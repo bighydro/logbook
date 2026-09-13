@@ -4,4 +4,6 @@ One adapter per source. `run(input_path, since) -> iterator[dict]` where each di
 
 Rules: pure by default (no network), never write to the source, never invent `tier` lower than the source deserves, fixture-tested with **synthetic** data only.
 
-Planned first: `google-takeout`, `apple-health`, `whatsapp`. Wanted: strava, garmin, immich, dawarich, telegram, imessage, bank-csv (generic, with mapping files), spotify, letterboxd, ics.
+Planned first (ADR 0008): `google-takeout`, `apple-health`, `whatsapp`, then `email`.
+
+Wanted — pick one and open an issue with the adapter template: immich, dawarich, strava, garmin, apple-fitness, eight-sleep, oura, withings, telegram, imessage, signal, gmail, ics-calendar, google-calendar, flighty, flightradar24, notion, obsidian, spotify, apple-music, letterboxd, goodreads, kindle-highlights, youtube-history, chrome-history, twitter-archive, instagram-export, bank-csv (generic, with per-bank mapping files), revolut, paypal, amazon-orders, uber, airbnb, vivino, steam, boat-passage logs.
