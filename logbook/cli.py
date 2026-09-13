@@ -9,7 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
-from .store import Logbook, now_utc
+from .store import CodeCheckoutError, Logbook, now_utc
 
 
 def _tz_default() -> str:
@@ -19,7 +19,11 @@ def _tz_default() -> str:
 
 def cmd_init(a: argparse.Namespace) -> None:
     root = Path(a.path or Path.home() / "Logbook").expanduser()
-    lb = Logbook.init(root, a.timezone or _tz_default())
+    try:
+        lb = Logbook.init(root, a.timezone or _tz_default())
+    except CodeCheckoutError as e:
+        print(f"refusing to init: {e}", file=sys.stderr)
+        sys.exit(2)
     print(f'created {lb.root}\nDrop any export into {lb.root / "inbox"}, or: logbook add "what happened"')
 
 
