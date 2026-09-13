@@ -29,6 +29,21 @@ def uuid7() -> str:
     return str(uuid.UUID(int=value))
 
 
+CHECKOUT_MARKERS = ("pyproject.toml", ".git", "logbook/__init__.py")
+
+
+class CodeCheckoutError(Exception):
+    """The folder looks like a clone of this repository, not a personal record."""
+
+
+def code_checkout_marker(root: Path) -> str | None:
+    """The first thing in `root` that says "source code, not a diary", or None.
+
+    On a case-insensitive disk ~/Logbook and a clone at ~/logbook are the same folder,
+    so a logbook must never be created in, or found in, a folder that has one of these."""
+    return next((m for m in CHECKOUT_MARKERS if (Path(root) / m).exists()), None)
+
+
 class Logbook:
     def __init__(self, root: Path):
         self.root = Path(root)
@@ -39,6 +54,12 @@ class Logbook:
     @classmethod
     def init(cls, root: Path, timezone_name: str) -> Logbook:
         root = Path(root)
+        marker = code_checkout_marker(root)
+        if marker is not None:
+            raise CodeCheckoutError(
+                f"{root} looks like a code checkout (it has {marker}); "
+                "choose another folder or set LOGBOOK_HOME"
+            )
         if (root / "logbook.json").exists():
             raise FileExistsError(f"{root} is already a logbook")
         for d in ("logbook", "notes", "inbox", "inbox/done"):
@@ -61,7 +82,7 @@ class Logbook:
         p = Path(start or Path.cwd()).resolve()
         candidates += [p, *p.parents, Path.home() / "Logbook"]
         for c in candidates:
-            if (c / "logbook.json").exists():
+            if (c / "logbook.json").exists() and code_checkout_marker(c) is None:
                 return cls(c)
         raise FileNotFoundError("no logbook found; run `logbook init`")
 

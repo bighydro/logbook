@@ -5,8 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.store import Logbook
+from logbook.store import CodeCheckoutError, Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "conformance" / "sample-logbook"
@@ -69,3 +71,77 @@ def test_cli_round_trip(tmp_path):
     assert "valid — 1 lines" in run("verify")
     run("export", str(tmp_path / "all.jsonl"))
     assert len((tmp_path / "all.jsonl").read_text().splitlines()) == 1
+
+
+# -- issue #12: never mistake a code checkout for a logbook -------------------
+
+CHECKOUT_MARKERS = ["pyproject.toml", ".git/", "logbook/__init__.py"]
+
+
+def _make_checkout(root, marker):
+    """A folder that looks like a clone of this repo, identified by one marker."""
+    root.mkdir(parents=True, exist_ok=True)
+    if marker.endswith("/"):
+        (root / marker).mkdir(parents=True)
+    else:
+        (root / marker).parent.mkdir(parents=True, exist_ok=True)
+        (root / marker).write_text("", encoding="utf-8")
+
+
+@pytest.mark.parametrize("marker", CHECKOUT_MARKERS)
+def test_init_refuses_code_checkout(tmp_path, marker):
+    _make_checkout(tmp_path / "clone", marker)
+    with pytest.raises(CodeCheckoutError):
+        Logbook.init(tmp_path / "clone", "UTC")
+    assert not (tmp_path / "clone" / "logbook.json").exists()
+    assert not (tmp_path / "clone" / "logbook" / "2026").exists()
+
+
+@pytest.mark.parametrize("marker", CHECKOUT_MARKERS)
+def test_cli_init_refuses_code_checkout_with_exit_2(tmp_path, marker):
+    _make_checkout(tmp_path / "clone", marker)
+    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    env.pop("LOGBOOK_HOME", None)
+    r = subprocess.run(
+        [sys.executable, "-m", "logbook.cli", "init", str(tmp_path / "clone"), "--timezone", "UTC"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert r.returncode == 2
+    assert r.stdout == ""
+    assert len(r.stderr.strip().splitlines()) == 1
+    assert "looks like a code checkout" in r.stderr
+    assert not (tmp_path / "clone" / "logbook.json").exists()
+
+
+@pytest.mark.parametrize("marker", CHECKOUT_MARKERS)
+def test_find_never_falls_back_to_code_checkout(tmp_path, monkeypatch, marker):
+    # a clone that already carries a stray logbook.json (the captain's day-one accident)
+    _make_checkout(tmp_path / "clone", marker)
+    (tmp_path / "clone" / "logbook.json").write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("LOGBOOK_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    with pytest.raises(FileNotFoundError):
+        Logbook.find(start=tmp_path / "clone" / "logbook")
+
+
+def test_find_skips_home_logbook_that_is_a_code_checkout(tmp_path, monkeypatch):
+    # on a case-insensitive disk ~/Logbook and a clone at ~/logbook are the same folder
+    home = tmp_path / "home"
+    _make_checkout(home / "Logbook", "pyproject.toml")
+    (home / "Logbook" / "logbook.json").write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("LOGBOOK_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(home))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    with pytest.raises(FileNotFoundError):
+        Logbook.find(start=elsewhere)
+
+
+def test_find_still_locates_a_real_logbook_past_a_checkout(tmp_path, monkeypatch):
+    real = Logbook.init(tmp_path / "real", "UTC")
+    _make_checkout(tmp_path / "real" / "clone", ".git/")
+    monkeypatch.delenv("LOGBOOK_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert Logbook.find(start=tmp_path / "real" / "clone").root == real.root
