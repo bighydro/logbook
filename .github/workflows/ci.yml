@@ -2,6 +2,8 @@ name: ci
 on:
   push: { branches: [main] }
   pull_request:
+  schedule:
+    - cron: "17 4 * * 1"   # weekly scorecard
 permissions: { contents: read }
 jobs:
   test:
@@ -24,6 +26,7 @@ jobs:
       - uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
   scorecard:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions: { security-events: write, id-token: write }
     steps:
