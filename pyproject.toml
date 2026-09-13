@@ -1,5 +1,5 @@
 [project]
-name = "logbook-cli"            # "logbook" on PyPI belongs to an unrelated logging library
+name = "openlogbook"           # the PyPI package; the command is still `logbook`
 version = "0.1.0"
 description = "A diary that writes itself. Your life, in a folder."
 readme = "README.md"
