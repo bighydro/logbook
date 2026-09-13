@@ -1,11 +1,19 @@
 """The folder. The only code that writes to logbook/*.jsonl."""
+
 from __future__ import annotations
-import json, os, secrets, time, uuid
+
+import json
+import os
+import secrets
+import time
+import uuid
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
 from . import FORMAT
-from .chain import GENESIS, compute_hash, verify_lines
+from .chain import GENESIS, Line, compute_hash, verify_lines
 
 
 def now_utc() -> str:
@@ -29,19 +37,25 @@ class Logbook:
 
     # -- lifecycle -----------------------------------------------------------
     @classmethod
-    def init(cls, root: Path, timezone_name: str) -> "Logbook":
+    def init(cls, root: Path, timezone_name: str) -> Logbook:
         root = Path(root)
         if (root / "logbook.json").exists():
             raise FileExistsError(f"{root} is already a logbook")
         for d in ("logbook", "notes", "inbox", "inbox/done"):
             (root / d).mkdir(parents=True, exist_ok=True)
-        meta = {"format": FORMAT, "owner_id": uuid7(), "created_at": now_utc(),
-                "timezone": timezone_name, "seq": 0, "head": GENESIS}
+        meta = {
+            "format": FORMAT,
+            "owner_id": uuid7(),
+            "created_at": now_utc(),
+            "timezone": timezone_name,
+            "seq": 0,
+            "head": GENESIS,
+        }
         (root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         return cls(root)
 
     @classmethod
-    def find(cls, start: Path | None = None) -> "Logbook":
+    def find(cls, start: Path | None = None) -> Logbook:
         env = os.environ.get("LOGBOOK_HOME")
         candidates = [Path(env)] if env else []
         p = Path(start or Path.cwd()).resolve()
@@ -52,20 +66,21 @@ class Logbook:
         raise FileNotFoundError("no logbook found; run `logbook init`")
 
     @property
-    def meta(self) -> dict:
-        return json.loads(self.meta_path.read_text(encoding="utf-8"))
+    def meta(self) -> dict[str, Any]:
+        data: dict[str, Any] = json.loads(self.meta_path.read_text(encoding="utf-8"))
+        return data
 
-    def _save_meta(self, meta: dict) -> None:
+    def _save_meta(self, meta: dict[str, Any]) -> None:
         self.meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
     # -- reading -------------------------------------------------------------
     def files(self) -> list[Path]:
         return sorted(self.log_dir.glob("*/*.jsonl"))
 
-    def lines(self) -> Iterator[dict]:
+    def lines(self) -> Iterator[Line]:
         """All lines in chain order (by seq). Files partition by month of `at`; backfilled
         history lands in old files, so file order is not chain order."""
-        rows: list[dict] = []
+        rows: list[Line] = []
         for f in self.files():
             with f.open(encoding="utf-8") as fh:
                 rows.extend(json.loads(raw) for raw in fh if raw.strip())
@@ -76,20 +91,42 @@ class Logbook:
         seq, head, errors = verify_lines(self.lines())
         meta = self.meta
         if meta["seq"] != seq or meta["head"] != head:
-            errors.append(f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, files say seq={seq} head={head[:12]}…")
+            errors.append(
+                f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, "
+                f"files say seq={seq} head={head[:12]}…"
+            )
         return seq, head, errors
 
     # -- writing -------------------------------------------------------------
-    def append(self, at: str, source: str, kind: str, tier: int, payload: dict,
-               end: str | None = None, tz: str | None = None, recorded_at: str | None = None) -> dict:
+    def append(
+        self,
+        at: str,
+        source: str,
+        kind: str,
+        tier: int,
+        payload: dict[str, Any],
+        end: str | None = None,
+        tz: str | None = None,
+        recorded_at: str | None = None,
+    ) -> Line:
         if "schema" not in payload:
             raise ValueError("payload.schema is required")
         if tier not in (1, 2, 3):
             raise ValueError("tier must be 1, 2 or 3")
         meta = self.meta
-        line: dict[str, object] = {"id": uuid7(), "seq": meta["seq"] + 1, "at": at, "end": end,
-                "tz": tz or meta["timezone"], "source": source, "kind": kind, "tier": tier,
-                "payload": payload, "recorded_at": recorded_at or now_utc(), "prev": meta["head"]}
+        line: Line = {
+            "id": uuid7(),
+            "seq": meta["seq"] + 1,
+            "at": at,
+            "end": end,
+            "tz": tz or meta["timezone"],
+            "source": source,
+            "kind": kind,
+            "tier": tier,
+            "payload": payload,
+            "recorded_at": recorded_at or now_utc(),
+            "prev": meta["head"],
+        }
         line["hash"] = compute_hash(line)
         year, month = at[:4], at[5:7]
         path = self.log_dir / year / f"{month}.jsonl"
@@ -100,7 +137,7 @@ class Logbook:
         self._save_meta(meta)
         return line
 
-    def append_many(self, drafts: Iterable[dict]) -> int:
+    def append_many(self, drafts: Iterable[dict[str, Any]]) -> int:
         n = 0
         for d in drafts:
             self.append(**d)

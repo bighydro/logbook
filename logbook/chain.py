@@ -1,6 +1,13 @@
 """The hash chain. Pure functions, no I/O. This file *is* SPEC.md §3."""
+
 from __future__ import annotations
-import hashlib, json
+
+import hashlib
+import json
+from collections.abc import Iterable
+from typing import Any
+
+Line = dict[str, Any]
 
 GENESIS = "0" * 64
 CONTENT_FIELDS = ("at", "end", "tz", "source", "kind", "tier", "payload")
@@ -10,23 +17,20 @@ def canonical_json(obj: object) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
-def content_hash(line: dict) -> str:
+def content_hash(line: Line) -> str:
     content = {k: line.get(k) for k in CONTENT_FIELDS}
     return hashlib.sha256(canonical_json(content).encode("utf-8")).hexdigest()
 
 
 def line_hash(prev: str, seq: int, chash: str, recorded_at: str) -> str:
-    return hashlib.sha256(f"{prev}|{seq}|{chash}|{recorded_at}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{prev}|{seq}|{chash}|{recorded_at}".encode()).hexdigest()
 
 
-def compute_hash(line: dict) -> str:
+def compute_hash(line: Line) -> str:
     return line_hash(line["prev"], line["seq"], content_hash(line), line["recorded_at"])
 
 
-from collections.abc import Iterable
-
-
-def verify_lines(lines: Iterable[dict]) -> tuple[int, str, list[str]]:
+def verify_lines(lines: Iterable[Line]) -> tuple[int, str, list[str]]:
     """Walk lines in order. Returns (count, head, errors)."""
     errors, prev, seq, head = [], GENESIS, 0, GENESIS
     for n, line in enumerate(lines, 1):
