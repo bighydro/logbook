@@ -23,7 +23,7 @@ jobs:
       - run: uv run pytest --cov=logbook --cov-report=xml
       - name: conformance
         run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
   scorecard:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
