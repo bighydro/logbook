@@ -1,0 +1,16 @@
+name: docs
+on:
+  push:
+    branches: [main]
+    paths: ["**.md", "mkdocs.yml", "docs/**", ".github/workflows/docs.yml"]
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install 3.12
+      - run: uvx --with mkdocs-material --with pymdown-extensions mkdocs gh-deploy --force --no-history

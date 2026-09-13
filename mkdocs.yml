@@ -1,0 +1,50 @@
+site_name: Logbook
+site_description: A diary that writes itself. Your life, in a folder.
+site_url: https://bighydro.github.io/logbook/
+repo_url: https://github.com/bighydro/logbook
+repo_name: bighydro/logbook
+edit_uri: edit/main/
+docs_dir: docs
+exclude_docs: |
+  demo.tape
+theme:
+  name: material
+  features: [navigation.sections, navigation.top, content.code.copy, toc.follow]
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: amber
+      toggle: { icon: material/weather-night, name: dark }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: amber
+      toggle: { icon: material/weather-sunny, name: light }
+  font: { text: IBM Plex Sans, code: IBM Plex Mono }
+markdown_extensions: [tables, admonition, toc, pymdownx.superfences, pymdownx.highlight]
+nav:
+  - Home: index.md
+  - Vision: VISION.md
+  - Lore: LORE.md
+  - Specification v0.1: SPEC.md
+  - Architecture: ARCHITECTURE.md
+  - Roadmap: ROADMAP.md
+  - Decisions:
+      - About ADRs: adr/README.md
+      - "0001 Files are the truth": adr/0001-files-are-the-truth.md
+      - "0002 Canonical JSON and hashing": adr/0002-canonical-json-and-hashing.md
+      - "0003 One log": adr/0003-one-log.md
+      - "0004 Notes live in the Logbook": adr/0004-notes-live-in-the-logbook.md
+      - "0005 One evening message": adr/0005-one-evening-message.md
+      - "0006 Chain mandatory": adr/0006-chain-mandatory.md
+      - "0007 SQLite default index": adr/0007-sqlite-default-index.md
+      - "0008 First adapters": adr/0008-first-adapters.md
+      - "0009 The circle is core": adr/0009-the-circle-is-core.md
+      - "0010 bighydro is a pen name": adr/0010-identity-of-the-captain.md
+  - Adapters: adapters/README.md
+  - Conformance: conformance/README.md
+  - Contributing: CONTRIBUTING.md
+  - Governance: GOVERNANCE.md
+  - Security: SECURITY.md
+  - Changelog: CHANGELOG.md
