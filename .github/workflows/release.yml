@@ -1,0 +1,16 @@
+name: release
+on:
+  push: { tags: ["v*"] }
+permissions: { contents: write, id-token: write }   # id-token: PyPI trusted publishing + Sigstore, no API tokens
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv build
+      - uses: actions/attest-build-provenance@v1      # SLSA provenance for every wheel
+        with: { subject-path: dist/* }
+      - uses: pypa/gh-action-pypi-publish@release/v1  # OIDC; configure "trusted publisher" once on PyPI
+      - uses: softprops/action-gh-release@v2
+        with: { files: dist/*, generate_release_notes: true }

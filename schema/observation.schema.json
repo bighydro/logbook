@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://logbook.dev/schema/observation-0.1.json",
+  "title": "Logbook observation (envelope) v0.1",
+  "type": "object",
+  "required": ["id", "seq", "at", "tz", "source", "kind", "tier", "payload", "recorded_at", "prev", "hash"],
+  "properties": {
+    "id": {"type": "string", "format": "uuid"},
+    "seq": {"type": "integer", "minimum": 1},
+    "at": {"type": "string", "format": "date-time"},
+    "end": {"type": ["string", "null"], "format": "date-time"},
+    "tz": {"type": "string"},
+    "source": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "kind": {"type": "string", "pattern": "^[a-z0-9_-]+$"},
+    "tier": {"type": "integer", "enum": [1, 2, 3]},
+    "payload": {"type": "object", "required": ["schema"], "properties": {"schema": {"type": "string", "pattern": "^[a-z0-9-]+/v[0-9]+$"}}},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "prev": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
