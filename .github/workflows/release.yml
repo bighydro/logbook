@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
       - run: uv build
-      - uses: actions/attest-build-provenance@v1      # SLSA provenance for every wheel
+      - uses: actions/attest-build-provenance@v4      # SLSA provenance for every wheel
         with: { subject-path: dist/* }
       - uses: pypa/gh-action-pypi-publish@release/v1  # OIDC; configure "trusted publisher" once on PyPI
       - uses: softprops/action-gh-release@v3
