@@ -2,6 +2,8 @@ name: ci
 on:
   push: { branches: [main] }
   pull_request:
+  schedule:
+    - cron: "17 4 * * 1"   # weekly scorecard
 permissions: { contents: read }
 jobs:
   test:
@@ -12,8 +14,8 @@ jobs:
         python: ["3.12", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - run: uv python install ${{ matrix.python }}
       - run: uv sync --group dev
       - run: uv run ruff check . && uv run ruff format --check .
@@ -21,12 +23,13 @@ jobs:
       - run: uv run pytest --cov=logbook --cov-report=xml
       - name: conformance
         run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
   scorecard:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions: { security-events: write, id-token: write }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ossf/scorecard-action@v2
         with: { results_file: results.sarif, results_format: sarif, publish_results: true }

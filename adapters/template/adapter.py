@@ -1,11 +1,13 @@
 """Template adapter. Copy this folder, rename SOURCE, implement run()."""
-from __future__ import annotations
-import json
-from pathlib import Path
-from typing import Iterator
 
-SOURCE = "example"          # lowercase, dashes only
-TIER = 1                    # the lowest tier this source's lines may carry
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from pathlib import Path
+
+SOURCE = "example"  # lowercase, dashes only
+TIER = 1  # the lowest tier this source's lines may carry
 
 
 def run(input_path: Path, since: str | None = None) -> Iterator[dict]:
@@ -14,13 +16,18 @@ def run(input_path: Path, since: str | None = None) -> Iterator[dict]:
         if since and row["when"] < since:
             continue
         yield {
-            "at": row["when"], "end": None, "tz": None,       # tz None → the logbook's own timezone
-            "source": SOURCE, "kind": "event", "tier": TIER,
+            "at": row["when"],
+            "end": None,
+            "tz": None,  # tz None → the logbook's own timezone
+            "source": SOURCE,
+            "kind": "event",
+            "tier": TIER,
             "payload": {"schema": "event/v1", "title": row["title"], "raw_id": row["id"]},
         }
 
 
-if __name__ == "__main__":       # python adapter.py fixture/input.json > out.jsonl ; logbook add out.jsonl
+if __name__ == "__main__":  # python adapter.py fixture/input.json > out.jsonl ; logbook add out.jsonl
     import sys
+
     for obs in run(Path(sys.argv[1])):
         print(json.dumps(obs, ensure_ascii=False, sort_keys=True))
