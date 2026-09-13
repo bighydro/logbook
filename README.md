@@ -6,7 +6,7 @@ Your life already gets recorded — by your phone, your photos, your calendar, y
 
 It is the opposite of social media: no feed, no followers, no likes, no counts. Reveal, never reward. Nothing leaves without a name.
 
-![How Logbook works](docs/how-it-works.svg)
+![How Logbook works](https://raw.githubusercontent.com/bighydro/logbook/main/docs/how-it-works.svg)
 
 ## Sixty seconds
 
@@ -44,6 +44,7 @@ If you also keep a clone of this repository, set `LOGBOOK_HOME` to your record's
 
 ## Read next
 
+- Docs site: https://bighydro.github.io/logbook/
 - [VISION.md](VISION.md) — why, and the rules the product refuses to break
 - [LORE.md](LORE.md) — where the logbook comes from: ships, pilots, diaries, and the log in computing
 - [SPEC.md](SPEC.md) — the format, one page; this is the part meant to become a standard
