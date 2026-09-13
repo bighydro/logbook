@@ -11,7 +11,7 @@ It is the opposite of social media: no feed, no followers, no likes, no counts. 
 ## Sixty seconds
 
 ```bash
-pipx install logbook            # or: pip install .
+pipx install openlogbook        # or: pip install .
 logbook init                    # creates ~/Logbook and your key
 logbook add "had lunch with a friend by the lake"
 logbook add ~/Downloads/takeout.zip     # any export, no flags
