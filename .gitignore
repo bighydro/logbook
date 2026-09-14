@@ -17,3 +17,6 @@ data/
 /notes/
 /inbox/
 site/
+
+# day packages written by `logbook export --day` are views, not the record
+export/
