@@ -6,4 +6,6 @@ Status: accepted · 2026-09-13
 
 **Rationale.** Three drops cover location, photos, calendar, health and messages for most people. Takeout alone is six witnesses in one zip.
 
+**Amendment (2026-09-14).** The captain's own first adapters are `dawarich` (location; Dawarich already holds imported Google Timeline history) and `immich` (photos with faces, camera and live-photo metadata), because both already run on his server. They are published as ordinary adapters. Takeout remains the first *onboarding* adapter for someone with no server.
+
 **Consequences.** Every other source is a community adapter from the template. The "wanted" list lives in `adapters/README.md`.
