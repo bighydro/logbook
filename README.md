@@ -8,6 +8,8 @@ It is the opposite of social media: no feed, no followers, no likes, no counts. 
 
 ![How Logbook works](https://raw.githubusercontent.com/bighydro/logbook/main/docs/how-it-works.svg)
 
+![Sixty seconds with Logbook](https://raw.githubusercontent.com/bighydro/logbook/main/docs/demo.gif)
+
 ## Sixty seconds
 
 ```bash
