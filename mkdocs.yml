@@ -42,6 +42,9 @@ nav:
       - "0008 First adapters": adr/0008-first-adapters.md
       - "0009 The circle is core": adr/0009-the-circle-is-core.md
       - "0010 bighydro is a pen name": adr/0010-identity-of-the-captain.md
+      - "0011 Log everything cheap, judge downstream": adr/0011-log-everything-cheap-judge-downstream.md
+      - "0012 Adapters ship in the package": adr/0012-adapters-ship-in-the-package.md
+      - "0013 Downstream interpreters": adr/0013-downstream-interpreters.md
   - RFCs:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md
