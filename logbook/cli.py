@@ -151,6 +151,9 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; the CLI speaks UTF-8
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="logbook", description="A diary that writes itself.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
