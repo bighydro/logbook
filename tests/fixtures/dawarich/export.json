@@ -1,0 +1,2093 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7587,
+     59.9226
+    ]
+   },
+   "properties": {
+    "timestamp": 1775970000,
+    "accuracy": 8,
+    "altitude": "14.0",
+    "velocity": "0.4",
+    "course": "0.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 92,
+    "ssid": "flat-wifi-fictional",
+    "bssid": null,
+    "motion_data": {
+     "stationary": true
+    },
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7587,
+       59.9226
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000001,
+      "osm_key": "building",
+      "osm_value": "apartments",
+      "type": "house",
+      "street": "Thorvald Meyers gate",
+      "housenumber": "42",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0555",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.758,
+       59.923,
+       10.759,
+       59.922
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7578,
+     59.92215
+    ]
+   },
+   "properties": {
+    "timestamp": 1775971200,
+    "accuracy": 15,
+    "altitude": "16.5",
+    "velocity": "0.75",
+    "course": "37.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 91,
+    "ssid": "flat-wifi-fictional",
+    "bssid": null,
+    "motion_data": {
+     "stationary": true
+    },
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7578,
+       59.92215
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000001,
+      "osm_key": "building",
+      "osm_value": "apartments",
+      "type": "house",
+      "street": "Thorvald Meyers gate",
+      "housenumber": "42",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0555",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.758,
+       59.923,
+       10.759,
+       59.922
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7571,
+     59.9217
+    ]
+   },
+   "properties": {
+    "timestamp": 1775972400,
+    "accuracy": 22,
+    "altitude": "19.0",
+    "velocity": "1.1",
+    "course": "74.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 90,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7571,
+       59.9217
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000002,
+      "osm_key": "amenity",
+      "osm_value": "cafe",
+      "type": "house",
+      "name": "Kaffe Fiktiv",
+      "street": "Markveien",
+      "housenumber": "17",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0554",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7566,
+     59.92125
+    ]
+   },
+   "properties": {
+    "timestamp": 1775973600,
+    "accuracy": 29,
+    "altitude": "21.5",
+    "velocity": "1.45",
+    "course": "111.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 89,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7566,
+       59.92125
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000002,
+      "osm_key": "amenity",
+      "osm_value": "cafe",
+      "type": "house",
+      "name": "Kaffe Fiktiv",
+      "street": "Markveien",
+      "housenumber": "17",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0554",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7557,
+     59.9208
+    ]
+   },
+   "properties": {
+    "timestamp": 1775974800,
+    "accuracy": 13,
+    "altitude": "24.0",
+    "velocity": "0.4",
+    "course": "148.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 88,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7557,
+       59.9208
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000002,
+      "osm_key": "amenity",
+      "osm_value": "cafe",
+      "type": "house",
+      "name": "Kaffe Fiktiv",
+      "street": "Markveien",
+      "housenumber": "17",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0554",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.755,
+     59.92035
+    ]
+   },
+   "properties": {
+    "timestamp": 1775976000,
+    "accuracy": 20,
+    "altitude": "14.0",
+    "velocity": "0.75",
+    "course": "185.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 87,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.755,
+       59.92035
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000002,
+      "osm_key": "amenity",
+      "osm_value": "cafe",
+      "type": "house",
+      "name": "Kaffe Fiktiv",
+      "street": "Markveien",
+      "housenumber": "17",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0554",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7545,
+     59.9199
+    ]
+   },
+   "properties": {
+    "timestamp": 1775977200,
+    "accuracy": 27,
+    "altitude": "16.5",
+    "velocity": "1.1",
+    "course": "222.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 86,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7545,
+       59.9199
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7536,
+     59.91945
+    ]
+   },
+   "properties": {
+    "timestamp": 1775978400,
+    "accuracy": 11,
+    "altitude": "19.0",
+    "velocity": "-1",
+    "course": "-1.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 85,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7536,
+       59.91945
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7529,
+     59.919
+    ]
+   },
+   "properties": {
+    "timestamp": 1775979600,
+    "accuracy": 18,
+    "altitude": "21.5",
+    "velocity": "0.4",
+    "course": "296.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 84,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7529,
+       59.919
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7524,
+     59.91855
+    ]
+   },
+   "properties": {
+    "timestamp": 1775980800,
+    "accuracy": 25,
+    "altitude": "24.0",
+    "velocity": "0.75",
+    "course": "333.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 83,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7524,
+       59.91855
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7515,
+     59.9181
+    ]
+   },
+   "properties": {
+    "timestamp": 1775982000,
+    "accuracy": 9,
+    "altitude": "14.0",
+    "velocity": "1.1",
+    "course": "10.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 82,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": {
+     "stationary": false
+    },
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7515,
+       59.9181
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7508,
+     59.91765
+    ]
+   },
+   "properties": {
+    "timestamp": 1775983200,
+    "accuracy": 16,
+    "altitude": "16.5",
+    "velocity": "1.45",
+    "course": "47.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 81,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7508,
+       59.91765
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7503,
+     59.9172
+    ]
+   },
+   "properties": {
+    "timestamp": 1775984400,
+    "accuracy": 23,
+    "altitude": "19.0",
+    "velocity": "0.4",
+    "course": "84.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 80,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7503,
+       59.9172
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7494,
+     59.91675
+    ]
+   },
+   "properties": {
+    "timestamp": 1775985600,
+    "accuracy": 30,
+    "altitude": "21.5",
+    "velocity": "0.75",
+    "course": "121.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 79,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7494,
+       59.91675
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7487,
+     59.9163
+    ]
+   },
+   "properties": {
+    "timestamp": 1775986800,
+    "accuracy": 14,
+    "altitude": "24.0",
+    "velocity": "1.1",
+    "course": "158.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 78,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7487,
+       59.9163
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7482,
+     59.91585
+    ]
+   },
+   "properties": {
+    "timestamp": 1775988000,
+    "accuracy": 21,
+    "altitude": "14.0",
+    "velocity": "1.45",
+    "course": "195.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 77,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7482,
+       59.91585
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7473,
+     59.9154
+    ]
+   },
+   "properties": {
+    "timestamp": 1775989200,
+    "accuracy": 28,
+    "altitude": "16.5",
+    "velocity": "0.4",
+    "course": "232.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 76,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7473,
+       59.9154
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7466,
+     59.91495
+    ]
+   },
+   "properties": {
+    "timestamp": 1775990400,
+    "accuracy": 12,
+    "altitude": "19.0",
+    "velocity": "0.75",
+    "course": "269.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 75,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7466,
+       59.91495
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7461,
+     59.9145
+    ]
+   },
+   "properties": {
+    "timestamp": 1775991600,
+    "accuracy": 19,
+    "altitude": "21.5",
+    "velocity": "1.1",
+    "course": "306.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 74,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7461,
+       59.9145
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7452,
+     59.91405
+    ]
+   },
+   "properties": {
+    "timestamp": 1775992800,
+    "accuracy": 26,
+    "altitude": "0.0",
+    "velocity": "1.45",
+    "course": "343.0",
+    "vertical_accuracy": 6,
+    "anomaly": true,
+    "track_id": 7,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 73,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7452,
+       59.91405
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7452,
+     59.91405
+    ]
+   },
+   "properties": {
+    "timestamp": 1775994000,
+    "accuracy": 10,
+    "altitude": "24.0",
+    "velocity": "0.4",
+    "course": "20.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 72,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": {
+     "stationary": false
+    },
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7452,
+       59.91405
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7461,
+     59.9145
+    ]
+   },
+   "properties": {
+    "timestamp": 1775995200,
+    "accuracy": 17,
+    "altitude": "21.5",
+    "velocity": "0.75",
+    "course": "57.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 71,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7461,
+       59.9145
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7466,
+     59.91495
+    ]
+   },
+   "properties": {
+    "timestamp": 1775996400,
+    "accuracy": 24,
+    "altitude": "19.0",
+    "velocity": "1.1",
+    "course": "94.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 70,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7466,
+       59.91495
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7473,
+     59.9154
+    ]
+   },
+   "properties": {
+    "timestamp": 1775997600,
+    "accuracy": 8,
+    "altitude": "16.5",
+    "velocity": "1.45",
+    "course": "131.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 69,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7473,
+       59.9154
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7482,
+     59.91585
+    ]
+   },
+   "properties": {
+    "timestamp": 1775998800,
+    "accuracy": 15,
+    "altitude": "14.0",
+    "velocity": "0.4",
+    "course": "168.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 68,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7482,
+       59.91585
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7487,
+     59.9163
+    ]
+   },
+   "properties": {
+    "timestamp": 1776000000,
+    "accuracy": 22,
+    "altitude": "24.0",
+    "velocity": "0.75",
+    "course": "205.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 67,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7487,
+       59.9163
+      ]
+     },
+     "properties": {
+      "osm_type": "N",
+      "osm_id": 100000004,
+      "osm_key": "tourism",
+      "osm_value": "attraction",
+      "type": "house",
+      "name": "Operahuset",
+      "street": "Kirsten Flagstads plass",
+      "housenumber": "1",
+      "district": "Sentrum",
+      "city": "Oslo",
+      "postcode": "0150",
+      "country": "Norway",
+      "countrycode": "NO"
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7494,
+     59.91675
+    ]
+   },
+   "properties": {
+    "timestamp": 1776001200,
+    "accuracy": 29,
+    "altitude": "21.5",
+    "velocity": "1.1",
+    "course": "242.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 66,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7494,
+       59.91675
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7503,
+     59.9172
+    ]
+   },
+   "properties": {
+    "timestamp": 1776002400,
+    "accuracy": 13,
+    "altitude": "19.0",
+    "velocity": "1.45",
+    "course": "279.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 65,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7503,
+       59.9172
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7508,
+     59.91765
+    ]
+   },
+   "properties": {
+    "timestamp": 1776003600,
+    "accuracy": 20,
+    "altitude": "16.5",
+    "velocity": "0.4",
+    "course": "316.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 64,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7508,
+       59.91765
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7515,
+     59.9181
+    ]
+   },
+   "properties": {
+    "timestamp": 1776004800,
+    "accuracy": 27,
+    "altitude": "14.0",
+    "velocity": "0.75",
+    "course": "353.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 63,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7515,
+       59.9181
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7524,
+     59.91855
+    ]
+   },
+   "properties": {
+    "timestamp": 1776006000,
+    "accuracy": 11,
+    "altitude": "24.0",
+    "velocity": "1.1",
+    "course": "30.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 62,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": {
+     "stationary": false
+    },
+    "geodata": null
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7529,
+     59.919
+    ]
+   },
+   "properties": {
+    "timestamp": 1776007200,
+    "accuracy": 18,
+    "altitude": "21.5",
+    "velocity": "1.45",
+    "course": "67.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 61,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7529,
+       59.919
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7536,
+     59.91945
+    ]
+   },
+   "properties": {
+    "timestamp": 1776008400,
+    "accuracy": 25,
+    "altitude": "19.0",
+    "velocity": "0.4",
+    "course": "104.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 60,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7536,
+       59.91945
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7545,
+     59.9199
+    ]
+   },
+   "properties": {
+    "timestamp": 1776009600,
+    "accuracy": 9,
+    "altitude": "16.5",
+    "velocity": "0.75",
+    "course": "141.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 59,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7545,
+       59.9199
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.755,
+     59.92035
+    ]
+   },
+   "properties": {
+    "timestamp": 1776010800,
+    "accuracy": 16,
+    "altitude": "14.0",
+    "velocity": "1.1",
+    "course": "178.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 58,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.755,
+       59.92035
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7557,
+     59.9208
+    ]
+   },
+   "properties": {
+    "timestamp": 1776012000,
+    "accuracy": 23,
+    "altitude": "0.0",
+    "velocity": "1.45",
+    "course": "215.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 57,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7557,
+       59.9208
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7566,
+     59.92125
+    ]
+   },
+   "properties": {
+    "timestamp": 1776013200,
+    "accuracy": 30,
+    "altitude": "21.5",
+    "velocity": "0.4",
+    "course": "252.0",
+    "vertical_accuracy": 3,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 56,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7566,
+       59.92125
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7571,
+     59.9217
+    ]
+   },
+   "properties": {
+    "timestamp": 1776014400,
+    "accuracy": 14,
+    "altitude": "19.0",
+    "velocity": "0.75",
+    "course": "289.0",
+    "vertical_accuracy": 4,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 55,
+    "ssid": null,
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7571,
+       59.9217
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000003,
+      "osm_key": "leisure",
+      "osm_value": "park",
+      "type": "street",
+      "name": "Sofienbergparken",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0558",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.76,
+       59.924,
+       10.765,
+       59.921
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7578,
+     59.92215
+    ]
+   },
+   "properties": {
+    "timestamp": 1776015600,
+    "accuracy": 21,
+    "altitude": "16.5",
+    "velocity": "1.1",
+    "course": "326.0",
+    "vertical_accuracy": 5,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 54,
+    "ssid": "flat-wifi-fictional",
+    "bssid": null,
+    "motion_data": null,
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7578,
+       59.92215
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000001,
+      "osm_key": "building",
+      "osm_value": "apartments",
+      "type": "house",
+      "street": "Thorvald Meyers gate",
+      "housenumber": "42",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0555",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.758,
+       59.923,
+       10.759,
+       59.922
+      ]
+     }
+    }
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     10.7587,
+     59.9226
+    ]
+   },
+   "properties": {
+    "timestamp": 1776016800,
+    "accuracy": 28,
+    "altitude": "14.0",
+    "velocity": "1.45",
+    "course": "3.0",
+    "vertical_accuracy": 6,
+    "anomaly": null,
+    "track_id": 8,
+    "tracker_id": "5d1f8e2a-3b4c-4d5e-8f60-718293a4b5c6",
+    "battery": 53,
+    "ssid": "flat-wifi-fictional",
+    "bssid": null,
+    "motion_data": {
+     "stationary": true
+    },
+    "geodata": {
+     "type": "Feature",
+     "geometry": {
+      "type": "Point",
+      "coordinates": [
+       10.7587,
+       59.9226
+      ]
+     },
+     "properties": {
+      "osm_type": "W",
+      "osm_id": 100000001,
+      "osm_key": "building",
+      "osm_value": "apartments",
+      "type": "house",
+      "street": "Thorvald Meyers gate",
+      "housenumber": "42",
+      "district": "Grünerløkka",
+      "city": "Oslo",
+      "postcode": "0555",
+      "country": "Norway",
+      "countrycode": "NO",
+      "extent": [
+       10.758,
+       59.923,
+       10.759,
+       59.922
+      ]
+     }
+    }
+   }
+  }
+ ]
+}
