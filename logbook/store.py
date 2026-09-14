@@ -159,8 +159,23 @@ class Logbook:
         return line
 
     def append_many(self, drafts: Iterable[dict[str, Any]]) -> int:
+        """Append drafts in order; returns how many were written.
+
+        A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
+        same export appends nothing. Drafts without a raw_id are never deduped."""
+        seen = {key for key in map(_dedupe_key, self.lines()) if key is not None}
         n = 0
         for d in drafts:
+            key = _dedupe_key(d)
+            if key is not None:
+                if key in seen:
+                    continue
+                seen.add(key)
             self.append(**d)
             n += 1
         return n
+
+
+def _dedupe_key(line: dict[str, Any]) -> tuple[str, str] | None:
+    raw_id = (line.get("payload") or {}).get("raw_id")
+    return (str(line.get("source")), str(raw_id)) if raw_id is not None else None

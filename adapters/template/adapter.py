@@ -6,8 +6,17 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
-SOURCE = "example"  # lowercase, dashes only
+NAME = SOURCE = "example"  # lowercase, dashes only
 TIER = 1  # the lowest tier this source's lines may carry
+
+
+def sniff(input_path: Path) -> bool:
+    """Is this file mine? Cheap, reads only what it must, never raises."""
+    try:
+        rows = json.loads(Path(input_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(rows, list) and bool(rows) and {"when", "title", "id"} <= set(rows[0])
 
 
 def run(input_path: Path, since: str | None = None) -> Iterator[dict]:
