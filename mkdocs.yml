@@ -42,6 +42,10 @@ nav:
       - "0008 First adapters": adr/0008-first-adapters.md
       - "0009 The circle is core": adr/0009-the-circle-is-core.md
       - "0010 bighydro is a pen name": adr/0010-identity-of-the-captain.md
+  - RFCs:
+      - About RFCs: rfcs/README.md
+      - "0001 location/v1": rfcs/0001-location-v1.md
+      - "0002 photo/v1": rfcs/0002-photo-v1.md
   - Adapters: adapters/README.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
