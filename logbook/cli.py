@@ -9,6 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__, adapters
+from .export import day_package, day_range, parse_day, write_package
 from .store import CodeCheckoutError, Logbook, now_utc
 
 
@@ -106,6 +107,12 @@ def cmd_verify(a: argparse.Namespace) -> None:
 
 def cmd_export(a: argparse.Namespace) -> None:
     lb = Logbook.find()
+    if a.day or a.days:
+        _export_days(lb, a)
+        return
+    if not a.path:
+        print("export: give a .jsonl path, or --day YYYY-MM-DD, or --days FROM TO", file=sys.stderr)
+        sys.exit(2)
     out = Path(a.path).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
     n = 0
@@ -116,7 +123,37 @@ def cmd_export(a: argparse.Namespace) -> None:
     print(f"exported {n} lines to {out} — verify with: logbook verify")
 
 
+def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
+    """--day DATE [--out DIR]: one package at DIR (default <root>/export/DATE).
+    --days FROM TO [--out DIR] [--empty]: one package per day at DIR/DATE (default <root>/export/DATE)."""
+    try:
+        if a.day:
+            days = [parse_day(a.day).isoformat()]
+            dirs = [Path(a.out).expanduser() if a.out else lb.root / "export" / a.day]
+        else:
+            days = day_range(*a.days)
+            base = Path(a.out).expanduser() if a.out else lb.root / "export"
+            dirs = [base / d for d in days]
+    except ValueError as e:
+        print(f"export: {e}", file=sys.stderr)
+        sys.exit(2)
+    written = 0
+    for day, out in zip(days, dirs, strict=True):
+        package = day_package(lb, day)
+        n = len(package["entries"])
+        if a.days and not a.empty and n == 0:
+            continue
+        write_package(package, out)
+        written += 1
+        print(f"{day}: {n} entries → {out}")
+    if a.days:
+        print(f"wrote {written} day package(s)")
+
+
 def main(argv: list[str] | None = None) -> None:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; the CLI speaks UTF-8
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="logbook", description="A diary that writes itself.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -135,8 +172,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--root", help="logbook folder (default: find)")
     s.add_argument("--expect", help="expected.json with seq and head (conformance)")
     s.set_defaults(fn=cmd_verify)
-    s = sub.add_parser("export", help="the whole log as one .jsonl")
-    s.add_argument("path")
+    s = sub.add_parser("export", help="the whole log as one .jsonl, or one day-package/v1 per day")
+    s.add_argument("path", nargs="?", help=".jsonl file for the whole log")
+    s.add_argument("--day", metavar="YYYY-MM-DD", help="one day-package/v1 directory")
+    s.add_argument("--days", nargs=2, metavar=("FROM", "TO"), help="one directory per day, inclusive")
+    s.add_argument("--out", metavar="DIR", help="where to write (default <root>/export/<date>/)")
+    s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.set_defaults(fn=cmd_export)
     a = ap.parse_args(argv)
     a.fn(a)
