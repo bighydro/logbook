@@ -143,7 +143,7 @@ def test_day_package_rejects_bad_date(two_days: Logbook, tmp_path: Path):
 def _run(lb: Logbook, *args: str) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "LOGBOOK_HOME": str(lb.root), "PYTHONPATH": str(ROOT)}
     return subprocess.run(
-        [sys.executable, "-m", "logbook.cli", "export", *args], env=env, capture_output=True, text=True
+        [sys.executable, "-m", "logbook.cli", "export", *args], env=env, capture_output=True, encoding="utf-8"
     )
 
 
