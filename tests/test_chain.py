@@ -63,7 +63,11 @@ def test_cli_round_trip(tmp_path):
 
     def run(*a):
         return subprocess.run(
-            [sys.executable, "-m", "logbook.cli", *a], env=env, capture_output=True, encoding="utf-8", check=True
+            [sys.executable, "-m", "logbook.cli", *a],
+            env=env,
+            capture_output=True,
+            encoding="utf-8",
+            check=True,
         ).stdout
 
     assert "created" in run("init", str(tmp_path / "lb"), "--timezone", "UTC")
