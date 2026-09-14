@@ -15,7 +15,7 @@ classifiers = [
   "Topic :: Database",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = ["tzdata; sys_platform == 'win32'"]
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
