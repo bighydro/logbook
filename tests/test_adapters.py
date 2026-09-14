@@ -223,7 +223,11 @@ def _cli(tmp_path):
 
     def run(*a, check=True):
         return subprocess.run(
-            [sys.executable, "-m", "logbook.cli", *a], env=env, capture_output=True, text=True, check=check
+            [sys.executable, "-m", "logbook.cli", *a],
+            env=env,
+            capture_output=True,
+            encoding="utf-8",
+            check=check,
         )
 
     return run

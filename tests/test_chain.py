@@ -63,7 +63,11 @@ def test_cli_round_trip(tmp_path):
 
     def run(*a):
         return subprocess.run(
-            [sys.executable, "-m", "logbook.cli", *a], env=env, capture_output=True, text=True, check=True
+            [sys.executable, "-m", "logbook.cli", *a],
+            env=env,
+            capture_output=True,
+            encoding="utf-8",
+            check=True,
         ).stdout
 
     assert "created" in run("init", str(tmp_path / "lb"), "--timezone", "UTC")
@@ -106,7 +110,7 @@ def test_cli_init_refuses_code_checkout_with_exit_2(tmp_path, marker):
         [sys.executable, "-m", "logbook.cli", "init", str(tmp_path / "clone"), "--timezone", "UTC"],
         env=env,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert r.returncode == 2
     assert r.stdout == ""
