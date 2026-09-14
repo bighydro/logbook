@@ -8,7 +8,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from . import __version__
+from . import __version__, adapters
 from .store import CodeCheckoutError, Logbook, now_utc
 
 
@@ -27,20 +27,36 @@ def cmd_init(a: argparse.Namespace) -> None:
     print(f'created {lb.root}\nDrop any export into {lb.root / "inbox"}, or: logbook add "what happened"')
 
 
+def _add_file(lb: Logbook, p: Path) -> bool:
+    """Append one file through the adapter that recognises it. False when nothing does."""
+    adapter = adapters.find(p)
+    if adapter is not None:
+        n = lb.append_many(adapter.run(p))
+        print(f"added {n} lines from {adapter.NAME}")
+        return True
+    if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
+        drafts = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
+        n = lb.append_many(drafts)
+        print(f"added {n} lines from {p.name}")
+        return True
+    print(
+        f"{p.name}: no adapter for this file yet (roadmap phase 1). "
+        "Put it in inbox/ and it will be read when one exists."
+    )
+    return False
+
+
 def cmd_add(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     what = " ".join(a.what).strip()
     p = Path(what).expanduser()
-    if p.exists() and p.suffix == ".jsonl":  # observations produced by an adapter
-        drafts = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
-        n = lb.append_many(drafts)
-        print(f"added {n} lines from {p.name}")
+    if p.is_dir():  # every file in it, in name order; hidden files are not exports
+        for f in sorted(p.iterdir()):
+            if f.is_file() and not f.name.startswith("."):
+                _add_file(lb, f)
     elif p.exists():
-        print(
-            f"{p.name}: no adapter for this file yet (roadmap phase 1). "
-            "Put it in inbox/ and it will be read when one exists."
-        )
-        sys.exit(2)
+        if not _add_file(lb, p):
+            sys.exit(2)
     else:  # a sentence, in your own words
         at = a.at or now_utc()
         line = lb.append(
@@ -108,7 +124,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("path", nargs="?")
     s.add_argument("--timezone")
     s.set_defaults(fn=cmd_init)
-    s = sub.add_parser("add", help="a sentence in your words, or an adapter's .jsonl")
+    s = sub.add_parser("add", help="a sentence in your words, an export file, or a folder of them")
     s.add_argument("what", nargs="+")
     s.add_argument("--at", help="RFC3339 UTC, default now")
     s.set_defaults(fn=cmd_add)
