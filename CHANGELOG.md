@@ -5,6 +5,9 @@
 - CLI: init, add (text or JSONL), show, verify, export.
 - Conformance fixture with expected head.
 
+## Unreleased
+- `sync <source> [--since RFC3339] [--dry-run]` pulls from a live source through the new live-adapter contract (`configure`/`pull`) and keeps its watermark in `state/`; first live adapter: `immich` → `photo/v1` (RFC 0002), stdlib urllib only.
+
 ## 0.2.0 — 2026-09-15
 - Docs site (MkDocs Material) deployed from main; reproducible demo tape.
 - Package published as `openlogbook`; the command is `logbook`.

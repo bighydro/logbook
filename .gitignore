@@ -20,3 +20,6 @@ site/
 
 # day packages written by `logbook export --day` are views, not the record
 export/
+
+# where `logbook sync` left off per source: bookkeeping, not the record
+state/

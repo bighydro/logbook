@@ -1,11 +1,13 @@
-"""logbook — init · add · retract · show · verify · export. Three verbs and three you run once a year."""
+"""logbook — init · add · sync · retract · show · verify · export. Three verbs and four you run rarely."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-from collections.abc import Iterator
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -100,6 +102,97 @@ def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
         at=at or now_utc(), source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": what}
     )
     print(f"#{line['seq']} {line['at']}  {what}")
+
+
+def cmd_sync(a: argparse.Namespace) -> None:
+    """Pull from a live source since its stored watermark (or --since), append, advance the watermark.
+    The watermark is the source's own clock (adapter.watermark), not the event time, so late uploads of
+    old items are still picked up. It lives in <root>/state/<name>.json — bookkeeping, not the record."""
+    adapter = adapters.live(a.name)
+    if adapter is None:
+        known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
+        print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
+        sys.exit(2)
+    config = adapter.configure(os.environ)
+    if config is None:
+        missing = [v for v in adapter.ENV if not os.environ.get(v, "").strip()]
+        print(f"sync: {a.name}: set {' and '.join(missing)}", file=sys.stderr)
+        sys.exit(2)
+    if a.since is not None and not _is_rfc3339(a.since):
+        print(
+            f"sync: --since must be RFC3339 UTC, e.g. 2026-03-01T00:00:00Z, not {a.since!r}", file=sys.stderr
+        )
+        sys.exit(2)
+    lb = Logbook.find()
+    state_path = lb.root / "state" / f"{a.name}.json"
+    since = a.since if a.since is not None else _read_state(state_path).get("since")
+    seen: dict[str, Any] = {
+        "count": 0,
+        "first": None,
+        "last": None,
+        "watermark": None,
+        "provenance": Counter(),
+    }
+    drafts = _watch(adapter.pull(config, since), adapter.watermark, seen)
+    try:
+        if a.dry_run:
+            for _ in drafts:
+                pass
+        else:
+            n = lb.append_many(drafts, progress=_progress)
+    except OSError as e:  # urllib's errors are OSErrors; what was pulled before is already checkpointed
+        print(f"sync: {a.name}: {e}", file=sys.stderr)
+        sys.exit(1)
+    where = f"since {since}" if since else "from the beginning"
+    if a.dry_run:
+        print(f"{a.name}: {seen['count']} lines {where} (dry run, nothing written)")
+        if seen["count"]:
+            print(f"  first {seen['first']}  last {seen['last']}  watermark {seen['watermark'] or '-'}")
+            for provenance, count in sorted(seen["provenance"].items()):
+                print(f"  {provenance}: {count}")
+        return
+    if seen["watermark"] is not None:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps({"since": seen["watermark"]}, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"{a.name}: {n} new lines of {seen['count']} seen {where}; "
+        f"watermark {seen['watermark'] or since or '-'}"
+    )
+
+
+def _watch(
+    drafts: Iterable[dict[str, Any]],
+    watermark: Callable[[dict[str, Any]], str | None],
+    seen: dict[str, Any],
+) -> Iterator[dict[str, Any]]:
+    """Pass drafts through, noting count, earliest/latest `at`, the largest watermark and
+    per-provenance counts."""
+    for d in drafts:
+        seen["count"] += 1
+        at = d["at"]
+        if seen["first"] is None or at < seen["first"]:
+            seen["first"] = at
+        if seen["last"] is None or at > seen["last"]:
+            seen["last"] = at
+        mark = watermark(d)
+        if mark is not None and (seen["watermark"] is None or mark > seen["watermark"]):
+            seen["watermark"] = mark
+        seen["provenance"][d["payload"].get("provenance", "-")] += 1
+        yield d
+
+
+def _read_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return data
+
+
+def _is_rfc3339(value: str) -> bool:
+    try:
+        return datetime.fromisoformat(value).tzinfo is not None
+    except ValueError:
+        return False
 
 
 def cmd_retract(a: argparse.Namespace) -> None:
@@ -221,6 +314,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("what", nargs="+")
     s.add_argument("--at", help="RFC3339 UTC, default now")
     s.set_defaults(fn=cmd_add)
+    s = sub.add_parser("sync", help="pull new items from a live source (immich); safe to re-run")
+    s.add_argument("name", help="the source, e.g. immich")
+    s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
+    s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
+    s.set_defaults(fn=cmd_sync)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
