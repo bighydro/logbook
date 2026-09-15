@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 import time
 import uuid
+from array import array
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,9 +38,19 @@ PROGRESS_EVERY = 50_000  # append_many: lines between progress reports
 
 RETRACTION = "retraction"  # kind of the line that supersedes another (SPEC §3)
 
+OLD_FORMAT = "logbook/0.1"  # hashed with a canonicalisation that deviated from RFC 8785 (SPEC §3.1)
+MIGRATE_MESSAGE = "created as logbook/0.1 before the canonicalisation fix; run: logbook migrate"
+MIGRATE_PROGRESS_EVERY = 100_000  # migrate: lines between progress reports
+MIGRATION = "migration"  # kind of the one line a migration appends (SPEC §3.1)
+NOT_INTACT = "the 0.1 record is not intact; nothing was changed"
+
 
 class CodeCheckoutError(Exception):
     """The folder looks like a clone of this repository, not a personal record."""
+
+
+class FormatError(Exception):
+    """logbook.json names a format this code will not verify or write (SPEC §3.1)."""
 
 
 def code_checkout_marker(root: Path) -> str | None:
@@ -97,7 +109,18 @@ class Logbook:
         return data
 
     def _save_meta(self, meta: dict[str, Any]) -> None:
-        self.meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+        tmp = self.meta_path.with_name("logbook.json.tmp")
+        tmp.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, self.meta_path)  # never a half-written logbook.json
+
+    def _check_format(self, meta: dict[str, Any]) -> None:
+        """verify and every writer refuse a record hashed by another rule (SPEC §3.1)."""
+        found = meta.get("format")
+        if found == FORMAT:
+            return
+        if found == OLD_FORMAT:
+            raise FormatError(MIGRATE_MESSAGE)
+        raise FormatError(f"format {found!r} is not {FORMAT}; this logbook needs another version of the code")
 
     # -- reading -------------------------------------------------------------
     def files(self) -> list[Path]:
@@ -123,8 +146,9 @@ class Logbook:
         return next((line for line in self.lines_unsorted() if line.get("seq") == seq), None)
 
     def verify(self) -> tuple[int, str, list[str]]:
-        seq, head, errors = verify_lines(self.lines())
         meta = self.meta
+        self._check_format(meta)
+        seq, head, errors = verify_lines(self.lines())
         if meta["seq"] != seq or meta["head"] != head:
             errors.append(
                 f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, "
@@ -145,6 +169,7 @@ class Logbook:
         recorded_at: str | None = None,
     ) -> Line:
         meta = self.meta
+        self._check_format(meta)
         line = self._line(
             meta, meta["seq"] + 1, meta["head"], at, source, kind, tier, payload, end, tz, recorded_at
         )
@@ -194,8 +219,9 @@ class Logbook:
 
         Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
         and `at` is the event time. A batch is never sorted."""
-        seen = set(self._dedupe_keys())
         meta = self.meta
+        self._check_format(meta)
+        seen = set(self._dedupe_keys())
         seq, head = meta["seq"], meta["head"]
         handles: dict[Path, TextIO] = {}
         pending: dict[Path, list[str]] = {}
@@ -236,6 +262,110 @@ class Logbook:
             for fh in handles.values():
                 fh.close()
         return n
+
+    # -- migration -----------------------------------------------------------
+    def migrate(self, progress: Callable[[int, float], None] | None = None) -> dict[str, Any]:
+        """logbook/0.1 → logbook/0.2 (SPEC §3.1, ADR 0014): the same lines, hashed with the right rule.
+
+        Every line keeps `id`, `seq`, the content fields and `recorded_at`; `prev` and `hash` are
+        recomputed in seq order. New month files are written under <root>/logbook.migrating/, then
+        swapped in: the 0.1 files move to <root>/logbook-0.1/ (kept, never deleted here) and the
+        new ones take their place. logbook.json gets the new format and head and a `lineage`
+        entry; index.sqlite is dropped (it is rebuilt from the files); then one manual line,
+        `migration/v1`, records the old head inside the chain. Refuses anything but a 0.1 record,
+        and a 0.1 record whose links (`seq`, `prev`, the head) are broken — nothing is touched then.
+        `progress(count, elapsed_seconds)` is called every MIGRATE_PROGRESS_EVERY lines."""
+        meta = self.meta
+        if meta.get("format") != OLD_FORMAT:
+            raise FormatError(f"nothing to migrate: this logbook is {meta.get('format')}")
+        old_head = meta["head"]
+        kept = self.root / "logbook-0.1"
+        if kept.exists():
+            raise FileExistsError(f"{kept} already exists; move it away before migrating")
+        tmp = self.root / "logbook.migrating"
+        if tmp.exists():
+            shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
+        tmp.mkdir()
+        handles: dict[Path, TextIO] = {}
+        n, prev, old_prev, started = 0, GENESIS, GENESIS, time.monotonic()
+        try:
+            for line in self._lines_by_seq():
+                n += 1
+                if line.get("seq") != n:
+                    raise ValueError(f"line {n}: seq {line.get('seq')}, expected {n}; {NOT_INTACT}")
+                if line.get("prev") != old_prev:
+                    raise ValueError(f"line {n}: prev does not match the previous hash; {NOT_INTACT}")
+                old_prev = line["hash"]
+                line["prev"] = prev
+                line["hash"] = prev = compute_hash(line)
+                path = tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl"
+                fh = handles.get(path)
+                if fh is None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fh = handles[path] = path.open("a", encoding="utf-8")
+                fh.write(_dumps(line))
+                if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
+                    progress(n, time.monotonic() - started)
+            if (n, old_prev) != (meta["seq"], old_head):
+                raise ValueError(
+                    f"logbook.json says seq={meta['seq']} head={old_head[:12]}…, files say seq={n} "
+                    f"head={old_prev[:12]}…; {NOT_INTACT}"
+                )
+            for fh in handles.values():
+                fh.flush()
+                os.fsync(fh.fileno())
+                fh.close()
+        except BaseException:
+            for fh in handles.values():
+                fh.close()
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        if self.log_dir.exists():
+            os.rename(self.log_dir, kept)
+        os.rename(tmp, self.log_dir)
+        migrated_at = now_utc()
+        meta["format"], meta["head"] = FORMAT, prev
+        lineage = meta.setdefault("lineage", [])
+        lineage.append({"from_format": OLD_FORMAT, "from_head": old_head, "migrated_at": migrated_at})
+        self._save_meta(meta)
+        index = self.root / "index.sqlite"
+        if index.exists():
+            index.unlink()  # ADR 0007: disposable, rebuilt from the files
+        line = self.append(
+            at=migrated_at,
+            source="manual",
+            kind=MIGRATION,
+            tier=1,
+            payload={"schema": "migration/v1", "from_format": OLD_FORMAT, "from_head": old_head},
+            recorded_at=migrated_at,
+        )
+        return {"lines": n, "from_head": old_head, "head": line["hash"], "kept": kept}
+
+    def _lines_by_seq(self) -> Iterator[Line]:
+        """Every line in chain order with one line in memory at a time: a first pass notes where
+        each seq lives (two integers per line), a second reads them back in seq order."""
+        files = self.files()
+        seqs: array[int] = array("q")
+        places: array[int] = array("q")  # file number << 40 | byte offset
+        for file_no, f in enumerate(files):
+            with f.open("rb") as fh:
+                offset = 0
+                for raw in fh:
+                    if raw.strip():
+                        seqs.append(int(json.loads(raw).get("seq", 0)))
+                        places.append((file_no << 40) | offset)
+                    offset += len(raw)
+        order = sorted(range(len(seqs)), key=seqs.__getitem__)
+        handles = [f.open("rb") for f in files]
+        try:
+            for i in order:
+                fh = handles[places[i] >> 40]
+                fh.seek(places[i] & ((1 << 40) - 1))
+                row: Line = json.loads(fh.readline())
+                yield row
+        finally:
+            for fh in handles:
+                fh.close()
 
     def _line(
         self,
