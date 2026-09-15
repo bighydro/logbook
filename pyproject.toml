@@ -15,7 +15,10 @@ classifiers = [
   "Topic :: Database",
   "Typing :: Typed",
 ]
-dependencies = ["tzdata; sys_platform == 'win32'"]
+dependencies = [
+    "ijson>=3.3",
+    "tzdata; sys_platform == 'win32'",
+]
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
@@ -46,6 +49,11 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 strict = true
 python_version = "3.12"
 
+[[tool.mypy.overrides]]
+module = "ijson"
+ignore_missing_imports = true  # no py.typed, no stubs
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["slow: generated stress tests; run with LOGBOOK_SLOW=1"]

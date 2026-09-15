@@ -276,3 +276,36 @@ def test_cli_add_unknown_file_still_exits_2(tmp_path):
     p.write_text("a,b\n1,2\n", encoding="utf-8")
     r = run("add", str(p), check=False)
     assert r.returncode == 2 and "no adapter" in r.stdout
+
+
+# -- streaming: the adapter never holds the whole file ------------------------------
+
+
+def _truncated_export(tmp_path: Path) -> Path:
+    """The fixture cut off inside its third feature: only a streaming reader gets anything out."""
+    text = FIXTURE.read_text(encoding="utf-8")
+    third = [i for i, line in enumerate(text.splitlines(keepends=True)) if line.startswith("  {")][2]
+    head = "".join(text.splitlines(keepends=True)[: third + 3])
+    p = tmp_path / "truncated.json"
+    p.write_text(head, encoding="utf-8")
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(head)
+    return p
+
+
+def test_sniff_reads_only_the_head_of_the_file(tmp_path):
+    assert dawarich.sniff(_truncated_export(tmp_path)) is True
+
+
+def test_run_yields_points_before_the_end_of_the_file(tmp_path):
+    points = dawarich.run(_truncated_export(tmp_path))
+    first, second = next(points), next(points)
+    assert first["at"] == "2026-04-12T05:00:00Z" and second["at"] == "2026-04-12T05:20:00Z"
+    with pytest.raises(dawarich.ijson.JSONError):
+        next(points)
+
+
+def test_run_coordinates_are_floats_not_decimals():
+    p = next(dawarich.run(FIXTURE))["payload"]
+    assert type(p["lat"]) is float and type(p["lon"]) is float
+    json.dumps(p)  # canonical JSON must be able to serialise every payload value
