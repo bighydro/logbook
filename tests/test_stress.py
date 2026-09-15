@@ -94,3 +94,21 @@ def test_dawarich_streams_a_large_export_into_a_valid_logbook(tmp_path):
     assert n == POINTS
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == POINTS
+
+
+@pytest.mark.slow
+def test_show_on_200k_lines_takes_under_a_second_after_indexing(tmp_path, monkeypatch, capsys):
+    from logbook import cli
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    lb.append_many(_drafts(POINTS))
+    with lb.index():
+        pass
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    started = time.perf_counter()
+    cli.main(["show", "2026-04-13"])  # a full day: 8,640 points at one every 10 s
+    elapsed = time.perf_counter() - started
+    rows = capsys.readouterr().out.splitlines()
+    print(f"\nshow: {len(rows) - 1:,} rows in {elapsed:.2f}s")
+    assert len(rows) - 1 == 8_640
+    assert elapsed < 1.0
