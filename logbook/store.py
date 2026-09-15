@@ -12,10 +12,12 @@ from array import array
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, BinaryIO, TextIO
 
 from . import FORMAT
 from .chain import GENESIS, Line, compute_hash, verify_lines
+from .index import FILE_NAME as INDEX_FILE
+from .index import Index, Located, Row, row
 
 
 def now_utc() -> str:
@@ -142,8 +144,51 @@ class Logbook:
                     if raw.strip():
                         yield json.loads(raw)
 
+    def located_lines(self) -> Iterator[Located]:
+        """Every line with its file (relative to the root) and byte offset, streamed in file order."""
+        for f in self.files():
+            rel = f.relative_to(self.root).as_posix()
+            offset = 0
+            with f.open("rb") as fh:
+                for raw in fh:
+                    if raw.strip():
+                        yield rel, offset, json.loads(raw)
+                    offset += len(raw)
+
+    # -- the index: a locator, rebuilt whenever it is missing or stale (ADR 0001, 0007) ----------
+    def index(self) -> Index:
+        """The index, current with logbook.json; built from the files first when it is not. The
+        caller closes it (`with lb.index() as idx:`). Silent: a rebuild inside a reader prints
+        nothing; `logbook index` is the command that shows progress."""
+        idx = Index.open(self)
+        if not idx.matches(self.meta):
+            idx.rebuild()
+        return idx
+
+    def index_rebuild(self, progress: Callable[[int, float], None] | None = None) -> int:
+        """`logbook index`: build from the files whatever the state; returns the line count."""
+        with Index.open(self) as idx:
+            return idx.rebuild(progress)
+
+    def _index_if_current(self, meta: dict[str, Any]) -> Index | None:
+        """For a writer: the index when it exists and is current, so it can be extended; a stale
+        one is deleted (the next reader rebuilds) and a missing one is left missing."""
+        if not (self.root / INDEX_FILE).exists():
+            return None
+        idx = Index.open(self)
+        if idx.matches(meta):
+            return idx
+        idx.discard()
+        return None
+
+    def day_lines(self, day_local: str) -> list[Line]:
+        """Every line of one local day (the owner's timezone), in chain order."""
+        with self.index() as idx:
+            return idx.day(day_local)
+
     def line_by_seq(self, seq: int) -> Line | None:
-        return next((line for line in self.lines_unsorted() if line.get("seq") == seq), None)
+        with self.index() as idx:
+            return idx.by_seq(seq)
 
     def verify(self) -> tuple[int, str, list[str]]:
         meta = self.meta
@@ -175,10 +220,16 @@ class Logbook:
         )
         path = self._path_for(at)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(_dumps(line))
+        idx = self._index_if_current(meta)
+        with path.open("ab") as fh:
+            fh.seek(0, os.SEEK_END)
+            offset = fh.tell()
+            fh.write(_dumps(line).encode("utf-8"))
         meta["seq"], meta["head"] = line["seq"], line["hash"]
         self._save_meta(meta)
+        if idx is not None:
+            with idx:
+                idx.add([row(line, meta["timezone"], self._relative(path), offset)], meta)
         return line
 
     def retract(self, seq: int, reason: str, at: str | None = None) -> Line:
@@ -208,59 +259,77 @@ class Logbook:
         A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
         same export appends nothing. Drafts without a raw_id are never deduped.
 
-        Built for millions of drafts: the dedupe set is read once, the chain is computed in
-        memory, month files stay open, and every META_EVERY lines the pending lines are written
-        and flushed and then logbook.json is saved (a checkpoint). Lines never reach disk ahead of
-        a checkpoint, so an interruption leaves the log exactly as it was at the last checkpoint —
+        Built for millions of drafts: drafts are taken META_EVERY at a time, each batch is deduped
+        with one SELECT against the index, the chain is computed in memory, month files stay open,
+        and at the end of every batch the lines are written and flushed, then logbook.json is
+        saved, then the index is extended (a checkpoint). Lines never reach disk ahead of a
+        checkpoint, so an interruption leaves the log exactly as it was at the last checkpoint —
         a valid chain — and re-adding the same export finishes the job. On a Python-level
-        interruption (Ctrl-C, an exception in an adapter) the final checkpoint still runs, so
-        nothing already drafted is lost. `progress(count, elapsed_seconds)` is called every
-        PROGRESS_EVERY lines.
+        interruption (Ctrl-C, an exception in an adapter) the drafts already taken are still
+        written, so nothing already drafted is lost. `progress(count, elapsed_seconds)` is called
+        every PROGRESS_EVERY lines.
 
         Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
         and `at` is the event time. A batch is never sorted."""
         meta = self.meta
         self._check_format(meta)
-        seen = set(self._dedupe_keys())
+        idx = self.index()
+        tz = str(meta["timezone"])
         seq, head = meta["seq"], meta["head"]
-        handles: dict[Path, TextIO] = {}
-        pending: dict[Path, list[str]] = {}
-        n, since_checkpoint, started = 0, 0, time.monotonic()
+        handles: dict[Path, BinaryIO] = {}
+        n, started = 0, time.monotonic()
+        it = iter(drafts)
 
-        def checkpoint() -> None:
-            for path, rows in pending.items():
+        def checkpoint(lines: list[tuple[Path, Line]]) -> None:
+            pending: dict[Path, list[Line]] = {}
+            for path, line in lines:
+                pending.setdefault(path, []).append(line)
+            rows: list[Row] = []
+            for path, batch in pending.items():
                 fh = handles.get(path)
                 if fh is None:
                     path.parent.mkdir(parents=True, exist_ok=True)
-                    fh = handles[path] = path.open("a", encoding="utf-8")
-                fh.write("".join(rows))
+                    fh = handles[path] = path.open("ab")
+                    fh.seek(0, os.SEEK_END)
+                rel, offset = self._relative(path), fh.tell()
+                encoded = [_dumps(line).encode("utf-8") for line in batch]
+                for line, raw in zip(batch, encoded, strict=True):
+                    rows.append(row(line, tz, rel, offset))
+                    offset += len(raw)
+                fh.write(b"".join(encoded))
                 fh.flush()
-            pending.clear()
             if (meta["seq"], meta["head"]) != (seq, head):
                 meta["seq"], meta["head"] = seq, head
                 self._save_meta(meta)
+                idx.add(rows, meta)
 
         try:
-            for d in drafts:
-                key = _dedupe_key(d)
-                if key is not None:
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                line = self._line(meta, seq + 1, head, **d)
-                pending.setdefault(self._path_for(line["at"]), []).append(_dumps(line))
-                seq, head = line["seq"], line["hash"]
-                n += 1
-                since_checkpoint += 1
-                if since_checkpoint >= META_EVERY:
-                    checkpoint()
-                    since_checkpoint = 0
-                if progress is not None and n % PROGRESS_EVERY == 0:
-                    progress(n, time.monotonic() - started)
+            while True:
+                batch, error = _take(it, META_EVERY)
+                keys = {key for d in batch if (key := _dedupe_key(d)) is not None}
+                found = idx.existing(keys) if keys else set()
+                lines: list[tuple[Path, Line]] = []
+                for d in batch:
+                    key = _dedupe_key(d)
+                    if key is not None:
+                        if key in found:
+                            continue
+                        found.add(key)
+                    line = self._line(meta, seq + 1, head, **d)
+                    lines.append((self._path_for(line["at"]), line))
+                    seq, head = line["seq"], line["hash"]
+                    n += 1
+                    if progress is not None and n % PROGRESS_EVERY == 0:
+                        progress(n, time.monotonic() - started)
+                checkpoint(lines)
+                if error is not None:
+                    raise error
+                if len(batch) < META_EVERY:
+                    break
         finally:
-            checkpoint()
             for fh in handles.values():
                 fh.close()
+            idx.close()
         return n
 
     # -- migration -----------------------------------------------------------
@@ -328,9 +397,10 @@ class Logbook:
         lineage = meta.setdefault("lineage", [])
         lineage.append({"from_format": OLD_FORMAT, "from_head": old_head, "migrated_at": migrated_at})
         self._save_meta(meta)
-        index = self.root / "index.sqlite"
-        if index.exists():
-            index.unlink()  # ADR 0007: disposable, rebuilt from the files
+        if (
+            self.root / INDEX_FILE
+        ).exists():  # ADR 0007: disposable; closed through the registry, then deleted
+            Index.open(self).discard()
         line = self.append(
             at=migrated_at,
             source="manual",
@@ -406,12 +476,8 @@ class Logbook:
         year, month = at[:4], at[5:7]
         return self.log_dir / year / f"{month}.jsonl"
 
-    def _dedupe_keys(self) -> Iterator[tuple[str, str]]:
-        """(source, raw_id) of every line — order does not matter here."""
-        for line in self.lines_unsorted():
-            key = _dedupe_key(line)
-            if key is not None:
-                yield key
+    def _relative(self, path: Path) -> str:
+        return path.relative_to(self.root).as_posix()
 
 
 def retractions(lines: Iterable[Line]) -> dict[str, Line]:
@@ -424,6 +490,27 @@ def retractions(lines: Iterable[Line]) -> dict[str, Line]:
             if isinstance(superseded, str):
                 found[superseded] = line
     return found
+
+
+def read_line_at(fh: BinaryIO, offset: int) -> Line:
+    """The line that starts at byte `offset` of an open month file."""
+    fh.seek(offset)
+    line: Line = json.loads(fh.readline())
+    return line
+
+
+def _take(it: Iterator[dict[str, Any]], size: int) -> tuple[list[dict[str, Any]], BaseException | None]:
+    """Up to `size` drafts, and the exception that stopped the iterator early, if one did: the
+    drafts taken before it are still returned so an interrupted import keeps them."""
+    batch: list[dict[str, Any]] = []
+    try:
+        for _ in range(size):
+            batch.append(next(it))
+    except StopIteration:
+        pass
+    except BaseException as e:  # KeyboardInterrupt included
+        return batch, e
+    return batch, None
 
 
 def _dumps(line: Line) -> str:

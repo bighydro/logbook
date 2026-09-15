@@ -1,35 +1,77 @@
-"""logbook — init · add · sync · retract · show · verify · export · migrate. Three verbs; the rest, rarely."""
+"""logbook — init · add · sync · retract · show · verify · export · index · migrate. Three verbs, six rare."""
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
+import time
+import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from . import FORMAT, __version__, adapters
+from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, now_utc, retractions
 
+_LOCALTIME = "/etc/localtime"
+
+
+def _zone_or_none(candidate: object) -> str | None:
+    """The candidate when it names a real IANA zone, else None."""
+    if not isinstance(candidate, str) or not candidate:
+        return None
+    try:
+        zoneinfo.ZoneInfo(candidate)
+    except (KeyError, ValueError, OSError):  # ZoneInfoNotFoundError is a KeyError
+        return None
+    return candidate
+
+
+def _detect_timezone() -> str | None:
+    """The local IANA zone, or None when nothing on this machine says which it is.
+
+    datetime.now().astimezone() has no zone name on macOS (issue #25), so /etc/localtime
+    comes first: it is a symlink into a zoneinfo tree whose tail is the zone name.
+    """
+    parts = PurePath(os.path.realpath(_LOCALTIME)).parts  # Windows: backslash-split
+    if "zoneinfo" in parts:
+        after_last = len(parts) - parts[::-1].index("zoneinfo")
+        if zone := _zone_or_none("/".join(parts[after_last:])):
+            return zone
+    if zone := _zone_or_none(getattr(datetime.now().astimezone().tzinfo, "key", None)):
+        return zone
+    return _zone_or_none(os.environ.get("TZ"))
+
 
 def _tz_default() -> str:
-    key = getattr(datetime.now().astimezone().tzinfo, "key", None)
-    return key if isinstance(key, str) else "UTC"
+    return _detect_timezone() or "UTC"
 
 
 def cmd_init(a: argparse.Namespace) -> None:
     root = Path(a.path or Path.home() / "Logbook").expanduser()
+    timezone_name, hint = a.timezone, ""
+    if not timezone_name:
+        timezone_name = _detect_timezone()
+    if not timezone_name:
+        timezone_name = "UTC"
+        hint = " (could not detect; pass --timezone Europe/Zurich to change)"
     try:
-        lb = Logbook.init(root, a.timezone or _tz_default())
+        lb = Logbook.init(root, timezone_name)
     except CodeCheckoutError as e:
         print(f"refusing to init: {e}", file=sys.stderr)
         sys.exit(2)
-    print(f'created {lb.root}\nDrop any export into {lb.root / "inbox"}, or: logbook add "what happened"')
+    print(
+        f"created {lb.root}\ntimezone: {timezone_name}{hint}\n"
+        f'Drop any export into {lb.root / "inbox"}, or: logbook add "what happened"'
+    )
 
 
 def _add_file(lb: Logbook, p: Path) -> bool:
@@ -67,6 +109,7 @@ def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
 
 
 PATH_SUFFIXES = (".json", ".jsonl", ".geojson", ".zip", ".csv", ".txt")
+EN_DASH = "\u2013"  # between the two clocks of a time span
 
 
 def looks_like_path(arg: str) -> bool:
@@ -223,37 +266,93 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def cmd_show(a: argparse.Namespace) -> None:
+    """One local day (the owner's timezone), located through the index, read from the files,
+    in time order (then chain order for the same instant)."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
-    lines = list(lb.lines())
-    retracted = retractions(lines)
-    # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
-    rows = [line for line in lines if line["at"].startswith(day) and line["kind"] != RETRACTION]
+    tz = ZoneInfo(lb.meta["timezone"])
+    with lb.index() as idx:
+        # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
+        rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
+        retracted = retractions(idx.retractions())
     if not rows:
         print(f"{day}: nothing logged")
         return
+    rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
-    for line in rows:
-        retraction = retracted.get(line["id"])
-        if retraction is not None:
-            print(
-                f"  {line['at'][11:16]}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
-            )
-            continue
-        p = line["payload"]
-        text = (
-            p.get("text")
-            or p.get("title")
-            or p.get("name")
-            or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
-        )
-        print(f"  {line['at'][11:16]}  {line['kind']:<10} {line['source']:<14} {text}")
+    for text in _day_rows(rows, retracted, tz):
+        print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
 
 
+def _day_rows(rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo) -> Iterator[str]:
+    """One printed row per line, except that a run of location points from one source, unbroken
+    by any other row, collapses into one summary."""
+    run: list[Line] = []
+    for line in rows:
+        retraction = retracted.get(line["id"])
+        point = line["kind"] == "location" and retraction is None
+        if run and not (point and line["source"] == run[0]["source"]):
+            yield _run_row(run, tz)
+            run = []
+        if point:
+            run.append(line)
+        else:
+            yield _line_row(line, retraction, tz)
+    if run:
+        yield _run_row(run, tz)
+
+
+def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo) -> str:
+    clock = _clock(line["at"], tz)
+    if retraction is not None:
+        return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
+    p = line["payload"]
+    text = (
+        p.get("text")
+        or p.get("title")
+        or p.get("name")
+        or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
+    )
+    return f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}"
+
+
+def _run_row(run: list[Line], tz: ZoneInfo) -> str:
+    """Time span, count, and the first and last named place of a run of location points."""
+    first, last = _clock(run[0]["at"], tz), _clock(run[-1]["at"], tz)
+    span = first if first == last else f"{first}{EN_DASH}{last}"
+    n = len(run)
+    text = f"{n:,} point{'s' if n != 1 else ''}"
+    places = [place for place in map(_place, run) if place]
+    if places:
+        text += f" · {places[0]}" if places[0] == places[-1] else f" · {places[0]} → {places[-1]}"
+    return f"  {span}  {'location':<10} {run[0]['source']:<14} {text}"
+
+
+def _place(line: Line) -> str | None:
+    """extra.place.district, else extra.place.city, else None (RFC 0001: `extra` is the source's)."""
+    place = ((line.get("payload") or {}).get("extra") or {}).get("place") or {}
+    value = place.get("district") or place.get("city")
+    return str(value) if value else None
+
+
+def _clock(at: str, tz: ZoneInfo) -> str:
+    return datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(tz).strftime("%H:%M")
+
+
+def cmd_index(a: argparse.Namespace) -> None:
+    """Rebuild index.sqlite from the files. Readers do this by themselves when it is missing or
+    stale; this is the command that shows progress, or that you run after copying a logbook."""
+    lb = Logbook.find()
+    started = time.monotonic()
+    n = lb.index_rebuild(progress=_progress)
+    print(f"indexed {n:,} lines in {time.monotonic() - started:,.1f}s → {lb.root / 'index.sqlite'}")
+
+
 def cmd_verify(a: argparse.Namespace) -> None:
+    """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     seq, head, errors = lb.verify()
     if a.expect:
@@ -358,6 +457,8 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("show", help="one day (default today)")
     s.add_argument("day", nargs="?")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
+    s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.add_argument("--expect", help="expected.json with seq and head (conformance)")
@@ -378,6 +479,15 @@ def main(argv: list[str] | None = None) -> None:
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
+    except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
+        _stdout_to_devnull()
+
+
+def _stdout_to_devnull() -> None:
+    """Point stdout at the null device so the interpreter's final flush does not report the
+    broken pipe on stderr and turn the exit status into 120."""
+    with contextlib.suppress(OSError, ValueError):  # no real file behind stdout (a test capture)
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
 
 if __name__ == "__main__":
