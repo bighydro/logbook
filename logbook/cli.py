@@ -10,7 +10,7 @@ import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from . import __version__, adapters
@@ -37,9 +37,11 @@ def _detect_timezone() -> str | None:
     datetime.now().astimezone() has no zone name on macOS (issue #25), so /etc/localtime
     comes first: it is a symlink into a zoneinfo tree whose tail is the zone name.
     """
-    _, found, tail = os.path.realpath(_LOCALTIME).partition("zoneinfo/")
-    if found and (zone := _zone_or_none(tail.replace(os.sep, "/"))):
-        return zone
+    parts = PurePath(os.path.realpath(_LOCALTIME)).parts  # Windows: backslash-split
+    if "zoneinfo" in parts:
+        after_last = len(parts) - parts[::-1].index("zoneinfo")
+        if zone := _zone_or_none("/".join(parts[after_last:])):
+            return zone
     if zone := _zone_or_none(getattr(datetime.now().astimezone().tzinfo, "key", None)):
         return zone
     return _zone_or_none(os.environ.get("TZ"))

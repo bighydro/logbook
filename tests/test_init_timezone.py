@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 from datetime import timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -53,6 +53,19 @@ def nothing_detectable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 def test_tz_from_etc_localtime_symlink(nothing_detectable, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "_LOCALTIME", str(_fake_localtime(tmp_path, "Europe/Zurich")))
+    assert cli._tz_default() == "Europe/Zurich"
+
+
+def test_tz_from_localtime_with_backslash_path(nothing_detectable, monkeypatch):
+    """Windows CI: realpath yields backslashes and PurePath is the Windows flavour."""
+    monkeypatch.setattr(cli.os.path, "realpath", lambda _p: r"C:\tz\zoneinfo\Europe\Zurich")
+    monkeypatch.setattr(cli, "PurePath", PureWindowsPath, raising=False)
+    assert cli._tz_default() == "Europe/Zurich"
+
+
+def test_tz_uses_last_zoneinfo_part(nothing_detectable, monkeypatch, tmp_path):
+    link = _fake_localtime(tmp_path / "zoneinfo", "Europe/Zurich")
+    monkeypatch.setattr(cli, "_LOCALTIME", str(link))
     assert cli._tz_default() == "Europe/Zurich"
 
 
