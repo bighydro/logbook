@@ -32,11 +32,36 @@ That is the whole product. Everything else is a layer somebody plugs in.
   inbox/            drop anything here. it gets read, then moved to done/.
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head.
+  state/            where each live source left off. bookkeeping, not the record.
 ```
 
 Nothing here needs the app to make sense. Open the files in any editor twenty years from now.
 
 If you also keep a clone of this repository, set `LOGBOOK_HOME` to your record's folder and pass that path to `logbook init`. On a case-insensitive disk (macOS by default) `~/Logbook` and a clone named `~/logbook` are the same folder; `init` refuses a folder that contains `pyproject.toml`, `.git` or `logbook/__init__.py`, and the CLI never picks such a folder as your record.
+
+## Sources
+
+Two ways in. `add` reads a file you already hold; `sync` asks a service you run for what is new.
+
+```bash
+logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
+logbook sync immich                               # everything since the last run; safe to repeat
+logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
+logbook sync immich --dry-run                     # count and summarise, write nothing
+```
+
+`sync` remembers where it got to in `state/<source>.json` and re-runs append nothing that is already
+in the log. The watermark is the source's own clock, when it received or last changed an item, not the
+capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tomorrow's sync and still
+lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
+and the command exits 2.
+
+| Source | Variables | What it logs |
+|---|---|---|
+| `immich` | `LOGBOOK_IMMICH_URL`, `LOGBOOK_IMMICH_KEY` | one `photo/v1` line per asset: capture time, camera, place, size, faces as person ids, never the pixels |
+
+Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
+The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
 
 ## Three rules
 
