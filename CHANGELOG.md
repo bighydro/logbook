@@ -5,7 +5,7 @@
 - CLI: init, add (text or JSONL), show, verify, export.
 - Conformance fixture with expected head.
 
-## 0.1.1 (unreleased)
+## 0.2.0 — 2026-09-15
 - Docs site (MkDocs Material) deployed from main; reproducible demo tape.
 - Package published as `openlogbook`; the command is `logbook`.
 - `init` and `find` refuse a code checkout (#12).
