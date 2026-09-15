@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import inspect
 import json
 import os
 import sys
@@ -78,8 +79,12 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     """Append one file through the adapter that recognises it. False when nothing does."""
     adapter = adapters.find(p)
     if adapter is not None:
-        n = lb.append_many(adapter.run(p), progress=_progress)
+        counts: dict[str, int] = {}
+        run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
+        drafts = run(p, counts=counts) if _takes_counts(adapter) else run(p)
+        n = lb.append_many(drafts, progress=_progress)
         print(f"added {n} lines from {adapter.NAME}")
+        _report_skipped(counts)
         return True
     if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
         n = lb.append_many(_jsonl(p), progress=_progress)
@@ -90,6 +95,19 @@ def _add_file(lb: Logbook, p: Path) -> bool:
         "Put it in inbox/ and it will be read when one exists."
     )
     return False
+
+
+def _takes_counts(adapter: adapters.Adapter) -> bool:
+    """Whether the adapter's `run` accepts a `counts` dict to tally what it skipped (optional)."""
+    return "counts" in inspect.signature(adapter.run).parameters
+
+
+def _report_skipped(counts: dict[str, int]) -> None:
+    """One line naming what an adapter left out and why, or nothing when it skipped nothing."""
+    no_time = counts.get("skipped_no_timestamp", 0)
+    bad_coords = counts.get("skipped_bad_coordinates", 0)
+    if no_time or bad_coords:
+        print(f"  skipped {no_time:,} without a timestamp, {bad_coords:,} with unusable coordinates")
 
 
 def _progress(n: int, elapsed: float) -> None:
