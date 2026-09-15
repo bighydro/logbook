@@ -1,0 +1,62 @@
+{
+  "semanticSegments": [
+    {
+      "startTime": "2026-03-01T07:00:00.000+01:00",
+      "endTime": "2026-03-01T09:00:00.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.93,
+        "topCandidate": {
+          "placeId": "ChIJ-synthetic-home-0001",
+          "semanticType": "HOME",
+          "probability": 0.88,
+          "placeLocation": {"latLng": "59.911°, 10.75°"}
+        }
+      }
+    },
+    {
+      "startTime": "2026-03-01T09:00:00.000+01:00",
+      "endTime": "2026-03-01T09:35:00.000+01:00",
+      "activity": {
+        "start": {"latLng": "59.911°, 10.75°"},
+        "end": {"latLng": "59.913°, 10.742°"},
+        "distanceMeters": 640.5,
+        "topCandidate": {"type": "WALKING", "probability": 0.71},
+        "probability": 0.71
+      }
+    },
+    {
+      "startTime": "2026-03-01T09:00:00.000+01:00",
+      "endTime": "2026-03-01T09:35:00.000+01:00",
+      "timelinePath": [
+        {"point": "geo:59.911,10.75", "time": "2026-03-01T09:01:00.000+01:00"},
+        {"point": "geo:59.912,10.746", "time": "2026-03-01T09:12:00.000+01:00", "mode": "WALKING"},
+        {"point": "geo:nan,10.744", "time": "2026-03-01T09:20:00.000+01:00"},
+        {"point": "geo:59.9125,10.744"},
+        {"point": "geo:59.913,10.742", "time": "2026-03-01T09:34:00.000+01:00"}
+      ]
+    },
+    {
+      "startTime": "2026-03-01T09:35:00.000+01:00",
+      "endTime": "2026-03-01T10:40:00.000+01:00",
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.81,
+        "topCandidate": {
+          "placeId": "ChIJ-synthetic-cafe-0002",
+          "semanticType": "UNKNOWN",
+          "probability": 0.6
+        }
+      }
+    },
+    {
+      "startTime": "2026-03-01T10:40:00.000+01:00",
+      "endTime": "2026-03-01T10:41:00.000+01:00",
+      "timelineMemory": {"trip": {"distanceFromOriginKms": 1}}
+    }
+  ],
+  "rawSignals": [],
+  "userLocationProfile": {"frequentPlaces": []}
+}

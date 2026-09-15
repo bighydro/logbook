@@ -49,6 +49,7 @@ Two ways in. `add` reads a file you already hold; `sync` asks a service you run 
 
 ```bash
 logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
+logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
