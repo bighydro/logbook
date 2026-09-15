@@ -1,4 +1,4 @@
-# Logbook format — specification v0.1
+# Logbook format — specification v0.2
 
 Status: draft. License: CC0. Anyone may implement this without asking.
 
@@ -18,9 +18,12 @@ The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described 
 `logbook.json`:
 
 ```json
-{"format": "logbook/0.1", "owner_id": "<uuid>", "created_at": "<RFC3339 UTC>",
- "timezone": "<IANA tz>", "seq": 4181, "head": "<hex sha256>"}
+{"format": "logbook/0.2", "owner_id": "<uuid>", "created_at": "<RFC3339 UTC>",
+ "timezone": "<IANA tz>", "seq": 4181, "head": "<hex sha256>",
+ "lineage": [{"from_format": "logbook/0.1", "from_head": "<hex sha256>", "migrated_at": "<RFC3339 UTC>"}]}
 ```
+
+`lineage` is present only in a record that was migrated from an earlier format (§3.1).
 
 ## 2. The line (the envelope)
 
@@ -54,15 +57,26 @@ hash    = sha256( prev + "|" + seq + "|" + sha256(content) + "|" + recorded_at )
 
 Corrections are new lines. A source that revises an earlier record writes a new line with `payload.supersedes = "<id>"`. Nothing is ever rewritten or removed.
 
+### 3.1 Format versions
+
+`logbook.json` `format` names the rule the record's hashes were computed with.
+
+| Format | Canonicalisation |
+|---|---|
+| `logbook/0.1` | Python's `json.dumps(sort_keys=True, separators=(",", ":"))`. It deviated from RFC 8785 in float layout (`0.0` and `120.0` instead of `0` and `120`; `1e-06` instead of `0.000001`; exponent form from 1e16, not 1e21) and in key order (Unicode code points, not UTF-16 code units). |
+| `logbook/0.2` | RFC 8785 exactly, as §3 says. |
+
+Canonicalisation is fixed, not versioned (ADR 0014): a conformant implementation carries one rule and MUST refuse to verify or write a `logbook/0.1` record. Such a record MUST be migrated forward. A migration keeps every line's `id`, `seq`, content fields and `recorded_at` unchanged, recomputes `prev` and `hash` in `seq` order under the 0.2 rule, sets `format` to `logbook/0.2`, appends `{from_format, from_head, migrated_at}` to `lineage` in `logbook.json`, and then appends one line — `source` `manual`, `kind` `migration`, `tier` 1, payload `{"schema": "migration/v1", "from_format": "logbook/0.1", "from_head": "<old head>"}` — so that the fact of the migration, and the head it replaced, are inside the chain. The old head stays reproducible from the old files with the old rule; nothing else about the record changes.
+
 ## 4. Tiers
 
 | Tier | Typical content | At rest |
 |---|---|---|
 | 1 | location, photo metadata, calendar, public activity | plain |
-| 2 | notes, messages, decisions, confirmations, personal mail | encrypted with the owner's key (v0.2) |
-| 3 | money, health | encrypted with the owner's key (v0.2) |
+| 2 | notes, messages, decisions, confirmations, personal mail | encrypted with the owner's key (a later version) |
+| 3 | money, health | encrypted with the owner's key (a later version) |
 
-Derived data inherits the highest tier of its evidence. v0.1 conformance requires the field; v0.2 will define the encryption envelope for tiers 2–3 (`payload_enc` replacing `payload`, age/X25519 recipient = the owner's key).
+Derived data inherits the highest tier of its evidence. Conformance requires the field; a later version will define the encryption envelope for tiers 2–3 (`payload_enc` replacing `payload`, age/X25519 recipient = the owner's key).
 
 ## 5. Payload profiles
 
@@ -70,7 +84,7 @@ The envelope is the standard. Payloads are versioned by `payload.schema` and pro
 
 ## 6. Conformance
 
-An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`, and when appending one line to a copy of it yields a logbook that still verifies. Level 2 conformance (v0.2) adds encryption. Two independent implementations must agree before v1.0 is frozen.
+An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`, and when appending one line to a copy of it yields a logbook that still verifies. Level 2 conformance (a later version) adds encryption. Two independent implementations must agree before v1.0 is frozen.
 
 ## 7. What this spec does not say
 
