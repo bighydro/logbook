@@ -171,7 +171,10 @@ def test_show_into_a_closed_pipe_returns_quietly(lb: Logbook, monkeypatch, capsy
     assert capsys.readouterr().err == ""
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash for a pipeline with pipefail")
+@pytest.mark.skipif(
+    sys.platform == "win32" or shutil.which("bash") is None,
+    reason="needs a real bash for a pipeline with pipefail (the Windows stub is not one)",
+)
 def test_show_piped_into_head_exits_0_with_nothing_on_stderr(tmp_path: Path):
     lb = Logbook.init(tmp_path / "lb", "UTC")
     stamps = (f"2026-03-01T{i // 3600:02d}:{i // 60 % 60:02d}:{i % 60:02d}Z" for i in range(20_000))
