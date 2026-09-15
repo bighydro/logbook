@@ -1,0 +1,71 @@
+{
+ "albums": {
+  "total": 0,
+  "count": 0,
+  "items": [],
+  "facets": []
+ },
+ "assets": {
+  "total": 1,
+  "count": 1,
+  "items": [
+   {
+    "id": "0000a5e7-0000-4000-8000-000000000009",
+    "createdAt": "2026-03-05T19:59:30.000Z",
+    "ownerId": "00000f00-0000-4000-8000-000000000001",
+    "libraryId": null,
+    "type": "IMAGE",
+    "originalPath": "/data/library/owner-1/2015/2015-07-14/IMG_0342.JPG",
+    "originalFileName": "IMG_0342.JPG",
+    "originalMimeType": "image/jpeg",
+    "thumbhash": null,
+    "fileCreatedAt": "2015-07-14T16:20:00.000Z",
+    "fileModifiedAt": "2015-07-14T16:20:00.000Z",
+    "localDateTime": "2015-07-14T18:20:00.000Z",
+    "updatedAt": "2026-03-05T20:00:00.000Z",
+    "isFavorite": false,
+    "isArchived": false,
+    "isTrashed": false,
+    "visibility": "timeline",
+    "duration": null,
+    "exifInfo": {
+     "city": null,
+     "country": null,
+     "dateTimeOriginal": "2015-07-14T18:20:00.000+02:00",
+     "description": "",
+     "exifImageHeight": 2448,
+     "exifImageWidth": 3264,
+     "exposureTime": null,
+     "fNumber": null,
+     "fileSizeInByte": 1900000,
+     "focalLength": null,
+     "iso": null,
+     "latitude": null,
+     "lensModel": null,
+     "longitude": null,
+     "make": "OldCam",
+     "model": "Pocket 7",
+     "modifyDate": null,
+     "orientation": null,
+     "projectionType": null,
+     "rating": null,
+     "state": null,
+     "timeZone": "UTC+2"
+    },
+    "livePhotoVideoId": null,
+    "people": [],
+    "checksum": "c3ludGhldGljLWNoZWNrc3VtLTAwMDk=",
+    "isOffline": false,
+    "hasMetadata": true,
+    "duplicateId": null,
+    "resized": true,
+    "width": 3264,
+    "height": 2448,
+    "isEdited": false
+   }
+  ],
+  "facets": [],
+  "nextPage": null,
+  "nextCursor": null
+ }
+}
