@@ -55,7 +55,7 @@ hash    = sha256( prev + "|" + seq + "|" + sha256(content) + "|" + recorded_at )
 
 `canonical_json` is RFC 8785 (JSON Canonicalization Scheme): keys sorted by UTF-16 code units, no whitespace, UTF-8, ES6 number serialisation, no NaN/Infinity. A logbook is **valid** when, taking every line from every file and ordering by `seq` (files partition by the month of `at`, so backfilled history lands in old files; file order is not chain order), every line's `seq` is the previous plus one, every `prev` equals the previous `hash`, every `hash` recomputes, and `logbook.json` `seq`/`head` match the last line.
 
-Corrections are new lines. A source that revises an earlier record writes a new line with `payload.supersedes = "<id>"`. Nothing is ever rewritten or removed.
+Corrections are new lines. A source that revises an earlier record writes a new line with `payload.supersedes = "<id>"`. Nothing is ever rewritten or removed. A line that should be hidden rather than corrected is retracted: a new line of kind `retraction` whose payload supersedes it (RFC 0003, `retraction/v1`); readers mark it and never drop it.
 
 ### 3.1 Format versions
 
