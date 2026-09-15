@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime
@@ -16,20 +17,55 @@ from . import __version__, adapters
 from .export import day_packages, day_range, parse_day, write_package
 from .store import RETRACTION, CodeCheckoutError, Logbook, now_utc, retractions
 
+_LOCALTIME = "/etc/localtime"
+
+
+def _zone_or_none(candidate: object) -> str | None:
+    """The candidate when it names a real IANA zone, else None."""
+    if not isinstance(candidate, str) or not candidate:
+        return None
+    try:
+        zoneinfo.ZoneInfo(candidate)
+    except (KeyError, ValueError, OSError):  # ZoneInfoNotFoundError is a KeyError
+        return None
+    return candidate
+
+
+def _detect_timezone() -> str | None:
+    """The local IANA zone, or None when nothing on this machine says which it is.
+
+    datetime.now().astimezone() has no zone name on macOS (issue #25), so /etc/localtime
+    comes first: it is a symlink into a zoneinfo tree whose tail is the zone name.
+    """
+    _, found, tail = os.path.realpath(_LOCALTIME).partition("zoneinfo/")
+    if found and (zone := _zone_or_none(tail.replace(os.sep, "/"))):
+        return zone
+    if zone := _zone_or_none(getattr(datetime.now().astimezone().tzinfo, "key", None)):
+        return zone
+    return _zone_or_none(os.environ.get("TZ"))
+
 
 def _tz_default() -> str:
-    key = getattr(datetime.now().astimezone().tzinfo, "key", None)
-    return key if isinstance(key, str) else "UTC"
+    return _detect_timezone() or "UTC"
 
 
 def cmd_init(a: argparse.Namespace) -> None:
     root = Path(a.path or Path.home() / "Logbook").expanduser()
+    timezone_name, hint = a.timezone, ""
+    if not timezone_name:
+        timezone_name = _detect_timezone()
+    if not timezone_name:
+        timezone_name = "UTC"
+        hint = " (could not detect; pass --timezone Europe/Zurich to change)"
     try:
-        lb = Logbook.init(root, a.timezone or _tz_default())
+        lb = Logbook.init(root, timezone_name)
     except CodeCheckoutError as e:
         print(f"refusing to init: {e}", file=sys.stderr)
         sys.exit(2)
-    print(f'created {lb.root}\nDrop any export into {lb.root / "inbox"}, or: logbook add "what happened"')
+    print(
+        f"created {lb.root}\ntimezone: {timezone_name}{hint}\n"
+        f'Drop any export into {lb.root / "inbox"}, or: logbook add "what happened"'
+    )
 
 
 def _add_file(lb: Logbook, p: Path) -> bool:
