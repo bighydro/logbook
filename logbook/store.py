@@ -7,10 +7,10 @@ import os
 import secrets
 import time
 import uuid
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from . import FORMAT
 from .chain import GENESIS, Line, compute_hash, verify_lines
@@ -30,6 +30,9 @@ def uuid7() -> str:
 
 
 CHECKOUT_MARKERS = ("pyproject.toml", ".git", "logbook/__init__.py")
+
+META_EVERY = 10_000  # append_many: lines between checkpoints (files flushed, then logbook.json)
+PROGRESS_EVERY = 50_000  # append_many: lines between progress reports
 
 
 class CodeCheckoutError(Exception):
@@ -130,14 +133,104 @@ class Logbook:
         tz: str | None = None,
         recorded_at: str | None = None,
     ) -> Line:
+        meta = self.meta
+        line = self._line(
+            meta, meta["seq"] + 1, meta["head"], at, source, kind, tier, payload, end, tz, recorded_at
+        )
+        path = self._path_for(at)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(_dumps(line))
+        meta["seq"], meta["head"] = line["seq"], line["hash"]
+        self._save_meta(meta)
+        return line
+
+    def append_many(
+        self,
+        drafts: Iterable[dict[str, Any]],
+        progress: Callable[[int, float], None] | None = None,
+    ) -> int:
+        """Append drafts in order; returns how many were written.
+
+        A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
+        same export appends nothing. Drafts without a raw_id are never deduped.
+
+        Built for millions of drafts: the dedupe set is read once, the chain is computed in
+        memory, month files stay open, and every META_EVERY lines the pending lines are written
+        and flushed and then logbook.json is saved (a checkpoint). Lines never reach disk ahead of
+        a checkpoint, so an interruption leaves the log exactly as it was at the last checkpoint —
+        a valid chain — and re-adding the same export finishes the job. On a Python-level
+        interruption (Ctrl-C, an exception in an adapter) the final checkpoint still runs, so
+        nothing already drafted is lost. `progress(count, elapsed_seconds)` is called every
+        PROGRESS_EVERY lines.
+
+        Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
+        and `at` is the event time. A batch is never sorted."""
+        seen = set(self._dedupe_keys())
+        meta = self.meta
+        seq, head = meta["seq"], meta["head"]
+        handles: dict[Path, TextIO] = {}
+        pending: dict[Path, list[str]] = {}
+        n, since_checkpoint, started = 0, 0, time.monotonic()
+
+        def checkpoint() -> None:
+            for path, rows in pending.items():
+                fh = handles.get(path)
+                if fh is None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fh = handles[path] = path.open("a", encoding="utf-8")
+                fh.write("".join(rows))
+                fh.flush()
+            pending.clear()
+            if (meta["seq"], meta["head"]) != (seq, head):
+                meta["seq"], meta["head"] = seq, head
+                self._save_meta(meta)
+
+        try:
+            for d in drafts:
+                key = _dedupe_key(d)
+                if key is not None:
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                line = self._line(meta, seq + 1, head, **d)
+                pending.setdefault(self._path_for(line["at"]), []).append(_dumps(line))
+                seq, head = line["seq"], line["hash"]
+                n += 1
+                since_checkpoint += 1
+                if since_checkpoint >= META_EVERY:
+                    checkpoint()
+                    since_checkpoint = 0
+                if progress is not None and n % PROGRESS_EVERY == 0:
+                    progress(n, time.monotonic() - started)
+        finally:
+            checkpoint()
+            for fh in handles.values():
+                fh.close()
+        return n
+
+    def _line(
+        self,
+        meta: dict[str, Any],
+        seq: int,
+        prev: str,
+        at: str,
+        source: str,
+        kind: str,
+        tier: int,
+        payload: dict[str, Any],
+        end: str | None = None,
+        tz: str | None = None,
+        recorded_at: str | None = None,
+    ) -> Line:
+        """A complete, hashed line; nothing is written."""
         if "schema" not in payload:
             raise ValueError("payload.schema is required")
         if tier not in (1, 2, 3):
             raise ValueError("tier must be 1, 2 or 3")
-        meta = self.meta
         line: Line = {
             "id": uuid7(),
-            "seq": meta["seq"] + 1,
+            "seq": seq,
             "at": at,
             "end": end,
             "tz": tz or meta["timezone"],
@@ -146,34 +239,29 @@ class Logbook:
             "tier": tier,
             "payload": payload,
             "recorded_at": recorded_at or now_utc(),
-            "prev": meta["head"],
+            "prev": prev,
         }
         line["hash"] = compute_hash(line)
-        year, month = at[:4], at[5:7]
-        path = self.log_dir / year / f"{month}.jsonl"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n")
-        meta["seq"], meta["head"] = line["seq"], line["hash"]
-        self._save_meta(meta)
         return line
 
-    def append_many(self, drafts: Iterable[dict[str, Any]]) -> int:
-        """Append drafts in order; returns how many were written.
+    def _path_for(self, at: str) -> Path:
+        year, month = at[:4], at[5:7]
+        return self.log_dir / year / f"{month}.jsonl"
 
-        A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
-        same export appends nothing. Drafts without a raw_id are never deduped."""
-        seen = {key for key in map(_dedupe_key, self.lines()) if key is not None}
-        n = 0
-        for d in drafts:
-            key = _dedupe_key(d)
-            if key is not None:
-                if key in seen:
-                    continue
-                seen.add(key)
-            self.append(**d)
-            n += 1
-        return n
+    def _dedupe_keys(self) -> Iterator[tuple[str, str]]:
+        """(source, raw_id) of every line, streamed file by file — order does not matter here,
+        and `lines()` would hold the whole log in memory."""
+        for f in self.files():
+            with f.open(encoding="utf-8") as fh:
+                for raw in fh:
+                    if raw.strip():
+                        key = _dedupe_key(json.loads(raw))
+                        if key is not None:
+                            yield key
+
+
+def _dumps(line: Line) -> str:
+    return json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n"
 
 
 def _dedupe_key(line: dict[str, Any]) -> tuple[str, str] | None:
