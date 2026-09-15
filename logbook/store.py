@@ -34,6 +34,8 @@ CHECKOUT_MARKERS = ("pyproject.toml", ".git", "logbook/__init__.py")
 META_EVERY = 10_000  # append_many: lines between checkpoints (files flushed, then logbook.json)
 PROGRESS_EVERY = 50_000  # append_many: lines between progress reports
 
+RETRACTION = "retraction"  # kind of the line that supersedes another (SPEC §3)
+
 
 class CodeCheckoutError(Exception):
     """The folder looks like a clone of this repository, not a personal record."""
@@ -104,12 +106,21 @@ class Logbook:
     def lines(self) -> Iterator[Line]:
         """All lines in chain order (by seq). Files partition by month of `at`; backfilled
         history lands in old files, so file order is not chain order."""
-        rows: list[Line] = []
-        for f in self.files():
-            with f.open(encoding="utf-8") as fh:
-                rows.extend(json.loads(raw) for raw in fh if raw.strip())
+        rows = list(self.lines_unsorted())
         rows.sort(key=lambda r: r.get("seq", 0))
         return iter(rows)
+
+    def lines_unsorted(self) -> Iterator[Line]:
+        """Every line, streamed file by file, in file order — not chain order. For a pass that
+        groups or indexes and must not hold the whole log in memory; `lines()` does."""
+        for f in self.files():
+            with f.open(encoding="utf-8") as fh:
+                for raw in fh:
+                    if raw.strip():
+                        yield json.loads(raw)
+
+    def line_by_seq(self, seq: int) -> Line | None:
+        return next((line for line in self.lines_unsorted() if line.get("seq") == seq), None)
 
     def verify(self) -> tuple[int, str, list[str]]:
         seq, head, errors = verify_lines(self.lines())
@@ -144,6 +155,23 @@ class Logbook:
         meta["seq"], meta["head"] = line["seq"], line["hash"]
         self._save_meta(meta)
         return line
+
+    def retract(self, seq: int, reason: str, at: str | None = None) -> Line:
+        """Retract line `seq`: a new manual line, kind `retraction`, whose payload supersedes it
+        (SPEC §3). The retracted line stays; readers hide it. Raises ValueError when there is no
+        such line or it is itself a retraction."""
+        target = self.line_by_seq(seq)
+        if target is None:
+            raise ValueError(f"no line with seq {seq}")
+        if target.get("kind") == RETRACTION:
+            raise ValueError(f"#{seq} is itself a retraction")
+        return self.append(
+            at=at or now_utc(),
+            source="manual",
+            kind=RETRACTION,
+            tier=2,
+            payload={"schema": "retraction/v1", "supersedes": target["id"], "seq": seq, "reason": reason},
+        )
 
     def append_many(
         self,
@@ -249,15 +277,23 @@ class Logbook:
         return self.log_dir / year / f"{month}.jsonl"
 
     def _dedupe_keys(self) -> Iterator[tuple[str, str]]:
-        """(source, raw_id) of every line, streamed file by file — order does not matter here,
-        and `lines()` would hold the whole log in memory."""
-        for f in self.files():
-            with f.open(encoding="utf-8") as fh:
-                for raw in fh:
-                    if raw.strip():
-                        key = _dedupe_key(json.loads(raw))
-                        if key is not None:
-                            yield key
+        """(source, raw_id) of every line — order does not matter here."""
+        for line in self.lines_unsorted():
+            key = _dedupe_key(line)
+            if key is not None:
+                yield key
+
+
+def retractions(lines: Iterable[Line]) -> dict[str, Line]:
+    """The retraction that supersedes each retracted line, keyed by the retracted line's id.
+    When a line is retracted more than once the one written last wins."""
+    found: dict[str, Line] = {}
+    for line in lines:
+        if line.get("kind") == RETRACTION:
+            superseded = (line.get("payload") or {}).get("supersedes")
+            if isinstance(superseded, str):
+                found[superseded] = line
+    return found
 
 
 def _dumps(line: Line) -> str:
