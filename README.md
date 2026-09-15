@@ -27,6 +27,15 @@ Nix: `nix run github:bighydro/logbook -- --version`, or `nix develop` in a clone
 
 That is the whole product. Everything else is a layer somebody plugs in.
 
+## Upgrading
+
+0.3.0 changes how lines are hashed (format `logbook/0.2`, SPEC §3.1). A record written by 0.1.0 or 0.2.0 is refused until it is migrated. Back up first, then migrate once:
+
+```bash
+cp -a ~/Logbook ~/Logbook.bak    # or wherever LOGBOOK_HOME points
+logbook migrate                  # same lines, new hashes; keeps the old files at logbook-0.1/
+```
+
 ## What is in the folder
 
 ```
