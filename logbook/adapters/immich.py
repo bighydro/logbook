@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -37,6 +38,8 @@ TIMEOUT_S = 60
 
 # -- provenance rule (RFC 0002, ADR 0011): data, so it can be reconsidered ----------------------
 # A camera file: HEIC/RAW/JPEG stills, or a video, with make/model and an original capture time.
+# A live-photo pair is camera evidence on its own: only a phone's camera makes one, and the mobile
+# app links the pair at upload, before the server's metadata job has read any EXIF.
 CAMERA_MIMES = frozenset(
     {
         "image/heic",
@@ -130,13 +133,23 @@ def configure(env: Mapping[str, str]) -> Config | None:
     return Config(url=url.rstrip("/"), key=key)
 
 
-def pull(config: Config, since: str | None = None) -> Iterator[dict[str, Any]]:
+def pull(
+    config: Config,
+    since: str | None = None,
+    progress: Callable[[int, float], None] | None = None,
+    counts: dict[str, int] | None = None,
+) -> Iterator[dict[str, Any]]:
     """Every asset Immich created or changed at or after `since` (RFC3339 UTC; None means all),
     oldest capture first, one photo/v1 line draft each. Trashed and hidden assets are never read
     (ADR 0011: the source's own junk judgement stands; hidden assets are the motion halves of live
-    photos)."""
+    photos). Assets whose metadata is still pending are deferred to a later sync (see the module
+    docstring) and tallied in `counts["pending"]`. `progress(assets_so_far, elapsed_seconds)` is
+    called after every page."""
     post: Callable[[Config, dict[str, Any]], dict[str, Any]] = _post
     cursor: str | None = None
+    count, started = 0, time.monotonic()
+    if counts is not None:
+        counts["pending"] = 0
     while True:
         body: dict[str, Any] = {
             "orderBy": {"field": "fileCreatedAt", "direction": "asc"},
@@ -152,10 +165,27 @@ def pull(config: Config, since: str | None = None) -> Iterator[dict[str, Any]]:
         for asset in page.get("items", []):
             if asset.get("isTrashed") or asset.get("visibility") == "hidden":
                 continue
+            if _metadata_pending(asset):
+                if counts is not None:
+                    counts["pending"] += 1
+                continue
             yield _line(asset)
+        count += len(page.get("items", []))
+        if progress is not None:
+            progress(count, time.monotonic() - started)
         cursor = page.get("nextCursor")
         if not cursor or not page.get("items"):
             return
+
+
+def _metadata_pending(asset: dict[str, Any]) -> bool:
+    """True for an upload Immich's metadata job has not reached: no dimensions on the asset and
+    an EXIF row holding nothing but the file size (or no EXIF row at all). After the job every
+    image and video has dimensions, even one with no EXIF of its own."""
+    exif: dict[str, Any] = asset.get("exifInfo") or {}
+    if asset.get("width") is not None or asset.get("height") is not None:
+        return False
+    return not any(value not in (None, "") for key, value in exif.items() if key != "fileSizeInByte")
 
 
 def watermark(draft: dict[str, Any]) -> str | None:
@@ -275,13 +305,17 @@ def _provenance(
     width: int | None,
     height: int | None,
 ) -> str:
-    """RFC 0002's reference rule. `camera` needs make/model and an original capture time plus a
-    camera file type or a live-photo pair; `screenshot` is a PNG with no camera data at a device
-    screen size (or named as one); `received` has no EXIF and a messenger's file name; else `other`."""
+    """RFC 0002's reference rule. `camera` is a live-photo pair, or make/model and an original
+    capture time on a camera file type; `screenshot` is a PNG with no camera data at a device
+    screen size (or named as one); `received` has no EXIF and a messenger's file name; else `other`.
+
+    Before Immich's metadata job has run on an upload, `exifInfo` holds only the file size and
+    width/height/duration are null, so the EXIF-based branches see nothing; the pair link is the
+    one signal the mobile app sets at upload."""
     mime = str(asset.get("originalMimeType") or "").lower()
     name = str(asset.get("originalFileName") or "")
     taken = bool(exif.get("dateTimeOriginal"))
-    if camera and taken and (mime in CAMERA_MIMES or live_photo):
+    if live_photo or (camera and taken and mime in CAMERA_MIMES):
         return "camera"
     if mime == "image/png" and not camera:
         size = (width, height)

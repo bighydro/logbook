@@ -54,6 +54,11 @@ def _progress(n: int, elapsed: float) -> None:
     print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
 
 
+def _page_progress(n: int, elapsed: float) -> None:
+    """One line per page pulled from a live source, dry runs included."""
+    print(f"  {n:,} assets in {elapsed:,.0f}s", file=sys.stderr)
+
+
 def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
     with p.open(encoding="utf-8") as fh:
         for line in fh:
@@ -133,23 +138,28 @@ def cmd_sync(a: argparse.Namespace) -> None:
         "watermark": None,
         "provenance": Counter(),
     }
-    drafts = _watch(adapter.pull(config, since), adapter.watermark, seen)
+    counts: dict[str, int] = {}
+    drafts = _watch(
+        adapter.pull(config, since, progress=_page_progress, counts=counts), adapter.watermark, seen
+    )
     try:
         if a.dry_run:
             for _ in drafts:
                 pass
         else:
-            n = lb.append_many(drafts, progress=_progress)
+            n = lb.append_many(drafts)  # the page lines above are the progress; one stream, not two
     except OSError as e:  # urllib's errors are OSErrors; what was pulled before is already checkpointed
         print(f"sync: {a.name}: {e}", file=sys.stderr)
         sys.exit(1)
     where = f"since {since}" if since else "from the beginning"
+    pending = counts.get("pending", 0)
     if a.dry_run:
         print(f"{a.name}: {seen['count']} lines {where} (dry run, nothing written)")
         if seen["count"]:
             print(f"  first {seen['first']}  last {seen['last']}  watermark {seen['watermark'] or '-'}")
             for provenance, count in sorted(seen["provenance"].items()):
                 print(f"  {provenance}: {count}")
+        _report_pending(pending)
         return
     if seen["watermark"] is not None:
         state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,6 +168,13 @@ def cmd_sync(a: argparse.Namespace) -> None:
         f"{a.name}: {n} new lines of {seen['count']} seen {where}; "
         f"watermark {seen['watermark'] or since or '-'}"
     )
+    _report_pending(pending)
+
+
+def _report_pending(pending: int) -> None:
+    """Assets the source has not finished processing; the adapter left them for a later sync."""
+    if pending:
+        print(f"  {pending:,} pending (metadata not extracted yet; will arrive on a later sync)")
 
 
 def _watch(
