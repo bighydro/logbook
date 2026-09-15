@@ -1,4 +1,4 @@
-"""logbook — init · add · show · verify · export. Three verbs and two you run once a year."""
+"""logbook — init · add · retract · show · verify · export. Three verbs and three you run once a year."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__, adapters
-from .export import day_package, day_range, parse_day, write_package
-from .store import CodeCheckoutError, Logbook, now_utc
+from .export import day_packages, day_range, parse_day, write_package
+from .store import RETRACTION, CodeCheckoutError, Logbook, now_utc, retractions
 
 
 def _tz_default() -> str:
@@ -59,34 +59,77 @@ def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
                 yield json.loads(line)
 
 
+PATH_SUFFIXES = (".json", ".jsonl", ".geojson", ".zip", ".csv", ".txt")
+
+
+def looks_like_path(arg: str) -> bool:
+    """Something the shell would have expanded from a glob, or a file name."""
+    return "/" in arg or arg.startswith("~") or arg.lower().endswith(PATH_SUFFIXES)
+
+
 def cmd_add(a: argparse.Namespace) -> None:
     lb = Logbook.find()
-    what = " ".join(a.what).strip()
-    p = Path(what).expanduser()
-    if p.is_dir():  # every file in it, in name order; hidden files are not exports
-        for f in sorted(p.iterdir()):
-            if f.is_file() and not f.name.startswith("."):
-                _add_file(lb, f)
-    elif p.exists():
-        if not _add_file(lb, p):
+    paths = [Path(w).expanduser() for w in a.what]
+    # When nothing exists, the arguments are a sentence unless every one of them looks like a
+    # path: "had 5/10 sleep" is a note, "~/Downloads/typo.json" is a typo.
+    if not any(p.exists() for p in paths) and not all(looks_like_path(w) for w in a.what):
+        _add_sentence(lb, " ".join(a.what).strip(), a.at)
+        return
+    # Something exists, so every argument is a path. A glob that matched two files must never
+    # become a note, and a path that does not exist is a typo, so nothing is written until every
+    # argument checks out.
+    for w, p in zip(a.what, paths, strict=True):
+        if not p.exists():
+            print(f"add: no such file or directory: {w}", file=sys.stderr)
             sys.exit(2)
-    else:  # a sentence, in your own words
-        at = a.at or now_utc()
-        line = lb.append(
-            at=at, source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": what}
-        )
-        print(f"#{line['seq']} {line['at']}  {what}")
+    ok = True
+    for p in paths:
+        if p.is_dir():  # every file in it, in name order; hidden files are not exports
+            for f in sorted(p.iterdir()):
+                if f.is_file() and not f.name.startswith("."):
+                    _add_file(lb, f)
+        elif not _add_file(lb, p):
+            ok = False
+    if not ok:
+        sys.exit(2)
+
+
+def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
+    """A sentence, in your own words."""
+    line = lb.append(
+        at=at or now_utc(), source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": what}
+    )
+    print(f"#{line['seq']} {line['at']}  {what}")
+
+
+def cmd_retract(a: argparse.Namespace) -> None:
+    lb = Logbook.find()
+    try:
+        line = lb.retract(a.seq, a.reason)
+    except ValueError as e:
+        print(f"retract: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(f"#{line['seq']} {line['at']}  retracted #{a.seq}: {a.reason}")
 
 
 def cmd_show(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
-    rows = [line for line in lb.lines() if line["at"].startswith(day)]
+    lines = list(lb.lines())
+    retracted = retractions(lines)
+    # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
+    rows = [line for line in lines if line["at"].startswith(day) and line["kind"] != RETRACTION]
     if not rows:
         print(f"{day}: nothing logged")
         return
     print(day)
     for line in rows:
+        retraction = retracted.get(line["id"])
+        if retraction is not None:
+            print(
+                f"  {line['at'][11:16]}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
+            )
+            continue
         p = line["payload"]
         text = (
             p.get("text")
@@ -150,8 +193,9 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
         print(f"export: {e}", file=sys.stderr)
         sys.exit(2)
     written = 0
+    packages = day_packages(lb, days)  # one read of the log for the whole range
     for day, out in zip(days, dirs, strict=True):
-        package = day_package(lb, day)
+        package = packages[day]
         n = len(package["entries"])
         if a.days and not a.empty and n == 0:
             continue
@@ -177,6 +221,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("what", nargs="+")
     s.add_argument("--at", help="RFC3339 UTC, default now")
     s.set_defaults(fn=cmd_add)
+    s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
+    s.add_argument("seq", type=int)
+    s.add_argument("reason")
+    s.set_defaults(fn=cmd_retract)
     s = sub.add_parser("show", help="one day (default today)")
     s.add_argument("day", nargs="?")
     s.set_defaults(fn=cmd_show)

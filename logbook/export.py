@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .chain import canonical_json
-from .store import Logbook, now_utc
+from .chain import Line, canonical_json
+from .store import Logbook, now_utc, retractions
 
 SCHEMA = "day-package/v1"
 
@@ -36,40 +36,71 @@ def day_range(first: str, last: str) -> list[str]:
     return [(a + timedelta(days=n)).isoformat() for n in range((b - a).days + 1)]
 
 
+def entry(line: Line, retracted_by: Line | None = None) -> dict[str, Any]:
+    """The day-package view of one line: identity and shape, never the payload. A retracted
+    line stays (the record is complete) and carries the id of the retraction that hides it."""
+    e = {
+        "id": line["id"],
+        "seq": line["seq"],
+        "at": line["at"],
+        "end": line.get("end"),
+        "kind": line["kind"],
+        "tier": line["tier"],
+        "source": line["source"],
+        "raw_id": (line.get("payload") or {}).get("raw_id"),
+        "tags": [],
+    }
+    if retracted_by is not None:
+        e["retracted_by"] = retracted_by["id"]
+    return e
+
+
+def entries_by_day(lb: Logbook, tz: str) -> dict[str, list[dict[str, Any]]]:
+    """Every line as an entry, grouped by local date, each day in chain order. One pass over the
+    log, streamed: entries are small, lines are not, and a year of days must not mean a year of
+    re-reads."""
+    lines: dict[str, list[Line]] = {}
+    for line in lb.lines_unsorted():
+        lines.setdefault(local_date(line["at"], tz), []).append(line)
+    retracted = retractions(line for rows in lines.values() for line in rows)
+    days: dict[str, list[dict[str, Any]]] = {}
+    for day, rows in lines.items():
+        rows.sort(key=lambda r: r["seq"])
+        days[day] = [entry(line, retracted.get(line["id"])) for line in rows]
+    return days
+
+
 def day_entries(lb: Logbook, day: str) -> list[dict[str, Any]]:
     """One entry per line whose local date is `day`, in chain order."""
-    tz = lb.meta["timezone"]
-    return [
-        {
-            "id": line["id"],
-            "seq": line["seq"],
-            "at": line["at"],
-            "end": line.get("end"),
-            "kind": line["kind"],
-            "tier": line["tier"],
-            "source": line["source"],
-            "raw_id": (line.get("payload") or {}).get("raw_id"),
-            "tags": [],
+    return entries_by_day(lb, lb.meta["timezone"]).get(day, [])
+
+
+def day_packages(lb: Logbook, days: list[str], generated_at: str | None = None) -> dict[str, dict[str, Any]]:
+    """One package per requested day (empty days included), from a single read of the log.
+    All packages carry the same `logbook_head`: they describe one state of the record."""
+    for day in days:
+        parse_day(day)
+    meta = lb.meta
+    generated_at = generated_at or now_utc()
+    by_day = entries_by_day(lb, meta["timezone"])
+    return {
+        day: {
+            "schema": SCHEMA,
+            "date": day,
+            "tz": meta["timezone"],
+            "owner_id": meta["owner_id"],
+            "generated_at": generated_at,
+            "logbook_head": meta["head"],
+            "entries": by_day.get(day, []),
+            "derived": {},
+            "attachments": [],
         }
-        for line in lb.lines()
-        if local_date(line["at"], tz) == day
-    ]
+        for day in days
+    }
 
 
 def day_package(lb: Logbook, day: str, generated_at: str | None = None) -> dict[str, Any]:
-    parse_day(day)
-    meta = lb.meta
-    return {
-        "schema": SCHEMA,
-        "date": day,
-        "tz": meta["timezone"],
-        "owner_id": meta["owner_id"],
-        "generated_at": generated_at or now_utc(),
-        "logbook_head": meta["head"],
-        "entries": day_entries(lb, day),
-        "derived": {},
-        "attachments": [],
-    }
+    return day_packages(lb, [day], generated_at)[day]
 
 
 def write_package(package: dict[str, Any], out: Path) -> None:

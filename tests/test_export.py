@@ -193,3 +193,27 @@ def test_cli_export_whole_log_unchanged(two_days: Logbook, tmp_path: Path):
 def test_cli_export_needs_a_target(two_days: Logbook):
     r = _run(two_days)
     assert r.returncode == 2
+
+
+# -- one pass: --days reads the log once, whatever the range ---------------------
+
+
+def test_cli_export_days_reads_the_log_once(
+    two_days: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from logbook import cli
+
+    calls: list[Path] = []
+    original = Logbook.files
+
+    def counting(self: Logbook) -> list[Path]:
+        calls.append(self.root)
+        return original(self)
+
+    monkeypatch.setattr(Logbook, "files", counting)
+    monkeypatch.setenv("LOGBOOK_HOME", str(two_days.root))
+    cli.main(["export", "--days", "2026-02-01", "2026-03-31", "--out", str(tmp_path / "o")])
+    assert len(calls) == 1
+    made = sorted(p.name for p in (tmp_path / "o").iterdir())
+    assert made == ["2026-03-01", "2026-03-02"]
+    assert [e["seq"] for e in _manifest(tmp_path / "o" / "2026-03-02")["entries"]] == [3, 4]
