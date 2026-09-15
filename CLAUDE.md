@@ -10,3 +10,4 @@ Hard rules — a change that needs to break one is wrong; stop and say so:
 - Test first: write the failing test, run it, implement, run it, commit with `-s`. One issue per task, closed by the commit.
 
 Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv run ruff check --fix .`, `uv run mypy logbook`). Conventional commits (`feat:`, `fix:`, `spec:`, `docs:`, `adapter:`). Plain English names inside the code: Logbook, Line, Day, Note — no metaphors.
+- Paths: never match or split them as strings; use `pathlib` parts. Windows runs the tests too.
