@@ -102,7 +102,8 @@ def test_show_on_200k_lines_takes_under_a_second_after_indexing(tmp_path, monkey
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     lb.append_many(_drafts(POINTS))
-    lb.index()
+    with lb.index():
+        pass
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     started = time.perf_counter()
     cli.main(["show", "2026-04-13"])  # a full day: 8,640 points at one every 10 s

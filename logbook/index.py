@@ -8,10 +8,13 @@ head or timezone rebuilds it from the files. `verify` never opens it. Deleting i
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import time
+from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -40,6 +43,10 @@ INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 Row = tuple[int, str, str, str, str, str, int, str | None, str, int]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
 
+# Open connections per index file, in this process. Windows refuses to delete a file that has an
+# open handle and Unix does not; `discard` consults this so the refusal is the same everywhere.
+_open: Counter[Path] = Counter()
+
 
 def local_date(at: str, tz: str) -> str:
     """The calendar date of an RFC3339 UTC instant in the owner's timezone."""
@@ -64,12 +71,15 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
 
 
 class Index:
-    """One connection to index.sqlite. Autocommit mode; every write is an explicit transaction."""
+    """One connection to index.sqlite. Autocommit mode; every write is an explicit transaction.
+    Close it when done (`with lb.index() as idx:`); the file is only ever deleted through
+    `discard`, which closes first."""
 
     def __init__(self, lb: Logbook):
         self.lb = lb
         self.path = lb.root / FILE_NAME
-        self.db = sqlite3.connect(self.path, isolation_level=None)
+        self._db: sqlite3.Connection | None = sqlite3.connect(self.path, isolation_level=None)
+        _open[self.path] += 1
 
     @classmethod
     def open(cls, lb: Logbook) -> Index:
@@ -78,19 +88,41 @@ class Index:
         try:
             idx.db.execute("SELECT count(*) FROM sqlite_master").fetchone()
         except sqlite3.DatabaseError:
-            idx.close()
-            idx.path.unlink(missing_ok=True)
+            idx.discard()
             idx = cls(lb)
         return idx
 
+    @property
+    def db(self) -> sqlite3.Connection:
+        if self._db is None:
+            raise RuntimeError("this Index is closed")
+        return self._db
+
     def close(self) -> None:
-        self.db.close()
+        """Idempotent. Every path that could delete the file goes through here first."""
+        if self._db is not None:
+            self._db.close()
+            self._db = None
+            _open[self.path] -= 1
+
+    def discard(self) -> None:
+        """Close, then delete the file. Refuses while another Index in this process is still
+        open on it: deleting under an open handle fails on Windows and silently succeeds on
+        Unix, and the same code must do the same thing on both."""
+        self.close()
+        if _open[self.path] > 0:
+            raise RuntimeError(f"{self.path} is still open elsewhere in this process; close it first")
+        self.path.unlink(missing_ok=True)
 
     def __enter__(self) -> Index:
         return self
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):  # interpreter shutdown, or never fully constructed
+            self.close()
 
     # -- state -------------------------------------------------------------------------------
     def matches(self, meta: dict[str, Any]) -> bool:

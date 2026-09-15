@@ -8,6 +8,7 @@ import json
 import sqlite3
 import sys
 from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -59,8 +60,24 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 
 
 def _rows(lb: Logbook, sql: str) -> list[tuple[Any, ...]]:
-    with sqlite3.connect(lb.root / "index.sqlite") as db:
+    """Read the index with a connection that is closed before the call returns: an open handle
+    would stop the code under test from deleting the file (Windows refuses; Unix does not)."""
+    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
         return list(db.execute(sql))
+
+
+def _tamper(lb: Logbook, *sql: str) -> None:
+    """Run statements against the index and close the connection before returning."""
+    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+        for statement in sql:
+            db.execute(statement)
+        db.commit()
+
+
+def _build(lb: Logbook) -> None:
+    """Build (or refresh) the index and close it; a test must never hold an Index open."""
+    with lb.index():
+        pass
 
 
 def _head_in_index(lb: Logbook) -> str:
@@ -94,7 +111,7 @@ def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, c
 
 
 def test_index_rows_carry_the_local_day_and_where_the_line_is_in_the_files(lb: Logbook):
-    lb.index()
+    _build(lb)
     rows = _rows(lb, "SELECT seq, day_local, source, raw_id, file, offset FROM lines ORDER BY seq")
     assert [r[1] for r in rows] == ["2026-03-01", "2026-03-01", "2026-03-02", "2026-03-02"]
     assert rows[0][2:4] == ("sim-phone", "trk:1") and rows[1][3] is None
@@ -125,7 +142,7 @@ def test_show_looks_a_day_up_by_local_date(lb: Logbook, capsys):
 
 
 def test_deleting_the_index_loses_nothing_show_rebuilds_it_silently(lb: Logbook, capsys):
-    lb.index()
+    _build(lb)
     cli.main(["show", "2026-03-01"])
     before = capsys.readouterr()
     (lb.root / "index.sqlite").unlink()
@@ -136,10 +153,8 @@ def test_deleting_the_index_loses_nothing_show_rebuilds_it_silently(lb: Logbook,
 
 
 def test_a_stale_index_is_rebuilt_before_it_is_read(lb: Logbook):
-    lb.index()
-    with sqlite3.connect(lb.root / "index.sqlite") as db:
-        db.execute("UPDATE meta SET value = 'stale' WHERE key = 'head'")
-        db.execute("DELETE FROM lines WHERE seq = 4")
+    _build(lb)
+    _tamper(lb, "UPDATE meta SET value = 'stale' WHERE key = 'head'", "DELETE FROM lines WHERE seq = 4")
     assert lb.line_by_seq(4) is not None
     assert _head_in_index(lb) == lb.meta["head"] and _rows(lb, "SELECT count(*) FROM lines") == [(4,)]
 
@@ -151,7 +166,7 @@ def test_an_unreadable_index_is_treated_as_missing(lb: Logbook):
 
 
 def test_a_changed_timezone_rebuilds_the_index(lb: Logbook):
-    lb.index()
+    _build(lb)
     meta = lb.meta
     meta["timezone"] = "UTC"
     lb._save_meta(meta)
@@ -167,11 +182,42 @@ def test_verify_never_opens_the_index(lb: Logbook, capsys):
     assert (lb.root / "index.sqlite").read_bytes() == b"not a database"
 
 
+# -- connections: closed before any unlink, on every platform -------------------------------
+
+
+def test_an_index_can_be_closed_deleted_and_reopened(lb: Logbook):
+    idx = lb.index()
+    idx.close()
+    (lb.root / "index.sqlite").unlink()  # Windows would refuse this with the connection still open
+    with lb.index() as again:
+        assert again.by_seq(1) is not None
+    assert _head_in_index(lb) == lb.meta["head"]
+
+
+def test_discard_closes_its_own_connection_and_refuses_while_another_is_open(lb: Logbook):
+    """Deleting index.sqlite under an open connection fails on Windows and silently succeeds on
+    Unix; `discard` makes it fail everywhere, so the suite catches it on any platform."""
+    with lb.index() as held:
+        other = index.Index.open(lb)
+        with pytest.raises(RuntimeError):
+            other.discard()
+        assert (lb.root / "index.sqlite").exists() and held.by_seq(1) is not None
+    other.discard()  # `held` is closed now; `other` was closed by the refused attempt
+    assert not (lb.root / "index.sqlite").exists()
+
+
+def test_a_closed_index_refuses_to_be_read(lb: Logbook):
+    idx = lb.index()
+    idx.close()
+    with pytest.raises(RuntimeError):
+        idx.by_seq(1)
+
+
 # -- writers keep it current ------------------------------------------------------------
 
 
 def test_append_keeps_a_current_index_current_without_a_rebuild(lb: Logbook, monkeypatch):
-    lb.index()
+    _build(lb)
     line = lb.append(
         at="2026-03-03T10:00:00Z",
         source="manual",
@@ -190,9 +236,8 @@ def test_append_keeps_a_current_index_current_without_a_rebuild(lb: Logbook, mon
 
 
 def test_append_discards_a_stale_index_rather_than_extending_it(lb: Logbook):
-    lb.index()
-    with sqlite3.connect(lb.root / "index.sqlite") as db:
-        db.execute("UPDATE meta SET value = 'stale' WHERE key = 'head'")
+    _build(lb)
+    _tamper(lb, "UPDATE meta SET value = 'stale' WHERE key = 'head'")
     lb.append(
         at="2026-03-03T10:00:00Z",
         source="manual",
@@ -265,7 +310,7 @@ def test_interrupted_append_many_leaves_the_index_at_the_last_checkpoint(tmp_pat
 
 
 def test_retract_finds_the_line_through_the_index_and_records_the_retraction(lb: Logbook, capsys):
-    lb.index()
+    _build(lb)
     (lb.root / "index.sqlite").unlink()
     cli.main(["retract", "2", "wrong cafe"])
     assert "retracted #2" in capsys.readouterr().out
@@ -287,7 +332,7 @@ def test_export_day_reads_the_same_package_with_or_without_the_index(lb: Logbook
 
 
 def test_export_days_with_a_current_index_does_not_scan_the_files(lb: Logbook, tmp_path: Path, monkeypatch):
-    lb.index()
+    _build(lb)
     calls: list[Path] = []
     original = Logbook.files
 
@@ -302,9 +347,8 @@ def test_export_days_with_a_current_index_does_not_scan_the_files(lb: Logbook, t
 
 
 def test_whole_log_export_and_verify_read_the_files_not_the_index(lb: Logbook, tmp_path: Path, capsys):
-    lb.index()
-    with sqlite3.connect(lb.root / "index.sqlite") as db:
-        db.execute("DELETE FROM lines")  # a lying index; head still matches
+    _build(lb)
+    _tamper(lb, "DELETE FROM lines")  # a lying index; head still matches
     cli.main(["export", str(tmp_path / "all.jsonl")])
     assert "exported 4 lines" in capsys.readouterr().out
     assert len((tmp_path / "all.jsonl").read_text(encoding="utf-8").splitlines()) == 4

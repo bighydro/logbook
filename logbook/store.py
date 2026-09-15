@@ -155,8 +155,7 @@ class Logbook:
         idx = Index.open(self)
         if idx.matches(meta):
             return idx
-        idx.close()
-        idx.path.unlink(missing_ok=True)
+        idx.discard()
         return None
 
     def day_lines(self, day_local: str) -> list[Line]:
