@@ -1,4 +1,4 @@
-"""logbook — init · add · sync · retract · show · verify · export. Three verbs and four you run rarely."""
+"""logbook — init · add · sync · retract · show · verify · export · index. Three verbs, five run rarely."""
 
 from __future__ import annotations
 
@@ -6,11 +6,13 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from . import __version__, adapters
 from .export import day_packages, day_range, parse_day, write_package
@@ -223,22 +225,23 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def cmd_show(a: argparse.Namespace) -> None:
+    """One local day (the owner's timezone), located through the index, read from the files."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
-    lines = list(lb.lines())
-    retracted = retractions(lines)
-    # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
-    rows = [line for line in lines if line["at"].startswith(day) and line["kind"] != RETRACTION]
+    tz = ZoneInfo(lb.meta["timezone"])
+    with lb.index() as idx:
+        # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
+        rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
+        retracted = retractions(idx.retractions())
     if not rows:
         print(f"{day}: nothing logged")
         return
     print(day)
     for line in rows:
+        clock = datetime.fromisoformat(line["at"].replace("Z", "+00:00")).astimezone(tz).strftime("%H:%M")
         retraction = retracted.get(line["id"])
         if retraction is not None:
-            print(
-                f"  {line['at'][11:16]}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
-            )
+            print(f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}")
             continue
         p = line["payload"]
         text = (
@@ -247,13 +250,23 @@ def cmd_show(a: argparse.Namespace) -> None:
             or p.get("name")
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
-        print(f"  {line['at'][11:16]}  {line['kind']:<10} {line['source']:<14} {text}")
+        print(f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}")
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
 
 
+def cmd_index(a: argparse.Namespace) -> None:
+    """Rebuild index.sqlite from the files. Readers do this by themselves when it is missing or
+    stale; this is the command that shows progress, or that you run after copying a logbook."""
+    lb = Logbook.find()
+    started = time.monotonic()
+    n = lb.index_rebuild(progress=_progress)
+    print(f"indexed {n:,} lines in {time.monotonic() - started:,.1f}s → {lb.root / 'index.sqlite'}")
+
+
 def cmd_verify(a: argparse.Namespace) -> None:
+    """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     seq, head, errors = lb.verify()
     if a.expect:
@@ -343,6 +356,8 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("show", help="one day (default today)")
     s.add_argument("day", nargs="?")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
+    s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.add_argument("--expect", help="expected.json with seq and head (conformance)")

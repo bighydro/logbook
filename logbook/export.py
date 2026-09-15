@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from .chain import Line, canonical_json
+from .index import local_date
 from .store import Logbook, now_utc, retractions
 
+__all__ = ["local_date"]  # re-exported: the day of a line is the index's business now
+
 SCHEMA = "day-package/v1"
-
-
-def local_date(at: str, tz: str) -> str:
-    """The calendar date of an RFC3339 UTC instant in the owner's timezone."""
-    instant = datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(UTC)
-    return instant.astimezone(ZoneInfo(tz)).date().isoformat()
 
 
 def parse_day(text: str) -> date:
@@ -55,14 +51,15 @@ def entry(line: Line, retracted_by: Line | None = None) -> dict[str, Any]:
     return e
 
 
-def entries_by_day(lb: Logbook, tz: str) -> dict[str, list[dict[str, Any]]]:
-    """Every line as an entry, grouped by local date, each day in chain order. One pass over the
-    log, streamed: entries are small, lines are not, and a year of days must not mean a year of
-    re-reads."""
+def entries_by_day(lb: Logbook, first: str, last: str) -> dict[str, list[dict[str, Any]]]:
+    """Every line whose local date is in [first, last] as an entry, grouped by day, each day in
+    chain order. The index says where the lines are; one sweep of the files reads them."""
+    with lb.index() as idx:
+        located = idx.between(first, last)
+        retracted = retractions(idx.retractions())
     lines: dict[str, list[Line]] = {}
-    for line in lb.lines_unsorted():
-        lines.setdefault(local_date(line["at"], tz), []).append(line)
-    retracted = retractions(line for rows in lines.values() for line in rows)
+    for day, line in located:
+        lines.setdefault(day, []).append(line)
     days: dict[str, list[dict[str, Any]]] = {}
     for day, rows in lines.items():
         rows.sort(key=lambda r: r["seq"])
@@ -72,7 +69,7 @@ def entries_by_day(lb: Logbook, tz: str) -> dict[str, list[dict[str, Any]]]:
 
 def day_entries(lb: Logbook, day: str) -> list[dict[str, Any]]:
     """One entry per line whose local date is `day`, in chain order."""
-    return entries_by_day(lb, lb.meta["timezone"]).get(day, [])
+    return entries_by_day(lb, day, day).get(day, [])
 
 
 def day_packages(lb: Logbook, days: list[str], generated_at: str | None = None) -> dict[str, dict[str, Any]]:
@@ -82,7 +79,7 @@ def day_packages(lb: Logbook, days: list[str], generated_at: str | None = None) 
         parse_day(day)
     meta = lb.meta
     generated_at = generated_at or now_utc()
-    by_day = entries_by_day(lb, meta["timezone"])
+    by_day = entries_by_day(lb, min(days), max(days)) if days else {}
     return {
         day: {
             "schema": SCHEMA,

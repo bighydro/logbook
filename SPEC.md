@@ -12,6 +12,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described 
   logbook/<YYYY>/<MM>.jsonl   the record
   notes/<YYYY>/<YYYY-MM-DD>.md   free text, optional
   inbox/                  optional; not part of conformance
+  index.sqlite            optional; a derived locator, disposable (ADR 0007); not part of conformance
 ```
 
 `logbook.json`:
