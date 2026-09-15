@@ -1,0 +1,10 @@
+# Only what the wheel needs reaches the build context.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!logbook/
+logbook/__pycache__/
+# never a personal record (see .gitignore)
+logbook/[0-9][0-9][0-9][0-9]/

@@ -1,4 +1,4 @@
-"""logbook — init · add · sync · retract · show · verify · export · index. Three verbs, five run rarely."""
+"""logbook — init · add · sync · retract · show · verify · export · index · migrate. Three verbs, six rare."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import __version__, adapters
+from . import FORMAT, __version__, adapters
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
-from .store import RETRACTION, CodeCheckoutError, Logbook, now_utc, retractions
+from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, now_utc, retractions
 
 _LOCALTIME = "/etc/localtime"
 
@@ -369,6 +369,21 @@ def cmd_verify(a: argparse.Namespace) -> None:
     print(f"valid — {seq} lines, head {head}")
 
 
+def cmd_migrate(a: argparse.Namespace) -> None:
+    """A logbook/0.1 record becomes logbook/0.2: same lines, hashes recomputed, lineage kept (SPEC §3.1)."""
+    lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
+    try:
+        result = lb.migrate(progress=_progress)
+    except (FormatError, FileExistsError, ValueError) as e:
+        print(f"migrate: {e}", file=sys.stderr)
+        sys.exit(2)
+    old, new = result["from_head"][:12], result["head"][:12]
+    print(
+        f"migrated {result['lines']} lines to {FORMAT}: head {old}… → {new}…\n"
+        f"the 0.1 files are kept at {result['kept']}; delete them once `logbook verify` is green"
+    )
+
+
 def cmd_export(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if a.day or a.days:
@@ -455,9 +470,15 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--out", metavar="DIR", help="where to write (default <root>/export/<date>/)")
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
+    s.add_argument("--root", help="logbook folder (default: find)")
+    s.set_defaults(fn=cmd_migrate)
     a = ap.parse_args(argv)
     try:
         a.fn(a)
+    except FormatError as e:  # verify and every writer refuse a record hashed by another rule
+        print(f"{a.cmd}: {e}", file=sys.stderr)
+        sys.exit(2)
     except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
         _stdout_to_devnull()
 
