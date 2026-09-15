@@ -1,0 +1,84 @@
+{
+  "locations": [
+    {
+      "latitudeE7": 599110000,
+      "longitudeE7": 107500000,
+      "accuracy": 12,
+      "altitude": 14,
+      "verticalAccuracy": 3,
+      "source": "WIFI",
+      "deviceTag": 123456789,
+      "platformType": "ANDROID",
+      "formFactor": "PHONE",
+      "batteryCharging": false,
+      "serverTimestamp": "2026-03-01T07:30:04.000Z",
+      "deviceTimestamp": "2026-03-01T07:30:01.000Z",
+      "osLevel": 34,
+      "timestamp": "2026-03-01T07:30:00.123Z"
+    },
+    {
+      "latitudeE7": 599130000,
+      "longitudeE7": 107420000,
+      "accuracy": 8,
+      "altitude": 16,
+      "velocity": 1,
+      "heading": 37,
+      "source": "GPS",
+      "deviceTag": 123456789,
+      "activity": [
+        {
+          "activity": [
+            {"type": "ON_FOOT", "confidence": 62},
+            {"type": "WALKING", "confidence": 62},
+            {"type": "STILL", "confidence": 20}
+          ],
+          "timestamp": "2026-03-01T08:04:58.000Z"
+        }
+      ],
+      "timestamp": "2026-03-01T08:05:00.000Z"
+    },
+    {
+      "latitudeE7": 599140000,
+      "longitudeE7": 107400000,
+      "accuracy": 650,
+      "source": "CELL",
+      "deviceTag": 123456789,
+      "timestamp": "2026-03-01T08:20:00.000Z"
+    },
+    {
+      "latitudeE7": 599150000,
+      "longitudeE7": 107380000,
+      "accuracy": 20,
+      "source": "UNKNOWN",
+      "deviceTag": 123456789,
+      "timestamp": "2026-03-01T08:40:00.000Z"
+    },
+    {
+      "latitudeE7": 599160000,
+      "longitudeE7": 107360000,
+      "accuracy": 25,
+      "deviceTag": 987654321,
+      "timestampMs": "1772354700000"
+    },
+    {
+      "latitudeE7": 599170000,
+      "longitudeE7": 107340000,
+      "accuracy": 30,
+      "deviceTag": 123456789
+    },
+    {
+      "latitudeE7": 599180000,
+      "accuracy": 30,
+      "deviceTag": 123456789,
+      "timestamp": "2026-03-01T09:20:00.000Z"
+    },
+    {
+      "latitudeE7": 599190000,
+      "longitudeE7": 107300000,
+      "accuracy": 10,
+      "source": "GPS",
+      "deviceTag": 123456789,
+      "timestamp": "2026-03-01T09:40:00.000Z"
+    }
+  ]
+}
