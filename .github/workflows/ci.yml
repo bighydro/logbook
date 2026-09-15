@@ -25,6 +25,30 @@ jobs:
         run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
       - uses: codecov/codecov-action@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v23
+      - run: nix build --print-build-logs
+      - run: result/bin/logbook --version
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: build linux/amd64 and linux/arm64 (no push)
+        uses: docker/build-push-action@v7
+        with: { context: ., platforms: "linux/amd64,linux/arm64", push: false, cache-from: type=gha, cache-to: "type=gha,mode=max" }
+      - name: load amd64 image
+        uses: docker/build-push-action@v7
+        with: { context: ., platforms: linux/amd64, load: true, tags: logbook:amd64, cache-from: type=gha }
+      - run: docker run --rm logbook:amd64 --version
+      - name: load arm64 image
+        uses: docker/build-push-action@v7
+        with: { context: ., platforms: linux/arm64, load: true, tags: logbook:arm64, cache-from: type=gha }
+      - run: docker run --rm --platform linux/arm64 logbook:arm64 --version
   scorecard:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

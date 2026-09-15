@@ -1,5 +1,9 @@
 """Regenerates the synthetic sample logbook. A fictional person, a fictional town, one week.
-Deterministic: fixed ids are not required by the spec, but fixed recorded_at keeps the head stable."""
+Deterministic: fixed ids are not required by the spec, but fixed recorded_at keeps the head stable.
+
+Three lines carry values that RFC 8785 lays out differently from Python's json.dumps (SPEC §3.1):
+120.0, 0.0, 1e20, 1e-06 and an object key outside the BMP. A canonicaliser that gets those wrong
+cannot reproduce the head."""
 
 import json
 import shutil
@@ -7,6 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from logbook import FORMAT
 from logbook.store import Logbook
 
 HERE = Path(__file__).parent
@@ -27,7 +32,14 @@ rows = [
         "sim-phone",
         "location",
         1,
-        {"schema": "location/v1", "lat": 59.911, "lon": 10.750, "accuracy_m": 12},
+        {
+            "schema": "location/v1",
+            "lat": 59.911,
+            "lon": 10.750,
+            "accuracy_m": 12,
+            "alt_m": 120.0,
+            "speed_mps": 0.0,
+        },
     ),
     (
         "2026-03-01T08:05:00Z",
@@ -70,7 +82,12 @@ rows = [
         "sim-watch",
         "sleep",
         3,
-        {"schema": "health-sample/v1", "metric": "sleep", "hours": 8.25},
+        {
+            "schema": "health-sample/v1",
+            "metric": "sleep",
+            "hours": 8.25,
+            "calibration": {"gain": 1e21, "offset": 1e20, "epsilon": 1e-06},
+        },
     ),
     (
         "2026-03-02T12:10:00Z",
@@ -139,7 +156,16 @@ rows = [
         "sim-messages",
         "message",
         2,
-        {"schema": "message/v1", "chat": "Ines", "direction": "in", "text": "Landed? Dinner Sunday?"},
+        {
+            "schema": "message/v1",
+            "chat": "Ines",
+            "direction": "in",
+            "text": "Landed? Dinner Sunday?",
+            "reactions": {
+                chr(0x1F600): 2,
+                chr(0xFB33): 1,
+            },  # UTF-16 order: U+1F600 first; code-point order: last
+        },
     ),
     (
         "2026-03-07T18:00:00Z",
@@ -172,7 +198,5 @@ for f in sorted(ROOT.glob("logbook/*/*.jsonl")):
 (ROOT / "notes" / "2026" / "2026-03-07.md").write_text("A good week. The decision is made; now live it.\n")
 seq, head, errors = lb.verify()
 assert not errors, errors
-(HERE / "expected.json").write_text(
-    json.dumps({"format": "logbook/0.1", "seq": seq, "head": head}, indent=2) + "\n"
-)
+(HERE / "expected.json").write_text(json.dumps({"format": FORMAT, "seq": seq, "head": head}, indent=2) + "\n")
 print("sample logbook:", seq, "lines, head", head)

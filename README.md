@@ -21,6 +21,10 @@ logbook show today
 logbook verify                  # the chain is intact
 ```
 
+Docker: `docker build -t logbook . && docker run --rm -v ~/Logbook:/data logbook show today` — the image keeps the record in the `/data` volume (`LOGBOOK_HOME=/data`).
+
+Nix: `nix run github:bighydro/logbook -- --version`, or `nix develop` in a clone for a shell with Python 3.12 and uv.
+
 That is the whole product. Everything else is a layer somebody plugs in.
 
 ## What is in the folder
