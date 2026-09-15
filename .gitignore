@@ -23,3 +23,6 @@ export/
 
 # where `logbook sync` left off per source: bookkeeping, not the record
 state/
+
+# a disposable locator for the files, rebuilt whenever it is missing or stale (ADR 0007)
+index.sqlite
