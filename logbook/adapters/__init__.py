@@ -27,7 +27,7 @@ makes them only inside `pull`.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from importlib import import_module
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -55,7 +55,13 @@ class LiveAdapter(Protocol):
 
     def configure(self, env: Mapping[str, str]) -> object | None: ...
 
-    def pull(self, config: Any, since: str | None = None) -> Iterator[dict[str, Any]]: ...
+    def pull(
+        self,
+        config: Any,
+        since: str | None = None,
+        progress: Callable[[int, float], None] | None = None,
+        counts: dict[str, int] | None = None,
+    ) -> Iterator[dict[str, Any]]: ...
 
     def watermark(self, draft: dict[str, Any]) -> str | None: ...
 

@@ -29,7 +29,7 @@ One image or video asset the owner holds, described by its metadata. The pixels 
 
 ## Provenance rule (reference)
 
-`camera` when make/model and original capture time are present and the file is HEIC/RAW/JPEG from a known device or has a live-photo pair; `screenshot` when PNG at a device screen size with no camera data; `received` when there is no EXIF and the name follows messenger patterns (`IMG-2026…-WA0012`, `image0.jpg`); else `other`. Owners correct with one tap; corrections are `manual` lines.
+`camera` when the asset has a live-photo pair, or when make/model and an original capture time are present on a camera file type (HEIC/RAW/JPEG/video); `screenshot` when PNG at a device screen size with no camera data; `received` when there is no EXIF and the name follows messenger patterns (`IMG-2026…-WA0012`, `image0.jpg`); else `other`. Owners correct with one tap; corrections are `manual` lines.
 
 ## Example (synthetic)
 

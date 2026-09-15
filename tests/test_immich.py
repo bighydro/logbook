@@ -389,3 +389,121 @@ def test_sync_server_error_exits_1_after_keeping_what_was_pulled(lb, monkeypatch
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == 3  # page 1 landed at the checkpoint; the watermark did not move
     assert not (lb.root / "state" / "immich.json").exists()
+
+
+# -- assets the server has not extracted metadata for yet -------------------
+# Immich writes the asset row at upload and fills EXIF, dimensions and video duration in a later
+# job, which bumps `updatedAt`. Until it runs, `exifInfo` holds only the file size and
+# width/height/duration/thumbhash are null. `pull` defers such assets: not yielded, so not in the
+# watermark, so the next sync's `updatedAt >= since` window still covers them once processed.
+# pending.json: one extracted asset (earliest updatedAt) and three pending ones; extracted.json:
+# the same three after the job, with later stamps.
+
+PENDING_NOTE = "3 pending (metadata not extracted yet; will arrive on a later sync)"
+
+
+@pytest.fixture
+def pending(monkeypatch: pytest.MonkeyPatch) -> FakeServer:
+    fake = FakeServer({None: "pending.json"})
+    monkeypatch.setattr(immich, "_post", fake)
+    return fake
+
+
+def test_live_photo_pair_alone_is_camera_evidence():
+    asset = _page("pending.json")["assets"]["items"][1]  # IMG_3101: a pair link and nothing else
+    line = immich._line(asset)
+    p = line["payload"]
+    assert p["live_photo"] is True and p["provenance"] == "camera"
+    assert "camera" not in p and "width" not in p and "height" not in p and "lat" not in p
+    assert line["at"] == "2021-08-14T13:05:12Z"  # the file time
+
+
+def test_metadata_is_pending_when_there_are_no_dimensions_and_exif_holds_only_the_file_size():
+    assert [immich._metadata_pending(a) for a in _page("pending.json")["assets"]["items"]] == [
+        False,
+        True,
+        True,
+        True,
+    ]
+    assert not any(immich._metadata_pending(a) for a in _page("extracted.json")["assets"]["items"])
+    # a file with no EXIF at all but known dimensions has been through the job (screenshots, received)
+    assert not immich._metadata_pending({"width": 1170, "height": 2532, "exifInfo": {"fileSizeInByte": 1}})
+    assert immich._metadata_pending({"width": None, "height": None, "exifInfo": None})
+
+
+def test_pull_defers_pending_assets_and_counts_them(pending):
+    counts: dict[str, int] = {}
+    lines = list(immich.pull(CONFIG, None, counts=counts))
+    assert [line["payload"]["file_name"] for line in lines] == ["IMG_3100.HEIC"]
+    assert counts == {"pending": 3}
+
+
+def test_pull_yields_a_deferred_asset_once_a_later_page_has_its_metadata(monkeypatch):
+    monkeypatch.setattr(immich, "_post", FakeServer({None: "extracted.json"}))
+    counts: dict[str, int] = {}
+    outcome = {
+        line["payload"]["file_name"]: line["payload"]["provenance"]
+        for line in immich.pull(CONFIG, None, counts=counts)
+    }
+    assert outcome == {
+        "IMG_3101.JPG": "camera",
+        "IMG_3102.JPG": "other",
+        "video-31_singular_display.MOV": "other",
+    }
+    assert counts == {"pending": 0}
+
+
+def test_sync_reports_pending_assets_and_keeps_them_out_of_the_watermark(lb, pending, capsys):
+    _sync("immich")()
+    out = capsys.readouterr().out
+    assert "immich: 1 new lines of 1 seen from the beginning" in out
+    assert PENDING_NOTE in out
+    state = json.loads((lb.root / "state" / "immich.json").read_text(encoding="utf-8"))
+    # the extracted asset's stamp; the pending ones are later and must not move it
+    assert state == {"since": "2026-09-03T18:39:00Z"}
+
+
+def test_sync_dry_run_reports_pending_assets_too(lb, pending, capsys):
+    _sync("immich", "--dry-run")()
+    out = capsys.readouterr().out
+    assert "immich: 1 lines from the beginning (dry run, nothing written)" in out
+    assert PENDING_NOTE in out
+    assert not (lb.root / "state").exists()
+
+
+def test_sync_picks_up_deferred_assets_once_immich_has_extracted_them(lb, pending, monkeypatch, capsys):
+    _sync("immich")()
+    later = FakeServer({None: "extracted.json"})
+    monkeypatch.setattr(immich, "_post", later)
+    _sync("immich")()
+    assert later.requests[0]["filter"] == {"updatedAt": {"gte": "2026-09-03T18:39:00Z"}}
+    out = capsys.readouterr().out
+    assert "immich: 3 new lines of 3 seen" in out.splitlines()[-1] and "pending" not in out.splitlines()[-1]
+    lines = list(lb.lines())
+    assert [line["payload"]["file_name"] for line in lines] == [
+        "IMG_3100.HEIC",
+        "IMG_3101.JPG",
+        "IMG_3102.JPG",
+        "video-31_singular_display.MOV",
+    ]
+    assert lines[1]["payload"]["provenance"] == "camera" and lines[1]["payload"]["camera"] == "SimPhone 3"
+    assert lines[3]["payload"]["duration_s"] == 4.2
+    state = json.loads((lb.root / "state" / "immich.json").read_text(encoding="utf-8"))
+    assert state == {"since": "2026-09-03T19:12:00Z"}
+
+
+# -- progress ---------------------------------------------------------------
+
+
+def test_pull_reports_the_running_asset_count_after_each_page(server):
+    ticks: list[tuple[int, float]] = []
+    list(immich.pull(CONFIG, None, progress=lambda n, elapsed: ticks.append((n, elapsed))))
+    assert [n for n, _ in ticks] == [3, 6]
+    assert all(elapsed >= 0 for _, elapsed in ticks)
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_sync_prints_a_progress_line_per_page_to_stderr(lb, server, capsys, dry_run):
+    _sync("immich", *(["--dry-run"] if dry_run else []))()
+    err = capsys.readouterr().err.splitlines()
+    assert [line for line in err if "assets in" in line] == ["  3 assets in 0s", "  6 assets in 0s"]
