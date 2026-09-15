@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -15,6 +16,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import __version__, adapters
+from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .store import RETRACTION, CodeCheckoutError, Logbook, now_utc, retractions
 
@@ -69,6 +71,7 @@ def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
 
 
 PATH_SUFFIXES = (".json", ".jsonl", ".geojson", ".zip", ".csv", ".txt")
+EN_DASH = "\u2013"  # between the two clocks of a time span
 
 
 def looks_like_path(arg: str) -> bool:
@@ -225,7 +228,8 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def cmd_show(a: argparse.Namespace) -> None:
-    """One local day (the owner's timezone), located through the index, read from the files."""
+    """One local day (the owner's timezone), located through the index, read from the files,
+    in time order (then chain order for the same instant)."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
@@ -236,24 +240,68 @@ def cmd_show(a: argparse.Namespace) -> None:
     if not rows:
         print(f"{day}: nothing logged")
         return
+    rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
-    for line in rows:
-        clock = datetime.fromisoformat(line["at"].replace("Z", "+00:00")).astimezone(tz).strftime("%H:%M")
-        retraction = retracted.get(line["id"])
-        if retraction is not None:
-            print(f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}")
-            continue
-        p = line["payload"]
-        text = (
-            p.get("text")
-            or p.get("title")
-            or p.get("name")
-            or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
-        )
-        print(f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}")
+    for text in _day_rows(rows, retracted, tz):
+        print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
+
+
+def _day_rows(rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo) -> Iterator[str]:
+    """One printed row per line, except that a run of location points from one source, unbroken
+    by any other row, collapses into one summary."""
+    run: list[Line] = []
+    for line in rows:
+        retraction = retracted.get(line["id"])
+        point = line["kind"] == "location" and retraction is None
+        if run and not (point and line["source"] == run[0]["source"]):
+            yield _run_row(run, tz)
+            run = []
+        if point:
+            run.append(line)
+        else:
+            yield _line_row(line, retraction, tz)
+    if run:
+        yield _run_row(run, tz)
+
+
+def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo) -> str:
+    clock = _clock(line["at"], tz)
+    if retraction is not None:
+        return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
+    p = line["payload"]
+    text = (
+        p.get("text")
+        or p.get("title")
+        or p.get("name")
+        or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
+    )
+    return f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}"
+
+
+def _run_row(run: list[Line], tz: ZoneInfo) -> str:
+    """Time span, count, and the first and last named place of a run of location points."""
+    first, last = _clock(run[0]["at"], tz), _clock(run[-1]["at"], tz)
+    span = first if first == last else f"{first}{EN_DASH}{last}"
+    n = len(run)
+    text = f"{n:,} point{'s' if n != 1 else ''}"
+    places = [place for place in map(_place, run) if place]
+    if places:
+        text += f" · {places[0]}" if places[0] == places[-1] else f" · {places[0]} → {places[-1]}"
+    return f"  {span}  {'location':<10} {run[0]['source']:<14} {text}"
+
+
+def _place(line: Line) -> str | None:
+    """extra.place.district, else extra.place.city, else None (RFC 0001: `extra` is the source's)."""
+    place = ((line.get("payload") or {}).get("extra") or {}).get("place") or {}
+    value = place.get("district") or place.get("city")
+    return str(value) if value else None
+
+
+def _clock(at: str, tz: ZoneInfo) -> str:
+    return datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(tz).strftime("%H:%M")
 
 
 def cmd_index(a: argparse.Namespace) -> None:
@@ -370,7 +418,17 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.set_defaults(fn=cmd_export)
     a = ap.parse_args(argv)
-    a.fn(a)
+    try:
+        a.fn(a)
+    except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
+        _stdout_to_devnull()
+
+
+def _stdout_to_devnull() -> None:
+    """Point stdout at the null device so the interpreter's final flush does not report the
+    broken pipe on stderr and turn the exit status into 120."""
+    with contextlib.suppress(OSError, ValueError):  # no real file behind stdout (a test capture)
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
 
 if __name__ == "__main__":
