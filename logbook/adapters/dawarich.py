@@ -4,15 +4,19 @@ Reads Dawarich's GeoJSON export: a FeatureCollection of Point features whose pro
 tracker's fields (timestamp in unix seconds, accuracy, altitude/velocity/course as strings, a
 `tracker_id` UUID, optional device fields) and, when Dawarich has reverse-geocoded the point, a
 nested Photon Feature under `geodata`. Pure: reads one file, makes no network calls.
+
+The export can be gigabytes (millions of points), so the file is streamed with ijson: `sniff`
+reads up to the end of the first feature and `run` holds one feature at a time.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import ijson
 
 NAME = "dawarich"
 KIND = "location"
@@ -42,34 +46,52 @@ def sniff(path: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        doc_type, first = _head(path)
+    except (OSError, ValueError, ijson.JSONError):
         return False
-    if not isinstance(doc, dict) or doc.get("type") != "FeatureCollection":
+    if doc_type != "FeatureCollection" or not isinstance(first, dict):
         return False
-    features = doc.get("features")
-    if not isinstance(features, list) or not features:
-        return False
-    props = features[0].get("properties") if isinstance(features[0], dict) else None
+    props = first.get("properties")
     return isinstance(props, dict) and "tracker_id" in props and "timestamp" in props
+
+
+def _head(path: Path) -> tuple[object, object]:
+    """The document's `type` and its first feature, reading no further than the first feature.
+
+    Dawarich writes `type` before `features`; a `type` that comes after is not seen."""
+    doc_type: object = None
+    builder: ijson.ObjectBuilder | None = None
+    with path.open("rb") as fh:
+        for prefix, event, value in ijson.parse(fh, use_float=True):
+            if prefix == "type" and event == "string":
+                doc_type = value
+            elif prefix == "features" and event == "end_array":
+                break
+            elif prefix == "features.item" and event == "start_map":
+                builder = ijson.ObjectBuilder()
+            if builder is not None:
+                builder.event(event, value)
+                if prefix == "features.item" and event == "end_map":
+                    return doc_type, builder.value
+    return doc_type, None
 
 
 def run(path: Path, since: str | None = None) -> Iterator[dict[str, Any]]:
     """Yield one location/v1 line draft per point, in export order. `since` is RFC3339 UTC."""
-    doc = json.loads(Path(path).read_text(encoding="utf-8"))
-    for feature in doc["features"]:
-        at = _rfc3339(feature["properties"]["timestamp"])
-        if since and at < since:
-            continue
-        yield {
-            "at": at,
-            "end": None,
-            "tz": None,  # the logbook's own
-            "source": NAME,
-            "kind": KIND,
-            "tier": TIER,
-            "payload": _payload(feature),
-        }
+    with Path(path).open("rb") as fh:
+        for feature in ijson.items(fh, "features.item", use_float=True):
+            at = _rfc3339(feature["properties"]["timestamp"])
+            if since and at < since:
+                continue
+            yield {
+                "at": at,
+                "end": None,
+                "tz": None,  # the logbook's own
+                "source": NAME,
+                "kind": KIND,
+                "tier": TIER,
+                "payload": _payload(feature),
+            }
 
 
 def _rfc3339(unix_seconds: int | float) -> str:

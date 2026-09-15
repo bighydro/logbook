@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterator
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 from . import __version__, adapters
 from .export import day_package, day_range, parse_day, write_package
@@ -32,12 +34,11 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     """Append one file through the adapter that recognises it. False when nothing does."""
     adapter = adapters.find(p)
     if adapter is not None:
-        n = lb.append_many(adapter.run(p))
+        n = lb.append_many(adapter.run(p), progress=_progress)
         print(f"added {n} lines from {adapter.NAME}")
         return True
     if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
-        drafts = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
-        n = lb.append_many(drafts)
+        n = lb.append_many(_jsonl(p), progress=_progress)
         print(f"added {n} lines from {p.name}")
         return True
     print(
@@ -45,6 +46,17 @@ def _add_file(lb: Logbook, p: Path) -> bool:
         "Put it in inbox/ and it will be read when one exists."
     )
     return False
+
+
+def _progress(n: int, elapsed: float) -> None:
+    print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
+
+
+def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
+    with p.open(encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                yield json.loads(line)
 
 
 def cmd_add(a: argparse.Namespace) -> None:
