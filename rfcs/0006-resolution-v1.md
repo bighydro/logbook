@@ -18,7 +18,7 @@ The record must not depend on anything outside itself. An outside registry — a
 |---|---|---|---|
 | `schema` | `"resolution/v1"` | MUST | |
 | `ref` | object | MUST | the source-native identifier being resolved, as it appears in the raw lines: `{ kind, value, source? }` where `kind` is one of `email`, `phone`, `handle`, `provider_id`, `device_id`, `domain`, or `line`, whose `value` is the `id` of a derived line (a stay) that stands for the thing being resolved |
-| `entity` | object | MUST | what it refers to: `{ type, id, registry }` where `type` is `person`, `place`, `company` or `thing`. For `person`, `company` and `thing`, `registry` MUST be `logbook` and `id` MUST be a UUID minted in this record (see Minting). For `place`, `registry` MUST be `wikidata` or `osm` and `id` is that registry's identifier (ADR 0013.3). A private or interpreter namespace MUST NOT appear as a registry; an interpreter stores a `logbook_ref` on its own side instead (ADR 0013.2) |
+| `entity` | object | MUST | what it refers to: `{ type, id, registry }` where `type` is `person`, `place` or `company`. For `person` and `company`, `registry` MUST be `logbook` and `id` MUST be a UUID minted in this record (see Minting). For `place`, `registry` MUST be `wikidata` or `osm` and `id` is that registry's identifier (ADR 0013.3). A private or interpreter namespace MUST NOT appear as a registry; an interpreter stores a `logbook_ref` on its own side instead (ADR 0013.2) |
 | `label` | string | SHOULD | a human-readable name at the time of resolution, for reading the log without any registry |
 | `confidence` | number | MAY | 0–1. Absent means asserted, not estimated |
 | `method` | string | MAY | how it was decided: `exact`, `heuristic`, `model`, `owner` |
@@ -28,7 +28,7 @@ The record must not depend on anything outside itself. An outside registry — a
 
 ## Minting
 
-An entity exists because a resolution names it. The first resolution for a new person, company or thing mints a UUIDv7 as `entity.id`, with `registry` `logbook`, and carries `label`; later resolutions for other refs — a second email address, a phone number — reuse that id. There is no separate registry file: the log is the registry, and the set of entities is derived by reading every resolution line. Places are not minted; they reference a `wikidata` or `osm` id.
+An entity exists because a resolution names it. The first resolution for a new person or company mints a UUIDv7 as `entity.id`, with `registry` `logbook`, and carries `label`; later resolutions for other refs — a second email address, a phone number — reuse that id. There is no separate registry file: the log is the registry, and the set of entities is derived by reading every resolution line. Places are not minted; they reference a `wikidata` or `osm` id. A later profile MAY introduce another type along with the rules for minting it.
 
 ## Rules
 
