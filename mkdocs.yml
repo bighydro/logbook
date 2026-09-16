@@ -45,6 +45,7 @@ nav:
       - "0011 Log everything cheap, judge downstream": adr/0011-log-everything-cheap-judge-downstream.md
       - "0012 Adapters ship in the package": adr/0012-adapters-ship-in-the-package.md
       - "0013 Downstream interpreters": adr/0013-downstream-interpreters.md
+      - "0014 Canonicalisation is fixed, not versioned": adr/0014-canonicalisation-is-fixed-not-versioned.md
   - RFCs:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md

@@ -6,7 +6,7 @@ Something the owner said they would do, or someone said they would do for the ow
 
 ## Line
 
-`kind` MUST be `commitment`. `tier` SHOULD be 2. `at` is when the commitment was made; `end` is the moment it is due, or null when there is no deadline. `source` is where it came from — `manual`, or the adapter/engine that found it (a transcript pass, an email pass).
+`kind` MUST be `commitment`. `tier` MUST be the highest tier of the lines it was drawn from (SPEC §4: derived data inherits the highest tier of its evidence); a commitment the owner writes by hand is tier 2. `at` is when the commitment was made. `end` MUST be null: a commitment is not an interval, and its deadline, if any, lives only in `payload.due`. `source` is where it came from — `manual`, or the adapter/engine that found it (a transcript pass, an email pass).
 
 ## Payload
 
@@ -16,9 +16,10 @@ Something the owner said they would do, or someone said they would do for the ow
 | `text` | string | MUST | what was promised, in the words it was made in |
 | `direction` | string | MUST | `owed_by_owner` or `owed_to_owner` |
 | `counterparty` | object | SHOULD | who the other party is, source-native: `{ kind, value }` as in `resolution/v1`, or `{ kind: "name", value: "..." }` when only a name is known |
-| `due` | RFC3339 | MAY | the deadline, if one was stated. Mirrors `end` |
+| `due` | RFC3339 | MAY | the deadline, if one was stated. This is the only place it lives; `end` stays null |
 | `origin` | string | SHOULD | the id of the line it was found in (a transcript, a message) |
 | `certainty` | string | MAY | `stated` when the words were explicit, `inferred` when a model read it into them |
+| `supersedes` | string | MAY | the id of an earlier commitment this replaces — an owner's `manual` line confirming an inferred one (rule 3), or a restatement with a new deadline |
 
 ## Closing
 
@@ -32,7 +33,7 @@ A commitment is closed by a **separate line**, never by editing it:
 | `evidence` | array | SHOULD | ids of lines that show it: the email that went, the meeting that happened, the payment that cleared |
 | `note` | string | MAY | the owner's words |
 
-`kind` MUST be `commitment-close`; tier follows the commitment.
+`kind` MUST be `commitment-close`; `end` is null; `tier` MUST be the highest tier of the commitment and of the evidence it cites (SPEC §4).
 
 ## Rules
 
@@ -41,11 +42,12 @@ A commitment is closed by a **separate line**, never by editing it:
 3. A model-found commitment (`certainty: "inferred"`) is a draft: a surface MAY show it, and the owner confirms it by writing a `manual` commitment that supersedes it, or retracts it (RFC 0003). An inferred commitment is never closed automatically by another inference.
 4. Evidence is a pointer to lines already in the log, never a copy of them.
 5. A commitment with no counterparty is valid — a promise to oneself is a commitment.
+6. **Who may close.** A close with outcome `kept` is written by the owner (`source` `manual`) or by an adapter carrying evidence (the mail adapter that saw the reply go out, with its id in `evidence`). A downstream interpreter MAY propose a close but MUST NOT write one (ADR 0013.6); the owner's acceptance of the proposal is the `manual` close.
 
 ## Example (synthetic)
 
 ```json
-{"at":"2026-03-02T19:40:00Z","end":"2026-03-09T00:00:00Z","tz":"Europe/Oslo","source":"manual","kind":"commitment","tier":2,
+{"at":"2026-03-02T19:40:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"commitment","tier":2,
  "payload":{"schema":"commitment/v1","text":"send Ola the mooring photos","direction":"owed_by_owner",
  "counterparty":{"kind":"email","value":"ola@example.org"},"due":"2026-03-09T00:00:00Z","certainty":"stated"}}
 ```
