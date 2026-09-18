@@ -81,8 +81,10 @@ lands on its 2015 day. Each live source is configured by environment variables; 
 and the command exits 2.
 
 Contacts become resolution lines (RFC 0006): each contact mints a person or company id in the record, and
-every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (for example `47`) so numbers
-saved without a country code get one; otherwise they are kept as entered and flagged `unnormalised`.
+every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (for example `41`) so numbers
+saved without a country code get one, with the national trunk `0` dropped (`079 654 31 17` becomes
+`+41796543117`); a number that already starts with the prefix digits but no `+`, or any number when the
+variable is unset, is kept as entered and flagged `unnormalised`.
 
 | Source | Variables | What it logs |
 |---|---|---|

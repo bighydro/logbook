@@ -281,6 +281,40 @@ def test_run_phone_without_country_code_takes_logbook_dial_prefix(tmp_path, monk
     assert "phone:+4791234567" in lines  # a number that already had one is untouched
 
 
+def _one_phone(tmp_path: Path, entered: str) -> dict:
+    p = tmp_path / "AddressBook.sqlitedb"
+    con = sqlite3.connect(p)
+    try:
+        con.executescript(DDL)
+        con.execute("INSERT INTO ABPerson VALUES (1,'Ines','Nordmann',NULL,NULL,NULL,NULL,NULL)")
+        con.execute("INSERT INTO ABMultiValue VALUES (1,1,?,0,'mobile',?)", (PHONE, entered))
+        con.commit()
+    finally:
+        con.close()
+    (line,) = ios_contacts.run(p)
+    return line["payload"]
+
+
+def test_run_dial_prefix_strips_one_national_trunk_zero(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "41")
+    p = _one_phone(tmp_path, "079 654 31 17")
+    assert p["ref"]["value"] == "+41796543117" and p["raw_id"] == "phone:+41796543117"
+    assert "unnormalised" not in p["extra"]
+    assert p["extra"]["entered"] == "079 654 31 17"
+
+
+def test_run_dial_prefix_strips_only_one_zero(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "39")
+    assert _one_phone(tmp_path, "06 1234 5678")["ref"]["value"] == "+39612345678"
+
+
+def test_run_number_already_starting_with_the_prefix_is_kept_and_flagged(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "41")
+    p = _one_phone(tmp_path, "41 79 654 31 17")
+    assert p["ref"]["value"] == "41796543117" and p["raw_id"] == "phone:41796543117"
+    assert p["extra"]["unnormalised"] is True
+
+
 def test_run_email_is_lower_cased_trimmed_and_deduped_within_a_run(tmp_path, no_dial_prefix):
     lines = list(ios_contacts.run(_address_book(tmp_path)))
     emails = [line for line in lines if line["payload"]["ref"]["kind"] == "email"]
