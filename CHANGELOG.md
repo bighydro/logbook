@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- SPEC §1.1 (ADR 0015): the content-addressed attachment store, `attachments/<sha256>`, optional, write-once, never pruned, outside the hash chain; the `{ sha256, path, bytes, media_type }` reference shape that RFCs 0004, 0005, 0008 and 0010 point at. No format bump; nothing implemented yet.
 - SPEC clarifications, no format bump, no hash change: GENESIS named; month-file placement is a writer MUST, not a validity condition; every envelope field present and `end` null, never absent; timestamps UTC with `Z`, fractional seconds hashed verbatim; `seq` decimal unpadded and hex lowercase in the pre-image; the verifier checks §2 as well as the chain; duplicate keys and duplicate `seq` are invalid; only the canonical form is hashed; unknown keys in `logbook.json` are preserved; the write order (lines, then `logbook.json`, then the index). §6 and `conformance/README.md` now state the same tamper-and-delete condition. Found by the clean-room TypeScript implementation.
 
 ## 0.3.0 — 2026-09-15
