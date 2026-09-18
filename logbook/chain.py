@@ -12,6 +12,23 @@ Line = dict[str, Any]
 
 GENESIS = "0" * 64
 CONTENT_FIELDS = ("at", "end", "tz", "source", "kind", "tier", "payload")
+ENVELOPE_FIELDS = ("id", "seq", *CONTENT_FIELDS, "recorded_at", "prev", "hash")  # all present, SPEC §2
+
+
+def parse_line(text: str | bytes) -> Line:
+    """The stored form of a line (SPEC §2) as a dict. A key given twice in one object, at any
+    depth, is invalid: `json.loads` would keep the last value silently, so the pairs are checked."""
+    line: Line = json.loads(text, object_pairs_hook=_no_duplicate_keys)
+    return line
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"duplicate key {key!r}")
+        obj[key] = value
+    return obj
 
 
 def canonical_json(obj: object) -> str:
@@ -126,10 +143,22 @@ def compute_hash(line: Line) -> str:
     return line_hash(line["prev"], line["seq"], content_hash(line), line["recorded_at"])
 
 
-def verify_lines(lines: Iterable[Line]) -> tuple[int, str, list[str]]:
-    """Walk lines in order. Returns (count, head, errors)."""
-    errors, prev, seq, head = [], GENESIS, 0, GENESIS
+TIMESTAMP_FIELDS = ("at", "end", "recorded_at")
+OFFSET_WARNING = "is not UTC with a literal Z (SPEC §2); a warning in this release, an error in the next"
+
+
+def verify_lines(lines: Iterable[Line], warnings: list[str] | None = None) -> tuple[int, str, list[str]]:
+    """Walk lines in order. Returns (count, head, errors); what this release only warns about is
+    appended to `warnings` when a list is given."""
+    errors: list[str] = []
+    prev, seq, head = GENESIS, 0, GENESIS
     for n, line in enumerate(lines, 1):
+        errors.extend(f"line {n}: {k} is missing" for k in ENVELOPE_FIELDS if k not in line)
+        if warnings is not None:
+            for k in TIMESTAMP_FIELDS:
+                stamp = line.get(k)
+                if isinstance(stamp, str) and not stamp.endswith("Z"):
+                    warnings.append(f"line {n}: {k} {stamp!r} {OFFSET_WARNING}")
         if line.get("seq") != seq + 1:
             errors.append(f"line {n}: seq {line.get('seq')} expected {seq + 1}")
         if line.get("prev") != prev:

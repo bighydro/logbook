@@ -3,7 +3,7 @@
   "$id": "https://logbook.dev/schema/observation-0.1.json",
   "title": "Logbook observation (envelope) v0.1",
   "type": "object",
-  "required": ["id", "seq", "at", "tz", "source", "kind", "tier", "payload", "recorded_at", "prev", "hash"],
+  "required": ["id", "seq", "at", "end", "tz", "source", "kind", "tier", "payload", "recorded_at", "prev", "hash"],
   "properties": {
     "id": {"type": "string", "format": "uuid"},
     "seq": {"type": "integer", "minimum": 1},
