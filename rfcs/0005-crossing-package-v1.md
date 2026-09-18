@@ -49,7 +49,7 @@ v1). The bundle is regenerable from the log at `logbook_head`.
 | `policy` | object | MUST | the crossing policy applied, for audit — see Tier & carve-out |
 | `counts` | object | SHOULD | audit totals: `{ logged, crossed, held_back }` |
 | `entries_file` | string | MUST | path to the crossed lines (`entries.jsonl`) |
-| `blobs` | array | SHOULD | `[{ sha256, bytes, media_type }]` for the content-addressed blobs included |
+| `blobs` | array | SHOULD | `[{ sha256, path, bytes, media_type }]` for the content-addressed blobs included — the SPEC §1.1 reference shape, with `path` relative to the bundle (`blobs/<sha256>`) |
 | `resolution_file` | string | MAY | path to `resolution.jsonl`, if a derived resolution overlay is shipped |
 
 ## Entries
@@ -63,8 +63,8 @@ separately (Resolution).
 
 Copies of the content-addressed blobs the crossed lines reference (e.g. a `transcript/v1` `content.sha256`).
 Each appears once, addressed by `sha256`; a consumer verifies a blob by hashing it. Addressing and store
-semantics are per the content-addressed-store SPEC PR (forthcoming) — this format only ships copies of the
-referenced blobs, it does not define the store. A held-back line's blob does not cross.
+semantics are per SPEC §1.1 — this format only ships copies of the referenced blobs, it does not define the
+store. A held-back line's blob does not cross.
 
 ## Verification
 
