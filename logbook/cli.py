@@ -372,7 +372,8 @@ def cmd_index(a: argparse.Namespace) -> None:
 def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
-    seq, head, errors = lb.verify()
+    warnings: list[str] = []
+    seq, head, errors = lb.verify(warnings)
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
         if (exp["seq"], exp["head"]) != (seq, head):
@@ -385,6 +386,10 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + e)
         sys.exit(1)
     print(f"valid — {seq} lines, head {head}")
+    if warnings:
+        print(f"WARNING — {len(warnings)} timestamp(s) the next release will reject:")
+        for w in warnings:
+            print("  " + w)
 
 
 def cmd_migrate(a: argparse.Namespace) -> None:

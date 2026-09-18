@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- The reference is as strict as SPEC §2–3 (#47), no hash change: `verify` names any missing envelope field (`end` is `null`, never absent; `schema/observation.schema.json` now requires it); a line with a duplicate JSON key, at any depth, is invalid on read; writers normalise `at`/`end`/`recorded_at` to UTC with a literal `Z` (an offset is converted, a stamp with no zone is refused); `verify` reports a timestamp with a numeric offset as a WARNING in this release — the record stays valid, exit 0 — and the next release makes it an error; `append`/`append_many` fsync the month files before `logbook.json` is saved.
 - SPEC clarifications, no format bump, no hash change: GENESIS named; month-file placement is a writer MUST, not a validity condition; every envelope field present and `end` null, never absent; timestamps UTC with `Z`, fractional seconds hashed verbatim; `seq` decimal unpadded and hex lowercase in the pre-image; the verifier checks §2 as well as the chain; duplicate keys and duplicate `seq` are invalid; only the canonical form is hashed; unknown keys in `logbook.json` are preserved; the write order (lines, then `logbook.json`, then the index). §6 and `conformance/README.md` now state the same tamper-and-delete condition. Found by the clean-room TypeScript implementation.
 
 ## 0.3.0 — 2026-09-15
