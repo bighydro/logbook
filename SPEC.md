@@ -86,6 +86,8 @@ The envelope is the standard. Payloads are versioned by `payload.schema` and pro
 
 An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`, and when appending one line to a copy of it yields a logbook that still verifies. Level 2 conformance (a later version) adds encryption. Two independent implementations must agree before v1.0 is frozen.
 
+*Status:* two independent implementations, [openlogbook](https://github.com/bighydro/logbook) (Python, reference) and [logbook-ts](https://github.com/bighydro/logbook-ts) (TypeScript), reproduce the head in `conformance/expected.json`; they agree on `verify` and `append`.
+
 ## 7. What this spec does not say
 
 Nothing about servers, databases, user interfaces, engines, agents, or how two logbooks exchange pages. Those are layers. The spec is finished when it is small enough to implement in an afternoon.

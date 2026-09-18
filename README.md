@@ -27,6 +27,15 @@ Nix: `nix run github:bighydro/logbook -- --version`, or `nix develop` in a clone
 
 That is the whole product. Everything else is a layer somebody plugs in.
 
+## Implementations
+
+| Implementation | Language | Status |
+|---|---|---|
+| [openlogbook](https://github.com/bighydro/logbook) (this repo) | Python | reference |
+| [logbook-ts](https://github.com/bighydro/logbook-ts) | TypeScript | independent |
+
+Both reproduce the conformance head `53d39fda…088e6` from `conformance/sample-logbook` (`conformance/expected.json`). SPEC §6 requires two independent implementations to agree before v1.0 is frozen; that is now true for `verify` and `append`.
+
 ## Upgrading
 
 0.3.0 changes how lines are hashed (format `logbook/0.2`, SPEC §3.1). A record written by 0.1.0 or 0.2.0 is refused until it is migrated. Back up first, then migrate once:
