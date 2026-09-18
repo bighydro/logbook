@@ -7,7 +7,8 @@ Two kinds share one registry. A *file* adapter reads an export you already hold:
     run(path, since=None) -> Iterator[dict]     # line drafts: at, end, tz, source, kind, tier, payload
 
 `run` may also take an optional `counts: dict[str, int]`; when it does, `logbook add` passes one and
-reports what the adapter skipped (`skipped_no_timestamp`, `skipped_bad_coordinates`).
+reports what the adapter skipped (`skipped_no_timestamp`, `skipped_bad_coordinates`, `skipped_no_ref`, ...;
+the phrases live in `cli.SKIP_PHRASES`).
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 
@@ -37,7 +38,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 ENTRY_POINT_GROUP = "logbook.adapters"
-BUILT_IN = ("dawarich", "immich", "takeout.location")
+BUILT_IN = ("dawarich", "immich", "takeout.location", "ios_contacts")
 
 
 @runtime_checkable
