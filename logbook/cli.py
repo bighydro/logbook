@@ -102,12 +102,29 @@ def _takes_counts(adapter: adapters.Adapter) -> bool:
     return "counts" in inspect.signature(adapter.run).parameters
 
 
+LOCATION_SKIPS = ("skipped_no_timestamp", "skipped_bad_coordinates")
+SKIP_PHRASES = {
+    "skipped_no_timestamp": "without a timestamp",
+    "skipped_bad_coordinates": "with unusable coordinates",
+    "skipped_no_ref": "without a phone or email",
+    "skipped_empty_ref": "with an empty phone or email",
+    "skipped_duplicate_ref": "with a phone or email already seen",
+}
+
+
 def _report_skipped(counts: dict[str, int]) -> None:
     """One line naming what an adapter left out and why, or nothing when it skipped nothing."""
     no_time = counts.get("skipped_no_timestamp", 0)
     bad_coords = counts.get("skipped_bad_coordinates", 0)
     if no_time or bad_coords:
         print(f"  skipped {no_time:,} without a timestamp, {bad_coords:,} with unusable coordinates")
+    others = [
+        f"{n:,} {SKIP_PHRASES.get(key, key.removeprefix('skipped_').replace('_', ' '))}"
+        for key, n in counts.items()
+        if key not in LOCATION_SKIPS and n
+    ]
+    if others:
+        print("  skipped " + ", ".join(others))
 
 
 def _progress(n: int, elapsed: float) -> None:
