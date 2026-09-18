@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- SPEC clarifications, no format bump, no hash change: GENESIS named; month-file placement is a writer MUST, not a validity condition; every envelope field present and `end` null, never absent; timestamps UTC with `Z`, fractional seconds hashed verbatim; `seq` decimal unpadded and hex lowercase in the pre-image; the verifier checks §2 as well as the chain; duplicate keys and duplicate `seq` are invalid; only the canonical form is hashed; unknown keys in `logbook.json` are preserved; the write order (lines, then `logbook.json`, then the index). §6 and `conformance/README.md` now state the same tamper-and-delete condition. Found by the clean-room TypeScript implementation.
+
 ## 0.3.0 — 2026-09-15
 - **BREAKING:** records created by 0.1.0 or 0.2.0 must run `logbook migrate` once before any other command will read or write them (SPEC §3.1).
 - Format `logbook/0.2` (SPEC §3.1, ADR 0014): `canonical_json` is now RFC 8785 exactly (UTF-16 key order, ECMAScript float layout; tested against the RFC's vectors). 0.1 hashed floats such as `0.0`, `120.0` and `1e-06` differently, so `verify` and every writer refuse a 0.1 record; `logbook migrate` recomputes `prev`/`hash` in seq order, keeps everything else, records `lineage` in `logbook.json`, appends one `migration/v1` line, keeps the 0.1 files at `logbook-0.1/`. The conformance sample is 0.2.
