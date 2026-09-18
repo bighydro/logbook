@@ -13,7 +13,7 @@ One calendar entry as the calendar stored it: a planned thing with a title, a sp
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `schema` | `"event/v1"` | MUST | |
-| `raw_id` | string | MUST | the calendar's own stable id for the entry (iCal UID, or the store's row id when the UID is absent). The dedupe key |
+| `raw_id` | string | MUST | the calendar's own stable id for the entry (iCal UID, or the store's row id when the UID is absent), suffixed with its last-modified time (see rule 5), e.g. `"<uid>@2026-03-04T10:15:00Z"`. The dedupe key |
 | `title` | string | SHOULD | the summary, verbatim; may be absent for private entries |
 | `calendar` | object | SHOULD | `{ id, name? }` — which calendar it lives in, as the source names it |
 | `all_day` | boolean | MUST | |
@@ -24,6 +24,7 @@ One calendar entry as the calendar stored it: a planned thing with a title, a sp
 | `recurrence` | string | MAY | the recurrence rule as the source stores it (RRULE text), present only on a master entry |
 | `recurrence_of` | string | MAY | `raw_id` of the master this occurrence belongs to, when the source materialises occurrences |
 | `notes` | string | MAY | the description body |
+| `supersedes` | string | MAY | id of the earlier line for the same entry (rule 5) |
 
 Anything else the source reports MAY be kept under `extra`.
 
@@ -32,14 +33,14 @@ Anything else the source reports MAY be kept under `extra`.
 1. One line per entry the source stores. A recurring event with no materialised occurrences is one line carrying `recurrence`; expanding it into occurrences is engine work, not adapter work (ADR 0011: log what the source has).
 2. Attendees are never resolved here; the adapter keeps the email or handle the calendar has.
 3. A cancelled entry is a line with `status: "cancelled"`, not an omission — the plan existed.
-4. Placeholder and sentinel dates (the year 1601, the year 2030 for an open-ended series) are the source's artefacts; an adapter MUST skip entries whose start is outside a plausible window and count what it skipped.
-5. A later export of the same calendar in which an entry changed writes a new line with `supersedes` set to the earlier line's id; `raw_id` alone does not change.
+4. Sentinel-dated rows (the year 1601, the year 2030 for an open-ended series) are the store's placeholders, not items the source offers, so skipping them is consistent with ADR 0011: an adapter MUST skip rows whose start is outside a plausible window and report how many it skipped.
+5. Entries are edited over time, and the log is not. An exported entry is a snapshot: the adapter's `raw_id` includes the last-modified time, so the same entry exported again after a change is a *new* line (the dedupe key differs), carrying `supersedes` = the earlier line's id. Readers show the latest by `supersedes`; the earlier entry is still in the record.
 
 ## Example (synthetic)
 
 ```json
 {"at":"2026-03-03T08:30:00Z","end":"2026-03-03T09:15:00Z","tz":"Europe/Oslo","source":"ios-calendar","kind":"event","tier":1,
- "payload":{"schema":"event/v1","raw_id":"7E0C2D4A-9B1F-4C7E-8A2B-5D3E1F6A9C0B","title":"Boat survey — Tromsø marina",
+ "payload":{"schema":"event/v1","raw_id":"7E0C2D4A-9B1F-4C7E-8A2B-5D3E1F6A9C0B@2026-02-27T16:05:00Z","title":"Boat survey — Tromsø marina",
  "calendar":{"id":"A1B2","name":"Personal"},"all_day":false,"location":"Tromsø småbåthavn",
  "attendees":[{"ref":{"kind":"email","value":"ola@example.org"},"name":"Ola Nordmann","response":"accepted"}],"status":"confirmed"}}
 ```
