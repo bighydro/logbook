@@ -27,7 +27,7 @@ nav:
   - Home: index.md
   - Vision: VISION.md
   - Lore: LORE.md
-  - Specification v0.1: SPEC.md
+  - Specification v0.2: SPEC.md
   - Architecture: ARCHITECTURE.md
   - Roadmap: ROADMAP.md
   - Decisions:
@@ -46,6 +46,7 @@ nav:
       - "0012 Adapters ship in the package": adr/0012-adapters-ship-in-the-package.md
       - "0013 Downstream interpreters": adr/0013-downstream-interpreters.md
       - "0014 Canonicalisation is fixed, not versioned": adr/0014-canonicalisation-is-fixed-not-versioned.md
+      - "0015 Attachments are content-addressed": adr/0015-attachments-are-content-addressed.md
   - RFCs:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md

@@ -18,7 +18,7 @@ One message in a conversation — sent or received — from any messaging source
 | `from_me` | boolean | MUST | true when the owner sent it |
 | `sender` | object | SHOULD when `from_me` is false | the sender as the source identifies them, source-native (RFC 0006 `ref` shape): `{ kind, value }` with `kind` one of `phone`, `email`, `handle`, `provider_id` |
 | `text` | string | MAY | the body, verbatim; absent for pure media messages |
-| `media` | object | MAY | attachment reference per SPEC §1.1 (pending): `{ sha256, path, bytes, media_type }`; absent when the source no longer has the file |
+| `media` | object | MAY | attachment reference per SPEC §1.1: `{ sha256, path, bytes, media_type }`; absent when the source no longer has the file |
 | `media_kind` | string | MAY | `image`, `video`, `audio`, `voice`, `document`, `sticker`, `location`, `contact`, `other` — the source's own classification |
 | `reply_to` | string | MAY | `raw_id` of the message this replies to |
 | `starred` | boolean | MAY | the owner's own flag in the source |
