@@ -11,6 +11,7 @@ The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described 
   logbook.json            identity and chain head
   logbook/<YYYY>/<MM>.jsonl   the record
   notes/<YYYY>/<YYYY-MM-DD>.md   free text, optional
+  attachments/<sha256>    optional; content-addressed files a line points at (§1.1)
   inbox/                  optional; not part of conformance
   index.sqlite            optional; a derived locator, disposable (ADR 0007); not part of conformance
 ```
@@ -28,6 +29,26 @@ The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described 
 `lineage` is present only in a record that was migrated from an earlier format (§3.1).
 
 Writers MUST preserve keys of `logbook.json` they do not know: read the file, change `seq` and `head`, write everything else back. An implementation that rewrites the file from a fixed set of keys drops `lineage`, and whatever a later version adds, the first time it appends.
+
+### 1.1 Attachments
+
+Some observations refer to a file too large, binary or private to put in a line: a transcript, a photo, a voice message. A line MUST NOT inline such content. The file is stored once, named by its own SHA-256, and the line points at it.
+
+A file lives at `<root>/attachments/<sha256>`, where `<sha256>` is the lowercase hex digest of the file's exact bytes: no extension, no subdirectories.
+
+A payload references it as an object of this shape:
+
+```json
+{"sha256": "<hex sha256>", "path": "attachments/<hex sha256>", "bytes": 48213, "media_type": "text/markdown"}
+```
+
+`path` is relative to the record root. `bytes` is the length of the file. `media_type` is an IANA media type. A profile MAY name the field as it likes (`content`, `media`, `attachments`) but MUST use this shape.
+
+The store is write-once: a digest is written once and never rewritten. Two lines that point at the same bytes share one file; this is how re-importing a source de-duplicates. Attachments are record, not cache (ADR 0001): they are never pruned.
+
+The chain covers lines, not bytes. The digest is inside the line, so tampering with the file is detectable, but the file is not in the hash chain. `verify` MUST NOT fail because an attachment is missing; it MUST report missing attachments separately and exit 0 when the chain is intact. A verifier MAY check the digests of present files; a file whose bytes do not match its name **is** an error.
+
+A record with no `attachments/` directory is valid. Conformance (§6) does not require the store.
 
 ## 2. The line (the envelope)
 
