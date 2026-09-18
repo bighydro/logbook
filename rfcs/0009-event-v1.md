@@ -14,6 +14,7 @@ One calendar entry as the calendar stored it: a planned thing with a title, a sp
 |---|---|---|---|
 | `schema` | `"event/v1"` | MUST | |
 | `raw_id` | string | MUST | the calendar's own stable id for the entry (iCal UID, or the store's row id when the UID is absent), suffixed with its last-modified time (see rule 5), e.g. `"<uid>@2026-03-04T10:15:00Z"`. The dedupe key |
+| `modified_at` | RFC3339 | MAY | the source's last-modified time |
 | `title` | string | SHOULD | the summary, verbatim; may be absent for private entries |
 | `calendar` | object | SHOULD | `{ id, name? }` — which calendar it lives in, as the source names it |
 | `all_day` | boolean | MUST | |
@@ -22,7 +23,7 @@ One calendar entry as the calendar stored it: a planned thing with a title, a sp
 | `attendees` | array | MAY | `[{ ref: { kind, value }, name?, response? }]` with `response` one of `accepted`, `declined`, `tentative`, `none` |
 | `status` | string | MAY | `confirmed`, `tentative`, `cancelled` |
 | `recurrence` | string | MAY | the recurrence rule as the source stores it (RRULE text), present only on a master entry |
-| `recurrence_of` | string | MAY | `raw_id` of the master this occurrence belongs to, when the source materialises occurrences |
+| `recurrence_of` | string | MAY | the master's bare UID (not its suffixed `raw_id`, which changes when the master is edited) this occurrence belongs to, when the source materialises occurrences |
 | `notes` | string | MAY | the description body |
 | `supersedes` | string | MAY | id of the earlier line for the same entry (rule 5) |
 
