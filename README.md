@@ -68,6 +68,7 @@ Two ways in. `add` reads a file you already hold; `sync` asks a service you run 
 ```bash
 logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
 logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
+logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -78,6 +79,12 @@ in the log. The watermark is the source's own clock, when it received or last ch
 capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tomorrow's sync and still
 lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
 and the command exits 2.
+
+Contacts become resolution lines (RFC 0006): each contact mints a person or company id in the record, and
+every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (for example `41`) so numbers
+saved without a country code get one, with the national trunk `0` dropped (`079 654 31 17` becomes
+`+41796543117`); a number that already starts with the prefix digits but no `+`, or any number when the
+variable is unset, is kept as entered and flagged `unnormalised`.
 
 | Source | Variables | What it logs |
 |---|---|---|
