@@ -81,7 +81,12 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     if adapter is not None:
         counts: dict[str, int] = {}
         run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
-        drafts = run(p, counts=counts) if _takes_counts(adapter) else run(p)
+        options: dict[str, Any] = {}
+        if _takes(adapter, "counts"):
+            options["counts"] = counts
+        if _takes(adapter, "timezone"):
+            options["timezone"] = lb.meta["timezone"]
+        drafts = run(p, **options)
         n = lb.append_many(drafts, progress=_progress)
         print(f"added {n} lines from {adapter.NAME}")
         _report_skipped(counts)
@@ -97,9 +102,10 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     return False
 
 
-def _takes_counts(adapter: adapters.Adapter) -> bool:
-    """Whether the adapter's `run` accepts a `counts` dict to tally what it skipped (optional)."""
-    return "counts" in inspect.signature(adapter.run).parameters
+def _takes(adapter: adapters.Adapter, option: str) -> bool:
+    """Whether the adapter's `run` accepts the optional keyword: `counts` (a dict to tally what it
+    skipped) or `timezone` (the record's zone, for a source whose times are floating)."""
+    return option in inspect.signature(adapter.run).parameters
 
 
 LOCATION_SKIPS = ("skipped_no_timestamp", "skipped_bad_coordinates")
@@ -117,6 +123,8 @@ SKIP_PHRASES = {
     "skipped_no_body": "without a body",
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
+    "skipped_no_start": "without a start",
+    "skipped_placeholder_date": "with placeholder dates",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -126,6 +134,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "deleted": "marked for deletion",
     "body_from_snippet": "with the body taken from the snippet",
     "no_identifier": "without an identifier, keyed by row id",
+    "no_unique_identifier": "without a unique identifier, keyed by row id",
 }
 
 

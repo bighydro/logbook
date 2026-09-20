@@ -33,6 +33,7 @@ ios-contacts = "logbook.adapters.ios_contacts"
 whatsapp = "logbook.adapters.whatsapp"
 imessage = "logbook.adapters.imessage"
 ios-notes = "logbook.adapters.ios_notes"
+ios-calendar = "logbook.adapters.ios_calendar"
 
 [dependency-groups]
 dev = ["pre-commit>=4", "pytest>=8", "hypothesis>=6.168.0", "ruff>=0.6", "mypy>=1.11", "pytest-cov>=5", "jsonschema>=4"]
