@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 ENTRY_POINT_GROUP = "logbook.adapters"
-BUILT_IN = ("dawarich", "immich", "takeout.location", "ios_contacts", "whatsapp", "imessage")
+BUILT_IN = ("dawarich", "immich", "takeout.location", "ios_contacts", "whatsapp", "imessage", "ios_notes")
 
 
 @runtime_checkable
