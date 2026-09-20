@@ -11,7 +11,7 @@ import sys
 import time
 import zoneinfo
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import date, datetime
 from pathlib import Path, PurePath
 from typing import Any
@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from . import FORMAT, __version__, adapters
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
+from .resolve import Ref, labels
 from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, now_utc, retractions
 
 _LOCALTIME = "/etc/localtime"
@@ -335,7 +336,9 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 def cmd_show(a: argparse.Namespace) -> None:
     """One local day (the owner's timezone), located through the index, read from the files,
-    in time order (then chain order for the same instant)."""
+    in time order (then chain order for the same instant). Senders, attendees and unnamed group
+    chats are shown by the names the record's own resolution lines give them (RFC 0006), built
+    once per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
@@ -343,21 +346,25 @@ def cmd_show(a: argparse.Namespace) -> None:
         # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
         rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
         retracted = retractions(idx.retractions())
+        names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
     if not rows:
         print(f"{day}: nothing logged")
         return
     rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
-    for text in _day_rows(rows, retracted, tz):
+    for text in _day_rows(rows, retracted, tz, names):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
 
 
-def _day_rows(rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo) -> Iterator[str]:
+def _day_rows(
+    rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo, names: Mapping[Ref, str] | None
+) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
-    by any other row, collapses into one summary."""
+    by any other row, collapses into one summary. `names` is the label map; None is the `--raw`
+    path: refs exactly as the sources gave them, no label, no fallback."""
     run: list[Line] = []
     for line in rows:
         retraction = retracted.get(line["id"])
@@ -368,23 +375,90 @@ def _day_rows(rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo) -> Ite
         if point:
             run.append(line)
         else:
-            yield _line_row(line, retraction, tz)
+            yield _line_row(line, retraction, tz, names)
     if run:
         yield _run_row(run, tz)
 
 
-def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo) -> str:
+def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
     p = line["payload"]
-    text = (
-        p.get("text")
-        or p.get("title")
-        or p.get("name")
-        or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
-    )
+    if line["kind"] == "message":
+        text = _message_text(p, names)
+    elif line["kind"] == "event":
+        text = _event_text(p, names)
+    else:
+        text = (
+            p.get("text")
+            or p.get("title")
+            or p.get("name")
+            or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
+        )
     return f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}"
+
+
+def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
+    """The label of a source-native ref `{kind, value}` (RFC 0006), else None."""
+    if names is None or not isinstance(ref, dict):
+        return None
+    kind, value = ref.get("kind"), ref.get("value")
+    if not isinstance(kind, str) or not isinstance(value, str):
+        return None
+    return names.get((kind, value))
+
+
+def _ref_value(ref: object) -> str:
+    return str(ref.get("value", "")) if isinstance(ref, dict) else ""
+
+
+def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    """`who: text`, `who in group: text`, `me → other: text` (RFC 0008). The sender is its label,
+    else the direct chat's own name, else the ref as given; the group is its name, else the
+    label of its id (a `provider_id` ref), else the id. Raw (`names` None): the ref, the id."""
+    chat = p.get("chat") or {}
+    chat_id = str(chat.get("id") or "")
+    direct = chat.get("type") == "direct"
+    chat_name = str(chat.get("name") or "")
+    if p.get("from_me"):
+        who = "me"
+    elif names is None:
+        who = _ref_value(p.get("sender"))
+    else:
+        who = _name(p.get("sender"), names) or (chat_name if direct else "") or _ref_value(p.get("sender"))
+    if direct:
+        prefix = f"{who} → {chat_name or chat_id}" if who == "me" else who
+    elif names is None:
+        prefix = f"{who} in {chat_id}"
+    else:
+        prefix = f"{who} in {chat_name or names.get(('provider_id', chat_id)) or chat_id}"
+    body = p.get("text") or f"[{p.get('media_kind') or 'media'}]"
+    return f"{prefix}: {body}"
+
+
+def _event_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    """`title · by organizer · with attendees` (RFC 0009). An attendee is its label, else the
+    name the calendar gave it, else the ref; raw (`names` None) is always the ref."""
+    parts = [str(p.get("title") or "")]
+    organizer = p.get("organizer")
+    if organizer:
+        parts.append(f"by {_name(organizer, names) or _ref_value(organizer)}")
+    attendees = p.get("attendees") or []
+    if attendees:
+        parts.append("with " + ", ".join(_attendee(a, names) for a in attendees))
+    return " · ".join(part for part in parts if part)
+
+
+def _attendee(attendee: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    ref = attendee.get("ref")
+    label = _name(ref, names)
+    if label:
+        return label
+    own = attendee.get("name")
+    if names is not None and isinstance(own, str) and own:
+        return own
+    return _ref_value(ref) or str(own or "")
 
 
 def _run_row(run: list[Line], tz: ZoneInfo) -> str:
@@ -529,6 +603,7 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_retract)
     s = sub.add_parser("show", help="one day (default today)")
     s.add_argument("day", nargs="?")
+    s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)

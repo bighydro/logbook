@@ -356,3 +356,36 @@ def test_whole_log_export_and_verify_read_the_files_not_the_index(lb: Logbook, t
 
 def test_index_sqlite_is_in_the_root_ignore_list():
     assert "index.sqlite" in (ROOT / ".gitignore").read_text(encoding="utf-8").split()
+
+
+# -- resolutions: every resolution/v1 line, in chain order, kept in step by append ------------------
+
+
+def _resolution(value: str, label: str) -> dict[str, Any]:
+    return {
+        "schema": "resolution/v1",
+        "ref": {"kind": "email", "value": value},
+        "entity": {"type": "person", "id": "019cadd3-6bc0-7dcd-9133-043f5aabf2a9", "registry": "logbook"},
+        "label": label,
+    }
+
+
+def test_resolutions_lists_every_resolution_line_in_seq_order_and_nothing_else(lb: Logbook):
+    lb.append(
+        at="2026-03-05T10:00:00Z", source="manual", kind="resolution", tier=2, payload=_resolution("a@x", "A")
+    )
+    lb.append(
+        at="2026-03-04T10:00:00Z", source="manual", kind="resolution", tier=2, payload=_resolution("b@x", "B")
+    )
+    with lb.index() as idx:  # built from the files: a rebuild
+        assert [line["payload"]["label"] for line in idx.resolutions()] == ["A", "B"]
+        assert {line["kind"] for line in idx.resolutions()} == {"resolution"}
+
+
+def test_resolutions_sees_a_line_appended_after_the_index_was_built(lb: Logbook):
+    _build(lb)
+    lb.append(
+        at="2026-03-05T10:00:00Z", source="manual", kind="resolution", tier=2, payload=_resolution("a@x", "A")
+    )
+    with lb.index() as idx:  # incremental add, no rebuild
+        assert [line["payload"]["label"] for line in idx.resolutions()] == ["A"]

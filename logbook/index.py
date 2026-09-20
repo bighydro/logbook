@@ -215,6 +215,15 @@ class Index:
         ).fetchall()
         return self._read(found)
 
+    def resolutions(self) -> list[Line]:
+        """Every resolution line (RFC 0006), in chain order (the (kind, at) index). Served by the
+        `kind` column every index has had, so a record indexed before this method exists needs
+        no rebuild."""
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE kind = 'resolution' ORDER BY seq"
+        ).fetchall()
+        return self._read(found)
+
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
         """Which of these (source, raw_id) keys the log already has: one SELECT for the batch,
         through a temp table so a batch of any size stays one statement."""
