@@ -221,13 +221,13 @@ ITEMS = [
         None,
         None,
     ),
-    (
+    (  # the year before the floor: a placeholder too
         10,
         "F1A2B3C4-0000-4000-8000-000000000010",
         "too early",
         None,
-        100.0,
-        200.0,
+        _apple("1899-12-31T23:00:00Z"),
+        None,
         None,
         0,
         1,
@@ -411,6 +411,14 @@ def test_run_skips_and_counts_placeholder_dates_and_rows_without_a_start(tmp_pat
     lines = list(ios_calendar.run(_calendar(tmp_path), counts=counts))
     assert {6, 9, 10}.isdisjoint(_by_row(lines))
     assert counts == {"skipped_placeholder_date": 2, "skipped_no_start": 1, "no_unique_identifier": 1}
+
+
+def test_run_keeps_a_start_from_1900_on(tmp_path):
+    """A birthday master from 1985 is a plan the owner keeps, not a placeholder (RFC 0009 rule 4)."""
+    line = _one_item(tmp_path, start=_apple("1985-06-15T00:00:00Z"), end=None, start_tz=None, all_day=1)
+    assert line["at"] == "1985-06-15T00:00:00Z" and line["end"] == "1985-06-16T00:00:00Z"
+    line = _one_item(tmp_path, start=_apple("1900-01-01T00:00:00Z"), end=_apple("1900-01-01T01:00:00Z"))
+    assert line["at"] == "1900-01-01T00:00:00Z" and line["end"] == "1900-01-01T01:00:00Z"
 
 
 # -- run: the timed event -----------------------------------------------------------
@@ -742,7 +750,7 @@ def test_cli_add_reports_lines_and_skips_and_places_all_day_events_in_the_record
     p = _calendar(tmp_path)
     out = run("add", str(p)).stdout
     assert "added 7 lines from ios-calendar" in out
-    assert "skipped 2 with placeholder dates, 1 without a start" in out
+    assert "skipped 2 with a placeholder start (before 1900), 1 without a start" in out
     assert "also 1 without a unique identifier, keyed by row id" in out
     assert "added 0 lines from ios-calendar" in run("add", str(p)).stdout
     assert "valid — 7 lines" in run("verify").stdout
@@ -766,7 +774,7 @@ PAYLOAD_KEYS = {
 def _rfc_rules(line: dict) -> None:
     assert set(line) == ENVELOPE
     assert line["kind"] == "event" and line["tier"] == 1 and line["source"] == "ios-calendar"
-    assert STAMP.match(line["at"]) and line["at"] >= "1990-"
+    assert STAMP.match(line["at"]) and line["at"] >= "1900-"
     assert line["end"] is None or STAMP.match(line["end"])
     if line["tz"] is not None:
         zoneinfo.ZoneInfo(line["tz"])

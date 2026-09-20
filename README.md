@@ -103,7 +103,7 @@ Calendar entries become `event/v1` lines (RFC 0009), one per entry as the phone 
 calendar, the place, the organizer and attendees as email refs, the status; a recurring entry is one line
 carrying its rule as RRULE text and a moved occurrence points back at it — occurrences are never expanded.
 An all-day entry is placed at local midnight in your record's timezone. The store's placeholder rows (a
-start in 1601) are skipped and counted.
+start before 1900, such as 1601) are skipped and counted; a birthday from 1965 is kept.
 
 | Source | Variables | What it logs |
 |---|---|---|

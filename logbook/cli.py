@@ -124,7 +124,7 @@ SKIP_PHRASES = {
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
     "skipped_no_start": "without a start",
-    "skipped_placeholder_date": "with placeholder dates",
+    "skipped_placeholder_date": "with a placeholder start (before 1900)",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",

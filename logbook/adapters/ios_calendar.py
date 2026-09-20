@@ -23,8 +23,12 @@ uid (ADR 0011: log what the source has).
 `raw_id` is `<unique_identifier>@<last_modified>`, so an entry edited after an export is a new line
 next time (RFC 0009 rule 5); a row with no unique identifier is keyed by its ROWID and counted. A
 detached occurrence that shares its master's uid is keyed `<uid>/<original date>` so the two never
-collide. Rows whose start is a placeholder — the year 1601, or anything before 2010-07 — are the store's,
-not the owner's, and are skipped and counted (rule 4); so is a row with no start at all.
+collide. Rows whose start is a placeholder — the year 1601, or anything before 1900 — are the store's, not
+the owner's, and are skipped and counted (rule 4); so is a row with no start at all.
+
+`supersedes` (rule 5) is never set on import: an adapter sees one snapshot of the store and cannot know
+the id of the line an earlier import wrote. A second import of an edited entry writes a new line with a
+new `raw_id`; readers join the two on the bare uid and show the latest `modified_at`.
 
 Every column beyond ROWID and start_date is optional: an iOS version without it yields lines without
 the field. Pure: opened `mode=ro`, `immutable=1` (no lock, no journal beside the source), one SELECT
@@ -48,9 +52,8 @@ SCHEMA = "event/v1"
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 REQUIRED_TABLES = frozenset({"CalendarItem", "Calendar"})
-APPLE_EPOCH = 978_307_200  # 2001-01-01T00:00:00Z; every date column counts from it
-EARLIEST_START = 300_000_000  # 2010-07-07; a start before this is a placeholder (RFC 0009 rule 4)
-PLACEHOLDER_BEFORE_YEAR = 1990  # the store's 1601 rows, and anything else that is not a plan
+APPLE_EPOCH_UTC = datetime(2001, 1, 1, tzinfo=UTC)  # every date column counts seconds from it
+PLACEHOLDER_BEFORE_YEAR = 1900  # the store's 1601 rows are placeholders (RFC 0009 rule 4); 1900 on is a plan
 
 ITEM_COLUMNS = (
     "unique_identifier",
@@ -235,7 +238,7 @@ def _draft(
     if start is None:
         _count(counts, "skipped_no_start" if not _is_number(start_date) else "skipped_placeholder_date")
         return None
-    if (_is_number(start_date) and start_date < EARLIEST_START) or start.year < PLACEHOLDER_BEFORE_YEAR:
+    if start.year < PLACEHOLDER_BEFORE_YEAR:
         _count(counts, "skipped_placeholder_date")
         return None
     end = _datetime(end_date)
@@ -434,11 +437,13 @@ def _zone(name: object) -> zoneinfo.ZoneInfo | None:
 
 
 def _datetime(seconds_since_2001: object) -> datetime | None:
+    """Arithmetic from the epoch, not `fromtimestamp`: Windows refuses instants before 1970, and a 1965
+    birthday is a real entry."""
     if not isinstance(seconds_since_2001, int | float) or isinstance(seconds_since_2001, bool):
         return None
     try:
-        return datetime.fromtimestamp(APPLE_EPOCH + int(seconds_since_2001), UTC)
-    except (OverflowError, OSError, ValueError):
+        return APPLE_EPOCH_UTC + timedelta(seconds=int(seconds_since_2001))
+    except (OverflowError, ValueError):
         return None
 
 
