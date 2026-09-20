@@ -69,6 +69,7 @@ Two ways in. `add` reads a file you already hold; `sync` asks a service you run 
 logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
 logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
 logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
+logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -85,6 +86,11 @@ every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (fo
 saved without a country code get one, with the national trunk `0` dropped (`079 654 31 17` becomes
 `+41796543117`); a number that already starts with the prefix digits but no `+`, or any number when the
 variable is unset, is kept as entered and flagged `unnormalised`.
+
+WhatsApp messages become `message/v1` lines (RFC 0008), one per message, with the sender as the same kind of
+phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
+into the record yet: a file found under `Message/` beside the database is hashed and its digest kept under
+`extra.media` for a later attach pass; set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
 
 | Source | Variables | What it logs |
 |---|---|---|
