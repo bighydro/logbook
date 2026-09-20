@@ -8,7 +8,8 @@ Two kinds share one registry. A *file* adapter reads an export you already hold:
 
 `run` may also take an optional `counts: dict[str, int]`; when it does, `logbook add` passes one and
 reports what the adapter skipped (`skipped_no_timestamp`, `skipped_bad_coordinates`, `skipped_no_ref`, ...;
-the phrases live in `cli.SKIP_PHRASES`).
+the phrases live in `cli.SKIP_PHRASES`). It may also take an optional `timezone: str`, the record's IANA
+zone, for a source whose times are floating (an all-day calendar entry has a day, not an instant).
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 
@@ -38,7 +39,16 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 ENTRY_POINT_GROUP = "logbook.adapters"
-BUILT_IN = ("dawarich", "immich", "takeout.location", "ios_contacts", "whatsapp", "imessage", "ios_notes")
+BUILT_IN = (
+    "dawarich",
+    "immich",
+    "takeout.location",
+    "ios_contacts",
+    "whatsapp",
+    "imessage",
+    "ios_notes",
+    "ios_calendar",
+)
 
 
 @runtime_checkable

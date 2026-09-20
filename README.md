@@ -71,6 +71,7 @@ logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Take
 logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
+logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -97,6 +98,12 @@ Apple Notes become `note/v1` lines (RFC 0010), one per note, with the plain text
 the title, the folder and the modification time. A note edited since the last import is a new line (its `raw_id`
 carries the modification time); password-protected notes are skipped because their body is encrypted; notes in
 Recently Deleted are logged and flagged `deleted`.
+
+Calendar entries become `event/v1` lines (RFC 0009), one per entry as the phone stores it: the span, the
+calendar, the place, the organizer and attendees as email refs, the status; a recurring entry is one line
+carrying its rule as RRULE text and a moved occurrence points back at it — occurrences are never expanded.
+An all-day entry is placed at local midnight in your record's timezone. The store's placeholder rows (a
+start before 1900, such as 1601) are skipped and counted; a birthday from 1965 is kept.
 
 | Source | Variables | What it logs |
 |---|---|---|
