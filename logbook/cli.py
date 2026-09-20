@@ -109,6 +109,15 @@ SKIP_PHRASES = {
     "skipped_no_ref": "without a phone or email",
     "skipped_empty_ref": "with an empty phone or email",
     "skipped_duplicate_ref": "with a phone or email already seen",
+    "skipped_status": "in a status chat",
+    "skipped_bad_date": "with an unusable date",
+    "skipped_no_chat": "without a chat",
+    "skipped_system_event": "group system events",
+}
+NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
+    "no_stanza_id": "without a stanza id, keyed by row id",
+    "media_hashed": "with media hashed",
+    "media_missing": "with media missing",
 }
 
 
@@ -121,10 +130,17 @@ def _report_skipped(counts: dict[str, int]) -> None:
     others = [
         f"{n:,} {SKIP_PHRASES.get(key, key.removeprefix('skipped_').replace('_', ' '))}"
         for key, n in counts.items()
-        if key not in LOCATION_SKIPS and n
+        if key not in LOCATION_SKIPS and key.startswith("skipped_") and n
     ]
     if others:
         print("  skipped " + ", ".join(others))
+    noted = [
+        f"{n:,} {NOTE_PHRASES.get(key, key.replace('_', ' '))}"
+        for key, n in counts.items()
+        if not key.startswith("skipped_") and n
+    ]
+    if noted:
+        print("  also " + ", ".join(noted))
 
 
 def _progress(n: int, elapsed: float) -> None:
