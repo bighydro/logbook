@@ -143,6 +143,18 @@ def test_find_skips_home_logbook_that_is_a_code_checkout(tmp_path, monkeypatch):
         Logbook.find(start=elsewhere)
 
 
+def test_find_is_pinned_to_a_temporary_record_by_conftest(tmp_path):
+    """tests/conftest.py sets LOGBOOK_HOME, HOME and USERPROFILE per test, so neither the variable nor
+    the ~/Logbook fallback can ever reach a real record."""
+    home = Path(os.environ["LOGBOOK_HOME"])
+    assert home.resolve().is_relative_to(tmp_path.resolve())
+    assert (Path.home() / "Logbook").resolve().is_relative_to(tmp_path.resolve())
+    with pytest.raises(FileNotFoundError):  # nothing anywhere yet: the fallback found no real record
+        Logbook.find(start=tmp_path)
+    Logbook.init(home, "UTC")
+    assert Logbook.find().root.resolve().is_relative_to(tmp_path.resolve())
+
+
 def test_find_still_locates_a_real_logbook_past_a_checkout(tmp_path, monkeypatch):
     real = Logbook.init(tmp_path / "real", "UTC")
     _make_checkout(tmp_path / "real" / "clone", ".git/")
