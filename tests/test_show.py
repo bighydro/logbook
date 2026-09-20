@@ -188,3 +188,180 @@ def test_show_piped_into_head_exits_0_with_nothing_on_stderr(tmp_path: Path):
     )
     assert r.returncode == 0, r.stderr
     assert r.stdout == f"{DAY}\n" and r.stderr == ""
+
+
+# -- names: refs rendered through the record's own resolution lines (RFC 0006) ----------------
+
+PERSON_A = "019cadd3-6bc0-7dcd-9133-043f5aabf2a9"
+PERSON_B = "019cadd3-6bc0-7dcd-9133-043f5aabf2aa"
+PERSON_C = "019cadd3-6bc0-7dcd-9133-043f5aabf2ab"
+
+
+def _resolution(
+    kind: str, value: str, label: str, entity: str, entity_type: str = "person", supersedes: str | None = None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": "resolution/v1",
+        "ref": {"kind": kind, "value": value},
+        "entity": {"type": entity_type, "id": entity, "registry": "logbook"},
+        "label": label,
+        "method": "owner",
+    }
+    if supersedes is not None:
+        payload["supersedes"] = supersedes
+    return {
+        "at": "2026-02-28T09:00:00Z",
+        "source": "manual",
+        "kind": "resolution",
+        "tier": 2,
+        "payload": payload,
+    }
+
+
+def _message(
+    at: str, chat: dict[str, Any], sender: str | None, text: str | None, **more: Any
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": "message/v1",
+        "raw_id": f"wa:{at}",
+        "chat": chat,
+        "from_me": sender is None,
+    }
+    if sender is not None:
+        payload["sender"] = {"kind": "phone", "value": sender}
+    if text is not None:
+        payload["text"] = text
+    payload.update(more)
+    return {"at": at, "source": "whatsapp", "kind": "message", "tier": 2, "payload": payload}
+
+
+OLA_CHAT = {"id": "4790000001@s.whatsapp.net", "type": "direct", "name": "Ola"}
+GROUP_CHAT = {"id": "1234@g.us", "type": "group"}  # the source has no name for it
+
+
+@pytest.fixture
+def people(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    """Ola (two refs), Kari (one superseded resolution, one pair where the later wins), a
+    retracted resolution of a third number; three messages and one event."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append(**_resolution("email", "ola@example.org", "Ola Nordmann", PERSON_A))
+    lb.append(**_resolution("phone", "+4790000001", "Ola Nordmann", PERSON_A))
+    old = lb.append(**_resolution("phone", "+4790000002", "K. Nordmann", PERSON_B))
+    lb.append(**_resolution("phone", "+4790000002", "Kari Nordmann", PERSON_B, supersedes=old["id"]))
+    lb.append(**_resolution("email", "kari@example.org", "Kari Older", PERSON_B))
+    lb.append(**_resolution("email", "kari@example.org", "Kari Nordmann", PERSON_B))
+    wrong = lb.append(**_resolution("phone", "+4790000003", "Mistaken Match", PERSON_C))
+    lb.retract(wrong["seq"], "wrong person")
+    lb.append_many(
+        [
+            _message("2026-03-01T10:00:00Z", OLA_CHAT, "+4790000001", "mooring photos sent"),
+            _message("2026-03-01T10:05:00Z", GROUP_CHAT, "+4790000002", "who brings rope"),
+            _message(
+                "2026-03-01T10:10:00Z",
+                {"id": "4790000003@s.whatsapp.net", "type": "direct", "name": "Mystery"},
+                "+4790000003",
+                "hello?",
+            ),
+            {
+                "at": "2026-03-01T08:30:00Z",
+                "end": "2026-03-01T09:15:00Z",
+                "source": "ios-calendar",
+                "kind": "event",
+                "tier": 1,
+                "payload": {
+                    "schema": "event/v1",
+                    "raw_id": "uid@2026-02-27T16:05:00Z",
+                    "title": "Boat survey",
+                    "all_day": False,
+                    "organizer": {"kind": "email", "value": "ola@example.org"},
+                    "attendees": [
+                        {
+                            "ref": {"kind": "email", "value": "kari@example.org"},
+                            "name": "Kari (work)",
+                            "response": "accepted",
+                        },
+                        {"ref": {"kind": "email", "value": "guest@example.org"}, "name": "Guest Person"},
+                        {"ref": {"kind": "email", "value": "anon@example.org"}},
+                    ],
+                },
+            },
+        ]
+    )
+    return lb
+
+
+def _text(out: list[str]) -> list[str]:
+    """The part of each row after the kind and source columns."""
+    return [" ".join(line.split()[3:]) for line in out[1:]]
+
+
+def test_show_names_senders_and_attendees_from_resolution_lines(people: Logbook, capsys):
+    assert _text(_show(capsys)) == [
+        "Boat survey · by Ola Nordmann · with Kari Nordmann, Guest Person, anon@example.org",
+        "Ola Nordmann: mooring photos sent",
+        "Kari Nordmann in 1234@g.us: who brings rope",  # an unnamed group is its id, never resolved
+        "Mystery: hello?",  # the resolution of +4790000003 is retracted: the direct chat's own name
+    ]
+
+
+def test_show_raw_prints_refs_unchanged(people: Logbook, capsys):
+    cli.main(["show", DAY, "--raw"])
+    out = capsys.readouterr().out.splitlines()
+    assert _text(out) == [
+        "Boat survey · by ola@example.org · with kari@example.org, guest@example.org, anon@example.org",
+        "+4790000001: mooring photos sent",
+        "+4790000002 in 1234@g.us: who brings rope",
+        "+4790000003: hello?",
+    ]
+
+
+def test_show_a_retracted_resolution_does_not_resolve_even_without_a_chat_name(people: Logbook, capsys):
+    people.append(
+        **_message(
+            "2026-03-01T10:20:00Z", {"id": "x@s.whatsapp.net", "type": "direct"}, "+4790000003", "still me"
+        )
+    )
+    assert _text(_show(capsys))[-1] == "+4790000003: still me"
+
+
+def test_show_last_resolution_wins_when_neither_supersedes(people: Logbook, capsys):
+    people.append(**_resolution("phone", "+4790000001", "Ola N. (new phone)", PERSON_A))
+    assert _text(_show(capsys))[1] == "Ola N. (new phone): mooring photos sent"
+
+
+def test_show_own_messages_say_me_and_name_the_other_side(people: Logbook, capsys):
+    people.append(**_message("2026-03-01T10:30:00Z", OLA_CHAT, None, "on my way"))
+    people.append(**_message("2026-03-01T10:31:00Z", GROUP_CHAT, None, None, media_kind="image"))
+    assert _text(_show(capsys))[-2:] == ["me → Ola: on my way", "me in 1234@g.us: [image]"]
+
+
+def test_show_writes_nothing(people: Logbook, capsys):
+    before = people.meta["head"]
+    _show(capsys)
+    cli.main(["show", DAY, "--raw"])
+    assert people.meta["head"] == before
+
+
+def test_show_without_any_resolution_still_uses_the_names_the_sources_gave(lb: Logbook, capsys):
+    lb.append(**_message("2026-03-01T10:00:00Z", OLA_CHAT, "+4790000001", "hi"))
+    lb.append(
+        at="2026-03-01T10:01:00Z",
+        source="ios-calendar",
+        kind="event",
+        tier=1,
+        payload={
+            "schema": "event/v1",
+            "title": "Survey",
+            "all_day": False,
+            "attendees": [{"ref": {"kind": "email", "value": "guest@example.org"}, "name": "Guest Person"}],
+        },
+    )
+    rows = _text(_show(capsys))
+    assert "Ola: hi" in rows
+    assert "Survey · with Guest Person" in rows
+
+
+def test_show_never_resolves_a_chat_id_a_chat_is_not_an_entity(people: Logbook, capsys):
+    people.append(**_resolution("provider_id", "1234@g.us", "Boat club", PERSON_C, entity_type="company"))
+    assert _text(_show(capsys))[2] == "Kari Nordmann in 1234@g.us: who brings rope"
