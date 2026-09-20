@@ -69,7 +69,8 @@ def test_registry_lists_immich_as_a_live_adapter():
 def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters(tmp_path):
     names = [a.NAME for a in adapters.all_adapters()]
     assert "dawarich" in names and "immich" in names
-    assert [a.NAME for a in adapters.file_adapters()] == ["dawarich", "google-takeout-location"]
+    file_names = [a.NAME for a in adapters.file_adapters()]
+    assert file_names == ["dawarich", "google-takeout-location", "ios-contacts"]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")
     assert adapters.find(p) is None  # immich has no sniff and must not break the lookup
