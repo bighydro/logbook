@@ -105,9 +105,8 @@ carrying its rule as RRULE text and a moved occurrence points back at it — occ
 An all-day entry is placed at local midnight in your record's timezone. The store's placeholder rows (a
 start before 1900, such as 1601) are skipped and counted; a birthday from 1965 is kept.
 
-`show` prints people by name — the sender of a message, the organizer and attendees of an event, a group
-chat the source left unnamed — and the names come from your own resolution lines, never from the raw
-lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
+`show` prints people by name — the sender of a message, the organizer and attendees of an event — and the
+names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
 nobody has resolved shows as the source gave it, after the name the source itself attached, if any.
 `show --raw` prints every ref unchanged. Either way, `show` only reads.
 

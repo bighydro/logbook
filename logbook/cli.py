@@ -336,9 +336,9 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 def cmd_show(a: argparse.Namespace) -> None:
     """One local day (the owner's timezone), located through the index, read from the files,
-    in time order (then chain order for the same instant). Senders, attendees and unnamed group
-    chats are shown by the names the record's own resolution lines give them (RFC 0006), built
-    once per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
+    in time order (then chain order for the same instant). Senders, organizers and attendees
+    are shown by the names the record's own resolution lines give them (RFC 0006), built once
+    per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
@@ -415,8 +415,8 @@ def _ref_value(ref: object) -> str:
 
 def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     """`who: text`, `who in group: text`, `me → other: text` (RFC 0008). The sender is its label,
-    else the direct chat's own name, else the ref as given; the group is its name, else the
-    label of its id (a `provider_id` ref), else the id. Raw (`names` None): the ref, the id."""
+    else the direct chat's own name, else the ref as given. A group is its name, else its id: a
+    chat is not an entity (RFC 0006), so its id is never looked up. Raw (`names` None): the ref."""
     chat = p.get("chat") or {}
     chat_id = str(chat.get("id") or "")
     direct = chat.get("type") == "direct"
@@ -429,10 +429,8 @@ def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
         who = _name(p.get("sender"), names) or (chat_name if direct else "") or _ref_value(p.get("sender"))
     if direct:
         prefix = f"{who} → {chat_name or chat_id}" if who == "me" else who
-    elif names is None:
-        prefix = f"{who} in {chat_id}"
     else:
-        prefix = f"{who} in {chat_name or names.get(('provider_id', chat_id)) or chat_id}"
+        prefix = f"{who} in {chat_name or chat_id}"
     body = p.get("text") or f"[{p.get('media_kind') or 'media'}]"
     return f"{prefix}: {body}"
 

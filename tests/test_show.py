@@ -195,7 +195,6 @@ def test_show_piped_into_head_exits_0_with_nothing_on_stderr(tmp_path: Path):
 PERSON_A = "019cadd3-6bc0-7dcd-9133-043f5aabf2a9"
 PERSON_B = "019cadd3-6bc0-7dcd-9133-043f5aabf2aa"
 PERSON_C = "019cadd3-6bc0-7dcd-9133-043f5aabf2ab"
-GROUP = "019cadd3-6bc0-7dcd-9133-043f5aabf2ac"
 
 
 def _resolution(
@@ -243,7 +242,7 @@ GROUP_CHAT = {"id": "1234@g.us", "type": "group"}  # the source has no name for 
 @pytest.fixture
 def people(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     """Ola (two refs), Kari (one superseded resolution, one pair where the later wins), a
-    retracted resolution of a third number, a named group chat; three messages and one event."""
+    retracted resolution of a third number; three messages and one event."""
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append(**_resolution("email", "ola@example.org", "Ola Nordmann", PERSON_A))
@@ -254,7 +253,6 @@ def people(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     lb.append(**_resolution("email", "kari@example.org", "Kari Nordmann", PERSON_B))
     wrong = lb.append(**_resolution("phone", "+4790000003", "Mistaken Match", PERSON_C))
     lb.retract(wrong["seq"], "wrong person")
-    lb.append(**_resolution("provider_id", "1234@g.us", "Boat club", GROUP, entity_type="company"))
     lb.append_many(
         [
             _message("2026-03-01T10:00:00Z", OLA_CHAT, "+4790000001", "mooring photos sent"),
@@ -298,11 +296,11 @@ def _text(out: list[str]) -> list[str]:
     return [" ".join(line.split()[3:]) for line in out[1:]]
 
 
-def test_show_names_senders_attendees_and_group_chats_from_resolution_lines(people: Logbook, capsys):
+def test_show_names_senders_and_attendees_from_resolution_lines(people: Logbook, capsys):
     assert _text(_show(capsys)) == [
         "Boat survey · by Ola Nordmann · with Kari Nordmann, Guest Person, anon@example.org",
         "Ola Nordmann: mooring photos sent",
-        "Kari Nordmann in Boat club: who brings rope",
+        "Kari Nordmann in 1234@g.us: who brings rope",  # an unnamed group is its id, never resolved
         "Mystery: hello?",  # the resolution of +4790000003 is retracted: the direct chat's own name
     ]
 
@@ -335,7 +333,7 @@ def test_show_last_resolution_wins_when_neither_supersedes(people: Logbook, caps
 def test_show_own_messages_say_me_and_name_the_other_side(people: Logbook, capsys):
     people.append(**_message("2026-03-01T10:30:00Z", OLA_CHAT, None, "on my way"))
     people.append(**_message("2026-03-01T10:31:00Z", GROUP_CHAT, None, None, media_kind="image"))
-    assert _text(_show(capsys))[-2:] == ["me → Ola: on my way", "me in Boat club: [image]"]
+    assert _text(_show(capsys))[-2:] == ["me → Ola: on my way", "me in 1234@g.us: [image]"]
 
 
 def test_show_writes_nothing(people: Logbook, capsys):
@@ -362,3 +360,8 @@ def test_show_without_any_resolution_still_uses_the_names_the_sources_gave(lb: L
     rows = _text(_show(capsys))
     assert "Ola: hi" in rows
     assert "Survey · with Guest Person" in rows
+
+
+def test_show_never_resolves_a_chat_id_a_chat_is_not_an_entity(people: Logbook, capsys):
+    people.append(**_resolution("provider_id", "1234@g.us", "Boat club", PERSON_C, entity_type="company"))
+    assert _text(_show(capsys))[2] == "Kari Nordmann in 1234@g.us: who brings rope"
