@@ -113,9 +113,12 @@ SKIP_PHRASES = {
     "skipped_bad_date": "with an unusable date",
     "skipped_no_chat": "without a chat",
     "skipped_system_event": "group system events",
+    "skipped_reaction": "reactions",
+    "skipped_no_body": "without a body",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
+    "no_guid": "without a guid, keyed by row id",
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
 }
