@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from ..store import uuid7
+from . import phone
 
 NAME = "ios-contacts"
 KIND = "resolution"
@@ -41,7 +42,6 @@ LABEL_TABLE = "ABMultiValueLabel"
 APPLE_EPOCH = 978_307_200  # 2001-01-01T00:00:00Z; CreationDate/ModificationDate count from it
 PROPERTIES = {3: "phone", 4: "email"}
 
-PHONE_PUNCTUATION = re.compile(r"[\s\-.()]+")
 APPLE_LABEL = re.compile(r"^_\$!<(.+)>!\$_$")
 
 
@@ -192,30 +192,11 @@ def _identity(first: object, last: object, organization: object, nickname: objec
 
 
 def _normalise(kind: str, entered: str, prefix: str) -> tuple[str, bool]:
-    """(ref value, unnormalised). Empty when nothing usable is left.
-
-    Phones lose spaces, dashes, dots and parentheses; a `00` prefix becomes `+`. A number with no
-    country code gets `+<LOGBOOK_DIAL_PREFIX>` when that is set, after exactly one leading `0` (the
-    national trunk prefix) is dropped: `079 654 31 17` with prefix 41 is `+41796543117`. A number
-    that already starts with the prefix digits but no `+` is ambiguous (a trunk-less national number
-    or a country code typed without `+`), so it is kept as entered and flagged. With no prefix set
-    the number is kept as entered (punctuation stripped) and flagged. Anything that is not digits
-    after that is flagged too. Emails are lower-cased and trimmed."""
+    """(ref value, unnormalised). Phones through `phone.normalise` (shared with every adapter that
+    writes a phone ref, so the same number is the same ref); emails lower-cased and trimmed."""
     if kind == "email":
         return entered.strip().lower(), False
-    number = PHONE_PUNCTUATION.sub("", entered)
-    if number.startswith("00"):
-        number = "+" + number[2:]
-    digits = number[1:] if number.startswith("+") else number
-    if not digits.isdigit() or not digits.isascii():
-        return number, bool(number)
-    if number.startswith("+"):
-        return number, False
-    if prefix and not number.startswith(prefix):
-        national = number.removeprefix("0")
-        if national:
-            return f"+{prefix}{national}", False
-    return number, True
+    return phone.normalise(entered, prefix)
 
 
 def _label(labels: dict[int, str], raw: object) -> str:
