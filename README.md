@@ -70,6 +70,7 @@ logbook add ~/Downloads/dawarich-export.json      # any export the adapters reco
 logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
 logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
+logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -91,6 +92,11 @@ WhatsApp messages become `message/v1` lines (RFC 0008), one per message, with th
 phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
 into the record yet: a file found under `Message/` beside the database is hashed and its digest kept under
 `extra.media` for a later attach pass; set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
+
+Apple Notes become `note/v1` lines (RFC 0010), one per note, with the plain text pulled out of the note archive,
+the title, the folder and the modification time. A note edited since the last import is a new line (its `raw_id`
+carries the modification time); password-protected notes are skipped because their body is encrypted; notes in
+Recently Deleted are logged and flagged `deleted`.
 
 | Source | Variables | What it logs |
 |---|---|---|
