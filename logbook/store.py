@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import shutil
 import time
@@ -15,13 +16,33 @@ from pathlib import Path
 from typing import Any, BinaryIO, TextIO
 
 from . import FORMAT
-from .chain import GENESIS, Line, compute_hash, verify_lines
+from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
 from .index import Index, Located, Row, row
 
 
 def now_utc() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def utc(stamp: str) -> str:
+    """`stamp` as SPEC §2 wants it written: RFC 3339 in UTC with a literal Z. A stamp that already
+    ends in Z is kept verbatim (it is hashed as written); a numeric offset is converted, keeping
+    the fractional seconds as given; a stamp with no zone at all is refused."""
+    if stamp.endswith("Z"):
+        return stamp
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        raise ValueError(f"timestamp {stamp!r} is not RFC 3339 UTC, e.g. 2026-03-01T07:30:00Z") from None
+    if parsed.tzinfo is None:
+        raise ValueError(f"timestamp {stamp!r} has no zone; SPEC §2 wants UTC, e.g. 2026-03-01T07:30:00Z")
+    fraction = FRACTION.search(stamp)
+    seconds = parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+    return seconds + (fraction.group(0) if fraction else "") + "Z"
+
+
+FRACTION = re.compile(r"\.\d+(?=[+-]\d\d:?\d\d$)")  # the fractional seconds before a numeric offset
 
 
 def uuid7() -> str:
@@ -140,9 +161,9 @@ class Logbook:
         groups or indexes and must not hold the whole log in memory; `lines()` does."""
         for f in self.files():
             with f.open(encoding="utf-8") as fh:
-                for raw in fh:
+                for n, raw in enumerate(fh, 1):
                     if raw.strip():
-                        yield json.loads(raw)
+                        yield self._parse(f, n, raw)
 
     def located_lines(self) -> Iterator[Located]:
         """Every line with its file (relative to the root) and byte offset, streamed in file order."""
@@ -150,9 +171,9 @@ class Logbook:
             rel = f.relative_to(self.root).as_posix()
             offset = 0
             with f.open("rb") as fh:
-                for raw in fh:
+                for n, raw in enumerate(fh, 1):
                     if raw.strip():
-                        yield rel, offset, json.loads(raw)
+                        yield rel, offset, self._parse(f, n, raw)
                     offset += len(raw)
 
     # -- the index: a locator, rebuilt whenever it is missing or stale (ADR 0001, 0007) ----------
@@ -190,10 +211,15 @@ class Logbook:
         with self.index() as idx:
             return idx.by_seq(seq)
 
-    def verify(self) -> tuple[int, str, list[str]]:
+    def verify(self, warnings: list[str] | None = None) -> tuple[int, str, list[str]]:
+        """(seq, head, errors) of the files, never the index. What this release only warns about
+        (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given."""
         meta = self.meta
         self._check_format(meta)
-        seq, head, errors = verify_lines(self.lines())
+        try:
+            seq, head, errors = verify_lines(self.lines(), warnings)
+        except ValueError as e:  # a line that is not one JSON object with distinct keys (SPEC §2)
+            return 0, GENESIS, [str(e)]
         if meta["seq"] != seq or meta["head"] != head:
             errors.append(
                 f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, "
@@ -218,13 +244,15 @@ class Logbook:
         line = self._line(
             meta, meta["seq"] + 1, meta["head"], at, source, kind, tier, payload, end, tz, recorded_at
         )
-        path = self._path_for(at)
+        path = self._path_for(line["at"])  # the month of `at` in UTC, after normalisation (SPEC §2)
         path.parent.mkdir(parents=True, exist_ok=True)
         idx = self._index_if_current(meta)
         with path.open("ab") as fh:
             fh.seek(0, os.SEEK_END)
             offset = fh.tell()
             fh.write(_dumps(line).encode("utf-8"))
+            fh.flush()
+            os.fsync(fh.fileno())  # SPEC §3 write order: the line is on disk before logbook.json names it
         meta["seq"], meta["head"] = line["seq"], line["hash"]
         self._save_meta(meta)
         if idx is not None:
@@ -298,6 +326,7 @@ class Logbook:
                     offset += len(raw)
                 fh.write(b"".join(encoded))
                 fh.flush()
+                os.fsync(fh.fileno())  # SPEC §3 write order: every line is on disk before logbook.json
             if (meta["seq"], meta["head"]) != (seq, head):
                 meta["seq"], meta["head"] = seq, head
                 self._save_meta(meta)
@@ -420,9 +449,9 @@ class Logbook:
         for file_no, f in enumerate(files):
             with f.open("rb") as fh:
                 offset = 0
-                for raw in fh:
+                for n, raw in enumerate(fh, 1):
                     if raw.strip():
-                        seqs.append(int(json.loads(raw).get("seq", 0)))
+                        seqs.append(int(self._parse(f, n, raw).get("seq", 0)))
                         places.append((file_no << 40) | offset)
                     offset += len(raw)
         order = sorted(range(len(seqs)), key=seqs.__getitem__)
@@ -431,8 +460,7 @@ class Logbook:
             for i in order:
                 fh = handles[places[i] >> 40]
                 fh.seek(places[i] & ((1 << 40) - 1))
-                row: Line = json.loads(fh.readline())
-                yield row
+                yield parse_line(fh.readline())
         finally:
             for fh in handles:
                 fh.close()
@@ -459,18 +487,25 @@ class Logbook:
         line: Line = {
             "id": uuid7(),
             "seq": seq,
-            "at": at,
-            "end": end,
+            "at": utc(at),
+            "end": None if end is None else utc(end),
             "tz": tz or meta["timezone"],
             "source": source,
             "kind": kind,
             "tier": tier,
             "payload": payload,
-            "recorded_at": recorded_at or now_utc(),
+            "recorded_at": utc(recorded_at) if recorded_at else now_utc(),
             "prev": prev,
         }
         line["hash"] = compute_hash(line)
         return line
+
+    def _parse(self, path: Path, n: int, raw: str | bytes) -> Line:
+        """One stored line as a dict; a bad one is reported by file and line number."""
+        try:
+            return parse_line(raw)
+        except ValueError as e:
+            raise ValueError(f"{self._relative(path)} line {n}: {e}") from e
 
     def _path_for(self, at: str) -> Path:
         year, month = at[:4], at[5:7]
@@ -495,8 +530,7 @@ def retractions(lines: Iterable[Line]) -> dict[str, Line]:
 def read_line_at(fh: BinaryIO, offset: int) -> Line:
     """The line that starts at byte `offset` of an open month file."""
     fh.seek(offset)
-    line: Line = json.loads(fh.readline())
-    return line
+    return parse_line(fh.readline())
 
 
 def _take(it: Iterator[dict[str, Any]], size: int) -> tuple[list[dict[str, Any]], BaseException | None]:
