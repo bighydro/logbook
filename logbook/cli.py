@@ -115,12 +115,17 @@ SKIP_PHRASES = {
     "skipped_system_event": "group system events",
     "skipped_reaction": "reactions",
     "skipped_no_body": "without a body",
+    "skipped_password_protected": "password protected",
+    "skipped_no_text": "without any text",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
     "no_guid": "without a guid, keyed by row id",
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
+    "deleted": "marked for deletion",
+    "body_from_snippet": "with the body taken from the snippet",
+    "no_identifier": "without an identifier, keyed by row id",
 }
 
 
