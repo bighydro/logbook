@@ -28,7 +28,7 @@ A crossing package is a directory (or a tar of one):
 <bundle>/
   manifest.json          # this schema
   entries.jsonl          # the crossed log lines, verbatim (the standard envelope)
-  blobs/<sha256>         # copies of the content-addressed blobs referenced by crossed lines
+  attachments/<sha256>   # copies of the content-addressed files referenced by crossed lines (SPEC §1.1 layout)
   resolution.jsonl       # OPTIONAL — derived id resolutions (see Resolution)
 ```
 
@@ -49,7 +49,7 @@ v1). The bundle is regenerable from the log at `logbook_head`.
 | `policy` | object | MUST | the crossing policy applied, for audit — see Tier & carve-out |
 | `counts` | object | SHOULD | audit totals: `{ logged, crossed, held_back }` |
 | `entries_file` | string | MUST | path to the crossed lines (`entries.jsonl`) |
-| `blobs` | array | SHOULD | `[{ sha256, path, bytes, media_type }]` for the content-addressed blobs included — the SPEC §1.1 reference shape, with `path` relative to the bundle (`blobs/<sha256>`) |
+| `blobs` | array | SHOULD | `[{ sha256, path, bytes, media_type }]` for the content-addressed files included — the SPEC §1.1 reference shape, with `path` the record-relative store path (`attachments/<sha256>`), so a crossed line's verbatim `content.path` resolves inside the bundle |
 | `resolution_file` | string | MAY | path to `resolution.jsonl`, if a derived resolution overlay is shipped |
 
 ## Entries
@@ -61,10 +61,12 @@ separately (Resolution).
 
 ## Blobs
 
-Copies of the content-addressed blobs the crossed lines reference (e.g. a `transcript/v1` `content.sha256`).
-Each appears once, addressed by `sha256`; a consumer verifies a blob by hashing it. Addressing and store
-semantics are per SPEC §1.1 — this format only ships copies of the referenced blobs, it does not define the
-store. A held-back line's blob does not cross.
+Copies of the content-addressed files the crossed lines reference (e.g. a `transcript/v1` `content.sha256`),
+laid out under `attachments/<sha256>` — the same record-relative path SPEC §1.1 gives them. Because
+`entries.jsonl` crosses **verbatim**, a line's `content.path` is already `attachments/<sha256>`, so it
+resolves inside the bundle without any rewrite; a consumer MAY instead resolve by `sha256`, and MUST verify
+each file by hashing it. Each appears once. Addressing and store semantics are per SPEC §1.1 — this format
+only ships copies of the referenced files, it does not define the store. A held-back line's file does not cross.
 
 ## Verification
 
@@ -82,10 +84,12 @@ line. Placement is a deployment choice:
 - **Consumer-side (recommended — and the choice for the first deployment).** The bundle omits
   `resolution.jsonl`; the consumer resolves source ids against its own registry, so the exporter depends on
   nothing outside its own record.
-- **Exporter-side.** The exporter runs a resolution pass and ships `resolution.jsonl` — lines of
-  `{ ref: { …source id… }, resolved: { person?, place?, company? } }` keyed to the entries they annotate.
+- **Exporter-side.** The exporter runs a resolution pass and ships `resolution.jsonl` — `resolution/v1`
+  lines (RFC 0006): each `{ ref: { kind, value, source? }, entity: { type, id, registry }, … }` stating the
+  entity a source-native id refers to. A consumer joins an entry to its entity by `ref`.
 
-`resolution_file` is OPTIONAL, so the choice is a deployment decision, not a format change.
+`resolution_file` is OPTIONAL, so the choice is a deployment decision, not a format change. Either way the
+crossed lines stay raw — resolution is a separate overlay (RFC 0006), never written back into a line.
 
 ## Tier & carve-out
 
