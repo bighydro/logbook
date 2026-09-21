@@ -106,6 +106,10 @@ WhatsApp messages become `message/v1` lines (RFC 0008), one per message, with th
 phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
 into the record yet: a file found under `Message/` beside the database is hashed and its digest kept under
 `extra.media` for a later attach pass; set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
+A group message sent from a linked device carries a `@lid` id instead of a phone number, which no contact list
+knows; add WhatsApp's own ContactsV2.sqlite (it sits beside ChatStorage.sqlite) and each lid becomes an alias
+of the phone number WhatsApp pairs it with (RFC 0006 `alias_of`), so the sender takes the name your contacts
+import gave that number, whichever import came first.
 
 Apple Notes become `note/v1` lines (RFC 0010), one per note, with the plain text pulled out of the note archive,
 the title, the folder and the modification time. A note edited since the last import is a new line (its `raw_id`

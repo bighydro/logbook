@@ -31,6 +31,7 @@ logbook = "logbook.cli:main"
 [project.entry-points."logbook.adapters"]
 ios-contacts = "logbook.adapters.ios_contacts"
 whatsapp = "logbook.adapters.whatsapp"
+whatsapp-contacts = "logbook.adapters.whatsapp_contacts"
 imessage = "logbook.adapters.imessage"
 ios-notes = "logbook.adapters.ios_notes"
 ios-calendar = "logbook.adapters.ios_calendar"

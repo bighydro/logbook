@@ -45,6 +45,7 @@ BUILT_IN = (
     "takeout.location",
     "ios_contacts",
     "whatsapp",
+    "whatsapp_contacts",
     "imessage",
     "ios_notes",
     "ios_calendar",
