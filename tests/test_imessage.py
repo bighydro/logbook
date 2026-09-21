@@ -373,6 +373,31 @@ def test_run_group_chat_named_and_sender_from_the_handle(tmp_path, hash_media):
     assert p["sender"] == {"kind": "phone", "value": "+4790000002"}
 
 
+def test_run_sender_has_no_name_because_the_store_has_none(tmp_path, hash_media):
+    lines = _by_rowid(list(imessage.run(_store(tmp_path))))
+    assert "name" not in lines[1]["payload"]["sender"] and "name" not in lines[6]["payload"]["sender"]
+
+
+def _store_with_handle_names(tmp_path: Path) -> Path:
+    """A store whose handle table carries a display_name column (Apple's do not, today)."""
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("ALTER TABLE handle ADD COLUMN display_name TEXT")
+        con.execute("UPDATE handle SET display_name = 'Ola' WHERE ROWID = 1")
+        con.execute("UPDATE handle SET display_name = '' WHERE ROWID = 3")
+        con.commit()
+    finally:
+        con.close()
+    return p
+
+
+def test_run_sender_name_from_the_handle_display_name_when_the_store_has_one(tmp_path, hash_media):
+    lines = _by_rowid(list(imessage.run(_store_with_handle_names(tmp_path))))
+    assert lines[1]["payload"]["sender"] == {"kind": "phone", "value": "+4790000001", "name": "Ola"}
+    assert "name" not in lines[6]["payload"]["sender"]  # an empty display name is no name
+
+
 def test_run_from_me_in_a_group_has_no_sender(tmp_path, hash_media):
     p = _by_rowid(list(imessage.run(_store(tmp_path))))[13]["payload"]
     assert p["from_me"] is True and "sender" not in p
