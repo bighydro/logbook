@@ -27,6 +27,19 @@ Nix: `nix run github:bighydro/logbook -- --version`, or `nix develop` in a clone
 
 That is the whole product. Everything else is a layer somebody plugs in.
 
+## Where to keep the record
+
+Never in a folder that iCloud Drive, Dropbox, Google Drive or OneDrive syncs. Those services evict files to the
+cloud and fetch them back on demand, so reads stall on files that are not really there, and the record ends up
+on someone else's server. Keep it in a plain local folder and point `LOGBOOK_HOME` at it:
+
+```bash
+logbook init ~/Records/Logbook           # once
+export LOGBOOK_HOME=~/Records/Logbook    # in your shell profile, so every command finds it
+```
+
+Back it up with Time Machine or an equivalent that copies the folder as it is.
+
 ## Implementations
 
 | Implementation | Language | Status |
