@@ -16,7 +16,7 @@ One message in a conversation — sent or received — from any messaging source
 | `raw_id` | string | MUST | the source's own stable message id (WhatsApp `ZSTANZAID`, iMessage `guid`). The dedupe key: re-importing the same store appends nothing |
 | `chat` | object | MUST | `{ id, type, name? }` — `id` is the source's chat identifier (a JID, a chat guid), `type` is `direct` or `group`, `name` the source's display name if any |
 | `from_me` | boolean | MUST | true when the owner sent it |
-| `sender` | object | SHOULD when `from_me` is false | the sender as the source identifies them, source-native (RFC 0006 `ref` shape): `{ kind, value }` with `kind` one of `phone`, `email`, `handle`, `provider_id` |
+| `sender` | object | SHOULD when `from_me` is false | the sender as the source identifies them, source-native (RFC 0006 `ref` shape): `{ kind, value, name? }` with `kind` one of `phone`, `email`, `handle`, `provider_id`; `name` is the sender's display name as the source shows it (a push name, a group-member contact name) — never a resolution — mirroring an attendee's `name` in `event/v1` (RFC 0009) |
 | `text` | string | MAY | the body, verbatim; absent for pure media messages |
 | `media` | object | MAY | attachment reference per SPEC §1.1: `{ sha256, path, bytes, media_type }`; absent when the source no longer has the file |
 | `media_kind` | string | MAY | `image`, `video`, `gif`, `audio`, `voice`, `document`, `sticker`, `location`, `contact`, `link`, `other` — the source's own classification |
@@ -29,7 +29,7 @@ Anything else the source reports MAY be kept under `extra`.
 ## Rules
 
 1. One line per message. Group membership, read receipts and reactions are not lines in v1; a source that has them keeps them in `extra`.
-2. `sender` is never resolved here. Mapping `4790…` to a person is a `resolution/v1` line (RFC 0006).
+2. `sender` is never resolved here. Mapping `4790…` to a person is a `resolution/v1` line (RFC 0006). `sender.name` is what the source displayed, kept so a reader has something to show before any resolution exists; it says nothing about who the sender is.
 3. A deleted message that the source still records as deleted is still a line (with `extra.deleted: true`); the log keeps what the source kept.
 4. Timestamps are the source's. Sources disagree about clock and timezone; the adapter converts the source's epoch to UTC and does not "correct" it.
 5. A media file the source has lost is not an error: `media` is absent and `media_kind` says what it was.

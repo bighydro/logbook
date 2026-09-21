@@ -20,7 +20,9 @@ nothing already logged; a row with no guid is keyed `row<ROWID>` and counted. Th
 source-native (RFC 0006 `ref`): a handle that is a number is `{phone, +digits}` through the shared
 `phone` module, so it meets the address book on the same ref; one with an `@` is `{email,
 lower-cased}`; anything else (an alphanumeric SMS sender id) is `{handle, <id>}`. Names are never
-resolved here; `chat.name` is the source's own display name.
+resolved here; `chat.name` is the source's own display name. Apple's handle table carries no name,
+so `sender.name` is normally absent; a store whose handle table has a `display_name` column (none
+of Apple's do today) fills it from there.
 
 Three traps the store sets. (1) Since iOS 16 `text` is often NULL and the body lives in
 `attributedBody`, an NSArchiver typedstream: the plain string is the one NSString in it, its
@@ -80,12 +82,14 @@ MEDIA_KINDS = {"image": "image", "video": "video", "audio": "voice"}
 MEDIA_TYPES = {"text/vcard": "contact", "application/pdf": "document"}
 CHUNK = 1 << 20
 
+HANDLE_NAME_COLUMN = "display_name"  # not in Apple's handle table; honoured when a store has it
 QUERY = """
 SELECT m.ROWID, m.guid, m.text, m.attributedBody, m.date, m.is_from_me, m.service,
        m.associated_message_type, m.reply_to_guid, m.item_type,
        h.id,
        c.ROWID, c.chat_identifier, c.display_name, c.style,
-       a.ROWID, a.filename, a.mime_type
+       a.ROWID, a.filename, a.mime_type,
+       {handle_name}
 FROM message AS m
 LEFT JOIN handle AS h ON h.ROWID = m.handle_id
 LEFT JOIN chat_message_join AS cm ON cm.message_id = m.ROWID
@@ -126,6 +130,13 @@ def _tables(con: sqlite3.Connection) -> set[str]:
     return {str(name) for (name,) in rows}
 
 
+def _query(con: sqlite3.Connection) -> str:
+    """QUERY with the handle's name column when the store has one, NULL in its place when not."""
+    columns = {str(row[1]) for row in con.execute("PRAGMA table_info(handle)")}
+    handle_name = f"h.{HANDLE_NAME_COLUMN}" if HANDLE_NAME_COLUMN in columns else "NULL"
+    return QUERY.format(handle_name=handle_name)
+
+
 def run(
     path: Path, since: str | None = None, counts: dict[str, int] | None = None
 ) -> Iterator[dict[str, Any]]:
@@ -142,7 +153,7 @@ def run(
     hash_media = os.environ.get(HASH_MEDIA_ENV, "1").strip() != "0"
     con = _open(path)
     try:
-        cursor = con.execute(QUERY)  # the cursor streams; only one message's rows sit in memory
+        cursor = con.execute(_query(con))  # the cursor streams; only one message's rows sit in memory
         for _rowid, rows in groupby(cursor, key=lambda row: row[0]):
             draft = _draft(list(rows), media_root, hash_media, counts)
             if draft is not None and not (since and draft["at"] < since):
@@ -212,6 +223,9 @@ def _draft(
     payload: dict[str, Any] = {"schema": SCHEMA, "raw_id": raw_id, "chat": chat, "from_me": bool(from_me)}
     if not from_me and isinstance(handle, str) and handle.strip():
         payload["sender"] = _ref(handle)
+        handle_name = rows[0][18]
+        if isinstance(handle_name, str) and handle_name.strip():
+            payload["sender"]["name"] = handle_name.strip()
     if body is not None:
         payload["text"] = body
     if isinstance(reply_to_guid, str) and reply_to_guid:

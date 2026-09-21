@@ -415,8 +415,9 @@ def _ref_value(ref: object) -> str:
 
 def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     """`who: text`, `who in group: text`, `me → other: text` (RFC 0008). The sender is its label,
-    else the direct chat's own name, else the ref as given. A group is its name, else its id: a
-    chat is not an entity (RFC 0006), so its id is never looked up. Raw (`names` None): the ref."""
+    else the name the source showed for it (`sender.name`), else the direct chat's own name, else
+    the ref as given. A group is its name, else its id: a chat is not an entity (RFC 0006), so its
+    id is never looked up. Raw (`names` None): the ref."""
     chat = p.get("chat") or {}
     chat_id = str(chat.get("id") or "")
     direct = chat.get("type") == "direct"
@@ -426,7 +427,14 @@ def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     elif names is None:
         who = _ref_value(p.get("sender"))
     else:
-        who = _name(p.get("sender"), names) or (chat_name if direct else "") or _ref_value(p.get("sender"))
+        sender = p.get("sender")
+        own = sender.get("name") if isinstance(sender, dict) else None
+        who = (
+            _name(sender, names)
+            or (own if isinstance(own, str) else "")
+            or (chat_name if direct else "")
+            or _ref_value(sender)
+        )
     if direct:
         prefix = f"{who} → {chat_name or chat_id}" if who == "me" else who
     else:
