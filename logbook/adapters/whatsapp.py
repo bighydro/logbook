@@ -19,7 +19,9 @@ appends nothing already logged; a row with no stanza id is keyed `<chat jid>:pk<
 The sender is source-native (RFC 0006 `ref`): a `digits@s.whatsapp.net` JID is `{phone, +digits}`
 through the shared `phone` module, so it meets the address book on the same ref; anything else
 (a `@lid`, an odd JID) is `{handle, <jid>}`. Names are never resolved here; `chat.name` is the
-source's own display name.
+source's own display name, and `sender.name` is the name the source showed for the sender: the
+group member's ZCONTACTNAME when the message's ZGROUPMEMBER row exists, else the message's
+ZPUSHNAME (the name the sender chose) on a store whose ZWAMESSAGE has that column.
 
 Media, v1 rule: the file is never copied into the record — the §1.1 attachment store is not built
 yet. When ZMEDIALOCALPATH names a file that exists under `<db folder>/Message/`, its SHA-256 and
@@ -74,11 +76,13 @@ MEDIA_KINDS = {
 }
 CHUNK = 1 << 20
 
+PUSH_NAME_COLUMN = "ZPUSHNAME"  # on ZWAMESSAGE in newer stores; absent in older ones
 QUERY = """
 SELECT m.Z_PK, m.ZISFROMME, m.ZMESSAGETYPE, m.ZMESSAGEDATE, m.ZTEXT, m.ZFROMJID, m.ZSTANZAID,
        c.Z_PK, c.ZCONTACTJID, c.ZPARTNERNAME, c.ZSESSIONTYPE,
-       g.ZMEMBERJID,
-       i.Z_PK, i.ZMEDIALOCALPATH, i.ZTITLE
+       g.ZMEMBERJID, g.ZCONTACTNAME,
+       i.Z_PK, i.ZMEDIALOCALPATH, i.ZTITLE,
+       {push_name}
 FROM ZWAMESSAGE AS m
 LEFT JOIN ZWACHATSESSION AS c ON c.Z_PK = m.ZCHATSESSION
 LEFT JOIN ZWAGROUPMEMBER AS g ON g.Z_PK = m.ZGROUPMEMBER
@@ -117,6 +121,13 @@ def _tables(con: sqlite3.Connection) -> set[str]:
     return {str(name) for (name,) in rows}
 
 
+def _query(con: sqlite3.Connection) -> str:
+    """QUERY with the push-name column when ZWAMESSAGE has one, NULL in its place when not."""
+    columns = {str(row[1]) for row in con.execute("PRAGMA table_info(ZWAMESSAGE)")}
+    push_name = f"m.{PUSH_NAME_COLUMN}" if PUSH_NAME_COLUMN in columns else "NULL"
+    return QUERY.format(push_name=push_name)
+
+
 def run(
     path: Path, since: str | None = None, counts: dict[str, int] | None = None
 ) -> Iterator[dict[str, Any]]:
@@ -133,7 +144,7 @@ def run(
     hash_media = os.environ.get(HASH_MEDIA_ENV, "1").strip() != "0"
     con = _open(path)
     try:
-        for row in con.execute(QUERY):  # the cursor streams; a million rows never sit in memory
+        for row in con.execute(_query(con)):  # the cursor streams; a million rows never sit in memory
             draft = _draft(row, media_root, hash_media, counts)
             if draft is not None and not (since and draft["at"] < since):
                 yield draft
@@ -161,9 +172,11 @@ def _draft(
         chat_name,
         session_type,
         member_jid,
+        member_name,
         media_pk,
         local_path,
         title,
+        push_name,
     ) = row
     if chat_pk is None or not isinstance(chat_jid, str) or not chat_jid:
         _count(counts, "skipped_no_chat")
@@ -200,6 +213,11 @@ def _draft(
                 sender_jid = candidate
         if sender_jid is not None:
             payload["sender"] = _ref(sender_jid)
+            name = _text(member_name) if member_jid is not None else None
+            if name is None:
+                name = _text(push_name)
+            if name is not None:
+                payload["sender"]["name"] = name
     if body is not None:
         payload["text"] = body
     if media_kind is not None:
@@ -222,6 +240,11 @@ def _draft(
         "tier": TIER,
         "payload": payload,
     }
+
+
+def _text(value: object) -> str | None:
+    """A non-blank string, stripped; anything else is None."""
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _ref(jid: str) -> dict[str, str]:

@@ -253,7 +253,36 @@ def test_run_from_me_has_no_sender(tmp_path, hash_media):
 def test_run_group_sender_from_the_group_member(tmp_path, hash_media):
     p = _by_pk(list(whatsapp.run(_store(tmp_path))))[6]["payload"]
     assert p["chat"] == {"id": CREW, "type": "group", "name": "Mooring crew"}
-    assert p["sender"] == {"kind": "phone", "value": "+4790000001"}
+    assert p["sender"] == {"kind": "phone", "value": "+4790000001", "name": "Ola"}  # ZCONTACTNAME
+
+
+def test_run_sender_name_is_absent_when_the_member_has_no_contact_name(tmp_path, hash_media):
+    lines = _by_pk(list(whatsapp.run(_store(tmp_path))))
+    assert "name" not in lines[7]["payload"]["sender"]  # member row, ZCONTACTNAME null
+    assert "name" not in lines[8]["payload"]["sender"]  # no member row, and no ZPUSHNAME column
+
+
+def _store_with_push_names(tmp_path: Path) -> Path:
+    """A newer store: ZWAMESSAGE carries a ZPUSHNAME column, the name the sender chose."""
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("ALTER TABLE ZWAMESSAGE ADD COLUMN ZPUSHNAME VARCHAR")
+        con.execute("UPDATE ZWAMESSAGE SET ZPUSHNAME = 'Ines \u2693' WHERE Z_PK = 8")
+        con.execute("UPDATE ZWAMESSAGE SET ZPUSHNAME = 'Ola from his phone' WHERE Z_PK IN (1, 6)")
+        con.execute("UPDATE ZWAMESSAGE SET ZPUSHNAME = '  ' WHERE Z_PK = 7")
+        con.commit()
+    finally:
+        con.close()
+    return p
+
+
+def test_run_sender_name_from_zpushname_when_the_column_exists(tmp_path, hash_media):
+    lines = _by_pk(list(whatsapp.run(_store_with_push_names(tmp_path))))
+    assert lines[8]["payload"]["sender"]["name"] == "Ines \u2693"  # no member row: the push name
+    assert lines[1]["payload"]["sender"]["name"] == "Ola from his phone"  # a direct chat too
+    assert lines[6]["payload"]["sender"]["name"] == "Ola"  # the member's contact name wins
+    assert "name" not in lines[7]["payload"]["sender"]  # blank push name is no name
 
 
 def test_run_group_sender_falls_back_to_zfromjid(tmp_path, hash_media):

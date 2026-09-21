@@ -219,7 +219,12 @@ def _resolution(
 
 
 def _message(
-    at: str, chat: dict[str, Any], sender: str | None, text: str | None, **more: Any
+    at: str,
+    chat: dict[str, Any],
+    sender: str | None,
+    text: str | None,
+    sender_name: str | None = None,
+    **more: Any,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "schema": "message/v1",
@@ -229,6 +234,8 @@ def _message(
     }
     if sender is not None:
         payload["sender"] = {"kind": "phone", "value": sender}
+        if sender_name is not None:
+            payload["sender"]["name"] = sender_name
     if text is not None:
         payload["text"] = text
     payload.update(more)
@@ -365,3 +372,31 @@ def test_show_without_any_resolution_still_uses_the_names_the_sources_gave(lb: L
 def test_show_never_resolves_a_chat_id_a_chat_is_not_an_entity(people: Logbook, capsys):
     people.append(**_resolution("provider_id", "1234@g.us", "Boat club", PERSON_C, entity_type="company"))
     assert _text(_show(capsys))[2] == "Kari Nordmann in 1234@g.us: who brings rope"
+
+
+def test_show_unresolved_sender_falls_back_to_the_name_the_source_gave(people: Logbook, capsys):
+    people.append(
+        **_message("2026-03-01T10:40:00Z", GROUP_CHAT, "+4790000004", "rope is here", sender_name="Per")
+    )
+    assert _text(_show(capsys))[-1] == "Per in 1234@g.us: rope is here"
+
+
+def test_show_a_resolution_label_wins_over_the_source_name(people: Logbook, capsys):
+    people.append(
+        **_message("2026-03-01T10:40:00Z", GROUP_CHAT, "+4790000001", "hi", sender_name="Ola (push)")
+    )
+    assert _text(_show(capsys))[-1] == "Ola Nordmann in 1234@g.us: hi"
+
+
+def test_show_source_sender_name_comes_before_the_direct_chat_name(people: Logbook, capsys):
+    chat = {"id": "4790000004@s.whatsapp.net", "type": "direct", "name": "Mystery"}
+    people.append(**_message("2026-03-01T10:40:00Z", chat, "+4790000004", "hi", sender_name="Per"))
+    assert _text(_show(capsys))[-1] == "Per: hi"
+
+
+def test_show_raw_ignores_the_source_sender_name(people: Logbook, capsys):
+    people.append(
+        **_message("2026-03-01T10:40:00Z", GROUP_CHAT, "+4790000004", "rope is here", sender_name="Per")
+    )
+    cli.main(["show", DAY, "--raw"])
+    assert _text(capsys.readouterr().out.splitlines())[-1] == "+4790000004 in 1234@g.us: rope is here"
