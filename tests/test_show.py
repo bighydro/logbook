@@ -312,6 +312,31 @@ def test_show_names_senders_and_attendees_from_resolution_lines(people: Logbook,
     ]
 
 
+def test_show_names_a_lid_sender_once_the_contacts_and_the_alias_imports_exist(people: Logbook, capsys):
+    """A group message from a linked device carries a `@lid` handle, which no contacts import resolves.
+    An alias line (RFC 0006 `alias_of`) from the WhatsApp contacts store pairs it with the phone;
+    `show` needs no change: `labels()` follows the alias to the phone's own resolution."""
+    lid = {"kind": "handle", "value": "236000000000001@lid"}
+    draft = _message("2026-03-01T10:20:00Z", GROUP_CHAT, None, "moored")
+    draft["payload"].update(sender=lid, from_me=False)
+    people.append(**draft)
+    assert _text(_show(capsys))[-1] == "236000000000001@lid in 1234@g.us: moored"  # nothing names it yet
+    people.append(
+        at="2026-03-01T09:30:00Z",
+        source="whatsapp-contacts",
+        kind="resolution",
+        tier=2,
+        payload={
+            "schema": "resolution/v1",
+            "ref": lid,
+            "alias_of": {"kind": "phone", "value": "+4790000001"},  # Ola, from the contacts import
+            "label": "Ola (WhatsApp)",
+            "method": "exact",
+        },
+    )
+    assert _text(_show(capsys))[-1] == "Ola Nordmann in 1234@g.us: moored"
+
+
 def test_show_raw_prints_refs_unchanged(people: Logbook, capsys):
     cli.main(["show", DAY, "--raw"])
     out = capsys.readouterr().out.splitlines()

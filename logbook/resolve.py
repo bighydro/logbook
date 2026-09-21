@@ -3,8 +3,10 @@
 A raw line carries what its source gave — an email address, a phone number — and never a name.
 The name is a separate resolution line, and the log is the registry: read every resolution, drop
 the retracted ones and the ones a later resolution `supersedes`, and for each ref the last one
-standing decides. A reader that wants "Ola Nordmann" instead of "+4790000001" joins here. Nothing
-is written and nothing outside the record is consulted."""
+standing decides. A line may instead say that its ref is an alias of another ref (`alias_of`): the
+reader follows it to that ref's own last line, at most `MAX_HOPS` hops, stopping on a cycle, and the
+line it stops on decides. A reader that wants "Ola Nordmann" instead of "+4790000001" joins here.
+Nothing is written and nothing outside the record is consulted."""
 
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
     from .store import Logbook
 
 RESOLUTION = "resolution"
+MAX_HOPS = 4  # RFC 0006: a reader follows `alias_of` at most this many times
 Ref = tuple[str, str]  # (ref.kind, ref.value), as the raw lines carry it
 
 
@@ -38,7 +41,12 @@ def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
     RFC 0006 rule 4: for one ref the last resolution wins, where "last" is chain order (`seq`).
     A retracted resolution (RFC 0003) counts for nothing, including its `supersedes`. A
     resolution that `supersedes` another removes that one from consideration. The last one
-    standing decides: its `label`, or no entry when it has none."""
+    standing decides: its `label`, or no entry when it has none.
+
+    RFC 0006 aliases: when the last line standing carries `alias_of`, the walk moves to the
+    target ref's last line standing and goes on, at most `MAX_HOPS` hops, stopping at a line
+    with no `alias_of`, at a ref with no standing line, or at a ref already visited (a cycle).
+    The line it stops on decides, as above."""
     lines = sorted(lines, key=lambda line: int(line["seq"]))
     retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
     live = [line for line in lines if line.get("kind") == RESOLUTION and str(line["id"]) not in retracted]
@@ -56,14 +64,26 @@ def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
             last[ref] = line
     found: dict[Ref, str] = {}
     for ref, line in last.items():
-        label = line["payload"].get("label")
+        label = _follow(ref, line, last)["payload"].get("label")
         if isinstance(label, str) and label:
             found[ref] = label
     return found
 
 
-def _ref(line: Line) -> Ref | None:
-    ref = (line.get("payload") or {}).get("ref")
+def _follow(ref: Ref, line: Line, last: dict[Ref, Line]) -> Line:
+    """The line that decides for `ref`: `line` itself, or the one `alias_of` leads to."""
+    visited = {ref}
+    for _ in range(MAX_HOPS):
+        target = _ref(line, "alias_of")
+        if target is None or target in visited or target not in last:
+            break
+        visited.add(target)
+        line = last[target]
+    return line
+
+
+def _ref(line: Line, field: str = "ref") -> Ref | None:
+    ref = (line.get("payload") or {}).get(field)
     if not isinstance(ref, dict):
         return None
     kind, value = ref.get("kind"), ref.get("value")
