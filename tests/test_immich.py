@@ -75,6 +75,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "google-takeout-location",
         "ios-contacts",
         "whatsapp",
+        "whatsapp-contacts",
         "imessage",
         "ios-notes",
         "ios-calendar",
