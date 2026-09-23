@@ -105,9 +105,10 @@ class FakeDawarich:
     """Serves GET /api/v1/points from `points`: filtered on start_at/end_at, oldest first, paged by
     page/per_page, an empty array past the end. Records every request."""
 
-    def __init__(self, points: list[dict[str, Any]], ignore_page: bool = False):
+    def __init__(self, points: list[dict[str, Any]], ignore_page: bool = False, newest_first: bool = False):
         self.points = points
         self.ignore_page = ignore_page
+        self.newest_first = newest_first  # Dawarich's default order is descending
         self.requests: list[dict[str, Any]] = []
 
     def __call__(self, req: Any, timeout: float) -> Any:
@@ -118,6 +119,8 @@ class FakeDawarich:
         page, per_page = int(query["page"]), int(query["per_page"])
         timed = [p for p in self.points if isinstance(p.get("timestamp"), int)]
         chosen = sorted((p for p in timed if start <= p["timestamp"] <= end), key=lambda p: p["timestamp"])
+        if self.newest_first:
+            chosen.reverse()
         if self.ignore_page:
             page = 1
         body = json.dumps(chosen[(page - 1) * per_page : page * per_page]).encode("utf-8")
@@ -263,6 +266,18 @@ def test_pull_pages_until_an_empty_page(monkeypatch):
     lines = list(dawarich_live.pull(CONFIG, None))
     assert fake.pages() == [1, 2, 3, 4]  # 3 + 3 + 1, then the empty page
     assert [line["at"] for line in lines] == [_stamp(T0 + i * 60) for i in range(7)]
+
+
+def test_pull_yields_oldest_first_whatever_order_the_server_pages_in(monkeypatch):
+    monkeypatch.setattr(dawarich_live, "PAGE_SIZE", 3)
+    fake = _serve(monkeypatch, [_point(i, T0 + i * 60) for i in range(7)], newest_first=True)
+    lines = list(dawarich_live.pull(CONFIG, None))
+    assert fake.pages() == [1, 2, 3, 4]
+    assert [line["at"] for line in lines] == [_stamp(T0 + i * 60) for i in range(7)]
+    same_second = [_point(20, T0, altitude="1.0"), _point(21, T0, altitude="2.0")]
+    _serve(monkeypatch, [_point(22, T0 + 60), *same_second])
+    ties = [line["payload"]["alt_m"] for line in dawarich_live.pull(CONFIG, None) if line["at"] == _stamp(T0)]
+    assert ties == [1.0, 2.0]  # equal seconds keep the server's order
 
 
 def test_pull_stops_when_the_server_repeats_a_page(monkeypatch):

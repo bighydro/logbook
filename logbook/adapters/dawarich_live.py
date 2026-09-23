@@ -95,26 +95,28 @@ def pull(
     progress: Callable[[int, float], None] | None = None,
     counts: dict[str, int] | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Every point Dawarich holds from `since` (RFC3339 UTC; None means all) to now, oldest first as
-    the server orders them, one location/v1 line draft each. Skips are tallied in `counts`.
-    `progress(points_so_far, elapsed_seconds)` is called after every page."""
+    """Every point Dawarich holds from `since` (RFC3339 UTC; None means all) to now, oldest first
+    whatever order the server pages them in, one location/v1 line draft each. The whole pull is
+    fetched before the first line is yielded, so chain order is time order (a pull is one lookback
+    window, so this is small). Skips are tallied in `counts`. `progress(points_so_far,
+    elapsed_seconds)` is called after every page."""
     counts = _counts(counts if counts is not None else {})
     window = {"start_at": since or EPOCH, "end_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
     page, count, started = 1, 0, time.monotonic()
     previous: set[object] = set()
+    lines: list[dict[str, Any]] = []
     while True:
         rows = _get(config, {**window, "page": page, "per_page": PAGE_SIZE})
         keys = {_row_key(row) for row in rows}
         if not rows or keys <= previous:  # an empty page, or a server that ignores `page`
-            return
-        for row in rows:
-            line = _line(row, counts)
-            if line is not None:
-                yield line
+            break
+        lines.extend(line for row in rows if (line := _line(row, counts)) is not None)
         count += len(rows)
         if progress is not None:
             progress(count, time.monotonic() - started)
         previous, page = keys, page + 1
+    lines.sort(key=lambda line: str(line["at"]))  # stable: equal seconds keep the server's order
+    yield from lines
 
 
 def _get(config: Config, params: dict[str, Any]) -> list[Any]:
