@@ -130,9 +130,33 @@ nobody has resolved shows as the source gave it, after the name the source itsel
 | Source | Variables | What it logs |
 |---|---|---|
 | `immich` | `LOGBOOK_IMMICH_URL`, `LOGBOOK_IMMICH_KEY` | one `photo/v1` line per asset: capture time, camera, place, size, faces as person ids, never the pixels |
+| `dawarich` | `LOGBOOK_DAWARICH_URL`, `LOGBOOK_DAWARICH_KEY` (`LOGBOOK_DAWARICH_LOOKBACK_H`, default 24) | one `location/v1` line per point, identical to the line its export gives |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
+
+## Keep it flowing
+
+Import your Dawarich export once, then let `sync` pick up every point your phone sends after it:
+
+```bash
+export LOGBOOK_DAWARICH_URL=https://dawarich.example.org   # your own server
+export LOGBOOK_DAWARICH_KEY=...                            # Settings → Account → API key
+logbook add ~/Downloads/dawarich-export.json               # once: the history
+logbook sync dawarich                                      # then, as often as you like
+```
+
+Both write the same line for the same point (same `raw_id`), so nothing you already imported is written
+twice. The first `sync` starts from the newest Dawarich point already in the record; after that from the
+last point it saw. A phone uploads in batches, so a point can reach the server after newer ones: each
+sync looks back 24 hours before its watermark and skips what the record already has, and says how many
+that was. Set `LOGBOOK_DAWARICH_LOOKBACK_H` for a longer or shorter window; `--since` pulls from an exact
+time instead.
+
+**A Dawarich API key is full access** to your account: it can read and delete every point you have.
+Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file
+outside the record) and never in the record, the repository or a script you share. The logbook sends it
+only in the `Authorization` header and never prints it.
 
 ## Three rules
 

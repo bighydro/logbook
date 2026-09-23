@@ -168,9 +168,13 @@ def _progress(n: int, elapsed: float) -> None:
     print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
 
 
-def _page_progress(n: int, elapsed: float) -> None:
-    """One line per page pulled from a live source, dry runs included."""
-    print(f"  {n:,} assets in {elapsed:,.0f}s", file=sys.stderr)
+def _page_progress(unit: str) -> Callable[[int, float], None]:
+    """One line per page pulled from a live source, dry runs included, counting `unit`."""
+
+    def report(n: int, elapsed: float) -> None:
+        print(f"  {n:,} {unit} in {elapsed:,.0f}s", file=sys.stderr)
+
+    return report
 
 
 def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
@@ -233,7 +237,11 @@ def cmd_sync(a: argparse.Namespace) -> None:
         known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
         print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
         sys.exit(2)
-    config = adapter.configure(os.environ)
+    try:
+        config = adapter.configure(os.environ)
+    except ValueError as e:
+        print(f"sync: {a.name}: {e}", file=sys.stderr)
+        sys.exit(2)
     if config is None:
         missing = [v for v in adapter.ENV if not os.environ.get(v, "").strip()]
         print(f"sync: {a.name}: set {' and '.join(missing)}", file=sys.stderr)
@@ -245,7 +253,8 @@ def cmd_sync(a: argparse.Namespace) -> None:
         sys.exit(2)
     lb = Logbook.find()
     state_path = lb.root / "state" / f"{a.name}.json"
-    since = a.since if a.since is not None else _read_state(state_path).get("since")
+    stored = _read_state(state_path).get("since")
+    since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
     seen: dict[str, Any] = {
         "count": 0,
         "first": None,
@@ -254,8 +263,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
         "provenance": Counter(),
     }
     counts: dict[str, int] = {}
+    unit = str(getattr(adapter, "UNIT", "assets"))
     drafts = _watch(
-        adapter.pull(config, since, progress=_page_progress, counts=counts), adapter.watermark, seen
+        adapter.pull(config, since, progress=_page_progress(unit), counts=counts), adapter.watermark, seen
     )
     try:
         if a.dry_run:
@@ -263,27 +273,61 @@ def cmd_sync(a: argparse.Namespace) -> None:
                 pass
         else:
             n = lb.append_many(drafts)  # the page lines above are the progress; one stream, not two
-    except OSError as e:  # urllib's errors are OSErrors; what was pulled before is already checkpointed
-        print(f"sync: {a.name}: {e}", file=sys.stderr)
+    except (OSError, ValueError) as e:  # urllib's errors are OSErrors, a malformed page a ValueError;
+        print(f"sync: {a.name}: {e}", file=sys.stderr)  # what was pulled before is checkpointed
         sys.exit(1)
     where = f"since {since}" if since else "from the beginning"
     pending = counts.get("pending", 0)
+    skipped = {k: v for k, v in counts.items() if k != "pending"}
+    if resumed_from_record is not None:
+        print(f"  starting from the record's newest {a.name} point, {resumed_from_record}, less the lookback")
     if a.dry_run:
         print(f"{a.name}: {seen['count']} lines {where} (dry run, nothing written)")
         if seen["count"]:
             print(f"  first {seen['first']}  last {seen['last']}  watermark {seen['watermark'] or '-'}")
             for provenance, count in sorted(seen["provenance"].items()):
-                print(f"  {provenance}: {count}")
+                if provenance != "-":
+                    print(f"  {provenance}: {count}")
+        _report_skipped(skipped)
         _report_pending(pending)
         return
-    if seen["watermark"] is not None:
+    mark = seen["watermark"]
+    if mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(json.dumps({"since": seen["watermark"]}, indent=2) + "\n", encoding="utf-8")
+        state_path.write_text(json.dumps({"since": mark}, indent=2) + "\n", encoding="utf-8")
+    else:
+        mark = stored
+    already = seen["count"] - n
     print(
-        f"{a.name}: {n} new lines of {seen['count']} seen {where}; "
-        f"watermark {seen['watermark'] or since or '-'}"
+        f"{a.name}: {n} new lines of {seen['count']} seen {where}"
+        + (f" ({already} already in the record)" if already else "")
+        + f"; watermark {mark or since or '-'}"
     )
+    _report_skipped(skipped)
     _report_pending(pending)
+
+
+def _start(
+    lb: Logbook, adapter: adapters.LiveAdapter, config: object, given: str | None, stored: str | None
+) -> tuple[str | None, str | None]:
+    """Where a pull starts, and the record's newest line when that is what it started from.
+
+    `--since` is used as given. Otherwise the stored watermark; an adapter with `resume` turns it
+    into a start (a lookback before it, for a source whose items can arrive late) and, with no
+    watermark yet, resumes from the record's newest line of its source and KIND, so a record seeded
+    from an export carries on where the export ended."""
+    if given is not None:
+        return given, None
+    resume = getattr(adapter, "resume", None)
+    if resume is None:
+        return stored, None
+    if stored is not None:
+        return str(resume(config, stored)), None
+    with lb.index() as idx:
+        newest = idx.newest(adapter.NAME, str(getattr(adapter, "KIND", "")))
+    if newest is None:
+        return None, None
+    return str(resume(config, newest)), newest
 
 
 def _report_pending(pending: int) -> None:
@@ -601,8 +645,8 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("what", nargs="+")
     s.add_argument("--at", help="RFC3339 UTC, default now")
     s.set_defaults(fn=cmd_add)
-    s = sub.add_parser("sync", help="pull new items from a live source (immich); safe to re-run")
-    s.add_argument("name", help="the source, e.g. immich")
+    s = sub.add_parser("sync", help="pull new items from a live source (immich, dawarich); safe to re-run")
+    s.add_argument("name", help="the source, e.g. immich or dawarich")
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)

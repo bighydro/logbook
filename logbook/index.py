@@ -224,6 +224,13 @@ class Index:
         ).fetchall()
         return self._read(found)
 
+    def newest(self, source: str, kind: str) -> str | None:
+        """The latest `at` among lines of this source and kind, or None when there are none."""
+        found = self.db.execute(
+            "SELECT MAX(at) FROM lines WHERE kind = ? AND source = ?", (kind, source)
+        ).fetchone()
+        return None if found is None or found[0] is None else str(found[0])
+
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
         """Which of these (source, raw_id) keys the log already has: one SELECT for the batch,
         through a temp table so a batch of any size stays one statement."""
