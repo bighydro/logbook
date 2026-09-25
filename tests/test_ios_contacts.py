@@ -296,11 +296,11 @@ def _one_phone(tmp_path: Path, entered: str) -> dict:
 
 
 def test_run_dial_prefix_strips_one_national_trunk_zero(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "41")
-    p = _one_phone(tmp_path, "079 654 31 17")
-    assert p["ref"]["value"] == "+41796543117" and p["raw_id"] == "phone:+41796543117"
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "44")
+    p = _one_phone(tmp_path, "07700 900123")
+    assert p["ref"]["value"] == "+447700900123" and p["raw_id"] == "phone:+447700900123"
     assert "unnormalised" not in p["extra"]
-    assert p["extra"]["entered"] == "079 654 31 17"
+    assert p["extra"]["entered"] == "07700 900123"
 
 
 def test_run_dial_prefix_strips_only_one_zero(tmp_path, monkeypatch):
@@ -309,9 +309,9 @@ def test_run_dial_prefix_strips_only_one_zero(tmp_path, monkeypatch):
 
 
 def test_run_number_already_starting_with_the_prefix_is_kept_and_flagged(tmp_path, monkeypatch):
-    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "41")
-    p = _one_phone(tmp_path, "41 79 654 31 17")
-    assert p["ref"]["value"] == "41796543117" and p["raw_id"] == "phone:41796543117"
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "44")
+    p = _one_phone(tmp_path, "44 7700 900123")
+    assert p["ref"]["value"] == "447700900123" and p["raw_id"] == "phone:447700900123"
     assert p["extra"]["unnormalised"] is True
 
 

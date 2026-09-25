@@ -17,7 +17,7 @@ def normalise(entered: str, prefix: str) -> tuple[str, bool]:
 
     Spaces, dashes, dots and parentheses are dropped; a `00` prefix becomes `+`. A number with no
     country code gets `+<prefix>` when `prefix` is set, after exactly one leading `0` (the national
-    trunk prefix) is dropped: `079 654 31 17` with prefix 41 is `+41796543117`. A number that already
+    trunk prefix) is dropped: `07700 900123` with prefix 44 is `+447700900123`. A number that already
     starts with the prefix digits but no `+` is ambiguous (a trunk-less national number or a country
     code typed without `+`), so it is kept as entered and flagged. With no prefix the number is kept
     as entered (punctuation stripped) and flagged. Anything that is not digits after that is flagged
