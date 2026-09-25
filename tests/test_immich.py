@@ -60,8 +60,8 @@ def _by_name(lines: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 # -- registry ---------------------------------------------------------------
 
 
-def test_registry_lists_immich_as_a_live_adapter():
-    assert [a.NAME for a in adapters.live_adapters()] == ["immich"]
+def test_registry_lists_immich_and_dawarich_as_live_adapters():
+    assert [a.NAME for a in adapters.live_adapters()] == ["immich", "dawarich"]
     assert adapters.live("immich") is immich
     assert adapters.live("nope") is None
 

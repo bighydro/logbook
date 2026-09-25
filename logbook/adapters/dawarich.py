@@ -7,11 +7,17 @@ nested Photon Feature under `geodata`. Pure: reads one file, makes no network ca
 
 The export can be gigabytes (millions of points), so the file is streamed with ijson: `sniff`
 reads up to the end of the first feature and `run` holds one feature at a time.
+
+`draft(props, lat, lon)` is the one mapping from a Dawarich point to a location/v1 line draft. The
+live adapter (`dawarich_live`) calls it too, with a row of `GET /api/v1/points`, which carries the
+same point attributes as an export feature's properties: a point imported from an export and the
+same point pulled live are the same line with the same `raw_id`, so it is deduped, not duplicated.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import math
+from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -80,18 +86,30 @@ def run(path: Path, since: str | None = None) -> Iterator[dict[str, Any]]:
     """Yield one location/v1 line draft per point, in export order. `since` is RFC3339 UTC."""
     with Path(path).open("rb") as fh:
         for feature in ijson.items(fh, "features.item", use_float=True):
-            at = _rfc3339(feature["properties"]["timestamp"])
-            if since and at < since:
+            line = _draft_of(feature)
+            if since and line["at"] < since:
                 continue
-            yield {
-                "at": at,
-                "end": None,
-                "tz": None,  # the logbook's own
-                "source": NAME,
-                "kind": KIND,
-                "tier": TIER,
-                "payload": _payload(feature),
-            }
+            yield line
+
+
+def _draft_of(feature: dict[str, Any]) -> dict[str, Any]:
+    lon, lat = feature["geometry"]["coordinates"][:2]  # GeoJSON: longitude first
+    return draft(feature["properties"], lat, lon)
+
+
+def draft(props: Mapping[str, Any], lat: float, lon: float) -> dict[str, Any]:
+    """One Dawarich point → one location/v1 line draft. `props` are the point's attributes (an
+    export feature's properties, or a row of the points API); they must carry `timestamp` (unix
+    seconds) and `tracker_id`. Fields not named here are ignored."""
+    return {
+        "at": _rfc3339(props["timestamp"]),
+        "end": None,
+        "tz": None,  # the logbook's own
+        "source": NAME,
+        "kind": KIND,
+        "tier": TIER,
+        "payload": payload(props, lat, lon),
+    }
 
 
 def _rfc3339(unix_seconds: int | float) -> str:
@@ -99,18 +117,22 @@ def _rfc3339(unix_seconds: int | float) -> str:
 
 
 def _number(value: object) -> float | None:
-    """Dawarich exports altitude/velocity/course as strings; None when absent or unparsable."""
-    if value is None:
+    """Dawarich exports altitude/velocity/course as strings; None when absent, unparsable or not finite."""
+    if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError, OverflowError):
         return None
+    return number if math.isfinite(number) else None
 
 
 def _payload(feature: dict[str, Any]) -> dict[str, Any]:
-    props: dict[str, Any] = feature["properties"]
-    lon, lat = feature["geometry"]["coordinates"][:2]  # GeoJSON: longitude first
+    lon, lat = feature["geometry"]["coordinates"][:2]
+    return payload(feature["properties"], lat, lon)
+
+
+def payload(props: Mapping[str, Any], lat: float, lon: float) -> dict[str, Any]:
     anomaly = props.get("anomaly")
     payload: dict[str, Any] = {"schema": SCHEMA, "lat": lat, "lon": lon}
     accuracy = _number(props.get("accuracy"))
@@ -123,7 +145,7 @@ def _payload(feature: dict[str, Any]) -> dict[str, Any]:
     if speed is not None and speed >= 0:
         payload["speed_mps"] = speed
     heading = _number(props.get("course"))
-    if heading is not None and heading >= 0:
+    if heading is not None and 0 <= heading <= 360:
         payload["heading_deg"] = heading
     payload["tracker"] = props["tracker_id"]
     payload["raw_id"] = f"{props['tracker_id']}:{props['timestamp']}"
@@ -131,7 +153,7 @@ def _payload(feature: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _extra(props: dict[str, Any], anomaly: object) -> dict[str, Any]:
+def _extra(props: Mapping[str, Any], anomaly: object) -> dict[str, Any]:
     extra: dict[str, Any] = {
         "track_id": props.get("track_id"),
         "anomaly": anomaly,
