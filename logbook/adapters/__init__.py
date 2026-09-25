@@ -36,8 +36,8 @@ event time regardless.
 
 Built-in adapters live in this package. Third-party ones are separate packages that register the
 `logbook.adapters` entry point. `all_adapters()` returns both kinds; `find(path)` asks only file
-adapters; `live(name)` resolves a live one. No file adapter makes a network call, and a live adapter
-makes them only inside `pull`.
+adapters; `named(name)` resolves a file adapter by NAME and `live(name)` a live one. No file adapter
+makes a network call, and a live adapter makes them only inside `pull`.
 """
 
 from __future__ import annotations
@@ -123,6 +123,11 @@ def live_adapters() -> list[LiveAdapter]:
 def find(path: Path) -> Adapter | None:
     """The first registered file adapter that recognises `path`, or None."""
     return next((a for a in file_adapters() if a.sniff(Path(path))), None)
+
+
+def named(name: str) -> Adapter | None:
+    """The file adapter called `name`, or None."""
+    return next((a for a in file_adapters() if name == a.NAME), None)
 
 
 def live(name: str) -> LiveAdapter | None:
