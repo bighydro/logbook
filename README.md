@@ -18,6 +18,7 @@ logbook init                    # creates ~/Logbook and your key
 logbook add "had lunch with a friend by the lake"
 logbook add ~/Downloads/takeout.zip     # any export, no flags
 logbook show today
+logbook stats                   # what the record holds: counts by kind, source and year
 logbook verify                  # the chain is intact
 ```
 
@@ -126,6 +127,9 @@ start before 1900, such as 1601) are skipped and counted; a birthday from 1965 i
 names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
 nobody has resolved shows as the source gave it, after the name the source itself attached, if any.
 `show --raw` prints every ref unchanged. Either way, `show` only reads.
+
+`stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
+resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
 
 | Source | Variables | What it logs |
 |---|---|---|

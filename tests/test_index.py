@@ -105,7 +105,21 @@ def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, c
     assert _rows(lb, "SELECT count(*) FROM lines") == [(4,)]
     assert _head_in_index(lb) == lb.meta["head"]
     columns = [r[1] for r in _rows(lb, "PRAGMA table_info(lines)")]
-    assert columns == ["seq", "id", "at", "day_local", "kind", "source", "tier", "raw_id", "file", "offset"]
+    assert columns == [
+        "seq",
+        "id",
+        "at",
+        "day_local",
+        "kind",
+        "source",
+        "tier",
+        "raw_id",
+        "file",
+        "offset",
+        "supersedes",
+        "entity",
+        "media",
+    ]
     indexes = {r[0] for r in _rows(lb, "SELECT name FROM sqlite_master WHERE type = 'index'")}
     assert {"lines_day_local", "lines_source_raw_id", "lines_kind_at"} <= indexes
 

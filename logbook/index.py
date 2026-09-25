@@ -1,10 +1,11 @@
 """index.sqlite — a disposable locator for the log (ADR 0001, ADR 0007).
 
 The files are the record. This is a cache of where every line is (file, byte offset) and the few
-fields readers filter on, so `show`, `export --day` and dedupe do not parse the whole log. Lines
-are always read back from the files; nothing is ever served from here. It records the chain head,
-seq and timezone it was built at; a reader that finds it missing, unreadable, or built at another
-head or timezone rebuilds it from the files. `verify` never opens it. Deleting it loses nothing."""
+fields readers filter or count on, so `show`, `export --day`, `stats` and dedupe do not parse the
+whole log. Lines are always read back from the files; nothing but counts (`stats`) is ever served
+from here. It records the chain head, seq and timezone it was built at; a reader that finds it
+missing, unreadable, or built at another head or timezone rebuilds it from the files. `verify`
+never opens it. Deleting it loses nothing."""
 
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from .store import Logbook
 
 FILE_NAME = "index.sqlite"
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"  # 2: supersedes, entity and media columns, for `stats`
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -32,15 +33,15 @@ SCHEMA = (
     "CREATE TABLE lines ("
     " seq INTEGER PRIMARY KEY, id TEXT NOT NULL, at TEXT NOT NULL, day_local TEXT NOT NULL,"
     " kind TEXT NOT NULL, source TEXT NOT NULL, tier INTEGER NOT NULL, raw_id TEXT,"
-    " file TEXT NOT NULL, offset INTEGER NOT NULL)",
+    " file TEXT NOT NULL, offset INTEGER NOT NULL, supersedes TEXT, entity TEXT, media TEXT)",
     "CREATE INDEX lines_day_local ON lines (day_local)",
     "CREATE INDEX lines_source_raw_id ON lines (source, raw_id)",
     "CREATE INDEX lines_kind_at ON lines (kind, at)",
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
-INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-Row = tuple[int, str, str, str, str, str, int, str | None, str, int]
+Row = tuple[int, str, str, str, str, str, int, str | None, str, int, str | None, str | None, str | None]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
 
 # Open connections per index file, in this process. Windows refuses to delete a file that has an
@@ -55,7 +56,12 @@ def local_date(at: str, tz: str) -> str:
 
 
 def row(line: Line, tz: str, file: str, offset: int) -> Row:
-    raw_id = (line.get("payload") or {}).get("raw_id")
+    """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
+    line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
+    the one attachment a line points at (`payload.media`, else `extra.media`; SPEC §1.1)."""
+    payload = line.get("payload") or {}
+    raw_id = payload.get("raw_id")
+    media = _field(payload.get("media"), "sha256") or _field(_field(payload.get("extra"), "media"), "sha256")
     return (
         int(line["seq"]),
         str(line["id"]),
@@ -67,7 +73,18 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
         None if raw_id is None else str(raw_id),
         file,
         offset,
+        _string(payload.get("supersedes")),
+        _string(_field(payload.get("entity"), "id")),
+        _string(media),
     )
+
+
+def _field(obj: object, key: str) -> object:
+    return obj.get(key) if isinstance(obj, dict) else None
+
+
+def _string(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 class Index:
@@ -230,6 +247,64 @@ class Index:
             "SELECT MAX(at) FROM lines WHERE kind = ? AND source = ?", (kind, source)
         ).fetchone()
         return None if found is None or found[0] is None else str(found[0])
+
+    # -- counting: `stats`; one SELECT per table, nothing read from the files ----------------------
+    def totals(self) -> tuple[int, str | None, str | None]:
+        """(lines, first `at`, last `at`); the stamps are None on an empty record."""
+        n, first, last = self.db.execute("SELECT count(*), min(at), max(at) FROM lines").fetchone()
+        return int(n), first, last
+
+    def kinds(self) -> list[dict[str, Any]]:
+        """Per kind, most lines first: lines, first and last local day, distinct sources."""
+        found = self.db.execute(
+            "SELECT kind, count(*), min(day_local), max(day_local), count(DISTINCT source) FROM lines"
+            " GROUP BY kind ORDER BY count(*) DESC, kind"
+        ).fetchall()
+        return [
+            {"kind": kind, "lines": n, "first": first, "last": last, "sources": sources}
+            for kind, n, first, last, sources in found
+        ]
+
+    def sources(self) -> list[dict[str, Any]]:
+        """Per source, most lines first."""
+        found = self.db.execute(
+            "SELECT source, count(*) FROM lines GROUP BY source ORDER BY count(*) DESC, source"
+        ).fetchall()
+        return [{"source": source, "lines": n} for source, n in found]
+
+    def years(self) -> list[dict[str, Any]]:
+        """Lines per local year, oldest first."""
+        found = self.db.execute(
+            "SELECT substr(day_local, 1, 4), count(*) FROM lines GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+        return [{"year": year, "lines": n} for year, n in found]
+
+    def retraction_counts(self) -> dict[str, int]:
+        """Retraction lines, and how many distinct lines they hide."""
+        n, hidden = self.db.execute(
+            "SELECT count(*), count(DISTINCT supersedes) FROM lines WHERE kind = 'retraction'"
+        ).fetchone()
+        return {"lines": int(n), "hidden": int(hidden)}
+
+    def resolution_counts(self) -> dict[str, int]:
+        """Resolution lines, and how many distinct entities they mint (an alias line mints none)."""
+        n, entities = self.db.execute(
+            "SELECT count(*), count(DISTINCT entity) FROM lines WHERE kind = 'resolution'"
+        ).fetchone()
+        return {"lines": int(n), "entities": int(entities)}
+
+    def attachment_counts(self, present: Callable[[str], bool]) -> dict[str, int]:
+        """Distinct attachments referenced, the lines that reference one, and how many of the
+        digests `present` finds in the store. One SELECT, streamed; digests are never returned."""
+        lines, referenced, found = 0, 0, 0
+        for sha256, n in self.db.execute(
+            "SELECT media, count(*) FROM lines WHERE media IS NOT NULL GROUP BY media"
+        ):
+            lines += int(n)
+            referenced += 1
+            if present(str(sha256)):
+                found += 1
+        return {"referenced": referenced, "lines": lines, "present": found}
 
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
         """Which of these (source, raw_id) keys the log already has: one SELECT for the batch,
