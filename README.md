@@ -81,6 +81,7 @@ Two ways in. `add` reads a file you already hold; `sync` asks a service you run 
 ```bash
 logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
 logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
+logbook add ~/Takeout/"Google Photos"                 # Google Takeout photos: one line per file, the pixels stay put
 logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
@@ -110,6 +111,14 @@ A group message sent from a linked device carries a `@lid` id instead of a phone
 knows; add WhatsApp's own ContactsV2.sqlite (it sits beside ChatStorage.sqlite) and each lid becomes an alias
 of the phone number WhatsApp pairs it with (RFC 0006 `alias_of`), so the sender takes the name your contacts
 import gave that number, whichever import came first.
+
+Google Photos from a Takeout become `photo/v1` lines (RFC 0002), one per media file in the `Google Photos/`
+folder, timed by the sidecar's taken time, with the place, the album, the caption and the names Google tagged as
+`extra.people` refs (never resolved); a live photo's still and motion halves are one `camera` line, a photo from a
+shared album is `received`, an edited copy with no sidecar is still a line, timed by the file. The sidecar naming
+Google uses (`.json`, `.supplemental-metadata.json`, the truncated and `(1)`-numbered variants) is matched
+defensively and a sidecar with no file is counted. Media files are hashed into `extra.media` as for WhatsApp, never
+copied; set `LOGBOOK_TAKEOUT_HASH_MEDIA=0` to skip the hashing.
 
 Apple Notes become `note/v1` lines (RFC 0010), one per note, with the plain text pulled out of the note archive,
 the title, the folder and the modification time. A note edited since the last import is a new line (its `raw_id`

@@ -129,6 +129,9 @@ SKIP_PHRASES = {
     "skipped_no_text": "without any text",
     "skipped_no_start": "without a start",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
+    "skipped_sidecar_without_file": "sidecars without a media file",
+    "skipped_unreadable_json": "JSON files that would not parse",
+    "skipped_not_media": "files that are not media",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -139,6 +142,10 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "body_from_snippet": "with the body taken from the snippet",
     "no_identifier": "without an identifier, keyed by row id",
     "no_unique_identifier": "without a unique identifier, keyed by row id",
+    "live_photo_pairs": "live-photo pairs",
+    "no_sidecar": "without a sidecar",
+    "at_from_creation_time": "timed by creation time",
+    "at_from_file_time": "timed by the file",
 }
 
 
@@ -210,7 +217,9 @@ def cmd_add(a: argparse.Namespace) -> None:
             sys.exit(2)
     ok = True
     for p in paths:
-        if p.is_dir():  # every file in it, in name order; hidden files are not exports
+        if p.is_dir() and adapters.find(p) is not None:  # a folder one adapter reads as a whole
+            _add_file(lb, p)
+        elif p.is_dir():  # every file in it, in name order; hidden files are not exports
             for f in sorted(p.iterdir()):
                 if f.is_file() and not f.name.startswith("."):
                     _add_file(lb, f)
