@@ -19,6 +19,16 @@ A *live* adapter pulls from a service you run, and only when `logbook sync <NAME
     pull(config, since=None) -> Iterator[dict]  # the same line drafts, oldest first
     watermark(draft) -> str | None              # the `since` that would pull this draft again
 
+and optionally:
+
+    resume(config, mark) -> str                 # where to start given a watermark; its presence also
+                                                # makes a first sync start from the record's newest
+                                                # line of this source and KIND
+    UNIT: str                                   # what the progress lines count ("assets" if absent)
+
+A source can have both kinds under one NAME (`dawarich` reads an export and pulls live); they write
+the same lines, so either dedupes the other.
+
 `since` and the watermark are in the *source's* clock (when it received or last changed the item),
 not the event's: `logbook sync` stores the largest watermark of a completed pull and passes it back
 as `since`, so an old photo uploaded tomorrow is picked up by tomorrow's sync. A line's `at` is the
@@ -42,6 +52,7 @@ ENTRY_POINT_GROUP = "logbook.adapters"
 BUILT_IN = (
     "dawarich",
     "immich",
+    "dawarich_live",
     "takeout.location",
     "ios_contacts",
     "whatsapp",
@@ -82,7 +93,8 @@ class LiveAdapter(Protocol):
 
 
 def all_adapters() -> list[Adapter | LiveAdapter]:
-    """Built-ins first, then entry points; one per NAME (the first registered wins)."""
+    """Built-ins first, then entry points; one file adapter and one live adapter per NAME (the first
+    registered of each kind wins), so a source can be both read from an export and pulled live."""
     found: list[Adapter | LiveAdapter] = []
     for name in BUILT_IN:
         found.append(import_module(f"{__name__}.{name}"))
@@ -90,11 +102,12 @@ def all_adapters() -> list[Adapter | LiveAdapter]:
         module = ep.load()
         if isinstance(module, Adapter | LiveAdapter):
             found.append(module)
-    seen: set[str] = set()
+    seen: set[tuple[bool, str]] = set()
     unique: list[Adapter | LiveAdapter] = []
     for a in found:
-        if a.NAME not in seen:
-            seen.add(a.NAME)
+        key = (isinstance(a, LiveAdapter), a.NAME)
+        if key not in seen:
+            seen.add(key)
             unique.append(a)
     return unique
 
