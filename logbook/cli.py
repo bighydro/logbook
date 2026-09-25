@@ -129,6 +129,10 @@ SKIP_PHRASES = {
     "skipped_no_text": "without any text",
     "skipped_no_start": "without a start",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
+    "skipped_bad_start": "with an unusable start",
+    "skipped_no_uid": "without a uid",
+    "skipped_todo": "to-do items",
+    "skipped_journal": "journal entries",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
