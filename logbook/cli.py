@@ -1,4 +1,5 @@
-"""logbook — init · add · sync · retract · show · verify · export · index · migrate. Three verbs, six rare."""
+"""logbook — init · add · sync · import-backup · retract · show · verify · export · index · migrate.
+Three verbs, seven rare."""
 
 from __future__ import annotations
 
@@ -17,7 +18,8 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters
+from . import FORMAT, __version__, adapters, ios_backup
+from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .resolve import Ref, labels
@@ -80,17 +82,7 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     """Append one file through the adapter that recognises it. False when nothing does."""
     adapter = adapters.find(p)
     if adapter is not None:
-        counts: dict[str, int] = {}
-        run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
-        options: dict[str, Any] = {}
-        if _takes(adapter, "counts"):
-            options["counts"] = counts
-        if _takes(adapter, "timezone"):
-            options["timezone"] = lb.meta["timezone"]
-        drafts = run(p, **options)
-        n = lb.append_many(drafts, progress=_progress)
-        print(f"added {n} lines from {adapter.NAME}")
-        _report_skipped(counts)
+        _append_with(lb, adapter, p)
         return True
     if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
         n = lb.append_many(_jsonl(p), progress=_progress)
@@ -101,6 +93,22 @@ def _add_file(lb: Logbook, p: Path) -> bool:
         "Put it in inbox/ and it will be read when one exists."
     )
     return False
+
+
+def _append_with(lb: Logbook, adapter: adapters.Adapter, p: Path) -> int:
+    """Run one file adapter on `p`, append, print what was added and what it skipped; the count."""
+    counts: dict[str, int] = {}
+    run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
+    options: dict[str, Any] = {}
+    if _takes(adapter, "counts"):
+        options["counts"] = counts
+    if _takes(adapter, "timezone"):
+        options["timezone"] = lb.meta["timezone"]
+    drafts = run(p, **options)
+    n = lb.append_many(drafts, progress=_progress)
+    print(f"added {n} lines from {adapter.NAME}")
+    _report_skipped(counts)
+    return n
 
 
 def _takes(adapter: adapters.Adapter, option: str) -> bool:
@@ -369,6 +377,108 @@ def _is_rfc3339(value: str) -> bool:
         return datetime.fromisoformat(value).tzinfo is not None
     except ValueError:
         return False
+
+
+ENCRYPTED_BACKUP = (
+    "import-backup: this backup is encrypted and cannot be read; in Finder select the iPhone, untick"
+    " “Encrypt local backup”, back up again, then re-run"
+)
+DIAL_PREFIX_HINT = (
+    f"  {ios_contacts.DIAL_PREFIX_ENV} is not set: numbers saved without a country code stay as entered;"
+    f" set it (for example {ios_contacts.DIAL_PREFIX_ENV}=41) to complete them"
+)
+
+
+def cmd_import_backup(a: argparse.Namespace) -> None:
+    """Every phone source in one go, from an unencrypted iOS backup folder: each store is copied
+    (with its -wal/-shm siblings and its media) into <root>/inbox/ios-backup-<udid>/<source>/,
+    checked by size, and the adapter runs on the copy — never on the backup, which is only read.
+    Sources run in `ios_backup.SOURCES` order (contacts before chats), then the chain is verified."""
+    lb = Logbook.find()
+    sources = _only(a.only)
+    try:
+        manifest = ios_backup.Manifest(Path(a.backup).expanduser())
+    except ios_backup.NotABackup as e:
+        print(f"import-backup: {e}", file=sys.stderr)
+        sys.exit(2)
+    if manifest.encrypted:
+        print(ENCRYPTED_BACKUP, file=sys.stderr)
+        sys.exit(2)
+    plans = ios_backup.plan(manifest, sources)
+    inbox = lb.root / "inbox" / f"ios-backup-{manifest.udid}"
+    if a.dry_run:
+        for p in plans:
+            print(_plan_row(p, inbox))
+        found = [p for p in plans if p.found]
+        print(
+            f"dry run: {len(found)} of {len(plans)} sources found, {sum(p.bytes for p in found):,} bytes"
+            f" would be copied to {inbox}; nothing written"
+        )
+        return
+    wants_prefix = any(p.found and p.source.name in ("ios-contacts", "whatsapp-contacts") for p in plans)
+    if wants_prefix and not os.environ.get(ios_contacts.DIAL_PREFIX_ENV, "").strip():
+        print(DIAL_PREFIX_HINT)
+    for p in plans:
+        print(_plan_row(p, inbox))
+        if not p.found:
+            continue
+        adapter = adapters.named(p.source.name)
+        if adapter is None:  # a build without this adapter: say so, copy nothing
+            print(f"  no adapter named {p.source.name} in this build; skipped")
+            continue
+        try:
+            store_copy = ios_backup.copy(p, inbox / p.source.name)
+        except (ios_backup.CopyError, OSError) as e:
+            print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
+            sys.exit(1)
+        _append_with(lb, adapter, store_copy)
+    seq, head, errors = lb.verify()
+    if errors:
+        print(f"INVALID — {len(errors)} problem(s):")
+        for problem in errors:
+            print("  " + problem)
+        sys.exit(1)
+    print(f"valid — {seq} lines, head {head}")
+
+
+def _only(spec: str | None) -> tuple[ios_backup.Source, ...]:
+    """`--only a,b,c` as sources in SOURCES order; an unknown name exits 2 naming the known ones."""
+    if spec is None:
+        return ios_backup.SOURCES
+    wanted: set[str] = set()
+    for word in spec.split(","):
+        name = word.strip()
+        if not name:
+            continue
+        source = ios_backup.source(name)
+        if source is None:
+            known = ", ".join(s.name for s in ios_backup.SOURCES)
+            print(f"import-backup: no source named {name!r} (known: {known})", file=sys.stderr)
+            sys.exit(2)
+        wanted.add(source.name)
+    if not wanted:
+        print("import-backup: --only names no source", file=sys.stderr)
+        sys.exit(2)
+    return tuple(s for s in ios_backup.SOURCES if s.name in wanted)
+
+
+def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
+    """`<source>: <store> (<size>) [+ siblings] [+ N media files (<size>) under <folder>/] → <dest>`,
+    or `<source>: <store> not found`."""
+    name = p.source.store_name
+    if not p.found:
+        why = " (listed in Manifest.db, file missing)" if p.listed else ""
+        return f"{p.source.name}: {name} not found{why}"
+    assert p.store is not None
+    parts = [f"{name} ({p.store.size or 0:,} bytes)"]
+    parts += [f"{s.name} ({s.size:,} bytes)" for s in p.siblings if s.size is not None]
+    media = [m for m in p.media if m.size is not None]
+    if media:
+        n, total = len(media), sum(m.size or 0 for m in media)
+        parts.append(
+            f"{n:,} media file{'s' if n != 1 else ''} ({total:,} bytes) under {p.source.media_folder}/"
+        )
+    return f"{p.source.name}: {' + '.join(parts)} → {inbox / p.source.name}"
 
 
 def cmd_retract(a: argparse.Namespace) -> None:
@@ -650,6 +760,22 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)
+    s = sub.add_parser(
+        "import-backup",
+        help="every phone source from an unencrypted iOS backup folder: copy each store into inbox/, add it",
+    )
+    s.add_argument("backup", help="the backup folder (Finder → Manage Backups → Show in Finder)")
+    s.add_argument(
+        "--dry-run", action="store_true", help="list what would be copied and imported; write nothing"
+    )
+    s.add_argument(
+        "--only",
+        metavar="NAMES",
+        help="comma-separated sources, e.g. contacts,whatsapp (known: "
+        + ", ".join(src.name for src in ios_backup.SOURCES)
+        + ")",
+    )
+    s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")

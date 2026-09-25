@@ -27,6 +27,26 @@ Nix: `nix run github:bighydro/logbook -- --version`, or `nix develop` in a clone
 
 That is the whole product. Everything else is a layer somebody plugs in.
 
+## Sixty seconds with an iPhone backup
+
+Plug the iPhone into a Mac, select it in Finder, leave *Encrypt local backup* unticked and press *Back Up Now*.
+The backup lands in `~/Library/Application Support/MobileSync/Backup/<udid>` (on Windows under
+`%APPDATA%\Apple Computer\MobileSync\Backup\`). Then:
+
+```bash
+export LOGBOOK_DIAL_PREFIX=47                       # your country code, for numbers saved without one
+logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --dry-run   # what is there, how big
+logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid>
+logbook import-backup <the same> --only contacts,whatsapp        # just some of it
+```
+
+One command reads the backup's `Manifest.db`, finds the six stores the adapters know — Contacts, WhatsApp's
+contacts and chats, Messages, Calendar, Notes — copies each one with its `-wal`/`-shm` siblings and its media
+folder into `inbox/ios-backup-<udid>/<source>/`, checks every copy by size, and runs the adapters on the copies:
+contacts first, so the chats that follow already have their people. The backup itself is only ever read. Per
+source it prints found or not found, the lines added and what was skipped, and it ends with `verify`.
+Re-running it appends nothing already logged. An encrypted backup is refused with the checkbox to untick.
+
 ## Where to keep the record
 
 Never in a folder that iCloud Drive, Dropbox, Google Drive or OneDrive syncs. Those services evict files to the
@@ -85,6 +105,7 @@ logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts f
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
 logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
+logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
