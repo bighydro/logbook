@@ -1,4 +1,5 @@
-"""logbook — init · add · sync · retract · show · verify · export · index · migrate. Three verbs, six rare."""
+"""logbook — init · add · sync · retract · show · stats · verify · export · index · migrate.
+Three verbs, seven rare."""
 
 from __future__ import annotations
 
@@ -7,6 +8,7 @@ import contextlib
 import inspect
 import json
 import os
+import re
 import sys
 import time
 import zoneinfo
@@ -537,6 +539,96 @@ def _clock(at: str, tz: ZoneInfo) -> str:
     return datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(tz).strftime("%H:%M")
 
 
+DIGEST = re.compile(r"[0-9a-f]{64}")  # an attachment's name (SPEC §1.1); anything else is never looked up
+BAR = "\u2588"  # one full block per ~1% of the busiest year
+BAR_WIDTH = 100
+
+
+def cmd_stats(a: argparse.Namespace) -> None:
+    """One screen of what the record holds, counted through the index (one SELECT per table,
+    nothing read from the files): kinds, sources, years, retractions, resolutions, attachments.
+    Numbers, kinds, sources and dates only; never what a line says. Nothing is written."""
+    lb = Logbook.find()
+    started = time.monotonic()
+    stats = record_stats(lb)
+    stats["took_seconds"] = round(time.monotonic() - started, 3)
+    if a.json:
+        print(json.dumps(stats, indent=2))
+        return
+    for text in _stats_rows(stats):
+        print(text)
+
+
+def record_stats(lb: Logbook) -> dict[str, Any]:
+    """The numbers `stats` prints, as one JSON-ready object (no `took_seconds`)."""
+    meta = lb.meta
+    store = lb.root / "attachments"
+
+    def present(sha256: str) -> bool:
+        return DIGEST.fullmatch(sha256) is not None and (store / sha256).is_file()
+
+    with lb.index() as idx:
+        lines, first, last = idx.totals()
+        return {
+            "format": meta.get("format"),
+            "head": meta.get("head"),
+            "lines": lines,
+            "first": first,
+            "last": last,
+            "kinds": idx.kinds(),
+            "sources": idx.sources(),
+            "years": idx.years(),
+            "retractions": idx.retraction_counts(),
+            "resolutions": idx.resolution_counts(),
+            "attachments": idx.attachment_counts(present),
+        }
+
+
+def _stats_rows(s: dict[str, Any]) -> Iterator[str]:
+    yield f"{s['format']}  head {s['head']}"
+    if not s["lines"]:
+        yield "0 lines"
+    else:
+        yield f"{s['lines']:,} lines  first {s['first']}  last {s['last']}"
+    width = max(5, len(f"{s['lines']:,}"))
+    if s["kinds"]:
+        name = max(10, *(len(k["kind"]) for k in s["kinds"]))
+        yield ""
+        yield f"  {'kind':<{name}}  {'lines':>{width}}   first       last"
+        for k in s["kinds"]:
+            yield (
+                f"  {k['kind']:<{name}}  {k['lines']:>{width},}   {k['first']}  {k['last']}"
+                f"   {_plural(k['sources'], 'source')}"
+            )
+    if s["sources"]:
+        name = max(10, *(len(x["source"]) for x in s["sources"]))
+        yield ""
+        yield f"  {'source':<{name}}  {'lines':>{width}}"
+        for x in s["sources"]:
+            yield f"  {x['source']:<{name}}  {x['lines']:>{width},}"
+    if s["years"]:
+        busiest = max(y["lines"] for y in s["years"])
+        yield ""
+        yield f"  year  {'lines':>{width}}"
+        for y in s["years"]:
+            bar = BAR * max(1, round(BAR_WIDTH * y["lines"] / busiest))  # a year with any line shows
+            yield f"  {y['year']}  {y['lines']:>{width},}  {bar}"
+    r, e, m = s["retractions"], s["resolutions"], s["attachments"]
+    yield ""
+    yield f"{_plural(r['lines'], 'retraction')} hiding {_plural(r['hidden'], 'line')}"
+    yield f"{_plural(e['lines'], 'resolution line')} minting {_plural(e['entities'], 'entity', 'entities')}"
+    yield (
+        f"{_plural(m['referenced'], 'attachment')} referenced by {_plural(m['lines'], 'line')},"
+        f" {m['present']:,} present under attachments/"
+    )
+    yield ""
+    yield f"took {s['took_seconds']:.3f}s"
+
+
+def _plural(n: int, noun: str, plural: str | None = None) -> str:
+    return f"{n:,} {noun if n == 1 else plural or noun + 's'}"
+
+
 def cmd_index(a: argparse.Namespace) -> None:
     """Rebuild index.sqlite from the files. Readers do this by themselves when it is missing or
     stale; this is the command that shows progress, or that you run after copying a logbook."""
@@ -658,6 +750,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("day", nargs="?")
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
+    s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
+    s.set_defaults(fn=cmd_stats)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
