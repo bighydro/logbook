@@ -1,6 +1,6 @@
 [project]
 name = "openlogbook"           # the PyPI package; the command is still `logbook`
-version = "0.4.0"
+version = "0.4.1"
 description = "A diary that writes itself. Your life, in a folder."
 readme = "README.md"
 license = "Apache-2.0"
