@@ -56,7 +56,7 @@ SQLITE_HEADER = b"SQLite format 3\x00"
 REQUIRED_TABLES = frozenset({"ZWACHATSESSION", "ZWAMESSAGE"})
 MEDIA_FOLDER = "Message"
 APPLE_EPOCH = 978_307_200  # 2001-01-01T00:00:00Z; ZMESSAGEDATE counts from it
-EARLIEST_DATE = 300_000_000  # 2010-07-07: WhatsApp did not exist before; anything earlier is garbage
+EARLIEST_DATE = 300_000_000  # 2010-07-05T05:20:00Z: WhatsApp did not exist before; earlier is garbage
 PHONE_DOMAIN = "s.whatsapp.net"
 STATUS_JID = "status@broadcast"
 SESSION_STATUS = 3
@@ -268,13 +268,16 @@ def _media(
     """extra.media = {local_path, title?, sha256?, bytes?}; extra.media_missing when the file is not there.
 
     The stored path is POSIX-relative to `Message/`; it is resolved with pathlib parts and must stay
-    inside that folder (no `..`, no absolute path), else it counts as missing."""
-    media: dict[str, Any] = {}
-    if isinstance(local_path, str) and local_path:
-        media["local_path"] = local_path
+    inside that folder (no `..`, no absolute path), else it counts as missing. A media row with no
+    path names no file at all: it is only missing, and `extra.media` is not written."""
+    if not (isinstance(local_path, str) and local_path):
+        extra["media_missing"] = True
+        _count(counts, "media_missing")
+        return
+    media: dict[str, Any] = {"local_path": local_path}
     if isinstance(title, str) and title:
         media["title"] = title
-    file = _inside(media_root, local_path) if "local_path" in media else None
+    file = _inside(media_root, local_path)
     if file is None or not file.is_file():
         extra["media_missing"] = True
         _count(counts, "media_missing")
@@ -283,8 +286,7 @@ def _media(
         media["sha256"] = digest
         media["bytes"] = size
         _count(counts, "media_hashed")
-    if media:
-        extra["media"] = media
+    extra["media"] = media
 
 
 def _inside(root: Path, local_path: object) -> Path | None:
