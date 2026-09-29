@@ -30,8 +30,8 @@ That is the whole product. Everything else is a layer somebody plugs in.
 
 ## Sixty seconds with an iPhone backup
 
-Plug the iPhone into a Mac, select it in Finder, leave *Encrypt local backup* unticked and press *Back Up Now*.
-The backup lands in `~/Library/Application Support/MobileSync/Backup/<udid>` (on Windows under
+Plug the iPhone into a Mac, select it in Finder and press *Back Up Now*. The backup lands in
+`~/Library/Application Support/MobileSync/Backup/<udid>` (on Windows under
 `%APPDATA%\Apple Computer\MobileSync\Backup\`). Then:
 
 ```bash
@@ -46,7 +46,26 @@ contacts and chats, Messages, Calendar, Notes — copies each one with its `-wal
 folder into `inbox/ios-backup-<udid>/<source>/`, checks every copy by size, and runs the adapters on the copies:
 contacts first, so the chats that follow already have their people. The backup itself is only ever read. Per
 source it prints found or not found, the lines added and what was skipped, and it ends with `verify`.
-Re-running it appends nothing already logged. An encrypted backup is refused with the checkbox to untick.
+Re-running it appends nothing already logged. `inbox/ios-backup-<udid>/copies.json` lists every copy.
+
+**An encrypted backup** (*Encrypt local backup* ticked in Finder) holds more than an unencrypted one: Health,
+the call log and Safari's history are only ever backed up encrypted. `import-backup` reads one with the
+`encrypted` extra and the password in one environment variable, never a flag:
+
+```bash
+pip install "openlogbook[encrypted]"        # or: uv tool install "openlogbook[encrypted]"
+read -s LOGBOOK_BACKUP_PASSWORD && export LOGBOOK_BACKUP_PASSWORD   # typed once, never echoed
+logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid>
+```
+
+The keybag in `Manifest.plist` is unlocked first, so a wrong password fails on one line before any file is
+touched; then `Manifest.db` is decrypted into the inbox folder and every file is decrypted a chunk at a time
+on its way to the same `inbox/ios-backup-<udid>/<source>/` layout, so the adapters run unchanged. The
+password is never printed, never written anywhere, and never part of an error. `copies.json` records
+`encrypted: true` and each file's protection class. The extra stores are copied out beside the others —
+`health/` (`healthdb_secure.sqlite`, `healthdb.sqlite`), `calls/` (`CallHistory.storedata`), `safari/`
+(`History.db`) — and reported as *copied, no adapter yet*; `--only health` names them too. Without the extra
+installed the command prints the `pip install` line and exits 2; without the variable it says which one to set.
 
 ## Where to keep the record
 

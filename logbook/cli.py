@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters, crossing, ios_backup, policy
+from . import FORMAT, __version__, adapters, crossing, ios_backup, ios_backup_crypto, policy
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
@@ -490,9 +490,15 @@ def _is_rfc3339(value: str) -> bool:
         return False
 
 
-ENCRYPTED_BACKUP = (
-    "import-backup: this backup is encrypted and cannot be read; in Finder select the iPhone, untick"
-    " “Encrypt local backup”, back up again, then re-run"
+PASSWORD_ENV = "LOGBOOK_BACKUP_PASSWORD"
+ENCRYPTED_NO_PASSWORD = (
+    f"import-backup: this backup is encrypted; put its password in {PASSWORD_ENV} (never a flag) and re-run,"
+    " or in Finder untick “Encrypt local backup”, back up again, then re-run"
+)
+ENCRYPTED_NO_EXTRA = f"import-backup: this backup is encrypted; reading it needs {ios_backup_crypto.EXTRA}"
+WRONG_PASSWORD = (
+    f"import-backup: {PASSWORD_ENV} does not unlock this backup's keybag (wrong password?);"
+    " nothing was copied"
 )
 DIAL_PREFIX_HINT = (
     f"  {ios_contacts.DIAL_PREFIX_ENV} is not set: numbers saved without a country code stay as entered;"
@@ -501,22 +507,28 @@ DIAL_PREFIX_HINT = (
 
 
 def cmd_import_backup(a: argparse.Namespace) -> None:
-    """Every phone source in one go, from an unencrypted iOS backup folder: each store is copied
-    (with its -wal/-shm siblings and its media) into <root>/inbox/ios-backup-<udid>/<source>/,
-    checked by size, and the adapter runs on the copy — never on the backup, which is only read.
-    Sources run in `ios_backup.SOURCES` order (contacts before chats), then the chain is verified."""
+    """Every phone source in one go, from an iOS backup folder: each store is copied (with its
+    -wal/-shm siblings and its media) into <root>/inbox/ios-backup-<udid>/<source>/, checked by
+    size, and the adapter runs on the copy — never on the backup, which is only read. Sources run
+    in `ios_backup.SOURCES` order (contacts before chats), then the chain is verified.
+
+    An encrypted backup is unlocked with the password in LOGBOOK_BACKUP_PASSWORD (only there: never
+    a flag, never printed). The keybag check comes first, so a wrong password fails before any file
+    is touched; then Manifest.db is decrypted into the inbox folder and every copy is decrypted on
+    the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
+    encrypted backup carries (`ios_backup.EXTRAS`: Health, the call log, Safari's history) are
+    copied out too, and reported as copied with no adapter yet."""
     lb = Logbook.find()
-    sources = _only(a.only)
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
     except ios_backup.NotABackup as e:
         print(f"import-backup: {e}", file=sys.stderr)
         sys.exit(2)
-    if manifest.encrypted:
-        print(ENCRYPTED_BACKUP, file=sys.stderr)
-        sys.exit(2)
-    plans = ios_backup.plan(manifest, sources)
+    sources = _only(a.only, manifest.encrypted)
     inbox = lb.root / "inbox" / f"ios-backup-{manifest.udid}"
+    if manifest.encrypted:
+        _unlock(manifest, inbox)
+    plans = ios_backup.plan(manifest, sources)
     if a.dry_run:
         for p in plans:
             print(_plan_row(p, inbox))
@@ -533,16 +545,21 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         print(_plan_row(p, inbox))
         if not p.found:
             continue
-        adapter = adapters.named(p.source.name)
-        if adapter is None:  # a build without this adapter: say so, copy nothing
+        adapter = adapters.named(p.source.name) if p.source.adapter else None
+        if adapter is None and p.source.adapter:  # a build without this adapter: say so, copy nothing
             print(f"  no adapter named {p.source.name} in this build; skipped")
             continue
         try:
             store_copy = ios_backup.copy(p, inbox / p.source.name)
-        except (ios_backup.CopyError, OSError) as e:
+        except (ios_backup.CopyError, ios_backup.DecryptError, OSError) as e:
             print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
             sys.exit(1)
+        if adapter is None:
+            print("  copied, no adapter yet")
+            continue
         _append_with(lb, adapter, store_copy)
+    if any(p.copied for p in plans):
+        ios_backup.write_copies(inbox, manifest, plans)
     seq, head, errors = lb.verify()
     if errors:
         print(f"INVALID — {len(errors)} problem(s):")
@@ -552,10 +569,41 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     print(f"valid — {seq} lines, head {head}")
 
 
-def _only(spec: str | None) -> tuple[ios_backup.Source, ...]:
-    """`--only a,b,c` as sources in SOURCES order; an unknown name exits 2 naming the known ones."""
+def _unlock(manifest: ios_backup.Manifest, inbox: Path) -> None:
+    """Unlock an encrypted backup with LOGBOOK_BACKUP_PASSWORD and decrypt its Manifest.db into
+    the inbox. The extra, the variable, then the keybag are checked in that order; each failure is
+    one line on stderr and exit 2, and none of them names the password."""
+    if not ios_backup_crypto.available():
+        print(ENCRYPTED_NO_EXTRA, file=sys.stderr)
+        sys.exit(2)
+    password = os.environ.get(PASSWORD_ENV, "")
+    if not password:
+        print(ENCRYPTED_NO_PASSWORD, file=sys.stderr)
+        sys.exit(2)
+    try:
+        manifest.unlock(password, inbox / ios_backup.MANIFEST_DB)
+    except ios_backup.WrongPassword:
+        print(WRONG_PASSWORD, file=sys.stderr)
+        sys.exit(2)
+    except (ios_backup.NotABackup, ios_backup.DecryptError, ios_backup.MissingExtra) as e:
+        print(f"import-backup: {e}", file=sys.stderr)
+        sys.exit(2)
+    finally:
+        del password
+    assert manifest.keybag is not None
+    print(
+        f"encrypted backup: keybag unlocked, keys for {len(manifest.keybag.classes)} protection classes;"
+        f" {ios_backup.MANIFEST_DB} decrypted to {inbox / ios_backup.MANIFEST_DB}"
+    )
+
+
+def _only(spec: str | None, encrypted: bool = False) -> tuple[ios_backup.Source, ...]:
+    """`--only a,b,c` as sources in SOURCES order (EXTRAS after them); an unknown name exits 2
+    naming the known ones. Without `--only`, every adapter's source, plus the EXTRAS when the
+    backup is encrypted (only such a backup carries them)."""
+    known_sources = ios_backup.SOURCES + ios_backup.EXTRAS
     if spec is None:
-        return ios_backup.SOURCES
+        return known_sources if encrypted else ios_backup.SOURCES
     wanted: set[str] = set()
     for word in spec.split(","):
         name = word.strip()
@@ -563,14 +611,14 @@ def _only(spec: str | None) -> tuple[ios_backup.Source, ...]:
             continue
         source = ios_backup.source(name)
         if source is None:
-            known = ", ".join(s.name for s in ios_backup.SOURCES)
+            known = ", ".join(dict.fromkeys(s.name for s in known_sources))
             print(f"import-backup: no source named {name!r} (known: {known})", file=sys.stderr)
             sys.exit(2)
         wanted.add(source.name)
     if not wanted:
         print("import-backup: --only names no source", file=sys.stderr)
         sys.exit(2)
-    return tuple(s for s in ios_backup.SOURCES if s.name in wanted)
+    return tuple(s for s in known_sources if s.name in wanted)
 
 
 def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
@@ -1071,7 +1119,8 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_sync)
     s = sub.add_parser(
         "import-backup",
-        help="every phone source from an unencrypted iOS backup folder: copy each store into inbox/, add it",
+        help="every phone source from an iOS backup folder: copy each store into inbox/, add it"
+        f" (an encrypted backup's password comes from {PASSWORD_ENV})",
     )
     s.add_argument("backup", help="the backup folder (Finder → Manage Backups → Show in Finder)")
     s.add_argument(
@@ -1081,8 +1130,8 @@ def main(argv: list[str] | None = None) -> None:
         "--only",
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
-        + ", ".join(src.name for src in ios_backup.SOURCES)
-        + ")",
+        + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
+        + "; the last three only from an encrypted backup, copied without an adapter yet)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
