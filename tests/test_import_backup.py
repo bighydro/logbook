@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import plistlib
 import sqlite3
 import sys
@@ -177,7 +178,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     out = capsys.readouterr().out
     assert _snapshot(backup) == before  # never written, never journaled
     inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
-    assert sorted(p.name for p in inbox.iterdir()) == sorted(ALL)
+    assert sorted(p.name for p in inbox.iterdir()) == sorted([*ALL, "copies.json"])
     for source, name in STORES.items():
         copy = inbox / source / name
         assert copy.is_file(), source
@@ -217,6 +218,24 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         ("HomeDomain", "Library/AddressBook/AddressBook.sqlitedb")
     ]
     assert photo.stat().st_size == sizes[(WHATSAPP, "Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg")]
+    # copies.json records every copy; nothing here was encrypted
+    copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
+    assert copies["backup"] == UDID and copies["encrypted"] is False
+    by_copy = {c["copy"]: c for c in copies["files"]}
+    never = {
+        ("HomeDomain", "Library/Preferences/com.apple.example.plist"),
+        (WHATSAPP, "Message/../escape.jpg"),
+    }
+    assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
+    assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
+        "source": "whatsapp",
+        "domain": WHATSAPP,
+        "path": "Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg",
+        "copy": "whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg",
+        "bytes": photo.stat().st_size,
+        "encrypted": False,
+        "protection_class": None,
+    }
 
 
 def test_import_backup_again_adds_nothing_and_leaves_one_copy(lb, tmp_path, capsys):
@@ -264,14 +283,16 @@ def test_import_backup_treats_a_listed_but_missing_file_as_not_found(lb, tmp_pat
 # -- refusals --------------------------------------------------------------------------
 
 
-def test_import_backup_refuses_an_encrypted_backup(lb, tmp_path, capsys):
+def test_import_backup_refuses_an_encrypted_backup_without_a_password(lb, tmp_path, capsys):
+    """The full encrypted path is in test_import_backup_encrypted.py; here: no password, no attempt."""
     backup = _backup(tmp_path, encrypted=True)
     before = _snapshot(backup)
     with pytest.raises(SystemExit) as e:
         _run(str(backup))
     assert e.value.code == 2
     err = capsys.readouterr().err
-    assert err.count("\n") == 1 and "encrypted" in err and "Finder" in err and "Encrypt local backup" in err
+    assert err.count("\n") == 1 and "encrypted" in err and "LOGBOOK_BACKUP_PASSWORD" in err
+    assert "Finder" in err and "Encrypt local backup" in err
     assert _snapshot(backup) == before
     assert not any((lb.root / "inbox").glob("ios-backup-*"))
     assert lb.verify()[0] == 0
@@ -308,7 +329,23 @@ def test_import_backup_only_takes_the_named_sources_in_the_fixed_order(lb, tmp_p
         assert source not in out
     assert "valid — 25 lines" in out
     inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
-    assert sorted(p.name for p in inbox.iterdir()) == ["ios-contacts", "whatsapp", "whatsapp-contacts"]
+    assert sorted(p.name for p in inbox.iterdir()) == [
+        "copies.json",
+        "ios-contacts",
+        "whatsapp",
+        "whatsapp-contacts",
+    ]
+    copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
+    assert {c["source"] for c in copies["files"]} == {"ios-contacts", "whatsapp", "whatsapp-contacts"}
+    # a later run of other sources keeps these entries and adds its own
+    _run(str(backup), "--only", "notes")
+    copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
+    assert {c["source"] for c in copies["files"]} == {
+        "ios-contacts",
+        "whatsapp",
+        "whatsapp-contacts",
+        "ios-notes",
+    }
 
 
 def test_import_backup_dry_run_lists_files_and_sizes_and_writes_nothing(lb, tmp_path, capsys):

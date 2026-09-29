@@ -1,12 +1,20 @@
-"""An unencrypted iOS backup folder (Finder, iTunes) → the files the phone adapters read.
+"""An iOS backup folder (Finder, iTunes), encrypted or not → the files the phone adapters read.
 
 A backup is a folder of files named by hash. Manifest.db, a SQLite file, has one row per file in
 its Files table (fileID, domain, relativePath, flags: 1 a file, 2 a directory, 4 a symlink); the
 bytes of a file are at <fileID[:2]>/<fileID> (older backups kept them flat at <fileID>).
-Manifest.plist says whether the backup is encrypted (IsEncrypted), in which case Manifest.db is
-encrypted too and nothing here can be read; it also carries the phone's identifier under
-Lockdown/UniqueDeviceID. Both are read and never written: Manifest.db is opened `mode=ro`,
-`immutable=1`, so not even a journal appears beside it.
+Manifest.plist says whether the backup is encrypted (IsEncrypted) and carries the phone's
+identifier under Lockdown/UniqueDeviceID. Both are read and never written: Manifest.db is opened
+`mode=ro`, `immutable=1`, so not even a journal appears beside it.
+
+An encrypted backup (IsEncrypted, with a BackupKeyBag and a ManifestKey in the plist) is the same
+folder with every file, Manifest.db included, encrypted under its own key (`ios_backup_crypto`).
+`Manifest.unlock(password, dest)` unlocks the keybag — a wrong password fails there, before any
+file is touched — and decrypts Manifest.db into `dest`, from where it is read exactly as an
+unencrypted one; each file row then also carries its protection class and its unwrapped key, and
+`copy` decrypts the file a chunk at a time on the way to its copy. The layout of the copies is the
+same either way, so the adapters never know. `unlock` needs the `encrypted` extra
+(`openlogbook[encrypted]`, `cryptography`); without it, `MissingExtra` says how to install it.
 
 SOURCES lists, in import order, the store each adapter reads and where the phone keeps it:
 
@@ -21,14 +29,22 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
 
+EXTRAS are the stores only an encrypted backup carries and no adapter reads yet — Health, the
+call log, Safari's history. They are copied out beside the others (`health/`, `calls/`,
+`safari/`) so the adapters that follow find them, and reported as "copied, no adapter yet".
+
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
 store, the siblings beside it, the media in the folder the adapter looks for beside the store
-(`Message/`, `Attachments/`) — and checks every copy by size. The adapters then run on the copies.
+(`Message/`, `Attachments/`) — and checks every copy by size (the plaintext size, for an
+encrypted one). The adapters then run on the copies. `write_copies` records every copy in
+`copies.json` beside them: domain, path, copy, bytes, whether it was decrypted and under which
+protection class — never a key.
 """
 
 from __future__ import annotations
 
+import json
 import plistlib
 import shutil
 import sqlite3
@@ -36,13 +52,22 @@ from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from typing import Any
+
+from . import ios_backup_crypto
+from .ios_backup_crypto import DecryptError, MissingExtra, WrongPassword
+
+__all__ = ["DecryptError", "MissingExtra", "WrongPassword"]
 
 MANIFEST_DB = "Manifest.db"
 MANIFEST_PLIST = "Manifest.plist"
+COPIES = "copies.json"
 HOME = "HomeDomain"
 MEDIA = "MediaDomain"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
+HEALTH = "HealthDomain"
+SAFARI = "AppDomain-com.apple.mobilesafari"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -63,6 +88,7 @@ class Source:
     domain: str
     relative_path: str  # POSIX, as Manifest.db spells it
     media: tuple[str, str] | None = None  # (domain, folder prefix); copied beside the store as its last part
+    adapter: bool = True  # False: copied out for a later adapter, nothing runs on it yet
 
     @property
     def store_name(self) -> str:
@@ -83,20 +109,35 @@ SOURCES: tuple[Source, ...] = (
     Source("ios-notes", NOTES, "NoteStore.sqlite"),
 )
 
+EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these; copied, no adapter yet
+    Source("health", HEALTH, "Health/healthdb_secure.sqlite", adapter=False),
+    Source("health", HEALTH, "Health/healthdb.sqlite", adapter=False),
+    Source("calls", HOME, "Library/CallHistoryDB/CallHistory.storedata", adapter=False),
+    Source("safari", SAFARI, "Library/Safari/History.db", adapter=False),
+)
+
 
 def source(name: str) -> Source | None:
     """The source called `name`; `contacts`, `calendar` and `notes` stand for their `ios-` names."""
-    return next((s for s in SOURCES if name in (s.name, s.name.removeprefix("ios-"))), None)
+    return next((s for s in SOURCES + EXTRAS if name in (s.name, s.name.removeprefix("ios-"))), None)
 
 
 @dataclass(frozen=True)
 class BackupFile:
-    """One file row of Manifest.db and where its bytes are; `size` is None when they are not there."""
+    """One file row of Manifest.db and where its bytes are; `size` is None when they are not there
+    (for an encrypted file, the plaintext size). `key` is the file's unwrapped key when the backup
+    is encrypted — never printed — and `protection_class` the class it was wrapped under."""
 
     domain: str
     relative_path: str
     path: Path
     size: int | None
+    protection_class: int | None = None
+    key: bytes | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def encrypted(self) -> bool:
+        return self.key is not None
 
     @property
     def name(self) -> str:
@@ -118,73 +159,174 @@ class Manifest:
                 f"{self.folder}: no {MANIFEST_DB} here; an iOS backup folder is what Finder shows under"
                 " Manage Backups → Show in Finder"
             )
-        self.encrypted, self.udid = self._plist()
+        self.encrypted, self.udid, self._keybag_blob, self._manifest_key = self._plist()
+        self.keybag: ios_backup_crypto.Keybag | None = None
         if not self.encrypted:
-            try:
-                with closing(self._open()) as con:
-                    con.execute("SELECT fileID, domain, relativePath, flags FROM Files LIMIT 1").fetchall()
-            except sqlite3.Error as e:
-                raise NotABackup(f"{self.db}: cannot be read as a backup manifest ({e})") from e
+            self._check_readable()
 
-    def _plist(self) -> tuple[bool, str]:
-        """(IsEncrypted, the phone's identifier — else the folder's own name)."""
+    def _check_readable(self) -> None:
+        try:
+            with closing(self._open()) as con:
+                con.execute("SELECT fileID, domain, relativePath, flags, file FROM Files LIMIT 1").fetchall()
+        except sqlite3.Error as e:
+            raise NotABackup(f"{self.db}: cannot be read as a backup manifest ({e})") from e
+
+    def _plist(self) -> tuple[bool, str, bytes | None, bytes | None]:
+        """(IsEncrypted, the phone's identifier — else the folder's own name, BackupKeyBag, ManifestKey)."""
         fallback = self.folder.resolve().name or "unknown"
         plist = self.folder / MANIFEST_PLIST
         if not plist.is_file():
-            return False, fallback
+            return False, fallback, None, None
         try:
             with plist.open("rb") as fh:
                 data = plistlib.load(fh)
         except (plistlib.InvalidFileException, ValueError, OSError):
-            return False, fallback
+            return False, fallback, None, None
         if not isinstance(data, dict):
-            return False, fallback
+            return False, fallback, None, None
         lockdown = data.get("Lockdown")
         udid = lockdown.get("UniqueDeviceID") if isinstance(lockdown, dict) else None
         udid = udid.strip() if isinstance(udid, str) and udid.strip() else fallback
-        return bool(data.get("IsEncrypted", False)), udid
+        keybag = data.get("BackupKeyBag")
+        manifest_key = data.get("ManifestKey")
+        return (
+            bool(data.get("IsEncrypted", False)),
+            udid,
+            keybag if isinstance(keybag, bytes) else None,
+            manifest_key if isinstance(manifest_key, bytes) else None,
+        )
+
+    @property
+    def unlocked(self) -> bool:
+        """Whether the rows can be read: an unencrypted backup always, an encrypted one after `unlock`."""
+        return not self.encrypted or self.keybag is not None
+
+    def unlock(self, password: str, dest_db: Path) -> None:
+        """Unlock the keybag with `password` and decrypt Manifest.db into `dest_db`, which the rows
+        are read from afterwards. Raises MissingExtra without `cryptography`, NotABackup when the
+        plist lacks the keybag or the manifest key, WrongPassword before anything is written, and
+        DecryptError when the manifest's key or bytes are not what the format says."""
+        if not self.encrypted:
+            return
+        if self._keybag_blob is None:
+            raise NotABackup(f"{self.folder / MANIFEST_PLIST}: encrypted, but no BackupKeyBag in it")
+        if self._manifest_key is None:
+            raise NotABackup(f"{self.folder / MANIFEST_PLIST}: encrypted, but no ManifestKey in it")
+        if not ios_backup_crypto.available():
+            raise MissingExtra()
+        keybag = ios_backup_crypto.Keybag.parse(self._keybag_blob)
+        keybag.unlock(password)  # WrongPassword here, before any file is touched
+        number, wrapped = ios_backup_crypto.split_class(self._manifest_key)
+        key = keybag.unwrap(number, wrapped)
+        dest_db.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            ios_backup_crypto.decrypt_file(self.folder / MANIFEST_DB, dest_db, key)
+        except OSError as e:
+            raise DecryptError(f"{MANIFEST_DB}: {e}") from e
+        self.db = dest_db
+        self.keybag = keybag
+        self._check_readable()
 
     def _open(self) -> sqlite3.Connection:
         """Read-only and immutable: SQLite neither locks the file nor writes a journal beside it."""
         return sqlite3.connect(f"{self.db.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
 
-    def _located(self, file_id: str, domain: str, relative_path: str) -> BackupFile:
+    def _located(self, file_id: str, domain: str, relative_path: str, blob: object) -> BackupFile:
         candidates = (self.folder / file_id[:2] / file_id, self.folder / file_id)  # two-level, then flat
+        protection_class: int | None = None
+        key: bytes | None = None
+        size: int | None = None
+        if self.keybag is not None:
+            protection_class, key, size = self._file_key(relative_path, blob)
         for path in candidates:
             if path.is_file():
-                return BackupFile(domain, relative_path, path, path.stat().st_size)
-        return BackupFile(domain, relative_path, candidates[0], None)
+                if size is None:
+                    size = path.stat().st_size
+                return BackupFile(domain, relative_path, path, size, protection_class, key)
+        return BackupFile(domain, relative_path, candidates[0], None, protection_class, key)
+
+    def _file_key(self, relative_path: str, blob: object) -> tuple[int | None, bytes | None, int | None]:
+        """From the row's `file` plist (an NSKeyedArchiver MBFile): (protection class, the unwrapped
+        file key, the plaintext size). A row without a key is a plaintext file; a key that will
+        not unwrap is a DecryptError naming the path, never a silent skip."""
+        assert self.keybag is not None
+        if not isinstance(blob, bytes):
+            return None, None, None
+        try:
+            data = plistlib.loads(blob)
+        except (plistlib.InvalidFileException, ValueError) as e:
+            raise DecryptError(f"{relative_path}: its Manifest.db row is not a file plist ({e})") from e
+        root = _archived_root(data)
+        if root is None:
+            return None, None, None
+        size = root.get("Size")
+        number = root.get("ProtectionClass")
+        wrapped = _archived(data, root.get("EncryptionKey"))
+        if isinstance(wrapped, dict):
+            wrapped = wrapped.get("NS.data")
+        if not isinstance(wrapped, bytes):
+            return number if isinstance(number, int) else None, None, size if isinstance(size, int) else None
+        try:
+            prefixed_class, wrapped_key = ios_backup_crypto.split_class(wrapped)
+            key = self.keybag.unwrap(prefixed_class, wrapped_key)
+        except DecryptError as e:
+            raise DecryptError(f"{relative_path}: {e}") from e
+        return prefixed_class, key, size if isinstance(size, int) else None
 
     def file(self, domain: str, relative_path: str) -> BackupFile | None:
-        """The file row at exactly this domain and path, or None (a directory row is not a file)."""
+        """The file row at exactly this domain and path, or None (a directory row is not a file;
+        an encrypted backup that is not unlocked has no readable rows)."""
+        if not self.unlocked:
+            return None
         with closing(self._open()) as con:
             rows = con.execute(
-                "SELECT fileID, flags FROM Files WHERE domain = ? AND relativePath = ?",
+                "SELECT fileID, flags, file FROM Files WHERE domain = ? AND relativePath = ?",
                 (domain, relative_path),
             ).fetchall()
-        for file_id, flags in rows:
+        for file_id, flags, blob in rows:
             if flags == FILE_FLAG and isinstance(file_id, str):
-                return self._located(file_id, domain, relative_path)
+                return self._located(file_id, domain, relative_path, blob)
         return None
 
     def files_under(self, domain: str, prefix: str) -> Iterator[BackupFile]:
         """Every file row below `prefix` in `domain`, in path order. A path that would leave the
         folder (`..`, an empty part) is never yielded: the copy stays inside its media folder."""
+        if not self.unlocked:
+            return
         head = PurePosixPath(prefix).parts
         with closing(self._open()) as con:
             rows = con.execute(
-                "SELECT fileID, relativePath, flags FROM Files WHERE domain = ? AND relativePath LIKE ?"
+                "SELECT fileID, relativePath, flags, file FROM Files WHERE domain = ? AND relativePath LIKE ?"
                 " ORDER BY relativePath",
                 (domain, prefix + "/%"),
             ).fetchall()
-        for file_id, relative_path, flags in rows:
+        for file_id, relative_path, flags, blob in rows:
             if flags != FILE_FLAG or not isinstance(file_id, str) or not isinstance(relative_path, str):
                 continue
             parts = PurePosixPath(relative_path).parts
             rest = parts[len(head) :]
             if parts[: len(head)] != head or not rest or any(p in ("..", "", "/") for p in rest):
                 continue
-            yield self._located(file_id, domain, relative_path)
+            yield self._located(file_id, domain, relative_path, blob)
+
+
+def _archived_root(data: object) -> dict[str, Any] | None:
+    """The root object of an NSKeyedArchiver plist, when it is a dictionary."""
+    if not isinstance(data, dict):
+        return None
+    top = data.get("$top")
+    root = _archived(data, top.get("root")) if isinstance(top, dict) else None
+    return root if isinstance(root, dict) else None
+
+
+def _archived(data: dict[str, Any], value: object) -> object:
+    """`value` with one level of NSKeyedArchiver indirection followed: a UID names an `$objects` entry."""
+    if isinstance(value, plistlib.UID):
+        objects = data.get("$objects")
+        if isinstance(objects, list) and 0 <= value.data < len(objects):
+            return objects[value.data]
+        return None
+    return value
 
 
 @dataclass
@@ -197,6 +339,7 @@ class Plan:
     store: BackupFile | None
     siblings: list[BackupFile] = field(default_factory=list)
     media: list[BackupFile] = field(default_factory=list)
+    copied: list[tuple[BackupFile, Path]] = field(default_factory=list)  # filled by `copy`
 
     @property
     def listed(self) -> bool:
@@ -241,11 +384,14 @@ def copy(p: Plan, dest: Path) -> Path:
     The store and its siblings land in `dest` itself; a sibling left by an earlier copy that this
     backup does not have is removed, so the store is never read with someone else's journal. Media
     lands under `dest/<media folder>/` with its path below the backup's media prefix. Every copy is
-    checked by size against its original; a mismatch raises CopyError."""
+    checked by size against its original; a mismatch raises CopyError. An encrypted file is
+    decrypted on the way, a chunk at a time. Every copy is noted in `p.copied`."""
     if not p.found or p.store is None:
         raise ValueError(f"{p.source.name}: nothing to copy")
     dest.mkdir(parents=True, exist_ok=True)
+    p.copied.clear()
     store_copy = _copy_file(p.store, dest / p.store.name)
+    p.copied.append((p.store, store_copy))
     present = {f.name for f in p.siblings if f.size is not None}
     for suffix in SIBLINGS:
         stale = dest / (p.store.name + suffix)
@@ -253,20 +399,59 @@ def copy(p: Plan, dest: Path) -> Path:
             stale.unlink()
     for sibling in p.siblings:
         if sibling.size is not None:
-            _copy_file(sibling, dest / sibling.name)
+            p.copied.append((sibling, _copy_file(sibling, dest / sibling.name)))
     if p.source.media is not None and p.source.media_folder is not None:
         head = len(PurePosixPath(p.source.media[1]).parts)
         folder = dest / p.source.media_folder
         for f in p.media:
             if f.size is not None:
-                _copy_file(f, folder.joinpath(*f.parts[head:]))
+                p.copied.append((f, _copy_file(f, folder.joinpath(*f.parts[head:]))))
     return store_copy
 
 
 def _copy_file(f: BackupFile, target: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(f.path, target)
-    copied = target.stat().st_size
+    if f.key is not None:
+        copied = ios_backup_crypto.decrypt_file(f.path, target, f.key, f.size)
+    else:
+        shutil.copyfile(f.path, target)
+        copied = target.stat().st_size
     if copied != f.size:
         raise CopyError(f"{f.relative_path}: copied {copied:,} bytes, the backup has {f.size:,}")
     return target
+
+
+def write_copies(inbox: Path, manifest: Manifest, plans: list[Plan]) -> Path:
+    """`<inbox>/copies.json`: one entry per file `copy` put under `inbox`, merged over the entries
+    an earlier run left for sources this run did not touch. `encrypted` says whether the backup
+    was; each entry says whether its file was decrypted and under which protection class. Keys
+    are never written. Returns the file's path."""
+    path = inbox / COPIES
+    previous: list[dict[str, Any]] = []
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("files"), list):
+                previous = [e for e in data["files"] if isinstance(e, dict)]
+        except (OSError, ValueError):
+            previous = []
+    touched = {p.source.name for p in plans}
+    entries = [e for e in previous if e.get("source") not in touched]
+    for p in plans:
+        for f, target in p.copied:
+            entries.append(
+                {
+                    "source": p.source.name,
+                    "domain": f.domain,
+                    "path": f.relative_path,
+                    "copy": target.relative_to(inbox).as_posix(),
+                    "bytes": f.size,
+                    "encrypted": f.encrypted,
+                    "protection_class": f.protection_class,
+                }
+            )
+    entries.sort(key=lambda e: str(e.get("copy", "")))
+    record = {"backup": manifest.udid, "encrypted": manifest.encrypted, "files": entries}
+    inbox.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
