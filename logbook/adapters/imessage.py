@@ -42,8 +42,14 @@ a later attach pass can find the bytes by digest; when it does not, `extra.media
 skips the hashing and records only the stored path.
 
 Built for the real store, hundreds of thousands of rows: one SELECT streamed through the cursor,
-chat, handle and attachments joined by SQLite, rows grouped by message as they arrive. Pure:
-opened `mode=ro`, `immutable=1` (no lock, no journal beside the source), no network.
+chat, handle and attachments joined by SQLite, rows grouped by message as they arrive, `since` cut
+in SQL so rows before it are neither decoded nor hashed. Pure: opened `mode=ro`, `immutable=1` (no
+lock, no journal beside the source), no network.
+
+`lines(con, ...)` is the one mapping from a store to line drafts. The live adapter (`imessage_live`,
+`logbook sync imessage`) calls it too, on the Mac's own chat.db opened by `open_live`: a message
+imported from the phone backup and the same message read on the Mac are the same line with the same
+`raw_id`, so it is deduped, not duplicated.
 """
 
 from __future__ import annotations
@@ -96,8 +102,16 @@ LEFT JOIN chat_message_join AS cm ON cm.message_id = m.ROWID
 LEFT JOIN chat AS c ON c.ROWID = cm.chat_id
 LEFT JOIN message_attachment_join AS ma ON ma.message_id = m.ROWID
 LEFT JOIN attachment AS a ON a.ROWID = ma.attachment_id
+{where}
 ORDER BY m.ROWID, c.ROWID, a.ROWID
 """
+# Rows dated before `since` are cut here, in both units; rows with no date or a garbage one stay, so
+# they are still counted as skipped_bad_date.
+SINCE_WHERE = f"""
+WHERE m.date IS NULL OR m.date < {EARLIEST_DATE} OR m.date >= :since_ns
+   OR (m.date < {NANOSECONDS_FROM} AND m.date >= :since_s)
+"""
+NOT_A_STORE = "not a Messages database (no message, handle, chat and chat_message_join tables)"
 
 
 def sniff(path: Path) -> bool:
@@ -125,16 +139,53 @@ def _open(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
 
 
+def open_live(path: Path) -> sqlite3.Connection:
+    """The Mac's own chat.db, read-only. `mode=ro` first: it takes only the shared locks a WAL reader
+    needs (Messages.app keeps writing) and sees what is still in the -wal file. `immutable=1` only
+    when that fails (a -shm SQLite cannot open; it then reads the checkpointed file alone). Never
+    writes. Raises OSError, one line, when neither opens or the tables are not a Messages store."""
+    path = Path(path)
+    errors: list[str] = []
+    for extra in ("", "&immutable=1"):
+        try:
+            con = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro{extra}", uri=True)
+        except (OSError, ValueError, sqlite3.Error) as e:
+            errors.append(str(e).replace("\n", " "))
+            continue
+        try:
+            tables = _tables(con)
+        except sqlite3.Error as e:
+            con.close()
+            errors.append(str(e).replace("\n", " "))
+            continue
+        if not tables >= REQUIRED_TABLES:
+            con.close()
+            raise OSError(f"{path} is {NOT_A_STORE}")
+        return con
+    raise OSError(f"cannot read {path} ({'; '.join(errors)}): {FULL_DISK_ACCESS}")
+
+
+FULL_DISK_ACCESS = (
+    "Full Disk Access for the terminal is the usual cause"
+    " (System Settings → Privacy & Security → Full Disk Access, then open a new window)"
+)
+
+
 def _tables(con: sqlite3.Connection) -> set[str]:
     rows = con.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
     return {str(name) for (name,) in rows}
 
 
-def _query(con: sqlite3.Connection) -> str:
-    """QUERY with the handle's name column when the store has one, NULL in its place when not."""
+def _query(con: sqlite3.Connection, since: str | None) -> tuple[str, dict[str, int]]:
+    """QUERY with the handle's name column when the store has one, NULL in its place when not, and
+    the `since` cut with its parameters when there is one."""
     columns = {str(row[1]) for row in con.execute("PRAGMA table_info(handle)")}
     handle_name = f"h.{HANDLE_NAME_COLUMN}" if HANDLE_NAME_COLUMN in columns else "NULL"
-    return QUERY.format(handle_name=handle_name)
+    if since is None:
+        return QUERY.format(handle_name=handle_name, where=""), {}
+    seconds = int(datetime.fromisoformat(since).astimezone(UTC).timestamp()) - APPLE_EPOCH
+    params = {"since_s": seconds, "since_ns": seconds * 1_000_000_000}
+    return QUERY.format(handle_name=handle_name, where=SINCE_WHERE), params
 
 
 def run(
@@ -153,13 +204,27 @@ def run(
     hash_media = os.environ.get(HASH_MEDIA_ENV, "1").strip() != "0"
     con = _open(path)
     try:
-        cursor = con.execute(_query(con))  # the cursor streams; only one message's rows sit in memory
-        for _rowid, rows in groupby(cursor, key=lambda row: row[0]):
-            draft = _draft(list(rows), media_root, hash_media, counts)
-            if draft is not None and not (since and draft["at"] < since):
-                yield draft
+        yield from lines(con, media_root, hash_media, counts, since)
     finally:
         con.close()
+
+
+def lines(
+    con: sqlite3.Connection,
+    media_root: Path,
+    hash_media: bool,
+    counts: dict[str, int],
+    since: str | None = None,
+) -> Iterator[dict[str, Any]]:
+    """The one mapping: every message in an open store, in ROWID order, as line drafts, streamed.
+    `media_root` is the Attachments folder the stored paths are looked up under; `since` (RFC3339 UTC)
+    cuts rows dated before it in SQL. The connection stays open; the caller closes it."""
+    query, params = _query(con, since)
+    cursor = con.execute(query, params)  # the cursor streams; only one message's rows sit in memory
+    for _rowid, rows in groupby(cursor, key=lambda row: row[0]):
+        draft = _draft(list(rows), media_root, hash_media, counts)
+        if draft is not None and not (since and draft["at"] < since):
+            yield draft
 
 
 def _count(counts: dict[str, int], key: str) -> None:
