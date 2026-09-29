@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
@@ -362,6 +362,20 @@ def test_run_media_file_that_is_missing_is_flagged(tmp_path, hash_media):
     assert counts["media_missing"] == 1
 
 
+def test_run_media_row_without_a_path_is_missing_and_has_no_media_extra(tmp_path, hash_media):
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("UPDATE ZWAMEDIAITEM SET ZMEDIALOCALPATH = NULL WHERE Z_PK = 101")
+        con.commit()
+    finally:
+        con.close()
+    counts: dict[str, int] = {}
+    extra = _by_pk(list(whatsapp.run(p, counts=counts)))[4]["payload"]["extra"]
+    assert extra == {"media_missing": True}  # a title alone names no file under Message/
+    assert counts["media_missing"] == 1
+
+
 def test_run_media_message_without_a_media_row_has_no_media_extra(tmp_path, hash_media):
     p = _by_pk(list(whatsapp.run(_store(tmp_path))))[5]["payload"]
     assert p["media_kind"] == "voice" and "extra" not in p
@@ -471,6 +485,9 @@ def test_cli_add_reports_lines_skips_and_media(tmp_path):
 # -- property: every emitted line is a valid message/v1 observation -------------------
 
 MEDIA_KINDS = {"image", "video", "voice", "contact", "location", "link", "document", "gif", "sticker"}
+EARLIEST_AT = datetime.fromtimestamp(whatsapp.APPLE_EPOCH + whatsapp.EARLIEST_DATE, UTC).strftime(
+    "%Y-%m-%dT%H:%M:%SZ"
+)
 
 
 def _rfc_rules(line: dict, chats: dict[int, tuple]) -> None:
@@ -478,7 +495,7 @@ def _rfc_rules(line: dict, chats: dict[int, tuple]) -> None:
     assert line["kind"] == "message" and line["tier"] == 2 and line["end"] is None
     assert line["source"] == "whatsapp"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", line["at"])
-    assert line["at"] >= "2010-07-07T"  # ZMESSAGEDATE >= 300000000
+    assert line["at"] >= EARLIEST_AT  # the adapter's own floor on ZMESSAGEDATE
     p = line["payload"]
     assert set(p) <= {"schema", "raw_id", "chat", "from_me", "sender", "text", "media_kind", "extra"}
     assert {"schema", "raw_id", "chat", "from_me"} <= set(p)
@@ -490,9 +507,12 @@ def _rfc_rules(line: dict, chats: dict[int, tuple]) -> None:
     if p["from_me"]:
         assert "sender" not in p
     if "sender" in p:
-        assert set(p["sender"]) == {"kind", "value"} and p["sender"]["kind"] in {"phone", "handle"}
+        assert set(p["sender"]) - {"name"} == {"kind", "value"} and p["sender"]["kind"] in {"phone", "handle"}
         if p["sender"]["kind"] == "phone":
             assert re.fullmatch(r"\+[0-9]+", p["sender"]["value"])
+        if "name" in p["sender"]:  # RFC 0008: the name the source showed, never blank
+            name = p["sender"]["name"]
+            assert isinstance(name, str) and name and name == name.strip()
     if "text" in p:
         assert isinstance(p["text"], str) and p["text"].strip()
     if "media_kind" in p:
@@ -548,8 +568,35 @@ _store_strategy = st.tuples(
 )
 
 
+_EMPTY = (None, None, 0, None, None, None, "0@s.whatsapp.net", None, None)
+
+
 @settings(max_examples=40, deadline=None)
 @given(_store_strategy)
+@example(  # #66: a media row with a title and no path
+    (
+        [(None, "0@s.whatsapp.net", None)],
+        [],
+        [(None, None, "0")],
+        [_EMPTY, (None, None, 0, None, 1, 300153600.0, "status@broadcast", None, "0")],
+    )
+)
+@example(  # #66: ZMESSAGEDATE exactly at the adapter's floor
+    (
+        [(None, "0@s.whatsapp.net", None)],
+        [],
+        [],
+        [_EMPTY, (None, None, 0, None, None, 300000000.0, "status@broadcast", None, "0")],
+    )
+)
+@example(  # a group member with a contact name: sender.name
+    (
+        [(1, "1@g.us", None)],
+        [("7@s.whatsapp.net", "Ola")],
+        [],
+        [(0, 0, 0, 1, None, 400000000, "7@s.whatsapp.net", "abc", "hi")],
+    )
+)
 def test_any_chat_store_yields_only_valid_lines(tmp_path_factory, store):
     chats, members, media, messages = store
     folder = tmp_path_factory.mktemp("wa")
