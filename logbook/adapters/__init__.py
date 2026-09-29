@@ -3,7 +3,7 @@
 Two kinds share one registry. A *file* adapter reads an export you already hold:
 
     NAME: str                                   # the `source` it writes, e.g. "dawarich"
-    sniff(path) -> bool                         # "is this file mine?" — cheap, never raises
+    sniff(path) -> bool                         # "is this file (or folder) mine?" — cheap, never raises
     run(path, since=None) -> Iterator[dict]     # line drafts: at, end, tz, source, kind, tier, payload
 
 `run` may also take an optional `counts: dict[str, int]`; when it does, `logbook add` passes one and
@@ -54,6 +54,7 @@ BUILT_IN = (
     "immich",
     "dawarich_live",
     "takeout.location",
+    "takeout.photos",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
