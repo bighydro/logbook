@@ -49,6 +49,59 @@ jobs:
         uses: docker/build-push-action@v7
         with: { context: ., platforms: linux/arm64, load: true, tags: logbook:arm64, cache-from: type=gha }
       - run: docker run --rm --platform linux/arm64 logbook:arm64 --version
+  cross-impl:
+    # The independent TypeScript implementation (bighydro/logbook-ts, written from SPEC.md alone) must
+    # agree with this one: on the conformance sample, and on a record the other implementation wrote.
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: check out logbook-ts at main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { repository: bighydro/logbook-ts, ref: main, path: logbook-ts }
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with: { package_json_file: logbook-ts/package.json }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "22", cache: pnpm, cache-dependency-path: logbook-ts/pnpm-lock.yaml }
+      - name: build logbook-ts
+        working-directory: logbook-ts
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      - run: uv sync
+      - name: logbook-ts verify prints the head in conformance/expected.json
+        run: |
+          set -euo pipefail
+          expected=$(jq -r .head conformance/expected.json)
+          out=$(node logbook-ts/dist/bin.js verify conformance/sample-logbook)
+          echo "$out"
+          got=${out##*head }
+          if [ "$got" != "$expected" ]; then
+            echo "::error::logbook-ts and conformance/expected.json disagree on the head of conformance/sample-logbook"
+            echo "  expected (conformance/expected.json): $expected"
+            echo "  got      (logbook-ts verify):         $got"
+            exit 1
+          fi
+      - name: a note appended by the Python CLI verifies with the TypeScript CLI
+        env: { LOGBOOK_HOME: "${{ runner.temp }}/sample-copy" }
+        run: |
+          set -euo pipefail
+          cp -R conformance/sample-logbook "$LOGBOOK_HOME"
+          uv run logbook add "written by the Python implementation, verified by the TypeScript one"
+          py=$(uv run logbook verify --root "$LOGBOOK_HOME" | head -n 1)
+          ts=$(node logbook-ts/dist/bin.js verify "$LOGBOOK_HOME")
+          echo "python:     $py"
+          echo "typescript: $ts"
+          lines=$(( $(jq -r .seq conformance/expected.json) + 1 ))
+          want="valid — ${lines} lines, head ${py##*head }"
+          if [ "$ts" != "$want" ]; then
+            echo "::error::logbook-ts does not accept the record the Python implementation wrote"
+            echo "  python verify:     $py"
+            echo "  typescript verify: $ts"
+            echo "  wanted:            $want"
+            exit 1
+          fi
   scorecard:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
