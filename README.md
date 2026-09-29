@@ -184,6 +184,7 @@ resolutions, attachments. It prints numbers, kinds, sources and dates, never wha
 | `dawarich` | `LOGBOOK_DAWARICH_URL`, `LOGBOOK_DAWARICH_KEY` (`LOGBOOK_DAWARICH_LOOKBACK_H`, default 24) | one `location/v1` line per point, identical to the line its export gives |
 | `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
+| `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -230,6 +231,26 @@ marked `extra.derived = true` and pointing at the transcript by id (set `LOGBOOK
 The watermark is the recording's end; each sync looks back 24 hours (`LOGBOOK_GRANOLA_LOOKBACK_H`) and skips what
 the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
 written: a batch is all or nothing.
+
+`logbook sync gcal` pulls your Google calendars from their private iCal addresses (Google Calendar →
+Settings → the calendar → *Integrate calendar* → *Secret address in iCal format*), one whole calendar per
+URL, and reads each with the same reader `logbook add` uses for an `.ics` export, so a calendar you
+imported from a Takeout or settings-page export and the same calendar pulled by URL are one line per
+event (same `raw_id`, the event's UID and last-modified time; ADR 0017). Name a feed with `name=url` when it has no
+name of its own. The watermark is the newest last-modified time seen; each run keeps the events changed
+in the 24 hours before it (`LOGBOOK_GCAL_LOOKBACK_H`) and reports, per calendar, how many it saw and how
+many were new. A calendar that fails (an expired secret address is a 404) is one line on stderr, the others
+are still written, the watermark stays put and the exit is 1.
+
+```bash
+export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/private-…/basic.ics,https://…'
+logbook sync gcal --dry-run                                # counts per calendar, nothing written
+logbook sync gcal
+```
+
+**A secret iCal address is the whole calendar** to anyone who holds it; Google can reset it. Keep the
+URLs in the shell environment only, as the Dawarich key below: the logbook never prints one, naming a
+calendar by its name or by eight characters of the URL's hash.
 
 **A Dawarich API key is full access** to your account: it can read and delete every point you have.
 Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file

@@ -1058,3 +1058,22 @@ def test_any_icalendar_file_yields_only_valid_lines(tmp_path_factory, head, even
     validator = Draft202012Validator(SCHEMA)
     for line in lb.lines():
         validator.validate(line)
+
+
+# -- lines: the reader a live feed goes through -------------------------------------------------
+
+
+def test_lines_reads_text_as_run_reads_the_same_file(tmp_path):
+    p = _export(tmp_path, "basic.ics")
+    counts_run: dict[str, int] = {}
+    counts_text: dict[str, int] = {}
+    from_run = list(ics.run(p, counts=counts_run, timezone="Europe/Oslo"))
+    from_text = list(ics.lines(CALENDAR, "basic.ics", counts=counts_text, timezone="Europe/Oslo"))
+    assert from_text == from_run and counts_text == counts_run == {"skipped_todo": 1, "skipped_no_uid": 1}
+
+
+def test_lines_uses_the_name_given_when_the_calendar_has_none():
+    text = _calendar(
+        "UID:U-1\nDTSTAMP:20260301T110000Z\nDTSTART:20260310T100000Z\nSUMMARY:one", head="VERSION:2.0"
+    )
+    assert [d["payload"]["calendar"] for d in ics.lines(text, "chores.ics")] == [{"id": "chores.ics"}]
