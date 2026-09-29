@@ -800,7 +800,7 @@ def test_run_on_a_folder_reads_its_calendar_files_in_name_order_and_nothing_else
 
 
 def test_takeout_dispatch_stub_lists_calendar_beside_location():
-    assert takeout.SUB_ADAPTERS == ("location", "calendar")
+    assert takeout.SUB_ADAPTERS == ("location", "calendar", "photos")
     assert takeout_calendar.NAME == ics.NAME == "ics"
 
 
@@ -874,8 +874,10 @@ def test_cli_add_a_takeout_calendar_folder_imports_every_calendar(tmp_path):
     run = _cli(tmp_path)
     run("init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo")
     folder = _folder(tmp_path, str(Path("Takeout") / "Calendar"))
+    # `ics` claims the folder as a whole (it sniffs folders), so `add` hands it over instead of
+    # walking it: one report for both calendars, the same 7 lines.
     out = run("add", str(folder)).stdout
-    assert "added 6 lines from ics" in out and "added 1 lines from ics" in out
+    assert "added 7 lines from ics" in out
     assert "valid — 7 lines" in run("verify").stdout
     assert "added 0 lines from ics" in run("add", str(folder)).stdout
 
