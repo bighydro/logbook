@@ -60,6 +60,7 @@ BUILT_IN = (
     "imessage",
     "ios_notes",
     "ios_calendar",
+    "ics",
 )
 
 
