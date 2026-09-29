@@ -14,6 +14,27 @@ Hard rules — a change that needs to break one is wrong; stop and say so:
 Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv run ruff check --fix .`, `uv run mypy logbook`). Conventional commits (`feat:`, `fix:`, `spec:`, `docs:`, `adapter:`). Plain English names inside the code: Logbook, Line, Day, Note — no metaphors.
 - Paths: never match or split them as strings; use `pathlib` parts. Windows runs the tests too.
 
+## Commit routine
+
+- Commits are authored as `bighydro <122497530+bighydro@users.noreply.github.com>` only. A cloud or new checkout sets `user.name` and `user.email` before its first commit:
+  `git config user.name bighydro && git config user.email 122497530+bighydro@users.noreply.github.com`
+- Every commit is signed off and signed: `git commit -s -S`. After every commit run `git log -1 --format='%G?'` and expect `G`. Anything else (`N`, `E`, `B`) means the commit is unsigned or unverifiable: fix it before pushing. (A squash merge GitHub made shows `E` locally because its key is not in the keyring; that is GitHub's commit, not yours.)
+- `pre-commit` runs on every commit (`uv run pre-commit install` once per checkout). Its last hook, `scripts/check_pii.py`, greps every added line of the staged diff for the owner's personal identifiers and fails the commit on a match, printing the file and line but never the text. The identifiers are never in the repository: the hook reads them from the file `LOGBOOK_PII_PATTERNS` names, default `~/.config/logbook/pii-patterns`, one case-insensitive regular expression per line (`#` comments and blank lines ignored). Without the file it prints one warning and passes, so CI and strangers are unaffected. Create it locally once, with your real identifiers in place of these synthetic ones:
+
+  ```
+  mkdir -p ~/.config/logbook && cat > ~/.config/logbook/pii-patterns <<'EOF'
+  # one regex per line, matched case-insensitively against every added line
+  07700 900123
+  kari\.nordmann@example\.org
+  Storgata 1
+  EOF
+  ```
+
+## Release routine
+
+- Bump `version` in `pyproject.toml` and `__version__` in `logbook/__init__.py` together; move the `Unreleased` block of `CHANGELOG.md` under the new version and date.
+- Commit, then grep `__version__` on the tagged commit before `git tag -s`: `git grep __version__ HEAD -- logbook/__init__.py` must print the version you are about to tag. Only then `git tag -s vX.Y.Z -m vX.Y.Z` and push the tag.
+
 ## Cross-platform (the tests run on Windows too, and it has caught a bug in every PR that ignored this)
 
 - Paths: never match, split or join them as strings; use `pathlib` (`.parts`, `/`). Windows returns backslashes.
