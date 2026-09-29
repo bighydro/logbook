@@ -8,3 +8,11 @@ repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
     hooks: [{ id: gitleaks }]
+  - repo: local
+    hooks:
+      - id: check-pii
+        name: check staged diff for personal identifiers
+        entry: python scripts/check_pii.py
+        language: python
+        pass_filenames: true
+        stages: [pre-commit]
