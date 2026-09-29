@@ -286,11 +286,13 @@ class Logbook:
         self,
         drafts: Iterable[dict[str, Any]],
         progress: Callable[[int, float], None] | None = None,
+        skipped: Callable[[dict[str, Any]], None] | None = None,
     ) -> int:
         """Append drafts in order; returns how many were written.
 
         A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
-        same export appends nothing. Drafts without a raw_id are never deduped. A draft may bring
+        same export appends nothing; `skipped(draft)` is called for each one, so a caller can say
+        what was already there. Drafts without a raw_id are never deduped. A draft may bring
         its own `id` (a UUIDv7 an adapter minted so another draft could point at it); one without
         gets one here. `id` is outside the hash (SPEC §2).
 
@@ -349,6 +351,8 @@ class Logbook:
                     key = _dedupe_key(d)
                     if key is not None:
                         if key in found:
+                            if skipped is not None:
+                                skipped(d)
                             continue
                         found.add(key)
                     line = self._line(meta, seq + 1, head, **d)

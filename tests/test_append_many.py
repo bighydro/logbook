@@ -69,6 +69,15 @@ def test_append_many_dedupes_against_the_log_and_within_the_batch(tmp_path):
     assert errors == [] and seq == 7
 
 
+def test_append_many_hands_every_deduped_draft_to_skipped(tmp_path):
+    lb = Logbook.init(tmp_path / "lb", "UTC")
+    assert lb.append_many(_drafts(4)) == 4
+    skipped: list[str] = []
+    again = [*_drafts(6), _draft(5), _draft(2, source="owntracks")]
+    assert lb.append_many(again, skipped=lambda d: skipped.append(d["payload"]["raw_id"])) == 3
+    assert skipped == ["t:0", "t:1", "t:2", "t:3", "t:5"]  # the log's four, then the batch's own repeat
+
+
 def test_append_many_reports_progress_every_progress_every_lines(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "PROGRESS_EVERY", 4)
     lb = Logbook.init(tmp_path / "lb", "UTC")

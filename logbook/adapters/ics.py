@@ -30,7 +30,9 @@ BEGIN/END nest (an END that matches nothing is ignored, an outer END closes what
 end of the file), parameters may be quoted and multi-valued, TEXT escapes are undone, and every property
 or component it does not know is passed over. Names are case-insensitive. A file is read whole: a
 calendar export is megabytes, not gigabytes. Also reads a folder of such files (the Takeout `Calendar/`
-folder among them), each in name order. Pure: no network, the source is never written.
+folder among them), each in name order. Pure: no network, the source is never written. `lines` reads the
+same text from memory: the `gcal` live mode fetches Google Calendar's private feeds and hands them here, so
+a feed and its export are the same lines.
 """
 
 from __future__ import annotations
@@ -135,7 +137,12 @@ def _is_calendar(path: Path) -> bool:
         return False
     with path.open("rb") as fh:
         head = fh.read(SNIFF_BYTES)
-    return head.removeprefix(BOM).lstrip().upper().startswith(HEAD)
+    return sniff_bytes(head)
+
+
+def sniff_bytes(head: bytes) -> bool:
+    """Whether bytes begin an iCalendar text: BEGIN:VCALENDAR after a BOM or blank lines, any case."""
+    return head[:SNIFF_BYTES].removeprefix(BOM).lstrip().upper().startswith(HEAD)
 
 
 def _calendar_files(folder: Path) -> Iterator[Path]:
@@ -161,24 +168,29 @@ def run(
     `skipped_no_start`, `skipped_bad_start`, `skipped_placeholder_date`, `skipped_no_uid`,
     `skipped_todo` and `skipped_journal`."""
     counts = counts if counts is not None else {}
-    record_zone = _zone(timezone)
     path = Path(path)
     files = list(_calendar_files(path)) if path.is_dir() else [path]
     for file in files:
-        for draft in _file(file, record_zone, counts):
+        text = file.read_text(encoding="utf-8-sig", errors="replace")
+        for draft in lines(text, file.name, counts, timezone):
             if not (since and draft["at"] < since):
                 yield draft
 
 
-def _file(
-    path: Path, record_zone: zoneinfo.ZoneInfo | None, counts: dict[str, int]
+def lines(
+    text: str, name: str, counts: dict[str, int] | None = None, timezone: str | None = None
 ) -> Iterator[dict[str, Any]]:
-    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    """One event/v1 line per VEVENT in the iCalendar text, in order: what `run` does with one file's
+    text, for a feed that never touched the disk (`logbook sync gcal`). `name` stands in for the file
+    name as the calendar's id when the text has no X-WR-CALNAME, so the same calendar read either way
+    is the same lines. `counts` and `timezone` as for `run`."""
+    counts = counts if counts is not None else {}
+    record_zone = _zone(timezone)
     for root in parse(text):
         if root.name == "VCALENDAR":
-            calendar, components = _calendar(root, path), root.children
+            calendar, components = _calendar(root, name), root.children
         else:  # a bare component with no VCALENDAR around it
-            calendar, components = _calendar(None, path), [root]
+            calendar, components = _calendar(None, name), [root]
         for component in components:
             if component.name == "VEVENT":
                 draft = _draft(component, calendar, record_zone, counts)
@@ -188,11 +200,11 @@ def _file(
                 _count(counts, SKIPPED_COMPONENTS[component.name])
 
 
-def _calendar(root: Component | None, path: Path) -> dict[str, str]:
+def _calendar(root: Component | None, fallback: str) -> dict[str, str]:
     """`{id, name?}`: X-WR-CALNAME names the calendar (Google and Apple write it); without one the file name
-    is the id."""
+    (or the name a feed was given) is the id."""
     name = _text_value(root, "X-WR-CALNAME") if root is not None else ""
-    return {"id": name, "name": name} if name else {"id": path.name}
+    return {"id": name, "name": name} if name else {"id": fallback}
 
 
 def _count(counts: dict[str, int], key: str) -> None:

@@ -25,11 +25,18 @@ and optionally:
                                                 # makes a first sync start from the record's newest
                                                 # line of this source and KIND
     UNIT: str                                   # what the progress lines count ("assets" if absent)
+    group(draft) -> str                         # `sync` then reports seen and new per group (a calendar)
+
+`pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may) and
+`failed: list[str]`: a source made of several feeds appends one line per feed it could not read and
+still yields the others' drafts; `sync` prints each, keeps the watermark and exits 1.
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
 reads a phone backup's sms.db and the Mac's own chat.db); they write the same lines, so either
 dedupes the other. A live source need not be a service: `imessage` reads a file on this machine and
-`ENV` names only optional overrides, so its `configure` never returns None.
+`ENV` names only optional overrides, so its `configure` never returns None. Nor need it share the
+NAME: `gcal` pulls Google Calendar's feeds through the `ics` reader and writes `ics` lines, so a
+feed and an export of the same calendar dedupe each other.
 
 `since` and the watermark are in the *source's* clock (when it received or last changed the item),
 not the event's: `logbook sync` stores the largest watermark of a completed pull and passes it back
@@ -67,6 +74,7 @@ BUILT_IN = (
     "ics",
     "transcript",
     "granola",
+    "gcal",
 )
 
 
