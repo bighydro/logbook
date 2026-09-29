@@ -425,3 +425,49 @@ def test_show_raw_ignores_the_source_sender_name(people: Logbook, capsys):
     )
     cli.main(["show", DAY, "--raw"])
     assert _text(capsys.readouterr().out.splitlines())[-1] == "+4790000004 in 1234@g.us: rope is here"
+
+
+# -- transcripts -------------------------------------------------------------------------------
+
+
+def _transcript(
+    at: str, title: str | None, participants: list[dict[str, str]], **extra: Any
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": "transcript/v1",
+        "provider": "granola",
+        "raw_id": f"granola:{at}",
+        "participants": participants,
+        "content": {
+            "sha256": "0" * 64,
+            "path": "attachments/" + "0" * 64,
+            "bytes": 1,
+            "media_type": "text/vtt",
+        },
+        "extra": extra,
+    }
+    if title:
+        payload["title"] = title
+    return {"at": at, "end": None, "source": "granola", "kind": "transcript", "tier": 3, "payload": payload}
+
+
+def test_show_a_transcript_names_its_title_participants_and_length(tmp_path: Path, monkeypatch, capsys):
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    people = [{"name": "Kari Nordmann", "email": "kari@example.org"}, {"name": "Ola Nordmann"}]
+    lb.append_many(
+        [
+            _transcript(
+                "2026-03-01T13:00:00Z", "Tromsø-tur i mai", people, turns=3, speakers=2, duration_s=2100.0
+            ),
+            _transcript(
+                "2026-03-01T14:00:00Z", None, [], turns=4, speakers=0, unattributed=4, duration_s=20.0
+            ),
+            _transcript("2026-03-01T15:00:00Z", None, people[1:], turns=1, speakers=1),
+        ]
+    )
+    rows = _show(capsys)
+    people_row = "Tromsø-tur i mai — Kari Nordmann, Ola Nordmann; 3 turns, 35 min"
+    assert rows[1] == f"  14:00  transcript granola        {people_row}"
+    assert rows[2] == "  15:00  transcript granola        transcript; 4 turns, 20 s"
+    assert rows[3] == "  16:00  transcript granola        transcript — Ola Nordmann; 1 turn"

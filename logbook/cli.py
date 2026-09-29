@@ -79,11 +79,11 @@ def cmd_init(a: argparse.Namespace) -> None:
     )
 
 
-def _add_file(lb: Logbook, p: Path) -> bool:
+def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None) -> bool:
     """Append one file through the adapter that recognises it. False when nothing does."""
     adapter = adapters.find(p)
     if adapter is not None:
-        _append_with(lb, adapter, p)
+        _append_with(lb, adapter, p, options)
         return True
     if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
         n = lb.append_many(_jsonl(p), progress=_progress)
@@ -96,8 +96,12 @@ def _add_file(lb: Logbook, p: Path) -> bool:
     return False
 
 
-def _append_with(lb: Logbook, adapter: adapters.Adapter, p: Path) -> int:
-    """Run one file adapter on `p`, append, print what was added and what it skipped; the count."""
+def _append_with(
+    lb: Logbook, adapter: adapters.Adapter, p: Path, given: Mapping[str, Any] | None = None
+) -> int:
+    """Run one file adapter on `p`, append, print what was added and what it skipped; the count.
+    `given` are the command's own options (`source`, `tier`, `at`), passed when the adapter's `run`
+    takes them; one it does not take exits 2, so a flag is never silently ignored."""
     counts: dict[str, int] = {}
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
     options: dict[str, Any] = {}
@@ -105,6 +109,16 @@ def _append_with(lb: Logbook, adapter: adapters.Adapter, p: Path) -> int:
         options["counts"] = counts
     if _takes(adapter, "timezone"):
         options["timezone"] = lb.meta["timezone"]
+    if _takes(adapter, "store"):
+        options["store"] = lb.attach
+    for name, value in (given or {}).items():
+        if value is None:
+            continue
+        if _takes(adapter, name):
+            options[name] = value
+        elif name != "at":  # `--at` has always been the sentence's time; a file adapter ignores it
+            print(f"add: --{name} is not an option of the {adapter.NAME} adapter", file=sys.stderr)
+            sys.exit(2)
     drafts = run(p, **options)
     n = lb.append_many(drafts, progress=_progress)
     print(f"added {n} lines from {adapter.NAME}")
@@ -112,10 +126,15 @@ def _append_with(lb: Logbook, adapter: adapters.Adapter, p: Path) -> int:
     return n
 
 
-def _takes(adapter: adapters.Adapter, option: str) -> bool:
-    """Whether the adapter's `run` accepts the optional keyword: `counts` (a dict to tally what it
-    skipped) or `timezone` (the record's zone, for a source whose times are floating)."""
-    return option in inspect.signature(adapter.run).parameters
+def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
+    """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
+    `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
+    times are floating), `store` (puts bytes in the attachment store), `lookup` (the id of a line by
+    source and raw_id), or one of `add`'s own options."""
+    if isinstance(adapter, adapters.Adapter):
+        return option in inspect.signature(adapter.run).parameters
+    live: adapters.LiveAdapter = adapter
+    return option in inspect.signature(live.pull).parameters
 
 
 LOCATION_SKIPS = ("skipped_no_timestamp", "skipped_bad_coordinates")
@@ -145,6 +164,7 @@ SKIP_PHRASES = {
     "skipped_sidecar_without_file": "sidecars without a media file",
     "skipped_unreadable_json": "JSON files that would not parse",
     "skipped_not_media": "files that are not media",
+    "skipped_not_transcript": "files that are not transcripts",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -161,6 +181,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "at_from_file_time": "timed by the file",
     "direct_chat": "in direct chats",
     "group_chat": "in group chats",
+    "no_summary": "without a summary",
 }
 
 
@@ -215,8 +236,17 @@ def looks_like_path(arg: str) -> bool:
     return "/" in arg or arg.startswith("~") or arg.lower().endswith(PATH_SUFFIXES)
 
 
+TRANSCRIPT = "transcript"  # `add transcript <file|folder>`: the universal transcript adapter by name
+
+
 def cmd_add(a: argparse.Namespace) -> None:
     lb = Logbook.find()
+    given = {"source": a.source, "tier": a.tier, "at": a.at}
+    if a.what[0] == TRANSCRIPT and len(a.what) > 1:
+        paths = [Path(w).expanduser() for w in a.what[1:]]
+        if all(p.exists() for p in paths):  # else the whole thing may be a sentence
+            _add_transcripts(lb, paths, given)
+            return
     paths = [Path(w).expanduser() for w in a.what]
     # When nothing exists, the arguments are a sentence unless every one of them looks like a
     # path: "had 5/10 sleep" is a note, "~/Downloads/typo.json" is a typo.
@@ -233,15 +263,24 @@ def cmd_add(a: argparse.Namespace) -> None:
     ok = True
     for p in paths:
         if p.is_dir() and adapters.find(p) is not None:  # a folder one adapter reads as a whole
-            _add_file(lb, p)
+            _add_file(lb, p, given)
         elif p.is_dir():  # every file in it, in name order; hidden files are not exports
             for f in sorted(p.iterdir()):
                 if f.is_file() and not f.name.startswith("."):
-                    _add_file(lb, f)
-        elif not _add_file(lb, p):
+                    _add_file(lb, f, given)
+        elif not _add_file(lb, p, given):
             ok = False
     if not ok:
         sys.exit(2)
+
+
+def _add_transcripts(lb: Logbook, paths: list[Path], given: Mapping[str, Any]) -> None:
+    """`add transcript <file|folder>...`: every path through the transcript adapter, whatever its
+    format (Markdown and plain text are never sniffed), with `--source`, `--tier` and `--at`."""
+    adapter = adapters.named(TRANSCRIPT)
+    assert adapter is not None
+    for p in paths:
+        _append_with(lb, adapter, p, given)
 
 
 def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
@@ -285,12 +324,19 @@ def cmd_sync(a: argparse.Namespace) -> None:
         "last": None,
         "watermark": None,
         "provenance": Counter(),
+        "kinds": Counter(),
     }
     counts: dict[str, int] = {}
     unit = str(getattr(adapter, "UNIT", "assets"))
     item = unit.removesuffix("s")  # one of them: a point, a message, an asset
+    pull: Callable[..., Iterator[dict[str, Any]]] = adapter.pull
+    options: dict[str, Any] = {}
+    if _takes(adapter, "store") and not a.dry_run:
+        options["store"] = lb.attach
+    if _takes(adapter, "lookup"):
+        options["lookup"] = _lookup(lb)
     drafts = _watch(
-        adapter.pull(config, since, progress=_page_progress(unit), counts=counts), adapter.watermark, seen
+        pull(config, since, progress=_page_progress(unit), counts=counts, **options), adapter.watermark, seen
     )
     try:
         if a.dry_run:
@@ -315,6 +361,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
             for provenance, count in sorted(seen["provenance"].items()):
                 if provenance != "-":
                     print(f"  {provenance}: {count}")
+            if len(seen["kinds"]) > 1:
+                for kind, count in sorted(seen["kinds"].items()):
+                    print(f"  {kind}: {count}")
         _report_skipped(skipped)
         _report_pending(pending)
         return
@@ -332,6 +381,17 @@ def cmd_sync(a: argparse.Namespace) -> None:
     )
     _report_skipped(skipped)
     _report_pending(pending)
+
+
+def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
+    """For a live adapter whose `pull` takes `lookup`: the id of the line with (source, raw_id), or
+    None, read through the index, so a derived line can point at one already in the record."""
+
+    def lookup(source: str, raw_id: str) -> str | None:
+        with lb.index() as idx:
+            return idx.line_id(source, raw_id)
+
+    return lookup
 
 
 def _start(
@@ -381,6 +441,7 @@ def _watch(
         if mark is not None and (seen["watermark"] is None or mark > seen["watermark"]):
             seen["watermark"] = mark
         seen["provenance"][d["payload"].get("provenance", "-")] += 1
+        seen["kinds"][d["kind"]] += 1
         yield d
 
 
@@ -565,6 +626,8 @@ def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo, names: Mapping[
         text = _message_text(p, names)
     elif line["kind"] == "event":
         text = _event_text(p, names)
+    elif line["kind"] == "transcript":
+        text = _transcript_text(p, names)
     else:
         text = (
             p.get("text")
@@ -630,6 +693,29 @@ def _event_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     if attendees:
         parts.append("with " + ", ".join(_attendee(a, names) for a in attendees))
     return " · ".join(part for part in parts if part)
+
+
+def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    """`<title> — <participants>; <turns>, <length>` (RFC 0004). A participant is named by a
+    resolution of its email when one exists, else as the source names it; `--raw` uses the source's
+    name. Never the text: that is an attachment."""
+    who = [
+        _name({"kind": "email", "value": q.get("email")}, names) or str(q.get("name") or q.get("email") or "")
+        for q in p.get("participants") or []
+        if isinstance(q, dict)
+    ]
+    head = str(p.get("title") or "transcript")
+    if any(who):
+        head += " — " + ", ".join(w for w in who if w)
+    extra: dict[str, Any] = p["extra"] if isinstance(p.get("extra"), dict) else {}
+    parts: list[str] = []
+    turns = extra.get("turns")
+    if isinstance(turns, int):
+        parts.append(_plural(turns, "turn"))
+    duration = extra.get("duration_s")
+    if isinstance(duration, int | float) and duration >= 0:
+        parts.append(f"{duration / 60:.0f} min" if duration >= 60 else f"{duration:.0f} s")
+    return head + ("; " + ", ".join(parts) if parts else "")
 
 
 def _attendee(attendee: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
@@ -938,8 +1024,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--timezone")
     s.set_defaults(fn=cmd_init)
     s = sub.add_parser("add", help="a sentence in your words, an export file, or a folder of them")
-    s.add_argument("what", nargs="+")
-    s.add_argument("--at", help="RFC3339 UTC, default now")
+    s.add_argument("what", nargs="+", help="the words, the path(s), or `transcript <file|folder>`")
+    s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
+    s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
+    s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
         "sync", help="pull new items from a live source (immich, dawarich, imessage); safe to re-run"
