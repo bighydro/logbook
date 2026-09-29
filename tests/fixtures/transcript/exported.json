@@ -1,0 +1,35 @@
+{
+ "at": "2026-03-01T13:00:00Z",
+ "end": "2026-03-01T13:35:00Z",
+ "tz": "Europe/Oslo",
+ "source": "granola",
+ "kind": "transcript",
+ "tier": 3,
+ "payload": {
+  "schema": "transcript/v1",
+  "provider": "granola",
+  "raw_id": "granola:not_0synthetic0001",
+  "title": "Tromsø-tur i mai",
+  "participants": [
+   {
+    "name": "Kari Nordmann",
+    "email": "kari@example.org"
+   },
+   {
+    "name": "Ola Nordmann"
+   }
+  ],
+  "content": {
+   "sha256": "7ed527057371e8656f8754fe8e7492c4bc2355234ec458c19d22f4f6ba060354",
+   "path": "attachments/7ed527057371e8656f8754fe8e7492c4bc2355234ec458c19d22f4f6ba060354",
+   "bytes": 521,
+   "media_type": "application/json"
+  },
+  "source_uri": "https://granola.example/notes/not_0synthetic0001",
+  "extra": {
+   "turns": 3,
+   "speakers": 2,
+   "duration_s": 2100
+  }
+ }
+}

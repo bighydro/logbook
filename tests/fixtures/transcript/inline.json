@@ -1,0 +1,16 @@
+{
+ "at": "2026-03-02T09:00:00Z",
+ "end": null,
+ "source": "plaud",
+ "kind": "transcript",
+ "tier": 3,
+ "payload": {
+  "schema": "transcript/v1",
+  "provider": "plaud",
+  "title": "Notat om båten",
+  "content": {
+   "media_type": "text/markdown",
+   "text": "Kari Nordmann: Beholder båten en sesong til.\n"
+  }
+ }
+}

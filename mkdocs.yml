@@ -48,6 +48,7 @@ nav:
       - "0014 Canonicalisation is fixed, not versioned": adr/0014-canonicalisation-is-fixed-not-versioned.md
       - "0015 Attachments are content-addressed": adr/0015-attachments-are-content-addressed.md
       - "0016 The crossing ceiling is the owner's setting": adr/0016-tier-crossing-policy.md
+      - "0017 Backfill and live share one mapping": adr/0017-backfill-and-live-share-one-mapping.md
   - RFCs:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md

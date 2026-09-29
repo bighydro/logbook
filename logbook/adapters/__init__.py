@@ -65,6 +65,8 @@ BUILT_IN = (
     "ios_notes",
     "ios_calendar",
     "ics",
+    "transcript",
+    "granola",
 )
 
 
