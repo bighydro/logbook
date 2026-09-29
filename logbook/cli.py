@@ -628,6 +628,13 @@ def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo, names: Mapping[
         text = _event_text(p, names)
     elif line["kind"] == "transcript":
         text = _transcript_text(p, names)
+    elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
+        counts = p["counts"]
+        by_tier = counts["by_tier"]
+        tiers = ", ".join(f"tier {tier}: {by_tier[tier]}" for tier in ("1", "2", "3") if by_tier.get(tier))
+        text = f"crossed to {p['destination']}: {_plural(counts['crossed'], 'line')}"
+        if tiers:
+            text += f" ({tiers})"
     else:
         text = (
             p.get("text")
