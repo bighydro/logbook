@@ -397,9 +397,11 @@ def write_bundle(lb: Logbook, sel: Selection, manifest: dict[str, Any], out: Pat
         for blob in sel.blobs:
             sha256 = str(blob["sha256"])
             _copy_checked(lb.root / ATTACHMENTS_DIR / sha256, out / ATTACHMENTS_DIR / sha256, sha256)
-    text = json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
-    (out / MANIFEST_FILE).write_text(text, encoding="utf-8")
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    # Encoded once and written as bytes: text mode would turn the newlines into CRLF on Windows
+    # and the digest must name the bytes on disk, never the string that was formatted.
+    raw = (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+    (out / MANIFEST_FILE).write_bytes(raw)
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _write_jsonl(path: Path, lines: Iterable[Line]) -> str:

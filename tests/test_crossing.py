@@ -398,6 +398,28 @@ def test_a_real_export_appends_one_crossing_line_and_the_chain_stays_valid(lb: L
     assert line["at"] == m["generated_at"]
 
 
+def test_every_digest_is_of_the_bytes_on_disk_even_where_text_mode_writes_crlf(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Windows text mode turns every written newline into CRLF; a digest taken from the string
+    instead of the bytes then names a manifest that does not exist. Simulated on every OS."""
+    real_open = Path.open
+
+    def crlf_open(self: Path, mode: str = "r", buffering: int = -1, encoding=None, errors=None, newline=None):  # type: ignore[no-untyped-def]
+        if "b" not in mode and newline is None and any(c in mode for c in "wax"):
+            newline = "\r\n"
+        return real_open(self, mode, buffering, encoding, errors, newline)
+
+    monkeypatch.setattr(Path, "open", crlf_open)
+    out = tmp_path / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    m = _manifest(out)
+    p = list(lb.lines())[-1]["payload"]
+    assert p["package_sha256"] == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
+    assert m["entries_sha256"] == hashlib.sha256((out / "entries.jsonl").read_bytes()).hexdigest()
+    assert m["resolution_sha256"] == hashlib.sha256((out / "resolution.jsonl").read_bytes()).hexdigest()
+
+
 def test_watermark_round_trip(lb: Logbook, tmp_path: Path):
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "a"))
     mark = json.loads((lb.root / "exports" / "crossing.json").read_text(encoding="utf-8"))
