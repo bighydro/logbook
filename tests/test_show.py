@@ -177,6 +177,43 @@ def test_show_orders_a_day_by_time_then_seq(lb: Logbook, capsys):
     assert "breakfast" in out[1] and "Standup" in out[2]  # same instant: seq 5 before seq 7
 
 
+def test_show_summarizes_a_crossing_without_raw_payload_fields(tmp_path: Path, monkeypatch, capsys):
+    lb = Logbook.init(tmp_path / "lb", "UTC")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append(
+        at="2026-03-01T10:00:00Z",
+        source="logbook",
+        kind="crossing",
+        tier=1,
+        payload={
+            "schema": "crossing/v1",
+            "destination": "hermes",
+            "counts": {"crossed": 6, "by_tier": {"1": 4, "2": 2, "3": 0}},
+        },
+    )
+    assert _show(capsys) == [
+        DAY,
+        "  10:00  crossing   logbook        crossed to hermes: 6 lines (tier 1: 4, tier 2: 2)",
+    ]
+
+
+def test_show_crossing_singular_and_no_tier_counts(tmp_path: Path, monkeypatch, capsys):
+    lb = Logbook.init(tmp_path / "lb", "UTC")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append(
+        at="2026-03-01T10:00:00Z",
+        source="logbook",
+        kind="crossing",
+        tier=1,
+        payload={
+            "schema": "crossing/v1",
+            "destination": "hermes",
+            "counts": {"crossed": 1, "by_tier": {"1": 1, "2": 0, "3": 0}},
+        },
+    )
+    assert _show(capsys)[1].endswith("crossed to hermes: 1 line (tier 1: 1)")
+
+
 # -- runs of location points ----------------------------------------------------------------------
 
 
