@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
@@ -629,6 +629,27 @@ def test_cli_add_reports_lines_skips_and_media(tmp_path):
 
 MEDIA_KINDS = {"image", "video", "voice", "contact", "document", "other"}
 MEDIA_KEYS = {"sha256", "bytes", "local_path", "media_type"}
+EARLIEST_AT = datetime.fromtimestamp(imessage.APPLE_EPOCH + imessage.EARLIEST_DATE, UTC).strftime(
+    "%Y-%m-%dT%H:%M:%SZ"
+)
+
+
+def _media_rules(item: dict) -> None:
+    """The adapter's media rule for one attachment: `media` is the file's row and, when the file is
+    there and hashed, its `sha256` with `bytes`; `media_missing` when it is not on disk. A row that
+    names no file at all is only missing, with no `media`."""
+    assert set(item) <= {"media", "media_missing"}
+    if "media_missing" in item:
+        assert item["media_missing"] is True
+    if "media" not in item:
+        assert item.get("media_missing") is True
+        return
+    media = item["media"]
+    assert set(media) <= MEDIA_KEYS
+    assert ("sha256" in media) == ("bytes" in media)
+    if "sha256" in media:  # hashed means it was found under Attachments/, so by its path
+        assert "media_missing" not in item
+        assert isinstance(media["local_path"], str) and media["local_path"]
 
 
 def _rfc_rules(line: dict) -> None:
@@ -636,7 +657,7 @@ def _rfc_rules(line: dict) -> None:
     assert line["kind"] == "message" and line["tier"] == 2 and line["end"] is None
     assert line["source"] == "imessage"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", line["at"])
-    assert line["at"] >= "2010-07-07T"  # date >= 300000000 seconds
+    assert line["at"] >= EARLIEST_AT  # the adapter's own floor on message.date
     p = line["payload"]
     assert set(p) <= {
         "schema",
@@ -660,8 +681,12 @@ def _rfc_rules(line: dict) -> None:
     if p["from_me"]:
         assert "sender" not in p
     if "sender" in p:
-        assert set(p["sender"]) == {"kind", "value"} and p["sender"]["kind"] in {"phone", "email", "handle"}
+        assert set(p["sender"]) - {"name"} == {"kind", "value"}
+        assert p["sender"]["kind"] in {"phone", "email", "handle"}
         assert p["sender"]["value"]
+        if "name" in p["sender"]:  # RFC 0008: the name the source showed, never blank
+            name = p["sender"]["name"]
+            assert isinstance(name, str) and name and name == name.strip()
         if p["sender"]["kind"] == "phone":
             assert re.fullmatch(r"\+[0-9]+", p["sender"]["value"])
         if p["sender"]["kind"] == "email":
@@ -685,18 +710,15 @@ def _rfc_rules(line: dict) -> None:
             2000 <= extra["associated_message_type"] <= 2005
             or 3000 <= extra["associated_message_type"] <= 3005
         )
-    if "media" in extra:
-        assert "media_kind" in p
-        assert set(extra["media"]) <= MEDIA_KEYS
-        assert ("sha256" in extra["media"]) == ("bytes" in extra["media"])
-        assert not ("sha256" in extra["media"] and extra.get("media_missing"))
+    first = {key: extra[key] for key in ("media", "media_missing") if key in extra}
+    assert ("media_kind" in p) == bool(first)  # the first attachment is the line's own
+    if first:
+        _media_rules(first)
     if "more_media" in extra:
-        assert "media" in extra and isinstance(extra["more_media"], list) and extra["more_media"]
+        assert "media_kind" in p and isinstance(extra["more_media"], list) and extra["more_media"]
         for item in extra["more_media"]:
-            assert (
-                set(item) - {"media_missing"} == {"media_kind", "media"} and item["media_kind"] in MEDIA_KINDS
-            )
-            assert set(item["media"]) <= MEDIA_KEYS
+            assert "media_kind" in item and item["media_kind"] in MEDIA_KINDS
+            _media_rules({key: value for key, value in item.items() if key != "media_kind"})
     json.dumps(line, allow_nan=False)
 
 
@@ -706,8 +728,8 @@ _handle_id = st.one_of(
     st.text(alphabet="abcXYZ.", min_size=1, max_size=8).map(lambda s: s + "@Example.org"),
     st.text(max_size=12),
 )
-_handle = st.tuples(_handle_id, st.sampled_from(["SMS", "iMessage"]))
 _name = st.one_of(st.none(), st.text(max_size=12))
+_handle = st.tuples(_handle_id, st.sampled_from(["SMS", "iMessage"]), _name)  # name: display_name column
 _chat = st.tuples(st.one_of(st.none(), st.text(max_size=24)), _name, st.one_of(st.none(), st.integers(0, 50)))
 _date = st.one_of(
     st.none(),
@@ -760,6 +782,25 @@ _store_strategy = st.tuples(
 
 @settings(max_examples=40, deadline=None)
 @given(_store_strategy)
+@example(  # #75: message.date exactly at the adapter's floor
+    ([], [("0", None, None)], [], [(None, "hi", None, None, 300000000, None, None, None, None, None, 0, [])])
+)
+@example(  # #75: attachment rows that name no file, first and under more_media: media_missing only
+    (
+        [],
+        [("0", None, None)],
+        [(None, None, None), (None, None, None)],
+        [(None, None, None, None, 300153600, None, None, None, None, None, 0, [0, 1])],
+    )
+)
+@example(  # a handle with a display name in a store that has the column: sender.name
+    (
+        [("+4790000001", "SMS", "Ola")],
+        [("0", None, 45)],
+        [],
+        [(None, "hi", None, 1, 400000000, 0, "SMS", None, None, None, 0, [])],
+    )
+)
 def test_any_message_store_yields_only_valid_lines(tmp_path_factory, store):
     handles, chats, attachments, messages = store
     folder = tmp_path_factory.mktemp("im")
@@ -769,8 +810,13 @@ def test_any_message_store_yields_only_valid_lines(tmp_path_factory, store):
     con = sqlite3.connect(p)
     try:
         con.executescript(DDL)
-        for rowid, handle in enumerate(handles, start=1):
-            con.execute("INSERT INTO handle VALUES (?,?,?)", (rowid, *handle))
+        if any(name is not None for _id, _service, name in handles):
+            con.execute("ALTER TABLE handle ADD COLUMN display_name TEXT")  # Apple's table has none
+            for rowid, handle in enumerate(handles, start=1):
+                con.execute("INSERT INTO handle VALUES (?,?,?,?)", (rowid, *handle))
+        else:
+            for rowid, (handle_id, service, _name) in enumerate(handles, start=1):
+                con.execute("INSERT INTO handle VALUES (?,?,?)", (rowid, handle_id, service))
         for rowid, chat in enumerate(chats, start=1):
             con.execute("INSERT INTO chat VALUES (?,?,?,?,?)", (rowid, f"chat-{rowid}", *chat))
         for rowid, item in enumerate(attachments, start=1):
