@@ -73,6 +73,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
     assert file_names == [
         "dawarich",
         "google-takeout-location",
+        "google-takeout-photos",
         "ios-contacts",
         "whatsapp",
         "whatsapp-contacts",

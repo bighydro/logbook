@@ -6,17 +6,20 @@ sharing `SOURCE` for the lines it writes:
     location.py   Location History — Records.json and the on-device Timeline.json → location/v1
     calendar.py   Calendar/ — one plain .ics per calendar; a thin sibling that hands the folder to
                   the `ics` adapter → event/v1, under that adapter's own NAME and source, not SOURCE
+    photos.py     Google Photos — the album folders and their JSON sidecars → photo/v1
 
-Planned siblings, one file each: photos (Google Photos metadata → photo/v1), activity.
+Planned siblings, one file each: activity.
 
 Folder dispatch (roadmap): a whole unzipped Takeout folder handed to `logbook add` is walked file
 by file today, because `add` already processes a folder's files and each sub-adapter sniffs its
-own. This package will grow a `walk(folder)` that knows the Takeout layout (`Takeout/<Product>/...`)
-and dispatches each file to the matching sub-adapter without sniffing every file, and a `zip`
-reader so the archive never has to be unpacked. Neither exists yet.
+own; a folder that a sub-adapter claims as a whole (`Google Photos/`, or the root that holds it) is
+handed to that sub-adapter instead of being walked. This package will grow a `walk(folder)` that
+knows the Takeout layout (`Takeout/<Product>/...`) and dispatches each file to the matching
+sub-adapter without sniffing every file, and a `zip` reader so the archive never has to be
+unpacked. Neither exists yet.
 """
 
 from __future__ import annotations
 
 SOURCE = "google-takeout"
-SUB_ADAPTERS = ("location", "calendar")
+SUB_ADAPTERS = ("location", "calendar", "photos")
