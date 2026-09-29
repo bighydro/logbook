@@ -310,14 +310,17 @@ def _media(
 
     The stored path is looked up by the part after its `Attachments` folder, resolved with pathlib
     parts under `<db folder>/Attachments/`; it must stay inside (no `..`), else it counts as
-    missing."""
-    media: dict[str, Any] = {}
-    if isinstance(filename, str) and filename:
-        media["local_path"] = filename
+    missing. A row with no filename names no file at all: it is only missing, and `media` is not
+    written (its kind still comes from the mime type)."""
+    item: dict[str, Any] = {"media_kind": _media_kind(mime_type)}
+    if not (isinstance(filename, str) and filename):
+        item["media_missing"] = True
+        _count(counts, "media_missing")
+        return item
+    media: dict[str, Any] = {"local_path": filename}
     if isinstance(mime_type, str) and mime_type:
         media["media_type"] = mime_type
-    item: dict[str, Any] = {"media_kind": _media_kind(mime_type)}
-    file = _inside(media_root, filename) if "local_path" in media else None
+    file = _inside(media_root, filename)
     if file is None or not file.is_file():
         item["media_missing"] = True
         _count(counts, "media_missing")
@@ -326,8 +329,7 @@ def _media(
         media["sha256"] = digest
         media["bytes"] = size
         _count(counts, "media_hashed")
-    if media:
-        item["media"] = media
+    item["media"] = media
     return item
 
 

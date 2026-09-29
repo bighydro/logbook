@@ -484,6 +484,22 @@ def test_run_media_file_that_is_missing_is_flagged(tmp_path, hash_media):
     assert counts["media_missing"] == 3  # rows 10, 11 and the second file on 18
 
 
+def test_run_media_row_without_a_filename_is_missing_and_has_no_media_extra(tmp_path, hash_media):
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("UPDATE attachment SET filename = NULL WHERE ROWID = 101")
+        con.commit()
+    finally:
+        con.close()
+    counts: dict[str, int] = {}
+    payload = _by_rowid(list(imessage.run(p, counts=counts)))[10]["payload"]
+    assert payload["media_kind"] == "video"  # the kind still comes from the mime type
+    assert payload["extra"]["media_missing"] is True
+    assert "media" not in payload["extra"]  # a mime type alone names no file under Attachments/
+    assert counts["media_missing"] == 3
+
+
 def test_run_hashing_can_be_switched_off(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGBOOK_IMESSAGE_HASH_MEDIA", "0")
     counts: dict[str, int] = {}
@@ -635,9 +651,10 @@ EARLIEST_AT = datetime.fromtimestamp(imessage.APPLE_EPOCH + imessage.EARLIEST_DA
 
 
 def _media_rules(item: dict) -> None:
-    """The adapter's media rule for one attachment: `media` is the file's row and, when the file is
-    there and hashed, its `sha256` with `bytes`; `media_missing` when it is not on disk. A row that
-    names no file at all is only missing, with no `media`."""
+    """The adapter's media rule for one attachment, the one #74 fixed `whatsapp` to: `media` always
+    names the file by `local_path` and, when the file is there and hashed, carries its `sha256` with
+    `bytes`; `media_missing` when it is not on disk. A row with no filename names no file at all: it
+    is only missing, and `media` is not written."""
     assert set(item) <= {"media", "media_missing"}
     if "media_missing" in item:
         assert item["media_missing"] is True
@@ -646,10 +663,10 @@ def _media_rules(item: dict) -> None:
         return
     media = item["media"]
     assert set(media) <= MEDIA_KEYS
+    assert isinstance(media["local_path"], str) and media["local_path"]
     assert ("sha256" in media) == ("bytes" in media)
-    if "sha256" in media:  # hashed means it was found under Attachments/, so by its path
+    if "sha256" in media:
         assert "media_missing" not in item
-        assert isinstance(media["local_path"], str) and media["local_path"]
 
 
 def _rfc_rules(line: dict) -> None:
@@ -790,6 +807,14 @@ _store_strategy = st.tuples(
         [],
         [("0", None, None)],
         [(None, None, None), (None, None, None)],
+        [(None, None, None, None, 300153600, None, None, None, None, None, 0, [0, 1])],
+    )
+)
+@example(  # #76: an attachment row with a mime type and no filename is media_missing, never media
+    (
+        [],
+        [("0", None, None)],
+        [(None, "image/jpeg", 10), (None, "video/mp4", None)],
         [(None, None, None, None, 300153600, None, None, None, None, None, 0, [0, 1])],
     )
 )
