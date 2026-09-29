@@ -159,6 +159,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_sidecar": "without a sidecar",
     "at_from_creation_time": "timed by creation time",
     "at_from_file_time": "timed by the file",
+    "direct_chat": "in direct chats",
+    "group_chat": "in group chats",
 }
 
 
@@ -286,6 +288,7 @@ def cmd_sync(a: argparse.Namespace) -> None:
     }
     counts: dict[str, int] = {}
     unit = str(getattr(adapter, "UNIT", "assets"))
+    item = unit.removesuffix("s")  # one of them: a point, a message, an asset
     drafts = _watch(
         adapter.pull(config, since, progress=_page_progress(unit), counts=counts), adapter.watermark, seen
     )
@@ -302,7 +305,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
     pending = counts.get("pending", 0)
     skipped = {k: v for k, v in counts.items() if k != "pending"}
     if resumed_from_record is not None:
-        print(f"  starting from the record's newest {a.name} point, {resumed_from_record}, less the lookback")
+        print(
+            f"  starting from the record's newest {a.name} {item}, {resumed_from_record}, less the lookback"
+        )
     if a.dry_run:
         print(f"{a.name}: {seen['count']} lines {where} (dry run, nothing written)")
         if seen["count"]:
@@ -936,8 +941,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("what", nargs="+")
     s.add_argument("--at", help="RFC3339 UTC, default now")
     s.set_defaults(fn=cmd_add)
-    s = sub.add_parser("sync", help="pull new items from a live source (immich, dawarich); safe to re-run")
-    s.add_argument("name", help="the source, e.g. immich or dawarich")
+    s = sub.add_parser(
+        "sync", help="pull new items from a live source (immich, dawarich, imessage); safe to re-run"
+    )
+    s.add_argument("name", help="the source: immich, dawarich, or imessage (this Mac's Messages)")
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)

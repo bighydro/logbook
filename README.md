@@ -167,6 +167,7 @@ resolutions, attachments. It prints numbers, kinds, sources and dates, never wha
 |---|---|---|
 | `immich` | `LOGBOOK_IMMICH_URL`, `LOGBOOK_IMMICH_KEY` | one `photo/v1` line per asset: capture time, camera, place, size, faces as person ids, never the pixels |
 | `dawarich` | `LOGBOOK_DAWARICH_URL`, `LOGBOOK_DAWARICH_KEY` (`LOGBOOK_DAWARICH_LOOKBACK_H`, default 24) | one `location/v1` line per point, identical to the line its export gives |
+| `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -188,6 +189,15 @@ last point it saw. A phone uploads in batches, so a point can reach the server a
 sync looks back 24 hours before its watermark and skips what the record already has, and says how many
 that was. Set `LOGBOOK_DAWARICH_LOOKBACK_H` for a longer or shorter window; `--since` pulls from an exact
 time instead.
+
+On a Mac, `logbook sync imessage` reads the Messages database the Mac itself keeps, read-only, and writes
+the same line for the same message as the phone backup (same `raw_id`, the message guid), so a record
+seeded with `import-backup` carries on from its newest message and nothing is written twice. The first
+run starts from the newest iMessage line already in the record, later runs from the newest message seen,
+each looking back 24 hours (`LOGBOOK_IMESSAGE_LOOKBACK_H`) for a conversation another device synced late.
+Attachments stay where Messages keeps them; a file that is there is hashed into the line, one that is
+not is flagged. The terminal needs **Full Disk Access** (System Settings → Privacy & Security) to read
+the database; without it the sync says so on one line and exits 1.
 
 **A Dawarich API key is full access** to your account: it can read and delete every point you have.
 Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file

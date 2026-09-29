@@ -26,8 +26,10 @@ and optionally:
                                                 # line of this source and KIND
     UNIT: str                                   # what the progress lines count ("assets" if absent)
 
-A source can have both kinds under one NAME (`dawarich` reads an export and pulls live); they write
-the same lines, so either dedupes the other.
+A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
+reads a phone backup's sms.db and the Mac's own chat.db); they write the same lines, so either
+dedupes the other. A live source need not be a service: `imessage` reads a file on this machine and
+`ENV` names only optional overrides, so its `configure` never returns None.
 
 `since` and the watermark are in the *source's* clock (when it received or last changed the item),
 not the event's: `logbook sync` stores the largest watermark of a completed pull and passes it back
@@ -59,6 +61,7 @@ BUILT_IN = (
     "whatsapp",
     "whatsapp_contacts",
     "imessage",
+    "imessage_live",
     "ios_notes",
     "ios_calendar",
     "ics",
