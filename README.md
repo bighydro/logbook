@@ -110,6 +110,9 @@ logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS)
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
 logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
+logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
+logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
+logbook sync granola                              # every Granola recording, and its summary as a derived note
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -160,6 +163,18 @@ names come from your own resolution lines, never from the raw lines: import your
 nobody has resolved shows as the source gave it, after the name the source itself attached, if any.
 `show --raw` prints every ref unchanged. Either way, `show` only reads.
 
+Transcripts become `transcript/v1` lines (RFC 0004), one per recording, tier 3 by default because a transcript
+carries other people's words in full (`--tier` overrides). The text is never in the line: the file's own bytes go
+into the content-addressed store, `attachments/<sha256>` (SPEC §1.1), and the line points at them; `raw_id` is
+`<source>:<sha256>` unless the file brings one, so the same transcript added twice is one line. `logbook add
+transcript <file|folder> --source <name>` reads JSON already in transcript/v1 shape (the interchange format any tool
+can write: a `logbook export` line minus the chain fields), WebVTT and SRT (each cue a turn, the speaker from the
+voice tag or a leading `Name:`, else unknown), and Markdown or plain text with `Speaker: text` lines and an optional
+front-matter block for `title`, `started_at`, `ended_at` and `participants`. A file with no start of its own takes
+`--at`, else a date and time in its name (`2026-03-01T13-00-00Z …`, Zoom's `GMT20260301-130000_…`), else it is
+skipped and counted. Speakers stay as the source labels them; nothing is resolved here. Turn and speaker counts
+and the duration sit under `extra`.
+
 `stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
 
@@ -168,6 +183,7 @@ resolutions, attachments. It prints numbers, kinds, sources and dates, never wha
 | `immich` | `LOGBOOK_IMMICH_URL`, `LOGBOOK_IMMICH_KEY` | one `photo/v1` line per asset: capture time, camera, place, size, faces as person ids, never the pixels |
 | `dawarich` | `LOGBOOK_DAWARICH_URL`, `LOGBOOK_DAWARICH_KEY` (`LOGBOOK_DAWARICH_LOOKBACK_H`, default 24) | one `location/v1` line per point, identical to the line its export gives |
 | `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
+| `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -198,6 +214,22 @@ each looking back 24 hours (`LOGBOOK_IMESSAGE_LOOKBACK_H`) for a conversation an
 Attachments stay where Messages keeps them; a file that is there is hashed into the line, one that is
 not is flagged. The terminal needs **Full Disk Access** (System Settings → Privacy & Security) to read
 the database; without it the sync says so on one line and exits 1.
+
+Granola works the same way (ADR 0017: backfill and live share one mapping). Create the key under *Settings →
+Connectors → API keys* (Business and Enterprise plans; scope it to your personal notes), export it as
+`LOGBOOK_GRANOLA_KEY`, and run:
+
+```bash
+logbook add transcript ~/Granola-export/ --source granola   # once, if you have exports; optional
+logbook sync granola                                        # then nightly: 0 5 * * * logbook sync granola
+```
+
+Each recording is one `transcript/v1` line, `raw_id` `granola:<note id>`, with the transcript's segments stored
+under `attachments/` and the attendees as Granola names them; the AI summary follows as a `note/v1` line, tier 2,
+marked `extra.derived = true` and pointing at the transcript by id (set `LOGBOOK_GRANOLA_SUMMARIES=0` to skip it).
+The watermark is the recording's end; each sync looks back 24 hours (`LOGBOOK_GRANOLA_LOOKBACK_H`) and skips what
+the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
+written: a batch is all or nothing.
 
 **A Dawarich API key is full access** to your account: it can read and delete every point you have.
 Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file

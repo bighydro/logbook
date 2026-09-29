@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from .store import Logbook
 
 FILE_NAME = "index.sqlite"
-SCHEMA_VERSION = "2"  # 2: supersedes, entity and media columns, for `stats`
+SCHEMA_VERSION = "3"  # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -71,10 +71,15 @@ def local_date(at: str, tz: str) -> str:
 def row(line: Line, tz: str, file: str, offset: int) -> Row:
     """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
     line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
-    the one attachment a line points at (`payload.media`, else `extra.media`; SPEC §1.1)."""
+    the one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
+    SPEC §1.1)."""
     payload = line.get("payload") or {}
     raw_id = payload.get("raw_id")
-    media = _field(payload.get("media"), "sha256") or _field(_field(payload.get("extra"), "media"), "sha256")
+    media = (
+        _field(payload.get("media"), "sha256")
+        or _field(payload.get("content"), "sha256")
+        or _field(_field(payload.get("extra"), "media"), "sha256")
+    )
     return (
         int(line["seq"]),
         str(line["id"]),
@@ -272,6 +277,14 @@ class Index:
             "SELECT file, offset FROM lines WHERE kind = 'resolution' ORDER BY seq"
         ).fetchall()
         return self._read(found)
+
+    def line_id(self, source: str, raw_id: str) -> str | None:
+        """The id of the line with this (source, raw_id), or None; the first written when the log
+        has more than one (an adapter that keys on raw_id never writes two)."""
+        found = self.db.execute(
+            "SELECT id FROM lines WHERE source = ? AND raw_id = ? ORDER BY seq LIMIT 1", (source, raw_id)
+        ).fetchone()
+        return None if found is None else str(found[0])
 
     def newest(self, source: str, kind: str) -> str | None:
         """The latest `at` among lines of this source and kind, or None when there are none."""

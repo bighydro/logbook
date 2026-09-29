@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO
 
-from . import FORMAT, policy
+from . import FORMAT, attachments, policy
 from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
 from .index import Index, Located, Row, row
@@ -278,6 +278,10 @@ class Logbook:
             payload={"schema": "retraction/v1", "supersedes": target["id"], "seq": seq, "reason": reason},
         )
 
+    def attach(self, data: bytes) -> Path:
+        """Put `data` in the SPEC §1.1 store, `<root>/attachments/<sha256>`, once; the file."""
+        return attachments.write(self.root, data)
+
     def append_many(
         self,
         drafts: Iterable[dict[str, Any]],
@@ -286,7 +290,9 @@ class Logbook:
         """Append drafts in order; returns how many were written.
 
         A draft whose (source, payload.raw_id) is already in the log is skipped, so re-adding the
-        same export appends nothing. Drafts without a raw_id are never deduped.
+        same export appends nothing. Drafts without a raw_id are never deduped. A draft may bring
+        its own `id` (a UUIDv7 an adapter minted so another draft could point at it); one without
+        gets one here. `id` is outside the hash (SPEC §2).
 
         Built for millions of drafts: drafts are taken META_EVERY at a time, each batch is deduped
         with one SELECT against the index, the chain is computed in memory, month files stay open,
@@ -479,6 +485,7 @@ class Logbook:
         end: str | None = None,
         tz: str | None = None,
         recorded_at: str | None = None,
+        id: str | None = None,
     ) -> Line:
         """A complete, hashed line; nothing is written."""
         if "schema" not in payload:
@@ -486,7 +493,7 @@ class Logbook:
         if tier not in (1, 2, 3):
             raise ValueError("tier must be 1, 2 or 3")
         line: Line = {
-            "id": uuid7(),
+            "id": id or uuid7(),
             "seq": seq,
             "at": utc(at),
             "end": None if end is None else utc(end),

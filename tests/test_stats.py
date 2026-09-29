@@ -312,4 +312,4 @@ def test_stats_rebuilds_an_index_built_by_an_earlier_schema(lb: Logbook, capsys)
         db.commit()
     assert _json(capsys)["attachments"] == {"referenced": 2, "lines": 3, "present": 1}
     with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
-        assert list(db.execute("SELECT value FROM meta WHERE key = 'schema'")) == [("2",)]
+        assert list(db.execute("SELECT value FROM meta WHERE key = 'schema'")) == [("3",)]
