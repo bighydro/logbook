@@ -20,6 +20,9 @@ dependencies = [
     "tzdata; sys_platform == 'win32'",
 ]
 
+[project.optional-dependencies]
+encrypted = ["cryptography>=42"]  # `openlogbook[encrypted]`: import-backup on an encrypted iOS backup
+
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
 Specification = "https://github.com/bighydro/logbook/blob/main/SPEC.md"
@@ -40,7 +43,16 @@ transcript = "logbook.adapters.transcript"
 granola = "logbook.adapters.granola"
 
 [dependency-groups]
-dev = ["pre-commit>=4", "pytest>=8", "hypothesis>=6.168.0", "ruff>=0.6", "mypy>=1.11", "pytest-cov>=5", "jsonschema>=4"]
+dev = [
+  "pre-commit>=4",
+  "pytest>=8",
+  "hypothesis>=6.168.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "pytest-cov>=5",
+  "jsonschema>=4",
+  "cryptography>=42",  # the `encrypted` extra, so its tests and mypy see it
+]
 
 [build-system]
 requires = ["hatchling"]
