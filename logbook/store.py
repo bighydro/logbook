@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO
 
-from . import FORMAT
+from . import FORMAT, policy
 from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
 from .index import Index, Located, Row, row
@@ -113,6 +113,7 @@ class Logbook:
             "head": GENESIS,
         }
         (root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+        policy.write_default(root)  # ADR 0016: the crossing ceiling is a setting in the record
         return cls(root)
 
     @classmethod

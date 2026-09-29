@@ -88,7 +88,9 @@ logbook migrate                  # same lines, new hashes; keeps the old files a
   inbox/            drop anything here. it gets read, then moved to done/.
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head.
+  policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
   state/            where each live source left off. bookkeeping, not the record.
+  exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
 
 Nothing here needs the app to make sense. Open the files in any editor twenty years from now.
@@ -191,6 +193,35 @@ time instead.
 Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file
 outside the record) and never in the record, the repository or a script you share. The logbook sends it
 only in the `Authorization` header and never prints it.
+
+## Handing a window to someone
+
+A crossing package (RFC 0005) is the bundle you hand a named member of your circle: the lines of a window,
+verbatim, the attachments they point at, and the resolution lines that let the reader name the people in
+them, so they need nothing else from your record. The first reader is Hermes, an agent that pulls one
+nightly and proposes actions.
+
+```bash
+logbook export crossing --to hermes --since 2026-03-01T00:00:00Z --dry-run     # counts per kind and tier, writes nothing
+logbook export crossing --to hermes --since 2026-03-01T00:00:00Z               # the first window, tier 1 only
+logbook export crossing --to hermes --since last --tier 1,2                    # every night: since the last one, tiers 1 and 2
+logbook export crossing --to hermes --since last --tier 1,2 --kinds message,event --out /srv/hermes/inbox/tonight
+```
+
+The window is `[--since, --until)`, `--until` defaulting to now; `--since last` starts where the last crossing
+to that destination ended (`exports/crossing.json`), and the first run must say where to start. The bundle
+lands under `export/crossing/<destination>/<time>/` unless `--out` says otherwise: `manifest.json`,
+`entries.jsonl`, `attachments/<sha256>` for every referenced file the store holds (a missing one stays a
+reference), and `resolution.jsonl` when any exported line names someone your contacts have resolved,
+alias hops included. A JSON parser is all a reader needs.
+
+How much may cross is a setting in your record, not in the code (ADR 0016): `policy/crossing.json` maps each
+destination to its ceiling, `{"hermes": {"max_tier": 2}}` by default. Tier 1 crosses by default; tier 2 only
+with `--tier 1,2`, and the manifest then lists every tier-2 line under `review`; tier 3 only when the file
+allows it *and* you type `--tier 1,2,3`, and the manifest and the console say loudly that it did. A request
+above the ceiling is refused with the file's name. Every real export appends one `crossing/v1` line (RFC 0011)
+to the chain — destination, window, counts per tier, the ceiling in force, the package's digest — so the
+record itself shows every time anything left it. `--dry-run` writes nothing and appends nothing.
 
 ## Three rules
 

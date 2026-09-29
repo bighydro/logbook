@@ -42,4 +42,5 @@ Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv ru
 - Console output: the CLI reconfigures stdout/stderr to UTF-8 in `main()`; tests that read a subprocess must pass `encoding="utf-8"`, never `text=True`.
 - Open files: Windows refuses to delete a file that any handle still holds. Close every SQLite connection (and any file) before an unlink; `Index.discard` enforces this on all platforms.
 - Shell: `shutil.which("bash")` on Windows finds the WSL stub, not a shell. Tests that need a real shell skip on `win32`.
+- Digests: text mode turns `\n` into CRLF on Windows. Encode once, write those bytes (`write_bytes`, `"wb"`), and hash the bytes you wrote, never the string you formatted.
 - Filesystems: macOS is case-insensitive by default (`~/Logbook` and `~/logbook` are the same folder); Windows too. Never rely on case to tell files apart.

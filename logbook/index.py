@@ -16,7 +16,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from .chain import Line
@@ -43,6 +43,19 @@ INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 Row = tuple[int, str, str, str, str, str, int, str | None, str, int, str | None, str | None, str | None]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
+
+
+class Place(NamedTuple):
+    """Where one line is and the columns a reader filters on without opening the file."""
+
+    seq: int
+    id: str
+    at: str
+    kind: str
+    tier: int
+    file: str
+    offset: int
+
 
 # Open connections per index file, in this process. Windows refuses to delete a file that has an
 # open handle and Unix does not; `discard` consults this so the refusal is the same everywhere.
@@ -220,6 +233,25 @@ class Index:
         ).fetchall()
         lines = self._read([(file, offset) for _day, file, offset in found])
         return [(str(day), line) for (day, _file, _offset), line in zip(found, lines, strict=True)]
+
+    def window(self, since: str, until: str) -> list[Place]:
+        """Where every line with `since` <= `at` < `until` is, in chain order, with the columns a
+        caller filters on before reading. The SQL cut is on the first 19 characters of `at` (the
+        seconds, which order as text whatever the fractional part); the caller applies the exact
+        instants. Nothing is read from the files here."""
+        found = self.db.execute(
+            "SELECT seq, id, at, kind, tier, file, offset FROM lines"
+            " WHERE substr(at, 1, 19) BETWEEN ? AND ? ORDER BY seq",
+            (since[:19], until[:19]),
+        ).fetchall()
+        return [
+            Place(int(seq), str(id_), str(at), str(kind), int(tier), str(file), int(offset))
+            for seq, id_, at, kind, tier, file, offset in found
+        ]
+
+    def read(self, places: Iterable[tuple[str, int]]) -> list[Line]:
+        """The lines at these (file, offset) places, in the order given."""
+        return self._read(list(places))
 
     def by_seq(self, seq: int) -> Line | None:
         found = self.db.execute("SELECT file, offset FROM lines WHERE seq = ?", (seq,)).fetchall()

@@ -38,15 +38,23 @@ def labels(lb: Logbook, idx: Index | None = None) -> dict[Ref, str]:
 def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
     """The pure function: resolution and retraction lines, in any order, to the label map.
 
+    The last line standing for each ref (`standing`), followed through its aliases (`walk`),
+    decides: its `label`, or no entry when it has none."""
+    last = standing(lines)
+    found: dict[Ref, str] = {}
+    for ref in last:
+        label = walk(ref, last)[-1]["payload"].get("label")
+        if isinstance(label, str) and label:
+            found[ref] = label
+    return found
+
+
+def standing(lines: Iterable[Line]) -> dict[Ref, Line]:
+    """(ref.kind, ref.value) → the last resolution line standing for it.
+
     RFC 0006 rule 4: for one ref the last resolution wins, where "last" is chain order (`seq`).
     A retracted resolution (RFC 0003) counts for nothing, including its `supersedes`. A
-    resolution that `supersedes` another removes that one from consideration. The last one
-    standing decides: its `label`, or no entry when it has none.
-
-    RFC 0006 aliases: when the last line standing carries `alias_of`, the walk moves to the
-    target ref's last line standing and goes on, at most `MAX_HOPS` hops, stopping at a line
-    with no `alias_of`, at a ref with no standing line, or at a ref already visited (a cycle).
-    The line it stops on decides, as above."""
+    resolution that `supersedes` another removes that one from consideration."""
     lines = sorted(lines, key=lambda line: int(line["seq"]))
     retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
     live = [line for line in lines if line.get("kind") == RESOLUTION and str(line["id"]) not in retracted]
@@ -62,16 +70,18 @@ def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
         ref = _ref(line)
         if ref is not None:
             last[ref] = line
-    found: dict[Ref, str] = {}
-    for ref, line in last.items():
-        label = _follow(ref, line, last)["payload"].get("label")
-        if isinstance(label, str) and label:
-            found[ref] = label
-    return found
+    return last
 
 
-def _follow(ref: Ref, line: Line, last: dict[Ref, Line]) -> Line:
-    """The line that decides for `ref`: `line` itself, or the one `alias_of` leads to."""
+def walk(ref: Ref, last: dict[Ref, Line]) -> list[Line]:
+    """The lines a reader passes through resolving `ref`, the deciding one last: its own last line
+    standing, then each `alias_of` target's, at most `MAX_HOPS` hops (RFC 0006 rule 6), stopping
+    at a line with no `alias_of`, at a ref with no standing line, or at a ref already visited (a
+    cycle). Empty when `ref` has no line standing."""
+    line = last.get(ref)
+    if line is None:
+        return []
+    path = [line]
     visited = {ref}
     for _ in range(MAX_HOPS):
         target = _ref(line, "alias_of")
@@ -79,7 +89,8 @@ def _follow(ref: Ref, line: Line, last: dict[Ref, Line]) -> Line:
             break
         visited.add(target)
         line = last[target]
-    return line
+        path.append(line)
+    return path
 
 
 def _ref(line: Line, field: str = "ref") -> Ref | None:
