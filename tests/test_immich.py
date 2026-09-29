@@ -79,6 +79,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "imessage",
         "ios-notes",
         "ios-calendar",
+        "ics",
     ]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")
