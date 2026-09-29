@@ -130,7 +130,8 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> boo
     """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
     times are floating), `store` (puts bytes in the attachment store), `lookup` (the id of a line by
-    source and raw_id), or one of `add`'s own options."""
+    source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
+    `add`'s own options."""
     if isinstance(adapter, adapters.Adapter):
         return option in inspect.signature(adapter.run).parameters
     live: adapters.LiveAdapter = adapter
@@ -329,24 +330,38 @@ def cmd_sync(a: argparse.Namespace) -> None:
     counts: dict[str, int] = {}
     unit = str(getattr(adapter, "UNIT", "assets"))
     item = unit.removesuffix("s")  # one of them: a point, a message, an asset
-    pull: Callable[..., Iterator[dict[str, Any]]] = adapter.pull
     options: dict[str, Any] = {}
     if _takes(adapter, "store") and not a.dry_run:
         options["store"] = lb.attach
     if _takes(adapter, "lookup"):
         options["lookup"] = _lookup(lb)
+    if _takes(adapter, "timezone"):
+        options["timezone"] = lb.meta["timezone"]
+    failed: list[str] = []  # one line per feed the adapter could not read, the others still pulled
+    if _takes(adapter, "failed"):
+        options["failed"] = failed
+    group: Callable[[dict[str, Any]], str] | None = getattr(adapter, "group", None)
+    seen["groups"] = Counter()
+    already_in_group: Counter[str] = Counter()
     drafts = _watch(
-        pull(config, since, progress=_page_progress(unit), counts=counts, **options), adapter.watermark, seen
+        adapter.pull(config, since, progress=_page_progress(unit), counts=counts, **options),
+        adapter.watermark,
+        seen,
+        group,
     )
     try:
         if a.dry_run:
             for _ in drafts:
                 pass
         else:
-            n = lb.append_many(drafts)  # the page lines above are the progress; one stream, not two
+            n = lb.append_many(  # the page lines above are the progress; one stream, not two
+                drafts, skipped=(lambda d: already_in_group.update([group(d)])) if group else None
+            )
     except (OSError, ValueError) as e:  # urllib's errors are OSErrors, a malformed page a ValueError;
         print(f"sync: {a.name}: {e}", file=sys.stderr)  # what was pulled before is checkpointed
         sys.exit(1)
+    for problem in failed:
+        print(f"sync: {a.name}: {problem}", file=sys.stderr)
     where = f"since {since}" if since else "from the beginning"
     pending = counts.get("pending", 0)
     skipped = {k: v for k, v in counts.items() if k != "pending"}
@@ -364,23 +379,36 @@ def cmd_sync(a: argparse.Namespace) -> None:
             if len(seen["kinds"]) > 1:
                 for kind, count in sorted(seen["kinds"].items()):
                     print(f"  {kind}: {count}")
+        for name, count in seen["groups"].items():
+            print(f"  {name}: {count} seen")
         _report_skipped(skipped)
         _report_pending(pending)
+        if failed:
+            sys.exit(1)
         return
     mark = seen["watermark"]
-    if mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
+    if failed:  # a feed that was not read may hold changes older than the lookback: try again from here
+        kept = f" (kept: {len(failed)} {'feed' if len(failed) == 1 else 'feeds'} failed)"
+        mark = stored
+    elif mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
+        kept = ""
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps({"since": mark}, indent=2) + "\n", encoding="utf-8")
     else:
+        kept = ""
         mark = stored
     already = seen["count"] - n
     print(
         f"{a.name}: {n} new lines of {seen['count']} seen {where}"
         + (f" ({already} already in the record)" if already else "")
-        + f"; watermark {mark or since or '-'}"
+        + f"; watermark {mark or since or '-'}{kept}"
     )
+    for name, count in seen["groups"].items():
+        print(f"  {name}: {count - already_in_group[name]} new of {count} seen")
     _report_skipped(skipped)
     _report_pending(pending)
+    if failed:
+        sys.exit(1)
 
 
 def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
@@ -427,10 +455,13 @@ def _watch(
     drafts: Iterable[dict[str, Any]],
     watermark: Callable[[dict[str, Any]], str | None],
     seen: dict[str, Any],
+    group: Callable[[dict[str, Any]], str] | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Pass drafts through, noting count, earliest/latest `at`, the largest watermark and
-    per-provenance counts."""
+    """Pass drafts through, noting count, earliest/latest `at`, the largest watermark, per-provenance
+    counts and, given `group`, the count per group (per calendar, for `gcal`)."""
     for d in drafts:
+        if group is not None:
+            seen["groups"][group(d)] += 1
         seen["count"] += 1
         at = d["at"]
         if seen["first"] is None or at < seen["first"]:
@@ -1030,9 +1061,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
-        "sync", help="pull new items from a live source (immich, dawarich, imessage); safe to re-run"
+        "sync", help="pull new items from a live source (immich, dawarich, imessage, gcal); safe to re-run"
     )
-    s.add_argument("name", help="the source: immich, dawarich, or imessage (this Mac's Messages)")
+    s.add_argument(
+        "name", help="the source: immich, dawarich, imessage (this Mac's Messages), or gcal (Google Calendar)"
+    )
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)
