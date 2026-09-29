@@ -76,7 +76,7 @@ CALENDAR = "\r\n".join(
         "DTEND;TZID=Europe/Oslo:20260303T101500",
         "SUMMARY:Boat survey — Tromsø marina",
         "DESCRIPTION:bring the papers\\, the keys\\nand a flask of coffee for the surv",
-        " eyor\; who is always cold",
+        r" eyor\; who is always cold",
         "LOCATION:Tromsø småbåthavn",
         "GEO:69.6489;18.9551",
         "STATUS:CONFIRMED",
@@ -362,7 +362,7 @@ def test_run_unfolds_the_long_line_and_unescapes_comma_semicolon_and_newline(tmp
 
 
 def test_run_unescapes_backslash_and_upper_case_newline(tmp_path):
-    line = _only(tmp_path, "DTSTART:20260310T100000", "DESCRIPTION:a\\\\b\\Nc\;d\\,e\\x")
+    line = _only(tmp_path, "DTSTART:20260310T100000", r"DESCRIPTION:a\\b\Nc\;d\,e\x")
     assert line["payload"]["notes"] == "a\\b\nc;d,e\\x"  # an escape we do not know keeps its backslash
 
 
