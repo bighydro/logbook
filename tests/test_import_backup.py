@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_imessage import _store as _sms_store
+from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
 from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
@@ -236,6 +237,31 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         "encrypted": False,
         "protection_class": None,
     }
+
+
+def test_import_backup_unencrypted_warns_when_the_manifest_size_is_stale(lb, tmp_path, capsys):
+    """An unencrypted backup's file plist can also carry a stale Size: when the copy equals the
+    blob on disk byte for byte, that is one warning, not an error."""
+    backup = _backup(tmp_path, sources=("ios-contacts",))
+    rel = "Library/AddressBook/AddressBook.sqlitedb"
+    fid = _file_id("HomeDomain", rel)
+    real = (backup / fid[:2] / fid).stat().st_size
+    con = sqlite3.connect(backup / "Manifest.db")
+    try:
+        con.execute("UPDATE Files SET file = ? WHERE fileID = ?", (_file_plist(35_745_792, 4, None), fid))
+        con.commit()
+    finally:
+        con.close()
+    _run(str(backup))
+    captured = capsys.readouterr()
+    warnings = [line for line in captured.out.splitlines() if "warning" in line]
+    assert len(warnings) == 1
+    assert rel in warnings[0] and f"{real:,}" in warnings[0] and "35,745,792" in warnings[0]
+    assert captured.err == ""
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
+    entry = next(c for c in copies["files"] if c["path"] == rel)
+    assert entry["bytes"] == real and "35,745,792" in entry["warning"]
 
 
 def test_import_backup_again_adds_nothing_and_leaves_one_copy(lb, tmp_path, capsys):
