@@ -68,7 +68,8 @@ password is never printed, never written anywhere, and never part of an error. `
 `encrypted: true` and each file's protection class. The stores only an encrypted backup carries come along:
 the call log (`ios-calls/CallHistory.storedata`) runs through its adapter like the others; Health
 (`health/healthdb_secure.sqlite`, `healthdb.sqlite`) and Safari (`safari/History.db`) are copied out beside
-them and reported as *copied, no adapter yet*; `--only calls,health` names them too. Without the extra
+them: Health runs through `apple-health` (RFC 0014; `healthdb.sqlite` is copied first so the store finds its
+source names beside it), Safari is reported as *copied, no adapter yet*; `--only calls,health` names them too. Without the extra
 installed the command prints the `pip install` line and exits 2; without the variable it says which one to set.
 
 ## Where to keep the record
@@ -136,6 +137,7 @@ logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS)
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
 logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
 logbook add ios-calls ~/inbox/ios-backup-<udid>/ios-calls/CallHistory.storedata   # the call log, by adapter name
+logbook add health ~/inbox/ios-backup-<udid>/health/healthdb_secure.sqlite   # Apple Health, by adapter name (or apple-health)
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
@@ -205,6 +207,14 @@ flight seen twice is not written twice as two flights: the later observation sup
 the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in.
 The package ships the world's 1,150 large airports with their zones; `--airports FILE` (or `LOGBOOK_AIRPORTS`)
 adds a private field. Tier 1; a booking reference is never kept.
+
+Apple Health becomes `health-sample/v1` lines (RFC 0014) from the `healthdb_secure.sqlite` an encrypted backup
+carries: steps, distance, active and basal energy and flights climbed summed into quarter-hour buckets per device;
+heart rate at its own resolution, at most one reading a minute per device; resting heart rate, heart-rate
+variability and weight one line each; every sleep stage as a span with its stage; every workout as a span with
+its duration, activity, energy and distance. Each line names the device that measured it (`Watch7,1`) and, when
+`healthdb.sqlite` is beside the store, the source's name. Tier 2. `logbook add health <file>` names the adapter;
+`logbook add <file>` recognises the store by content. Re-importing a later backup appends only what is new.
 
 `show` prints people by name — the sender of a message, the organizer and attendees of an event — and the
 names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref

@@ -79,6 +79,7 @@ BUILT_IN = (
     "ios_calendar",
     "ios_calls",
     "flighty",
+    "apple_health",
     "ics",
     "transcript",
     "granola",
@@ -151,7 +152,14 @@ def find(path: Path) -> Adapter | None:
     return next((a for a in file_adapters() if a.sniff(Path(path))), None)
 
 
-ALIASES = {"flights": "flighty"}  # `logbook add flights <export.csv>` (RFC 0013)
+ALIASES = {  # `logbook add flights <export.csv>` (RFC 0013); `add health`, `add calls` as `import-backup --only`
+    "flights": "flighty",
+    "health": "apple-health",
+    "calls": "ios-calls",
+    "contacts": "ios-contacts",
+    "calendar": "ios-calendar",
+    "notes": "ios-notes",
+}
 
 
 def named(name: str) -> Adapter | None:

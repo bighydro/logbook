@@ -207,6 +207,11 @@ SKIP_PHRASES = {
     "skipped_no_designator": "without a carrier and flight number",
     "skipped_no_route": "without both airports",
     "skipped_label": "by label",
+    "skipped_no_value": "without a value",
+    "skipped_bad_span": "ending before they start",
+    "skipped_other_type": "of a type this version does not know",
+    "skipped_unknown_stage": "with a sleep stage this version does not know",
+    "skipped_over_cap": "over the one-per-minute heart-rate cap",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -736,8 +741,9 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     a flag, never printed). The keybag check comes first, so a wrong password fails before any file
     is touched; then Manifest.db is decrypted into the inbox folder and every copy is decrypted on
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
-    encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`; Health
-    and Safari's history are copied out and reported as copied with no adapter yet."""
+    encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
+    through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
+    beside it); Safari's history is copied out and reported as copied with no adapter yet."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
@@ -778,7 +784,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
             if c.warning is not None:
                 print(f"  warning: {c.warning}")
         if adapter is None:
-            print("  copied, no adapter yet")
+            print(f"  copied, {p.source.note}")
             continue
         _append_with(lb, adapter, store_copy)
     if any(p.copied for p in plans):
@@ -1693,7 +1699,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
         + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
-        + "; the last four only from an encrypted backup, health and safari copied without an adapter yet)",
+        + "; calls, health and safari only from an encrypted backup, safari copied without an adapter yet)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser(
