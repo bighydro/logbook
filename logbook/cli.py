@@ -36,7 +36,16 @@ from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .index import local_date
 from .resolve import Ref, labels
-from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, UnsortedFile, now_utc, retractions
+from .store import (
+    RETRACTION,
+    CodeCheckoutError,
+    FormatError,
+    Logbook,
+    UnsortedFile,
+    _dedupe_key,
+    now_utc,
+    retractions,
+)
 
 _LOCALTIME = "/etc/localtime"
 
@@ -236,7 +245,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "merged": "merged into a flight already in the record",
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",
-    "no_gap": "calendar flights without a location gap",
+    "no_gap": "calendar flights the location points do not confirm",
     "no_message_id": "without a Message-ID, keyed by digest",
     "date_from_separator": "timed by the mbox separator (no Date header)",
     "body_from_html": "with the body taken from HTML",
@@ -571,19 +580,18 @@ def cmd_infer(a: argparse.Namespace) -> None:
 
     if a.dry_run:
         found = list(drafts)
-        entries = counts.pop("calendar_flights", 0)
-        entries_text = _plural(entries, "calendar entry", "calendar entries")
-        print(
-            f"dry run: {_plural(len(found), 'flight')} from {entries_text} would be written; nothing written"
-        )
+        with lb.index() as idx:  # what append_many would skip: the observations the record already holds
+            already = len(idx.existing({key for d in found if (key := _dedupe_key(d)) is not None}))
+        n = len(found) - already
     else:
         n = lb.append_many(drafts, skipped=skipped)
-        entries = counts.pop("calendar_flights", 0)
-        entries_text = _plural(entries, "calendar entry", "calendar entries")
-        print(
-            f"inferred {_plural(n, 'new flight')} from {entries_text}"
-            + (f" ({already} already in the record)" if already else "")
-        )
+    entries_text = _plural(counts.pop("calendar_flights", 0), "calendar entry", "calendar entries")
+    already_text = f" ({already} already in the record)" if already else ""
+    if a.dry_run:
+        would = f"{_plural(n, 'flight')} from {entries_text} would be written"
+        print(f"dry run: {would}{already_text}; nothing written")
+    else:
+        print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")
     _report_skipped(counts)
 
 

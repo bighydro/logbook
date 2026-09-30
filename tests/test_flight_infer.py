@@ -1,5 +1,5 @@
 """`logbook infer flights` (RFC 0013, evidence `inferred`): a calendar entry that names a flight plus
-a gap in the location points that starts at one airport and ends at another."""
+a leg in the location points from the last point at one airport to the first at another."""
 
 from __future__ import annotations
 
@@ -96,6 +96,58 @@ def test_infer_a_calendar_flight_with_a_gap_between_two_airports(lb: Logbook):
         points = idx.by_kind("location")
     assert p["extra"]["event"] == event["id"]
     assert p["extra"]["gap"] == [points[4]["id"], points[5]["id"]]
+    assert counts == {"calendar_flights": 1}
+
+
+def _between(a: tuple[float, float], b: tuple[float, float], fraction: float) -> tuple[float, float]:
+    return a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction
+
+
+def test_infer_a_phone_that_logs_through_the_climb_still_gives_the_flight(lb: Logbook):
+    """The tracker keeps logging on the take-off roll and the climb, so the silence starts from a
+    point in the air, near no airport: the flight is still the last point at Oslo airport to the
+    first at Zürich airport."""
+    lb.append_many(
+        [
+            _event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flight to Zurich (XY 561)"),
+            *_track("2026-09-27T04:30:00Z", OSL, 32, every=8),  # 04:30 … 05:02
+            _point("2026-09-27T05:04:00Z", _between(OSL, ZRH, 0.02)),
+            _point("2026-09-27T05:07:00Z", _between(OSL, ZRH, 0.05)),
+            _point("2026-09-27T05:12:00Z", _between(OSL, ZRH, 0.1)),
+            *_track("2026-09-27T07:18:00Z", ZRH, 20),
+        ]
+    )
+    (d,) = _infer(lb)
+    p = d["payload"]
+    assert p["from"]["iata"] == "OSL" and p["to"]["iata"] == "ZRH"
+    assert p["actual_departure"] == "2026-09-27T05:02:00Z" and p["actual_arrival"] == "2026-09-27T07:18:00Z"
+    with lb.index() as idx:
+        points = idx.by_kind("location")
+    assert p["extra"]["gap"] == [points[4]["id"], points[8]["id"]]
+
+
+def test_infer_a_phone_that_logs_the_whole_flight_gives_it_without_any_silence(lb: Logbook):
+    """Points every ten minutes from Oslo airport to Zürich airport, none near any airport in
+    between and no silence at all: still one flight."""
+    aloft = [
+        _point(
+            f"2026-09-27T{5 + (10 + 10 * i) // 60:02d}:{(10 + 10 * i) % 60:02d}:00Z", _between(OSL, ZRH, f)
+        )
+        for i, f in enumerate((0.15, 0.3, 0.45, 0.6, 0.75, 0.9))
+    ]
+    lb.append_many(
+        [
+            _event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flight XY 561"),
+            *_track("2026-09-27T04:30:00Z", OSL, 30),  # 04:30 … 05:00
+            *aloft,  # 05:10 … 06:00
+            *_track("2026-09-27T07:18:00Z", ZRH, 20),
+        ]
+    )
+    counts: dict[str, int] = {}
+    (d,) = _infer(lb, counts=counts)
+    p = d["payload"]
+    assert p["from"]["iata"] == "OSL" and p["to"]["iata"] == "ZRH"
+    assert p["actual_departure"] == "2026-09-27T05:00:00Z" and p["actual_arrival"] == "2026-09-27T07:18:00Z"
     assert counts == {"calendar_flights": 1}
 
 
@@ -214,6 +266,38 @@ def test_cli_infer_flights_writes_once_and_reports(lb: Logbook):
     assert "inferred 0 new flights from 1 calendar entry (1 already in the record)" in r.stdout
     assert lb.meta["seq"] == 17
     assert "XY 561 OSL → ZRH, arrives 09:18, inferred" in _cli(lb, "show", "2026-09-27").stdout
+
+
+def test_cli_infer_counts_one_flight_however_many_entries_name_it(lb: Logbook):
+    """Two calendars, two spellings, one flight: the dry run and the real run both say one."""
+    lb.append_many(
+        [
+            _event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flight to Zürich (XY 561)"),
+            _event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flug XY561 nach Zürich"),
+            {
+                **_event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flight to Zürich (XY 561)"),
+                "source": "ios-calendar",
+            },
+            {
+                **_event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", "Flug XY561 nach Zürich"),
+                "source": "ios-calendar",
+            },
+            *_track("2026-09-27T04:30:00Z", OSL, 32, every=8),
+            *_track("2026-09-27T07:18:00Z", ZRH, 20),
+        ]
+    )
+    r = _cli(lb, "infer", "flights", "--dry-run")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith("dry run: 1 flight from 4 calendar entries would be written")
+    assert "merged" not in r.stdout
+    r = _cli(lb, "infer", "flights")
+    assert r.stdout.startswith("inferred 1 new flight from 4 calendar entries\n")
+    r = _cli(lb, "infer", "flights", "--dry-run")
+    assert r.stdout.startswith(
+        "dry run: 0 flights from 4 calendar entries would be written (1 already in the record)"
+    )
+    r = _cli(lb, "infer", "flights")
+    assert r.stdout.startswith("inferred 0 new flights from 4 calendar entries (1 already in the record)")
 
 
 def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
