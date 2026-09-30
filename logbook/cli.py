@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · retract · show · stats · verify · export · index · migrate.
-Three verbs, eight rare."""
+"""logbook — init · add · sync · import-backup · retract · show · stats · verify · export · index · migrate ·
+assets. Three verbs, nine rare."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters, crossing, ios_backup, ios_backup_crypto, policy
+from . import FORMAT, __version__, adapters, assets, crossing, ios_backup, ios_backup_crypto, policy
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
@@ -415,6 +415,39 @@ def cmd_sync(a: argparse.Namespace) -> None:
     _report_pending(pending)
     if failed:
         sys.exit(1)
+
+
+def cmd_assets(a: argparse.Namespace) -> None:
+    """`assets list`: one line per registered asset. `assets add`: register one (ADR 0018). The
+    registry is <root>/assets.json, a setting of the record, outside the chain."""
+    lb = Logbook.find()
+    try:
+        if a.verb == "add":
+            asset = assets.Asset(
+                id=a.id, kind=a.kind, name=a.name, mmsi=a.mmsi, icao24=a.icao24, registration=a.registration
+            )
+            assets.add(lb.root, asset)
+            print(_asset_row(asset))
+            return
+        registry = assets.read(lb.root)
+    except assets.AssetError as e:
+        print(f"assets: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not registry:
+        print(
+            "no assets registered; register one with: logbook assets add <id> --kind "
+            f"{'|'.join(assets.KINDS)} --name NAME [--mmsi N] [--icao24 HEX] [--registration REG]"
+        )
+        return
+    for asset in registry:
+        print(_asset_row(asset))
+
+
+def _asset_row(asset: assets.Asset) -> str:
+    ids = [f"{key} {value}" for key in ("mmsi", "icao24") if (value := getattr(asset, key)) is not None]
+    if asset.registration is not None:
+        ids.append(asset.registration)
+    return f"{asset.id:<16} {asset.kind:<9} {asset.name}" + (f"  ({', '.join(ids)})" if ids else "")
 
 
 def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
@@ -1214,6 +1247,18 @@ def main(argv: list[str] | None = None) -> None:
         "--dry-run", action="store_true", help="crossing: count and show the policy; write nothing"
     )
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser("list", help="one line per registered asset")
+    v.set_defaults(fn=cmd_assets)
+    v = verbs.add_parser("add", help="register one asset")
+    v.add_argument("id", help="the subject id its positions carry: lower-case letters, digits, hyphens")
+    v.add_argument("--kind", required=True, choices=assets.KINDS)
+    v.add_argument("--name", required=True, help="what you call it")
+    v.add_argument("--mmsi", help="nine digits; `sync ais` asks aisstream.io for it")
+    v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
+    v.add_argument("--registration", help="call sign or plate, free text")
+    v.set_defaults(fn=cmd_assets)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
