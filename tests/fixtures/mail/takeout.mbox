@@ -1,0 +1,115 @@
+From 1795123456789012345@xxx Mon Mar 02 10:15:00 +0000 2026
+X-GM-THRID: 1795123456789012345
+X-Gmail-Labels: Inbox,Important,Category Personal
+Delivered-To: kari.nordmann@example.org
+Message-ID: <a1b2c3@mail.example.org>
+In-Reply-To: <9f8e7d@mail.example.org>
+References: <9f8e7d@mail.example.org> <0a0b0c@mail.example.org>
+Date: Mon, 2 Mar 2026 11:15:00 +0100
+From: Ola Nordmann <ola@example.org>
+To: Kari Nordmann <Kari.Nordmann@example.org>
+Cc: "Havnekontoret, Oslo" <havn@example.org>
+Subject: Re: Mooring for the weekend
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Photos attached. The east berth is free from Friday.
+>From the east berth you can see the lighthouse.
+>>From here, nothing.
+
+--
+Ola, Storgata 1, Oslo
+
+From 1795123456789012346@xxx Mon Mar 02 11:00:00 +0000 2026
+X-GM-THRID: 1795123456789012346
+X-Gmail-Labels: Sent
+Message-ID: <d4e5f6@mail.example.org>
+Date: Mon, 2 Mar 2026 12:00:00 +0100
+From: Kari Nordmann <kari.nordmann@example.org>
+To: ola@example.org
+Subject: Rope for Saturday
+Content-Type: text/plain; charset="utf-8"
+
+Can you bring the long rope?
+
+From 1795123456789012347@xxx Tue Mar 03 08:30:00 +0000 2026
+X-GM-THRID: 1795123456789012347
+X-Gmail-Labels: Inbox,Category Promotions,Unread
+Message-ID: <news-2026-03-03@news.example.org>
+Date: Tue, 3 Mar 2026 08:30:00 +0000
+From: Harbour News <news@example.org>
+To: kari.nordmann@example.org
+Subject: =?utf-8?q?Nytt_fra_havna_=E2=80=93_mars?=
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><head><title>Nytt fra havna</title><style>p { color: red }</style></head>
+<body><script>alert(1)</script><!-- hidden -->
+<h1>Nytt fra havna</h1>
+<p>Hei <b>Kari</b>,<br>se p=C3=A5 dette &amp; les mer.</p>
+<ul><li>Bryggeplasser</li><li>Priser</li></ul>
+<p><a href=3D"https://example.org/x">Les mer</a></p>
+</body></html>
+
+From 1795123456789012348@xxx Tue Mar 03 08:45:00 +0000 2026
+X-GM-THRID: 1795123456789012345
+X-Gmail-Labels: Inbox
+Message-ID: <b2c3d4@mail.example.org>
+In-Reply-To: <a1b2c3@mail.example.org>
+References: <9f8e7d@mail.example.org> <0a0b0c@mail.example.org> <a1b2c3@mail.example.org>
+Date: Tue, 3 Mar 2026 09:45:00 +0100
+From: Ola Nordmann <ola@example.org>
+To: Kari Nordmann <kari.nordmann@example.org>
+Subject: Re: Mooring for the weekend
+Content-Type: multipart/mixed; boundary="mixed1"
+
+--mixed1
+Content-Type: multipart/alternative; boundary="alt1"
+
+--alt1
+Content-Type: text/plain; charset="utf-8"
+
+Berth plan attached.
+
+--alt1
+Content-Type: text/html; charset="utf-8"
+
+<p>Berth plan <b>attached</b>.</p>
+
+--alt1--
+--mixed1
+Content-Type: text/plain; charset="utf-8"; name="berth-plan.txt"
+Content-Disposition: attachment; filename="berth-plan.txt"
+Content-Transfer-Encoding: base64
+
+RWFzdCBiZXJ0aDogZnJlZSBmcm9tIEZyaWRheS4KV2VzdCBiZXJ0aDogdGFrZW4uCg==
+--mixed1
+Content-Type: application/pdf; name="plan.pdf"
+Content-Disposition: attachment; filename="plan.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQgc3ludGhldGljIGJlcnRoIHBsYW4K
+--mixed1--
+
+From 1795123456789012349@xxx Wed Mar 04 11:00:00 +0000 2026
+X-GM-THRID: 1795123456789012349
+X-Gmail-Labels: Spam
+Date: Wed, 4 Mar 2026 06:00:00 -0500
+From: <spam@example.org>
+To: kari.nordmann@example.org
+Subject: You won
+Content-Type: text/plain; charset="utf-8"
+
+Claim your prize.
+
+From 1795123456789012350@xxx Wed Mar 04 13:00:00 +0000 2026
+X-GM-THRID: 1795123456789012350
+X-Gmail-Labels: Trash
+Message-ID: <e5f6a7@mail.example.org>
+From: Ola Nordmann <ola@example.org>
+To: kari.nordmann@example.org
+Subject: (no date)
+Content-Type: text/plain; charset="x-bogus-charset"
+Content-Transfer-Encoding: base64
+
+SGVp//4gS2FyaSwgYnJ5Z2dlcGxhc3NlbiBlciBsZWRpZy4K
