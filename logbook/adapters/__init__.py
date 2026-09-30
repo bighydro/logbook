@@ -71,6 +71,7 @@ BUILT_IN = (
     "imessage_live",
     "ios_notes",
     "ios_calendar",
+    "ios_calls",
     "ics",
     "transcript",
     "granola",
