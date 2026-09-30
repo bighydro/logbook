@@ -22,6 +22,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.keywrap import aes_key_wrap
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_apple_health import LINES as HEALTH_LINES
+from test_apple_health import _store as _health_store
 from test_imessage import _store as _sms_store
 from test_ios_calls import LINES as CALL_LINES
 from test_ios_calls import _store as _call_store
@@ -144,8 +146,7 @@ def _encrypted_backup(
         (stage / "sms").mkdir()
         sms = _sms_store(stage / "sms")
         calls = _call_store(stage)
-        health = stage / "healthdb_secure.sqlite"
-        health.write_bytes(b"SQLite format 3\0" + b"\x01" * 4100)  # not a real store; nobody reads it yet
+        health = _health_store(stage / "health")  # synthetic; healthdb.sqlite beside it names the sources
         safari = stage / "History.db"
         safari.write_bytes(b"SQLite format 3\0" + b"\x02" * 1000)
         files = {
@@ -156,6 +157,7 @@ def _encrypted_backup(
             ),
             ("HomeDomain", "Library/CallHistoryDB/CallHistory.storedata"): (calls, 3),
             (HEALTH, "Health/healthdb_secure.sqlite"): (health, 1),
+            (HEALTH, "Health/healthdb.sqlite"): (health.parent / "healthdb.sqlite", 1),
             ("HomeDomain", "Library/Safari/History.db"): (safari, 2),
         }
     backup = tmp_path / "backup"
@@ -253,16 +255,24 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     store = inbox / "ios-calls" / "CallHistory.storedata"
     assert store.read_bytes() == built.plain[("HomeDomain", "Library/CallHistoryDB/CallHistory.storedata")]
     assert f"added {CALL_LINES} lines from ios-calls" in out
-    assert f"valid — {13 + CALL_LINES} lines" in out
-    # the other files only an encrypted backup carries are copied out, no adapter yet
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in out
+    # Health: the companion is copied first, then the store, and the adapter runs on the store with
+    # the companion beside it, so the lines carry the source names
     health = inbox / "health" / "healthdb_secure.sqlite"
     assert health.read_bytes() == built.plain[(HEALTH, "Health/healthdb_secure.sqlite")]
+    companion = inbox / "health" / "healthdb.sqlite"
+    assert companion.read_bytes() == built.plain[(HEALTH, "Health/healthdb.sqlite")]
+    assert out.index("health: healthdb.sqlite") < out.index("health: healthdb_secure.sqlite")
+    assert f"added {HEALTH_LINES} lines from apple-health" in out
+    assert "copied, read beside healthdb_secure.sqlite" in out
+    named = [ln for ln in lb.lines() if ln["source"] == "apple-health" and "source_name" in ln["payload"]]
+    assert named and {ln["payload"]["source_name"] for ln in named} == {"Apple Watch", "iPhone"}
+    # Safari is copied out, no adapter yet
     safari = inbox / "safari" / "History.db"
     assert safari.read_bytes() == built.plain[("HomeDomain", "Library/Safari/History.db")]
-    assert "health: healthdb_secure.sqlite" in out and "copied, no adapter yet" in out
-    assert "safari: History.db" in out
+    assert "safari: History.db" in out and "copied, no adapter yet" in out
     assert "ios-calls: CallHistory.storedata" in out and "CallHistory.storedata not found" not in out
-    assert "health: healthdb.sqlite not found" in out
+    assert "healthdb.sqlite not found" not in out and "healthdb_secure.sqlite not found" not in out
     # the decrypted Manifest.db is beside the copies, and it is the plaintext
     assert (inbox / "Manifest.db").read_bytes() == built.manifest_db_plain
     # the manifest of copies records the encryption and each file's protection class
@@ -306,7 +316,7 @@ def test_import_backup_warns_when_the_manifest_size_is_stale_and_the_blob_decryp
     assert len(warnings) == 1
     assert "Library/Safari/History.db" in warnings[0]
     assert f"{real:,}" in warnings[0] and "35,745,792" in warnings[0]
-    assert f"valid — {13 + CALL_LINES} lines" in captured.out
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in captured.out
     assert captured.err == ""
     copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
     by_path = {(c["domain"], c["path"]): c for c in copies["files"]}
@@ -346,7 +356,8 @@ def test_import_backup_encrypted_again_adds_nothing(lb, tmp_path, monkeypatch, c
     _run(str(built.folder))
     out = capsys.readouterr().out
     assert "added 0 lines from imessage" in out and "added 0 lines from ios-calls" in out
-    assert f"valid — {13 + CALL_LINES} lines" in out
+    assert "added 0 lines from apple-health" in out
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in out
 
 
 def test_import_backup_encrypted_dry_run_decrypts_only_the_manifest(lb, tmp_path, monkeypatch, capsys):

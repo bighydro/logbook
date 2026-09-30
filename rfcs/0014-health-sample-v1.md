@@ -1,0 +1,98 @@
+# RFC 0014 — payload profile `health-sample/v1`
+
+Status: draft · 2026-10-01 · comment period: two weeks
+
+One measurement the body made and a device recorded: a count of steps in a quarter of an hour, one
+heart-rate reading, a stage of one night's sleep, a weight, a workout. The line records what the
+store said — a number, its unit, the span it covers and the device that measured it — and never
+what it means: no "good night", no "active day", no target. Interpretation is an engine's job
+(ADR 0013).
+
+## Line
+
+`kind` MUST be `health`. `tier` SHOULD be 3: SPEC §4 lists health under tier 3, and a step count,
+a heart rate and a night's sleep are the owner's body, the class of fact the spec keeps most
+private, however harmless one reading looks. An adapter MAY let the owner lower it (`logbook add
+--tier`); the profile does not. `at` is the sample's start in UTC; `end` is its end when the sample has
+a span (a bucket, a sleep stage, a workout), `null` for an instant (a heart-rate reading, a weight).
+`tz` is the zone the device recorded the sample in when the store keeps it, else the record's.
+`source` is the adapter: `apple-health`, …
+
+## Payload
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `schema` | `"health-sample/v1"` | MUST | |
+| `raw_id` | string | MUST | `<type>:<data_id>` for a sample the store keeps as one row; `<type>:<bucket start>:<device>` for an aggregated bucket (rule 2). The dedupe key: re-importing the same store appends nothing |
+| `type` | string | MUST | what was measured, one of the table below |
+| `value` | number | MUST | the measurement in `unit` |
+| `unit` | string | MUST | the unit `value` is in, fixed per `type` (below) |
+| `stage` | string | `sleep` only | `in_bed`, `asleep`, `awake`, `core`, `deep`, `rem` — as the source spells its own stages, mapped to these tokens |
+| `device` | string | SHOULD | the device that measured it, as the store identifies it (a product type such as `Watch7,1`, `iPhone14,2`); absent when the store does not say |
+| `source_name` | string | MAY | the name the store shows for the source (`Apple Watch`, a third-party app) |
+| `extra` | object | MAY | anything else the source reports: `samples` in a bucket, `activity` and `activity_type` of a workout, `energy_kcal`, `distance_m`, the sample's `original` quantity and unit |
+
+Types and their units:
+
+| `type` | `unit` | shape |
+|---|---|---|
+| `steps` | `count` | bucket |
+| `distance` | `m` | bucket |
+| `active_energy` | `kcal` | bucket |
+| `basal_energy` | `kcal` | bucket |
+| `flights_climbed` | `count` | bucket |
+| `heart_rate` | `bpm` | instant |
+| `resting_hr` | `bpm` | instant |
+| `hrv` | `ms` | instant (SDNN) |
+| `weight` | `kg` | instant |
+| `sleep` | `s` | span, with `stage` |
+| `workout` | `s` | span; `value` is the workout's duration |
+
+## Rules
+
+1. **One line per sample, except where the source is a firehose.** A heart-rate reading, a sleep stage, a weight, a workout: one row in the store is one line.
+2. **High-frequency counts are bucketed.** `steps`, `distance`, `active_energy`, `basal_energy` and `flights_climbed` are summed into buckets of 15 minutes aligned to the UTC hour (`:00`, `:15`, `:30`, `:45`), one bucket per device; `at` is the bucket's start, `end` its end, `value` the sum of the samples whose start falls inside it, `extra.samples` how many there were. A phone that counts steps for a day writes at most 96 lines of them. `raw_id` is `<type>:<bucket start RFC3339>:<device>`, so a re-import of the same store gives the same lines. A bucket is written once: samples for that bucket that reach the store after it was imported are not added (a later backup is taken days later; the store's own sync lag is hours).
+3. **Heart rate is capped at one reading per minute per device.** The first reading in a UTC minute is the line; later ones in that minute are skipped and counted. A chest strap that reports every second still gives 1,440 lines a day.
+4. **Sleep stages are spans.** One line per stage segment as the source stores it, `value` the segment's length in seconds, `stage` the token. `in_bed` and `awake` are lines too: they are what the device observed. A reader summing a night adds `asleep`, `core`, `deep` and `rem` and never `in_bed`.
+5. **Two devices are two observations.** When a watch and a phone both count the same quarter hour, both lines are written, each with its `device`. The profile does not choose between them; a reader that wants one number takes, per bucket, the device with the larger count (the source's own display rule, approximately). A line never sums across devices.
+6. **Units are the profile's, converted from the source's canonical unit by the adapter** and stated in the adapter's documentation; the source's own quantity and unit, when it keeps them, go under `extra.original` so the conversion can be checked later.
+7. **Timestamps are the source's.** The adapter converts the source's epoch to UTC and does not "correct" it. Rows dated before 1900 are placeholders, not samples, and are skipped and counted (RFC 0012 rule 4).
+8. **A sample of a type this profile does not name is skipped and counted, never mapped to a near type.** A later profile version adds types; a reader that meets a `type` it does not know keeps the line and shows nothing.
+
+## Example (synthetic)
+
+```json
+{"at":"2026-03-02T07:00:00Z","end":"2026-03-02T07:15:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":3,
+ "payload":{"schema":"health-sample/v1","raw_id":"steps:2026-03-02T07:00:00Z:Watch7,1","type":"steps","value":250,"unit":"count",
+ "device":"Watch7,1","source_name":"Apple Watch","extra":{"samples":3}}}
+```
+
+```json
+{"at":"2026-03-01T23:30:00Z","end":"2026-03-02T00:30:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":3,
+ "payload":{"schema":"health-sample/v1","raw_id":"sleep:1042","type":"sleep","value":3600,"unit":"s","stage":"deep","device":"Watch7,1"}}
+```
+
+## JSON Schema
+
+```json
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"health-sample/v1","type":"object",
+ "required":["schema","raw_id","type","value","unit"],
+ "properties":{
+  "schema":{"const":"health-sample/v1"},
+  "raw_id":{"type":"string","minLength":1},
+  "type":{"enum":["steps","distance","active_energy","basal_energy","flights_climbed","heart_rate","resting_hr","hrv","weight","sleep","workout"]},
+  "value":{"type":"number"},
+  "unit":{"enum":["count","m","kcal","bpm","ms","kg","s"]},
+  "stage":{"enum":["in_bed","asleep","awake","core","deep","rem"]},
+  "device":{"type":"string","minLength":1},
+  "source_name":{"type":"string","minLength":1},
+  "extra":{"type":"object"}},
+ "additionalProperties":false}
+```
+
+## Notes
+
+- **Why buckets and not the raw samples.** A watch writes a step sample every few minutes and an energy sample every minute; a year of that is over a million lines, none of which anyone reads. A quarter hour is fine enough to see a walk and coarse enough to keep the record small; the store keeps the raw rows if anyone ever needs them.
+- **Why the device is on the line.** Health data is the one source where two devices legitimately report the same thing; a reader cannot dedupe without knowing which device said what.
+- **Why no daily totals here.** "8,412 steps on Tuesday" is derived: an engine (or `logbook stats --health`) sums the buckets. Writing the total as a line would make a re-import with one more bucket a contradiction.
+- **What is not a health sample.** A workout's route is `location/v1`; a meal, a medication and a symptom are not this profile; a lab result is a document, another profile.

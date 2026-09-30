@@ -30,13 +30,17 @@ Contacts come first so the record has its people before the chats that name them
 contacts come before its chats for the same reason (RFC 0006).
 
 EXTRAS are the stores only an encrypted backup carries — the call log, Health, Safari's
-history. The call log has its adapter and runs like the SOURCES:
+history. The call log and Health have their adapters and run like the SOURCES:
 
     ios-calls           HomeDomain                                    Library/CallHistoryDB/
                                                                   CallHistory.storedata
+    health              HealthDomain                                  Health/healthdb.sqlite (copied
+                                                                  first: it names the sources),
+                                                                  Health/healthdb_secure.sqlite
+                                                                  (the samples; `apple-health` runs)
 
-Health and Safari have none yet: they are copied out beside the others (`health/`, `safari/`) so
-the adapters that follow find them, and reported as "copied, no adapter yet".
+Safari has none yet: it is copied out beside the others (`safari/`) so the adapter that follows
+finds it, and reported as "copied, no adapter yet".
 
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
@@ -95,7 +99,8 @@ class Source:
     domain: str
     relative_path: str  # POSIX, as Manifest.db spells it
     media: tuple[str, str] | None = None  # (domain, folder prefix); copied beside the store as its last part
-    adapter: bool = True  # False: copied out for a later adapter, nothing runs on it yet
+    adapter: bool = True  # False: copied out, nothing runs on it; `note` says why it is there
+    note: str = "no adapter yet"
 
     @property
     def store_name(self) -> str:
@@ -118,8 +123,10 @@ SOURCES: tuple[Source, ...] = (
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
     Source("ios-calls", HOME, "Library/CallHistoryDB/CallHistory.storedata"),
-    Source("health", HEALTH, "Health/healthdb_secure.sqlite", adapter=False),  # copied, no adapter yet
-    Source("health", HEALTH, "Health/healthdb.sqlite", adapter=False),
+    Source(  # the companion first, so it is beside the store when the adapter reads the store
+        "health", HEALTH, "Health/healthdb.sqlite", adapter=False, note="read beside healthdb_secure.sqlite"
+    ),
+    Source("health", HEALTH, "Health/healthdb_secure.sqlite"),  # `apple-health` (RFC 0014)
     Source("safari", HOME, "Library/Safari/History.db", adapter=False),  # HomeDomain, not the app's
 )
 
