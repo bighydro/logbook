@@ -32,7 +32,6 @@ from logbook.store import Logbook
 UDID = "00008030-000A1B2C3D4E5F61"
 PASSWORD = "correct horse battery staple"
 HEALTH = "HealthDomain"
-SAFARI = "AppDomain-com.apple.mobilesafari"
 ITERATIONS = 10  # a real keybag says 10,000,000 (DPIC) and 10,000 (ITER); the format does not care
 ZERO_IV = bytes(16)
 # protection classes as iOS numbers them: 1 complete, 2 unless open, 3 until first unlock, 4 none
@@ -157,7 +156,7 @@ def _encrypted_backup(
             ),
             ("HomeDomain", "Library/CallHistoryDB/CallHistory.storedata"): (calls, 3),
             (HEALTH, "Health/healthdb_secure.sqlite"): (health, 1),
-            (SAFARI, "Library/Safari/History.db"): (safari, 2),
+            ("HomeDomain", "Library/Safari/History.db"): (safari, 2),
         }
     backup = tmp_path / "backup"
     backup.mkdir()
@@ -259,7 +258,7 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     health = inbox / "health" / "healthdb_secure.sqlite"
     assert health.read_bytes() == built.plain[(HEALTH, "Health/healthdb_secure.sqlite")]
     safari = inbox / "safari" / "History.db"
-    assert safari.read_bytes() == built.plain[(SAFARI, "Library/Safari/History.db")]
+    assert safari.read_bytes() == built.plain[("HomeDomain", "Library/Safari/History.db")]
     assert "health: healthdb_secure.sqlite" in out and "copied, no adapter yet" in out
     assert "safari: History.db" in out
     assert "ios-calls: CallHistory.storedata" in out and "CallHistory.storedata not found" not in out
@@ -284,7 +283,7 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     )
     assert by_path[(HEALTH, "Health/healthdb_secure.sqlite")]["protection_class"] == 1
     assert by_path[(HEALTH, "Health/healthdb_secure.sqlite")]["copy"] == "health/healthdb_secure.sqlite"
-    assert by_path[(SAFARI, "Library/Safari/History.db")]["protection_class"] == 2
+    assert by_path[("HomeDomain", "Library/Safari/History.db")]["protection_class"] == 2
     assert "key" not in json.dumps(copies).lower().replace("encryption", "")  # never a key
 
 
@@ -294,7 +293,7 @@ def test_import_backup_warns_when_the_manifest_size_is_stale_and_the_blob_decryp
     """Apple records a file's size on the phone; the stored blob can be another size. The real check
     is the decrypted length against the blob less its PKCS#7 padding; the manifest's Size is only
     a warning naming the file and both sizes, never an error."""
-    key = (SAFARI, "Library/Safari/History.db")
+    key = ("HomeDomain", "Library/Safari/History.db")
     built = _encrypted_backup(tmp_path, claimed={key: 35_745_792})
     real = len(built.plain[key])
     assert real != 35_745_792
@@ -322,7 +321,7 @@ def test_import_backup_fails_when_the_decrypted_length_is_not_the_blob_less_its_
 ):
     """A blob whose last block does not decrypt to PKCS#7 padding is not the plaintext the manifest
     describes: the copy fails as before, with both lengths in the message."""
-    key = (SAFARI, "Library/Safari/History.db")
+    key = ("HomeDomain", "Library/Safari/History.db")
     built = _encrypted_backup(tmp_path)
     blob = built.stored[key]
     data = blob.read_bytes()

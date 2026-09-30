@@ -45,6 +45,9 @@ STORES = {
 }
 
 
+SAFARI_BYTES = b"SQLite format 3\0" + b"\x02" * 1000
+
+
 def _file_id(domain: str, relative_path: str) -> str:
     """How a backup names its files: the SHA-1 of `<domain>-<relativePath>`."""
     return hashlib.sha1(f"{domain}-{relative_path}".encode()).hexdigest()
@@ -110,6 +113,8 @@ def _backup(
         _put(backup, rows, "HomeDomain", "Library/Calendar/Calendar.sqlitedb", _calendar(_dir(stage, "cal")))
     if "ios-notes" in sources:
         _put(backup, rows, NOTES, "NoteStore.sqlite", _note_store(_dir(stage, "notes")))
+    if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
+        _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
     try:
         con.execute(
@@ -414,6 +419,31 @@ def test_import_backup_names_the_folder_after_the_backup_folder_without_a_lockdo
 
 def test_sources_are_in_the_documented_order():
     assert tuple(s.name for s in ios_backup.SOURCES) == ALL
+
+
+def test_safari_history_is_found_in_home_domain_by_domain_and_path_not_by_file_id(tmp_path):
+    """The phone backs Safari's history up as HomeDomain Library/Safari/History.db. The row is
+    resolved through Manifest.db by domain and path: its fileID here is not the SHA-1 a backup
+    would give it, and the copy still comes from where that row points."""
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    fid = "f" * 40
+    (backup / fid[:2]).mkdir()
+    (backup / fid[:2] / fid).write_bytes(SAFARI_BYTES)
+    con = sqlite3.connect(backup / "Manifest.db")
+    try:
+        con.execute(
+            "INSERT INTO Files VALUES (?,?,?,?,NULL)", (fid, "HomeDomain", "Library/Safari/History.db", 1)
+        )
+        con.commit()
+    finally:
+        con.close()
+    safari = ios_backup.source("safari")
+    assert safari is not None and safari.domain == "HomeDomain"
+    (p,) = ios_backup.plan(ios_backup.Manifest(backup), (safari,))
+    assert p.found and p.store is not None
+    assert p.store.path == backup / fid[:2] / fid and p.store.name == "History.db"
+    copied = ios_backup.copy(p, tmp_path / "out")
+    assert copied == tmp_path / "out" / "History.db" and copied.read_bytes() == SAFARI_BYTES
 
 
 def test_manifest_opens_read_only_and_finds_files(tmp_path):

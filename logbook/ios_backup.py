@@ -75,7 +75,6 @@ MEDIA = "MediaDomain"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
 HEALTH = "HealthDomain"
-SAFARI = "AppDomain-com.apple.mobilesafari"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -121,7 +120,7 @@ EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
     Source("ios-calls", HOME, "Library/CallHistoryDB/CallHistory.storedata"),
     Source("health", HEALTH, "Health/healthdb_secure.sqlite", adapter=False),  # copied, no adapter yet
     Source("health", HEALTH, "Health/healthdb.sqlite", adapter=False),
-    Source("safari", SAFARI, "Library/Safari/History.db", adapter=False),
+    Source("safari", HOME, "Library/Safari/History.db", adapter=False),  # HomeDomain, not the app's
 )
 
 

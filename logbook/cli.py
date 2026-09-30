@@ -186,6 +186,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "direct_chat": "in direct chats",
     "group_chat": "in group chats",
     "no_summary": "without a summary",
+    "no_recording": "without a recording (summary only)",
 }
 
 

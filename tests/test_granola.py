@@ -381,6 +381,40 @@ def test_a_note_without_a_summary_yields_no_note_and_is_counted(monkeypatch):
     assert counts == {"no_summary": 1}
 
 
+def test_a_note_with_no_recording_yields_only_its_summary(monkeypatch):
+    """A note Granola made without recording (one empty turn, a zero span, `duration_s` 0) is
+    not a transcript: only the summary is yielded, its raw_id as ever, nothing stored, and the
+    skip is counted. Without a transcript line there is nothing for `derived_from` to name."""
+    at = "2026-03-01T13:00:00Z"
+    silent = [_segment(None, "", at, at)]
+    _serve(monkeypatch, [_note(transcript=silent)])
+    counts: dict[str, int] = {}
+    stored: list[bytes] = []
+    lines = list(granola.pull(CONFIG, None, counts=counts, store=stored.append))
+    assert [line["kind"] for line in lines] == ["note"]
+    (summary,) = lines
+    assert summary["at"] == at
+    assert summary["payload"]["raw_id"] == f"granola:{NOTE_ID}:summary"
+    assert summary["payload"]["extra"] == {"derived": True, "derived_from_raw_id": f"granola:{NOTE_ID}"}
+    assert stored == [] and counts == {"no_recording": 1}
+
+
+def test_a_note_with_no_recording_still_points_at_a_transcript_already_in_the_record(monkeypatch):
+    at = "2026-03-01T13:00:00Z"
+    _serve(monkeypatch, [_note(transcript=[_segment(None, "", at, at)])])
+    existing = "01930000-0000-7000-8000-000000000001"
+    (summary,) = list(granola.pull(CONFIG, None, lookup=lambda _source, _raw_id: existing))
+    assert summary["payload"]["extra"]["derived_from"] == existing
+
+
+def test_a_note_with_neither_recording_nor_summary_yields_nothing_and_counts_both(monkeypatch):
+    at = "2026-03-01T13:00:00Z"
+    _serve(monkeypatch, [_note(transcript=[_segment(None, "", at, at)], summary_text="")])
+    counts: dict[str, int] = {}
+    assert list(granola.pull(CONFIG, None, counts=counts)) == []
+    assert counts == {"no_recording": 1, "no_summary": 1}
+
+
 # -- pull: requests, paging, the large transcript, order, store --------------------------------------
 
 
