@@ -29,9 +29,14 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
 
-EXTRAS are the stores only an encrypted backup carries and no adapter reads yet — Health, the
-call log, Safari's history. They are copied out beside the others (`health/`, `calls/`,
-`safari/`) so the adapters that follow find them, and reported as "copied, no adapter yet".
+EXTRAS are the stores only an encrypted backup carries — the call log, Health, Safari's
+history. The call log has its adapter and runs like the SOURCES:
+
+    ios-calls           HomeDomain                                    Library/CallHistoryDB/
+                                                                  CallHistory.storedata
+
+Health and Safari have none yet: they are copied out beside the others (`health/`, `safari/`) so
+the adapters that follow find them, and reported as "copied, no adapter yet".
 
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
@@ -112,16 +117,16 @@ SOURCES: tuple[Source, ...] = (
     Source("ios-notes", NOTES, "NoteStore.sqlite"),
 )
 
-EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these; copied, no adapter yet
-    Source("health", HEALTH, "Health/healthdb_secure.sqlite", adapter=False),
+EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
+    Source("ios-calls", HOME, "Library/CallHistoryDB/CallHistory.storedata"),
+    Source("health", HEALTH, "Health/healthdb_secure.sqlite", adapter=False),  # copied, no adapter yet
     Source("health", HEALTH, "Health/healthdb.sqlite", adapter=False),
-    Source("calls", HOME, "Library/CallHistoryDB/CallHistory.storedata", adapter=False),
     Source("safari", SAFARI, "Library/Safari/History.db", adapter=False),
 )
 
 
 def source(name: str) -> Source | None:
-    """The source called `name`; `contacts`, `calendar` and `notes` stand for their `ios-` names."""
+    """The source called `name`; `contacts`, `calendar`, `notes` and `calls` stand for their `ios-` names."""
     return next((s for s in SOURCES + EXTRAS if name in (s.name, s.name.removeprefix("ios-"))), None)
 
 

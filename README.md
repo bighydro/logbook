@@ -64,9 +64,10 @@ The keybag in `Manifest.plist` is unlocked first, so a wrong password fails on o
 touched; then `Manifest.db` is decrypted into the inbox folder and every file is decrypted a chunk at a time
 on its way to the same `inbox/ios-backup-<udid>/<source>/` layout, so the adapters run unchanged. The
 password is never printed, never written anywhere, and never part of an error. `copies.json` records
-`encrypted: true` and each file's protection class. The extra stores are copied out beside the others —
-`health/` (`healthdb_secure.sqlite`, `healthdb.sqlite`), `calls/` (`CallHistory.storedata`), `safari/`
-(`History.db`) — and reported as *copied, no adapter yet*; `--only health` names them too. Without the extra
+`encrypted: true` and each file's protection class. The stores only an encrypted backup carries come along:
+the call log (`ios-calls/CallHistory.storedata`) runs through its adapter like the others; Health
+(`health/healthdb_secure.sqlite`, `healthdb.sqlite`) and Safari (`safari/History.db`) are copied out beside
+them and reported as *copied, no adapter yet*; `--only calls,health` names them too. Without the extra
 installed the command prints the `pip install` line and exits 2; without the variable it says which one to set.
 
 ## Where to keep the record
@@ -130,6 +131,7 @@ logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts f
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
 logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
+logbook add ios-calls ~/inbox/ios-backup-<udid>/ios-calls/CallHistory.storedata   # the call log, by adapter name
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
@@ -178,6 +180,14 @@ calendar, the place, the organizer and attendees as email refs, the status; a re
 carrying its rule as RRULE text and a moved occurrence points back at it — occurrences are never expanded.
 An all-day entry is placed at local midnight in your record's timezone. The store's placeholder rows (a
 start before 1900, such as 1601) are skipped and counted; a birthday from 1965 is kept.
+
+Calls become `call/v1` lines (RFC 0012), one per call the phone's log stores, from the `CallHistory.storedata`
+an encrypted backup carries: the start, the end when the call was answered, the direction, whether it connected,
+the seconds it lasted, the other end as a phone, email or handle ref (the same shape as a message's sender, so
+one resolution of a number covers the address book, the chats and the calls) and the service as the phone names
+it — `cellular`, `facetime`, `facetime-audio`, or a third-party app such as `whatsapp`. A missed call is a line
+too. Tier 1: a call record is about your own time and carries nobody's words. Any `add ios-calls <file>` names
+the adapter for a store copied out under another name; `logbook add <file>` recognises it by content.
 
 `show` prints people by name — the sender of a message, the organizer and attendees of an event — and the
 names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
