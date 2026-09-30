@@ -14,7 +14,7 @@ import time
 import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -111,8 +111,10 @@ def _append_with(
     lb: Logbook, adapter: adapters.Adapter, p: Path, given: Mapping[str, Any] | None = None
 ) -> int:
     """Run one file adapter on `p`, append, print what was added and what it skipped; the count.
-    `given` are the command's own options (`source`, `tier`, `at`), passed when the adapter's `run`
-    takes them; one it does not take exits 2, so a flag is never silently ignored."""
+    `given` are the command's own options (`source`, `tier`, `at`, `since`, `account`, `attachments`,
+    `only_labels`, `skip_labels`), passed when the adapter's `run` takes them; one it does not take
+    exits 2, so a flag is never silently ignored. An adapter whose `run` takes `owner_emails` gets
+    the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none."""
     counts: dict[str, int] = {}
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
     options: dict[str, Any] = {}
@@ -124,6 +126,15 @@ def _append_with(
         options["store"] = lb.attach
     if _takes(adapter, "assets"):
         options["assets"] = _registry(lb, "add")
+    if _takes(adapter, "owner_emails"):
+        owner_emails = lb.meta.get("owner_emails") or []
+        options["owner_emails"] = owner_emails
+        if not owner_emails and not (given or {}).get("account"):
+            print(
+                "hint: no owner_emails in logbook.json and no --account, so every message is `received`; "
+                'add "owner_emails": ["you@example.org"] to logbook.json to mark your own mail `sent`',
+                file=sys.stderr,
+            )
     for name, value in (given or {}).items():
         if value is None:
             continue
@@ -195,6 +206,7 @@ SKIP_PHRASES = {
     "skipped_not_a_position": "that are not position reports",
     "skipped_no_designator": "without a carrier and flight number",
     "skipped_no_route": "without both airports",
+    "skipped_label": "by label",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -219,6 +231,12 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",
     "no_gap": "calendar flights without a location gap",
+    "no_message_id": "without a Message-ID, keyed by digest",
+    "date_from_separator": "timed by the mbox separator (no Date header)",
+    "body_from_html": "with the body taken from HTML",
+    "decoding_errors": "with undecodable bytes replaced",
+    "attachments_referenced": "attachments referenced, not stored",
+    "attachments_stored": "attachments stored",
 }
 
 
@@ -287,10 +305,16 @@ def cmd_add(a: argparse.Namespace) -> None:
         "tier": a.tier,
         "at": a.at,
         "airports": _airports(a.airports) if a.airports else None,
+        "since": _since(a.since, lb.meta["timezone"]) if a.since else None,
+        "account": a.account,
+        "attachments": a.attachments,
+        "only_labels": _csv(a.only_labels),
+        "skip_labels": _csv(a.skip_labels),
     }
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
         return
+
     if len(a.what) > 1 and (by_name := adapters.named(a.what[0])) is not None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
@@ -321,6 +345,26 @@ def cmd_add(a: argparse.Namespace) -> None:
             ok = False
     if not ok:
         sys.exit(2)
+
+
+def _since(value: str, timezone: str) -> str:
+    """`--since` as RFC3339 UTC: an instant is normalised, a bare day is that day's local midnight
+    in the record's zone. Anything else exits 2."""
+    with contextlib.suppress(ValueError):
+        day = datetime.combine(parse_day(value), datetime.min.time(), tzinfo=ZoneInfo(timezone))
+        return day.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if _is_rfc3339(value):
+        instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return instant.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    print(f"add: --since must be a day (YYYY-MM-DD) or an RFC3339 instant, not {value!r}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _csv(value: str | None) -> list[str] | None:
+    """A comma-separated flag as a list, None when the flag was not given."""
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _add_named(lb: Logbook, adapter: adapters.Adapter, paths: list[Path], given: Mapping[str, Any]) -> None:
@@ -904,6 +948,8 @@ def _line_row(
         text = _transcript_text(p, names)
     elif line["kind"] == "call":
         text = _call_text(p, names)
+    elif line["kind"] == "mail":
+        text = _mail_text(p, names)
     else:
         text = (
             p.get("text")
@@ -972,6 +1018,47 @@ def _call_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     if isinstance(p.get("service"), str):
         parts.append(p["service"])
     return ", ".join(parts)
+
+
+MAIL = "\u2709"  # ✉
+ARROW = "\u2192"  # →
+EM_DASH = "\u2014"  # —
+BODY_INDENT = "    "
+
+
+def _mail_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    """`✉ subject — from → to (n attachments)` (RFC 0015). A person is the label a resolution
+    gives their address, else the name the header gave, else the address; the owner's own mail says
+    `me`. Raw (`names` None): the addresses as given, and the body indented under the row — the
+    only time `show` prints a body."""
+    subject = str(p.get("subject") or "(no subject)")
+    sender = p.get("from")
+    own = p.get("direction") == "sent" and names is not None
+    who = "me" if own else _mail_person(sender, names) or "?"
+    recipients = [*(p.get("to") or []), *(p.get("cc") or [])]
+    to = ", ".join(name for r in recipients if (name := _mail_person(r, names)))
+    head = f"{MAIL} {subject} {EM_DASH} {who}"
+    if to:
+        head += f" {ARROW} {to}"
+    attachments = p.get("attachments")
+    if isinstance(attachments, list) and attachments:
+        head += f" ({_plural(len(attachments), 'attachment')})"
+    if names is None and isinstance(p.get("body"), str) and p["body"].strip():
+        head += "\n" + "\n".join(BODY_INDENT + row for row in p["body"].rstrip("\n").split("\n"))
+    return head
+
+
+def _mail_person(person: object, names: Mapping[Ref, str] | None) -> str:
+    """A mail/v1 `{email, name?}`: its resolution label, else its header name, else the address;
+    raw is always the address."""
+    if not isinstance(person, dict):
+        return ""
+    address = str(person.get("email") or "")
+    if names is None:
+        return address
+    label = names.get(("email", address)) if address else None
+    own = person.get("name")
+    return label or (own if isinstance(own, str) and own else "") or address
 
 
 def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
@@ -1558,13 +1645,26 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
-    s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
+    s.add_argument(
+        "--tier", type=int, choices=(1, 2, 3), help="transcript, mail: privacy tier for the whole import"
+    )
     s.add_argument(
         "--airports",
         metavar="FILE",
         help="flights: a CSV (iata,icao,name,lat,lon,tz) added to the airports table"
         f" (default ${flights.AIRPORTS_ENV})",
     )
+    s.add_argument("--since", metavar="DAY|RFC3339", help="mail: only messages from this day or instant on")
+    s.add_argument("--account", metavar="EMAIL", help="mail: the mailbox the export came from (in raw_id)")
+    s.add_argument(
+        "--attachments",
+        action="store_const",
+        const=True,
+        default=None,
+        help="mail: store attachments under attachments/ (default: reference them by digest only)",
+    )
+    s.add_argument("--only-labels", metavar="A,B", help="mail: keep only messages with any of these labels")
+    s.add_argument("--skip-labels", metavar="A,B", help="mail: drop messages with any of these labels")
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
         "sync",

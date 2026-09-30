@@ -85,6 +85,7 @@ BUILT_IN = (
     "gcal",
     "ais",
     "adsb",
+    "mail",
 )
 
 
