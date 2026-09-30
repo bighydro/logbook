@@ -157,6 +157,7 @@ SKIP_PHRASES = {
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
     "skipped_no_start": "without a start",
+    "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
     "skipped_bad_start": "with an unusable start",
     "skipped_no_uid": "without a uid",
@@ -170,6 +171,8 @@ SKIP_PHRASES = {
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
     "no_guid": "without a guid, keyed by row id",
+    "no_unique_id": "without a unique id, keyed by row id",
+    "no_counterparty": "without a counterparty",
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
     "deleted": "marked for deletion",
@@ -237,16 +240,13 @@ def looks_like_path(arg: str) -> bool:
     return "/" in arg or arg.startswith("~") or arg.lower().endswith(PATH_SUFFIXES)
 
 
-TRANSCRIPT = "transcript"  # `add transcript <file|folder>`: the universal transcript adapter by name
-
-
 def cmd_add(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     given = {"source": a.source, "tier": a.tier, "at": a.at}
-    if a.what[0] == TRANSCRIPT and len(a.what) > 1:
+    if len(a.what) > 1 and (by_name := adapters.named(a.what[0])) is not None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
-            _add_transcripts(lb, paths, given)
+            _add_named(lb, by_name, paths, given)
             return
     paths = [Path(w).expanduser() for w in a.what]
     # When nothing exists, the arguments are a sentence unless every one of them looks like a
@@ -275,11 +275,10 @@ def cmd_add(a: argparse.Namespace) -> None:
         sys.exit(2)
 
 
-def _add_transcripts(lb: Logbook, paths: list[Path], given: Mapping[str, Any]) -> None:
-    """`add transcript <file|folder>...`: every path through the transcript adapter, whatever its
-    format (Markdown and plain text are never sniffed), with `--source`, `--tier` and `--at`."""
-    adapter = adapters.named(TRANSCRIPT)
-    assert adapter is not None
+def _add_named(lb: Logbook, adapter: adapters.Adapter, paths: list[Path], given: Mapping[str, Any]) -> None:
+    """`add <adapter> <file|folder>...`: every path through the named adapter, sniffed or not
+    (`transcript` reads Markdown and plain text this way only; `ios-calls` a store copied out of a
+    backup under any name), with `--source`, `--tier` and `--at` when it takes them."""
     for p in paths:
         _append_with(lb, adapter, p, given)
 
@@ -516,8 +515,8 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     a flag, never printed). The keybag check comes first, so a wrong password fails before any file
     is touched; then Manifest.db is decrypted into the inbox folder and every copy is decrypted on
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
-    encrypted backup carries (`ios_backup.EXTRAS`: Health, the call log, Safari's history) are
-    copied out too, and reported as copied with no adapter yet."""
+    encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`; Health
+    and Safari's history are copied out and reported as copied with no adapter yet."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
@@ -710,6 +709,8 @@ def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo, names: Mapping[
         text = _event_text(p, names)
     elif line["kind"] == "transcript":
         text = _transcript_text(p, names)
+    elif line["kind"] == "call":
+        text = _call_text(p, names)
     else:
         text = (
             p.get("text")
@@ -732,6 +733,25 @@ def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
 
 def _ref_value(ref: object) -> str:
     return str(ref.get("value", "")) if isinstance(ref, dict) else ""
+
+
+def _call_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+    """`← who, 7 min, cellular` for an answered incoming call, `→ who` outgoing, `missed` or `no
+    answer` when it did not connect (RFC 0012). The counterparty is its label, else the ref as given;
+    a withheld number is `withheld`. Raw (`names` None): the ref."""
+    ref = p.get("counterparty")
+    who = _name(ref, names) or _ref_value(ref) or "withheld"
+    arrow = "→" if p.get("direction") == "outgoing" else "←"
+    parts = [f"{arrow} {who}"]
+    if not p.get("answered"):
+        parts.append("no answer" if p.get("direction") == "outgoing" else "missed")
+    else:
+        seconds = p.get("duration_s")
+        if isinstance(seconds, int) and seconds > 0:
+            parts.append(f"{seconds // 60} min" if seconds >= 60 else f"{seconds} s")
+    if isinstance(p.get("service"), str):
+        parts.append(p["service"])
+    return ", ".join(parts)
 
 
 def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
@@ -1106,7 +1126,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--timezone")
     s.set_defaults(fn=cmd_init)
     s = sub.add_parser("add", help="a sentence in your words, an export file, or a folder of them")
-    s.add_argument("what", nargs="+", help="the words, the path(s), or `transcript <file|folder>`")
+    s.add_argument("what", nargs="+", help="the words, the path(s), or `<adapter> <file|folder>`")
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
     s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
@@ -1134,7 +1154,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
         + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
-        + "; the last three only from an encrypted backup, copied without an adapter yet)",
+        + "; the last four only from an encrypted backup, health and safari copied without an adapter yet)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
