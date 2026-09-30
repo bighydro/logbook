@@ -167,7 +167,8 @@ class Logbook:
         appends each file in chain order, so this is a merge: every month file open at once, one
         parsed line from each in a heap keyed by seq, the smallest yielded and its file read on.
         Memory is one line per month file, whatever the size of the log. `progress` is told of
-        each file as its last line is yielded. A file whose lines are not in seq order raises
+        each file in path order: a file that finishes early is held until every earlier path
+        has finished, so `--progress` reads as file 1, 2, … N. A file whose lines are not in seq order raises
         UnsortedFile after some lines have been yielded; `verify` then reads again, sorted
         (`_lines_by_seq`), as SPEC §3 orders by seq wherever a line was found."""
         files = self.files()
@@ -177,6 +178,23 @@ class Logbook:
             held = [0] * len(files)  # lines each file holds, blank ones aside, for progress
             heap: list[tuple[int, int, Line]] = []
             started, total = time.monotonic(), 0
+            pending_held: dict[int, int] = {}
+            next_emit = 0
+
+            def emit_ready() -> None:
+                """Report finished files in path order, not heap-exhaustion order."""
+                nonlocal next_emit
+                if progress is None:
+                    return
+                while next_emit < len(files) and next_emit in pending_held:
+                    file_no = next_emit
+                    progress(
+                        self._relative(files[file_no]),
+                        pending_held.pop(file_no),
+                        total,
+                        time.monotonic() - started,
+                    )
+                    next_emit += 1
 
             def advance(file_no: int, after: int) -> None:
                 """Push the next line of a file, or report the file finished."""
@@ -194,7 +212,8 @@ class Logbook:
                         held[file_no] += 1
                         return
                 if progress is not None:
-                    progress(self._relative(f), held[file_no], total, time.monotonic() - started)
+                    pending_held[file_no] = held[file_no]
+                    emit_ready()
 
             for file_no in range(len(files)):
                 advance(file_no, 0)
