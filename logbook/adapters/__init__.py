@@ -152,7 +152,7 @@ def find(path: Path) -> Adapter | None:
     return next((a for a in file_adapters() if a.sniff(Path(path))), None)
 
 
-ALIASES = {  # `logbook add flights <export.csv>` (RFC 0013); `add health`, `add calls` as `import-backup --only`
+ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as `import-backup --only`
     "flights": "flighty",
     "health": "apple-health",
     "calls": "ios-calls",

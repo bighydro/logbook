@@ -213,7 +213,7 @@ carries: steps, distance, active and basal energy and flights climbed summed int
 heart rate at its own resolution, at most one reading a minute per device; resting heart rate, heart-rate
 variability and weight one line each; every sleep stage as a span with its stage; every workout as a span with
 its duration, activity, energy and distance. Each line names the device that measured it (`Watch7,1`) and, when
-`healthdb.sqlite` is beside the store, the source's name. Tier 2. `logbook add health <file>` names the adapter;
+`healthdb.sqlite` is beside the store, the source's name. Tier 3 (SPEC §4; `--tier` overrides). `logbook add health <file>` names the adapter;
 `logbook add <file>` recognises the store by content. Re-importing a later backup appends only what is new.
 
 `show` prints people by name — the sender of a message, the organizer and attendees of an event — and the

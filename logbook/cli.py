@@ -1729,7 +1729,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
     s.add_argument(
-        "--tier", type=int, choices=(1, 2, 3), help="transcript, mail: privacy tier for the whole import"
+        "--tier",
+        type=int,
+        choices=(1, 2, 3),
+        help="transcript, health, mail: privacy tier for the whole import (transcript and health default 3)",
     )
     s.add_argument(
         "--airports",

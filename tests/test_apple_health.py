@@ -300,8 +300,15 @@ def test_run_yields_health_lines(tmp_path):
     assert len(lines) == LINES
     for line in lines:
         assert set(line) == ENVELOPE
-        assert line["source"] == "apple-health" and line["kind"] == "health" and line["tier"] == 2
+        assert line["source"] == "apple-health" and line["kind"] == "health" and line["tier"] == 3
         assert line["payload"]["schema"] == "health-sample/v1"
+
+
+def test_run_tier_is_3_by_default_and_tier_overrides_it(tmp_path):
+    p = _store(tmp_path / "health")
+    assert {line["tier"] for line in apple_health.run(p)} == {3}
+    assert {line["tier"] for line in apple_health.run(p, tier=2)} == {2}
+    assert {line["tier"] for line in apple_health.run(p, tier=None)} == {3}
 
 
 def test_run_counts_what_it_skipped(tmp_path):
@@ -475,6 +482,14 @@ def test_cli_add_health_by_name_reports_lines_and_skips(tmp_path):
     assert f"valid — {LINES} lines" in run("verify").stdout
 
 
+def test_cli_add_tier_overrides_the_default(tmp_path):
+    run = _cli(tmp_path)
+    run("init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo")
+    run("add", "health", str(_store(tmp_path / "health")), "--tier", "2")
+    lb = Logbook(tmp_path / "lb")
+    assert {line["tier"] for line in lb.lines()} == {2}
+
+
 def test_cli_add_by_sniff_writes_the_same_lines(tmp_path):
     run = _cli(tmp_path)
     run("init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo")
@@ -564,7 +579,7 @@ PROFILE = {
 
 def _rfc_rules(line: dict[str, Any]) -> None:
     assert set(line) == ENVELOPE
-    assert line["kind"] == "health" and line["tier"] == 2 and line["source"] == "apple-health"
+    assert line["kind"] == "health" and line["tier"] == 3 and line["source"] == "apple-health"
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", line["at"])
     assert line["end"] is None or line["end"] >= line["at"]
     assert datetime.strptime(line["at"], "%Y-%m-%dT%H:%M:%SZ").year >= 1900

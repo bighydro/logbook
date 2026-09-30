@@ -10,10 +10,10 @@ what it means: no "good night", no "active day", no target. Interpretation is an
 
 ## Line
 
-`kind` MUST be `health`. `tier` SHOULD be 2 (SPEC §4 lists health under tier 3 as typical content;
-the captain sets these samples at 2: a step count and a heart rate are about the owner's own body
-but carry nobody's words and no diagnosis; a clinical record, a lab result or a medication would be
-another profile at tier 3). `at` is the sample's start in UTC; `end` is its end when the sample has
+`kind` MUST be `health`. `tier` SHOULD be 3: SPEC §4 lists health under tier 3, and a step count,
+a heart rate and a night's sleep are the owner's body, the class of fact the spec keeps most
+private, however harmless one reading looks. An adapter MAY let the owner lower it (`logbook add
+--tier`); the profile does not. `at` is the sample's start in UTC; `end` is its end when the sample has
 a span (a bucket, a sleep stage, a workout), `null` for an instant (a heart-rate reading, a weight).
 `tz` is the zone the device recorded the sample in when the store keeps it, else the record's.
 `source` is the adapter: `apple-health`, …
@@ -62,13 +62,13 @@ Types and their units:
 ## Example (synthetic)
 
 ```json
-{"at":"2026-03-02T07:00:00Z","end":"2026-03-02T07:15:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":2,
+{"at":"2026-03-02T07:00:00Z","end":"2026-03-02T07:15:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":3,
  "payload":{"schema":"health-sample/v1","raw_id":"steps:2026-03-02T07:00:00Z:Watch7,1","type":"steps","value":250,"unit":"count",
  "device":"Watch7,1","source_name":"Apple Watch","extra":{"samples":3}}}
 ```
 
 ```json
-{"at":"2026-03-01T23:30:00Z","end":"2026-03-02T00:30:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":2,
+{"at":"2026-03-01T23:30:00Z","end":"2026-03-02T00:30:00Z","tz":"Europe/Oslo","source":"apple-health","kind":"health","tier":3,
  "payload":{"schema":"health-sample/v1","raw_id":"sleep:1042","type":"sleep","value":3600,"unit":"s","stage":"deep","device":"Watch7,1"}}
 ```
 
@@ -95,4 +95,4 @@ Types and their units:
 - **Why buckets and not the raw samples.** A watch writes a step sample every few minutes and an energy sample every minute; a year of that is over a million lines, none of which anyone reads. A quarter hour is fine enough to see a walk and coarse enough to keep the record small; the store keeps the raw rows if anyone ever needs them.
 - **Why the device is on the line.** Health data is the one source where two devices legitimately report the same thing; a reader cannot dedupe without knowing which device said what.
 - **Why no daily totals here.** "8,412 steps on Tuesday" is derived: an engine (or `logbook stats --health`) sums the buckets. Writing the total as a line would make a re-import with one more bucket a contradiction.
-- **What is not a health sample.** A workout's route is `location/v1`; a meal, a medication and a symptom are not this profile; a lab result is a document, tier 3.
+- **What is not a health sample.** A workout's route is `location/v1`; a meal, a medication and a symptom are not this profile; a lab result is a document, another profile.

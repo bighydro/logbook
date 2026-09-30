@@ -37,7 +37,8 @@ bucket per device (rule 2): `at` the bucket's start, `end` its end, `extra.sampl
 `raw_id` `<type>:<bucket start>:<device>`. Heart rate keeps its native resolution but at most one
 reading per UTC minute per device: the first is the line, the rest are skipped and counted (rule 3).
 A sleep stage is one line per segment, `value` its length in seconds (rule 4). A workout is a span
-with its duration as `value` and its activity, energy and distance under `extra`.
+with its duration as `value` and its activity, energy and distance under `extra`. Every line is tier 3
+(SPEC §4); `logbook add --tier` overrides.
 
 `device` is the provenance's `origin_product_type` (`Watch7,1`, `iPhone14,2`); `tz` the provenance's
 `tz_name` when it looks like a zone name, else None so the record's applies. `raw_id` is
@@ -58,7 +59,7 @@ from typing import Any
 
 NAME = "apple-health"
 KIND = "health"
-TIER = 2
+TIER = 3  # SPEC §4: health is tier 3; `logbook add --tier` overrides
 SCHEMA = "health-sample/v1"
 
 SQLITE_HEADER = b"SQLite format 3\x00"
@@ -171,21 +172,26 @@ class _Bucket:
 class _State:
     counts: dict[str, int]
     since: str | None
+    tier: int
     buckets: dict[tuple[str, str], _Bucket] = field(default_factory=dict)
     last_reading: dict[tuple[str, str], datetime] = field(default_factory=dict)  # (type, device) → minute
 
 
 def run(
-    path: Path, since: str | None = None, counts: dict[str, int] | None = None
+    path: Path,
+    since: str | None = None,
+    counts: dict[str, int] | None = None,
+    tier: int | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One health-sample/v1 line per reading, stage or workout, and one per 15-minute bucket of the
     counted types, streamed in start order.
 
     `since` is RFC3339 UTC; lines with `at` before it are not yielded. `counts` tallies
     `skipped_no_date`, `skipped_placeholder_date`, `skipped_no_value`, `skipped_bad_span`,
-    `skipped_other_type`, `skipped_unknown_stage` and `skipped_over_cap` (RFC 0014 rules 3, 7, 8)."""
+    `skipped_other_type`, `skipped_unknown_stage` and `skipped_over_cap` (RFC 0014 rules 3, 7, 8).
+    `tier` overrides the default 3 (`logbook add --tier`)."""
     path = Path(path)
-    state = _State(counts if counts is not None else {}, since)
+    state = _State(counts if counts is not None else {}, since, tier or TIER)
     con = _open(path)
     try:
         query, names = _query(con)
@@ -460,7 +466,7 @@ def _line(
         "tz": tz,
         "source": NAME,
         "kind": KIND,
-        "tier": TIER,
+        "tier": state.tier,
         "payload": payload,
     }
 
