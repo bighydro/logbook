@@ -126,7 +126,7 @@ A reader here is `show`, `export`, or anything else that lists the record for a 
 - A reader listing a day MAY read only the month files that day can touch (§2). Resolutions and retractions apply wherever the line they cover is, so it takes those from every file.
 - A retraction line is not listed on its own day (RFC 0003 rule 3). It appears as a mark on the line it hides, on that line's day.
 - An alias walk (RFC 0006 rule 6) that ends without reaching an entity line — on its fourth hop, on a cycle, or at a ref with no line standing — names nothing. The `label` an alias line carries is a hint written at resolution time, not a resolution.
-- A run of consecutive location points from one source, unbroken by any other row, MAY be collapsed into one row. The row spans from the first point's `at` to the last point's `end` when that is not null, else to its `at`.
+- A run of consecutive location points from one source and of one subject (RFC 0001 `subject`; absent is the owner), unbroken by any other row, MAY be collapsed into one row. The row spans from the first point's `at` to the last point's `end` when that is not null, else to its `at`.
 - A payload whose shape predates its profile (§6) is shown however the reader chooses; reading a string `chat` as the chat's name and a string attendee as an `email` ref is reasonable, not required.
 - A read command MAY refuse a `logbook/0.1` record, so that every command answers a record it does not carry the same way; §3.1 requires refusal only of verify and write. A reader that does read one says nothing about its hashes.
 
