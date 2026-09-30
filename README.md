@@ -19,6 +19,7 @@ logbook add "had lunch with a friend by the lake"
 logbook add ~/Downloads/takeout.zip     # any export, no flags
 logbook show today
 logbook stats                   # what the record holds: counts by kind, source and year
+logbook derive stays --day 2026-09-30   # the day read back: stays, stops, moves, where you slept
 logbook verify                  # the chain is intact
 ```
 
@@ -111,7 +112,9 @@ logbook migrate                  # same lines, new hashes; keeps the old files a
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head.
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
+                    stays.json: how long a stay is, how far a place reaches. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
+  places.json       optional: names for the places `derive stays` finds (lat, lon, radius_m).
   state/            where each live source left off. bookkeeping, not the record.
   exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
@@ -325,6 +328,29 @@ calendar by its name or by eight characters of the URL's hash.
 Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file
 outside the record) and never in the record, the repository or a script you share. The logbook sends it
 only in the `Authorization` header and never prints it.
+
+## Reading the day back
+
+`logbook derive stays` is the first reader of the record: it turns the day's `location/v1` lines into
+stays, stops and moves and prints them in your local time, or as JSON with `--json`. Nothing is written
+to the record; the thresholds live in `policy/stays.json` (created with defaults on the first run) and an
+optional `places.json` at the root names places.
+
+```bash
+logbook derive stays                          # today
+logbook derive stays --day 2026-09-30
+logbook derive stays --since 2026-09-01 --until 2026-09-30 --json
+logbook derive stays --subject solvind        # one asset's own track (assets.json)
+```
+
+A stay is a span at one place of twenty minutes or more, or of any length when something is attached to
+it: a calendar event, a transcript, a note, a call, a message or a photo whose time falls inside it.
+Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
+flagged. A move is what lies between: its distance along the points, its duration, and a mode from the
+speed (walk, car, train, flight; flight also when a gap starts and ends near airports). The night of each
+day is the longest stay between 22:00 and 08:00; a night with none is in transit. An asset registered in
+`assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
+marked `aboard`.
 
 ## Handing a window to someone
 
