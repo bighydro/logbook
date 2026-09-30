@@ -61,6 +61,47 @@ def _show(capsys: pytest.CaptureFixture[str], day: str = DAY) -> list[str]:
     return capsys.readouterr().out.splitlines()
 
 
+def _fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drafts: list[dict[str, Any]]) -> Logbook:
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many(drafts)
+    return lb
+
+
+# -- notes ------------------------------------------------------------------------------------
+
+
+def test_show_a_note_prints_its_first_line_and_counts_the_rest(tmp_path: Path, monkeypatch, capsys):
+    _fresh(
+        tmp_path,
+        monkeypatch,
+        [_note("2026-03-01T11:00:00Z", "Standup notes\n\n- agreed the plan\n- next: ship\n")],
+    )
+    out = _show(capsys)
+    assert out[1] == "  12:00  note       manual         Standup notes … (+3 lines)"
+    assert len(out) == 2
+
+
+def test_show_a_one_line_note_and_a_two_line_note(tmp_path: Path, monkeypatch, capsys):
+    _fresh(
+        tmp_path,
+        monkeypatch,
+        [
+            _note("2026-03-01T11:00:00Z", "lunch"),
+            _note("2026-03-01T12:00:00Z", "\ncall the dentist\ntomorrow"),
+        ],
+    )
+    out = _show(capsys)
+    assert out[1].endswith("  lunch") and out[2].endswith("  call the dentist … (+1 line)")
+
+
+def test_show_raw_prints_the_whole_note(tmp_path: Path, monkeypatch, capsys):
+    _fresh(tmp_path, monkeypatch, [_note("2026-03-01T11:00:00Z", "Standup notes\n\n- agreed the plan")])
+    cli.main(["show", DAY, "--raw"])
+    out = capsys.readouterr().out
+    assert "Standup notes\n\n- agreed the plan\n" in out and "…" not in out
+
+
 # -- order ------------------------------------------------------------------------------------
 
 

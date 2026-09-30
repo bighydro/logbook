@@ -965,6 +965,8 @@ def _line_row(
         text = _call_text(p, names)
     elif line["kind"] == "mail":
         text = _mail_text(p, names)
+    elif line["kind"] == "note":
+        text = _note_text(p, raw=names is None)
     else:
         text = (
             p.get("text")
@@ -973,6 +975,21 @@ def _line_row(
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
     return f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}"
+
+
+def _note_text(p: dict[str, Any], raw: bool) -> str:
+    """A note's first line, with `… (+N lines)` when there are more (RFC 0010); `--raw` prints the
+    whole text as written."""
+    text = str(p.get("text") or "")
+    if raw:
+        return text
+    lines = text.rstrip().splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return ""
+    rest = len(lines) - 1
+    return lines[0] if rest == 0 else f"{lines[0]} … (+{_plural(rest, 'line')})"
 
 
 def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
