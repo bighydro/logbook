@@ -54,7 +54,7 @@ A record with no `attachments/` directory is valid. Conformance (§6) does not r
 
 One observation per line, JSON, UTF-8, newline-terminated, in `logbook/<YYYY>/<MM>.jsonl`, where YYYY and MM are taken from `at` in UTC.
 
-Placement is a writer's obligation, not a validity condition. A writer MUST put a line in the month file of its `at`. A reader takes every line of every `logbook/*/*.jsonl` file and verifies it by §3 wherever it was found; a line in the wrong month file is verified normally.
+Placement is a writer's obligation, not a validity condition. A writer MUST put a line in the month file of its `at`. A reader takes every line of every `logbook/*/*.jsonl` file and verifies it by §3 wherever it was found; a line in the wrong month file is verified normally. A reader other than `verify` MAY rely on placement: to list a day it MAY read only the month files that day's instants can fall in, and a line it misses because a writer put it in another month file is that writer's bug, not the reader's.
 
 The stored form of a line is any JSON text for the object on one line: UTF-8, no embedded newline (the newline ends the line), any key order, any whitespace. Only the canonical form (§3) is hashed, so re-serialising a line changes nothing. A reader ignores an empty or whitespace-only line. A line whose JSON text gives the same key twice in one object, at any depth, is invalid.
 
@@ -75,7 +75,9 @@ The stored form of a line is any JSON text for the object on one line: UTF-8, no
 
 Every field in the table is present in every line. `end` is `null` when the observation has no duration or its end is unknown; it is never omitted. Absent and null are different inputs to the hash: an object without `end` and one with `"end":null` canonicalise to different bytes. Writers MUST emit `null`.
 
-`at`, `end` and `recorded_at` are RFC 3339 date-times in UTC with the literal `Z` designator, as in `2026-03-01T07:30:00Z`; a numeric offset such as `+00:00` MUST NOT be used. Fractional seconds are permitted. The string is hashed verbatim, so `07:30:00Z` and `07:30:00.000Z` are different inputs.
+`at`, `end` and `recorded_at` are RFC 3339 date-times in UTC with the literal `Z` designator, as in `2026-03-01T07:30:00Z`; a numeric offset such as `+00:00` MUST NOT be used. Fractional seconds are permitted. The string is hashed verbatim, so `07:30:00Z` and `07:30:00.000Z` are different inputs. They are the same instant: timestamps compare as the instants they denote, never as text (`07:30:00.5Z` is after `07:30:00Z`, though it sorts before it as a string).
+
+`tz`, and `timezone` in `logbook.json`, are IANA zone names. This spec names no edition of the zone database, so a name may be known to one reader and not another (`Europe/Kyiv` and `Europe/Kiev` are the same zone under two editions). `verify` does not interpret `tz`, so no zone name makes a record invalid. A reader that must localise a time and does not know the zone MUST say so; it MUST NOT silently substitute another zone.
 
 Unknown fields MUST be preserved by readers and MUST NOT be added by writers at the top level; extensions go inside `payload`.
 
@@ -116,6 +118,18 @@ Corrections are new lines. A source that revises an earlier record writes a new 
 
 Canonicalisation is fixed, not versioned (ADR 0014): a conformant implementation carries one rule and MUST refuse to verify or write a `logbook/0.1` record. Such a record MUST be migrated forward. A migration keeps every line's `id`, `seq`, content fields and `recorded_at` unchanged, recomputes `prev` and `hash` in `seq` order under the 0.2 rule, sets `format` to `logbook/0.2`, appends `{from_format, from_head, migrated_at}` to `lineage` in `logbook.json`, and then appends one line — `source` `manual`, `kind` `migration`, `tier` 1, payload `{"schema": "migration/v1", "from_format": "logbook/0.1", "from_head": "<old head>"}` — so that the fact of the migration, and the head it replaced, are inside the chain. The old head stays reproducible from the old files with the old rule; nothing else about the record changes.
 
+### 3.2 Readers
+
+A reader here is `show`, `export`, or anything else that lists the record for a person. Nothing in this subsection touches validity or the hash; it is here so that two implementations print the same day.
+
+- A day is listed in the order of the instant `at` denotes, then by `seq`. A line whose `at` does not parse is on no day; a reader skips it.
+- A reader listing a day MAY read only the month files that day can touch (§2). Resolutions and retractions apply wherever the line they cover is, so it takes those from every file.
+- A retraction line is not listed on its own day (RFC 0003 rule 3). It appears as a mark on the line it hides, on that line's day.
+- An alias walk (RFC 0006 rule 6) that ends without reaching an entity line — on its fourth hop, on a cycle, or at a ref with no line standing — names nothing. The `label` an alias line carries is a hint written at resolution time, not a resolution.
+- A run of consecutive location points from one source, unbroken by any other row, MAY be collapsed into one row. The row spans from the first point's `at` to the last point's `end` when that is not null, else to its `at`.
+- A payload whose shape predates its profile (§6) is shown however the reader chooses; reading a string `chat` as the chat's name and a string attendee as an `email` ref is reasonable, not required.
+- A read command MAY refuse a `logbook/0.1` record, so that every command answers a record it does not carry the same way; §3.1 requires refusal only of verify and write. A reader that does read one says nothing about its hashes.
+
 ## 4. Tiers
 
 | Tier | Typical content | At rest |
@@ -128,11 +142,11 @@ Derived data inherits the highest tier of its evidence. Conformance requires the
 
 ## 5. Payload profiles
 
-The envelope is the standard. Payloads are versioned by `payload.schema` and proposed as RFCs in `rfcs/`. Seed profiles: `location/v1`, `photo/v1`, `event/v1`, `message/v1`, `transaction/v1`, `health-sample/v1`, `note/v1`. A logbook with unknown schemas is still valid.
+The envelope is the standard. Payloads are versioned by `payload.schema` and proposed as RFCs in `rfcs/`. Seed profiles: `location/v1`, `photo/v1`, `event/v1`, `message/v1`, `transaction/v1`, `health-sample/v1`, `note/v1`. A logbook with unknown schemas is still valid, and so is a line whose payload does not have the shape its profile describes: a profile constrains writers, and a reader MUST NOT fail on a payload it cannot interpret.
 
 ## 6. Conformance
 
-An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`; when appending one line to a copy of it yields a logbook that still verifies, with `seq` + 1; and when changing any hashed field of any line of the copy (a content field of §3, `seq`, `prev`, `recorded_at` or `hash`), or deleting any line of it, makes `verify` report invalid. `id` is outside the hash, and the stored form is not hashed (§2): a change to `id`, or a re-serialisation that leaves the canonical form unchanged, is not detected and is not required to be. `verify` checks the envelope requirements of §2 as well as the chain rules of §3. Level 2 conformance (a later version) adds encryption. Two independent implementations must agree before v1.0 is frozen.
+An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`; when appending one line to a copy of it yields a logbook that still verifies, with `seq` + 1; and when changing any hashed field of any line of the copy (a content field of §3, `seq`, `prev`, `recorded_at` or `hash`), or deleting any line of it, makes `verify` report invalid. `id` is outside the hash, and the stored form is not hashed (§2): a change to `id`, or a re-serialisation that leaves the canonical form unchanged, is not detected and is not required to be. `verify` checks the envelope requirements of §2 as well as the chain rules of §3. The sample tests the envelope and the chain, not the profiles: its payloads were written before the RFCs that now define `message/v1` and `event/v1`, and some do not have the shapes those RFCs give (a `chat` that is a string, an attendee that is a string). They are not profile examples; the RFCs are. Level 2 conformance (a later version) adds encryption. Two independent implementations must agree before v1.0 is frozen.
 
 *Status:* two independent implementations, [openlogbook](https://github.com/bighydro/logbook) (Python, reference) and [logbook-ts](https://github.com/bighydro/logbook-ts) (TypeScript), reproduce the head in `conformance/expected.json`; they agree on `verify` and `append`.
 
