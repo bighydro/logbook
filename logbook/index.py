@@ -278,6 +278,26 @@ class Index:
         ).fetchall()
         return self._read(found)
 
+    def by_kind(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> list[Line]:
+        """Every line of one kind, in chain order, optionally only those whose local day is in
+        [first_day, last_day] (either bound may be None). Flights, calendar entries: the kinds a
+        reader needs whole."""
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
+            " ORDER BY seq",
+            (kind, first_day or "", last_day or "9999-12-31"),
+        ).fetchall()
+        return self._read(found)
+
+    def superseded(self, kind: str) -> dict[str, int]:
+        """id → the seq of the line of this kind that `supersedes` it (the last one when several
+        do), from the `supersedes` column, nothing read from the files."""
+        found = self.db.execute(
+            "SELECT supersedes, seq FROM lines WHERE kind = ? AND supersedes IS NOT NULL ORDER BY seq",
+            (kind,),
+        ).fetchall()
+        return {str(superseded): int(seq) for superseded, seq in found}
+
     def line_id(self, source: str, raw_id: str) -> str | None:
         """The id of the line with this (source, raw_id), or None; the first written when the log
         has more than one (an adapter that keys on raw_id never writes two)."""

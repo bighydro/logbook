@@ -403,3 +403,27 @@ def test_resolutions_sees_a_line_appended_after_the_index_was_built(lb: Logbook)
     )
     with lb.index() as idx:  # incremental add, no rebuild
         assert [line["payload"]["label"] for line in idx.resolutions()] == ["A"]
+
+
+def test_by_kind_lists_every_line_of_one_kind_in_chain_order(lb: Logbook):
+    with lb.index() as idx:
+        points = idx.by_kind("location")
+        assert [p["payload"]["raw_id"] for p in points] == ["trk:1", "trk:2"]
+        assert [int(p["seq"]) for p in points] == sorted(int(p["seq"]) for p in points)
+        assert idx.by_kind("flight") == []
+
+
+def test_superseded_maps_each_superseded_id_to_the_seq_that_superseded_it(lb: Logbook):
+    first = lb.append(
+        at="2026-03-01T10:00:00Z", source="manual", kind="flight", tier=1, payload={"schema": "flight/v1"}
+    )
+    second = lb.append(
+        at="2026-03-01T10:00:00Z",
+        source="flighty",
+        kind="flight",
+        tier=1,
+        payload={"schema": "flight/v1", "supersedes": first["id"]},
+    )
+    with lb.index() as idx:
+        assert idx.superseded("flight") == {first["id"]: int(second["seq"])}
+        assert idx.superseded("note") == {}
