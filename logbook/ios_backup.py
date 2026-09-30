@@ -36,10 +36,13 @@ call log, Safari's history. They are copied out beside the others (`health/`, `c
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
 store, the siblings beside it, the media in the folder the adapter looks for beside the store
-(`Message/`, `Attachments/`) — and checks every copy by size (the plaintext size, for an
-encrypted one). The adapters then run on the copies. `write_copies` records every copy in
-`copies.json` beside them: domain, path, copy, bytes, whether it was decrypted and under which
-protection class — never a key.
+(`Message/`, `Attachments/`) — and checks every copy against the stored blob: byte for byte for
+a plain file, the blob's length less its PKCS#7 padding for a decrypted one. The manifest's
+`Size` is what the file measured on the phone and can be stale against the blob (seen on iOS
+26.5), so a copy that matches the blob but not `Size` is one warning naming the file and both
+sizes, never an error. The adapters then run on the copies. `write_copies` records every copy
+in `copies.json` beside them: domain, path, copy, bytes, whether it was decrypted and under
+which protection class, and that warning when there was one — never a key.
 """
 
 from __future__ import annotations
@@ -77,7 +80,7 @@ class NotABackup(Exception):
 
 
 class CopyError(Exception):
-    """A copy came out a different size from its original."""
+    """A copy came out a different size from the stored blob it was made from."""
 
 
 @dataclass(frozen=True)
@@ -124,9 +127,11 @@ def source(name: str) -> Source | None:
 
 @dataclass(frozen=True)
 class BackupFile:
-    """One file row of Manifest.db and where its bytes are; `size` is None when they are not there
-    (for an encrypted file, the plaintext size). `key` is the file's unwrapped key when the backup
-    is encrypted — never printed — and `protection_class` the class it was wrapped under."""
+    """One file row of Manifest.db and where its bytes are; `size` is None when they are not there,
+    else the manifest's `Size` (the file as measured on the phone, the plaintext size for an
+    encrypted one; it can be stale against the stored blob) or, when the row has none, the
+    blob's. `key` is the file's unwrapped key when the backup is encrypted — never printed — and
+    `protection_class` the class it was wrapped under."""
 
     domain: str
     relative_path: str
@@ -238,6 +243,8 @@ class Manifest:
         size: int | None = None
         if self.keybag is not None:
             protection_class, key, size = self._file_key(relative_path, blob)
+        else:
+            size = _claimed_size(blob)
         for path in candidates:
             if path.is_file():
                 if size is None:
@@ -310,6 +317,19 @@ class Manifest:
             yield self._located(file_id, domain, relative_path, blob)
 
 
+def _claimed_size(blob: object) -> int | None:
+    """The `Size` an unencrypted backup's file plist claims, or None when the row has no readable
+    plist (an older or a synthetic backup leaves the column NULL)."""
+    if not isinstance(blob, bytes):
+        return None
+    try:
+        root = _archived_root(plistlib.loads(blob))
+    except (plistlib.InvalidFileException, ValueError):
+        return None
+    size = root.get("Size") if root is not None else None
+    return size if isinstance(size, int) else None
+
+
 def _archived_root(data: object) -> dict[str, Any] | None:
     """The root object of an NSKeyedArchiver plist, when it is a dictionary."""
     if not isinstance(data, dict):
@@ -329,6 +349,17 @@ def _archived(data: dict[str, Any], value: object) -> object:
     return value
 
 
+@dataclass(frozen=True)
+class Copy:
+    """One file `copy` made: the row it came from, where the copy is, how many bytes it holds,
+    and the one-line warning when the manifest's `Size` disagreed with the stored blob."""
+
+    file: BackupFile
+    target: Path
+    bytes: int
+    warning: str | None = None
+
+
 @dataclass
 class Plan:
     """What one source would import: its store (None when the backup has no row for it), the
@@ -339,7 +370,7 @@ class Plan:
     store: BackupFile | None
     siblings: list[BackupFile] = field(default_factory=list)
     media: list[BackupFile] = field(default_factory=list)
-    copied: list[tuple[BackupFile, Path]] = field(default_factory=list)  # filled by `copy`
+    copied: list[Copy] = field(default_factory=list)  # filled by `copy`
 
     @property
     def listed(self) -> bool:
@@ -384,14 +415,15 @@ def copy(p: Plan, dest: Path) -> Path:
     The store and its siblings land in `dest` itself; a sibling left by an earlier copy that this
     backup does not have is removed, so the store is never read with someone else's journal. Media
     lands under `dest/<media folder>/` with its path below the backup's media prefix. Every copy is
-    checked by size against its original; a mismatch raises CopyError. An encrypted file is
-    decrypted on the way, a chunk at a time. Every copy is noted in `p.copied`."""
+    checked against the stored blob (`_copy_file`); a mismatch raises CopyError, a stale manifest
+    `Size` is only a warning on the Copy. An encrypted file is decrypted on the way, a chunk at a
+    time. Every copy is noted in `p.copied`."""
     if not p.found or p.store is None:
         raise ValueError(f"{p.source.name}: nothing to copy")
     dest.mkdir(parents=True, exist_ok=True)
     p.copied.clear()
     store_copy = _copy_file(p.store, dest / p.store.name)
-    p.copied.append((p.store, store_copy))
+    p.copied.append(store_copy)
     present = {f.name for f in p.siblings if f.size is not None}
     for suffix in SIBLINGS:
         stale = dest / (p.store.name + suffix)
@@ -399,33 +431,58 @@ def copy(p: Plan, dest: Path) -> Path:
             stale.unlink()
     for sibling in p.siblings:
         if sibling.size is not None:
-            p.copied.append((sibling, _copy_file(sibling, dest / sibling.name)))
+            p.copied.append(_copy_file(sibling, dest / sibling.name))
     if p.source.media is not None and p.source.media_folder is not None:
         head = len(PurePosixPath(p.source.media[1]).parts)
         folder = dest / p.source.media_folder
         for f in p.media:
             if f.size is not None:
-                p.copied.append((f, _copy_file(f, folder.joinpath(*f.parts[head:]))))
-    return store_copy
+                p.copied.append(_copy_file(f, folder.joinpath(*f.parts[head:])))
+    return store_copy.target
 
 
-def _copy_file(f: BackupFile, target: Path) -> Path:
+def _copy_file(f: BackupFile, target: Path) -> Copy:
+    """Copy (or decrypt) `f` to `target` and check the copy against the stored blob: a plain file
+    byte for byte, a decrypted one against the blob's length less the PKCS#7 padding stripped (a
+    blob whose last block is not valid padding is not the plaintext the manifest describes, so
+    it fails). The manifest's `Size` is only compared afterwards, and a difference is the Copy's
+    warning."""
     target.parent.mkdir(parents=True, exist_ok=True)
+    stored = f.path.stat().st_size
     if f.key is not None:
-        copied = ios_backup_crypto.decrypt_file(f.path, target, f.key, f.size)
+        done = ios_backup_crypto.decrypt_file(f.path, target, f.key, f.size)
+        copied = target.stat().st_size
+        if not done.padding:
+            raise CopyError(
+                f"{f.relative_path}: decrypted {copied:,} bytes, but the stored blob ({stored:,} bytes)"
+                " does not end in PKCS#7 padding"
+            )
+        expected = stored - done.padding
+        if copied != expected:
+            raise CopyError(
+                f"{f.relative_path}: decrypted {copied:,} bytes, the stored blob is {stored:,}"
+                f" less {done.padding} bytes of padding = {expected:,}"
+            )
     else:
         shutil.copyfile(f.path, target)
         copied = target.stat().st_size
+        if copied != stored:
+            raise CopyError(f"{f.relative_path}: copied {copied:,} bytes, the stored blob is {stored:,}")
+    warning = None
     if copied != f.size:
-        raise CopyError(f"{f.relative_path}: copied {copied:,} bytes, the backup has {f.size:,}")
-    return target
+        warning = (
+            f"{f.relative_path}: copied {copied:,} bytes, the manifest says {f.size:,}"
+            " (its Size is what the file measured on the phone; the stored blob is what was copied)"
+        )
+    return Copy(f, target, copied, warning)
 
 
 def write_copies(inbox: Path, manifest: Manifest, plans: list[Plan]) -> Path:
     """`<inbox>/copies.json`: one entry per file `copy` put under `inbox`, merged over the entries
     an earlier run left for sources this run did not touch. `encrypted` says whether the backup
-    was; each entry says whether its file was decrypted and under which protection class. Keys
-    are never written. Returns the file's path."""
+    was; each entry says whether its file was decrypted and under which protection class, its
+    `bytes` are the copy's, and `warning` is there when the manifest's `Size` disagreed with the
+    stored blob. Keys are never written. Returns the file's path."""
     path = inbox / COPIES
     previous: list[dict[str, Any]] = []
     if path.is_file():
@@ -438,18 +495,19 @@ def write_copies(inbox: Path, manifest: Manifest, plans: list[Plan]) -> Path:
     touched = {p.source.name for p in plans}
     entries = [e for e in previous if e.get("source") not in touched]
     for p in plans:
-        for f, target in p.copied:
-            entries.append(
-                {
-                    "source": p.source.name,
-                    "domain": f.domain,
-                    "path": f.relative_path,
-                    "copy": target.relative_to(inbox).as_posix(),
-                    "bytes": f.size,
-                    "encrypted": f.encrypted,
-                    "protection_class": f.protection_class,
-                }
-            )
+        for c in p.copied:
+            entry: dict[str, Any] = {
+                "source": p.source.name,
+                "domain": c.file.domain,
+                "path": c.file.relative_path,
+                "copy": c.target.relative_to(inbox).as_posix(),
+                "bytes": c.bytes,
+                "encrypted": c.file.encrypted,
+                "protection_class": c.file.protection_class,
+            }
+            if c.warning is not None:
+                entry["warning"] = c.warning
+            entries.append(entry)
     entries.sort(key=lambda e: str(e.get("copy", "")))
     record = {"backup": manifest.udid, "encrypted": manifest.encrypted, "files": entries}
     inbox.mkdir(parents=True, exist_ok=True)

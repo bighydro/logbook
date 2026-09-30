@@ -120,6 +120,7 @@ class Built:
         self.folder = folder
         self.plain: dict[tuple[str, str], bytes] = {}
         self.classes: dict[tuple[str, str], int] = {}
+        self.stored: dict[tuple[str, str], Path] = {}  # the encrypted blob in the backup folder
         self.manifest_db_plain: bytes = b""
 
 
@@ -128,11 +129,14 @@ def _encrypted_backup(
     password: str = PASSWORD,
     *,
     files: dict[tuple[str, str], tuple[Path, int]] | None = None,
+    claimed: dict[tuple[str, str], int] | None = None,
     legacy: bool = False,
     lockdown: bool = True,
 ) -> Built:
     """A tiny encrypted backup. `files` maps (domain, relativePath) → (plaintext file, protection
-    class); by default sms.db with one attachment, Health's secure store and Safari's history."""
+    class); by default sms.db with one attachment, Health's secure store and Safari's history.
+    `claimed` overrides the `Size` the manifest records for a file (a stale one, as a real backup
+    can carry)."""
     stage = tmp_path / "stage"
     stage.mkdir()
     if files is None:
@@ -164,9 +168,11 @@ def _encrypted_backup(
         target = backup / fid[:2] / fid
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(_encrypt(file_key, data))
+        claimed_size = (claimed or {}).get((domain, rel), len(data))
         rows.append(
-            (fid, domain, rel, 1, _file_plist(len(data), cls, aes_key_wrap(class_keys[cls], file_key)))
+            (fid, domain, rel, 1, _file_plist(claimed_size, cls, aes_key_wrap(class_keys[cls], file_key)))
         )
+        built.stored[(domain, rel)] = target
         built.plain[(domain, rel)] = data
         built.classes[(domain, rel)] = cls
     plain_db = stage / "Manifest.db"
@@ -269,6 +275,57 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     assert by_path[(HEALTH, "Health/healthdb_secure.sqlite")]["copy"] == "health/healthdb_secure.sqlite"
     assert by_path[(SAFARI, "Library/Safari/History.db")]["protection_class"] == 2
     assert "key" not in json.dumps(copies).lower().replace("encryption", "")  # never a key
+
+
+def test_import_backup_warns_when_the_manifest_size_is_stale_and_the_blob_decrypts_exactly(
+    lb, tmp_path, monkeypatch, capsys
+):
+    """Apple records a file's size on the phone; the stored blob can be another size. The real check
+    is the decrypted length against the blob less its PKCS#7 padding; the manifest's Size is only
+    a warning naming the file and both sizes, never an error."""
+    key = (SAFARI, "Library/Safari/History.db")
+    built = _encrypted_backup(tmp_path, claimed={key: 35_745_792})
+    real = len(built.plain[key])
+    assert real != 35_745_792
+    monkeypatch.setenv("LOGBOOK_BACKUP_PASSWORD", PASSWORD)
+    _run(str(built.folder))  # no SystemExit: the copy succeeds
+    captured = capsys.readouterr()
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    assert (inbox / "safari" / "History.db").read_bytes() == built.plain[key]
+    warnings = [line for line in captured.out.splitlines() if "warning" in line]
+    assert len(warnings) == 1
+    assert "Library/Safari/History.db" in warnings[0]
+    assert f"{real:,}" in warnings[0] and "35,745,792" in warnings[0]
+    assert "valid — 13 lines" in captured.out
+    assert captured.err == ""
+    copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
+    by_path = {(c["domain"], c["path"]): c for c in copies["files"]}
+    entry = by_path[key]
+    assert entry["bytes"] == real
+    assert "Library/Safari/History.db" in entry["warning"] and "35,745,792" in entry["warning"]
+    assert all("warning" not in c for k, c in by_path.items() if k != key)
+
+
+def test_import_backup_fails_when_the_decrypted_length_is_not_the_blob_less_its_padding(
+    lb, tmp_path, monkeypatch, capsys
+):
+    """A blob whose last block does not decrypt to PKCS#7 padding is not the plaintext the manifest
+    describes: the copy fails as before, with both lengths in the message."""
+    key = (SAFARI, "Library/Safari/History.db")
+    built = _encrypted_backup(tmp_path)
+    blob = built.stored[key]
+    data = blob.read_bytes()
+    blob.write_bytes(data[:-16] + bytes(b ^ 0x5A for b in data[-16:]))  # the last cipher block, damaged
+    monkeypatch.setenv("LOGBOOK_BACKUP_PASSWORD", PASSWORD)
+    with pytest.raises(SystemExit) as e:
+        _run(str(built.folder))
+    assert e.value.code == 1
+    err = capsys.readouterr().err
+    assert "Library/Safari/History.db" in err
+    assert f"{len(data):,}" in err and f"{len(built.plain[key]):,}" in err
+    assert "padding" in err
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    assert not (inbox / "copies.json").exists()
 
 
 def test_import_backup_encrypted_again_adds_nothing(lb, tmp_path, monkeypatch, capsys):
@@ -408,11 +465,21 @@ def test_decrypt_file_streams_in_chunks_and_strips_the_padding(tmp_path, size):
     src = tmp_path / "enc"
     src.write_bytes(_encrypt(key, plain))
     dest = tmp_path / "dec"
-    n = ios_backup_crypto.decrypt_file(src, dest, key, size=size, chunk=64)
-    assert n == size and dest.read_bytes() == plain
+    done = ios_backup_crypto.decrypt_file(src, dest, key, size=size, chunk=64)
+    assert done.written == size and done.padding == 16 - size % 16 and dest.read_bytes() == plain
     # without a size from the manifest, PKCS#7 padding decides
-    n = ios_backup_crypto.decrypt_file(src, dest, key, size=None, chunk=64)
-    assert n == size and dest.read_bytes() == plain
+    done = ios_backup_crypto.decrypt_file(src, dest, key, size=None, chunk=64)
+    assert done.written == size and done.padding == 16 - size % 16 and dest.read_bytes() == plain
+
+
+def test_decrypt_file_prefers_valid_padding_over_a_stale_size_in_the_last_block(tmp_path):
+    key = _random(4)
+    plain = os.urandom(20)  # 2 blocks stored; 12 bytes of padding
+    src = tmp_path / "enc"
+    src.write_bytes(_encrypt(key, plain))
+    dest = tmp_path / "dec"
+    done = ios_backup_crypto.decrypt_file(src, dest, key, size=25)
+    assert done.written == 20 and done.padding == 12 and dest.read_bytes() == plain
 
 
 def test_decrypt_file_without_padding_keeps_every_byte(tmp_path):
@@ -424,10 +491,10 @@ def test_decrypt_file_without_padding_keeps_every_byte(tmp_path):
     src = tmp_path / "enc"
     src.write_bytes(enc.update(plain) + enc.finalize())
     dest = tmp_path / "dec"
-    assert ios_backup_crypto.decrypt_file(src, dest, key, size=4096) == 4096
-    assert dest.read_bytes() == plain
-    assert ios_backup_crypto.decrypt_file(src, dest, key, size=None) == 4096
-    assert dest.read_bytes() == plain
+    done = ios_backup_crypto.decrypt_file(src, dest, key, size=4096)
+    assert done.written == 4096 and done.padding == 0 and dest.read_bytes() == plain
+    done = ios_backup_crypto.decrypt_file(src, dest, key, size=None)
+    assert done.written == 4096 and done.padding == 0 and dest.read_bytes() == plain
 
 
 def test_decrypt_file_refuses_a_file_that_is_not_whole_blocks(tmp_path):

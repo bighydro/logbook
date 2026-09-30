@@ -23,11 +23,12 @@ many tools); nothing is derived from Apple's own code. What a backup holds:
   object of the same 4-byte class prefix and 40-byte wrapped file key. Each file's bytes are
   AES-256-CBC, zero IV, PKCS#7-padded, under the unwrapped file key.
 
-Assumed, not seen in a specification: PKCS#7 padding on every file (a file that is a whole number
-of blocks and does not end in valid padding is kept whole; `Size` from the manifest wins when it
-is within the last block); a `TYPE` above 3 or a `VERS` other than 3 is not refused, only the
-records that are needed are; class numbers are whatever `CLAS` says, so classes iOS adds later
-just work.
+Assumed, not seen in a specification: PKCS#7 padding on every file (valid padding in the last
+block is stripped; only a last block that is not valid padding falls back to `Size` from the
+manifest when that lies within it, else the file is kept whole — `Size` is what the file measured
+on the phone and can be stale against the stored blob); a `TYPE` above 3 or a `VERS` other than 3
+is not refused, only the records that are needed are; class numbers are whatever `CLAS` says, so
+classes iOS adds later just work.
 
 `cryptography` is the only dependency, imported lazily: the package installs and runs without it,
 and an encrypted backup then raises `MissingExtra` naming `openlogbook[encrypted]`. PBKDF2 is
@@ -226,11 +227,20 @@ def split_class(prefixed: bytes) -> tuple[int, bytes]:
     return int(number), prefixed[4:]
 
 
-def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chunk: int = CHUNK) -> int:
-    """Decrypt `src` (AES-256-CBC, zero IV) into `dest` a chunk at a time and return the bytes
-    written. `size`, the manifest's plaintext size, decides what the last block keeps when it
-    lies within it; else valid PKCS#7 padding is stripped; else every byte is kept. `dest`'s
-    parent must exist; on an error nothing is left at `dest`."""
+@dataclass(frozen=True)
+class Decrypted:
+    """What `decrypt_file` wrote: the plaintext bytes and the PKCS#7 padding it stripped (0 when
+    the last block was not valid padding)."""
+
+    written: int
+    padding: int
+
+
+def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chunk: int = CHUNK) -> Decrypted:
+    """Decrypt `src` (AES-256-CBC, zero IV) into `dest` a chunk at a time. Valid PKCS#7 padding
+    in the last block is stripped; without it, `size`, the manifest's plaintext size, decides what
+    the last block keeps when it lies within it; else every byte is kept. `dest`'s parent must
+    exist; on an error nothing is left at `dest`."""
     Cipher, algorithms, modes, _, _, _ = _primitives()
     total = src.stat().st_size
     if total % BLOCK:
@@ -252,20 +262,21 @@ def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chu
                 fout.write(head)
                 written += len(head)
             decryptor.finalize()
-            last = _last_block(tail, written, size)
+            last, padding = _last_block(tail, written, size)
             fout.write(last)
             written += len(last)
     except BaseException:
         dest.unlink(missing_ok=True)
         raise
-    return written
+    return Decrypted(written, padding)
 
 
-def _last_block(tail: bytes, written: int, size: int | None) -> bytes:
-    if size is not None and written <= size <= written + len(tail):
-        return tail[: size - written]
+def _last_block(tail: bytes, written: int, size: int | None) -> tuple[bytes, int]:
+    """(What the last block keeps, the padding stripped from it.)"""
     if tail:
         pad = tail[-1]
         if 1 <= pad <= BLOCK and tail.endswith(bytes([pad]) * pad):
-            return tail[:-pad]
-    return tail
+            return tail[:-pad], pad
+    if size is not None and written <= size <= written + len(tail):
+        return tail[: size - written], 0
+    return tail, 0

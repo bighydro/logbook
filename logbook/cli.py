@@ -554,6 +554,9 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         except (ios_backup.CopyError, ios_backup.DecryptError, OSError) as e:
             print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
             sys.exit(1)
+        for c in p.copied:
+            if c.warning is not None:
+                print(f"  warning: {c.warning}")
         if adapter is None:
             print("  copied, no adapter yet")
             continue
