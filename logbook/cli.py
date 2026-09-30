@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · retract · show · stats · verify · export · index · migrate ·
-assets. Three verbs, nine rare."""
+"""logbook — init · add · sync · import-backup · infer · retract · show · stats · verify · export · index ·
+migrate · assets. Three verbs, ten rare."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters, assets, crossing, ios_backup, ios_backup_crypto, policy
+from . import FORMAT, __version__, adapters, assets, crossing, flights, ios_backup, ios_backup_crypto, policy
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
@@ -121,7 +121,9 @@ def _append_with(
         elif name != "at":  # `--at` has always been the sentence's time; a file adapter ignores it
             print(f"add: --{name} is not an option of the {adapter.NAME} adapter", file=sys.stderr)
             sys.exit(2)
-    drafts = run(p, **options)
+    if _takes(adapter, "airports") and "airports" not in options:
+        options["airports"] = _airports(None)
+    drafts = flights.reconcile(lb, run(p, **options), counts, options.get("airports"))
     n = lb.append_many(drafts, progress=_progress)
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
@@ -180,6 +182,8 @@ SKIP_PHRASES = {
     "skipped_not_transcript": "files that are not transcripts",
     "skipped_unknown_subject": "of a vessel or aircraft not in assets.json",
     "skipped_not_a_position": "that are not position reports",
+    "skipped_no_designator": "without a carrier and flight number",
+    "skipped_no_route": "without both airports",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -200,6 +204,10 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "group_chat": "in group chats",
     "no_summary": "without a summary",
     "no_recording": "without a recording (summary only)",
+    "merged": "merged into a flight already in the record",
+    "no_airport_zone": "with an airport the table does not know",
+    "arrival_before_departure": "arriving before departing, kept as given",
+    "no_gap": "calendar flights without a location gap",
 }
 
 
@@ -262,7 +270,15 @@ def looks_like_path(arg: str) -> bool:
 
 def cmd_add(a: argparse.Namespace) -> None:
     lb = Logbook.find()
-    given = {"source": a.source, "tier": a.tier, "at": a.at}
+    given = {
+        "source": a.source,
+        "tier": a.tier,
+        "at": a.at,
+        "airports": _airports(a.airports) if a.airports else None,
+    }
+    if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
+        _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
+        return
     if len(a.what) > 1 and (by_name := adapters.named(a.what[0])) is not None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
@@ -301,6 +317,38 @@ def _add_named(lb: Logbook, adapter: adapters.Adapter, paths: list[Path], given:
     backup under any name), with `--source`, `--tier` and `--at` when it takes them."""
     for p in paths:
         _append_with(lb, adapter, p, given)
+
+
+def _airports(given: str | None) -> flights.Airports:
+    """The airports table with the override `--airports` names, else `LOGBOOK_AIRPORTS`, else none;
+    a file that will not read exits 2 naming the line."""
+    path = given or os.environ.get(flights.AIRPORTS_ENV, "").strip() or None
+    try:
+        return flights.Airports.load(Path(path).expanduser() if path else None)
+    except (OSError, ValueError) as e:
+        print(f"add: --airports: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _add_flight(lb: Logbook, sentence: str, airports: flights.Airports) -> None:
+    """`add flight "LX 561 NCE ZRH 2026-09-27 pilot"`: one declared flight/v1 line (RFC 0013), merged
+    into the flight already standing for its key when there is one."""
+    try:
+        draft = flights.parse_declaration(sentence, airports, flights.Airlines.load())
+    except ValueError as e:
+        print(f"add: {e}", file=sys.stderr)
+        sys.exit(2)
+    counts: dict[str, int] = {}
+    if not lb.append_many(flights.reconcile(lb, [draft], counts, airports)):
+        print(f"already in the record: {_flight_text(draft['payload'])}")
+        return
+    line = lb.line_by_seq(lb.meta["seq"])  # the one line just written
+    assert line is not None
+    superseded = line["payload"].get("supersedes")
+    print(
+        f"#{line['seq']} {line['at']}  flight {_flight_text(line['payload'])}"
+        + (" (merged into the flight already in the record)" if superseded else "")
+    )
 
 
 def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
@@ -433,6 +481,48 @@ def cmd_sync(a: argparse.Namespace) -> None:
     _report_pending(pending)
     if failed:
         sys.exit(1)
+
+
+def cmd_infer(a: argparse.Namespace) -> None:
+    """`infer flights [--since DAY] [--until DAY] [--airports FILE] [--dry-run]`: flight/v1 lines
+    (RFC 0013, evidence `inferred`) from the record's own calendar entries and location points,
+    merged into the flights already standing; a re-run appends nothing new."""
+    if a.what != "flights":
+        print(f"infer: only flights can be inferred yet, not {a.what!r}", file=sys.stderr)
+        sys.exit(2)
+    for day in (a.since, a.until):
+        if day is not None:
+            try:
+                parse_day(day)
+            except ValueError as e:
+                print(f"infer: {e}", file=sys.stderr)
+                sys.exit(2)
+    lb = Logbook.find()
+    airports = _airports(a.airports)
+    counts: dict[str, int] = {}
+    drafts = flights.reconcile(lb, flights.infer(lb, airports, a.since, a.until, counts), counts, airports)
+    already = 0
+
+    def skipped(_draft: dict[str, Any]) -> None:
+        nonlocal already
+        already += 1
+
+    if a.dry_run:
+        found = list(drafts)
+        entries = counts.pop("calendar_flights", 0)
+        entries_text = _plural(entries, "calendar entry", "calendar entries")
+        print(
+            f"dry run: {_plural(len(found), 'flight')} from {entries_text} would be written; nothing written"
+        )
+    else:
+        n = lb.append_many(drafts, skipped=skipped)
+        entries = counts.pop("calendar_flights", 0)
+        entries_text = _plural(entries, "calendar entry", "calendar entries")
+        print(
+            f"inferred {_plural(n, 'new flight')} from {entries_text}"
+            + (f" ({already} already in the record)" if already else "")
+        )
+    _report_skipped(counts)
 
 
 def cmd_assets(a: argparse.Namespace) -> None:
@@ -739,13 +829,14 @@ def cmd_show(a: argparse.Namespace) -> None:
         # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
         rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
         retracted = retractions(idx.retractions())
+        superseded = idx.superseded(flights.KIND)  # a flight another flight line replaced (RFC 0013 rule 4)
         names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
     if not rows:
         print(f"{day}: nothing logged")
         return
     rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
-    for text in _day_rows(rows, retracted, tz, names):
+    for text in _day_rows(rows, retracted, tz, names, superseded):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
@@ -753,7 +844,11 @@ def cmd_show(a: argparse.Namespace) -> None:
 
 
 def _day_rows(
-    rows: list[Line], retracted: dict[str, Line], tz: ZoneInfo, names: Mapping[Ref, str] | None
+    rows: list[Line],
+    retracted: dict[str, Line],
+    tz: ZoneInfo,
+    names: Mapping[Ref, str] | None,
+    superseded: Mapping[str, int] | None = None,
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
     by any other row, collapses into one summary. `names` is the label map; None is the `--raw`
@@ -768,17 +863,28 @@ def _day_rows(
         if point:
             run.append(line)
         else:
-            yield _line_row(line, retraction, tz, names)
+            yield _line_row(line, retraction, tz, names, superseded)
     if run:
         yield _run_row(run, tz)
 
 
-def _line_row(line: Line, retraction: Line | None, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
+def _line_row(
+    line: Line,
+    retraction: Line | None,
+    tz: ZoneInfo,
+    names: Mapping[Ref, str] | None,
+    superseded: Mapping[str, int] | None = None,
+) -> str:
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
     p = line["payload"]
-    if line["kind"] == "message":
+    by = (superseded or {}).get(str(line["id"]))
+    if by is not None:
+        return f"  {clock}  {line['kind']:<10} {line['source']:<14} superseded by #{by}"
+    if line["kind"] == "flight":
+        text = _flight_text(p, tz)
+    elif line["kind"] == "message":
         text = _message_text(p, names)
     elif line["kind"] == "event":
         text = _event_text(p, names)
@@ -808,6 +914,33 @@ def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
 
 def _ref_value(ref: object) -> str:
     return str(ref.get("value", "")) if isinstance(ref, dict) else ""
+
+
+def _flight_text(p: dict[str, Any], tz: ZoneInfo | None = None) -> str:
+    """`XY 561 OSL → ZRH, arrives 09:24, Airbus A320 LN-XYA, tracked, as pilot` (RFC 0013): the
+    arrival clock in the owner's zone when `tz` is given; `cancelled` when it did not fly."""
+    origin, destination = _airport_code(p.get("from")), _airport_code(p.get("to"))
+    diverted = _airport_code(p.get("diverted_to"))
+    route = f"{origin} → {destination}" + (f" (landed {diverted})" if diverted else "")
+    parts = [f"{p.get('carrier', '')} {p.get('number', '')} {route}".strip()]
+    if p.get("cancelled"):
+        parts.append("cancelled")
+    arrival = p.get("actual_arrival") or p.get("scheduled_arrival")
+    if tz is not None and isinstance(arrival, str) and arrival:
+        parts.append(f"arrives {_clock(arrival, tz)}")
+    aircraft = p.get("aircraft")
+    if isinstance(aircraft, dict):
+        plane = " ".join(str(v) for v in (aircraft.get("type"), aircraft.get("registration")) if v)
+        if plane:
+            parts.append(plane)
+    parts.append(str(p.get("evidence", "")))
+    if p.get("role") == "pilot":
+        parts.append("as pilot")
+    return ", ".join(part for part in parts if part)
+
+
+def _airport_code(ref: object) -> str:
+    return str(ref.get("iata") or ref.get("icao") or "") if isinstance(ref, dict) else ""
 
 
 def _call_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
@@ -1221,11 +1354,24 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("path", nargs="?")
     s.add_argument("--timezone")
     s.set_defaults(fn=cmd_init)
-    s = sub.add_parser("add", help="a sentence in your words, an export file, or a folder of them")
-    s.add_argument("what", nargs="+", help="the words, the path(s), or `<adapter> <file|folder>`")
+    s = sub.add_parser(
+        "add",
+        help='a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH …"`',
+    )
+    s.add_argument(
+        "what",
+        nargs="+",
+        help='the words, the path(s), `<adapter> <file|folder>`, or `flight "<designator> …"`',
+    )
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
     s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help="flights: a CSV (iata,icao,name,lat,lon,tz) added to the airports table"
+        f" (default ${flights.AIRPORTS_ENV})",
+    )
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
         "sync",
@@ -1257,6 +1403,20 @@ def main(argv: list[str] | None = None) -> None:
         + "; the last four only from an encrypted backup, health and safari copied without an adapter yet)",
     )
     s.set_defaults(fn=cmd_import_backup)
+    s = sub.add_parser(
+        "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
+    )
+    s.add_argument("what", help="what to infer: flights")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="only calendar entries from this local day")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="… up to this local day, inclusive")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help="a CSV (iata,icao,name,lat,lon,tz) added to the airports table"
+        f" (default ${flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--dry-run", action="store_true", help="say what would be written; write nothing")
+    s.set_defaults(fn=cmd_infer)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
