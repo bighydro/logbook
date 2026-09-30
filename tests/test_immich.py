@@ -90,6 +90,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "ios-calendar",
         "ios-calls",
         "flighty",
+        "apple-health",
         "ics",
         "transcript",
         "ais",

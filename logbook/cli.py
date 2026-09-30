@@ -34,6 +34,7 @@ from . import (
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
+from .index import local_date
 from .resolve import Ref, labels
 from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, UnsortedFile, now_utc, retractions
 
@@ -207,6 +208,11 @@ SKIP_PHRASES = {
     "skipped_no_designator": "without a carrier and flight number",
     "skipped_no_route": "without both airports",
     "skipped_label": "by label",
+    "skipped_no_value": "without a value",
+    "skipped_bad_span": "ending before they start",
+    "skipped_other_type": "of a type this version does not know",
+    "skipped_unknown_stage": "with a sleep stage this version does not know",
+    "skipped_over_cap": "over the one-per-minute heart-rate cap",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -736,8 +742,9 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     a flag, never printed). The keybag check comes first, so a wrong password fails before any file
     is touched; then Manifest.db is decrypted into the inbox folder and every copy is decrypted on
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
-    encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`; Health
-    and Safari's history are copied out and reported as copied with no adapter yet."""
+    encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
+    through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
+    beside it); Safari's history is copied out and reported as copied with no adapter yet."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
@@ -778,7 +785,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
             if c.warning is not None:
                 print(f"  warning: {c.warning}")
         if adapter is None:
-            print("  copied, no adapter yet")
+            print(f"  copied, {p.source.note}")
             continue
         _append_with(lb, adapter, store_copy)
     if any(p.copied for p in plans):
@@ -1178,8 +1185,22 @@ BAR_WIDTH = 100
 def cmd_stats(a: argparse.Namespace) -> None:
     """One screen of what the record holds, counted through the index (one SELECT per table,
     nothing read from the files): kinds, sources, years, retractions, resolutions, attachments.
-    Numbers, kinds, sources and dates only; never what a line says. Nothing is written."""
+    Numbers, kinds, sources and dates only; never what a line says. Nothing is written.
+
+    `--health` is the one summary that reads lines: every `health` line (RFC 0014) through the
+    index, one row per local day — sleep hours, steps, resting heart rate — and no device, no
+    zone, no other field of any line."""
     lb = Logbook.find()
+    if a.health:
+        days = health_days(lb)
+        if a.json:
+            print(json.dumps({"days": days}, indent=2))
+        elif not days:
+            print("no health lines")
+        else:
+            for text in _health_rows(days):
+                print(text)
+        return
     started = time.monotonic()
     stats = record_stats(lb)
     stats["took_seconds"] = round(time.monotonic() - started, 3)
@@ -1213,6 +1234,68 @@ def record_stats(lb: Logbook) -> dict[str, Any]:
             "resolutions": idx.resolution_counts(),
             "attachments": idx.attachment_counts(present),
         }
+
+
+ASLEEP = frozenset({"asleep", "core", "deep", "rem"})  # RFC 0014 rule 4: never in_bed, never awake
+
+
+def health_days(lb: Logbook) -> list[dict[str, Any]]:
+    """One row per local day (the record's zone) that has any of: `sleep_h`, the asleep stages of
+    the night that ends on that day, summed per device and the longest device taken (rule 5),
+    in hours to one decimal; `steps`, the sum over the day's quarter hours of the larger device's
+    count (rule 5); `resting_hr`, the mean of the day's resting readings, whole bpm. A field the
+    day has no line for is None. Retracted lines are left out."""
+    tz = str(lb.meta["timezone"])
+    steps: dict[str, dict[str, float]] = {}  # day → bucket `at` → the larger device's count
+    sleep: dict[str, dict[str, float]] = {}  # day → device → seconds asleep
+    resting: dict[str, list[float]] = {}
+    with lb.index() as idx:
+        hidden = {r.get("payload", {}).get("supersedes") for r in idx.retractions()}
+        for line in idx.of_kind("health"):
+            if line.get("id") in hidden:
+                continue
+            payload = line.get("payload") or {}
+            value = payload.get("value")
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                continue
+            kind = payload.get("type")
+            try:
+                if kind == "steps":
+                    day = local_date(str(line["at"]), tz)
+                    buckets = steps.setdefault(day, {})
+                    buckets[str(line["at"])] = max(buckets.get(str(line["at"]), 0.0), float(value))
+                elif kind == "sleep" and payload.get("stage") in ASLEEP:
+                    day = local_date(str(line.get("end") or line["at"]), tz)
+                    device = str(payload.get("device") or "-")
+                    per_device = sleep.setdefault(day, {})
+                    per_device[device] = per_device.get(device, 0.0) + float(value)
+                elif kind == "resting_hr":
+                    resting.setdefault(local_date(str(line["at"]), tz), []).append(float(value))
+            except (KeyError, ValueError, TypeError):  # a stamp that does not parse is on no day
+                continue
+    rows: list[dict[str, Any]] = []
+    for day in sorted(set(steps) | set(sleep) | set(resting)):
+        nights, readings = sleep.get(day), resting.get(day)
+        rows.append(
+            {
+                "day": day,
+                "sleep_h": round(max(nights.values()) / 3600, 1) if nights else None,
+                "steps": round(sum(steps[day].values())) if day in steps else None,
+                "resting_hr": round(sum(readings) / len(readings)) if readings else None,
+            }
+        )
+    return rows
+
+
+def _health_rows(days: list[dict[str, Any]]) -> Iterator[str]:
+    yield f"  {'day':<10}  {'sleep':>5}  {'steps':>6}  {'resting':>7}"
+    for d in days:
+        sleep = "-" if d["sleep_h"] is None else f"{d['sleep_h']:.1f}"
+        steps = "-" if d["steps"] is None else f"{d['steps']:,}"
+        resting = "-" if d["resting_hr"] is None else str(d["resting_hr"])
+        yield f"  {d['day']:<10}  {sleep:>5}  {steps:>6}  {resting:>7}"
+    yield ""
+    yield f"{_plural(len(days), 'day')}; sleep in hours, steps per day, resting heart rate in bpm"
 
 
 def _stats_rows(s: dict[str, Any]) -> Iterator[str]:
@@ -1646,7 +1729,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
     s.add_argument(
-        "--tier", type=int, choices=(1, 2, 3), help="transcript, mail: privacy tier for the whole import"
+        "--tier",
+        type=int,
+        choices=(1, 2, 3),
+        help="transcript, health, mail: privacy tier for the whole import (transcript and health default 3)",
     )
     s.add_argument(
         "--airports",
@@ -1693,7 +1779,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
         + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
-        + "; the last four only from an encrypted backup, health and safari copied without an adapter yet)",
+        + "; calls, health and safari only from an encrypted backup, safari copied without an adapter yet)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser(
@@ -1720,6 +1806,11 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
+    s.add_argument(
+        "--health",
+        action="store_true",
+        help="one row per day of the health lines: sleep hours, steps, resting HR",
+    )
     s.set_defaults(fn=cmd_stats)
     s = sub.add_parser(
         "derive", help="read the record into stays and moves (`derive stays`); nothing is appended"
