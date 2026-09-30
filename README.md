@@ -43,10 +43,12 @@ logbook import-backup <the same> --only contacts,whatsapp        # just some of 
 
 One command reads the backup's `Manifest.db`, finds the six stores the adapters know — Contacts, WhatsApp's
 contacts and chats, Messages, Calendar, Notes — copies each one with its `-wal`/`-shm` siblings and its media
-folder into `inbox/ios-backup-<udid>/<source>/`, checks every copy by size, and runs the adapters on the copies:
+folder into `inbox/ios-backup-<udid>/<source>/`, checks every copy against the stored blob, and runs the adapters on the copies:
 contacts first, so the chats that follow already have their people. The backup itself is only ever read. Per
 source it prints found or not found, the lines added and what was skipped, and it ends with `verify`.
-Re-running it appends nothing already logged. `inbox/ios-backup-<udid>/copies.json` lists every copy.
+Re-running it appends nothing already logged. `inbox/ios-backup-<udid>/copies.json` lists every copy. The
+manifest's `Size` is what a file measured on the phone and can be stale against the stored blob; a copy that
+matches the blob but not `Size` is one warning naming the file and both sizes, recorded in `copies.json`, never an error.
 
 **An encrypted backup** (*Encrypt local backup* ticked in Finder) holds more than an unencrypted one: Health,
 the call log and Safari's history are only ever backed up encrypted. `import-backup` reads one with the
