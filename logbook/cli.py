@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · retract · show · stats · verify · export · index · migrate.
-Three verbs, eight rare."""
+"""logbook — init · add · sync · import-backup · retract · show · stats · verify · export · index · migrate ·
+assets. Three verbs, nine rare."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters, crossing, ios_backup, ios_backup_crypto, policy
+from . import FORMAT, __version__, adapters, assets, crossing, ios_backup, ios_backup_crypto, policy
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
@@ -111,6 +111,8 @@ def _append_with(
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
         options["store"] = lb.attach
+    if _takes(adapter, "assets"):
+        options["assets"] = _registry(lb, "add")
     for name, value in (given or {}).items():
         if value is None:
             continue
@@ -126,12 +128,21 @@ def _append_with(
     return n
 
 
+def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
+    """The record's asset registry for an adapter that takes `assets`; a broken file exits 2."""
+    try:
+        return assets.read(lb.root)
+    except assets.AssetError as e:
+        print(f"{command}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
     """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
     times are floating), `store` (puts bytes in the attachment store), `lookup` (the id of a line by
     source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
-    `add`'s own options."""
+    `assets` (the asset registry, ADR 0018), or one of `add`'s own options."""
     if isinstance(adapter, adapters.Adapter):
         return option in inspect.signature(adapter.run).parameters
     live: adapters.LiveAdapter = adapter
@@ -167,6 +178,8 @@ SKIP_PHRASES = {
     "skipped_unreadable_json": "JSON files that would not parse",
     "skipped_not_media": "files that are not media",
     "skipped_not_transcript": "files that are not transcripts",
+    "skipped_unknown_subject": "of a vessel or aircraft not in assets.json",
+    "skipped_not_a_position": "that are not position reports",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -346,8 +359,11 @@ def cmd_sync(a: argparse.Namespace) -> None:
     failed: list[str] = []  # one line per feed the adapter could not read, the others still pulled
     if _takes(adapter, "failed"):
         options["failed"] = failed
+    if _takes(adapter, "assets"):
+        options["assets"] = _registry(lb, "sync")
     group: Callable[[dict[str, Any]], str] | None = getattr(adapter, "group", None)
     seen["groups"] = Counter()
+    seen["group_marks"] = {}  # the largest watermark per group, kept in the state when GROUP_MARKS
     already_in_group: Counter[str] = Counter()
     drafts = _watch(
         adapter.pull(config, since, progress=_page_progress(unit), counts=counts, **options),
@@ -399,7 +415,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
     elif mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
         kept = ""
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(json.dumps({"since": mark}, indent=2) + "\n", encoding="utf-8")
+        state_path.write_text(
+            json.dumps(_state(state_path, adapter, mark, seen), indent=2) + "\n", encoding="utf-8"
+        )
     else:
         kept = ""
         mark = stored
@@ -415,6 +433,52 @@ def cmd_sync(a: argparse.Namespace) -> None:
     _report_pending(pending)
     if failed:
         sys.exit(1)
+
+
+def cmd_assets(a: argparse.Namespace) -> None:
+    """`assets list`: one line per registered asset. `assets add`: register one (ADR 0018). The
+    registry is <root>/assets.json, a setting of the record, outside the chain."""
+    lb = Logbook.find()
+    try:
+        if a.verb == "add":
+            asset = assets.Asset(
+                id=a.id, kind=a.kind, name=a.name, mmsi=a.mmsi, icao24=a.icao24, registration=a.registration
+            )
+            assets.add(lb.root, asset)
+            print(_asset_row(asset))
+            return
+        registry = assets.read(lb.root)
+    except assets.AssetError as e:
+        print(f"assets: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not registry:
+        print(
+            "no assets registered; register one with: logbook assets add <id> --kind "
+            f"{'|'.join(assets.KINDS)} --name NAME [--mmsi N] [--icao24 HEX] [--registration REG]"
+        )
+        return
+    for asset in registry:
+        print(_asset_row(asset))
+
+
+def _asset_row(asset: assets.Asset) -> str:
+    ids = [f"{key} {value}" for key in ("mmsi", "icao24") if (value := getattr(asset, key)) is not None]
+    if asset.registration is not None:
+        ids.append(asset.registration)
+    return f"{asset.id:<16} {asset.kind:<9} {asset.name}" + (f"  ({', '.join(ids)})" if ids else "")
+
+
+def _state(path: Path, adapter: adapters.LiveAdapter, mark: str, seen: dict[str, Any]) -> dict[str, Any]:
+    """The state to store: the watermark and, for an adapter with GROUP_MARKS, one per group (per
+    tracked asset), each merged with the stored one and never moved backwards."""
+    state: dict[str, Any] = {"since": mark}
+    if getattr(adapter, "GROUP_MARKS", False):
+        groups: dict[str, str] = dict(_read_state(path).get("groups") or {})
+        for name, group_mark in seen["group_marks"].items():
+            if name not in groups or group_mark > groups[name]:
+                groups[name] = group_mark
+        state["groups"] = dict(sorted(groups.items()))
+    return state
 
 
 def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
@@ -477,6 +541,10 @@ def _watch(
         mark = watermark(d)
         if mark is not None and (seen["watermark"] is None or mark > seen["watermark"]):
             seen["watermark"] = mark
+        if mark is not None and group is not None:
+            name = group(d)
+            if name not in seen["group_marks"] or mark > seen["group_marks"][name]:
+                seen["group_marks"][name] = mark
         seen["provenance"][d["payload"].get("provenance", "-")] += 1
         seen["kinds"][d["kind"]] += 1
         yield d
@@ -694,7 +762,7 @@ def _day_rows(
     for line in rows:
         retraction = retracted.get(line["id"])
         point = line["kind"] == "location" and retraction is None
-        if run and not (point and line["source"] == run[0]["source"]):
+        if run and not (point and (line["source"], _subject(line)) == (run[0]["source"], _subject(run[0]))):
             yield _run_row(run, tz)
             run = []
         if point:
@@ -847,7 +915,16 @@ def _run_row(run: list[Line], tz: ZoneInfo) -> str:
     places = [place for place in map(_place, run) if place]
     if places:
         text += f" · {places[0]}" if places[0] == places[-1] else f" · {places[0]} → {places[-1]}"
+    subject = _subject(run[0])
+    if subject is not None:  # an asset's own track (RFC 0001 `subject`, ADR 0018), never the owner's
+        text = f"{subject}: {text}"
     return f"  {span}  {'location':<10} {run[0]['source']:<14} {text}"
+
+
+def _subject(line: Line) -> str | None:
+    """The asset whose position a location line is, or None for the owner's own."""
+    subject = (line.get("payload") or {}).get("subject")
+    return str(subject) if subject else None
 
 
 def _place(line: Line) -> str | None:
@@ -1151,10 +1228,14 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--tier", type=int, choices=(1, 2, 3), help="transcript: privacy tier (default 3)")
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
-        "sync", help="pull new items from a live source (immich, dawarich, imessage, gcal); safe to re-run"
+        "sync",
+        help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb);"
+        " safe to re-run",
     )
     s.add_argument(
-        "name", help="the source: immich, dawarich, imessage (this Mac's Messages), or gcal (Google Calendar)"
+        "name",
+        help="the source: immich, dawarich, imessage (this Mac's Messages), gcal (Google Calendar), granola,"
+        " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky)",
     )
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
@@ -1214,6 +1295,18 @@ def main(argv: list[str] | None = None) -> None:
         "--dry-run", action="store_true", help="crossing: count and show the policy; write nothing"
     )
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser("list", help="one line per registered asset")
+    v.set_defaults(fn=cmd_assets)
+    v = verbs.add_parser("add", help="register one asset")
+    v.add_argument("id", help="the subject id its positions carry: lower-case letters, digits, hyphens")
+    v.add_argument("--kind", required=True, choices=assets.KINDS)
+    v.add_argument("--name", required=True, help="what you call it")
+    v.add_argument("--mmsi", help="nine digits; `sync ais` asks aisstream.io for it")
+    v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
+    v.add_argument("--registration", help="call sign or plate, free text")
+    v.set_defaults(fn=cmd_assets)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)

@@ -471,3 +471,32 @@ def test_show_a_transcript_names_its_title_participants_and_length(tmp_path: Pat
     assert rows[1] == f"  14:00  transcript granola        {people_row}"
     assert rows[2] == "  15:00  transcript granola        transcript; 4 turns, 20 s"
     assert rows[3] == "  16:00  transcript granola        transcript — Ola Nordmann; 1 turn"
+
+
+def test_show_run_is_broken_by_a_change_of_subject_and_names_the_asset(tmp_path: Path, monkeypatch, capsys):
+    """Two vessels heard by the same receiver are two tracks (RFC 0001 `subject`, ADR 0018); the owner's
+    own points, with no subject, are a third."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+
+    def boat(at: str, subject: str) -> dict[str, Any]:
+        line = _location(at, source="ais")
+        line["payload"]["subject"] = subject
+        line["payload"]["raw_id"] = f"ais:{subject}:{at}"
+        return line
+
+    lb.append_many(
+        [
+            boat(f"{DAY}T07:00:00Z", "solvind"),
+            boat(f"{DAY}T07:01:00Z", "solvind"),
+            boat(f"{DAY}T07:02:00Z", "dinghy"),
+            _location(f"{DAY}T07:03:00Z", source="ais"),
+            _location(f"{DAY}T07:04:00Z", source="ais"),
+        ]
+    )
+    cli.main(["show", DAY])
+    rows = [s for s in capsys.readouterr().out.splitlines() if "location" in s]
+    assert len(rows) == 3
+    assert "solvind: 2 points" in rows[0]
+    assert "dinghy: 1 point" in rows[1]
+    assert "2 points" in rows[2] and "solvind" not in rows[2] and "dinghy" not in rows[2]
