@@ -392,3 +392,20 @@ def test_show_lists_the_yachts_track_as_its_own_run_named_by_the_subject(lb, mon
     out = capsys.readouterr().out
     (row,) = (s for s in out.splitlines() if "location" in s)
     assert "4 points" in row and "solvind" in row and "ais" in row
+
+
+def test_pull_turns_a_connection_closed_by_the_server_into_one_oserror(monkeypatch):
+    from websockets.exceptions import ConnectionClosedError
+    from websockets.frames import Close
+
+    class Closing(FakeSocket):
+        def recv(self, timeout: float | None = None) -> str:
+            if not self.messages:
+                raise ConnectionClosedError(Close(1011, "server going away"), None, None)
+            return super().recv(timeout)
+
+    socket = Closing([MESSAGES[0]])
+    monkeypatch.setattr(ais, "_connect", lambda url, timeout: socket)
+    with pytest.raises(OSError, match="closed the connection") as e:
+        list(ais.pull(CONFIG, assets=REGISTRY))
+    assert KEY not in str(e.value)

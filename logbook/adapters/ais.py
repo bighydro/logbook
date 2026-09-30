@@ -226,6 +226,7 @@ def _stream(config: Config, mmsis: list[str]) -> Iterator[str | bytes]:
         raise OSError(
             "sync ais needs the websockets package: pip install 'openlogbook[ais]' (or uv sync --extra ais)"
         ) from None
+    closed = _closed_exception()
     with socket as ws:
         ws.send(json.dumps(subscription))
         while (remaining := deadline - time.monotonic()) > 0:
@@ -233,10 +234,22 @@ def _stream(config: Config, mmsis: list[str]) -> Iterator[str | bytes]:
                 yield ws.recv(timeout=remaining)
             except TimeoutError:
                 break
-            except Exception as e:  # websockets' ConnectionClosed is not an OSError
-                if type(e).__name__.startswith("ConnectionClosed"):
-                    raise OSError(f"aisstream closed the connection: {e}") from None
-                raise
+            except closed as e:  # websockets' ConnectionClosed is not an OSError
+                raise OSError(f"aisstream closed the connection: {e}") from None
+
+
+def _closed_exception() -> type[BaseException]:
+    """websockets' ConnectionClosed when the package is there (it is, once `_connect` succeeded); a
+    class nothing raises otherwise, so a fake socket in the tests needs no package."""
+    try:
+        from websockets.exceptions import ConnectionClosed
+    except ImportError:
+        return _NeverRaised
+    return ConnectionClosed
+
+
+class _NeverRaised(Exception):
+    pass
 
 
 def _connect(url: str, timeout: float) -> Any:
