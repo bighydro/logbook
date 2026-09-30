@@ -259,6 +259,8 @@ logbook sync granola                                        # then nightly: 0 5 
 Each recording is one `transcript/v1` line, `raw_id` `granola:<note id>`, with the transcript's segments stored
 under `attachments/` and the attendees as Granola names them; the AI summary follows as a `note/v1` line, tier 2,
 marked `extra.derived = true` and pointing at the transcript by id (set `LOGBOOK_GRANOLA_SUMMARIES=0` to skip it).
+A note made without a recording (one empty turn, zero seconds) gives no transcript line, only its summary,
+counted as `without a recording`.
 The watermark is the recording's end; each sync looks back 24 hours (`LOGBOOK_GRANOLA_LOOKBACK_H`) and skips what
 the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
 written: a batch is all or nothing.

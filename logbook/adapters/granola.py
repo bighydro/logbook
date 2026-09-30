@@ -24,7 +24,10 @@ names them, then any speaker label the attendees do not cover (source-native, ne
 by hand as transcript/v1 JSON and the same one pulled here are one line. Granola's summary is a
 model's words, so it is never `payload.summary`; it is a separate note/v1 line, tier 2,
 `extra.derived = true`, `extra.derived_from` the transcript line's id (the one already in the
-record, else the one this pull mints), skipped with `LOGBOOK_GRANOLA_SUMMARIES=0`.
+record, else the one this pull mints), skipped with `LOGBOOK_GRANOLA_SUMMARIES=0`. A note Granola
+made without recording (one empty turn from an instant to the same instant: `duration_s` 0, no
+words) is not a transcript: no transcript/v1 line, nothing stored, only the summary, whose `raw_id`
+is as ever and whose `extra.derived_from` names a transcript only when the record already has one.
 
 The watermark is the recording's end; `resume` starts a pull a lookback (24 h,
 `LOGBOOK_GRANOLA_LOOKBACK_H`) before it and dedupe absorbs the overlap. Every request is retried
@@ -60,6 +63,7 @@ __all__ = [
     "configure",
     "draft",
     "pull",
+    "recorded",
     "resume",
     "summary_of",
     "transcript_of",
@@ -83,6 +87,7 @@ TOO_LARGE = 413
 MEDIA_TYPE = "application/json"
 SUMMARY_TIER = 2
 NO_SUMMARY = "no_summary"
+NO_RECORDING = "no_recording"
 
 
 @dataclass(frozen=True)
@@ -136,11 +141,11 @@ def pull(
     lookup: Callable[[str, str], str | None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Every note created after `since` (RFC3339 UTC; None means all), oldest first: one
-    transcript/v1 draft each, followed by its summary as a note/v1 draft. Everything is fetched
-    before the first draft is yielded, so a failure yields nothing. `store` is called with the
-    transcript bytes just before its line; `lookup(source, raw_id)` gives the id of a transcript
-    already in the record, which the summary then points at. `progress(notes, elapsed)` after every
-    page of the listing."""
+    transcript/v1 draft each, followed by its summary as a note/v1 draft; a note with no recording
+    gives only the summary and is counted. Everything is fetched before the first draft is yielded,
+    so a failure yields nothing. `store` is called with the transcript bytes just before its line;
+    `lookup(source, raw_id)` gives the id of a transcript already in the record, which the summary
+    then points at. `progress(notes, elapsed)` after every page of the listing."""
     counts = counts if counts is not None else {}
     started = time.monotonic()
     listed: list[dict[str, Any]] = []
@@ -162,25 +167,38 @@ def pull(
         cursor = page.get("cursor") if page.get("hasMore") else None
         if not cursor:
             break
-    pairs: list[tuple[dict[str, Any], bytes, dict[str, Any] | None]] = []
+    pairs: list[tuple[dict[str, Any], bytes, dict[str, Any] | None, bool]] = []
     for stub in listed:
         note, segments = _note_with_transcript(config, str(stub["id"]))
         line = transcript_of(note, segments)
-        line["id"] = uuid7()
+        has_recording = recorded(line, segments)
+        if has_recording:
+            line["id"] = uuid7()
+        else:
+            counts[NO_RECORDING] = counts.get(NO_RECORDING, 0) + 1
         summary: dict[str, Any] | None = None
         if config.summaries:
             existing = lookup(NAME, str(line["payload"]["raw_id"])) if lookup is not None else None
-            summary = summary_of(note, line, existing or str(line["id"]))
+            summary = summary_of(note, line, existing or (str(line["id"]) if has_recording else None))
             if summary is None:
                 counts[NO_SUMMARY] = counts.get(NO_SUMMARY, 0) + 1
-        pairs.append((line, _content(segments), summary))
+        pairs.append((line, _content(segments), summary, has_recording))
     pairs.sort(key=lambda p: str(p[0]["at"]))  # stable: the server's order within a second
-    for line, data, summary in pairs:
-        if store is not None:
-            store(data)
-        yield line
+    for line, data, summary, has_recording in pairs:
+        if has_recording:
+            if store is not None:
+                store(data)
+            yield line
         if summary is not None:
             yield summary
+
+
+def recorded(line: Mapping[str, Any], segments: list[Any]) -> bool:
+    """Whether the note has a recording behind its transcript line: a segment with words, or a
+    span above zero seconds. A note made without recording has one empty segment that starts and
+    ends at the same instant, so `duration_s` is 0 and no turn says anything."""
+    words = any(str(s.get("text") or "").strip() for s in segments if isinstance(s, dict))
+    return words or line["payload"]["extra"].get("duration_s") != 0
 
 
 def transcript_of(note: Mapping[str, Any], segments: list[Any]) -> dict[str, Any]:
@@ -221,10 +239,14 @@ def transcript_of(note: Mapping[str, Any], segments: list[Any]) -> dict[str, Any
     )
 
 
-def summary_of(note: Mapping[str, Any], line: Mapping[str, Any], transcript_id: str) -> dict[str, Any] | None:
+def summary_of(
+    note: Mapping[str, Any], line: Mapping[str, Any], transcript_id: str | None
+) -> dict[str, Any] | None:
     """Granola's AI summary as a note/v1 draft that points at the transcript line, or None when the
     note has none. Tier 2 (a note); `at` is the recording's end (else start), where the summary was
-    made; `raw_id` is stable, so an edited summary is not re-logged."""
+    made; `raw_id` is stable, so an edited summary is not re-logged. `transcript_id` None (a note
+    with no recording and none in the record) leaves `derived_from` out; `derived_from_raw_id`
+    still names the transcript the note would have had."""
     text = note.get("summary_text")
     if not isinstance(text, str) or not text.strip():
         return None
@@ -236,11 +258,10 @@ def summary_of(note: Mapping[str, Any], line: Mapping[str, Any], transcript_id: 
     modified = _stamp(note.get("updated_at"))
     if modified:
         payload["modified_at"] = modified
-    payload["extra"] = {
-        "derived": True,
-        "derived_from": transcript_id,
-        "derived_from_raw_id": line["payload"]["raw_id"],
-    }
+    payload["extra"] = {"derived": True}
+    if transcript_id is not None:
+        payload["extra"]["derived_from"] = transcript_id
+    payload["extra"]["derived_from_raw_id"] = line["payload"]["raw_id"]
     return {
         "at": line["end"] or line["at"],
         "end": None,
