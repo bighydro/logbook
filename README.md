@@ -137,6 +137,9 @@ logbook import-backup ~/backup                    # all of the above from the ba
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
 logbook sync granola                              # every Granola recording, and its summary as a derived note
+logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
+logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
+logbook infer flights                             # calendar entries + gaps in your location points: evidence inferred
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -189,6 +192,15 @@ one resolution of a number covers the address book, the chats and the calls) and
 it — `cellular`, `facetime`, `facetime-audio`, or a third-party app such as `whatsapp`. A missed call is a line
 too. Tier 1: a call record is about your own time and carries nobody's words. Any `add ios-calls <file>` names
 the adapter for a store copied out under another name; `logbook add <file>` recognises it by content.
+
+Flights become `flight/v1` lines (RFC 0013), one per flight, from up to three places that meet on one key,
+`(date, carrier, number)`: a Flighty export (`add flights <csv>`, evidence `tracked`), your calendar plus a
+silence in your location points that starts at one airport and ends at another (`infer flights`, evidence
+`inferred`), and your own sentence (`add flight "LX 561 NCE ZRH 2026-09-27 pilot"`, evidence `declared`). A
+flight seen twice is not written twice as two flights: the later observation supersedes the standing line with
+the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in.
+The package ships the world's 1,150 large airports with their zones; `--airports FILE` (or `LOGBOOK_AIRPORTS`)
+adds a private field. Tier 1; a booking reference is never kept.
 
 `show` prints people by name — the sender of a message, the organizer and attendees of an event — and the
 names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref

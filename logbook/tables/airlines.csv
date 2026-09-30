@@ -1,0 +1,104 @@
+# IATA and ICAO designators of scheduled airlines, for spelling a carrier one way (RFC 0013). Add to it freely.
+iata,icao,name
+3K,JSA,Jetstar Asia
+3U,CSC,Sichuan Airlines
+4U,GWI,Germanwings
+5J,CEB,Cebu Pacific
+6E,IGO,IndiGo
+7C,JJA,Jeju Air
+9W,JAI,Jet Airways
+A3,AEE,Aegean Airlines
+AA,AAL,American Airlines
+AC,ACA,Air Canada
+AD,AZU,Azul
+AF,AFR,Air France
+AI,AIC,Air India
+AM,AMX,Aeroméxico
+AR,ARG,Aerolíneas Argentinas
+AS,ASA,Alaska Airlines
+AT,RAM,Royal Air Maroc
+AV,AVA,Avianca
+AY,FIN,Finnair
+AZ,ITY,ITA Airways
+B6,JBU,JetBlue
+BA,BAW,British Airways
+BR,EVA,EVA Air
+BT,BTI,airBaltic
+CA,CCA,Air China
+CI,CAL,China Airlines
+CM,CMP,Copa Airlines
+CX,CPA,Cathay Pacific
+CZ,CSN,China Southern Airlines
+D8,IBK,Norwegian Air International
+DE,CFG,Condor
+DL,DAL,Delta Air Lines
+DY,NAX,Norwegian Air Shuttle
+EI,EIN,Aer Lingus
+EK,UAE,Emirates
+EN,DLA,Air Dolomiti
+ET,ETH,Ethiopian Airlines
+EW,EWG,Eurowings
+EY,ETD,Etihad Airways
+F9,FFT,Frontier Airlines
+FI,ICE,Icelandair
+FR,RYR,Ryanair
+FZ,FDB,flydubai
+G3,GLO,Gol
+GA,GIA,Garuda Indonesia
+GF,GFA,Gulf Air
+HA,HAL,Hawaiian Airlines
+HU,CHH,Hainan Airlines
+HV,TRA,Transavia
+IB,IBE,Iberia
+JL,JAL,Japan Airlines
+JQ,JST,Jetstar
+JU,ASL,Air Serbia
+KE,KAL,Korean Air
+KL,KLM,KLM Royal Dutch Airlines
+KM,AMC,Air Malta
+KQ,KQA,Kenya Airways
+LA,LAN,LATAM Airlines
+LH,DLH,Lufthansa
+LO,LOT,LOT Polish Airlines
+LX,SWR,Swiss International Air Lines
+LY,ELY,El Al
+MH,MAS,Malaysia Airlines
+MS,MSR,EgyptAir
+MU,CES,China Eastern Airlines
+NH,ANA,All Nippon Airways
+NK,NKS,Spirit Airlines
+NZ,ANZ,Air New Zealand
+OK,CSA,Czech Airlines
+OS,AUA,Austrian Airlines
+OU,CTN,Croatia Airlines
+OZ,AAR,Asiana Airlines
+PC,PGT,Pegasus Airlines
+PR,PAL,Philippine Airlines
+QF,QFA,Qantas
+QR,QTR,Qatar Airways
+RJ,RJA,Royal Jordanian
+RO,ROT,TAROM
+S7,SBI,S7 Airlines
+SA,SAA,South African Airways
+SK,SAS,Scandinavian Airlines
+SN,BEL,Brussels Airlines
+SQ,SIA,Singapore Airlines
+SU,AFL,Aeroflot
+SV,SVA,Saudia
+TG,THA,Thai Airways
+TK,THY,Turkish Airlines
+TP,TAP,TAP Air Portugal
+TR,TGW,Scoot
+U2,EZY,easyJet
+UA,UAL,United Airlines
+UX,AEA,Air Europa
+VA,VOZ,Virgin Australia
+VN,HVN,Vietnam Airlines
+VS,VIR,Virgin Atlantic
+VY,VLG,Vueling
+W6,WZZ,Wizz Air
+WF,WIF,Widerøe
+WN,SWA,Southwest Airlines
+WS,WJA,WestJet
+WY,OMA,Oman Air
+XQ,SXS,SunExpress

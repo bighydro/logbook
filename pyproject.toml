@@ -40,6 +40,7 @@ imessage = "logbook.adapters.imessage"
 ios-notes = "logbook.adapters.ios_notes"
 ios-calendar = "logbook.adapters.ios_calendar"
 ics = "logbook.adapters.ics"
+flighty = "logbook.adapters.flighty"
 transcript = "logbook.adapters.transcript"
 granola = "logbook.adapters.granola"
 

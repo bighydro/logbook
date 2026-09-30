@@ -50,8 +50,9 @@ event time regardless.
 
 Built-in adapters live in this package. Third-party ones are separate packages that register the
 `logbook.adapters` entry point. `all_adapters()` returns both kinds; `find(path)` asks only file
-adapters; `named(name)` resolves a file adapter by NAME and `live(name)` a live one. No file adapter
-makes a network call, and a live adapter makes them only inside `pull`.
+adapters; `named(name)` resolves a file adapter by NAME (or an alias: `flights` is `flighty`) and
+`live(name)` a live one. No file adapter makes a network call, and a live adapter makes them only
+inside `pull`.
 """
 
 from __future__ import annotations
@@ -77,6 +78,7 @@ BUILT_IN = (
     "ios_notes",
     "ios_calendar",
     "ios_calls",
+    "flighty",
     "ics",
     "transcript",
     "granola",
@@ -148,8 +150,12 @@ def find(path: Path) -> Adapter | None:
     return next((a for a in file_adapters() if a.sniff(Path(path))), None)
 
 
+ALIASES = {"flights": "flighty"}  # `logbook add flights <export.csv>` (RFC 0013)
+
+
 def named(name: str) -> Adapter | None:
-    """The file adapter called `name`, or None."""
+    """The file adapter called `name` (or by an alias in `ALIASES`), or None."""
+    name = ALIASES.get(name, name)
     return next((a for a in file_adapters() if name == a.NAME), None)
 
 
