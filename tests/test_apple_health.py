@@ -14,12 +14,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters
+from logbook import adapters, cli
 from logbook.adapters import apple_health, ios_calls
 from logbook.store import Logbook
 
@@ -480,6 +481,65 @@ def test_cli_add_by_sniff_writes_the_same_lines(tmp_path):
     p = _store(tmp_path / "health")
     assert f"added {LINES} lines from apple-health" in run("add", str(p)).stdout
     assert "added 0 lines from apple-health" in run("add", "health", str(p)).stdout
+
+
+# -- `stats --health` ------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many(apple_health.run(_store(tmp_path / "health")))
+    return lb
+
+
+def _stats(capsys: pytest.CaptureFixture[str], *args: str) -> str:
+    cli.main(["stats", *args])
+    return capsys.readouterr().out
+
+
+def test_stats_health_json_one_row_per_day(lb: Logbook, capsys):
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert data["days"] == [
+        {"day": "2026-03-02", "sleep_h": 7.3, "steps": 550, "resting_hr": 56},
+        {"day": "2026-03-03", "sleep_h": None, "steps": 450, "resting_hr": 60},
+    ]
+
+
+def test_stats_health_prints_the_table(lb: Logbook, capsys):
+    out = _stats(capsys, "--health")
+    rows = [line.split() for line in out.splitlines() if line.startswith("  20")]
+    assert rows == [["2026-03-02", "7.3", "550", "56"], ["2026-03-03", "-", "450", "60"]]
+    assert "day" in out and "sleep" in out and "steps" in out and "resting" in out
+    assert "Watch" not in out and "Oslo" not in out
+
+
+def test_stats_health_sleep_is_the_night_that_ends_on_the_day_asleep_stages_only(lb: Logbook, capsys):
+    # 2h core + 1h deep + 30m rem + 3h50 core = 7h20; awake and the phone's in-bed span do not count
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert data["days"][0]["sleep_h"] == 7.3
+
+
+def test_stats_health_steps_take_the_larger_device_per_quarter_hour(lb: Logbook, capsys):
+    # 07:00Z: watch 250 vs phone 200 → 250; 07:15Z: watch 300 → 550. Next day: watch 400 vs phone 450 → 450
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert [d["steps"] for d in data["days"]] == [550, 450]
+
+
+def test_stats_health_ignores_retracted_lines(lb: Logbook, capsys):
+    with lb.index() as idx:
+        (line,) = (ln for ln in idx.day("2026-03-03") if ln["payload"].get("raw_id") == "resting_hr:27")
+    lb.retract(int(line["seq"]), "sensor fault")
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert data["days"][1]["resting_hr"] is None
+
+
+def test_stats_health_on_a_record_without_health_lines(tmp_path: Path, monkeypatch, capsys):
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    assert json.loads(_stats(capsys, "--health", "--json")) == {"days": []}
+    assert "no health lines" in _stats(capsys, "--health")
 
 
 # -- property: every emitted line is a valid health-sample/v1 observation ----------------------------

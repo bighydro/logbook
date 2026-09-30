@@ -13,7 +13,7 @@ import contextlib
 import sqlite3
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -297,6 +297,27 @@ class Index:
             (kind,),
         ).fetchall()
         return {str(superseded): int(seq) for superseded, seq in found}
+
+    def of_kind(self, kind: str) -> Iterator[Line]:
+        """Every line of one kind, streamed in file order (one sequential sweep of the files, each
+        opened once), so a kind with a million lines never sits in memory at once."""
+        from .store import read_line_at
+
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE kind = ? ORDER BY file, offset", (kind,)
+        ).fetchall()
+        handle: Any = None
+        current: str | None = None
+        try:
+            for file, offset in found:
+                if file != current:
+                    if handle is not None:
+                        handle.close()
+                    handle, current = (self.lb.root / file).open("rb"), file
+                yield read_line_at(handle, offset)
+        finally:
+            if handle is not None:
+                handle.close()
 
     def line_id(self, source: str, raw_id: str) -> str | None:
         """The id of the line with this (source, raw_id), or None; the first written when the log

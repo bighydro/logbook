@@ -250,6 +250,9 @@ instant. A message with no `Message-ID` is keyed by the digest of its bytes and 
 
 `stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
+`stats --health` is one row per day from the health lines — hours asleep (the night that ends on that day, asleep
+stages only, the longest device), steps (per quarter hour the larger device, summed) and resting heart rate — and
+prints no device, zone or other field; `--json` gives the rows as `days`.
 
 | Source | Variables | What it logs |
 |---|---|---|
