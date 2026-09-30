@@ -220,7 +220,8 @@ its duration, activity, energy and distance. Each line names the device that mea
 names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
 nobody has resolved shows as the source gave it, after the name the source itself attached, if any.
 `show --raw` prints every ref unchanged, and a note's whole text where `show` prints its first line and
-`… (+N lines)`. Either way, `show` only reads.
+`… (+N lines)`. A calendar entry two calendars carry (the same title, or the same flight number, within five
+minutes) is one row naming both sources. Either way, `show` only reads.
 
 Transcripts become `transcript/v1` lines (RFC 0004), one per recording, tier 3 by default because a transcript
 carries other people's words in full (`--tier` overrides). The text is never in the line: the file's own bytes go
