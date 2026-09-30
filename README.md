@@ -321,7 +321,7 @@ record itself shows every time anything left it. `--dry-run` writes nothing and 
 - [SPEC.md](SPEC.md) — the format, one page; this is the part meant to become a standard
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the five layers and what each may depend on
 - [ROADMAP.md](ROADMAP.md) — what ships when
-- [CONTRIBUTING.md](CONTRIBUTING.md) — the easiest thing to build is an adapter for the export you have
+- [CONTRIBUTING.md](CONTRIBUTING.md) — one issue per PR, signed commits, synthetic data only; the easiest thing to build is an adapter for the export you have
 
 ## Status
 
