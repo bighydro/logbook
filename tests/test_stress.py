@@ -112,3 +112,86 @@ def test_show_on_200k_lines_takes_under_a_second_after_indexing(tmp_path, monkey
     print(f"\nshow: {len(rows) - 1:,} rows in {elapsed:.2f}s")
     assert len(rows) - 1 == 8_640
     assert elapsed < 1.0
+
+
+# -- three million lines: verify and dedupe never hold the log (#28, #29) -----------------------------
+
+BIG = 3_000_000
+SMALL = 1_000_000
+FLAT_MB = 48  # how much more verify may take on three million lines than on one: the heap, not the log
+DEDUPE_CEILING_MB = 256  # a 100,000-draft batch deduped through the index on three million lines
+MEASURE = """
+import resource, sys, time
+from pathlib import Path
+from logbook.store import Logbook
+mode, root = sys.argv[1], Path(sys.argv[2])
+lb = Logbook(root)
+t = time.perf_counter()
+if mode == "verify":
+    seq, _head, errors = lb.verify()
+    assert errors == [], errors
+    result = seq
+else:
+    drafts = ({"at": "2026-01-01T00:00:00Z", "source": "sim", "kind": "note", "tier": 1,
+               "payload": {"schema": "note/v1", "raw_id": f"sim-{i}", "text": "x"}} for i in range(100_000))
+    result = lb.append_many(drafts)
+rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+if sys.platform != "darwin":
+    rss *= 1024  # Linux reports kilobytes
+print(result, round(time.perf_counter() - t, 1), round(rss / 1e6))
+"""
+
+
+def _synthetic_drafts(n: int) -> Iterator[dict[str, Any]]:
+    """`n` notes spread evenly over ten years of month files, raw_id sim-0 … sim-(n-1). Synthetic."""
+    from datetime import UTC, datetime
+
+    start, step = 1_500_000_000, (10 * 365 * 86400) // n  # 2017-07-14T02:40:00Z onwards
+    for i in range(n):
+        at = datetime.fromtimestamp(start + i * step, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        yield {
+            "at": at,
+            "source": "sim",
+            "kind": "note",
+            "tier": 1,
+            "payload": {"schema": "note/v1", "raw_id": f"sim-{i}", "text": f"synthetic line {i}"},
+        }
+
+
+def _measure(mode: str, root: Path) -> tuple[int, float, int]:
+    """(result, seconds, peak RSS in MB) of `mode` on the record, in a process of its own."""
+    import subprocess
+
+    out = subprocess.run(
+        [sys.executable, "-c", MEASURE, mode, str(root)], capture_output=True, encoding="utf-8", check=True
+    ).stdout.split()
+    return int(out[0]), float(out[1]), int(out[2])
+
+
+@pytest.fixture(scope="module")
+def big_record(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
+    lb = Logbook.init(tmp_path_factory.mktemp("big") / "lb", "Europe/Oslo")
+    started = time.perf_counter()
+    assert lb.append_many(_synthetic_drafts(BIG)) == BIG
+    print(f"\nbuilt {BIG:,} lines over {len(lb.files())} month files in {time.perf_counter() - started:.0f}s")
+    return lb
+
+
+@pytest.mark.slow
+def test_verify_peak_memory_is_flat_as_the_record_grows(big_record: Logbook, tmp_path: Path):
+    small = Logbook.init(tmp_path / "small", "Europe/Oslo")
+    assert small.append_many(_synthetic_drafts(SMALL)) == SMALL
+    n_small, s_small, rss_small = _measure("verify", small.root)
+    n_big, s_big, rss_big = _measure("verify", big_record.root)
+    print(f"\nverify: {n_small:,} lines in {s_small}s, peak {rss_small} MB")
+    print(f"verify: {n_big:,} lines in {s_big}s, peak {rss_big} MB")
+    assert (n_small, n_big) == (SMALL, BIG)
+    assert rss_big - rss_small < FLAT_MB
+
+
+@pytest.mark.slow
+def test_dedupe_of_a_batch_against_three_million_lines_stays_in_the_index(big_record: Logbook):
+    appended, seconds, rss = _measure("dedupe", big_record.root)
+    print(f"\ndedupe: 100,000 drafts already in the log, {seconds}s, peak {rss} MB")
+    assert appended == 0
+    assert rss < DEDUPE_CEILING_MB
