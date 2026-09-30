@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import os
 import re
@@ -74,6 +75,16 @@ class CodeCheckoutError(Exception):
 
 class FormatError(Exception):
     """logbook.json names a format this code will not verify or write (SPEC §3.1)."""
+
+
+class UnsortedFile(Exception):
+    """A month file whose lines are not in seq order. This code never writes one; SPEC §3 still
+    orders by seq wherever a line lives, so a caller that meets one reads again through
+    `Logbook._lines_by_seq`, which sorts."""
+
+
+# progress(file, lines_in_file, lines_so_far, elapsed_seconds): once per month file, as it is finished
+FileProgress = Callable[[str, int, int, float], None]
 
 
 def code_checkout_marker(root: Path) -> str | None:
@@ -150,12 +161,51 @@ class Logbook:
     def files(self) -> list[Path]:
         return sorted(self.log_dir.glob("*/*.jsonl"))
 
-    def lines(self) -> Iterator[Line]:
-        """All lines in chain order (by seq). Files partition by month of `at`; backfilled
-        history lands in old files, so file order is not chain order."""
-        rows = list(self.lines_unsorted())
-        rows.sort(key=lambda r: r.get("seq", 0))
-        return iter(rows)
+    def lines(self, progress: FileProgress | None = None) -> Iterator[Line]:
+        """All lines in chain order (by seq), streamed. Files partition by month of `at`;
+        backfilled history lands in old files, so file order is not chain order, but the writer
+        appends each file in chain order, so this is a merge: every month file open at once, one
+        parsed line from each in a heap keyed by seq, the smallest yielded and its file read on.
+        Memory is one line per month file, whatever the size of the log. `progress` is told of
+        each file as its last line is yielded. A file whose lines are not in seq order raises
+        UnsortedFile after some lines have been yielded; `verify` then reads again, sorted
+        (`_lines_by_seq`), as SPEC §3 orders by seq wherever a line was found."""
+        files = self.files()
+        handles = [f.open("rb") for f in files]
+        try:
+            counts = [0] * len(files)  # raw lines read from each file, for messages
+            held = [0] * len(files)  # lines each file holds, blank ones aside, for progress
+            heap: list[tuple[int, int, Line]] = []
+            started, total = time.monotonic(), 0
+
+            def advance(file_no: int, after: int) -> None:
+                """Push the next line of a file, or report the file finished."""
+                fh, f = handles[file_no], files[file_no]
+                while raw := fh.readline():
+                    counts[file_no] += 1
+                    if raw.strip():
+                        line = self._parse(f, counts[file_no], raw)
+                        seq = _seq_of(line)
+                        if seq < after:
+                            raise UnsortedFile(
+                                f"{self._relative(f)} line {counts[file_no]}: seq {seq} after {after}"
+                            )
+                        heapq.heappush(heap, (seq, file_no, line))
+                        held[file_no] += 1
+                        return
+                if progress is not None:
+                    progress(self._relative(f), held[file_no], total, time.monotonic() - started)
+
+            for file_no in range(len(files)):
+                advance(file_no, 0)
+            while heap:
+                seq, file_no, line = heapq.heappop(heap)
+                total += 1
+                yield line
+                advance(file_no, seq)
+        finally:
+            for fh in handles:
+                fh.close()
 
     def lines_unsorted(self) -> Iterator[Line]:
         """Every line, streamed file by file, in file order — not chain order. For a pass that
@@ -212,13 +262,23 @@ class Logbook:
         with self.index() as idx:
             return idx.by_seq(seq)
 
-    def verify(self, warnings: list[str] | None = None) -> tuple[int, str, list[str]]:
-        """(seq, head, errors) of the files, never the index. What this release only warns about
-        (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given."""
+    def verify(
+        self, warnings: list[str] | None = None, progress: FileProgress | None = None
+    ) -> tuple[int, str, list[str]]:
+        """(seq, head, errors) of the files, never the index, streamed through `lines()`: memory is
+        one line per month file however long the record. What this release only warns about
+        (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given.
+        `progress` is told of each month file as it is finished."""
         meta = self.meta
         self._check_format(meta)
+        kept = 0 if warnings is None else len(warnings)
         try:
-            seq, head, errors = verify_lines(self.lines(), warnings)
+            try:
+                seq, head, errors = verify_lines(self.lines(progress), warnings)
+            except UnsortedFile:  # not written by this code; SPEC §3 orders by seq regardless
+                if warnings is not None:
+                    del warnings[kept:]
+                seq, head, errors = verify_lines(self._lines_by_seq(progress), warnings)
         except ValueError as e:  # a line that is not one JSON object with distinct keys (SPEC §2)
             return 0, GENESIS, [str(e)]
         if meta["seq"] != seq or meta["head"] != head:
@@ -451,20 +511,25 @@ class Logbook:
         )
         return {"lines": n, "from_head": old_head, "head": line["hash"], "kept": kept}
 
-    def _lines_by_seq(self) -> Iterator[Line]:
-        """Every line in chain order with one line in memory at a time: a first pass notes where
-        each seq lives (two integers per line), a second reads them back in seq order."""
+    def _lines_by_seq(self, progress: FileProgress | None = None) -> Iterator[Line]:
+        """Every line in chain order with one line in memory at a time, whatever order the files
+        are in: a first pass notes where each seq lives (two integers per line), a second reads
+        them back in seq order. `lines()` is the one-pass merge for files the writer kept in seq
+        order; this is for `migrate` and for `verify`'s fallback."""
         files = self.files()
         seqs: array[int] = array("q")
         places: array[int] = array("q")  # file number << 40 | byte offset
+        started = time.monotonic()
         for file_no, f in enumerate(files):
             with f.open("rb") as fh:
-                offset = 0
+                offset, before = 0, len(seqs)
                 for n, raw in enumerate(fh, 1):
                     if raw.strip():
-                        seqs.append(int(self._parse(f, n, raw).get("seq", 0)))
+                        seqs.append(_seq_of(self._parse(f, n, raw)))
                         places.append((file_no << 40) | offset)
                     offset += len(raw)
+            if progress is not None:
+                progress(self._relative(f), len(seqs) - before, len(seqs), time.monotonic() - started)
         order = sorted(range(len(seqs)), key=seqs.__getitem__)
         handles = [f.open("rb") for f in files]
         try:
@@ -561,6 +626,13 @@ def _take(it: Iterator[dict[str, Any]], size: int) -> tuple[list[dict[str, Any]]
 
 def _dumps(line: Line) -> str:
     return json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n"
+
+
+def _seq_of(line: Line) -> int:
+    """The seq a line claims, for ordering; a missing or non-integer one sorts first and is
+    reported by `verify_lines`."""
+    seq = line.get("seq")
+    return seq if isinstance(seq, int) and not isinstance(seq, bool) else 0
 
 
 def _dedupe_key(line: dict[str, Any]) -> tuple[str, str] | None:

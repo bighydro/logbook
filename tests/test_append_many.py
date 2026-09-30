@@ -1,4 +1,4 @@
-"""Logbook.append_many at scale: one dedupe set, open file handles, the chain in memory,
+"""Logbook.append_many at scale: dedupe through the index, open file handles, the chain in memory,
 logbook.json every META_EVERY lines, and a valid chain after an interruption."""
 
 from __future__ import annotations

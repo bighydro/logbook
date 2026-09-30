@@ -24,7 +24,7 @@ from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .resolve import Ref, labels
-from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, now_utc, retractions
+from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, UnsortedFile, now_utc, retractions
 
 _LOCALTIME = "/etc/localtime"
 
@@ -213,6 +213,12 @@ def _report_skipped(counts: dict[str, int]) -> None:
 
 def _progress(n: int, elapsed: float) -> None:
     print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
+
+
+def _file_progress(file: str, n: int, total: int, elapsed: float) -> None:
+    """`verify --progress`: one line per month file as its last line is checked, on stderr, so
+    stdout stays the one line it always was."""
+    print(f"  {file}: {n:,} lines ({total:,} so far, {elapsed:,.0f}s)", file=sys.stderr)
 
 
 def _page_progress(unit: str) -> Callable[[int, float], None]:
@@ -957,7 +963,7 @@ def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
-    seq, head, errors = lb.verify(warnings)
+    seq, head, errors = lb.verify(warnings, progress=_file_progress if a.progress else None)
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
         if (exp["seq"], exp["head"]) != (seq, head):
@@ -1004,12 +1010,24 @@ def cmd_export(a: argparse.Namespace) -> None:
         sys.exit(2)
     out = Path(a.path).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
+    n = _write_lines(lb.lines(), out)
+    if n is None:  # a month file not in seq order (not one this code wrote): the sorted read
+        n = _write_lines(lb._lines_by_seq(), out)
+    print(f"exported {n} lines to {out} — verify with: logbook verify")
+
+
+def _write_lines(lines: Iterator[Line], out: Path) -> int | None:
+    """Stream `lines` to `out` as JSON lines, one in memory at a time; the count, or None when
+    the files turned out to need the sorted read (the caller starts the file over)."""
     n = 0
     with out.open("w", encoding="utf-8") as fh:
-        for line in lb.lines():
-            fh.write(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n")
-            n += 1
-    print(f"exported {n} lines to {out} — verify with: logbook verify")
+        try:
+            for line in lines:
+                fh.write(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n")
+                n += 1
+        except UnsortedFile:
+            return None
+    return n
 
 
 def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
@@ -1173,6 +1191,9 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("verify", help="check the chain")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.add_argument("--expect", help="expected.json with seq and head (conformance)")
+    s.add_argument(
+        "--progress", action="store_true", help="one line per month file on stderr, as each is finished"
+    )
     s.set_defaults(fn=cmd_verify)
     s = sub.add_parser(
         "export",
