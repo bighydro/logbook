@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 encrypted = ["cryptography>=42"]  # `openlogbook[encrypted]`: import-backup on an encrypted iOS backup
+ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
@@ -52,6 +53,7 @@ dev = [
   "pytest-cov>=5",
   "jsonschema>=4",
   "cryptography>=42",  # the `encrypted` extra, so its tests and mypy see it
+  "websockets>=13",  # the `ais` extra, so mypy sees it (the tests fake the socket)
 ]
 
 [build-system]

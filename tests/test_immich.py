@@ -61,7 +61,15 @@ def _by_name(lines: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def test_registry_lists_immich_and_dawarich_as_live_adapters():
-    assert [a.NAME for a in adapters.live_adapters()] == ["immich", "dawarich", "imessage", "granola", "gcal"]
+    assert [a.NAME for a in adapters.live_adapters()] == [
+        "immich",
+        "dawarich",
+        "imessage",
+        "granola",
+        "gcal",
+        "ais",
+        "adsb",
+    ]
     assert adapters.live("immich") is immich
     assert adapters.live("nope") is None
 
@@ -83,6 +91,8 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "ios-calls",
         "ics",
         "transcript",
+        "ais",
+        "adsb",
     ]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")

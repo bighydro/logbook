@@ -111,6 +111,7 @@ logbook migrate                  # same lines, new hashes; keeps the old files a
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head.
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
+  assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
   state/            where each live source left off. bookkeeping, not the record.
   exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
@@ -280,6 +281,29 @@ export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/
 logbook sync gcal --dry-run                                # counts per calendar, nothing written
 logbook sync gcal
 ```
+
+Your boat, your aircraft and your car are *subjects* with tracks of their own, not places (ADR 0018). Register
+each once in `assets.json`, then let `sync` ask the receivers that hear them:
+
+```bash
+logbook assets add solvind --kind yacht --name Solvind --mmsi 999000001        # synthetic MMSI; use your own
+logbook assets add ln-zz1 --kind aircraft --name "the club's Cub" --icao24 000a01 --registration ZZ-ZZ1
+logbook assets list
+export LOGBOOK_AISSTREAM_KEY=...                            # free key from aisstream.io
+uv sync --extra ais                                         # or: pip install 'openlogbook[ais]'
+logbook sync ais --dry-run                                  # listen for 60 s, count, write nothing
+logbook sync ais                                            # then: */10 * * * * logbook sync ais
+logbook sync adsb                                           # OpenSky, no key needed; LOGBOOK_OPENSKY_USER/PASS optional
+```
+
+Each position is a `location/v1` line like your own, with `subject` set to the asset's id and `raw_id` from the
+receiver, the identifier and the fix time (`aisstream:<mmsi>:<unix seconds>`, `opensky:<icao24>:<unix seconds>`),
+so a report heard twice is one line, and a stream you saved to a file (`logbook add messages.jsonl`) and the same
+reports heard live are one line too. `state/ais.json` and `state/adsb.json` keep a watermark per asset. `show`
+lists the boat's points as their own run, named by the asset; whether you were aboard is for an engine to decide
+from the two tracks, never written on a line. `LOGBOOK_AISSTREAM_LISTEN_S` sets how long each `sync ais` listens
+(a vessel under way reports every few seconds); OpenSky's `states/all` is the present, one fix per aircraft per
+poll, so poll as often as its rate limit allows.
 
 **A secret iCal address is the whole calendar** to anyone who holds it; Google can reset it. Keep the
 URLs in the shell environment only, as the Dawarich key below: the logbook never prints one, naming a

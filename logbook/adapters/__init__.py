@@ -9,7 +9,9 @@ Two kinds share one registry. A *file* adapter reads an export you already hold:
 `run` may also take an optional `counts: dict[str, int]`; when it does, `logbook add` passes one and
 reports what the adapter skipped (`skipped_no_timestamp`, `skipped_bad_coordinates`, `skipped_no_ref`, ...;
 the phrases live in `cli.SKIP_PHRASES`). It may also take an optional `timezone: str`, the record's IANA
-zone, for a source whose times are floating (an all-day calendar entry has a day, not an instant).
+zone, for a source whose times are floating (an all-day calendar entry has a day, not an instant), or
+`assets: list[Asset]`, the record's asset registry (`assets.json`, ADR 0018), for a source that reports
+the positions of the owner's boats and aircraft rather than the owner's own.
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 
@@ -26,10 +28,13 @@ and optionally:
                                                 # line of this source and KIND
     UNIT: str                                   # what the progress lines count ("assets" if absent)
     group(draft) -> str                         # `sync` then reports seen and new per group (a calendar)
+    GROUP_MARKS: bool                           # with `group`: `sync` also keeps a watermark per group
+                                                # in the state file (`groups`), one per tracked asset
 
-`pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may) and
-`failed: list[str]`: a source made of several feeds appends one line per feed it could not read and
-still yields the others' drafts; `sync` prints each, keeps the watermark and exits 1.
+`pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may), `assets`
+(the registry, as `run` may) and `failed: list[str]`: a source made of several feeds appends one line per
+feed it could not read and still yields the others' drafts; `sync` prints each, keeps the watermark and
+exits 1.
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
 reads a phone backup's sms.db and the Mac's own chat.db); they write the same lines, so either
@@ -76,6 +81,8 @@ BUILT_IN = (
     "transcript",
     "granola",
     "gcal",
+    "ais",
+    "adsb",
 )
 
 
