@@ -43,6 +43,7 @@ ics = "logbook.adapters.ics"
 flighty = "logbook.adapters.flighty"
 transcript = "logbook.adapters.transcript"
 granola = "logbook.adapters.granola"
+mail = "logbook.adapters.mail"
 
 [dependency-groups]
 dev = [

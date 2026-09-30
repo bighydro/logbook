@@ -139,6 +139,7 @@ logbook add ios-calls ~/inbox/ios-backup-<udid>/ios-calls/CallHistory.storedata 
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
+logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message
 logbook sync granola                              # every Granola recording, and its summary as a derived note
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
@@ -221,6 +222,21 @@ front-matter block for `title`, `started_at`, `ended_at` and `participants`. A f
 `--at`, else a date and time in its name (`2026-03-01T13-00-00Z …`, Zoom's `GMT20260301-130000_…`), else it is
 skipped and counted. Speakers stay as the source labels them; nothing is resolved here. Turn and speaker counts
 and the duration sit under `extra`.
+
+Mail becomes `mail/v1` lines (RFC 0015), one per message, tier 2 by default (`--tier` sets another for the whole
+import, never per message). `logbook add mail <file.mbox|folder>` reads a Google Takeout `Mail/` export — or any mbox —
+streamed, one message in memory at a time however large the file: the `Message-ID` as `raw_id` (prefixed by the
+mailbox when `--account` names it, so a re-import and a later live puller append nothing), the thread root from
+`References`, the sender and recipients as `{email, name}` exactly as the headers spell them (a resolution of the
+address names them in `show`, as for a message's sender), the subject, the `Date` header with its offset kept and
+`at` in UTC, Gmail's labels, the body as plain text (an HTML-only message stripped to its text, no library), the
+size, and every attachment by name, media type, digest and length. Attachments go into `attachments/` only with
+`--attachments`; otherwise the line names their digests and the record holds no bytes. `direction` is `sent` when
+the sender is one of your addresses — put `"owner_emails": ["you@example.org"]` in `logbook.json`, or pass
+`--account` — else `received`. `--only-labels`/`--skip-labels` keep or drop by Gmail label, `--since` cuts by day or
+instant. A message with no `Message-ID` is keyed by the digest of its bytes and counted; a message with no readable
+`Date` is timed by its mbox separator and counted; nothing is dropped silently. `show` prints
+`✉ subject — from → to (n attachments)`, never the body; `show --raw` prints the body under the row.
 
 `stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
