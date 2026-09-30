@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · infer · retract · show · stats · verify · export · index ·
-migrate · assets. Three verbs, ten rare."""
+"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · verify · export ·
+index · migrate · assets. Three verbs, eleven rare."""
 
 from __future__ import annotations
 
@@ -14,12 +14,23 @@ import time
 import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path, PurePath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import FORMAT, __version__, adapters, assets, crossing, flights, ios_backup, ios_backup_crypto, policy
+from . import (
+    FORMAT,
+    __version__,
+    adapters,
+    assets,
+    crossing,
+    flights,
+    ios_backup,
+    ios_backup_crypto,
+    policy,
+    stays,
+)
 from .adapters import ios_contacts
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
@@ -261,6 +272,7 @@ def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
 
 PATH_SUFFIXES = (".json", ".jsonl", ".geojson", ".zip", ".csv", ".txt")
 EN_DASH = "\u2013"  # between the two clocks of a time span
+EM_DASH = "\u2014"  # heads an asset's section of `derive stays`
 
 
 def looks_like_path(arg: str) -> bool:
@@ -1161,6 +1173,187 @@ def _plural(n: int, noun: str, plural: str | None = None) -> str:
     return f"{n:,} {noun if n == 1 else plural or noun + 's'}"
 
 
+def cmd_derive(a: argparse.Namespace) -> None:
+    """`derive stays`: the location lines of a window read into stays, stops and moves, the owner's
+    first and every asset's after (ADR 0018), the owner's stays marked aboard where an asset's
+    track matches, and the overnight stay of each day; a table in local time, or JSON. The window
+    runs from the first day's midnight to the night's end after the last day, so the night is
+    inside it. Read through the index. The only thing written is `policy/stays.json` with the
+    defaults, on the first run and never again; `--dry-run` writes nothing at all. Never a line:
+    derived is disposable (ADR 0013)."""
+    try:
+        first, last = _derive_days(a)
+    except ValueError as e:
+        print(f"derive: {e}", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    tz = ZoneInfo(lb.meta["timezone"])
+    try:
+        path = stays.settings_path(lb.root)
+        if a.dry_run:
+            note = f"settings from {path}" if path.exists() else f"default settings; {path} not written"
+            print(f"dry run: {note}", file=sys.stderr)
+        else:
+            stays.write_default_settings(lb.root)
+        settings = stays.read_settings(lb.root)
+        places = stays.read_places(lb.root, settings.radius_m)
+        registered = stays.read_assets(lb.root)
+    except stays.SettingsError as e:
+        print(f"derive: {e}", file=sys.stderr)
+        sys.exit(2)
+    days = day_range(first, last)
+    start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
+    _night_start, end = stays.night_window(last, tz, settings)
+    with lb.index() as idx:
+        spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+        lines = [line for _day, line in idx.between(first, spill)]
+        lines += idx.retractions()  # from every file: a retraction applies wherever its line is
+    window = [
+        line
+        for line in lines
+        if line["kind"] == RETRACTION or ((at := stays.instant(line["at"])) is not None and start <= at < end)
+    ]
+    derived = stays.derive(
+        window,
+        settings,
+        places,
+        {k: v.kind for k, v in registered.items()},
+        lb.meta["timezone"],
+        _airports(a.airports),
+    )
+    subjects = derived.subjects
+    if a.subject:
+        wanted = None if a.subject == "owner" else a.subject
+        if wanted is not None and wanted not in registered and wanted not in subjects:
+            print(
+                f"derive: no subject {a.subject!r}: assets.json does not name it and no location line"
+                " in this window carries it",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        subjects = [wanted]
+    segments = [s for s in derived.segments if s.subject in subjects]
+    nights = [stays.night(segments, day, tz, settings) for day in days] if None in subjects else []
+    if a.json:
+        out = {
+            "window": {"since": stays.instant_text(start), "until": stays.instant_text(end), "days": days},
+            "settings": settings.to_json(),
+            "subjects": subjects,
+            "segments": [s.to_json(tz) for s in segments],
+            "nights": [n.to_json(tz) for n in nights],
+            "noise_points": derived.noise_points,
+        }
+        print(json.dumps(out, indent=2))
+        return
+    for text in _stays_rows(segments, nights, days, subjects, registered, tz):
+        print(text)
+
+
+def _derive_days(a: argparse.Namespace) -> tuple[str, str]:
+    """The first and last local day of the window: `--day` (default today), or `--since`/`--until`."""
+    if a.day and (a.since or a.until):
+        raise ValueError("give --day, or --since and --until, not both")
+    if a.day:
+        day = date.today().isoformat() if a.day == "today" else parse_day(a.day).isoformat()
+        return day, day
+    if a.since or a.until:
+        since = parse_day(a.since).isoformat() if a.since else None
+        until = parse_day(a.until).isoformat() if a.until else since
+        since = since or until
+        assert since is not None and until is not None
+        if until < since:
+            raise ValueError(f"range runs backwards: {since} > {until}")
+        return since, until
+    today = date.today().isoformat()
+    return today, today
+
+
+def _stays_rows(
+    segments: list[stays.Segment],
+    nights: list[stays.Night],
+    days: list[str],
+    subjects: list[str | None],
+    registered: Mapping[str, assets.Asset],
+    tz: ZoneInfo,
+) -> Iterator[str]:
+    """One section per subject (the owner unheaded, an asset headed by its id and registry entry),
+    each day's rows under its date, the owner's night after each day's rows."""
+    by_night = {n.day: n for n in nights}
+    for subject in subjects:
+        mine = [s for s in segments if s.subject == subject]
+        if subject is not None:
+            info = registered.get(subject)
+            yield f"{EM_DASH} {subject}" + (f" ({info.name}, {info.kind})" if info else "")
+        by_day: dict[str, list[stays.Segment]] = {}
+        for s in mine:
+            by_day.setdefault(s.start.astimezone(tz).date().isoformat(), []).append(s)
+        for day in sorted(set(days) | set(by_day)):
+            rows = by_day.get(day, [])
+            if rows:
+                yield day
+                for s in rows:
+                    yield _segment_row(s, tz)
+            elif day in days:
+                yield f"{day}: no location lines"
+            if subject is None and day in by_night:
+                yield _night_row(by_night[day], tz)
+
+
+def _segment_row(s: stays.Segment, tz: ZoneInfo) -> str:
+    parts: list[str]
+    if s.kind == stays.MOVE:
+        parts = [_distance_text(s.distance_m or 0), _duration_text(s.duration_s), s.mode or "gap"]
+        if s.airports:
+            parts.append(f"{s.airports[0]} → {s.airports[1]}")
+    else:
+        parts = [_where(s), _duration_text(s.duration_s)]
+        if s.attached:
+            parts.append(", ".join(_plural(n, kind) for kind, n in s.attached.items()))
+        elif s.kind == stays.STOP:
+            parts.append("nothing attached")
+        if s.promoted:
+            parts.append("promoted")
+    if s.aboard:
+        parts.append(f"aboard {s.aboard}")
+    return f"  {_span(s.start, s.end, tz):<14} {s.kind:<5} {' · '.join(parts)}"
+
+
+def _night_row(n: stays.Night, tz: ZoneInfo) -> str:
+    if n.stay is None:
+        return "  night          in transit"
+    return f"  night          {_where(n.stay)} · {_span(n.stay.start, n.stay.end, tz)}"
+
+
+def _where(s: stays.Segment) -> str:
+    if s.place:
+        return s.place
+    assert s.lat is not None and s.lon is not None
+    return f"{s.lat:.4f},{s.lon:.4f}"
+
+
+def _span(start: datetime, end: datetime, tz: ZoneInfo) -> str:
+    a, b = start.astimezone(tz), end.astimezone(tz)
+    days = (b.date() - a.date()).days
+    return f"{a:%H:%M}{EN_DASH}{b:%H:%M}" + (f"+{days}" if days else "")
+
+
+def _duration_text(seconds: int) -> str:
+    minutes = round(seconds / 60)
+    if minutes < 1:
+        return "< 1 min"
+    hours, minutes = divmod(minutes, 60)
+    if not hours:
+        return f"{minutes} min"
+    return f"{hours} h" if not minutes else f"{hours} h {minutes} min"
+
+
+def _distance_text(metres: float) -> str:
+    if metres < 1000:
+        return f"{round(metres)} m"
+    km = metres / 1000
+    return f"{km:.1f} km" if km < 100 else f"{round(km)} km"
+
+
 def cmd_index(a: argparse.Namespace) -> None:
     """Rebuild index.sqlite from the files. Readers do this by themselves when it is missing or
     stale; this is the command that shows progress, or that you run after copying a logbook."""
@@ -1428,6 +1621,24 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
     s.set_defaults(fn=cmd_stats)
+    s = sub.add_parser(
+        "derive", help="read the record into stays and moves (`derive stays`); nothing is appended"
+    )
+    s.add_argument(
+        "what", choices=["stays"], help="stays: stays, stops and moves per subject, and each night"
+    )
+    s.add_argument("--day", metavar="YYYY-MM-DD", help="one local day (default today)")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range (default --since)")
+    s.add_argument("--subject", metavar="ID", help="only this asset's track (assets.json), or `owner`")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--dry-run", action="store_true", help="never create policy/stays.json; say what applies")
+    s.add_argument("--json", action="store_true", help="the segments and nights as one JSON object")
+    s.set_defaults(fn=cmd_derive)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
