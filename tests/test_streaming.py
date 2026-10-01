@@ -91,15 +91,15 @@ def test_a_parse_error_is_still_reported_by_file_and_line(lb: Logbook):
 
 
 def test_verify_reports_each_month_file_as_it_is_finished(lb: Logbook):
-    """A file is finished when its last line is checked, so files finish in the order of their
-    last seq: here 03 (seq 28), 01 (29), 02 (30), not file order."""
+    """Heap merge finishes files in last-seq order (03, 01, 02); progress is held until
+    every earlier path is done so reports read as 01, 02, 03."""
     seen: list[tuple[str, int, int]] = []
     seq, _head, errors = lb.verify(progress=lambda file, n, total, _elapsed: seen.append((file, n, total)))
     assert errors == [] and seq == 30
     assert seen == [
-        ("logbook/2026/03.jsonl", 10, 28),
         ("logbook/2026/01.jsonl", 10, 29),
         ("logbook/2026/02.jsonl", 10, 30),
+        ("logbook/2026/03.jsonl", 10, 30),
     ]
 
 
@@ -112,12 +112,14 @@ def test_cli_verify_progress_prints_one_line_per_file_on_stderr_and_the_same_std
     assert with_progress.out == plain.out
     assert plain.out.startswith("valid — 30 lines, head ")
     lines = with_progress.err.splitlines()
-    assert [text.split(":")[0].strip() for text in lines] == [
-        "logbook/2026/03.jsonl",
+    assert [text.split(": ", 1)[1].split(":")[0] for text in lines] == [
         "logbook/2026/01.jsonl",
         "logbook/2026/02.jsonl",
+        "logbook/2026/03.jsonl",
     ]
-    assert "10 lines (28 so far" in lines[0] and "10 lines (30 so far" in lines[-1]
+    assert lines[0].startswith("  file 1 of 3:")
+    assert lines[2].startswith("  file 3 of 3:")
+    assert "10 lines (29 so far" in lines[0] and "10 lines (30 so far" in lines[-1]
 
 
 def test_verify_fallback_does_not_gather_the_warnings_twice(lb: Logbook):
