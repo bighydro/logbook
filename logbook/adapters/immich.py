@@ -261,6 +261,8 @@ def _payload(asset: dict[str, Any], exif: dict[str, Any]) -> dict[str, Any]:
     payload["people"] = people
     payload["raw_id"] = asset["id"]
     extra: dict[str, Any] = {"checksum": asset.get("checksum"), "original_path": asset.get("originalPath")}
+    if "isFavorite" in asset:  # the owner's mark, read by `infer keepers` (RFC 0024)
+        extra["favorite"] = bool(asset["isFavorite"])
     if asset.get("updatedAt"):
         extra["updated_at"] = _rfc3339(asset["updatedAt"])
     description = (exif.get("description") or "").strip()

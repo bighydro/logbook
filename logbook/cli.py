@@ -1,5 +1,5 @@
 """logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
-trips · verify · export · index · migrate · assets. Three verbs, fourteen rare."""
+trips · keepers · verify · export · index · migrate · assets. Three verbs, fifteen rare."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from . import (
     flights,
     ios_backup,
     ios_backup_crypto,
+    keepers,
     pages,
     places,
     policy,
@@ -563,8 +564,11 @@ def cmd_infer(a: argparse.Namespace) -> None:
     """`infer flights [--since DAY] [--until DAY] [--airports FILE] [--dry-run]`: flight/v1 lines
     (RFC 0013, evidence `inferred`) from the record's own calendar entries and location points,
     merged into the flights already standing; a re-run appends nothing new."""
+    if a.what == "keepers":
+        _infer_keepers(a)
+        return
     if a.what != "flights":
-        print(f"infer: only flights can be inferred yet, not {a.what!r}", file=sys.stderr)
+        print(f"infer: flights or keepers can be inferred, not {a.what!r}", file=sys.stderr)
         sys.exit(2)
     for day in (a.since, a.until):
         if day is not None:
@@ -598,6 +602,74 @@ def cmd_infer(a: argparse.Namespace) -> None:
     else:
         print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")
     _report_skipped(counts)
+
+
+def _infer_keepers(a: argparse.Namespace) -> None:
+    """`infer keepers [--dry-run]`: keeper/v1 lines (RFC 0024) from the marks on the record's
+    photo lines — a favourite is a `memory`, the Art album is `art` — through `append_many`, so a
+    mark already in the record, retracted or not, is never written twice."""
+    lb = Logbook.find()
+    counts: dict[str, int] = {}
+    with lb.index() as idx:
+        retracted = retractions(idx.retractions())
+        photos = [line for line in idx.of_kind("photo") if str(line["id"]) not in retracted]
+    drafts = list(keepers.infer(photos, counts))
+    already = 0
+
+    def skipped(_draft: dict[str, Any]) -> None:
+        nonlocal already
+        already += 1
+
+    if a.dry_run:
+        with lb.index() as idx:
+            already = len(idx.existing({key for d in drafts if (key := _dedupe_key(d)) is not None}))
+        n = len(drafts) - already
+    else:
+        n = lb.append_many(drafts, skipped=skipped)
+    photos_text = f"{_plural(counts.get('marked', 0), 'marked photo')} of {counts.get('photos', 0)}"
+    already_text = f" ({already} already in the record)" if already else ""
+    if a.dry_run:
+        would = f"{_plural(n, 'keeper')} from {photos_text} would be written"
+        print(f"dry run: {would}{already_text}; nothing written")
+    else:
+        print(f"inferred {_plural(n, 'new keeper')} from {photos_text}{already_text}")
+
+
+def cmd_keepers(a: argparse.Namespace) -> None:
+    """`keepers [--since DAY] [--until DAY] [--lane memory|art] [--json]`: the keeper lines
+    standing (RFC 0024), by day. Nothing is written."""
+    lb = Logbook.find()
+    for day in (a.since, a.until):
+        if day is not None:
+            try:
+                parse_day(day)
+            except ValueError as e:
+                print(f"keepers: {e}", file=sys.stderr)
+                sys.exit(2)
+    tz = str(lb.meta["timezone"])
+    with lb.index() as idx:
+        found = keepers.standing([*idx.by_kind(keepers.KIND, a.since, a.until), *idx.retractions()])
+    rows = [
+        keepers.summary(line, local_date(str(line["at"]), tz))
+        for line in found
+        if a.lane is None or (line.get("payload") or {}).get("lane") == a.lane
+    ]
+    rows.sort(key=lambda r: (r["day"], r["at"], r["lane"]))
+    if a.json:
+        print(json.dumps({"keepers": rows}, indent=2, ensure_ascii=False))
+        return
+    if not rows:
+        print(
+            "no keepers"
+            + (f" in lane {a.lane}" if a.lane else "")
+            + "; `logbook infer keepers` reads the marks"
+        )
+        return
+    zone = ZoneInfo(tz)
+    for r in rows:
+        photo = r["photo"] if isinstance(r["photo"], dict) else {}
+        name = photo.get("file_name") or photo.get("asset_id") or "?"
+        print(f"  {r['day']}  {_clock(r['at'], zone)}  {r['lane']:<6} {r['source']:<10} {name}")
 
 
 def cmd_assets(a: argparse.Namespace) -> None:
@@ -918,6 +990,9 @@ def cmd_show(a: argparse.Namespace) -> None:
         return
     rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
+    hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
+    if hero:
+        print(f"  {hero}")
     for text in _day_rows(rows, retracted, tz, names, superseded):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
@@ -1050,6 +1125,8 @@ def _line_row(
         text = _mail_text(p, names)
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
+    elif line["kind"] == keepers.KIND:
+        text = keepers.text(line)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
     else:
@@ -2128,7 +2205,7 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser(
         "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
     )
-    s.add_argument("what", help="what to infer: flights")
+    s.add_argument("what", help="what to infer: flights, or keepers (favourites and the Art album, RFC 0024)")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only calendar entries from this local day")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="… up to this local day, inclusive")
     s.add_argument(
@@ -2234,6 +2311,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
     s.set_defaults(fn=cmd_trips)
+    s = sub.add_parser("keepers", help="the photos marked keepers (RFC 0024), by day")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="from this local day")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="up to this local day, inclusive")
+    s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
+    s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
+    s.set_defaults(fn=cmd_keepers)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
