@@ -213,6 +213,7 @@ SKIP_PHRASES = {
     "skipped_no_amount": "without an amount",
     "skipped_encrypted": "encrypted with no decrypted copy in the store",
     "skipped_redacted": "redacted, or redactions",
+    "skipped_call": "calls, not messages",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",

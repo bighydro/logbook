@@ -102,6 +102,7 @@ BUILT_IN = (
     "copilot",
     "splitwise",
     "beeper",
+    "line",
 )
 
 

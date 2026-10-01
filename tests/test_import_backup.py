@@ -27,6 +27,7 @@ from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
 from test_ios_wallet import LINES as WALLET_LINES
 from test_ios_wallet import _passes
+from test_line import _store as _line_store
 from test_safari import _store as _safari_store
 from test_splitwise import _store as _splitwise_store
 from test_whatsapp import _store as _chat_store
@@ -44,6 +45,9 @@ REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 COPILOT = "AppDomainGroup-group.com.copilot.production"
 SPLITWISE = "AppDomain-com.Splitwise.SplitwiseMobile"
 BEEPER = "AppDomainGroup-group.beeper.chat.ios"
+LINE_APP = "AppDomain-jp.naver.line"
+LINE = "AppDomainGroup-group.com.linecorp.line"
+LINE_STORE = "Library/Application Support/PrivateStore/P_u0000000000000000000000000000000"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -59,6 +63,7 @@ ALL = (
     "copilot",
     "splitwise",
     "beeper",
+    "line",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -75,6 +80,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "copilot": 6,
     "splitwise": 5,
     "beeper": 8,
+    "line": 8,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -91,6 +97,7 @@ STORES = {
 STORES["copilot"] = "CopilotDB.sqlite"
 STORES["splitwise"] = "database.sqlite"
 STORES["beeper"] = "BeeperStore.sqlite"
+STORES["line"] = "Line.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -194,6 +201,25 @@ def _backup(
     if "beeper" in sources:
         _put(backup, rows, BEEPER, "BeeperStore.sqlite", _beeper_store(_dir(stage, "beeper")))
         _put(backup, rows, BEEPER, "Contacts.sqlite", _blob(stage, SAFARI_BYTES))  # beside it, never copied
+    if "line" in sources:  # the store and the group names in the group container, the contacts in the app's
+        store = _line_store(_dir(stage, "line"))
+        _put(backup, rows, LINE, LINE_STORE + "/Messages", None)
+        _put(backup, rows, LINE, LINE_STORE + "/Messages/Line.sqlite", store)
+        _put(
+            backup,
+            rows,
+            LINE,
+            LINE_STORE + "/Messages/UnifiedGroup.sqlite",
+            store.parent / "UnifiedGroup.sqlite",
+        )
+        _put(backup, rows, LINE, LINE_STORE + "/Messages/ChatExt.sqlite", _blob(stage, SAFARI_BYTES))
+        _put(
+            backup,
+            rows,
+            LINE_APP,
+            LINE_STORE + "/Contacts Syncing/Contacts.sqlite",
+            store.parent / "Contacts.sqlite",
+        )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -327,6 +353,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (ios_backup.EASYPARK, "Documents/findmycar-pin_12345.json"),  # beside the file, not in the glob
         (REMINDERS, "Container_v1/MLModels/RDkNNReminder.json"),
         (BEEPER, "Contacts.sqlite"),
+        (LINE, LINE_STORE + "/Messages/ChatExt.sqlite"),
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -526,6 +553,22 @@ def test_import_backup_copies_every_store_a_pattern_source_matches_and_runs_on_t
     assert stores == {STORES["apple-reminders"], REMINDERS_OTHER}
 
 
+def test_import_backup_copies_lines_companions_beside_its_store(lb, tmp_path, capsys):
+    backup = _backup(tmp_path, sources=("line",))
+    _run(str(backup))
+    out = capsys.readouterr().out
+    folder = lb.root / "inbox" / f"ios-backup-{UDID}" / "line"
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "Contacts.sqlite",
+        "Line.sqlite",
+        "UnifiedGroup.sqlite",
+    ]
+    assert out.count("copied, read beside Line.sqlite") == 2
+    assert "added 8 lines from line" in out
+    senders = {line["payload"].get("sender", {}).get("kind") for line in lb.lines()}
+    assert "phone" in senders  # Contacts.sqlite was found beside the store
+
+
 def test_import_backup_pattern_source_with_no_match_is_not_found(lb, tmp_path, capsys):
     backup = _backup(tmp_path, sources=("ios-notes",))
     _run(str(backup), "--only", "reminders")
@@ -546,7 +589,13 @@ def test_import_backup_names_the_folder_after_the_backup_folder_without_a_lockdo
 
 
 def test_sources_are_in_the_documented_order():
-    assert tuple(s.name for s in ios_backup.SOURCES) == ALL
+    """One name per adapter, in import order; a companion store repeats its adapter's name."""
+    assert tuple(dict.fromkeys(s.name for s in ios_backup.SOURCES)) == ALL
+    companions = [s for s in ios_backup.SOURCES if not s.adapter]
+    assert [(s.name, s.store_name) for s in companions] == [
+        ("line", "Contacts.sqlite"),
+        ("line", "UnifiedGroup.sqlite"),
+    ]
 
 
 def test_safari_history_is_found_in_home_domain_by_domain_and_path_not_by_file_id(tmp_path):

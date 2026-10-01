@@ -38,6 +38,14 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     splitwise           AppDomain-com.Splitwise.SplitwiseMobile       Library/Application Support/
                                                                   database.sqlite
     beeper              AppDomainGroup-group.beeper.chat.ios          BeeperStore.sqlite
+    line                AppDomain-jp.naver.line                       Library/Application Support/
+                                                                  PrivateStore/P_*/Contacts Syncing/
+                                                                  Contacts.sqlite (copied first, read
+                                                                  beside the store)
+                        AppDomainGroup-group.com.linecorp.line        .../PrivateStore/P_*/Messages/
+                                                                  UnifiedGroup.sqlite (the same)
+                        the same                                      .../PrivateStore/P_*/Messages/
+                                                                  Line.sqlite
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -99,6 +107,9 @@ REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 COPILOT = "AppDomainGroup-group.com.copilot.production"
 SPLITWISE = "AppDomain-com.Splitwise.SplitwiseMobile"
 BEEPER = "AppDomainGroup-group.beeper.chat.ios"
+LINE_APP = "AppDomain-jp.naver.line"
+LINE = "AppDomainGroup-group.com.linecorp.line"
+LINE_STORE = "Library/Application Support/PrivateStore/P_*"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
@@ -160,6 +171,21 @@ SOURCES: tuple[Source, ...] = (
     Source("copilot", COPILOT, "database/CopilotDB.sqlite"),
     Source("splitwise", SPLITWISE, "Library/Application Support/database.sqlite"),
     Source("beeper", BEEPER, "BeeperStore.sqlite"),
+    Source(  # the companions first, so they are beside the store when the adapter reads it
+        "line",
+        LINE_APP,
+        LINE_STORE + "/Contacts Syncing/Contacts.sqlite",
+        adapter=False,
+        note="read beside Line.sqlite",
+    ),
+    Source(
+        "line",
+        LINE,
+        LINE_STORE + "/Messages/UnifiedGroup.sqlite",
+        adapter=False,
+        note="read beside Line.sqlite",
+    ),
+    Source("line", LINE, LINE_STORE + "/Messages/Line.sqlite"),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
