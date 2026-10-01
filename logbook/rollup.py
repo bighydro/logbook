@@ -8,13 +8,13 @@ append (ADR 0013); the same record gives the same rollup."""
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 from . import countries as country_table
 from . import flights as flight_lines
 from . import places as named_places
-from . import stays
+from . import present, stays
 from .reading import Reading, window_json
 
 KINDS = ("countries", "flights", "nights", "places", "people")
@@ -230,6 +230,182 @@ def _longest_trip(nights_of_year: Sequence[stays.Night]) -> dict[str, Any] | Non
     return {"start": best[0].day, "end": best[-1].day, "nights": len(best), "lines": lines}
 
 
+# -- places -------------------------------------------------------------------------------------------------
+
+
+def places(reading: Reading) -> dict[str, Any]:
+    """Per named place (places.json) and per asset (assets.json), per year: stays, hours, first
+    and last visit, the nights (assets), and the people present, confirmed, through the with
+    module. An asset's stays are the owner's stays aboard it."""
+    years: dict[str, dict[str, Any]] = {}
+    days_of = _days_of_lines(reading)
+    for stay in reading.owner_stays:
+        day = stay.start.astimezone(reading.tz).date().isoformat()
+        end_day = stay.end.astimezone(reading.tz).date().isoformat()
+        year = years.setdefault(_year_of(day), {"year": _year_of(day), "places": {}, "assets": {}})
+        who = [
+            c
+            for c in present.company(stay, reading.lines, reading.identities)
+            if c.status == present.CONFIRMED
+        ]
+        who_days = {c: {days_of.get(id_, day) for id_ in c.lines} for c in who}
+        if stay.place is not None:
+            place = next((p for p in reading.places if p.name == stay.place), None)
+            entry = year["places"].setdefault(
+                stay.place, {"place": stay.place, "kind": place.kind if place else None, **_visits()}
+            )
+            _visit(entry, stay, day, end_day, who, who_days)
+        if stay.aboard is not None:
+            asset = reading.assets.get(stay.aboard)
+            entry = year["assets"].setdefault(
+                stay.aboard,
+                {
+                    "asset": stay.aboard,
+                    "name": asset.name if asset else None,
+                    "kind": asset.kind if asset else None,
+                    **_visits(),
+                    "nights": 0,
+                },
+            )
+            _visit(entry, stay, day, end_day, who, who_days)
+    for night in reading.nights:
+        if night.stay is not None and night.stay.aboard:
+            aboard = years.get(_year_of(night.day), {"assets": {}})["assets"].get(night.stay.aboard)
+            if aboard is not None:
+                aboard["nights"] += 1
+    out = _head("places", reading)
+    out["years"] = []
+    for key in sorted(years):
+        entry = years[key]
+        out["years"].append(
+            {
+                "year": key,
+                "places": [
+                    _finish_visits(v) for v in sorted(entry["places"].values(), key=lambda v: -v["hours"])
+                ],
+                "assets": [
+                    _finish_visits(v) for v in sorted(entry["assets"].values(), key=lambda v: -v["hours"])
+                ],
+            }
+        )
+    return out
+
+
+def _visits() -> dict[str, Any]:
+    return {"stays": 0, "hours": 0.0, "first": None, "last": None, "people": {}, "lines": []}
+
+
+def _days_of_lines(reading: Reading) -> dict[str, str]:
+    """line id → its local day, for the evidence lines a companion rests on."""
+    return {str(line["id"]): reading.day_of(line) for line in reading.lines if line.get("kind") in EVIDENCE}
+
+
+EVIDENCE = ("event", "transcript", "note", "photo")
+
+
+def _visit(
+    entry: dict[str, Any],
+    stay: stays.Segment,
+    day: str,
+    end_day: str,
+    who: Sequence[present.Companion],
+    who_days: Mapping[present.Companion, set[str]],
+) -> None:
+    entry["stays"] += 1
+    entry["hours"] += stay.duration_s / 3600
+    entry["first"] = day if entry["first"] is None else min(entry["first"], day)
+    entry["last"] = end_day if entry["last"] is None else max(entry["last"], end_day)
+    entry["lines"].extend(_stay_lines(stay))
+    for c in who:
+        person = entry["people"].setdefault(
+            (c.person, c.name), {"id": c.person, "name": c.name, "stays": 0, "days": set(), "lines": []}
+        )
+        person["stays"] += 1
+        person["days"].update(who_days[c])
+        person["lines"].extend(c.lines)
+
+
+def _finish_visits(entry: dict[str, Any]) -> dict[str, Any]:
+    people = sorted(entry["people"].values(), key=lambda p: (-len(p["days"]), p["name"]))
+    return {
+        **entry,
+        "hours": round(entry["hours"], 1),
+        "people": [{**p, "days": len(p["days"]), "lines": list(dict.fromkeys(p["lines"]))} for p in people],
+    }
+
+
+# -- people -------------------------------------------------------------------------------------------------
+
+
+def people(reading: Reading) -> dict[str, Any]:
+    """Per resolved person, per year: days together (days with confirmed company), the last real
+    contact (the last such day), the places shared (named places, `aboard <asset>`, else the
+    stay's coordinates), confirmed and proposed evidence counts, and the lines. Names that
+    resolve to no person are listed apart, under `unresolved`."""
+    years: dict[str, dict[str, Any]] = {}
+    days_of = _days_of_lines(reading)
+    for stay in reading.owner_stays:
+        for c in present.present(stay, reading.lines, reading.identities):
+            day = days_of.get(c.line, stay.start.astimezone(reading.tz).date().isoformat())
+            year = years.setdefault(_year_of(day), {"year": _year_of(day), "people": {}, "unresolved": {}})
+            bucket = year["people"] if c.person else year["unresolved"]
+            entry = bucket.setdefault(
+                c.person or c.name.casefold(),
+                {
+                    "id": c.person,
+                    "name": c.name,
+                    "days": set(),
+                    "last_contact": None,
+                    "places": [],
+                    "confirmed": 0,
+                    "proposed": 0,
+                    "lines": [],
+                },
+            )
+            entry["lines"].append(c.line)
+            if c.status == present.CONFIRMED:
+                entry["confirmed"] += 1
+                entry["days"].add(day)
+                entry["last_contact"] = (
+                    day if entry["last_contact"] is None else max(entry["last_contact"], day)
+                )
+                where = _where(stay)
+                if where not in entry["places"]:
+                    entry["places"].append(where)
+            else:
+                entry["proposed"] += 1
+    out = _head("people", reading)
+    out["years"] = []
+    for key in sorted(years):
+        entry = years[key]
+        out["years"].append(
+            {
+                "year": key,
+                "people": [_finish_person(p) for p in sorted(entry["people"].values(), key=_person_order)],
+                "unresolved": [
+                    _finish_person(p) for p in sorted(entry["unresolved"].values(), key=_person_order)
+                ],
+            }
+        )
+    return out
+
+
+def _person_order(p: dict[str, Any]) -> tuple[int, str, str]:
+    return (-len(p["days"]), p["last_contact"] or "", p["name"])
+
+
+def _finish_person(p: dict[str, Any]) -> dict[str, Any]:
+    return {**p, "days": len(p["days"]), "lines": list(dict.fromkeys(p["lines"]))}
+
+
+def _where(stay: stays.Segment) -> str:
+    if stay.place:
+        return stay.place
+    if stay.aboard:
+        return f"aboard {stay.aboard}"
+    return f"{stay.lat:.4f},{stay.lon:.4f}" if stay.lat is not None and stay.lon is not None else "somewhere"
+
+
 # -- text ----------------------------------------------------------------------------------------------------
 
 
@@ -276,8 +452,33 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
                 f"longest trip {trip['start']} {EN_DASH} {trip['end']} ({_plural(trip['nights'], 'night')})"
             )
         yield f"  {year['year']}  {' · '.join(parts)}"
+    elif kind == "places":
+        yield f"  {year['year']}"
+        for v in year["places"]:
+            yield _visit_row(v["place"], v.get("kind"), v)
+        for v in year["assets"]:
+            name = f"{v['name']} ({v['asset']})" if v.get("name") else v["asset"]
+            yield _visit_row(name, v.get("kind"), v, nights=v["nights"])
     else:
-        yield f"  {year['year']}  {year}"
+        yield f"  {year['year']}"
+        for p in [*year["people"], *year["unresolved"]]:
+            parts = [
+                _plural(p["days"], "day"),
+                f"last {p['last_contact']}" if p["last_contact"] else "never confirmed",
+                ", ".join(p["places"]) if p["places"] else "nowhere",
+                f"{p['confirmed']} confirmed, {p['proposed']} proposed",
+            ]
+            yield f"        {p['name']:<24} {' · '.join(parts)}"
+
+
+def _visit_row(name: str, kind: str | None, v: dict[str, Any], nights: int | None = None) -> str:
+    parts = [_plural(v["stays"], "stay"), f"{v['hours']:g} h", f"{v['first']} {EN_DASH} {v['last']}"]
+    if nights is not None:
+        parts.append(_plural(nights, "night"))
+    if v["people"]:
+        parts.append("with " + ", ".join(p["name"] for p in v["people"]))
+    head = f"{name} ({kind})" if kind else name
+    return f"        {head:<28} {' · '.join(parts)}"
 
 
 def _plural(n: int, noun: str) -> str:

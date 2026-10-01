@@ -1778,6 +1778,8 @@ ROLLUPS: dict[str, Callable[[reading.Reading], dict[str, Any]]] = {
     "countries": rollup.countries,
     "flights": rollup.flights,
     "nights": rollup.nights,
+    "places": rollup.places,
+    "people": rollup.people,
 }
 
 

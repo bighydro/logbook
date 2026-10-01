@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from persona import BOAT, persona_record
+from persona import BOAT, KARI_ID, OLA_ID, PLACES, persona_record
 
 from logbook import cli, countries
 from logbook.flights import Airports
@@ -212,3 +212,48 @@ def test_an_empty_record_rolls_up_to_nothing(
         data = _json(capsys, kind)
         assert data["years"] == []
         assert "nothing" in _run(capsys, kind)
+
+
+# -- places and people (through the with module) ----------------------------------------------------------
+
+
+def test_places_rollup_counts_stays_hours_visits_and_company(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    persona_record(tmp_path, monkeypatch)
+    data = _json(capsys, "places", "--year", "2026")
+    [year] = data["years"]
+    by_name = {p["place"]: p for p in year["places"]}
+    assert set(by_name) == set(PLACES)
+    home = by_name["Home"]
+    assert home["kind"] == "home" and home["stays"] >= 10 and home["hours"] > 120
+    assert home["first"] == "2026-06-08" and home["last"] == "2026-06-21"
+    office = by_name["Office"]
+    assert office["stays"] == 8  # seven office days, one of them split by lunch
+    assert any(p["id"] == OLA_ID for p in office["people"]), "the transcript at the office"
+    assert len(office["lines"]) == 16
+    marina = by_name["Marina"]
+    assert marina["kind"] == "asset-berth" and marina["stays"] == 2
+    [solvind] = year["assets"]
+    assert solvind["asset"] == BOAT and solvind["name"] == "Solvind"
+    assert solvind["stays"] == 3 and solvind["hours"] > 26 and solvind["nights"] == 1
+    assert [p["id"] for p in solvind["people"]] == [OLA_ID]
+    text = _run(capsys, "places")
+    assert "Home" in text and "Solvind" in text and "Ola Nordmann" in text
+
+
+def test_people_rollup_counts_days_together_and_the_last_real_contact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    persona_record(tmp_path, monkeypatch)
+    data = _json(capsys, "people", "--year", "2026")
+    [year] = data["years"]
+    by_id = {p["id"]: p for p in year["people"]}
+    kari, ola = by_id[KARI_ID], by_id[OLA_ID]
+    assert kari["name"] == "Kari Nordmann" and kari["days"] == 1 and kari["last_contact"] == "2026-06-10"
+    assert ola["days"] == 3 and ola["last_contact"] == "2026-06-16"
+    assert set(ola["places"]) >= {"Office", "aboard solvind"}
+    assert all(len(id_) == 36 for id_ in ola["lines"]) and len(ola["lines"]) >= 3
+    assert ola["confirmed"] == 3 and kari["confirmed"] == 1 and kari["proposed"] == 1
+    text = _run(capsys, "people")
+    assert "Ola Nordmann" in text and "3 days" in text and "Kari Nordmann" in text
