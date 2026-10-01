@@ -46,7 +46,8 @@ passage, an anchorage. The asset's movement never fragments the stay.
    Under each row: its attachments, named for events (with their time), transcripts, notes (the
    first line), mail threads (with the message count), calls and keepers, and counted for messages
    and photos; then **with**, the people there, split into **confirmed** — declared in a note
-   (`with <name>`), speaking in a transcript, attending a timed calendar entry that overlaps the
+   (`with <name>`, only a name the record's resolution lines make a person: `with US` names
+   nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
    stay — and **proposed** — a face the photo library tagged, an attendee of an all-day entry. The
    owner is never their own company. A move carries attachments but no company.
 3. **Unplaced** — the day's events, transcripts, notes, mail and calls that fall inside no stay or

@@ -10,7 +10,7 @@ them per person. The sources, in the order a Day lists them:
 | `calendar`   | an attendee of a timed `event/v1` held at the stay **            | confirmed | 0.8, 0.6 * |
 | `calendar`   | an attendee of an all-day `event/v1` located at the stay **     | proposed  | 0.3        |
 | `transcript` | a participant of a `transcript/v1` recorded inside the stay *** | confirmed | 0.9        |
-| `note`       | a `note/v1` written inside the stay that says "with <name>"     | confirmed | 1.0        |
+| `note`       | a `note/v1` written inside the stay that says "with <name>" *** | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
 
 * 0.8 for an attendee who accepted, 0.6 for one who has not answered or is tentative; one who
@@ -28,15 +28,17 @@ and has no display name is a bare address and is dropped, and a calendar system 
 
 *** Only a participant the record resolves to a person: by email, phone or provider id, else by
 the spoken name matching a label. A diarization label (`Speaker A`), `me`, `them`, `Unknown` or
-a name no resolution knows is not company.
+a name no resolution knows is not company. A note's name follows the same rule: "with Ola" names
+Ola Nordmann when a resolution line gives a person that label (`_by_name`); "with US", "with
+XYZ", a country, an acronym or a name the record does not know names nobody.
 
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
 guess and stays proposed until the owner says otherwise, and so are the attendees of an all-day
 entry located at the stay: it names no hour. Names resolve through the record's resolution lines
 (RFC 0006, `resolve.identities_from`): an email, a phone number or a library's person id
 (`provider_id`, `<library>:<id>`) to the person it names; a bare name in a transcript or a note to
-the person whose label it is. A note's name that does not resolve is kept as written, with no
-person id; a transcript's is dropped. The owner is never listed as their own company: evidence
+the person whose label it is; a name that resolves to no person is dropped, in a note as in a
+transcript. The owner is never listed as their own company: evidence
 carrying one of the owner's own refs (`owner`, the addresses `logbook.json` lists under
 `owner_emails`) is dropped. Nothing here reads a file or writes a line."""
 
@@ -271,10 +273,12 @@ def from_notes(
                 if not name:
                     continue
                 person, label = _by_name(name, identities)
+                if person is None or not label:
+                    continue  # US, XYZ, a country, an acronym, a name the record has no person for
                 found.append(
                     Presence(
                         person,
-                        label or name,
+                        label,
                         None,
                         NOTE,
                         CONFIRMED,

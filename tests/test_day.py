@@ -164,6 +164,32 @@ def test_a_day_aboard_the_boat_is_one_stay_with_the_anchorages_inside(
     assert "keeper       IMG_131730.HEIC (memory)" in text
 
 
+# -- with, from a note ------------------------------------------------------------------------------------
+
+
+def test_a_note_names_company_only_when_the_record_resolves_the_name_to_a_person(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`with US and XYZ` names no one: a capitalised word is company only when a resolution line
+    makes it a person, the rule transcripts already follow."""
+    from persona import note
+
+    lb = persona_record(tmp_path, monkeypatch)
+    lb.append_many(
+        [note(utc("2026-06-09", "10:00"), "Standup with US and XYZ about Norway, then coffee with Ola")]
+    )
+    data = _json(capsys, "2026-06-09")
+    [office] = [e for e in data["timeline"] if e["where"] == "Office"]
+    assert [n["text"] for n in office["attached"]["notes"]] == [
+        "Standup with US and XYZ about Norway, then coffee with Ola"
+    ]
+    assert [c["name"] for c in office["with"]["confirmed"]] == ["Ola Nordmann"]
+    assert office["with"]["proposed"] == []
+    text = _run(capsys, "2026-06-09")
+    assert "with         Ola Nordmann (note)" in text
+    assert "US" not in text.split("with         ")[1].splitlines()[0]
+
+
 # -- a day with a tracker gap, and the health line -------------------------------------------------------
 
 
