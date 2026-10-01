@@ -594,7 +594,7 @@ def health_rows(found: Iterable[Line], rd: Reading) -> dict[str, dict[str, Any]]
     the day before the first (the night's sleep starts then), from the index — with the reading's
     retractions, so a retracted line is out. A day with no health lines has no row."""
     rows = health.summary([*found, *rd.retracted.values()], str(rd.tz))
-    return {str(row["day"]): {k: v for k, v in row.items() if k != "day"} for row in rows}
+    return {str(row["day"]): {k: v for k, v in row.items() if k not in ("day", "by")} for row in rows}
 
 
 def _sources(lines: Sequence[Line]) -> list[dict[str, Any]]:

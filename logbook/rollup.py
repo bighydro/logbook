@@ -1,25 +1,32 @@
 """`logbook rollup <kind>`: the record summed up per year — countries, flights, nights, places,
-people — from one reading of the window (`reading.read`). Every number carries, under `lines`,
-the ids of the lines it came from: for a stay, the ids of its first and last location line (a
-stay is one unbroken run of one subject's points, so the two ids name the run); for a flight,
-the flight line standing; for a person, the lines that put them there. Readers derive and never
-append (ADR 0013); the same record gives the same rollup."""
+people — from one reading of the window (`reading.read`), and per month or week — health — from
+the health lines of the window. Every number carries, under `lines`, the ids of the lines it
+came from: for a stay, the ids of its first and last location line (a stay is one unbroken run
+of one subject's points, so the two ids name the run); for a flight, the flight line standing;
+for a person, the lines that put them there; for a night's sleep, its stages. Readers derive and
+never append (ADR 0013); the same record gives the same rollup."""
 
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from datetime import date
 from typing import Any
 
 from . import countries as country_table
 from . import flights as flight_lines
+from . import health as health_lines
 from . import places as named_places
 from . import present, stays
+from .chain import Line
+from .export import day_range
 from .reading import Reading, window_json
 
-KINDS = ("countries", "flights", "nights", "places", "people")
+KINDS = ("countries", "flights", "nights", "places", "people", "health")
+PERIODS = ("month", "week")
 LONG_HAUL_KM = 3500.0
 EN_DASH = "\u2013"
+EM_DASH = "\u2014"
 ARROW = "\u2192"
 
 
@@ -37,9 +44,12 @@ def _head(kind: str, reading: Reading) -> dict[str, Any]:
     return {"kind": kind, "window": window_json(reading)}
 
 
-def empty(kind: str) -> dict[str, Any]:
+def empty(kind: str, by: str = "month") -> dict[str, Any]:
     """The rollup of a record with no lines."""
-    return {"kind": kind, "window": {"since": None, "until": None, "days": []}, "years": []}
+    window: dict[str, Any] = {"since": None, "until": None, "days": []}
+    if kind == "health":
+        return {"kind": kind, "window": window, "by": by, "periods": []}
+    return {"kind": kind, "window": window, "years": []}
 
 
 # -- countries --------------------------------------------------------------------------------------------
@@ -406,13 +416,105 @@ def _where(stay: stays.Segment) -> str:
     return f"{stay.lat:.4f},{stay.lon:.4f}" if stay.lat is not None and stay.lon is not None else "somewhere"
 
 
+# -- health -------------------------------------------------------------------------------------------------
+
+
+def health(lines: Iterable[Line], tz: str, first: str, last: str, by: str = "month") -> dict[str, Any]:
+    """Sleep, steps, resting heart rate and HRV per calendar month or ISO week of the window
+    `[first, last]`, from the day rows of `health.summary` (RFC 0014 rules 4 and 5; a correction
+    that `supersedes` a line wins, the latest when there are several; a retracted line is out;
+    units as stored, a resting rate in count/s read in bpm). `lines` are the health lines whose
+    local day is in the window or the day before it (the night that ends on the first day starts
+    then), with the retraction lines beside them. Per period: `sleep` the mean of the nights'
+    hours and how many nights had a line; `steps` the mean of the days' counts and how many days;
+    `resting_hr` the mean, lowest and highest of the days' resting rates in bpm and how many days;
+    `hrv` the mean of the days' SDNN in ms and how many days. Every period the window touches is
+    listed, and a field no day of it has a line for is None — never a zero."""
+    if by not in PERIODS:
+        raise ValueError(f"--by is month or week, not {by!r}")
+    days = day_range(first, last)
+    rows = {row["day"]: row for row in health_lines.summary(lines, tz) if first <= row["day"] <= last}
+    periods: dict[str, dict[str, Any]] = {}
+    for day in days:
+        key = _period(day, by)
+        entry = periods.setdefault(key, {"period": key, "first": day, "last": day, "rows": []})
+        entry["last"] = day
+        if day in rows:
+            entry["rows"].append(rows[day])
+    out: dict[str, Any] = {
+        "kind": "health",
+        "window": {"since": first, "until": last, "days": days},
+        "by": by,
+        "periods": [],
+    }
+    for entry in periods.values():
+        found: list[dict[str, Any]] = entry.pop("rows")
+        out["periods"].append(
+            {
+                **entry,
+                "sleep": _mean_of(found, "sleep_h", "mean_h", "nights", 1),
+                "steps": _mean_of(found, "steps", "mean", "days"),
+                "resting_hr": _spread_of(found, "resting_hr"),
+                "hrv": _mean_of(found, "hrv", "mean_ms", "days"),
+            }
+        )
+    return out
+
+
+def _period(day: str, by: str) -> str:
+    """`2026-06` for a month; `2026-W23` for an ISO week (the year is the ISO year, so the first
+    days of January can belong to the old year's last week)."""
+    if by == "month":
+        return day[:7]
+    year, week, _weekday = date.fromisoformat(day).isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def _values(found: Sequence[dict[str, Any]], field: str) -> tuple[list[float], list[str]]:
+    rows = [row for row in found if row[field] is not None]
+    return [float(row[field]) for row in rows], [id_ for row in rows for id_ in row["by"][field]]
+
+
+def _mean_of(
+    found: Sequence[dict[str, Any]], field: str, mean: str, count: str, decimals: int = 0
+) -> dict[str, Any] | None:
+    values, ids = _values(found, field)
+    if not values:
+        return None
+    average = sum(values) / len(values)
+    return {mean: round(average, decimals) if decimals else round(average), count: len(values), "lines": ids}
+
+
+def _spread_of(found: Sequence[dict[str, Any]], field: str) -> dict[str, Any] | None:
+    values, ids = _values(found, field)
+    if not values:
+        return None
+    return {
+        "mean": round(sum(values) / len(values)),
+        "min": round(min(values)),
+        "max": round(max(values)),
+        "days": len(values),
+        "lines": ids,
+    }
+
+
 # -- text ----------------------------------------------------------------------------------------------------
 
 
 def rows(data: dict[str, Any]) -> Iterator[str]:
-    """The rollup as a few lines of text: one per year."""
+    """The rollup as a few lines of text: one per year, or per period for health."""
     window = data["window"]
-    yield f"{data['kind']} {window['since']} {EN_DASH} {window['until']}" if window["since"] else data["kind"]
+    head = data["kind"]
+    if window["since"]:
+        head = f"{head} {window['since']} {EN_DASH} {window['until']}"
+    if data["kind"] == "health":
+        yield f"{head} · by {data['by']}"
+        if not data["periods"]:
+            yield "  nothing in the window"
+        for period in data["periods"]:
+            yield _period_row(period)
+        return
+    yield head
     if data.get("warning"):
         yield f"  ({data['warning']})"
     if not data["years"]:
@@ -422,6 +524,26 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield from _year_rows(data["kind"], year)
     if data["kind"] == "countries":
         yield f"  method: {data['method']}"
+
+
+def _period_row(period: dict[str, Any]) -> str:
+    """One period: `sleep 6.5 h (2 nights) · 2,125 steps (2 days) · resting 57 bpm (54 to 60, 2 days)
+    · hrv 45 ms (1 day)`, the range with an en dash; a field with no line is an em dash, never a zero."""
+    sleep, steps, resting, hrv = (period[k] for k in ("sleep", "steps", "resting_hr", "hrv"))
+    parts = [
+        f"sleep {EM_DASH}"
+        if sleep is None
+        else f"sleep {sleep['mean_h']:.1f} h ({_plural(sleep['nights'], 'night')})",
+        f"steps {EM_DASH}" if steps is None else f"{steps['mean']:,} steps ({_plural(steps['days'], 'day')})",
+        f"resting {EM_DASH}"
+        if resting is None
+        else (
+            f"resting {resting['mean']} bpm ({resting['min']}{EN_DASH}{resting['max']}, "
+            f"{_plural(resting['days'], 'day')})"
+        ),
+        f"hrv {EM_DASH}" if hrv is None else f"hrv {hrv['mean_ms']} ms ({_plural(hrv['days'], 'day')})",
+    ]
+    return f"  {period['period']}  {' · '.join(parts)}"
 
 
 def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
