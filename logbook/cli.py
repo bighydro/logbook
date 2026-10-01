@@ -1017,6 +1017,8 @@ def _line_row(
         text = _mail_text(p, names)
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
+    elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
+        text = _crossing_text(p)
     else:
         text = (
             p.get("text")
@@ -1025,6 +1027,17 @@ def _line_row(
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+
+
+def _crossing_text(p: dict[str, Any]) -> str:
+    """A crossing/v1 line as `crossed to <destination>: N lines (tier 1: a, tier 2: b)`."""
+    counts = p["counts"]
+    by_tier = counts["by_tier"]
+    tiers = ", ".join(f"tier {tier}: {by_tier[tier]}" for tier in ("1", "2", "3") if by_tier.get(tier))
+    text = f"crossed to {p['destination']}: {_plural(counts['crossed'], 'line')}"
+    if tiers:
+        text += f" ({tiers})"
+    return text
 
 
 def _note_text(p: dict[str, Any], raw: bool) -> str:
