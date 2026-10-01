@@ -686,11 +686,11 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
         parts = [str(entry["where"]), _duration_text(entry["within_day"]["duration_s"])]
         if entry.get("aboard") and not inside:
             parts.append(f"aboard {entry['aboard']}")
-        if entry["kind"] == stays.STOP:
-            parts.append("stop")
     counts = _counts_text(entry.get("attached"))
     if counts:
         parts.append(counts)
+    elif entry["kind"] == stays.STOP and not inside:
+        parts.append("nothing attached")  # the kind column already says stop
     yield f"{indent}{clock:<12} {kind:<6} {DOT.join(parts)}"
     inner = indent + "    "
     for s in entry.get("inside", []):

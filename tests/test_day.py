@@ -322,6 +322,36 @@ def test_a_tracker_gap_is_a_row_the_lunch_is_unplaced_and_health_takes_the_corre
     assert "health        sleep 7.0 h · 3,250 steps · resting 56 bpm" in text
 
 
+# -- a stop ------------------------------------------------------------------------------------------------
+
+
+def test_a_stop_with_nothing_attached_says_so_and_never_repeats_its_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ten minutes at the cafe with no line attached: a stop, whose row says `nothing attached`
+    after its place and duration — never `stop · stop`."""
+    from persona import CAFE
+
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    day = "2026-07-02"
+    lb.append_many(
+        dwell(day, "00:00", "09:00", HOME, every_min=5)
+        + travel(day, "09:00", "09:12", HOME, CAFE, steps=4)
+        + dwell(day, "09:12", "09:22", CAFE, noise_m=15)
+        + travel(day, "09:22", "09:34", CAFE, HOME, steps=4)
+        + dwell(day, "09:34", "24:00", HOME, every_min=5)
+    )
+    (lb.root / "places.json").write_text(json.dumps({"Home": PLACES["Home"]}), encoding="utf-8")
+    data = _json(capsys, day)
+    [stop] = [e for e in data["timeline"] if e["kind"] == "stop"]
+    assert stop["attached"]["events"] == [] and stop["attached"]["photos"]["count"] == 0
+    text = _run(capsys, day)
+    [row] = [line for line in text.splitlines() if "  stop   " in line]
+    assert row.endswith(" · 10 min · nothing attached"), row
+    assert "stop · stop" not in text and row.count("stop") == 1
+
+
 # -- the edges ---------------------------------------------------------------------------------------------
 
 
