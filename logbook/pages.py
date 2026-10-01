@@ -72,10 +72,10 @@ def person(reading: Reading, name: str) -> dict[str, Any]:
     for stay in reading.owner_stays:
         proposed += sum(
             1
-            for p in present.present(stay, reading.lines, reading.identities)
+            for p in present.present(stay, reading.lines, reading.identities, reading.places)
             if p.person == who.entity and p.status == present.PROPOSED
         )
-        for c in present.company(stay, reading.lines, reading.identities):
+        for c in present.company(stay, reading.lines, reading.identities, reading.places):
             if c.person != who.entity:
                 continue
             evidence_days = {days_of.get(id_, _day(stay, reading)) for id_ in c.lines}
@@ -246,7 +246,7 @@ def _people(visits: Sequence[stays.Segment], reading: Reading) -> list[dict[str,
     days_of = _days_of_lines(reading)
     found: dict[tuple[str | None, str], dict[str, Any]] = {}
     for stay in visits:
-        for c in present.company(stay, reading.lines, reading.identities):
+        for c in present.company(stay, reading.lines, reading.identities, reading.places):
             if c.status != present.CONFIRMED:
                 continue
             entry = found.setdefault(

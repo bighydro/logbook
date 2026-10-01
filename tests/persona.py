@@ -335,6 +335,7 @@ def persona_drafts() -> list[dict[str, Any]]:
                     "Lunch",
                     [attendee(KARI["email"], "Kari Nordmann")],
                     location="the cafe",
+                    extra={"location": {"latitude": CAFE[0], "longitude": CAFE[1]}},
                 )
             )
             drafts.append(photo(utc(day, "12:30"), CAFE, people=[KARI["face"]], favorite=True))

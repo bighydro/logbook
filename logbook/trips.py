@@ -198,7 +198,7 @@ def _city_of_airport(name: str) -> str:
 def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.Companion]:
     merged: dict[tuple[str | None, str], present.Companion] = {}
     for stay in visited:
-        for c in present.company(stay, reading.lines, reading.identities):
+        for c in present.company(stay, reading.lines, reading.identities, reading.places):
             if c.status != present.CONFIRMED:
                 continue
             key = (c.person, "" if c.person else c.name.casefold())
