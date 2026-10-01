@@ -108,6 +108,12 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "shazam",
         "apple-podcasts",
         "pocket",
+        "apple-reminders",
+        "copilot",
+        "splitwise",
+        "beeper",
+        "line",
+        "twitter",
     ]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")

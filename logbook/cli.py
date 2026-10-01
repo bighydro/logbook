@@ -142,8 +142,9 @@ def _append_with(
         options["owner_emails"] = owner_emails
         if not owner_emails and not (given or {}).get("account"):
             print(
-                "hint: no owner_emails in logbook.json and no --account, so every message is `received`; "
-                'add "owner_emails": ["you@example.org"] to logbook.json to mark your own mail `sent`',
+                f"hint: no owner_emails in logbook.json and no --account, so {adapter.NAME} cannot tell"
+                " which address is yours (mail: every message is `received`; splitwise: the person on most"
+                ' expenses is taken for you); add "owner_emails": ["you@example.org"] to logbook.json',
                 file=sys.stderr,
             )
     for name, value in (given or {}).items():
@@ -207,6 +208,12 @@ SKIP_PHRASES = {
     "skipped_ad": "advertisements",
     "skipped_never_played": "never played",
     "skipped_other_activity": "of another activity",
+    "skipped_not_involved": "the owner is not part of",
+    "skipped_no_owner": "with nobody to be the owner",
+    "skipped_no_amount": "without an amount",
+    "skipped_encrypted": "encrypted with no decrypted copy in the store",
+    "skipped_redacted": "redacted, or redactions",
+    "skipped_call": "calls, not messages",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
@@ -269,6 +276,9 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "attachments_stored": "attachments stored",
     "attachments_missing": "attachments missing from the export",
     "trashed": "marked trashed",
+    "pending": "still pending",
+    "from_last_message": "from a room's last-message row (not in the event cache)",
+    "owner_guessed": "owner taken as the person on most expenses (no owner_emails matched)",
 }
 
 
@@ -846,7 +856,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        _append_with(lb, adapter, store_copy)
+        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy)
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox, manifest, plans)
     seq, head, errors = lb.verify()
@@ -925,9 +935,9 @@ def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
         )
     if not p.found:
         why = " (listed in Manifest.db, file missing)" if p.listed else ""
-        return f"{p.source.name}: {name} not found{why}"
+        return f"{p.source.name}: {p.source.store_name} not found{why}"
     assert p.store is not None
-    parts = [f"{name} ({p.store.size or 0:,} bytes)"]
+    parts = [f"{p.store.name} ({p.store.size or 0:,} bytes)"]
     parts += [f"{s.name} ({s.size:,} bytes)" for s in p.siblings if s.size is not None]
     media = [m for m in p.media if m.size is not None]
     if media:
