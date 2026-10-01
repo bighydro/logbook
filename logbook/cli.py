@@ -201,6 +201,7 @@ SKIP_PHRASES = {
     "skipped_no_body": "without a body",
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
+    "skipped_no_title": "without a title",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",

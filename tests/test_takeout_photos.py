@@ -201,7 +201,7 @@ def test_registry_lists_google_takeout_photos():
 def test_takeout_package_registers_photos_beside_location():
     from logbook.adapters import takeout as package
 
-    assert package.SUB_ADAPTERS == ("location", "calendar", "photos", "keep")
+    assert package.SUB_ADAPTERS == ("location", "calendar", "photos", "keep", "tasks")
     assert photos.SOURCE == location.SOURCE == "google-takeout"
 
 

@@ -71,6 +71,7 @@ BUILT_IN = (
     "takeout.location",
     "takeout.photos",
     "takeout.keep",
+    "takeout.tasks",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
