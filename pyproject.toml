@@ -49,6 +49,7 @@ safari = "logbook.adapters.safari"
 shazam = "logbook.adapters.shazam"
 apple-podcasts = "logbook.adapters.apple_podcasts"
 pocket = "logbook.adapters.pocket"
+apple-books = "logbook.adapters.apple_books"
 
 [dependency-groups]
 dev = [

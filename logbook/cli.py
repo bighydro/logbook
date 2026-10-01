@@ -242,6 +242,8 @@ SKIP_PHRASES = {
     "skipped_other_type": "of a type this version does not know",
     "skipped_unknown_stage": "with a sleep stage this version does not know",
     "skipped_over_cap": "over the one-per-minute heart-rate cap",
+    "skipped_reading_position": "reading positions",
+    "skipped_deleted": "deleted",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -279,6 +281,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "pending": "still pending",
     "from_last_message": "from a room's last-message row (not in the event cache)",
     "owner_guessed": "owner taken as the person on most expenses (no owner_emails matched)",
+    "no_title": "without a title",
 }
 
 
@@ -1087,6 +1090,8 @@ def _line_row(
         text = _mail_text(p, names)
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
+    elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":
+        text = _highlight_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
     else:
@@ -1138,6 +1143,19 @@ def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
 
 def _ref_value(ref: object) -> str:
     return str(ref.get("value", "")) if isinstance(ref, dict) else ""
+
+
+def _highlight_text(p: dict[str, Any]) -> str:
+    """`“quote” — Title · note` for a highlight, `bookmark — Title @ location` for a bookmark
+    (RFC 0022); the title is the library's, else the asset id."""
+    book = p.get("title") or p.get("asset_id") or ""
+    if p.get("type") == "bookmark":
+        where = p.get("location")
+        return f"bookmark — {book}" + (f" @ {where}" if where else "")
+    text = f"\u201c{p.get('quote', '')}\u201d" + (f" — {book}" if book else "")
+    if p.get("note"):
+        text += f" · {p['note']}"
+    return text
 
 
 def _flight_text(p: dict[str, Any], tz: ZoneInfo | None = None) -> str:

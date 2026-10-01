@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_apple_books import LINES as BOOK_LINES
+from test_apple_books import _store as _books_store
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
 from test_beeper import _store as _beeper_store
@@ -51,6 +53,7 @@ LINE = "AppDomainGroup-group.com.linecorp.line"
 LINE_STORE = "Library/Application Support/PrivateStore/P_u0000000000000000000000000000000"
 TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 TWITTER_STORE = "com.atebits.tweetie.databases/v1/1000000000000000001/1000000000000000001-dmv2.db"
+BOOKS = "AppDomain-com.apple.iBooks"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -68,6 +71,7 @@ ALL = (
     "beeper",
     "line",
     "twitter",
+    "apple-books",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -86,6 +90,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "beeper": 8,
     "line": 8,
     "twitter": 6,
+    "apple-books": BOOK_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -104,6 +109,7 @@ STORES["splitwise"] = "database.sqlite"
 STORES["beeper"] = "BeeperStore.sqlite"
 STORES["line"] = "Line.sqlite"
 STORES["twitter"] = "1000000000000000001-dmv2.db"
+STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -237,6 +243,19 @@ def _backup(
             "com.atebits.tweetie.scribe/scribe.2-compact.sqlite",
             _blob(stage, SAFARI_BYTES),
         )
+    if "apple-books" in sources:  # the store under storeFiles/, the library under BKLibrary/ beside it
+        store = _books_store(_dir(stage, "books") / "storeFiles", library="documents")
+        _put(backup, rows, BOOKS, "Documents/storeFiles/AEAnnotation_v10312011_1727_local.sqlite", store)
+        _put(
+            backup,
+            rows,
+            BOOKS,
+            "Documents/storeFiles/AEAnnotation_v10312011_1727_local.sqlite-wal",
+            _blob(stage, b""),
+        )
+        _put(backup, rows, BOOKS, "Documents/BKLibrary", None)
+        library = store.parent.parent / "BKLibrary" / "BKLibrary-1-091020131601.sqlite"
+        _put(backup, rows, BOOKS, "Documents/BKLibrary/BKLibrary-1-091020131601.sqlite", library)
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -337,6 +356,13 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     assert (inbox / "imessage" / "Attachments" / "ab" / "12" / "AT-100" / "stern.jpg").is_file()
     assert (inbox / "imessage" / "Attachments" / "ef" / "56" / "AT-103" / "note.caf").is_file()
     assert not (inbox / "whatsapp" / "escape.jpg").exists() and not (inbox / "escape.jpg").exists()
+    # a companion travels beside the store under its own name, with the store's -wal; the store was
+    # found by its glob, the adapter ran on the folder and found the library there (titles, not ids)
+    assert (inbox / "apple-books" / "BKLibrary-1-091020131601.sqlite").is_file()
+    assert (inbox / "apple-books" / "AEAnnotation_v10312011_1727_local.sqlite-wal").stat().st_size == 0
+    assert "BKLibrary-1-091020131601.sqlite (" in out
+    titles = {line["payload"].get("title") for line in lb.lines() if line["source"] == "apple-books"}
+    assert "The Long Ships" in titles
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
