@@ -215,3 +215,40 @@ def test_on_the_persona_the_office_stay_has_ola_and_the_cafe_has_kari(
     fjord = next(s for s in read.owner_stays if s.aboard == "solvind" and s.duration_s > 20 * 3600)
     [ola] = present.company(fjord, read.lines, read.identities)
     assert ola.sources == ("note",) and ola.status == present.CONFIRMED
+
+
+def test_an_all_day_events_attendees_are_only_proposed() -> None:
+    """An all-day entry overlaps every stay of its day and places nobody at any of them; a timed
+    entry that overlaps the stay does (the Day's rule: timed and located confirms, all-day proposes)."""
+    lines = _lines(
+        [
+            event(
+                "2026-06-09T22:00:00Z",
+                "2026-06-10T22:00:00Z",
+                "Kari in town",
+                [attendee(KARI["email"], "Kari Nordmann")],
+                all_day=True,
+            ),
+        ]
+    )
+    [kari] = present.present(STAY, lines, IDENTITIES)
+    assert kari.status == present.PROPOSED and kari.source == "calendar"
+    assert kari.confidence == present.ALL_DAY and "all day" in kari.reason
+
+
+def test_the_owner_is_never_their_own_company() -> None:
+    lines = _lines(
+        [
+            event(
+                "2026-06-10T10:30:00Z",
+                "2026-06-10T11:00:00Z",
+                "Standup",
+                [attendee(KARI["email"], "Kari Nordmann"), attendee("ines@example.org", "Ines Nordmann")],
+            )
+        ]
+    )
+    owner = [("email", "ines@example.org")]
+    [kari] = present.present(STAY, lines, IDENTITIES, owner=owner)
+    assert kari.person == KARI_ID
+    [kari] = present.company(STAY, lines, IDENTITIES, owner=owner)
+    assert kari.person == KARI_ID
