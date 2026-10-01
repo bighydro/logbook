@@ -25,7 +25,9 @@ What a Day shows, in order:
    gap in the track, said so, and it places nothing. To each row attach the day's lines that
    fall inside its span:
    events, transcripts, notes, mail threads and calls named; messages and photos counted; keepers
-   (RFC 0024) named. Who was there (`present.company`) is split into confirmed — declared in a
+   (RFC 0024) named. A calendar entry several sources carry — the same start and end, the same
+   flight or the same title, case and accents aside (`events.fold`) — is one event, `×N sources`.
+   Who was there (`present.company`) is split into confirmed — declared in a
    note, speaking in a transcript, attending a timed calendar entry — and proposed — a face in a
    photo, an attendee of an all-day entry; never the owner.
 3. Unplaced: the day's events, transcripts, notes, mail and calls that fall inside no row — what
@@ -48,8 +50,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
+from . import events, health, keepers, present, reading, stays, trips
 from . import flights as flight_lines
-from . import health, keepers, present, reading, stays
+from . import places as named_places
 from .chain import Line
 from .export import parse_day
 from .flights import Airports
@@ -83,11 +86,13 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     day_end = day_start + timedelta(days=1)
     lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and day_start <= at < day_end]
     lines.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
+    folded, stands_for = events.fold(lines, flight_lines.Airlines.load())  # one row per calendar entry
     owner = rd.owner
     segments = [s for s in rd.segments if s.subject is None and s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
     entries = [
-        _finish(entry, lines, rd, owner, flights) for entry in _entries(segments, rd, day_start, day_end)
+        _finish(entry, folded, stands_for, rd, owner, flights)
+        for entry in _entries(segments, rd, day_start, day_end)
     ]
     timeline = sorted(
         [*entries, *flights],
@@ -96,8 +101,8 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     night_after = rd.night_of(day)
     night_before = rd.night_of(before)
     all_day = [
-        {"title": _title(line), "line": str(line["id"])}
-        for line in lines
+        {"title": _title(line), "line": str(line["id"]), **_stands_for(line, stands_for)}
+        for line in folded
         if line.get("kind") == "event" and (line.get("payload") or {}).get("all_day") is True
     ]
     return {
@@ -112,9 +117,9 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
         "all_day": all_day,
         "timeline": timeline,
         "flights": flights,
-        "unplaced": _unplaced(lines, entries, tz),
+        "unplaced": _unplaced(folded, stands_for, entries, tz),
         "health": _health(lb, before, day, rd),
-        "sources": _sources(lines),
+        "sources": _sources(lines),  # every line, the folded calendar entries too
     }
 
 
@@ -129,11 +134,23 @@ def _where(s: stays.Segment, rd: Reading) -> str | None:
         return s.place
     if s.aboard:
         return f"aboard {_asset_name(s.aboard, rd)}"
-    return _coordinates(s)
+    return _coordinates(s, rd)
 
 
-def _coordinates(s: stays.Segment) -> str | None:
-    return f"{s.lat:.4f},{s.lon:.4f}" if s.lat is not None and s.lon is not None else None
+def _coordinates(s: stays.Segment, rd: Reading) -> str | None:
+    """`lat,lon`, with the city of the nearest large airport within 30 km in parentheses when the
+    stay is at no airport and near no named place (`trips.city_near`, the route's rule), so a
+    reader sees `53.5998,10.0130 (Hamburg)`."""
+    if s.lat is None or s.lon is None:
+        return None
+    label = f"{s.lat:.4f},{s.lon:.4f}"
+    if rd.airports.nearest(s.lat, s.lon, trips.AIRPORT_KM) is not None:
+        return label
+    near = named_places.nearest(s.lat, s.lon, rd.places)
+    if near is not None and near[1] <= trips.NEAR_KM * 1000:
+        return label
+    city = trips.city_near(s.lat, s.lon, rd.airports)
+    return f"{label} ({city})" if city else label
 
 
 def _asset_name(asset_id: str, rd: Reading) -> str:
@@ -235,7 +252,7 @@ def _entry(s: stays.Segment, rd: Reading, day_start: datetime, day_end: datetime
         "end_local": s.end.astimezone(tz).isoformat(timespec="seconds"),
         "within_day": _within(s.start, s.end, day_start, day_end),
         "duration_s": s.duration_s,
-        "where": _where(s, rd) if s.aboard is None else (s.place or _coordinates(s)),
+        "where": _where(s, rd) if s.aboard is None else (s.place or _coordinates(s, rd)),
         "place": s.place,
         "lat": None if s.lat is None else round(s.lat, 6),
         "lon": None if s.lon is None else round(s.lon, 6),
@@ -310,16 +327,18 @@ def _within(start: datetime, end: datetime, day_start: datetime, day_end: dateti
 def _finish(
     entry: dict[str, Any],
     lines: Sequence[Line],
+    stands_for: Mapping[str, events.Folded],
     rd: Reading,
     owner: present.Owner,
     flights: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
     """The entry with its attachments, its company and, for a move, the flights that cover it. A
     gap places nothing: the track says nothing about where the owner was, so its lines stay
-    unplaced."""
+    unplaced. `lines` are the day's with the calendar entries folded (`events.fold`),
+    `stands_for` what each kept entry stands for."""
     start, end = _instant(entry["start"]), _instant(entry["end"])
     if entry["gap"]:
-        entry["attached"] = _attached(start, end, [], rd)
+        entry["attached"] = _attached(start, end, [], stands_for, rd)
         entry["with"] = {"confirmed": [], "proposed": []}
         entry["flights"] = []
         return entry
@@ -334,7 +353,7 @@ def _finish(
         place=entry["place"],
         aboard=entry["aboard"],
     )
-    entry["attached"] = _attached(start, end, lines, rd)
+    entry["attached"] = _attached(start, end, lines, stands_for, rd)
     companions = (
         [] if entry["kind"] == stays.MOVE else present.company(span, lines, rd.identities, rd.places, owner)
     )  # with is a stay's relation: a photo from the train attaches to the move, nobody is with you on it
@@ -406,8 +425,14 @@ def _inside(line: Line, start: datetime, end: datetime) -> bool:
     return at < end and until > start
 
 
-def _attached(start: datetime, end: datetime, lines: Iterable[Line], rd: Reading) -> dict[str, Any]:
-    events, transcripts, notes, calls, kept = [], [], [], [], []
+def _attached(
+    start: datetime,
+    end: datetime,
+    lines: Iterable[Line],
+    stands_for: Mapping[str, events.Folded],
+    rd: Reading,
+) -> dict[str, Any]:
+    found_events, transcripts, notes, calls, kept = [], [], [], [], []
     threads: dict[str, dict[str, Any]] = {}
     messages: list[str] = []
     photos: list[str] = []
@@ -422,7 +447,15 @@ def _attached(start: datetime, end: datetime, lines: Iterable[Line], rd: Reading
         if kind == "event":
             if payload.get("all_day") is True:
                 continue  # the day's, not the stay's
-            events.append({"title": _title(line), "start": line["at"], "end": line.get("end"), "line": id_})
+            found_events.append(
+                {
+                    "title": _title(line),
+                    "start": line["at"],
+                    "end": line.get("end"),
+                    "line": id_,
+                    **_stands_for(line, stands_for),
+                }
+            )
         elif kind == "transcript":
             transcripts.append({"title": _title(line), "line": id_})
         elif kind == "note":
@@ -449,7 +482,7 @@ def _attached(start: datetime, end: datetime, lines: Iterable[Line], rd: Reading
         elif kind == "photo":
             photos.append(id_)
     return {
-        "events": events,
+        "events": found_events,
         "transcripts": transcripts,
         "notes": notes,
         "mail": list(threads.values()),
@@ -458,6 +491,15 @@ def _attached(start: datetime, end: datetime, lines: Iterable[Line], rd: Reading
         "photos": {"count": len(photos), "lines": photos},
         "keepers": kept,
     }
+
+
+def _stands_for(line: Line, stands_for: Mapping[str, events.Folded]) -> dict[str, Any]:
+    """The sources a kept calendar entry stands for and the ids of their lines, its own first; a
+    line no other source repeats stands for itself."""
+    folded = stands_for.get(str(line["id"]))
+    if folded is None:
+        return {"sources": [str(line.get("source"))], "lines": [str(line["id"])]}
+    return {"sources": list(folded.sources), "lines": list(folded.lines)}
 
 
 def _title(line: Line) -> str:
@@ -492,7 +534,12 @@ def _call(payload: Mapping[str, Any], names: Mapping[Ref, str], id_: str) -> dic
     }
 
 
-def _unplaced(lines: Sequence[Line], entries: Sequence[dict[str, Any]], tz: ZoneInfo) -> list[dict[str, Any]]:
+def _unplaced(
+    lines: Sequence[Line],
+    stands_for: Mapping[str, events.Folded],
+    entries: Sequence[dict[str, Any]],
+    tz: ZoneInfo,
+) -> list[dict[str, Any]]:
     """The day's placeable lines inside no entry: planned where the track has nothing."""
     spans = [(_instant(e["start"]), _instant(e["end"])) for e in entries if not e["gap"]]
     out = []
@@ -505,15 +552,16 @@ def _unplaced(lines: Sequence[Line], entries: Sequence[dict[str, Any]], tz: Zone
             continue
         if any(_inside(line, start, end) for start, end in spans):
             continue
-        out.append(
-            {
-                "kind": kind,
-                "at": line["at"],
-                "end": line.get("end"),
-                "title": _title(line),
-                "line": str(line["id"]),
-            }
-        )
+        item = {
+            "kind": kind,
+            "at": line["at"],
+            "end": line.get("end"),
+            "title": _title(line),
+            "line": str(line["id"]),
+        }
+        if kind == "event":
+            item.update(_stands_for(line, stands_for))
+        out.append(item)
     return out
 
 
@@ -567,7 +615,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     yield _row("night after", _night_text(data["nights"]["after"]))
     yield _row("country", _country_text(data["country"]))
     if data["all_day"]:
-        yield _row("all day", ", ".join(a["title"] for a in data["all_day"]))
+        yield _row("all day", ", ".join(a["title"] + _sources_text(a) for a in data["all_day"]))
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
@@ -576,9 +624,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     if data["unplaced"]:
         yield ""
         for item in data["unplaced"]:
-            yield _row(
-                "unplaced", f"{_span_text(item['at'], item['end'], tz)}  {item['kind']:<6} {item['title']}"
-            )
+            span = _span_text(item["at"], item["end"], tz)
+            yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{_sources_text(item)}")
     yield ""
     yield _row("health", _health_text(data["health"]))
     if data["sources"]:
@@ -639,11 +686,11 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
         parts = [str(entry["where"]), _duration_text(entry["within_day"]["duration_s"])]
         if entry.get("aboard") and not inside:
             parts.append(f"aboard {entry['aboard']}")
-        if entry["kind"] == stays.STOP:
-            parts.append("stop")
     counts = _counts_text(entry.get("attached"))
     if counts:
         parts.append(counts)
+    elif entry["kind"] == stays.STOP and not inside:
+        parts.append("nothing attached")  # the kind column already says stop
     yield f"{indent}{clock:<12} {kind:<6} {DOT.join(parts)}"
     inner = indent + "    "
     for s in entry.get("inside", []):
@@ -651,7 +698,8 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
     attached = entry.get("attached")
     if attached:
         for e in attached["events"]:
-            yield f"{inner}{'event':<12} {e['title']} {_span_text(e['start'], e['end'], tz)}"
+            span = _span_text(e["start"], e["end"], tz)
+            yield f"{inner}{'event':<12} {e['title']} {span}{_sources_text(e)}"
         for t in attached["transcripts"]:
             yield f"{inner}{'transcript':<12} {t['title']}"
         for n in attached["notes"]:
@@ -670,6 +718,12 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
         if proposed:
             text = f"{text}{DOT}proposed {proposed}" if text else f"proposed {proposed}"
         yield f"{inner}{'with':<12} {text}"
+
+
+def _sources_text(item: Mapping[str, Any]) -> str:
+    """` · ×N sources` for a calendar entry several sources carry; nothing for one source."""
+    sources = item.get("sources") or []
+    return f"{DOT}×{len(sources)} sources" if len(sources) > 1 else ""
 
 
 def _counts_text(attached: dict[str, Any] | None) -> str:

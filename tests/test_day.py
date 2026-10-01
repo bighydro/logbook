@@ -107,6 +107,7 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert data["nights"]["before"]["where"] == "Home" and data["nights"]["before"]["home"] is True
     after = data["nights"]["after"]
     assert after["home"] is False and after["in_transit"] is False and after["where"].startswith("47.37")
+    assert after["where"].endswith(" (Zurich)"), "9 km from the airport, no named place: the airport's city"
     assert data["country"]["code"] == "CH" and data["country"]["from"] == "night"
     [flight] = data["flights"]
     assert (flight["carrier"], flight["number"], flight["from"], flight["to"]) == ("XY", "561", "OSL", "ZRH")
@@ -120,8 +121,46 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert [f["id"] for f in flights_in_timeline] == [flight["id"]], "and the flight is a row of the timeline"
     text = _run(capsys, "2026-06-15")
     assert "flight XY 561  OSL → ZRH · tracked" in text
-    assert "night after   47.37" in text and "· away" in text
+    assert "night after   47.37" in text and "(Zurich) · away" in text
+    hotel = data["timeline"][-1]
+    assert hotel["kind"] == "stay" and hotel["place"] is None
+    assert hotel["where"] == f"{hotel['lat']:.4f},{hotel['lon']:.4f} (Zurich)", "the stay's row says so too"
     assert "country       CH" in text
+
+
+# -- one calendar entry in several calendars -------------------------------------------------------------
+
+
+def test_the_same_flight_in_four_calendars_in_two_languages_is_one_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The persona's phone calendar holds the flight; a subscribed .ics, a Google calendar and a
+    fourth hold it too, two of them in German, all with the same start and end: one event row,
+    `×4 sources`, and the sources line still counts every calendar's line."""
+    lb = persona_record(tmp_path, monkeypatch)
+    at, end = utc("2026-06-15", "07:05"), utc("2026-06-15", "09:15")
+    twice = {**event(at, end, "Flug XY561 nach Zürich"), "source": "ics"}  # the same calendar twice
+    twice["payload"] = {**twice["payload"], "raw_id": "e-twice"}
+    lb.append_many(
+        [
+            {**event(at, end, "Flug XY561 nach Zürich"), "source": "ics"},
+            {**event(at, end, "Flight to Zurich (XY 561)"), "source": "gcal"},
+            {**event(at, end, "Flug XY 561 nach Zürich"), "source": "sim-calendar"},
+            twice,
+        ]
+    )
+    data = _json(capsys, "2026-06-15")
+    [hop] = [e for e in data["timeline"] if e["kind"] == "move" and e["mode"] == "flight"]
+    [entry] = hop["attached"]["events"]
+    assert entry["title"] == "Flight to Zürich (XY 561)", "the first line's title stands"
+    assert entry["sources"] == ["ios-calendar", "ics", "gcal", "sim-calendar"]
+    assert len(entry["lines"]) == 5, "every line it stands for, the repeat from one calendar too"
+    assert data["unplaced"] == []
+    sources = {s["source"]: s["lines"] for s in data["sources"]}
+    assert sources["ics"] == 2 and sources["gcal"] == 1, "the sources line counts what each calendar wrote"
+    text = _run(capsys, "2026-06-15")
+    assert text.count("Flight to Zürich (XY 561)") == 1 and "Flug" not in text
+    assert "1 event" in text and "×4 sources" in text
 
 
 # -- a day aboard an asset --------------------------------------------------------------------------------
@@ -158,6 +197,32 @@ def test_a_day_aboard_the_boat_is_one_stay_with_the_anchorages_inside(
     assert "aboard Solvind" in text and "night after   aboard Solvind · away" in text
     assert "with         Ola Nordmann (note)" in text
     assert "keeper       IMG_131730.HEIC (memory)" in text
+
+
+# -- with, from a note ------------------------------------------------------------------------------------
+
+
+def test_a_note_names_company_only_when_the_record_resolves_the_name_to_a_person(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`with US and XYZ` names no one: a capitalised word is company only when a resolution line
+    makes it a person, the rule transcripts already follow."""
+    from persona import note
+
+    lb = persona_record(tmp_path, monkeypatch)
+    lb.append_many(
+        [note(utc("2026-06-09", "10:00"), "Standup with US and XYZ about Norway, then coffee with Ola")]
+    )
+    data = _json(capsys, "2026-06-09")
+    [office] = [e for e in data["timeline"] if e["where"] == "Office"]
+    assert [n["text"] for n in office["attached"]["notes"]] == [
+        "Standup with US and XYZ about Norway, then coffee with Ola"
+    ]
+    assert [c["name"] for c in office["with"]["confirmed"]] == ["Ola Nordmann"]
+    assert office["with"]["proposed"] == []
+    text = _run(capsys, "2026-06-09")
+    assert "with         Ola Nordmann (note)" in text
+    assert "US" not in text.split("with         ")[1].splitlines()[0]
 
 
 # -- a day with a tracker gap, and the health line -------------------------------------------------------
@@ -255,6 +320,36 @@ def test_a_tracker_gap_is_a_row_the_lunch_is_unplaced_and_health_takes_the_corre
     assert "unplaced" in text and "Lunch" in text
     assert "all day       Kari in town" in text
     assert "health        sleep 7.0 h · 3,250 steps · resting 56 bpm" in text
+
+
+# -- a stop ------------------------------------------------------------------------------------------------
+
+
+def test_a_stop_with_nothing_attached_says_so_and_never_repeats_its_kind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ten minutes at the cafe with no line attached: a stop, whose row says `nothing attached`
+    after its place and duration — never `stop · stop`."""
+    from persona import CAFE
+
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    day = "2026-07-02"
+    lb.append_many(
+        dwell(day, "00:00", "09:00", HOME, every_min=5)
+        + travel(day, "09:00", "09:12", HOME, CAFE, steps=4)
+        + dwell(day, "09:12", "09:22", CAFE, noise_m=15)
+        + travel(day, "09:22", "09:34", CAFE, HOME, steps=4)
+        + dwell(day, "09:34", "24:00", HOME, every_min=5)
+    )
+    (lb.root / "places.json").write_text(json.dumps({"Home": PLACES["Home"]}), encoding="utf-8")
+    data = _json(capsys, day)
+    [stop] = [e for e in data["timeline"] if e["kind"] == "stop"]
+    assert stop["attached"]["events"] == [] and stop["attached"]["photos"]["count"] == 0
+    text = _run(capsys, day)
+    [row] = [line for line in text.splitlines() if "  stop   " in line]
+    assert row.endswith(" · 10 min · nothing attached"), row
+    assert "stop · stop" not in text and row.count("stop") == 1
 
 
 # -- the edges ---------------------------------------------------------------------------------------------

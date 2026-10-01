@@ -88,6 +88,13 @@ class Airport(NamedTuple):
     lat: float
     lon: float
     tz: str
+    municipality: str = ""  # as OurAirports writes it: `Oslo (Gardermoen)`, `Sandefjord(Torp)`
+
+    @property
+    def city(self) -> str:
+        """The municipality's city alone: the part before a parenthesis or a comma, so
+        `Paris (Roissy-en-France, Val-d'Oise)` is Paris. Empty when the row has none."""
+        return re.split(r"[(,]", self.municipality, maxsplit=1)[0].strip()
 
 
 class Airports:
@@ -115,9 +122,9 @@ class Airports:
 
     @classmethod
     def load(cls, override: Path | None = None) -> Airports:
-        """The built-in table, then the rows of `override` (same columns; `icao` and `name` may be
-        absent) on top of it. A row without a code or coordinates, or with a zone the zone
-        database does not know, is a ValueError naming its line."""
+        """The built-in table, then the rows of `override` (same columns; `icao`, `name` and
+        `municipality` may be absent) on top of it. A row without a code or coordinates, or with a
+        zone the zone database does not know, is a ValueError naming its line."""
         airports = cls(_builtin_airports())
         if override is not None:
             text = Path(override).read_text(encoding="utf-8")
@@ -181,7 +188,13 @@ def _read_airports(text: str, name: str) -> list[Airport]:
             raise ValueError(f"{name} line {n}: lat and lon must be numbers") from None
         found.append(
             Airport(
-                iata, (row.get("icao") or "").strip().upper(), (row.get("name") or "").strip(), lat, lon, tz
+                iata,
+                (row.get("icao") or "").strip().upper(),
+                (row.get("name") or "").strip(),
+                lat,
+                lon,
+                tz,
+                (row.get("municipality") or "").strip(),
             )
         )
     return found

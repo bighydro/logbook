@@ -36,17 +36,22 @@ passage, an anchorage. The asset's movement never fragments the stay.
    calendar entries.
 2. **Timeline** — one row per stay, stop, move and flight that touches the day, in time order.
    A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`;
-   the duration printed is the part on the day, and `--json` keeps the real span beside it.
+   the duration printed is the part on the day, and `--json` keeps the real span beside it. An
+   unnamed stay is its coordinates, with the city of the nearest large airport within 30 km in
+   parentheses when it is at no airport and near no named place (`53.5998,10.0130 (Hamburg)`, the
+   `trips` route's rule). A stop with nothing attached says so.
    A move prints its distance, duration and mode (walk, car, train, boat, flight), with the
    airports when it is a flight between two. A move with no points that lasts a silence or more
    (`merge_gap_s`) and is not a flight is a **gap**: the tracker did not see it, so it places
    nothing. Flights come from the `flight/v1` lines standing — the merged set `infer flights`
    maintains, one line per flight — with their evidence: `tracked`, `inferred` or `declared`; the
    move a flight covers names it under `--json`.
-   Under each row: its attachments, named for events (with their time), transcripts, notes (the
-   first line), mail threads (with the message count), calls and keepers, and counted for messages
-   and photos; then **with**, the people there, split into **confirmed** — declared in a note
-   (`with <name>`), speaking in a transcript, attending a timed calendar entry that overlaps the
+   Under each row: its attachments, named for events (with their time; an entry several calendars
+   carry — the same start and end, the same flight or the same title, case and accents aside — is
+   one event, `×N sources`), transcripts, notes (the first line), mail threads (with the message
+   count), calls and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
+   (`with <name>`, only a name the record's resolution lines make a person: `with US` names
+   nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
    stay — and **proposed** — a face the photo library tagged, an attendee of an all-day entry. The
    owner is never their own company. A move carries attachments but no company.
 3. **Unplaced** — the day's events, transcripts, notes, mail and calls that fall inside no stay or

@@ -55,6 +55,23 @@ def test_airports_override_file_adds_a_private_field_and_overrides_a_row(tmp_pat
     assert airports.nearest(60.5, 11.5).iata == "ZZZ"
 
 
+def test_airports_carry_the_municipality_and_its_city():
+    """OurAirports' municipality as written; `city` is the part before a parenthesis or a comma."""
+    airports = Airports.load()
+    assert airports.get("HAM").municipality == "Hamburg" and airports.get("HAM").city == "Hamburg"
+    assert airports.get("OSL").municipality == "Oslo (Gardermoen)" and airports.get("OSL").city == "Oslo"
+    assert airports.get("TRF").city == "Sandefjord"  # `Sandefjord(Torp)`
+    assert airports.get("CDG").city == "Paris"  # `Paris (Roissy-en-France, Val-d'Oise)`
+    assert all(a.municipality for a in airports), "every built-in row names its municipality"
+
+
+def test_airports_override_file_may_omit_the_municipality(tmp_path: Path):
+    p = tmp_path / "airports.csv"
+    p.write_text("iata,lat,lon,tz\nZZZ,60.5,11.5,Europe/Oslo\n", encoding="utf-8")
+    z = Airports.load(p).get("ZZZ")
+    assert z is not None and z.municipality == "" and z.city == ""
+
+
 def test_airports_override_file_may_omit_icao_and_name(tmp_path: Path):
     p = tmp_path / "airports.csv"
     p.write_text("iata,lat,lon,tz\nZZZ,60.5,11.5,Europe/Oslo\n", encoding="utf-8")

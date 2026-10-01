@@ -255,10 +255,14 @@ def test_a_transcript_speaker_counts_only_when_resolved_to_a_person() -> None:
 
 
 def test_a_note_that_says_with_someone_is_a_declaration() -> None:
+    """Only a name the record resolves to a person (the transcript rule): `Trude`, whom no
+    resolution line knows, and a capitalised word that is no person (`US`, `XYZ`, a country, an
+    acronym) are nobody."""
     lines = _lines(
         [
             note("2026-06-10T11:00:00Z", "Anchored in the bay with Ola Nordmann and Kari. Grilled."),
             note("2026-06-10T11:10:00Z", "Lunch with Trude at the cafe"),
+            note("2026-06-10T11:15:00Z", "Call with US and XYZ about Norway; then with Ola"),
             note("2026-06-10T11:20:00Z", "nothing to do with anyone"),
             note("2026-06-10T14:00:00Z", "with Ola"),  # after the stay
         ]
@@ -267,10 +271,10 @@ def test_a_note_that_says_with_someone_is_a_declaration() -> None:
     assert [(p.person, p.name) for p in found] == [
         (OLA_ID, "Ola Nordmann"),
         (KARI_ID, "Kari Nordmann"),
-        (None, "Trude"),
+        (OLA_ID, "Ola Nordmann"),
     ]
     assert all(p.source == "note" and p.status == present.CONFIRMED and p.confidence == 1.0 for p in found)
-    assert found[2].reason == "note says with Trude"
+    assert found[1].reason == "note says with Kari" and found[2].reason == "note says with Ola"
 
 
 def test_a_face_in_a_photo_is_only_proposed() -> None:
@@ -414,9 +418,8 @@ def test_the_owner_is_never_their_own_company() -> None:
     assert INES_ID not in {p.person for p in found}
     assert not {p.name for p in found} & {"Ines Nordmann", "I. Nordmann", "ines@example.org"}
     assert [c.name for c in present.company(STAY, _lines(EVIDENCE), WITH_INES, owner=owner)] == [
-        "Ola Nordmann",
-        "Nordmann",
-    ]
+        "Ola Nordmann"
+    ], "`Nordmann` alone resolves to nobody (three people share it), so the note names nobody by it"
 
 
 def test_the_owner_is_found_from_their_addresses_and_policy_aliases() -> None:
@@ -427,4 +430,4 @@ def test_the_owner_is_found_from_their_addresses_and_policy_aliases() -> None:
     by_policy = present.owner_of("unresolved-owner-id", [], aliases, WITH_INES)
     assert INES_ID in by_policy.entities and "nordmann" in by_policy.names
     found = present.company(STAY, _lines(EVIDENCE), WITH_INES, owner=by_policy)
-    assert [c.name for c in found] == ["Ola Nordmann"], "the note's unresolved alias is the owner too"
+    assert [c.name for c in found] == ["Ola Nordmann"]

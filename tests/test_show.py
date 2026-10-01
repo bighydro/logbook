@@ -61,9 +61,11 @@ def _show(capsys: pytest.CaptureFixture[str], day: str = DAY) -> list[str]:
     return capsys.readouterr().out.splitlines()
 
 
-def _event(at: str, title: str, source: str = "ics") -> dict[str, Any]:
-    payload = {"schema": "event/v1", "title": title, "raw_id": f"{source}:{title}@{at}"}
-    return {"at": at, "source": source, "kind": "event", "tier": 1, "payload": payload}
+def _event(
+    at: str, title: str, source: str = "ics", end: str | None = None, raw_id: str | None = None
+) -> dict[str, Any]:
+    payload = {"schema": "event/v1", "title": title, "raw_id": raw_id or f"{source}:{title}@{at}"}
+    return {"at": at, "end": end, "source": source, "kind": "event", "tier": 1, "payload": payload}
 
 
 def _fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drafts: list[dict[str, Any]]) -> Logbook:
@@ -111,28 +113,51 @@ def test_show_raw_prints_the_whole_note(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_show_collapses_one_event_seen_by_two_calendars_into_one_line(tmp_path: Path, monkeypatch, capsys):
-    """The same title, or the same flight number in two spellings, within five minutes, from
-    different sources: one line naming the sources, at the first one's time."""
+    """The same start and end, from different sources, with the same title or the same flight in
+    two spellings: one line, `×N sources` where the source would be."""
     _fresh(
         tmp_path,
         monkeypatch,
         [
             _event("2026-03-01T08:00:00Z", "Standup"),
-            _event("2026-03-01T08:03:00Z", "standup", source="sim-calendar"),
-            _event("2026-03-01T17:12:00Z", "Flug XY561 nach Zürich", source="ios-calendar"),
+            _event("2026-03-01T08:00:00Z", "standup", source="sim-calendar"),
+            _event("2026-03-01T17:10:00Z", "Flug XY561 nach Zürich", source="ios-calendar"),
             _event("2026-03-01T17:10:00Z", "Flight to Zürich (XY 561)"),
             _event("2026-03-01T17:10:00Z", "Flug XY561 nach Zürich"),
-            _event("2026-03-01T17:12:00Z", "Flight to Zürich (XY 561)", source="ios-calendar"),
+            _event("2026-03-01T17:10:00Z", "Flight to Zürich (XY 561)", source="ios-calendar"),
         ],
     )
     out = _show(capsys)
     assert out[1:] == [
-        "  09:00  event      ics+sim-calendar Standup",
-        "  18:10  event      ics+ios-calendar Flight to Zürich (XY 561)",
+        "  09:00  event      ×2 sources     Standup",
+        "  18:10  event      ×2 sources     Flug XY561 nach Zürich",
     ]
 
 
-def test_show_keeps_events_apart_from_one_source_or_six_minutes_apart_or_unrelated(
+def test_show_folds_the_same_flight_from_four_calendars_in_two_languages(tmp_path: Path, monkeypatch, capsys):
+    """Titles compare case, accents and whitespace aside (`Zürich`, `Zurich`); a flight designator
+    in any spelling (`XY561`, `XY 561`) is the same flight."""
+    at, end = "2026-03-01T06:05:00Z", "2026-03-01T08:15:00Z"
+    _fresh(
+        tmp_path,
+        monkeypatch,
+        [
+            _event(at, "Flight to Zürich (XY 561)", end=end),
+            _event(at, "Flug XY561 nach Zürich", source="ios-calendar", end=end),
+            _event(at, "Flight to Zurich (XY 561)", source="gcal", end=end),
+            _event(at, "Flug XY 561 nach Zürich", source="sim-calendar", end=end),
+            _event("2026-03-01T12:00:00Z", "Café  Olsen", source="gcal"),
+            _event("2026-03-01T12:00:00Z", "cafe olsen", source="ics"),
+        ],
+    )
+    out = _show(capsys)
+    assert out[1:] == [
+        "  07:05  event      ×4 sources     Flight to Zürich (XY 561)",
+        "  13:00  event      ×2 sources     Café  Olsen",
+    ]
+
+
+def test_show_keeps_events_apart_from_one_source_or_at_different_times_or_unrelated(
     tmp_path: Path, monkeypatch, capsys
 ):
     _fresh(
@@ -140,15 +165,19 @@ def test_show_keeps_events_apart_from_one_source_or_six_minutes_apart_or_unrelat
         monkeypatch,
         [
             _event("2026-03-01T08:00:00Z", "Standup"),
-            _event("2026-03-01T08:02:00Z", "Standup"),  # the same calendar twice: two entries
+            _event("2026-03-01T08:00:00Z", "Standup", raw_id="twice"),  # the same calendar twice: two entries
             _event("2026-03-01T11:00:00Z", "Lunch"),
-            _event("2026-03-01T11:06:00Z", "Lunch", source="ios-calendar"),  # too far apart
+            _event("2026-03-01T11:01:00Z", "Lunch", source="ios-calendar"),  # not the same start
             _event("2026-03-01T13:00:00Z", "Dentist"),
-            _event("2026-03-01T13:01:00Z", "Doctor", source="ios-calendar"),  # not the same thing
+            _event("2026-03-01T13:00:00Z", "Doctor", source="ios-calendar"),  # not the same thing
+            _event("2026-03-01T15:00:00Z", "Review", end="2026-03-01T16:00:00Z"),
+            _event(
+                "2026-03-01T15:00:00Z", "Review", source="gcal", end="2026-03-01T16:30:00Z"
+            ),  # not the same end
         ],
     )
     out = _show(capsys)
-    assert len(out) == 7 and all("+" not in line.split()[2] for line in out[1:])
+    assert len(out) == 9 and all("×" not in line for line in out[1:])
 
 
 def test_show_a_collapsed_event_does_not_break_a_run_of_location_points(tmp_path: Path, monkeypatch, capsys):
@@ -159,7 +188,7 @@ def test_show_a_collapsed_event_does_not_break_a_run_of_location_points(tmp_path
             _location("2026-03-01T17:00:00Z"),
             _event("2026-03-01T17:10:00Z", "Flight to Zürich (XY 561)"),
             _location("2026-03-01T17:11:00Z"),
-            _event("2026-03-01T17:12:00Z", "Flight to Zürich (XY 561)", source="ios-calendar"),
+            _event("2026-03-01T17:10:00Z", "Flight to Zürich (XY 561)", source="ios-calendar"),
             _location("2026-03-01T17:20:00Z"),
         ],
     )
