@@ -138,14 +138,6 @@ def test_a_codeshare_twin_shows_once_in_the_flights_in(
     assert text.count("in XY 561 OSL") == 1 and "9561" not in text
 
 
-def test_a_night_named_by_its_airport_drops_the_airport_words() -> None:
-    from logbook.trips import _city_of_airport
-
-    assert _city_of_airport("Zürich Airport") == "Zürich"
-    assert _city_of_airport("Oslo-Gardermoen International Airport") == "Oslo-Gardermoen"
-    assert _city_of_airport("Sandefjord Airport, Torp") == "Sandefjord"
-
-
 # -- the home radius ---------------------------------------------------------------------------------------
 
 NEAR_HOME = (59.9139 + 250 / 111_320, 10.7522)  # 250 m north of Home, outside its 120 m radius
@@ -234,6 +226,25 @@ def _places() -> list[Any]:
     return [Place("Home", *HOME, 120, "home"), Place("Office", *OFFICE, 120)]
 
 
+def test_an_unnamed_night_far_from_any_place_names_the_city_of_the_nearest_large_airport() -> None:
+    """Hamburg city, 4 km from the airport and with no named place near: the coordinates, then the
+    airport's city in parentheses — the city only, never the airport's name."""
+    from logbook.flights import Airports
+    from logbook.places import Place
+    from logbook.trips import route_of
+
+    airports = Airports.load()
+    hamburg = _stay((53.5998, 10.0130))
+    assert route_of([hamburg], [], airports) == ["53.5998,10.0130 (Hamburg)"]
+    at_the_airport = _stay((53.6310, 9.9890))  # within 2 km of HAM: the airport's own name
+    assert route_of([at_the_airport], [], airports) == ["Hamburg Helmut Schmidt Airport"]
+    cabin = Place("Cabin", 53.5900, 10.0100, 150.0)  # a named place 1.1 km away wins over the city
+    assert route_of([hamburg], [cabin], airports) == ["53.5998,10.0130 near Cabin, 1.1 km"]
+    oslo_fjord = _stay((59.8500, 10.6000))  # 40 km from OSL: nothing within 30 km, bare coordinates
+    assert route_of([oslo_fjord], [], airports) == ["59.8500,10.6000"]
+    assert route_of([_stay((53.5998, 10.0130), "Hotel")], [], airports) == ["Hotel"]
+
+
 def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
     from persona import ZRH, ZURICH
 
@@ -244,7 +255,7 @@ def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
     [at_airport] = trips.route_of([_stay((47.4700, 8.5481))], _places(), airports)  # 1.3 km from ZRH
     assert at_airport == "Zürich Airport"
     [in_town] = trips.route_of([_stay(ZURICH)], _places(), airports)  # 9 km from ZRH, no place near
-    assert in_town == "47.3769,8.5417", "a stay far from every airport and named place is its coordinates"
+    assert in_town == "47.3769,8.5417 (Zurich)", "far from every airport and named place: coordinates, city"
     assert trips.route_of([_stay(ZRH)], _places(), airports) == ["Zürich Airport"]
 
 
@@ -271,7 +282,7 @@ def test_consecutive_route_points_within_200_m_collapse_to_one() -> None:
 
     step = 10 / 111_320  # ten metres of latitude
     three = [_stay((ZURICH[0] + i * step, ZURICH[1])) for i in range(3)]
-    assert trips.route_of(three, _places(), Airports.load()) == ["47.3769,8.5417"]
+    assert trips.route_of(three, _places(), Airports.load()) == ["47.3769,8.5417 (Zurich)"]
     apart = [_stay(ZURICH), _stay((ZURICH[0] + 300 / 111_320, ZURICH[1])), _stay(ZURICH)]
     assert len(trips.route_of(apart, _places(), Airports.load())) == 3, "300 m apart stays three points"
 

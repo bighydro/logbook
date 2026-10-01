@@ -49,7 +49,8 @@ from zoneinfo import ZoneInfo
 
 from . import countries as country_table
 from . import flights as flight_lines
-from . import health, keepers, present, reading, stays
+from . import health, keepers, present, reading, stays, trips
+from . import places as named_places
 from .chain import Line
 from .export import parse_day
 from .flights import Airports
@@ -129,11 +130,23 @@ def _where(s: stays.Segment, rd: Reading) -> str | None:
         return s.place
     if s.aboard:
         return f"aboard {_asset_name(s.aboard, rd)}"
-    return _coordinates(s)
+    return _coordinates(s, rd)
 
 
-def _coordinates(s: stays.Segment) -> str | None:
-    return f"{s.lat:.4f},{s.lon:.4f}" if s.lat is not None and s.lon is not None else None
+def _coordinates(s: stays.Segment, rd: Reading) -> str | None:
+    """`lat,lon`, with the city of the nearest large airport within 30 km in parentheses when the
+    stay is at no airport and near no named place (`trips.city_near`, the route's rule), so a
+    reader sees `53.5998,10.0130 (Hamburg)`."""
+    if s.lat is None or s.lon is None:
+        return None
+    label = f"{s.lat:.4f},{s.lon:.4f}"
+    if rd.airports.nearest(s.lat, s.lon, trips.AIRPORT_KM) is not None:
+        return label
+    near = named_places.nearest(s.lat, s.lon, rd.places)
+    if near is not None and near[1] <= trips.NEAR_KM * 1000:
+        return label
+    city = trips.city_near(s.lat, s.lon, rd.airports)
+    return f"{label} ({city})" if city else label
 
 
 def _asset_name(asset_id: str, rd: Reading) -> str:
@@ -235,7 +248,7 @@ def _entry(s: stays.Segment, rd: Reading, day_start: datetime, day_end: datetime
         "end_local": s.end.astimezone(tz).isoformat(timespec="seconds"),
         "within_day": _within(s.start, s.end, day_start, day_end),
         "duration_s": s.duration_s,
-        "where": _where(s, rd) if s.aboard is None else (s.place or _coordinates(s)),
+        "where": _where(s, rd) if s.aboard is None else (s.place or _coordinates(s, rd)),
         "place": s.place,
         "lat": None if s.lat is None else round(s.lat, 6),
         "lon": None if s.lon is None else round(s.lon, 6),

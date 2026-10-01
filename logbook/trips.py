@@ -3,8 +3,10 @@
 A trip is a run of consecutive days whose overnight stay is outside every home region (places.json,
 kind `home`, or within 400 m of one) or in transit. It has a route (the night places in order: the
 named place, else a large airport's name when the stay is within 2 km of it, else the coordinates
-with `near <place>, x km` for the nearest named place within 5 km; consecutive points within 200 m
-of each other collapse into the first), its nights, the named places visited and the people
+with `near <place>, x km` for the nearest named place within 5 km, else the coordinates with the
+city of the nearest large airport within 30 km in parentheses, `53.5998,10.0130 (Hamburg)` — the
+city only, never the airport's name, so a reader sees where a hotel is; consecutive points within
+200 m of each other collapse into the first), its nights, the named places visited and the people
 confirmed present (the with module: never the owner, at most `WITH_MAX` names, most evidence
 first) between the first day's midnight and the end of the return day, and the flights in (dated
 the first day) and out (dated the return day, the day after the last night). An asset trip is one
@@ -31,6 +33,7 @@ from .reading import Reading, window_json
 
 AIRPORT_KM = 2.0  # an unnamed night this close to a large airport is named after it
 NEAR_KM = 5.0  # else its coordinates, with `near <place>, x km` for a named place this close
+CITY_KM = 30.0  # else its coordinates, with the city of the nearest large airport this close
 MERGE_M = 200.0  # consecutive route points this close are one
 WITH_MAX = 12  # names listed under "with", most evidence first
 EN_DASH = "\u2013"
@@ -181,20 +184,18 @@ def _label(stay: stays.Segment, places: Sequence[named_places.Place], airports: 
     label = f"{stay.lat:.4f},{stay.lon:.4f}"
     near = named_places.nearest(stay.lat, stay.lon, places)
     if near is not None and near[1] <= NEAR_KM * 1000:
-        label += f" near {near[0].name}, {near[1] / 1000:.1f} km"
-    return label
+        return f"{label} near {near[0].name}, {near[1] / 1000:.1f} km"
+    city = city_near(stay.lat, stay.lon, airports)
+    return f"{label} ({city})" if city else label
 
 
-def _city_of_airport(name: str) -> str:
-    """`Zürich Airport` is Zürich; `Sandefjord Airport, Torp` is Sandefjord (the table keeps
-    OurAirports' names, and a comma starts the part that is not the city). A route labels a
-    night at an airport by the airport's own name (`_label`); this is for a reader that wants
-    the city."""
-    name = name.split(",", 1)[0].strip()
-    for suffix in (" International Airport", " Intl Airport", " Airport", " Intl"):
-        if name.endswith(suffix):
-            return name[: -len(suffix)]
-    return name
+def city_near(lat: float, lon: float, airports: Airports) -> str | None:
+    """The city of the nearest large airport within `CITY_KM` (`Airport.city`: Hamburg for a
+    point in Hamburg), for a point that is at no airport and near no named place; None when no
+    airport is that close or its row names no municipality. The Day labels an unnamed stay with
+    it too."""
+    airport = airports.nearest(lat, lon, CITY_KM)
+    return airport.city or None if airport is not None else None
 
 
 def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.Companion]:

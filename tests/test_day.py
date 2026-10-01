@@ -107,6 +107,7 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert data["nights"]["before"]["where"] == "Home" and data["nights"]["before"]["home"] is True
     after = data["nights"]["after"]
     assert after["home"] is False and after["in_transit"] is False and after["where"].startswith("47.37")
+    assert after["where"].endswith(" (Zurich)"), "9 km from the airport, no named place: the airport's city"
     assert data["country"]["code"] == "CH" and data["country"]["from"] == "night"
     [flight] = data["flights"]
     assert (flight["carrier"], flight["number"], flight["from"], flight["to"]) == ("XY", "561", "OSL", "ZRH")
@@ -120,7 +121,10 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert [f["id"] for f in flights_in_timeline] == [flight["id"]], "and the flight is a row of the timeline"
     text = _run(capsys, "2026-06-15")
     assert "flight XY 561  OSL → ZRH · tracked" in text
-    assert "night after   47.37" in text and "· away" in text
+    assert "night after   47.37" in text and "(Zurich) · away" in text
+    hotel = data["timeline"][-1]
+    assert hotel["kind"] == "stay" and hotel["place"] is None
+    assert hotel["where"] == f"{hotel['lat']:.4f},{hotel['lon']:.4f} (Zurich)", "the stay's row says so too"
     assert "country       CH" in text
 
 

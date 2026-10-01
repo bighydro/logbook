@@ -487,8 +487,10 @@ is printed with the numbers; name the place and give it a country when it matter
 **Trips are derived, never written** (ADR 0019). A trip is a run of consecutive days whose overnight stay is
 outside every home region, recomputed every time; a trip's name, when you give one, is a note. Its route is
 the night places in order: the named place, else a large airport's name when the stay is within 2 km of one,
-else the coordinates with `near <place>, x km` for a named place within 5 km; consecutive points within 200 m
-of each other are one.
+else the coordinates with `near <place>, x km` for a named place within 5 km, else the coordinates with the city
+of the nearest large airport within 30 km in parentheses (`53.5998,10.0130 (Hamburg)`; the city, never the
+airport's name); consecutive points within 200 m of each other are one. `logbook day` labels an unnamed stay the
+same way.
 
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
 named Art is `art`. `infer keepers` reads the marks out of the photo lines once; `show <day>` lists the day's
