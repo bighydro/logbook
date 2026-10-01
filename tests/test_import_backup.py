@@ -14,6 +14,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_easypark import LINES as EASYPARK_LINES
 from test_easypark import _recent
+from test_flighty import STORE_LINES as FLIGHTY_LINES
+from test_flighty import _store as _flighty_store
 from test_imessage import _store as _sms_store
 from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
@@ -43,6 +45,7 @@ ALL = (
     "ios-wallet",
     "easypark",
     "wispr-flow",
+    "flighty",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -54,6 +57,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "ios-wallet": WALLET_LINES,
     "easypark": EASYPARK_LINES,
     "wispr-flow": WISPR_LINES,
+    "flighty": FLIGHTY_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -64,6 +68,7 @@ STORES = {
     "ios-calendar": "Calendar.sqlitedb",
     "ios-notes": "NoteStore.sqlite",
     "wispr-flow": "database.sqlite",
+    "flighty": "MainFlightyDatabase.db",
 }
 
 
@@ -143,6 +148,9 @@ def _backup(
         _put_tree(backup, rows, ios_backup.EASYPARK, "Documents", _recent(_dir(stage, "easypark")))
     if "wispr-flow" in sources:
         _put(backup, rows, ios_backup.WISPR, "Documents/database.sqlite", _wispr_store(_dir(stage, "wispr")))
+    if "flighty" in sources:
+        store = _flighty_store(_dir(stage, "flighty"))
+        _put(backup, rows, ios_backup.FLIGHTY, "Documents/MainFlightyDatabase.db", store)
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")

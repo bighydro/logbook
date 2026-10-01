@@ -31,6 +31,7 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     easypark            AppDomain-net.easypark.app                    Documents/recentparkings_<user>.json
                                                                   (a folder source: the glob names the file)
     wispr-flow          AppDomain-com.wispr.flowapp                   Documents/database.sqlite
+    flighty             AppDomain-com.flightyapp.flighty              Documents/MainFlightyDatabase.db
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
@@ -87,6 +88,7 @@ NOTES = "AppDomainGroup-group.com.apple.notes"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
+FLIGHTY = "AppDomain-com.flightyapp.flighty"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -133,6 +135,7 @@ SOURCES: tuple[Source, ...] = (
     ),  # an unpacked .pkpass folder per pass
     Source("easypark", EASYPARK, "Documents", files="recentparkings_*.json"),  # named after the user
     Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
+    Source("flighty", FLIGHTY, "Documents/MainFlightyDatabase.db"),  # the same lines as the CSV export
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
