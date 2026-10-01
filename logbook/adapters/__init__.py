@@ -103,6 +103,7 @@ BUILT_IN = (
     "splitwise",
     "beeper",
     "line",
+    "twitter",
 )
 
 

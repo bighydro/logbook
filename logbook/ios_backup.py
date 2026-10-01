@@ -46,6 +46,8 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   UnifiedGroup.sqlite (the same)
                         the same                                      .../PrivateStore/P_*/Messages/
                                                                   Line.sqlite
+    twitter             AppDomainGroup-group.com.atebits.Tweetie2     com.atebits.tweetie.databases/v1/*/
+                                                                  *-dmv2.db (one store per account)
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -110,6 +112,7 @@ BEEPER = "AppDomainGroup-group.beeper.chat.ios"
 LINE_APP = "AppDomain-jp.naver.line"
 LINE = "AppDomainGroup-group.com.linecorp.line"
 LINE_STORE = "Library/Application Support/PrivateStore/P_*"
+TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
@@ -186,6 +189,7 @@ SOURCES: tuple[Source, ...] = (
         note="read beside Line.sqlite",
     ),
     Source("line", LINE, LINE_STORE + "/Messages/Line.sqlite"),
+    Source("twitter", TWITTER, "com.atebits.tweetie.databases/v1/*/*-dmv2.db"),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

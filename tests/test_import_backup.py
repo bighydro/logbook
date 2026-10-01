@@ -30,6 +30,7 @@ from test_ios_wallet import _passes
 from test_line import _store as _line_store
 from test_safari import _store as _safari_store
 from test_splitwise import _store as _splitwise_store
+from test_twitter import _store as _twitter_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 from test_wispr_flow import LINES as WISPR_LINES
@@ -48,6 +49,8 @@ BEEPER = "AppDomainGroup-group.beeper.chat.ios"
 LINE_APP = "AppDomain-jp.naver.line"
 LINE = "AppDomainGroup-group.com.linecorp.line"
 LINE_STORE = "Library/Application Support/PrivateStore/P_u0000000000000000000000000000000"
+TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
+TWITTER_STORE = "com.atebits.tweetie.databases/v1/1000000000000000001/1000000000000000001-dmv2.db"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -64,6 +67,7 @@ ALL = (
     "splitwise",
     "beeper",
     "line",
+    "twitter",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -81,6 +85,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "splitwise": 5,
     "beeper": 8,
     "line": 8,
+    "twitter": 6,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -98,6 +103,7 @@ STORES["copilot"] = "CopilotDB.sqlite"
 STORES["splitwise"] = "database.sqlite"
 STORES["beeper"] = "BeeperStore.sqlite"
 STORES["line"] = "Line.sqlite"
+STORES["twitter"] = "1000000000000000001-dmv2.db"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -219,6 +225,17 @@ def _backup(
             LINE_APP,
             LINE_STORE + "/Contacts Syncing/Contacts.sqlite",
             store.parent / "Contacts.sqlite",
+        )
+    if "twitter" in sources:  # one store per account, found by pattern; the scribe db beside them is not one
+        store = _twitter_store(_dir(stage, "twitter"))
+        _put(backup, rows, TWITTER, "com.atebits.tweetie.databases/v1/1000000000000000001", None)
+        _put(backup, rows, TWITTER, TWITTER_STORE, store)
+        _put(
+            backup,
+            rows,
+            TWITTER,
+            "com.atebits.tweetie.scribe/scribe.2-compact.sqlite",
+            _blob(stage, SAFARI_BYTES),
         )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
@@ -354,6 +371,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (REMINDERS, "Container_v1/MLModels/RDkNNReminder.json"),
         (BEEPER, "Contacts.sqlite"),
         (LINE, LINE_STORE + "/Messages/ChatExt.sqlite"),
+        (TWITTER, "com.atebits.tweetie.scribe/scribe.2-compact.sqlite"),
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
