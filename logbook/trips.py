@@ -4,10 +4,11 @@ A trip is a run of consecutive days whose overnight stay is outside every home r
 kind `home`, or within 400 m of one) or in transit. It has a route (the night places in order: the
 named place, else a large airport's name when the stay is within 2 km of it, else the coordinates
 with `near <place>, x km` for the nearest named place within 5 km; consecutive points within 200 m
-of each other collapse into the first), its nights, the named places visited
-and the people confirmed present (the with module) between the first day's midnight and the end
-of the return day, and the flights in (dated the first day) and out (dated the return day, the
-day after the last night). An asset trip is one whose every night was aboard one asset.
+of each other collapse into the first), its nights, the named places visited and the people
+confirmed present (the with module: never the owner, at most `WITH_MAX` names, most evidence
+first) between the first day's midnight and the end of the return day, and the flights in (dated
+the first day) and out (dated the return day, the day after the last night). An asset trip is one
+whose every night was aboard one asset.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
 captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
@@ -31,6 +32,7 @@ from .reading import Reading, window_json
 AIRPORT_KM = 2.0  # an unnamed night this close to a large airport is named after it
 NEAR_KM = 5.0  # else its coordinates, with `near <place>, x km` for a named place this close
 MERGE_M = 200.0  # consecutive route points this close are one
+WITH_MAX = 12  # names listed under "with", most evidence first
 EN_DASH = "\u2013"
 ARROW = "\u2192"
 
@@ -198,7 +200,7 @@ def _city_of_airport(name: str) -> str:
 def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.Companion]:
     merged: dict[tuple[str | None, str], present.Companion] = {}
     for stay in visited:
-        for c in present.company(stay, reading.lines, reading.identities, reading.places):
+        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner):
             if c.status != present.CONFIRMED:
                 continue
             key = (c.person, "" if c.person else c.name.casefold())
@@ -215,7 +217,7 @@ def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.
                     (*seen.reasons, *c.reasons),
                     tuple(dict.fromkeys([*seen.lines, *c.lines])),
                 )
-    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))
+    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))[:WITH_MAX]
 
 
 def _flights(reading: Reading) -> list[dict[str, Any]]:

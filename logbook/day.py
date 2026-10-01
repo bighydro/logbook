@@ -83,7 +83,7 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     day_end = day_start + timedelta(days=1)
     lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and day_start <= at < day_end]
     lines.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
-    owner = _owner_refs(lb)
+    owner = rd.owner
     segments = [s for s in rd.segments if s.subject is None and s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
     entries = [
@@ -116,15 +116,6 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
         "health": _health(lb, before, day, rd),
         "sources": _sources(lines),
     }
-
-
-def _owner_refs(lb: Logbook) -> list[Ref]:
-    emails = lb.meta.get("owner_emails")
-    return [
-        ("email", e.strip().lower())
-        for e in (emails if isinstance(emails, list) else [])
-        if isinstance(e, str)
-    ]
 
 
 # -- the header ---------------------------------------------------------------------------------------------
@@ -320,7 +311,7 @@ def _finish(
     entry: dict[str, Any],
     lines: Sequence[Line],
     rd: Reading,
-    owner: Sequence[Ref],
+    owner: present.Owner,
     flights: Sequence[dict[str, Any]],
 ) -> dict[str, Any]:
     """The entry with its attachments, its company and, for a move, the flights that cover it. A

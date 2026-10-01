@@ -274,3 +274,83 @@ def test_consecutive_route_points_within_200_m_collapse_to_one() -> None:
     assert trips.route_of(three, _places(), Airports.load()) == ["47.3769,8.5417"]
     apart = [_stay(ZURICH), _stay((ZURICH[0] + 300 / 111_320, ZURICH[1])), _stay(ZURICH)]
     assert len(trips.route_of(apart, _places(), Airports.load())) == 3, "300 m apart stays three points"
+
+
+# -- with ---------------------------------------------------------------------------------------------------
+
+INES_ID = "019cadd3-6bc0-7dcd-9133-000000000003"
+
+
+def _zurich_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: list[dict[str, Any]]) -> Logbook:
+    """Two nights at the Zürich hotel, home before and after, plus `extra` lines."""
+    from persona import HOME, OLA, OLA_ID, ZURICH, dwell, resolution
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2, d3, d4 = "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13"
+    track = (
+        dwell(d1, "00:00", "24:00", HOME)
+        + dwell(d2, "00:00", "06:00", HOME)
+        + dwell(d2, "10:00", "24:00", ZURICH)
+        + dwell(d3, "00:00", "24:00", ZURICH)
+        + dwell(d4, "00:00", "08:00", ZURICH)
+        + dwell(d4, "14:00", "24:00", HOME)
+    )
+    lb.append_many([resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"), *track, *extra])
+    _home_places(lb)
+    return lb
+
+
+def test_the_owner_is_never_with_themselves_by_address_or_policy_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import OLA, attendee, event, note, resolution, utc
+
+    d2 = "2026-06-11"
+    lb = _zurich_record(
+        tmp_path,
+        monkeypatch,
+        [
+            resolution(("email", "ines@example.org"), INES_ID, "Ines Nordmann"),
+            event(
+                utc(d2, "19:00"),
+                utc(d2, "21:30"),
+                "Dinner",
+                [attendee("ines@example.org"), attendee(OLA["email"])],
+            ),
+            note(utc(d2, "22:00"), "Walked back with Nordmann"),
+        ],
+    )
+    meta = json.loads((lb.root / "logbook.json").read_text(encoding="utf-8"))
+    meta["owner_emails"] = ["ines@example.org"]
+    (lb.root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    owner_file = lb.root / "policy" / "owner.json"
+    empty = json.loads(owner_file.read_text(encoding="utf-8"))
+    assert empty == {"names": [], "emails": [], "phones": []}, "init writes the empty aliases file"
+    owner_file.write_text(json.dumps({"names": ["Nordmann"], "emails": [], "phones": []}), encoding="utf-8")
+    [trip] = _json(capsys, "--since", "2026-06-10", "--until", "2026-06-13")["trips"]
+    assert [p["name"] for p in trip["people"]] == ["Ola Nordmann"]
+    assert "with Ola Nordmann" in _run(capsys, "--since", "2026-06-10", "--until", "2026-06-13")
+
+
+def test_with_lists_at_most_twelve_names_most_evidence_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import attendee, event, resolution, transcript, utc
+
+    d2, d3 = "2026-06-11", "2026-06-12"
+    guests = [
+        (f"guest{n:02d}@example.org", f"Guest {n:02d}", f"019cadd3-6bc0-7dcd-9133-0000000001{n:02d}")
+        for n in range(14)
+    ]
+    lines = [resolution(("email", email), id_, name) for email, name, id_ in guests]
+    lines.append(
+        event(utc(d2, "19:00"), utc(d2, "22:00"), "Dinner", [attendee(email) for email, _, _ in guests])
+    )
+    lines.append(transcript(utc(d3, "10:00"), utc(d3, "11:00"), "Talk", [{"email": guests[13][0]}]))
+    _zurich_record(tmp_path, monkeypatch, lines)
+    [trip] = _json(capsys, "--since", "2026-06-10", "--until", "2026-06-13")["trips"]
+    names = [p["name"] for p in trip["people"]]
+    assert len(names) == 12
+    assert names[0] == "Guest 13", "two pieces of evidence come first"
+    assert names[1:] == [f"Guest {n:02d}" for n in range(11)]

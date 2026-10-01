@@ -8,7 +8,13 @@ default; nothing else writes it. Read-only from here on.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
 adapter with its state. An adapter existing is not a decision to run it: demo, sample and placeholder
 data never enters the record. `logbook init` writes the empty list, and so does the first command that
-reads the file in a record made before it existed."""
+reads the file in a record made before it existed.
+
+`owner.json` lists the owner's own aliases beyond what the record resolves: `{"names": [...], "emails":
+[...], "phones": [...]}`. The with module (`present.owner_of`) joins them with `owner_id` and `owner_emails`
+from `logbook.json` and every resolution line that names the owner, so the owner is never listed as their
+own company. The file lives in the record, never in the repository; `logbook init` writes the empty one,
+and so does the first reading of a record made before it existed."""
 
 from __future__ import annotations
 
@@ -22,6 +28,9 @@ DEFAULT_POLICY: dict[str, Any] = {DEFAULT_DESTINATION: {"max_tier": 2}}
 TIERS = (1, 2, 3)
 IMPORT_FILE = PurePosixPath("policy/import.json")
 DEFAULT_IMPORT: dict[str, Any] = {"disabled": []}
+OWNER_FILE = PurePosixPath("policy/owner.json")
+OWNER_KEYS = ("names", "emails", "phones")
+DEFAULT_OWNER: dict[str, list[str]] = {key: [] for key in OWNER_KEYS}
 
 
 class PolicyError(ValueError):
@@ -103,4 +112,38 @@ def disabled(root: Path) -> dict[str, str]:
         ):
             raise PolicyError(shape)
         out[entry["source"]] = entry["reason"]
+    return out
+
+
+def owner_path(root: Path) -> Path:
+    return Path(root).joinpath(*OWNER_FILE.parts)
+
+
+def write_default_owner(root: Path) -> Path:
+    """Write the empty owner aliases where none exist; never overwrite them. Returns the path."""
+    path = owner_path(root)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(DEFAULT_OWNER, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def owner_aliases(root: Path) -> dict[str, list[str]]:
+    """The owner's extra aliases as `{"names": [...], "emails": [...], "phones": [...]}`, every key
+    present (an absent one is empty). A record without the file gets the empty one; a file that is
+    not the documented shape raises PolicyError naming it."""
+    path = write_default_owner(root)
+    shape = f'{path} must be {{"names": [...], "emails": [...], "phones": [...]}}, each a list of strings'
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise PolicyError(f"{path} is not JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise PolicyError(shape)
+    out: dict[str, list[str]] = {}
+    for key in OWNER_KEYS:
+        values = data.get(key, [])
+        if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+            raise PolicyError(shape)
+        out[key] = [v.strip() for v in values if v.strip()]
     return out

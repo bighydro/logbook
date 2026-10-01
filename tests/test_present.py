@@ -359,7 +359,8 @@ def test_an_all_day_events_attendees_are_only_proposed() -> None:
     assert kari.confidence == present.ALL_DAY and "all day" in kari.reason
 
 
-def test_the_owner_is_never_their_own_company() -> None:
+def test_the_owners_address_in_logbook_json_is_never_their_own_company() -> None:
+    """`owner_emails` alone, with no resolution line for the owner, is enough to drop them."""
     lines = _lines(
         [
             event(
@@ -370,8 +371,60 @@ def test_the_owner_is_never_their_own_company() -> None:
             )
         ]
     )
-    owner = [("email", "ines@example.org")]
+    owner = present.owner_of("owner-id", ["ines@example.org"], {}, IDENTITIES)
     [kari] = present.present(STAY, lines, IDENTITIES, owner=owner)
     assert kari.person == KARI_ID
     [kari] = present.company(STAY, lines, IDENTITIES, owner=owner)
     assert kari.person == KARI_ID
+
+
+# -- the owner ---------------------------------------------------------------------------------------------
+
+INES_ID = "019cadd3-6bc0-7dcd-9133-000000000003"  # the persona herself, whose record this is
+INES = {"email": "ines@example.org"}
+WITH_INES = resolve.identities_from(
+    _lines(
+        [
+            resolution(("email", INES["email"]), INES_ID, "Ines Nordmann"),
+            resolution(("phone", "+4790000003"), INES_ID, "I. Nordmann"),
+            resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+        ]
+    )
+)
+EVIDENCE = [
+    event(
+        "2026-06-10T10:00:00Z",
+        "2026-06-10T12:00:00Z",
+        "Dinner",
+        [attendee(INES["email"]), attendee(OLA["email"])],
+    ),
+    transcript(
+        "2026-06-10T10:15:00Z", "2026-06-10T10:45:00Z", "Plans", [{"name": "I. Nordmann"}, {"name": "Ola"}]
+    ),
+    note("2026-06-10T11:00:00Z", "with Ola Nordmann and Nordmann"),
+]
+
+
+def test_the_owner_is_never_their_own_company() -> None:
+    owner = present.owner_of(INES_ID, [], {}, WITH_INES)
+    assert owner.entities == {INES_ID}
+    assert owner.refs == {("email", INES["email"]), ("phone", "+4790000003")}
+    assert owner.names == {"ines nordmann", "i. nordmann"}, "every label the owner's refs carry"
+    found = present.present(STAY, _lines(EVIDENCE), WITH_INES, owner=owner)
+    assert INES_ID not in {p.person for p in found}
+    assert not {p.name for p in found} & {"Ines Nordmann", "I. Nordmann", "ines@example.org"}
+    assert [c.name for c in present.company(STAY, _lines(EVIDENCE), WITH_INES, owner=owner)] == [
+        "Ola Nordmann",
+        "Nordmann",
+    ]
+
+
+def test_the_owner_is_found_from_their_addresses_and_policy_aliases() -> None:
+    by_address = present.owner_of("unresolved-owner-id", [INES["email"]], {}, WITH_INES)
+    assert by_address.entities == {"unresolved-owner-id", INES_ID}, "owner_emails lead to the resolved person"
+    assert by_address.refs == {("email", INES["email"]), ("phone", "+4790000003")}
+    aliases = {"names": ["Nordmann"], "emails": [], "phones": ["+4790000003"]}
+    by_policy = present.owner_of("unresolved-owner-id", [], aliases, WITH_INES)
+    assert INES_ID in by_policy.entities and "nordmann" in by_policy.names
+    found = present.company(STAY, _lines(EVIDENCE), WITH_INES, owner=by_policy)
+    assert [c.name for c in found] == ["Ola Nordmann"], "the note's unresolved alias is the owner too"
