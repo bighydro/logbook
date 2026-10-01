@@ -14,13 +14,23 @@ It is the opposite of social media: no feed, no followers, no likes, no counts. 
 
 ```bash
 pipx install openlogbook        # or: pip install .
+logbook demo --out ~/Demo/Logbook       # a month of a person who does not exist, every profile
+export LOGBOOK_HOME=~/Demo/Logbook
+logbook trips                   # a cabin weekend, Zürich, a week aboard, Copenhagen
+logbook day 2026-06-17          # one day read back: nights, stays, who was there, health
+logbook verify                  # the chain is intact
+```
+
+Five minutes more, every command on that record: [docs/try-it.md](docs/try-it.md). Then your own:
+
+```bash
+unset LOGBOOK_HOME
 logbook init                    # creates ~/Logbook and your key
 logbook add "had lunch with a friend by the lake"
 logbook add ~/Downloads/takeout.zip     # any export, no flags
 logbook show today
 logbook stats                   # what the record holds: counts by kind, source and year
-logbook derive stays --day 2026-09-30   # the day read back: stays, stops, moves, where you slept
-logbook verify                  # the chain is intact
+logbook verify
 ```
 
 Docker: `docker build -t logbook . && docker run --rm -v ~/Logbook:/data logbook show today` — the image keeps the record in the `/data` volume (`LOGBOOK_HOME=/data`).
@@ -510,6 +520,7 @@ record itself shows every time anything left it. `--dry-run` writes nothing and 
 ## Read next
 
 - Docs site: https://bighydro.github.io/logbook/
+- [docs/try-it.md](docs/try-it.md) — five minutes with a demo record: every reader on a month that never happened
 - [VISION.md](VISION.md) — why, and the rules the product refuses to break
 - [LORE.md](LORE.md) — where the logbook comes from: ships, pilots, diaries, and the log in computing
 - [SPEC.md](SPEC.md) — the format, one page; this is the part meant to become a standard

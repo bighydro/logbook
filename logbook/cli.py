@@ -25,6 +25,7 @@ from . import (
     adapters,
     assets,
     crossing,
+    demo,
     flights,
     health,
     ios_backup,
@@ -2152,6 +2153,30 @@ def cmd_trips(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_demo(a: argparse.Namespace) -> None:
+    """`demo [--days N] [--seed S] --out DIR`: a complete synthetic record of the Oslo persona,
+    invented in `logbook/demo.py`, written to a new folder; the same days and seed give the same
+    head. Nothing in it is real and nothing outside the folder is read."""
+    root = Path(a.out).expanduser()
+    if a.days < 1:
+        print("demo: --days must be at least 1", file=sys.stderr)
+        sys.exit(2)
+    try:
+        lb = demo.generate(root, days=a.days, seed=a.seed)
+    except (FileExistsError, CodeCheckoutError, OSError) as e:
+        print(f"demo: {e}", file=sys.stderr)
+        sys.exit(2)
+    meta = lb.meta
+    first, last = demo.START, demo.START + timedelta(days=a.days - 1)
+    where = _under_home(lb.root)
+    print(
+        f"demo record: {_plural(a.days, 'day')}, {first} to {last}, seed {a.seed}; nothing in it is real\n"
+        f"wrote {meta['seq']:,} lines to {where}, head {str(meta['head'])[:12]}…\n"
+        f"  export LOGBOOK_HOME={where}\n"
+        f"  logbook show {min(last, first + timedelta(days=7))}"
+    )
+
+
 def cmd_index(a: argparse.Namespace) -> None:
     """Rebuild index.sqlite from the files. Readers do this by themselves when it is missing or
     stale; this is the command that shows progress, or that you run after copying a logbook."""
@@ -2550,6 +2575,13 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
     s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
     s.set_defaults(fn=cmd_keepers)
+    s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
+    s.add_argument(
+        "--days", type=int, default=30, metavar="N", help="local days from 2026-06-01 (default 30)"
+    )
+    s.add_argument("--seed", type=int, default=1, metavar="S", help="the same seed gives the same record")
+    s.add_argument("--out", required=True, metavar="DIR", help="a folder that is not yet a logbook")
+    s.set_defaults(fn=cmd_demo)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")

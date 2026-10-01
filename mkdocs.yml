@@ -25,6 +25,7 @@ theme:
 markdown_extensions: [tables, admonition, toc, pymdownx.superfences, pymdownx.highlight]
 nav:
   - Home: index.md
+  - Try it: try-it.md
   - Vision: VISION.md
   - Lore: LORE.md
   - Specification v0.2: SPEC.md

@@ -133,3 +133,11 @@ def test_a_codeshare_twin_shows_once_in_the_flights_in(
     assert [f["number"] for f in zurich["flights_in"]] == ["561"]
     text = _run(capsys)
     assert text.count("in XY 561 OSL") == 1 and "9561" not in text
+
+
+def test_a_night_named_by_its_airport_drops_the_airport_words() -> None:
+    from logbook.trips import _city_of_airport
+
+    assert _city_of_airport("Zürich Airport") == "Zürich"
+    assert _city_of_airport("Oslo-Gardermoen International Airport") == "Oslo-Gardermoen"
+    assert _city_of_airport("Sandefjord Airport, Torp") == "Sandefjord"

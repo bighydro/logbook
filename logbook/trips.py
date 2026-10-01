@@ -161,6 +161,9 @@ def _city(stay: stays.Segment, reading: Reading) -> str:
 
 
 def _city_of_airport(name: str) -> str:
+    """`Zürich Airport` is Zürich; `Sandefjord Airport, Torp` is Sandefjord (the table keeps
+    OurAirports' names, and a comma starts the part that is not the city)."""
+    name = name.split(",", 1)[0].strip()
     for suffix in (" International Airport", " Intl Airport", " Airport", " Intl"):
         if name.endswith(suffix):
             return name[: -len(suffix)]
