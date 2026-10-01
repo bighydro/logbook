@@ -11,6 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v7
       - run: uv python install 3.12
       - run: uvx --with mkdocs-material --with pymdown-extensions mkdocs gh-deploy --force --no-history
