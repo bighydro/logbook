@@ -7,7 +7,8 @@ them per person. The sources, in the order a Day lists them:
 | source       | what                                                            | status    | confidence |
 |--------------|-----------------------------------------------------------------|-----------|------------|
 | `circle`     | a page another member of the circle shared (not built yet)      | confirmed | —          |
-| `calendar`   | an attendee of an `event/v1` whose span overlaps the stay       | confirmed | 0.8, 0.6 * |
+| `calendar`   | an attendee of a timed `event/v1` overlapping the stay  | confirmed | 0.8, 0.6 * |
+| `calendar`   | an attendee of an all-day `event/v1` on the stay's day  | proposed  | 0.3        |
 | `transcript` | a participant of a `transcript/v1` recorded inside the stay     | confirmed | 0.9        |
 | `note`       | a `note/v1` written inside the stay that says "with <name>"     | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
@@ -16,11 +17,14 @@ them per person. The sources, in the order a Day lists them:
 declined is not listed.
 
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
-guess and stays proposed until the owner says otherwise. Names resolve through the record's
-resolution lines (RFC 0006, `resolve.identities_from`): an email, a phone number or a library's
-person id (`provider_id`, `<library>:<id>`) to the person it names; a bare name in a transcript or
-a note to the person whose label it is. What does not resolve is kept as the source spelled it,
-with no person id. The owner is never listed as their own company. Nothing here reads a file or
+guess and stays proposed until the owner says otherwise, and so are the attendees of an all-day
+entry: it overlaps every stay of its day and places nobody at any one of them. Names resolve
+through the record's resolution lines (RFC 0006, `resolve.identities_from`): an email, a phone
+number or a library's person id (`provider_id`, `<library>:<id>`) to the person it names; a bare
+name in a transcript or a note to the person whose label it is. What does not resolve is kept as
+the source spelled it, with no person id. The owner is never listed as their own company: evidence
+carrying one of the owner's own refs (`owner`, the addresses `logbook.json` lists under
+`owner_emails`) is dropped. Nothing here reads a file or
 writes a line."""
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ from .stays import Segment, instant
 
 CONFIRMED, PROPOSED = "confirmed", "proposed"
 SOURCES = ("circle", "calendar", "transcript", "note", "photo")
-ACCEPTED, TENTATIVE, TRANSCRIPT, NOTE, PHOTO = 0.8, 0.6, 0.9, 1.0, 0.5
+ACCEPTED, TENTATIVE, TRANSCRIPT, NOTE, PHOTO, ALL_DAY = 0.8, 0.6, 0.9, 1.0, 0.5, 0.3
 NAME = r"[A-ZÆØÅÄÖÜ][\w'\-]*"
 WITH = re.compile(rf"\bwith\s+({NAME}(?:\s+(?:(?:and|og|&)\s+)?{NAME})*)")  # with Ola Nordmann and Kari
 AND = re.compile(r"\s+(?:and|og|&)\s+")
@@ -110,6 +114,7 @@ def from_calendar(stay: Segment, lines: Iterable[Line], identities: Mapping[Ref,
             continue
         payload = line.get("payload") or {}
         title = str(payload.get("title") or "an event")
+        all_day = payload.get("all_day") is True
         attendees = payload.get("attendees")
         for attendee in attendees if isinstance(attendees, list) else []:
             if not isinstance(attendee, dict):
@@ -122,18 +127,12 @@ def from_calendar(stay: Segment, lines: Iterable[Line], identities: Mapping[Ref,
                 continue
             person, label = _resolve(ref, identities)
             name = label or (str(attendee.get("name")) if attendee.get("name") else ref[1])
-            found.append(
-                Presence(
-                    person,
-                    name,
-                    ref,
-                    ACCEPTED if response == "accepted" else TENTATIVE,
-                    CONFIRMED,
-                    "calendar",
-                    f"attendee of {title}",
-                    str(line["id"]),
-                )
-            )
+            if all_day:
+                confidence, status, reason = ALL_DAY, PROPOSED, f"attendee of {title} (all day)"
+            else:
+                confidence = ACCEPTED if response == "accepted" else TENTATIVE
+                status, reason = CONFIRMED, f"attendee of {title}"
+            found.append(Presence(person, name, ref, confidence, status, "calendar", reason, str(line["id"])))
     return found
 
 
@@ -239,20 +238,32 @@ def from_photos(stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, I
 FROM = (from_circle, from_calendar, from_transcript, from_notes, from_photos)
 
 
-def present(stay: Segment, lines: Sequence[Line], identities: Mapping[Ref, Identity]) -> list[Presence]:
+def present(
+    stay: Segment,
+    lines: Sequence[Line],
+    identities: Mapping[Ref, Identity],
+    owner: Iterable[Ref] = (),
+) -> list[Presence]:
     """Everyone the evidence puts at the stay, one entry per piece of evidence, sources in the
-    order of `SOURCES`, lines in the order given."""
+    order of `SOURCES`, lines in the order given. `owner` names the owner's own refs (their
+    addresses); evidence that carries one of them is the owner, never company."""
+    mine = set(owner)
     found: list[Presence] = []
     for source in FROM:
-        found.extend(source(stay, lines, identities))
+        found.extend(p for p in source(stay, lines, identities) if p.ref not in mine)
     return found
 
 
-def company(stay: Segment, lines: Sequence[Line], identities: Mapping[Ref, Identity]) -> list[Companion]:
+def company(
+    stay: Segment,
+    lines: Sequence[Line],
+    identities: Mapping[Ref, Identity],
+    owner: Iterable[Ref] = (),
+) -> list[Companion]:
     """`present` merged per person (by entity id, else by name): confirmed before proposed, then
     by confidence, then by first evidence."""
     merged: dict[tuple[str | None, str], list[Presence]] = {}
-    for p in present(stay, lines, identities):
+    for p in present(stay, lines, identities, owner):
         merged.setdefault((p.person, "" if p.person else p.name.casefold()), []).append(p)
     companions = []
     for group in merged.values():

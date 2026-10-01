@@ -26,6 +26,7 @@ from . import (
     assets,
     crossing,
     flights,
+    health,
     ios_backup,
     ios_backup_crypto,
     keepers,
@@ -37,6 +38,9 @@ from . import (
     rollup,
     stays,
     trips,
+)
+from . import (
+    day as day_reader,
 )
 from .adapters import ios_contacts
 from .adapters.takeout import places as takeout_places
@@ -1154,6 +1158,25 @@ def cmd_show(a: argparse.Namespace) -> None:
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
 
 
+def cmd_day(a: argparse.Namespace) -> None:
+    """`day [YYYY-MM-DD] [--json]`: the Day — the nights either side, the country, the timeline of
+    stays, moves, stops and flights with what attached to each and who was there, the health
+    line, the sources — read through the index from one reading of the day and the day before
+    (`logbook.day`). Nothing is written, not even `policy/stays.json`."""
+    lb = Logbook.find()
+    day = date.today().isoformat() if a.day in (None, "today") else a.day
+    try:
+        data = day_reader.read(lb, day, _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"day: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    for text in day_reader.rows(data):
+        print(text)
+
+
 def _show_page(lb: Logbook, a: argparse.Namespace) -> None:
     """`show person|asset|place <name> [--json]`: a page read from the whole record (the days the
     owner's track covers) through `pages`. Nothing is written."""
@@ -1657,84 +1680,14 @@ def record_stats(lb: Logbook) -> dict[str, Any]:
         }
 
 
-ASLEEP = frozenset({"asleep", "core", "deep", "rem"})  # RFC 0014 rule 4: never in_bed, never awake
-
-
 def health_days(lb: Logbook) -> list[dict[str, Any]]:
-    """One row per local day (the record's zone) that has any of: `sleep_h`, the asleep stages
-    (`asleep`, `core`, `deep`, `rem`; never `in_bed`, never `awake`) of the night that ends on that
-    day — per device the union of their spans, so a source that writes a night twice counts it
-    once (rule 4), and the longest device taken, never a sum across devices (rule 5) — in hours to
-    one decimal; `steps`, the sum over the day's quarter hours of the larger device's count
-    (rule 5); `resting_hr`, the mean of the day's resting readings, whole bpm. A field the day has
-    no line for is None. Retracted lines are left out."""
+    """One row per local day of the record's health lines, through `health.summary` (the rules are
+    there): every `health` line streamed through the index, the retractions beside them; the
+    `lines` each row carries are dropped here, since `stats` prints numbers and never ids."""
     tz = str(lb.meta["timezone"])
-    steps: dict[str, dict[str, float]] = {}  # day → bucket `at` → the larger device's count
-    sleep: dict[str, dict[str, list[tuple[datetime, datetime]]]] = {}  # day → device → asleep spans
-    resting: dict[str, list[float]] = {}
     with lb.index() as idx:
-        hidden = {r.get("payload", {}).get("supersedes") for r in idx.retractions()}
-        for line in idx.of_kind("health"):
-            if line.get("id") in hidden:
-                continue
-            payload = line.get("payload") or {}
-            value = payload.get("value")
-            if isinstance(value, bool) or not isinstance(value, int | float):
-                continue
-            kind = payload.get("type")
-            try:
-                if kind == "steps":
-                    day = local_date(str(line["at"]), tz)
-                    buckets = steps.setdefault(day, {})
-                    buckets[str(line["at"])] = max(buckets.get(str(line["at"]), 0.0), float(value))
-                elif kind == "sleep" and payload.get("stage") in ASLEEP:
-                    day = local_date(str(line.get("end") or line["at"]), tz)
-                    device = str(payload.get("device") or "-")
-                    sleep.setdefault(day, {}).setdefault(device, []).append(_sleep_span(line, float(value)))
-                elif kind == "resting_hr":
-                    resting.setdefault(local_date(str(line["at"]), tz), []).append(float(value))
-            except (KeyError, ValueError, TypeError):  # a stamp that does not parse is on no day
-                continue
-    rows: list[dict[str, Any]] = []
-    for day in sorted(set(steps) | set(sleep) | set(resting)):
-        nights, readings = sleep.get(day), resting.get(day)
-        rows.append(
-            {
-                "day": day,
-                "sleep_h": round(max(_union_s(spans) for spans in nights.values()) / 3600, 1)
-                if nights
-                else None,
-                "steps": round(sum(steps[day].values())) if day in steps else None,
-                "resting_hr": round(sum(readings) / len(readings)) if readings else None,
-            }
-        )
-    return rows
-
-
-def _sleep_span(line: Line, seconds: float) -> tuple[datetime, datetime]:
-    """A sleep stage's span: `at` to `end`, or `at` plus its `value` when `end` is missing."""
-    start = datetime.fromisoformat(str(line["at"]).replace("Z", "+00:00"))
-    end = line.get("end")
-    if isinstance(end, str):
-        return start, datetime.fromisoformat(end.replace("Z", "+00:00"))
-    return start, start + timedelta(seconds=seconds)
-
-
-def _union_s(spans: list[tuple[datetime, datetime]]) -> float:
-    """The seconds covered by the spans, an instant under two of them counted once."""
-    total = 0.0
-    run_start: datetime | None = None
-    run_end: datetime | None = None
-    for start, end in sorted(spans):
-        if run_start is None or run_end is None or start > run_end:
-            if run_start is not None and run_end is not None:
-                total += (run_end - run_start).total_seconds()
-            run_start, run_end = start, end
-        elif end > run_end:
-            run_end = end
-    if run_start is not None and run_end is not None:
-        total += (run_end - run_start).total_seconds()
-    return total
+        rows = health.summary([*idx.of_kind(health.KIND), *idx.retractions()], tz)
+    return [{k: v for k, v in row.items() if k != "lines"} for row in rows]
 
 
 def _health_rows(days: list[dict[str, Any]]) -> Iterator[str]:
@@ -2487,6 +2440,19 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
     s.add_argument("--json", action="store_true", help="a page as one JSON object")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser(
+        "day", help="one day read back: nights, country, stays and moves with who and what, flights, health"
+    )
+    s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--json", action="store_true", help="the Day as one JSON object, every row with its line ids"
+    )
+    s.set_defaults(fn=cmd_day)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
     s.add_argument(

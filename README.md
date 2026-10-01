@@ -413,6 +413,17 @@ is the hop a silence may end with and still count as time at the place. An asset
 `assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
 marked `aboard`.
 
+## The Day
+
+`logbook day 2026-06-13` is the day read back whole ([docs/day.md](docs/day.md)): the night before and the night
+after (home, away or in transit), the country of the day, the timeline of stays, stops, moves and flights with what
+attached to each (events, transcripts, notes, mail threads, calls, keepers named; messages and photos counted) and who
+was there — confirmed by a note, a transcript or a timed calendar entry; proposed by a face or an all-day entry —
+then what the calendar planned where the track has nothing, the night's sleep, the day's steps and resting heart rate,
+and which sources spoke and when they last did. A run of stays and moves aboard a boat or an aircraft is one stay
+`aboard <asset>` with the anchorages inside it; a silence of the tracker is a `gap` row that places nothing. `--json`
+gives the Day as one object, every row with the ids of its lines. Nothing is written.
+
 ## Reading the record
 
 The readers above the day page derive, and never append: every one of them is a function of the record at its

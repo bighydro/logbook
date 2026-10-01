@@ -55,6 +55,7 @@ nav:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md
       - "0002 photo/v1": rfcs/0002-photo-v1.md
+  - The Day: day.md
   - Adapters: adapters/README.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
