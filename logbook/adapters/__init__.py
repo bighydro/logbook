@@ -99,6 +99,7 @@ BUILT_IN = (
     "apple_podcasts",
     "pocket",
     "apple_reminders",
+    "copilot",
 )
 
 

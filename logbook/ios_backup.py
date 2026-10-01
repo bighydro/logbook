@@ -34,6 +34,7 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     flighty             AppDomain-com.flightyapp.flighty              Documents/MainFlightyDatabase.db
     apple-reminders     AppDomainGroup-group.com.apple.reminders      Container_v1/Stores/Data-*.sqlite
                                                                   (one store per account)
+    copilot             AppDomainGroup-group.com.copilot.production   database/CopilotDB.sqlite
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -92,6 +93,7 @@ MEDIA = "MediaDomain"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
 REMINDERS = "AppDomainGroup-group.com.apple.reminders"
+COPILOT = "AppDomainGroup-group.com.copilot.production"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
@@ -150,6 +152,7 @@ SOURCES: tuple[Source, ...] = (
     Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
     Source("flighty", FLIGHTY, "Documents/MainFlightyDatabase.db"),  # the same lines as the CSV export
     Source("apple-reminders", REMINDERS, "Container_v1/Stores/Data-*.sqlite"),
+    Source("copilot", COPILOT, "database/CopilotDB.sqlite"),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
+from test_copilot import _store as _copilot_store
 from test_easypark import LINES as EASYPARK_LINES
 from test_easypark import _recent
 from test_flighty import STORE_LINES as FLIGHTY_LINES
@@ -38,6 +39,7 @@ UDID = "00008030-000A1B2C3D4E5F60"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
 REMINDERS = "AppDomainGroup-group.com.apple.reminders"
+COPILOT = "AppDomainGroup-group.com.copilot.production"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -50,6 +52,7 @@ ALL = (
     "wispr-flow",
     "flighty",
     "apple-reminders",
+    "copilot",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -63,6 +66,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "wispr-flow": WISPR_LINES,
     "flighty": FLIGHTY_LINES,
     "apple-reminders": 7,
+    "copilot": 6,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -76,6 +80,7 @@ STORES = {
     "flighty": "MainFlightyDatabase.db",
     "apple-reminders": "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite",  # first in path order
 }
+STORES["copilot"] = "CopilotDB.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -169,6 +174,9 @@ def _backup(
         _put(backup, rows, REMINDERS, "Container_v1/Stores/" + second.name, second)
         _put(backup, rows, REMINDERS, "Container_v1/Stores/" + first.name + "-wal", _blob(stage, b"\0" * 16))
         _put(backup, rows, REMINDERS, "Container_v1/MLModels/RDkNNReminder.json", _blob(stage, b"{}"))
+    if "copilot" in sources:
+        _put(backup, rows, COPILOT, "database", None)
+        _put(backup, rows, COPILOT, "database/CopilotDB.sqlite", _copilot_store(_dir(stage, "copilot")))
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
