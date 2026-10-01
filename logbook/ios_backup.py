@@ -60,6 +60,9 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   (every profile; the adapter runs on the
                                                                   folder)
     myfitnesspal        AppDomain-com.myfitnesspal.mfp                Documents/maindb.sqlite
+    sbb                 AppDomainGroup-group.ch.sbb.SBBMobile         SbbMobile.db (+ the app container's
+                                                                  Documents/ch.sbb.coredata.pasttrips.sqlite
+                                                                  beside it)
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -134,6 +137,8 @@ VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 CAMERA_ROLL = "CameraRollDomain"
 WITHINGS = "AppDomain-com.withings.wiScaleNG"
 MYFITNESSPAL = "AppDomain-com.myfitnesspal.mfp"
+SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
+SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
@@ -238,6 +243,12 @@ SOURCES: tuple[Source, ...] = (
         companions=((WITHINGS, "Library/Application Support/coredata/*_Measure.sqlite"),),
     ),
     Source("myfitnesspal", MYFITNESSPAL, "Documents/maindb.sqlite"),  # `myfitnesspal` (RFC 0014)
+    Source(  # `sbb` (RFC 0020): the tickets, with the past journeys from the app's own container beside them
+        "sbb",
+        SBB,
+        "SbbMobile.db",
+        companions=((SBB_APP, "Documents/ch.sbb.coredata.pasttrips.sqlite"),),
+    ),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

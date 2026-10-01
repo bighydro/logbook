@@ -109,6 +109,7 @@ BUILT_IN = (
     "apple_photos",
     "withings",
     "myfitnesspal",
+    "sbb",
 )
 
 

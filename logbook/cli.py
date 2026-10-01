@@ -1101,6 +1101,8 @@ def _line_row(
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
         text = _voice_memo_text(p)
+    elif line["kind"] == "trip" and p.get("schema") == "trip/v1":
+        text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
     else:
@@ -1165,6 +1167,33 @@ def _highlight_text(p: dict[str, Any]) -> str:
     if p.get("note"):
         text += f" · {p['note']}"
     return text
+
+
+def _trip_text(p: dict[str, Any]) -> str:
+    """`From → To, transit, sbb, 58.00 CHF, 1 change` (RFC 0020); a parking session names one place."""
+    origin = _place_name(p.get("from"))
+    destination = _place_name(p.get("to"))
+    route = f"{origin} → {destination}" if destination and destination != origin else origin
+    parts = [part for part in (route, str(p.get("mode") or ""), str(p.get("provider") or "")) if part]
+    price = p.get("price")
+    if isinstance(price, dict) and price.get("amount"):
+        parts.append(f"{price['amount']} {price.get('currency', '')}".strip())
+    if p.get("status") == "cancelled":
+        parts.append("cancelled")
+    extra = p.get("extra")
+    if isinstance(extra, dict):
+        transfers = extra.get("transfers")
+        if isinstance(transfers, int) and not isinstance(transfers, bool) and transfers > 0:
+            parts.append(_plural(transfers, "change"))
+        if extra.get("observed") == "ticket":
+            parts.append("ticket")
+    return ", ".join(parts)
+
+
+def _place_name(place: object) -> str:
+    if isinstance(place, dict):
+        return str(place.get("name") or place.get("address") or place.get("code") or "")
+    return str(place) if isinstance(place, str) else ""
 
 
 def _voice_memo_text(p: dict[str, Any]) -> str:

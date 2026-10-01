@@ -35,6 +35,9 @@ from test_line import _store as _line_store
 from test_myfitnesspal import LINES as MFP_LINES
 from test_myfitnesspal import _store as _mfp_store
 from test_safari import _store as _safari_store
+from test_sbb import LINES as SBB_LINES
+from test_sbb import _mobile_store as _sbb_mobile
+from test_sbb import _trips_store as _sbb_trips
 from test_splitwise import _store as _splitwise_store
 from test_twitter import _store as _twitter_store
 from test_voice_memos import LINES as MEMO_LINES
@@ -68,6 +71,8 @@ MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 WITHINGS = "AppDomain-com.withings.wiScaleNG"
 MFP = "AppDomain-com.myfitnesspal.mfp"
 COREDATA = "Library/Application Support/coredata"
+SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
+SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -90,6 +95,7 @@ ALL = (
     "apple-photos",
     "withings",
     "myfitnesspal",
+    "sbb",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -113,6 +119,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "apple-photos": PHOTO_LINES,
     "withings": 2 * WITHINGS_LINES,  # two profiles
     "myfitnesspal": MFP_LINES,
+    "sbb": SBB_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -136,6 +143,7 @@ STORES["voice-memos"] = "CloudRecordings.db"
 STORES["apple-photos"] = "Photos.sqlite"
 STORES["withings"] = "46567465_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
 STORES["myfitnesspal"] = "maindb.sqlite"
+STORES["sbb"] = "SbbMobile.db"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -322,6 +330,15 @@ def _backup(
         )  # not read
     if "myfitnesspal" in sources:
         _put(backup, rows, MFP, "Documents/maindb.sqlite", _mfp_store(_dir(stage, "mfp")))
+    if "sbb" in sources:  # two containers: the shared one holds the tickets, the app's own the past journeys
+        _put(backup, rows, SBB, "SbbMobile.db", _sbb_mobile(_dir(stage, "sbb")))
+        _put(
+            backup,
+            rows,
+            SBB_APP,
+            "Documents/ch.sbb.coredata.pasttrips.sqlite",
+            _sbb_trips(_dir(stage, "sbb-app")),
+        )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -447,6 +464,10 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     ]  # fmt: skip
     profiles = {line["payload"]["extra"]["profile"] for line in lb.lines() if line["source"] == "withings"}
     assert profiles == {"46567465", "46567466"}
+    # a companion from another domain lands beside the store, and the adapter read both
+    assert (inbox / "sbb" / "ch.sbb.coredata.pasttrips.sqlite").is_file()
+    observed = {line["payload"]["extra"]["observed"] for line in lb.lines() if line["source"] == "sbb"}
+    assert observed == {"ticket", "journey"}
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
