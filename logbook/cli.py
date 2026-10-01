@@ -29,6 +29,7 @@ from . import (
     demo,
     events,
     flights,
+    gaps,
     health,
     ios_backup,
     ios_backup_crypto,
@@ -727,8 +728,31 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
 def cmd_sources(a: argparse.Namespace) -> None:
     """`sources`: every adapter this build has, file and live, with its state under
     `policy/import.json` — `enabled`, or `disabled (<reason>)`; then any disabled name that is no
-    adapter, so a typo in the file is seen rather than silently ignored."""
+    adapter, so a typo in the file is seen rather than silently ignored.
+
+    `sources --gaps [--since DAY] [--expect SOURCE...] [--json]`: where each source went quiet, from
+    the index alone (`gaps.report`, the rules are there) — per source its lines in the range, its
+    last line's time, the longest silent stretch and the days with no line. With `--expect` only
+    those sources are shown, a flagged one marked `!`, and the command exits 1 when any is flagged,
+    so a cron job can say so. Nothing is written."""
+    if not a.gaps and (a.since is not None or a.expect is not None or a.json):
+        print("sources: --since, --expect and --json go with --gaps", file=sys.stderr)
+        sys.exit(2)
     lb = Logbook.find()
+    if a.gaps:
+        try:
+            data = gaps.report(lb, since=a.since, expect=a.expect)
+        except ValueError as e:
+            print(f"sources: {e}", file=sys.stderr)
+            sys.exit(2)
+        if a.json:
+            print(json.dumps(data, indent=2))
+        else:
+            for text in gaps.rows(data):
+                print(text)
+        if data["flagged"]:
+            sys.exit(1)
+        return
     disabled = _disabled(lb)
     kinds: dict[str, list[str]] = {}
     for file_adapter in adapters.file_adapters():
@@ -2623,8 +2647,29 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.set_defaults(fn=cmd_export)
     s = sub.add_parser(
-        "sources", help="every adapter, file and live, and whether policy/import.json has disabled it"
+        "sources",
+        help="every adapter, file and live, and whether policy/import.json has disabled it;"
+        " --gaps: where each source went quiet",
     )
+    s.add_argument(
+        "--gaps",
+        action="store_true",
+        help="per source with lines: its last line's time, the longest silent stretch and the days with"
+        " no line, from the index",
+    )
+    s.add_argument(
+        "--since",
+        metavar="YYYY-MM-DD",
+        help="with --gaps: the range starts here (default: each source's first line)",
+    )
+    s.add_argument(
+        "--expect",
+        nargs="+",
+        metavar="SOURCE",
+        help="with --gaps: only these sources; one silent for a day or more, or with no line, is flagged"
+        " and the command exits 1",
+    )
+    s.add_argument("--json", action="store_true", help="with --gaps: the report as JSON")
     s.set_defaults(fn=cmd_sources)
     s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
     verbs = s.add_subparsers(dest="verb", required=True)

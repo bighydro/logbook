@@ -393,6 +393,17 @@ Keep it in the shell environment only (your shell profile, a password manager's 
 outside the record) and never in the record, the repository or a script you share. The logbook sends it
 only in the `Authorization` header and never prints it.
 
+**Is every source still flowing?** `logbook sources --gaps` reads the index alone, never the files, and
+prints one row per source with lines: how many, its last line's time, the longest silent stretch (between two
+lines, or since the last one, still running) and the days with no line from it, folded into runs, so a phone
+that stopped sending or a sync that died is seen on one screen. The range runs from each source's first line
+to today in the record's zone, or from `--since YYYY-MM-DD`; a line dated after today (a calendar's future
+entries) is outside it, and today counts as a missing day only once the source has been silent a full day.
+`--expect dawarich imessage` shows only those sources, marks one that has been silent a day or more at any
+point of the range, or has no line at all, with `!`, and exits 1 when any is marked, so a cron job can tell
+you: `0 7 * * * logbook sources --gaps --since 2026-09-01 --expect dawarich imessage`. Every line counts,
+retracted or not; `--json` gives the same report as data.
+
 ## Reading the day back
 
 `logbook derive stays` is the first reader of the record: it turns the day's `location/v1` lines into
