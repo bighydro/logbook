@@ -141,3 +141,63 @@ def test_a_night_named_by_its_airport_drops_the_airport_words() -> None:
     assert _city_of_airport("Zürich Airport") == "Zürich"
     assert _city_of_airport("Oslo-Gardermoen International Airport") == "Oslo-Gardermoen"
     assert _city_of_airport("Sandefjord Airport, Torp") == "Sandefjord"
+
+
+# -- the home radius ---------------------------------------------------------------------------------------
+
+NEAR_HOME = (59.9139 + 250 / 111_320, 10.7522)  # 250 m north of Home, outside its 120 m radius
+
+
+def _home_places(lb: Logbook) -> None:
+    from persona import HOME
+
+    (lb.root / "places.json").write_text(
+        json.dumps({"Home": {"lat": HOME[0], "lon": HOME[1], "radius_m": 120, "kind": "home"}}),
+        encoding="utf-8",
+    )
+
+
+def test_a_night_250_m_from_home_is_home_so_it_makes_no_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import HOME, dwell, travel
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2 = "2026-06-10", "2026-06-11"
+    lb.append_many(
+        dwell(d1, "00:00", "18:00", HOME)
+        + travel(d1, "18:00", "18:10", HOME, NEAR_HOME, steps=3)
+        + dwell(d1, "18:10", "24:00", NEAR_HOME, noise_m=10)
+        + dwell(d2, "00:00", "08:00", NEAR_HOME, noise_m=10)
+        + travel(d2, "08:00", "08:10", NEAR_HOME, HOME, steps=3)
+        + dwell(d2, "08:10", "24:00", HOME)
+    )
+    _home_places(lb)
+    data = _json(capsys, "--since", d1, "--until", d2)
+    assert data["trips"] == [], "a night within 400 m of a home place is a night at home"
+    assert "no trips" in _run(capsys, "--since", d1, "--until", d2)
+
+
+def test_a_trip_never_starts_or_ends_with_a_night_near_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import HOME, ZURICH, dwell, travel
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2, d3, d4, d5 = "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14"
+    lb.append_many(
+        dwell(d1, "00:00", "24:00", NEAR_HOME, noise_m=10)  # the night before, 250 m from Home
+        + dwell(d2, "00:00", "06:00", NEAR_HOME, noise_m=10)
+        + dwell(d2, "10:00", "24:00", ZURICH)
+        + dwell(d3, "00:00", "24:00", ZURICH)
+        + dwell(d4, "00:00", "14:00", ZURICH)
+        + dwell(d4, "18:00", "24:00", NEAR_HOME, noise_m=10)  # the night after, 250 m from Home
+        + dwell(d5, "00:00", "08:00", NEAR_HOME, noise_m=10)
+        + travel(d5, "08:00", "08:10", NEAR_HOME, HOME, steps=3)
+        + dwell(d5, "08:10", "24:00", HOME)
+    )
+    _home_places(lb)
+    [trip] = _json(capsys, "--since", d1, "--until", d5)["trips"]
+    assert (trip["start"], trip["end"], trip["nights"]) == (d2, d3, 2)

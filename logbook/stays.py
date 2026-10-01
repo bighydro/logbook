@@ -746,16 +746,26 @@ def night(
     return Night(day, best, is_home(best, places))
 
 
+HOME_NEAR_M = 400.0  # a night whose stay centre is this close to a home place is a night at home
+
+
 def is_home(stay: Segment, places: Sequence[Place]) -> bool:
     """Whether a stay lies in a home region: its named place is of kind `home`, or its centre is
-    within a home place's radius."""
+    within a home place's radius, or within `HOME_NEAR_M` of a home place whatever its radius (the
+    night rule: a guest room across the street is not a trip, and a trip never starts or ends with
+    such a night)."""
     if stay.place is not None:
         named = next((p for p in places if p.name == stay.place), None)
         if named is not None and named.kind == registry_of_places.HOME:
             return True
     if stay.lat is None or stay.lon is None:
         return False
-    return registry_of_places.at_home(stay.lat, stay.lon, places) is not None
+    if registry_of_places.at_home(stay.lat, stay.lon, places) is not None:
+        return True
+    return any(
+        registry_of_places.distance_m(stay.lat, stay.lon, home.lat, home.lon) <= HOME_NEAR_M
+        for home in registry_of_places.home_places(places)
+    )
 
 
 def instant_text(instant: datetime) -> str:
