@@ -174,6 +174,7 @@ def test_a_usual_source_with_no_lines_on_a_day_is_a_gap(
         "sleep_h": None,
         "steps": 4000,
         "resting_hr": 55,
+        "hrv": None,
         "lines": by_day["2026-07-10"]["health"]["lines"],
     }
     text = _run(capsys, "--from", "2026-07-06", "--to", "2026-07-12")

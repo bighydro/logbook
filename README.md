@@ -495,6 +495,7 @@ logbook rollup flights                        # count, km, long-haul, by evidenc
 logbook rollup nights                         # home, away, in transit, nights aboard, the longest trip
 logbook rollup places                         # stays, hours, first and last, people, per named place and per asset
 logbook rollup people                         # days together, last real contact, places shared, per resolved person
+logbook rollup health --by week               # sleep, steps, resting heart rate, HRV per month or ISO week; — when missing
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
