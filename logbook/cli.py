@@ -26,6 +26,7 @@ from . import (
     assets,
     crossing,
     demo,
+    events,
     flights,
     health,
     ios_backup,
@@ -1209,10 +1210,10 @@ def _day_rows(
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
     by any other row, collapses into one summary, and one calendar entry that several sources
-    carry (`_fold_events`) is one row naming them. `names` is the label map; None is the `--raw`
+    carry (`events.fold`) is one row, `×N sources`. `names` is the label map; None is the `--raw`
     path: refs exactly as the sources gave them, no label, no fallback."""
     run: list[Line] = []
-    rows, sources = _fold_events(rows, retracted)
+    rows, folded = events.fold(rows, flights.Airlines.load(), retracted)
     for line in rows:
         retraction = retracted.get(line["id"])
         point = line["kind"] == "location" and retraction is None
@@ -1222,54 +1223,11 @@ def _day_rows(
         if point:
             run.append(line)
         else:
-            yield _line_row(line, retraction, tz, names, superseded, sources.get(str(line["id"])))
+            stands_for = folded.get(str(line["id"]))
+            sources = f"×{len(stands_for.sources)} sources" if stands_for else None
+            yield _line_row(line, retraction, tz, names, superseded, sources)
     if run:
         yield _run_row(run, tz)
-
-
-SAME_EVENT_WITHIN = timedelta(minutes=5)
-
-
-def _fold_events(rows: list[Line], retracted: Mapping[str, Line]) -> tuple[list[Line], dict[str, str]]:
-    """The rows with every calendar entry that repeats an earlier one from another source
-    dropped, and, for each entry kept in their place, its sources as `ics+ios-calendar`. Two
-    entries are one event when they carry the same title, or name the same flight (`Flight to
-    Zürich (LX 561)`, `Flug LX561 nach Zürich`), and start within five minutes of each other;
-    the fold happens only across sources — one calendar holding an entry twice is two entries."""
-    airlines = flights.Airlines.load()
-    clusters: list[list[Line]] = []
-    for line in rows:
-        if line["kind"] != "event" or line["id"] in retracted:
-            continue
-        for cluster in clusters:
-            first = cluster[0]
-            apart = abs(_instant(str(line["at"])) - _instant(str(first["at"])))
-            if apart <= SAME_EVENT_WITHIN and _same_event(first, line, airlines):
-                cluster.append(line)
-                break
-        else:
-            clusters.append([line])
-    dropped: set[str] = set()
-    sources: dict[str, str] = {}
-    for cluster in clusters:
-        seen = list(dict.fromkeys(str(line["source"]) for line in cluster))
-        if len(seen) < 2:
-            continue
-        sources[str(cluster[0]["id"])] = "+".join(seen)
-        dropped.update(str(line["id"]) for line in cluster[1:])
-    return [line for line in rows if str(line["id"]) not in dropped], sources
-
-
-def _same_event(a: Line, b: Line, airlines: flights.Airlines) -> bool:
-    title_a, title_b = (str((line.get("payload") or {}).get("title") or "") for line in (a, b))
-    if " ".join(title_a.split()).casefold() == " ".join(title_b.split()).casefold():
-        return True
-    flight = flights.designator(title_a, airlines)
-    return flight is not None and flight == flights.designator(title_b, airlines)
-
-
-def _instant(stamp: str) -> datetime:
-    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
 def _line_row(
@@ -1280,8 +1238,8 @@ def _line_row(
     superseded: Mapping[str, int] | None = None,
     sources: str | None = None,
 ) -> str:
-    """`sources` names every source of a folded calendar entry (`_fold_events`) in place of the
-    line's own."""
+    """`sources` stands in for the line's own source on a calendar entry several sources carry
+    (`events.fold`): `×2 sources`."""
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"

@@ -128,6 +128,41 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert "country       CH" in text
 
 
+# -- one calendar entry in several calendars -------------------------------------------------------------
+
+
+def test_the_same_flight_in_four_calendars_in_two_languages_is_one_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The persona's phone calendar holds the flight; a subscribed .ics, a Google calendar and a
+    fourth hold it too, two of them in German, all with the same start and end: one event row,
+    `×4 sources`, and the sources line still counts every calendar's line."""
+    lb = persona_record(tmp_path, monkeypatch)
+    at, end = utc("2026-06-15", "07:05"), utc("2026-06-15", "09:15")
+    twice = {**event(at, end, "Flug XY561 nach Zürich"), "source": "ics"}  # the same calendar twice
+    twice["payload"] = {**twice["payload"], "raw_id": "e-twice"}
+    lb.append_many(
+        [
+            {**event(at, end, "Flug XY561 nach Zürich"), "source": "ics"},
+            {**event(at, end, "Flight to Zurich (XY 561)"), "source": "gcal"},
+            {**event(at, end, "Flug XY 561 nach Zürich"), "source": "sim-calendar"},
+            twice,
+        ]
+    )
+    data = _json(capsys, "2026-06-15")
+    [hop] = [e for e in data["timeline"] if e["kind"] == "move" and e["mode"] == "flight"]
+    [entry] = hop["attached"]["events"]
+    assert entry["title"] == "Flight to Zürich (XY 561)", "the first line's title stands"
+    assert entry["sources"] == ["ios-calendar", "ics", "gcal", "sim-calendar"]
+    assert len(entry["lines"]) == 5, "every line it stands for, the repeat from one calendar too"
+    assert data["unplaced"] == []
+    sources = {s["source"]: s["lines"] for s in data["sources"]}
+    assert sources["ics"] == 2 and sources["gcal"] == 1, "the sources line counts what each calendar wrote"
+    text = _run(capsys, "2026-06-15")
+    assert text.count("Flight to Zürich (XY 561)") == 1 and "Flug" not in text
+    assert "1 event" in text and "×4 sources" in text
+
+
 # -- a day aboard an asset --------------------------------------------------------------------------------
 
 

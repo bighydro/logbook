@@ -82,6 +82,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+allowed-confusables = ["×"]  # `×N sources`: a calendar entry several sources carry
 
 [tool.mypy]
 strict = true
