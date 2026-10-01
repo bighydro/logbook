@@ -142,8 +142,9 @@ def _append_with(
         options["owner_emails"] = owner_emails
         if not owner_emails and not (given or {}).get("account"):
             print(
-                "hint: no owner_emails in logbook.json and no --account, so every message is `received`; "
-                'add "owner_emails": ["you@example.org"] to logbook.json to mark your own mail `sent`',
+                f"hint: no owner_emails in logbook.json and no --account, so {adapter.NAME} cannot tell"
+                " which address is yours (mail: every message is `received`; splitwise: the person on most"
+                ' expenses is taken for you); add "owner_emails": ["you@example.org"] to logbook.json',
                 file=sys.stderr,
             )
     for name, value in (given or {}).items():
@@ -207,6 +208,9 @@ SKIP_PHRASES = {
     "skipped_ad": "advertisements",
     "skipped_never_played": "never played",
     "skipped_other_activity": "of another activity",
+    "skipped_not_involved": "the owner is not part of",
+    "skipped_no_owner": "with nobody to be the owner",
+    "skipped_no_amount": "without an amount",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
@@ -269,6 +273,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "attachments_stored": "attachments stored",
     "attachments_missing": "attachments missing from the export",
     "trashed": "marked trashed",
+    "pending": "still pending",
+    "owner_guessed": "owner taken as the person on most expenses (no owner_emails matched)",
 }
 
 

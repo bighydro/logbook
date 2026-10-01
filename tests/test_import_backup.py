@@ -27,6 +27,7 @@ from test_ios_notes import _store as _note_store
 from test_ios_wallet import LINES as WALLET_LINES
 from test_ios_wallet import _passes
 from test_safari import _store as _safari_store
+from test_splitwise import _store as _splitwise_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 from test_wispr_flow import LINES as WISPR_LINES
@@ -40,6 +41,7 @@ WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
 REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 COPILOT = "AppDomainGroup-group.com.copilot.production"
+SPLITWISE = "AppDomain-com.Splitwise.SplitwiseMobile"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -53,6 +55,7 @@ ALL = (
     "flighty",
     "apple-reminders",
     "copilot",
+    "splitwise",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -67,6 +70,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "flighty": FLIGHTY_LINES,
     "apple-reminders": 7,
     "copilot": 6,
+    "splitwise": 5,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -81,6 +85,7 @@ STORES = {
     "apple-reminders": "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite",  # first in path order
 }
 STORES["copilot"] = "CopilotDB.sqlite"
+STORES["splitwise"] = "database.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -177,6 +182,10 @@ def _backup(
     if "copilot" in sources:
         _put(backup, rows, COPILOT, "database", None)
         _put(backup, rows, COPILOT, "database/CopilotDB.sqlite", _copilot_store(_dir(stage, "copilot")))
+    if "splitwise" in sources:
+        _put(backup, rows, SPLITWISE, "Library/Application Support", None)
+        store = _splitwise_store(_dir(stage, "splitwise"))
+        _put(backup, rows, SPLITWISE, "Library/Application Support/database.sqlite", store)
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")

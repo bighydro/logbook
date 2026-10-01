@@ -100,6 +100,7 @@ BUILT_IN = (
     "pocket",
     "apple_reminders",
     "copilot",
+    "splitwise",
 )
 
 
