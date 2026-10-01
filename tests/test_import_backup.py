@@ -12,14 +12,22 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_easypark import LINES as EASYPARK_LINES
+from test_easypark import _recent
+from test_flighty import STORE_LINES as FLIGHTY_LINES
+from test_flighty import _store as _flighty_store
 from test_imessage import _store as _sms_store
 from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
 from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
+from test_ios_wallet import LINES as WALLET_LINES
+from test_ios_wallet import _passes
 from test_safari import _store as _safari_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
+from test_wispr_flow import LINES as WISPR_LINES
+from test_wispr_flow import _store as _wispr_store
 
 from logbook import cli, ios_backup
 from logbook.store import Logbook
@@ -27,7 +35,18 @@ from logbook.store import Logbook
 UDID = "00008030-000A1B2C3D4E5F60"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
-ALL = ("ios-contacts", "whatsapp-contacts", "whatsapp", "imessage", "ios-calendar", "ios-notes")
+ALL = (
+    "ios-contacts",
+    "whatsapp-contacts",
+    "whatsapp",
+    "imessage",
+    "ios-calendar",
+    "ios-notes",
+    "ios-wallet",
+    "easypark",
+    "wispr-flow",
+    "flighty",
+)
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
     "whatsapp-contacts": 4,
@@ -35,7 +54,12 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "imessage": 13,
     "ios-calendar": 7,
     "ios-notes": 4,
+    "ios-wallet": WALLET_LINES,
+    "easypark": EASYPARK_LINES,
+    "wispr-flow": WISPR_LINES,
+    "flighty": FLIGHTY_LINES,
 }
+TOTAL = sum(LINES.values())
 STORES = {
     "ios-contacts": "AddressBook.sqlitedb",
     "whatsapp-contacts": "ContactsV2.sqlite",
@@ -43,6 +67,8 @@ STORES = {
     "imessage": "sms.db",
     "ios-calendar": "Calendar.sqlitedb",
     "ios-notes": "NoteStore.sqlite",
+    "wispr-flow": "database.sqlite",
+    "flighty": "MainFlightyDatabase.db",
 }
 
 
@@ -114,6 +140,17 @@ def _backup(
         _put(backup, rows, "HomeDomain", "Library/Calendar/Calendar.sqlitedb", _calendar(_dir(stage, "cal")))
     if "ios-notes" in sources:
         _put(backup, rows, NOTES, "NoteStore.sqlite", _note_store(_dir(stage, "notes")))
+    if "ios-wallet" in sources:  # one unpacked .pkpass folder per pass, as the phone keeps them
+        _put(backup, rows, "HomeDomain", "Library/Passes/Cards", None)
+        _put_tree(backup, rows, "HomeDomain", "Library/Passes/Cards", _passes(_dir(stage, "wallet")))
+    if "easypark" in sources:  # the recent-parkings file beside the find-my-car pin, which is not copied
+        _put(backup, rows, ios_backup.EASYPARK, "Documents", None)
+        _put_tree(backup, rows, ios_backup.EASYPARK, "Documents", _recent(_dir(stage, "easypark")))
+    if "wispr-flow" in sources:
+        _put(backup, rows, ios_backup.WISPR, "Documents/database.sqlite", _wispr_store(_dir(stage, "wispr")))
+    if "flighty" in sources:
+        store = _flighty_store(_dir(stage, "flighty"))
+        _put(backup, rows, ios_backup.FLIGHTY, "Documents/MainFlightyDatabase.db", store)
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -190,7 +227,18 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         copy = inbox / source / name
         assert copy.is_file(), source
         assert f"{source}: {name}" in out
+    for source in ALL:
         assert f"added {LINES[source]} lines from {source}" in out
+    # a folder source: every pass.json below the folder, the folder's path kept, nothing else
+    assert (inbox / "ios-wallet" / "01-swiss-style.pkpass" / "pass.json").is_file()
+    assert "ios-wallet: 18 pass.json files (" in out and "under Library/Passes/Cards/" in out
+    assert (
+        "1 passes that would not parse" in out
+        and "1 boarding passes whose year nothing on the pass gives" in out
+    )
+    assert (inbox / "easypark" / "recentparkings_12345.json").is_file()
+    assert not (inbox / "easypark" / "findmycar-pin_12345.json").exists()
+    assert "easypark: 1 recentparkings_*.json file (" in out
     # the order is the one that lets each source build on the one before it
     positions = [out.index(f"{source}: ") for source in ALL]
     assert positions == sorted(positions)
@@ -205,9 +253,9 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
-    assert "valid — 49 lines" in out
+    assert f"valid — {TOTAL} lines" in out
     seq, _head, errors = lb.verify()
-    assert (seq, errors) == (49, [])
+    assert (seq, errors) == (TOTAL, [])
     # LOGBOOK_DIAL_PREFIX reached the adapters: the number saved without a country code got one
     refs = {line["payload"]["ref"]["value"] for line in lb.lines() if line["source"] == "ios-contacts"}
     assert "+4722334455" in refs
@@ -232,6 +280,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     never = {
         ("HomeDomain", "Library/Preferences/com.apple.example.plist"),
         (WHATSAPP, "Message/../escape.jpg"),
+        (ios_backup.EASYPARK, "Documents/findmycar-pin_12345.json"),  # beside the file, not in the glob
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -278,7 +327,7 @@ def test_import_backup_again_adds_nothing_and_leaves_one_copy(lb, tmp_path, caps
     out = capsys.readouterr().out
     for source in ALL:
         assert f"added 0 lines from {source}" in out
-    assert "valid — 49 lines" in out
+    assert f"valid — {TOTAL} lines" in out
     inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
     assert sorted(p.name for p in (inbox / "whatsapp").iterdir()) == [
         "ChatStorage.sqlite",
@@ -458,3 +507,60 @@ def test_manifest_opens_read_only_and_finds_files(tmp_path):
     assert manifest.file(NOTES, "NoteStore.sqlite-wal") is None
     assert manifest.file("HomeDomain", "Library") is None  # a directory row is not a file
     assert _snapshot(backup) == before
+
+
+# -- folder sources: a glob of files under a folder, the adapter runs on the folder's copy ----------
+
+
+FOLDER = ios_backup.Source("cards", "HomeDomain", "Library/Cards", files="card.json", adapter=False)
+
+
+def _with_cards(tmp_path: Path, n: int = 2) -> Path:
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    con = sqlite3.connect(backup / "Manifest.db")
+    try:
+        for i in range(n):
+            rel = f"Library/Cards/{i:04d}.pkpass/card.json"
+            fid = _file_id("HomeDomain", rel)
+            (backup / fid[:2]).mkdir(exist_ok=True)
+            (backup / fid[:2] / fid).write_bytes(b'{"n": %d}' % i)
+            con.execute("INSERT INTO Files VALUES (?,?,?,?,NULL)", (fid, "HomeDomain", rel, 1))
+            con.execute(
+                "INSERT INTO Files VALUES (?,?,?,?,NULL)", (fid[::-1], "HomeDomain", rel.rsplit("/", 1)[0], 2)
+            )
+        other = "Library/Cards/0000.pkpass/logo.png"
+        con.execute(
+            "INSERT INTO Files VALUES (?,?,?,?,NULL)", (_file_id("HomeDomain", other), "HomeDomain", other, 1)
+        )
+        con.commit()
+    finally:
+        con.close()
+    return backup
+
+
+def test_folder_source_plans_every_matching_file_and_copies_them_below_the_folder(tmp_path):
+    backup = _with_cards(tmp_path)
+    (p,) = ios_backup.plan(ios_backup.Manifest(backup), (FOLDER,))
+    assert p.listed and p.found and p.store is None
+    assert [f.relative_path for f in p.files] == [
+        "Library/Cards/0000.pkpass/card.json",
+        "Library/Cards/0001.pkpass/card.json",
+    ]
+    assert p.bytes == 2 * len(b'{"n": 0}')
+    out = ios_backup.copy(p, tmp_path / "out")
+    assert out == tmp_path / "out"
+    assert (out / "0000.pkpass" / "card.json").read_bytes() == b'{"n": 0}'
+    assert (out / "0001.pkpass" / "card.json").read_bytes() == b'{"n": 1}'
+    assert not (out / "0000.pkpass" / "logo.png").exists()
+    assert len(p.copied) == 2
+    row = cli._plan_row(p, tmp_path / "inbox")
+    assert row.startswith("cards: 2 card.json files (16 bytes) under Library/Cards/ → ")
+
+
+def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    (p,) = ios_backup.plan(ios_backup.Manifest(backup), (FOLDER,))
+    assert not p.listed and not p.found and p.files == []
+    assert cli._plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
+    with pytest.raises(ValueError):
+        ios_backup.copy(p, tmp_path / "out")

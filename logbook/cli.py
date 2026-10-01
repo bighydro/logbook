@@ -216,6 +216,13 @@ SKIP_PHRASES = {
     "skipped_journal": "journal entries",
     "skipped_sidecar_without_file": "sidecars without a media file",
     "skipped_unreadable_json": "JSON files that would not parse",
+    "skipped_unreadable": "passes that would not parse",
+    "skipped_no_year": "boarding passes whose year nothing on the pass gives",
+    "skipped_no_flight": "boarding passes without a readable flight",
+    "skipped_store_cards": "store and loyalty cards",
+    "skipped_coupons": "coupons",
+    "skipped_generic_passes": "generic passes",
+    "skipped_unknown_style": "passes of no known style",
     "skipped_not_media": "files that are not media",
     "skipped_not_transcript": "files that are not transcripts",
     "skipped_unknown_subject": "of a vessel or aircraft not in assets.json",
@@ -905,8 +912,17 @@ def _only(spec: str | None, encrypted: bool = False) -> tuple[ios_backup.Source,
 
 def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
     """`<source>: <store> (<size>) [+ siblings] [+ N media files (<size>) under <folder>/] → <dest>`,
-    or `<source>: <store> not found`."""
+    or `<source>: <store> not found`; a folder source: `<source>: N <files> files (<size>) under
+    <folder>/ → <dest>`, or `<source>: no <files> under <folder>`."""
     name = p.source.store_name
+    if p.source.files is not None:
+        if not p.found:
+            return f"{p.source.name}: no {name} under {p.source.relative_path}"
+        n = len(p.files)
+        return (
+            f"{p.source.name}: {n:,} {name} file{'s' if n != 1 else ''} ({p.bytes:,} bytes)"
+            f" under {p.source.relative_path}/ → {inbox / p.source.name}"
+        )
     if not p.found:
         why = " (listed in Manifest.db, file missing)" if p.listed else ""
         return f"{p.source.name}: {name} not found{why}"

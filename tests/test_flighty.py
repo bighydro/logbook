@@ -306,3 +306,387 @@ def test_cli_airports_flag_and_env_name_the_override(lb: Logbook, tmp_path: Path
     bad.write_text("iata,lat,lon,tz\nZZZ,60.5,11.5,Mars/Olympus\n", encoding="utf-8")
     r = _cli(lb, "add", "flights", str(FIXTURE), "--airports", str(bad))
     assert r.returncode == 2 and "Mars/Olympus" in r.stderr
+
+
+# -- the app's own store, from an iPhone backup -------------------------------------------------------------
+
+STORE_LINES = 4
+PNR = "ABC123"
+
+
+def _unix(stamp: str) -> int:
+    from datetime import datetime
+
+    return int(datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp())
+
+
+def _store(folder: Path) -> Path:
+    """`MainFlightyDatabase.db` with the tables and columns the adapter reads; the first flight is
+    the CSV fixture's first row, so the two must give one and the same line."""
+    import sqlite3
+
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "MainFlightyDatabase.db"
+    con = sqlite3.connect(path)
+    try:
+        con.executescript(
+            "CREATE TABLE Airport (id TEXT PRIMARY KEY, name TEXT, iata TEXT, icao TEXT, city TEXT,"
+            " timeZoneIdentifier TEXT, latitude REAL, longitude REAL, accountId INTEGER);"
+            "CREATE TABLE Airline (id TEXT PRIMARY KEY, name TEXT, iata TEXT, icao TEXT, accountId INTEGER);"
+            "CREATE TABLE Flight (id TEXT PRIMARY KEY, number TEXT, departureAirportId TEXT,"
+            " departureTerminal TEXT, departureGate TEXT, departureScheduleGateOriginal INTEGER,"
+            " departureScheduleGateEstimated INTEGER, departureScheduleGateActual INTEGER,"
+            " departureScheduleRunwayOriginal INTEGER, departureScheduleRunwayEstimated INTEGER,"
+            " departureScheduleRunwayActual INTEGER, scheduledArrivalAirportId TEXT,"
+            " actualArrivalAirportId TEXT,"
+            " arrivalTerminal TEXT, arrivalGate TEXT, arrivalScheduleGateOriginal INTEGER,"
+            " arrivalScheduleGateEstimated INTEGER, arrivalScheduleGateActual INTEGER,"
+            " arrivalScheduleRunwayOriginal INTEGER, arrivalScheduleRunwayEstimated INTEGER,"
+            " arrivalScheduleRunwayActual INTEGER, equipmentTailNumber TEXT, equipmentModelName TEXT,"
+            " airlineId TEXT, isCancelled INTEGER, created INTEGER, lastUpdated INTEGER, deleted INTEGER,"
+            " accountId INTEGER);"
+            "CREATE TABLE UserFlight (accountId INTEGER, userId TEXT, flightId TEXT, isRandom INTEGER,"
+            " isMyFlight INTEGER, isArchived INTEGER, importSource TEXT, created INTEGER,"
+            " lastUpdated INTEGER,"
+            " deleted INTEGER);"
+            "CREATE TABLE Ticket (accountId INTEGER, userId TEXT, flightId TEXT, pnr TEXT, seatNumber TEXT,"
+            " seatPosition TEXT, cabinClass TEXT, flightReason TEXT, lastUpdated INTEGER, deleted INTEGER);"
+        )
+        con.executemany(
+            "INSERT INTO Airport (id, name, iata, icao, timeZoneIdentifier) VALUES (?,?,?,?,?)",
+            [
+                ("ap-osl", "Oslo", "OSL", "ENGM", "Europe/Oslo"),
+                ("ap-zrh", "Zurich", "ZRH", "LSZH", "Europe/Zurich"),
+                ("ap-cph", "Copenhagen", "CPH", "EKCH", "Europe/Copenhagen"),
+                ("ap-bgo", "Bergen", "BGO", "ENBR", "Europe/Oslo"),
+                ("ap-xqx", "Somewhere", "XQX", "ZZZZ", "Pacific/Auckland"),  # not in the shipped table
+            ],
+        )
+        con.executemany(
+            "INSERT INTO Airline (id, name, iata, icao) VALUES (?,?,?,?)",
+            [
+                ("al-xy", "Example Air", "XY", None),
+                ("al-lx", "Swiss", "LX", "SWR"),
+                ("al-sk", "SAS", "SK", "SAS"),
+            ],
+        )
+        flights_ = [
+            # the CSV fixture's first row, to the second
+            (
+                "fx-0001",
+                "561",
+                "ap-osl",
+                None,
+                "A12",
+                "2026-09-27T05:05:00Z",
+                "2026-09-27T05:10:00Z",
+                "2026-09-27T05:20:00Z",
+                "2026-09-27T05:31:00Z",
+                "ap-zrh",
+                "ap-zrh",
+                "2",
+                "B7",
+                "2026-09-27T07:20:00Z",
+                "2026-09-27T07:24:00Z",
+                "2026-09-27T07:05:00Z",
+                "2026-09-27T07:12:00Z",
+                "LN-XYA",
+                "Airbus A320",
+                "al-xy",
+                0,
+            ),
+            # diverted: landed in Bergen, not Oslo
+            (
+                "fx-0003",
+                "1210",
+                "ap-zrh",
+                "1",
+                "B12",
+                "2026-09-28T15:00:00Z",
+                None,
+                None,
+                None,
+                "ap-osl",
+                "ap-bgo",
+                None,
+                None,
+                "2026-09-28T17:30:00Z",
+                "2026-09-28T18:02:00Z",
+                None,
+                None,
+                "HB-JLT",
+                "Airbus A321",
+                "al-lx",
+                0,
+            ),
+            # cancelled
+            (
+                "fx-0004",
+                "0460",
+                "ap-osl",
+                None,
+                None,
+                "2026-10-01T06:00:00Z",
+                None,
+                None,
+                None,
+                "ap-cph",
+                "ap-cph",
+                None,
+                None,
+                "2026-10-01T07:10:00Z",
+                None,
+                None,
+                None,
+                None,
+                None,
+                "al-sk",
+                1,
+            ),
+            # a friend's flight (not mine) and a deleted one: never read
+            (
+                "fx-0005",
+                "77",
+                "ap-osl",
+                None,
+                None,
+                "2026-10-02T06:00:00Z",
+                None,
+                None,
+                None,
+                "ap-cph",
+                "ap-cph",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "al-sk",
+                0,
+            ),
+            (
+                "fx-0006",
+                "78",
+                "ap-osl",
+                None,
+                None,
+                "2026-10-03T06:00:00Z",
+                None,
+                None,
+                None,
+                "ap-cph",
+                "ap-cph",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "al-sk",
+                0,
+            ),
+            # from an airport the shipped table does not know: the store's zone dates it
+            (
+                "fx-0007",
+                "77",
+                "ap-xqx",
+                None,
+                None,
+                "2026-11-01T20:00:00Z",
+                None,
+                None,
+                None,
+                "ap-zrh",
+                "ap-zrh",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "al-xy",
+                0,
+            ),
+            # no schedule at all, and no airline
+            (
+                "fx-0008",
+                "9",
+                "ap-osl",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "ap-zrh",
+                "ap-zrh",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "al-xy",
+                0,
+            ),
+            (
+                "fx-0009",
+                "10",
+                "ap-osl",
+                None,
+                None,
+                "2026-11-05T06:00:00Z",
+                None,
+                None,
+                None,
+                "ap-zrh",
+                "ap-zrh",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            ),
+        ]
+        for row in flights_:
+            (fid, number, dep, dterm, dgate, dgo, dga, dro, dra, sarr, aarr, aterm, agate, ago, aga, aro, ara,
+             tail, model, airline, cancelled) = row  # fmt: skip
+            con.execute(
+                "INSERT INTO Flight (id, number, departureAirportId, departureTerminal, departureGate,"
+                " departureScheduleGateOriginal, departureScheduleGateActual,"
+                " departureScheduleRunwayOriginal,"
+                " departureScheduleRunwayActual, scheduledArrivalAirportId, actualArrivalAirportId,"
+                " arrivalTerminal, arrivalGate, arrivalScheduleGateOriginal, arrivalScheduleGateActual,"
+                " arrivalScheduleRunwayOriginal, arrivalScheduleRunwayActual, equipmentTailNumber,"
+                " equipmentModelName, airlineId, isCancelled, created, lastUpdated, accountId)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,1,0)",
+                (
+                    fid,
+                    number,
+                    dep,
+                    dterm,
+                    dgate,
+                    *(None if s is None else _unix(s) for s in (dgo, dga, dro, dra)),
+                    sarr,
+                    aarr,
+                    aterm,
+                    agate,
+                    *(None if s is None else _unix(s) for s in (ago, aga, aro, ara)),
+                    tail,
+                    model,
+                    airline,
+                    cancelled,
+                ),
+            )
+            mine = 0 if fid == "fx-0005" else 1
+            deleted = 1_700_000_000 if fid == "fx-0006" else None
+            con.execute(
+                "INSERT INTO UserFlight (accountId, userId, flightId, isRandom, isMyFlight, isArchived,"
+                " importSource, created, lastUpdated, deleted)"
+                " VALUES (0, 'me', ?, 0, ?, 1, 'CALENDAR', 1, 1, ?)",
+                (fid, mine, deleted),
+            )
+        con.execute(
+            "INSERT INTO Ticket VALUES (0, 'me', 'fx-0001', ?, '1A', 'window', 'economy', 'personal', 1,"
+            " NULL)",
+            (PNR,),
+        )
+        con.execute(
+            "INSERT INTO Ticket VALUES (0, 'me', 'fx-0003', ?, '12C', 'aisle', 'economy', 'personal', 1,"
+            " NULL)",
+            (PNR,),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return path
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> Path:
+    return _store(tmp_path / "flighty-app")
+
+
+def test_sniff_recognises_the_app_store_by_its_tables(store, tmp_path):
+    assert flighty.sniff(store)
+    assert adapters.find(store) is flighty
+    import sqlite3
+
+    other = tmp_path / "other.db"
+    con = sqlite3.connect(other)
+    con.execute("CREATE TABLE Flight (id TEXT)")
+    con.commit()
+    con.close()
+    assert not flighty.sniff(other)
+
+
+def test_the_store_gives_the_same_line_as_the_export_so_the_two_dedupe(store):
+    from_csv = _by_number(_drafts(), "561")
+    from_store = _by_number(_drafts(store), "561")
+    assert from_store == from_csv
+    assert from_store["payload"]["raw_id"] == from_csv["payload"]["raw_id"]
+
+
+def test_the_store_maps_diversions_cancellations_and_the_stores_own_zones(store):
+    counts: dict[str, int] = {}
+    drafts = list(flighty.run(store, counts=counts))
+    assert len(drafts) == STORE_LINES
+    assert [d["payload"]["raw_id"].split("@")[0] for d in drafts] == [
+        "fx-0001",
+        "fx-0003",
+        "fx-0004",
+        "fx-0007",
+    ]
+    diverted = _by_number(drafts, "1210")
+    p = diverted["payload"]
+    assert p["carrier"] == "LX" and p["carrier_icao"] == "SWR"
+    assert p["to"] == {"iata": "OSL", "icao": "ENGM"} and p["diverted_to"] == {"iata": "BGO", "icao": "ENBR"}
+    assert p["date"] == "2026-09-28" and p["scheduled_departure"] == "2026-09-28T15:00:00Z"
+    assert p["actual_arrival"] == "2026-09-28T18:02:00Z" and "actual_departure" not in p
+    assert p["extra"] == {
+        "departure_terminal": "1",
+        "departure_gate": "B12",
+        "seat": "12C",
+        "seat_type": "aisle",
+        "cabin": "economy",
+        "reason": "personal",
+    }
+    cancelled = _by_number(drafts, "460")
+    assert cancelled["payload"]["cancelled"] is True and cancelled["payload"]["carrier"] == "SK"
+    assert "aircraft" not in cancelled["payload"] and "extra" not in cancelled["payload"]
+    far = _by_number(drafts, "77")
+    assert far["payload"]["from"] == {"iata": "XQX", "icao": "ZZZZ"}
+    assert (
+        far["payload"]["date"] == "2026-11-02" and far["tz"] == "Pacific/Auckland"
+    )  # NZDT: 09:00 on the 2nd
+    assert counts == {"skipped_no_date": 1, "skipped_no_designator": 1}  # the store knew the zone
+
+
+def test_the_pnr_never_leaves_the_store(store):
+    assert PNR not in json.dumps(list(flighty.run(store)))
+
+
+def test_store_since_and_dedupe_against_the_export(store, tmp_path, monkeypatch):
+    root = tmp_path / "lb"
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    lb = Logbook.init(root, "Europe/Oslo")
+    assert lb.append_many(flights.reconcile(lb, _drafts())) == LINES
+    counts: dict[str, int] = {}
+    added = lb.append_many(flights.reconcile(lb, flighty.run(store), counts))
+    assert added == STORE_LINES - 1 and counts["merged"] == 1  # 561 is the same observation; 1210 a newer one
+    later = list(flighty.run(store, since="2026-10-01T00:00:00Z"))
+    assert [d["payload"]["number"] for d in later] == ["460", "77"]
