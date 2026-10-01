@@ -626,6 +626,7 @@ PROFILE = {
         "stage": {"enum": ["in_bed", "asleep", "awake", "core", "deep", "rem"]},
         "device": {"type": "string", "minLength": 1},
         "source_name": {"type": "string", "minLength": 1},
+        "supersedes": {"type": "string", "minLength": 1},
         "extra": {"type": "object"},
     },
     "additionalProperties": False,

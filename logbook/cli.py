@@ -33,6 +33,7 @@ from . import (
     places,
     policy,
     reading,
+    repair,
     rollup,
     stays,
     trips,
@@ -1106,6 +1107,15 @@ def cmd_retract(a: argparse.Namespace) -> None:
         print(f"retract: {e}", file=sys.stderr)
         sys.exit(2)
     print(f"#{line['seq']} {line['at']}  retracted #{a.seq}: {a.reason}")
+
+
+def cmd_repair(a: argparse.Namespace) -> None:
+    """`repair health-units`: the migration for a record whose `apple-health` lines carry resting
+    heart rate and HRV in the wrong unit (RFC 0014). Appends a corrected line and a retraction per
+    wrong line; `--dry-run` prints the counts and writes nothing. Nothing is ever rewritten."""
+    lb = Logbook.find()
+    report = repair.health_units(lb, dry_run=a.dry_run)
+    print(repair.describe_health_units(report))
 
 
 def cmd_show(a: argparse.Namespace) -> None:
@@ -2618,6 +2628,17 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
     v.add_argument("--registration", help="call sign or plate, free text")
     v.set_defaults(fn=cmd_assets)
+    s = sub.add_parser("repair", help="append the lines that put a known mistake right; nothing is rewritten")
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser(
+        "health-units",
+        help="retract apple-health resting_hr and hrv lines written 60 and 1,000 times too large and"
+        " re-emit them corrected (RFC 0014)",
+    )
+    v.add_argument(
+        "--dry-run", action="store_true", help="print how many lines would be appended; write nothing"
+    )
+    v.set_defaults(fn=cmd_repair)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)

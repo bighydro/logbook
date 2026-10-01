@@ -103,6 +103,13 @@ cp -a ~/Logbook ~/Logbook.bak    # or wherever LOGBOOK_HOME points
 logbook migrate                  # same lines, new hashes; keeps the old files at logbook-0.1/
 ```
 
+0.5.0 corrects the units `apple-health` gave resting heart rate and HRV (RFC 0014). A record that imported a Health store with an earlier version carries those lines 60 and 1,000 times too large; put them right once:
+
+```bash
+logbook repair health-units --dry-run   # how many lines it would retract and re-emit
+logbook repair health-units             # per wrong line a corrected line and a retraction; nothing rewritten
+```
+
 ## What is in the folder
 
 ```
