@@ -41,7 +41,9 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         1,
         "2026-06-14",
     )
-    assert boat["asset"] == BOAT and boat["route"] == ["near Marina"]
+    assert boat["asset"] == BOAT
+    [anchorage] = boat["route"]
+    assert anchorage.startswith("59.85") and "near" not in anchorage, "11 km out: coordinates, no place near"
     assert "Marina" in boat["places"]
     assert [p["id"] for p in boat["people"]] == [OLA_ID]
     assert boat["flights_in"] == [] and boat["flights_out"] == []
@@ -52,7 +54,8 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         "2026-06-18",
     )
     assert zurich["asset"] is None and zurich["in_transit"] == 0
-    assert zurich["route"] == ["Zürich"], "an unnamed night takes the nearest large airport's name"
+    [hotel] = zurich["route"]
+    assert hotel.startswith("47.37"), "9 km from the airport and no named place near: the coordinates"
     assert zurich["places"] == [], "no named place in Zürich yet"
     assert [p["name"] for p in zurich["people"]] == ["Ola Nordmann"]
     [flight_in], [flight_out] = zurich["flights_in"], zurich["flights_out"]
@@ -64,7 +67,7 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
     assert all(len(id_) == 36 for id_ in zurich["lines"])
     assert lb.meta["head"] == head, "trips are read, never written"
     text = _run(capsys)
-    assert "2 trips" in text and "aboard solvind" in text and "Zürich" in text
+    assert "2 trips" in text and "aboard solvind" in text and "route 47.37" in text
     assert "XY 561" in text and "XY 562" in text and "Ola Nordmann" in text and "3 nights" in text
 
 
@@ -92,7 +95,7 @@ def test_a_night_in_transit_inside_a_trip_joins_it(
     data = _json(capsys, "--since", d1, "--until", d4)
     [trip] = data["trips"]
     assert (trip["start"], trip["end"], trip["nights"], trip["in_transit"]) == (d1, d2, 2, 1)
-    assert trip["route"] == ["Zürich"]
+    assert len(trip["route"]) == 1 and trip["route"][0].startswith("47.37")
 
 
 def test_without_a_home_place_there_are_no_trips_and_the_command_says_why(
@@ -201,3 +204,73 @@ def test_a_trip_never_starts_or_ends_with_a_night_near_home(
     _home_places(lb)
     [trip] = _json(capsys, "--since", d1, "--until", d5)["trips"]
     assert (trip["start"], trip["end"], trip["nights"]) == (d2, d3, 2)
+
+
+# -- route labels ------------------------------------------------------------------------------------------
+
+
+def _stay(where: tuple[float, float], place: str | None = None) -> Any:
+    from datetime import UTC, datetime
+
+    from logbook import stays
+
+    return stays.Segment(
+        kind=stays.STAY,
+        subject=None,
+        start=datetime(2026, 6, 10, 18, tzinfo=UTC),
+        end=datetime(2026, 6, 11, 8, tzinfo=UTC),
+        points=10,
+        lat=where[0],
+        lon=where[1],
+        place=place,
+    )
+
+
+def _places() -> list[Any]:
+    from persona import HOME, OFFICE
+
+    from logbook.places import Place
+
+    return [Place("Home", *HOME, 120, "home"), Place("Office", *OFFICE, 120)]
+
+
+def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
+    from persona import ZRH, ZURICH
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    airports = Airports.load()
+    [at_airport] = trips.route_of([_stay((47.4700, 8.5481))], _places(), airports)  # 1.3 km from ZRH
+    assert at_airport == "Zürich Airport"
+    [in_town] = trips.route_of([_stay(ZURICH)], _places(), airports)  # 9 km from ZRH, no place near
+    assert in_town == "47.3769,8.5417", "a stay far from every airport and named place is its coordinates"
+    assert trips.route_of([_stay(ZRH)], _places(), airports) == ["Zürich Airport"]
+
+
+def test_a_route_point_within_5_km_of_a_named_place_says_near_it_with_the_distance() -> None:
+    from persona import CAFE, FJORD
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    airports = Airports.load()
+    [label] = trips.route_of([_stay(CAFE)], _places(), airports)  # 1.6 km from Office, 960 m from Home
+    assert label == "59.9200,10.7400 near Home, 1.0 km"
+    [far] = trips.route_of([_stay(FJORD)], _places(), airports)  # 11 km out on the fjord
+    assert far == "59.8500,10.6000"
+    named = trips.route_of([_stay(CAFE, place="Cafe")], _places(), airports)
+    assert named == ["Cafe"], "a named stay is its name"
+
+
+def test_consecutive_route_points_within_200_m_collapse_to_one() -> None:
+    from persona import ZURICH
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    step = 10 / 111_320  # ten metres of latitude
+    three = [_stay((ZURICH[0] + i * step, ZURICH[1])) for i in range(3)]
+    assert trips.route_of(three, _places(), Airports.load()) == ["47.3769,8.5417"]
+    apart = [_stay(ZURICH), _stay((ZURICH[0] + 300 / 111_320, ZURICH[1])), _stay(ZURICH)]
+    assert len(trips.route_of(apart, _places(), Airports.load())) == 3, "300 m apart stays three points"
