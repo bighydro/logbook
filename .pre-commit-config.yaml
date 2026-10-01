@@ -13,7 +13,9 @@ repos:
       - { id: end-of-file-fixer, exclude: &mirror '^docs/(?:[^/]+|adapters/README|conformance/README|rfcs/[^/]+)\.md$' }
       - { id: trailing-whitespace, exclude: *mirror }
       - { id: check-json }
-      - { id: check-yaml }
+      # mkdocs.yml carries a `!!python/name:` tag (the Mermaid fence); --unsafe parses the syntax
+      # without constructing the tag, which is what pre-commit-hooks documents for such files.
+      - { id: check-yaml, args: [--unsafe] }
       - { id: detect-private-key }
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
