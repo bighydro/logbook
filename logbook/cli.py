@@ -2109,9 +2109,7 @@ def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
-    seq, head, errors = lb.verify(
-        warnings, progress=_file_progress(len(lb.files())) if a.progress else None
-    )
+    seq, head, errors = lb.verify(warnings, progress=_file_progress(len(lb.files())) if a.progress else None)
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
         if (exp["seq"], exp["head"]) != (seq, head):
