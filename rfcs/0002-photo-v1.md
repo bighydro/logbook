@@ -26,10 +26,36 @@ One image or video asset the owner holds, described by its metadata. The pixels 
 | `faces` | integer | SHOULD | number of faces the library detected |
 | `people` | array of string | MAY | the library's person ids for those faces (ids, never names) |
 | `content_hash` | string | MAY | sha256 of the original file, for cross-library dedupe |
+| `favorite` | boolean | MAY | the owner marked it a favourite in this library; written only when true |
+| `hidden` | boolean | MAY | the owner hid it in this library; written only when true |
+| `albums` | array of string | MAY | the titles of the owner's own albums it is in, in this library, sorted; never the library's automatic groupings (smart albums, memories, shared streams) |
 
 ## Provenance rule (reference)
 
 `camera` when the asset has a live-photo pair, or when make/model and an original capture time are present on a camera file type (HEIC/RAW/JPEG/video); `screenshot` when PNG at a device screen size with no camera data; `received` when there is no EXIF and the name follows messenger patterns (`IMG-2026…-WA0012`, `image0.jpg`); else `other`. Owners correct with one tap; corrections are `manual` lines.
+
+A library that records how an asset arrived (Photos' `importedBy`: the back or front camera, a third-party app, AirDrop) uses that record instead of the heuristics: `camera` from the camera or a live-photo pair, `screenshot` when the library marks it one, `received` when it came from another app or another device, else `other`.
+
+## Several libraries, one asset (merge rule)
+
+The same photo reaches the record from more than one library: the phone's own Photos store
+(`apple-photos`) and the server it is backed up to (`immich`), or a Takeout folder. Each library's line
+is written — they are different observations with different `source`, and `(source, raw_id)` dedupes
+only within one (SPEC §3: nothing is dropped because another source saw it first). A reader folds them
+by this rule and never by guessing:
+
+- Two `photo/v1` lines describe **the same asset** when their `file_name` is equal ignoring case and
+  their `at` denote instants at most one second apart. Both fields are what a camera wrote (the
+  original file name, the EXIF capture time) and every library keeps them; one second absorbs the
+  libraries' rounding (Immich drops sub-seconds, Photos keeps them). Width, height and `content_hash`,
+  when both lines have them, MUST agree or the lines are not folded.
+- The fold is a **union**: a favourite in either library is a favourite; `albums` is the union of
+  both lists; `people` stays per library (person ids are the library's, `p_17` means nothing to another
+  library) under the line's own `source`; a `provenance` the libraries disagree on is shown from the
+  line with the better evidence (`camera` over `other`), and the owner's `manual` correction wins over
+  both.
+- The rule is a reader's. No adapter rewrites a line, adds another library's id, or skips an asset
+  because another library has it.
 
 ## Example (synthetic)
 

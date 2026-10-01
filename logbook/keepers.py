@@ -2,8 +2,9 @@
 hero photo) and `art`.
 
 `infer(lines)` is the producer `keeper-inference`: for every `photo/v1` line standing it drafts a
-`memory` keeper when the library marked the photo a favourite (`extra.favorite`) and an `art`
-keeper when the photo is in an album named Art (`extra.album`, or one of `extra.albums`). The
+`memory` keeper when the library marked the photo a favourite (`favorite` at the payload's top,
+as `apple-photos` writes it, or under `extra`, as `immich` does) and an `art` keeper when the
+photo is in an album named Art (`albums` or `album`, at the top or under `extra`). The
 draft's `raw_id` is `<photo line id>:<lane>`, so `append_many` writes each mark once, and a
 retracted keeper (an unmarked favourite) is never written again because its `(source, raw_id)` is
 still in the record. `standing(lines)` is the reader: the keeper lines not retracted, for
@@ -34,12 +35,15 @@ def marks(photo: Line) -> list[str]:
     found = payload.get("extra")
     extra: dict[str, Any] = found if isinstance(found, dict) else {}
     lanes = []
-    if extra.get("favorite") is True or extra.get("favourite") is True:
+    if any(marks.get(key) is True for marks in (payload, extra) for key in ("favorite", "favourite")):
         lanes.append(MEMORY)
-    listed = extra.get("albums")
-    albums: list[Any] = list(listed) if isinstance(listed, list) else []
-    if isinstance(extra.get("album"), str):
-        albums.insert(0, extra["album"])
+    albums: list[Any] = []
+    for marks in (payload, extra):
+        listed = marks.get("albums")
+        if isinstance(listed, list):
+            albums.extend(listed)
+        if isinstance(marks.get("album"), str):
+            albums.append(marks["album"])
     if any(isinstance(a, str) and a.strip().casefold() == ART_ALBUM for a in albums):
         lanes.append(ART)
     return lanes

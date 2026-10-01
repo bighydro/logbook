@@ -1,0 +1,78 @@
+{
+  "kind": "tasks#taskLists",
+  "items": [
+    {
+      "kind": "tasks#taskList",
+      "id": "MTIzNDU2Nzg5MDEyMzQ1Njc4OTA6MDow",
+      "title": "My Tasks",
+      "updated": "2026-03-08T09:00:00.000Z",
+      "items": [
+        {
+          "kind": "tasks#task",
+          "id": "aGVsbG8tcm9wZQ",
+          "title": "Buy the long rope",
+          "updated": "2026-03-04T12:10:00.000Z",
+          "selfLink": "https://www.googleapis.com/tasks/v1/lists/MTIzNDU2Nzg5MDEyMzQ1Njc4OTA6MDow/tasks/aGVsbG8tcm9wZQ",
+          "position": "00000000000000000001",
+          "notes": "30 m, 12 mm. Ask at the chandlery on Storgata 1.",
+          "status": "completed",
+          "due": "2026-03-05T00:00:00.000Z",
+          "completed": "2026-03-04T12:10:00.000Z",
+          "hidden": true,
+          "links": [{"type": "email", "description": "the quote", "link": "https://mail.example.org/u/0/#inbox/abc"}]
+        },
+        {
+          "kind": "tasks#task",
+          "id": "ZmVuZGVycw",
+          "title": "Fenders",
+          "updated": "2026-03-01T08:00:00.000Z",
+          "selfLink": "https://www.googleapis.com/tasks/v1/lists/MTIzNDU2Nzg5MDEyMzQ1Njc4OTA6MDow/tasks/ZmVuZGVycw",
+          "position": "00000000000000000002",
+          "status": "needsAction",
+          "due": "2026-03-20T00:00:00.000Z"
+        },
+        {
+          "kind": "tasks#task",
+          "id": "c3VidGFzaw",
+          "title": "Two blue ones",
+          "updated": "2026-03-01T08:05:00.000Z",
+          "parent": "ZmVuZGVycw",
+          "position": "00000000000000000000",
+          "status": "needsAction"
+        },
+        {
+          "kind": "tasks#task",
+          "id": "ZGVsZXRlZA",
+          "title": "Old idea",
+          "updated": "2026-01-02T00:00:00.000Z",
+          "status": "needsAction",
+          "deleted": true
+        },
+        {
+          "kind": "tasks#task",
+          "id": "bm90aXRsZQ",
+          "title": "",
+          "updated": "2026-01-03T00:00:00.000Z",
+          "status": "needsAction"
+        }
+      ]
+    },
+    {
+      "kind": "tasks#taskList",
+      "id": "Qm9hdA",
+      "title": "Boat",
+      "updated": "2026-02-11T07:40:00.000Z",
+      "items": [
+        {
+          "kind": "tasks#task",
+          "id": "YW50aWZvdWw",
+          "title": "Antifoul before launch",
+          "updated": "2026-02-11T07:40:00.000Z",
+          "status": "needsAction",
+          "due": "2026-04-15T00:00:00.000Z",
+          "notes": "Kari has the tin."
+        }
+      ]
+    }
+  ]
+}

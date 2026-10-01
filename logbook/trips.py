@@ -9,7 +9,9 @@ of the return day, and the flights in (dated the first day) and out (dated the r
 day after the last night). An asset trip is one whose every night was aboard one asset.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
-captain names it, and then the name is a note (ADR 0019). Without a place of kind `home` nothing
+captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
+is one bought ride, ticket or parking session as the service recorded it: raw evidence, like a
+flight line, that a derived trip may one day list beside its flights. Without a place of kind `home` nothing
 can be outside home, so there are no trips and the reader says so."""
 
 from __future__ import annotations

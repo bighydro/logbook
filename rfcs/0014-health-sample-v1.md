@@ -1,6 +1,6 @@
 # RFC 0014 — payload profile `health-sample/v1`
 
-Status: draft · 2026-10-01 · comment period: two weeks
+Status: draft · 2026-10-01 (body composition, energy intake and relayed readings added the same day) · comment period: two weeks
 
 One measurement the body made and a device recorded: a count of steps in a quarter of an hour, one
 heart-rate reading, a stage of one night's sleep, a weight, a workout. The line records what the
@@ -45,6 +45,15 @@ Types and their units:
 | `resting_hr` | `bpm` | instant |
 | `hrv` | `ms` | instant (SDNN) |
 | `weight` | `kg` | instant |
+| `body_fat_pct` | `%` | instant; body fat as a share of weight |
+| `fat_mass` | `kg` | instant |
+| `fat_free_mass` | `kg` | instant |
+| `muscle_mass` | `kg` | instant |
+| `bone_mass` | `kg` | instant |
+| `body_water` | `kg` | instant; total body water as the scale estimates it |
+| `bmi` | `kg/m2` | instant; as the source computed it, never recomputed here |
+| `vo2_max` | `mL/kg/min` | instant |
+| `energy_intake` | `kcal` | instant (or a day's span when the source keeps no time); one logged food or meal |
 | `sleep` | `s` | span, with `stage` |
 | `workout` | `s` | span; `value` is the workout's duration |
 
@@ -58,6 +67,9 @@ Types and their units:
 6. **Units are the profile's, converted from the source's canonical unit by the adapter** and stated in the adapter's documentation; the source's own quantity and unit, when it keeps them, go under `extra.original` so the conversion can be checked later.
 7. **Timestamps are the source's.** The adapter converts the source's epoch to UTC and does not "correct" it. Rows dated before 1900 are placeholders, not samples, and are skipped and counted (RFC 0012 rule 4).
 8. **A sample of a type this profile does not name is skipped and counted, never mapped to a near type.** A later profile version adds types; a reader that meets a `type` it does not know keeps the line and shows nothing.
+9. **Body composition is one line per quantity.** A smart scale reports a weight and, with it, fat mass, muscle mass, bone mass, water and a BMI from one standing; each is its own line with the same `at`, and a reader groups them by `at` and `device`. Percentages are written as the source gives them (`body_fat_pct`), never derived from the masses here.
+10. **A logged food is `energy_intake`.** One line per food or meal entry, `value` its energy in kcal as the source computed it from its portion and quantity, with the meal's name, the food's description and the portion under `extra`. A source that keeps the day but not the clock writes the entry as a span over that local day (`at` midnight, `end` the next) with `extra.all_day` true; nothing is invented about when it was eaten. A daily total the source keeps beside the entries is derived and is not written (rule 2 and the note on daily totals).
+11. **A reading relayed from another app is not this source's.** A health app that mirrors another app's data (Withings reading Apple Health, which carries a watch's readings) is a second copy, not a second device; an adapter skips rows whose source is another app and counts them (`skipped_relayed`), so that the record gets them once, from the adapter of the app that made them.
 
 ## Example (synthetic)
 
@@ -80,9 +92,9 @@ Types and their units:
  "properties":{
   "schema":{"const":"health-sample/v1"},
   "raw_id":{"type":"string","minLength":1},
-  "type":{"enum":["steps","distance","active_energy","basal_energy","flights_climbed","heart_rate","resting_hr","hrv","weight","sleep","workout"]},
+  "type":{"enum":["steps","distance","active_energy","basal_energy","flights_climbed","heart_rate","resting_hr","hrv","weight","body_fat_pct","fat_mass","fat_free_mass","muscle_mass","bone_mass","body_water","bmi","vo2_max","energy_intake","sleep","workout"]},
   "value":{"type":"number"},
-  "unit":{"enum":["count","m","kcal","bpm","ms","kg","s"]},
+  "unit":{"enum":["count","m","kcal","bpm","ms","kg","%","kg/m2","mL/kg/min","s"]},
   "stage":{"enum":["in_bed","asleep","awake","core","deep","rem"]},
   "device":{"type":"string","minLength":1},
   "source_name":{"type":"string","minLength":1},
@@ -95,4 +107,5 @@ Types and their units:
 - **Why buckets and not the raw samples.** A watch writes a step sample every few minutes and an energy sample every minute; a year of that is over a million lines, none of which anyone reads. A quarter hour is fine enough to see a walk and coarse enough to keep the record small; the store keeps the raw rows if anyone ever needs them.
 - **Why the device is on the line.** Health data is the one source where two devices legitimately report the same thing; a reader cannot dedupe without knowing which device said what.
 - **Why no daily totals here.** "8,412 steps on Tuesday" is derived: an engine (or `logbook stats --health`) sums the buckets. Writing the total as a line would make a re-import with one more bucket a contradiction.
-- **What is not a health sample.** A workout's route is `location/v1`; a meal, a medication and a symptom are not this profile; a lab result is a document, another profile.
+- **What is not a health sample.** A workout's route is `location/v1`; a medication and a symptom are not this profile; a lab result is a document, another profile. A meal is here only as the energy the source assigned it (`energy_intake`, rule 10): what was eaten is under `extra`, and nothing about nutrition beyond kilocalories is a type.
+- **Sources.** `apple-health` (an iPhone's Health store), `withings` (the Withings app's own stores: the scale's weight and body composition, the app's heart-rate readings), `myfitnesspal` (logged foods as `energy_intake`, weights, exercise as `workout`).

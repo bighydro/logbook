@@ -25,12 +25,57 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                         MediaDomain                                   media under Library/SMS/Attachments/
     ios-calendar        HomeDomain                                    Library/Calendar/Calendar.sqlitedb
     ios-notes           AppDomainGroup-group.com.apple.notes          NoteStore.sqlite
+    ios-wallet          HomeDomain                                    Library/Passes/Cards/…/pass.json (a
+                                                                  folder source: every pass.json under
+                                                                  Cards/, copied below ios-wallet/)
+    easypark            AppDomain-net.easypark.app                    Documents/recentparkings_<user>.json
+                                                                  (a folder source: the glob names the file)
+    wispr-flow          AppDomain-com.wispr.flowapp                   Documents/database.sqlite
+    flighty             AppDomain-com.flightyapp.flighty              Documents/MainFlightyDatabase.db
+    apple-reminders     AppDomainGroup-group.com.apple.reminders      Container_v1/Stores/Data-*.sqlite
+                                                                  (one store per account)
+    copilot             AppDomainGroup-group.com.copilot.production   database/CopilotDB.sqlite
+    splitwise           AppDomain-com.Splitwise.SplitwiseMobile       Library/Application Support/
+                                                                  database.sqlite
+    beeper              AppDomainGroup-group.beeper.chat.ios          BeeperStore.sqlite
+    line                AppDomain-jp.naver.line                       Library/Application Support/
+                                                                  PrivateStore/P_*/Contacts Syncing/
+                                                                  Contacts.sqlite (copied first, read
+                                                                  beside the store)
+                        AppDomainGroup-group.com.linecorp.line        .../PrivateStore/P_*/Messages/
+                                                                  UnifiedGroup.sqlite (the same)
+                        the same                                      .../PrivateStore/P_*/Messages/
+                                                                  Line.sqlite
+    twitter             AppDomainGroup-group.com.atebits.Tweetie2     com.atebits.tweetie.databases/v1/*/
+                                                                  *-dmv2.db (one store per account)
+    apple-books         AppDomain-com.apple.iBooks                   Documents/storeFiles/AEAnnotation*.sqlite
+                                                                  (+ Documents/BKLibrary/BKLibrary*.sqlite
+                                                                  beside it: the titles)
+    voice-memos         AppDomainGroup-group.com.apple.VoiceMemos.shared  Recordings/CloudRecordings.db,
+                                                                  the .m4a/.qta files under Recordings/
+    apple-photos        CameraRollDomain                              Media/PhotoData/Photos.sqlite (the
+                                                                  library's metadata; no image is copied)
+    withings            AppDomain-com.withings.wiScaleNG              Library/Application Support/coredata/
+                                                                  *_WTHealth.sqlite and *_Measure.sqlite
+                                                                  (every profile; the adapter runs on the
+                                                                  folder)
+    myfitnesspal        AppDomain-com.myfitnesspal.mfp                Documents/maindb.sqlite
+    sbb                 AppDomainGroup-group.ch.sbb.SBBMobile         SbbMobile.db (+ the app container's
+                                                                  Documents/ch.sbb.coredata.pasttrips.sqlite
+                                                                  beside it)
+
+A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
+domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
+beside it like its -wal/-shm siblings, and the adapter runs on the copies' folder, not the store.
+A source's `companions` — other files, by path or glob and from any domain — are copied beside the
+store the same way, with their own -wal/-shm, so an adapter finds beside the copy what it finds
+beside the store on the phone (Books' library next to its annotations).
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
 
 EXTRAS are the stores only an encrypted backup carries — the call log, Health, Safari's
-history. The call log and Health have their adapters and run like the SOURCES:
+history. Each has its adapter and runs like the SOURCES:
 
     ios-calls           HomeDomain                                    Library/CallHistoryDB/
                                                                   CallHistory.storedata
@@ -38,9 +83,8 @@ history. The call log and Health have their adapters and run like the SOURCES:
                                                                   first: it names the sources),
                                                                   Health/healthdb_secure.sqlite
                                                                   (the samples; `apple-health` runs)
-
-Safari has none yet: it is copied out beside the others (`safari/`) so the adapter that follows
-finds it, and reported as "copied, no adapter yet".
+    safari              HomeDomain                                    Library/Safari/History.db
+                                                                  (`safari` runs, RFC 0017)
 
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
@@ -63,6 +107,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, field
+from fnmatch import fnmatch, fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -78,7 +123,25 @@ HOME = "HomeDomain"
 MEDIA = "MediaDomain"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
+REMINDERS = "AppDomainGroup-group.com.apple.reminders"
+COPILOT = "AppDomainGroup-group.com.copilot.production"
+SPLITWISE = "AppDomain-com.Splitwise.SplitwiseMobile"
+BEEPER = "AppDomainGroup-group.beeper.chat.ios"
+LINE_APP = "AppDomain-jp.naver.line"
+LINE = "AppDomainGroup-group.com.linecorp.line"
+LINE_STORE = "Library/Application Support/PrivateStore/P_*"
+TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 HEALTH = "HealthDomain"
+BOOKS = "AppDomain-com.apple.iBooks"
+VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
+CAMERA_ROLL = "CameraRollDomain"
+WITHINGS = "AppDomain-com.withings.wiScaleNG"
+MYFITNESSPAL = "AppDomain-com.myfitnesspal.mfp"
+SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
+SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
+EASYPARK = "AppDomain-net.easypark.app"
+WISPR = "AppDomain-com.wispr.flowapp"
+FLIGHTY = "AppDomain-com.flightyapp.flighty"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -97,14 +160,28 @@ class Source:
 
     name: str  # the adapter's NAME, and the copy's folder name
     domain: str
-    relative_path: str  # POSIX, as Manifest.db spells it
+    relative_path: str  # POSIX, as Manifest.db spells it; with `*` or `?` a pattern over the domain
     media: tuple[str, str] | None = None  # (domain, folder prefix); copied beside the store as its last part
     adapter: bool = True  # False: copied out, nothing runs on it; `note` says why it is there
     note: str = "no adapter yet"
+    files: str | None = None  # a folder source: `relative_path` is a folder, this the file names under it
+    # (domain, path or glob) of files copied beside the store under their own names, with their -wal/-shm:
+    # a library the adapter looks up beside the store, a store from another container (`fnmatch`, as
+    # `relative_path`). A plain path names one file.
+    companions: tuple[tuple[str, str], ...] = ()
+    media_suffixes: tuple[
+        str, ...
+    ] = ()  # when set, only media whose suffix (lower-case) is one of these is copied
 
     @property
     def store_name(self) -> str:
-        return PurePosixPath(self.relative_path).name
+        return self.files if self.files is not None else PurePosixPath(self.relative_path).name
+
+    @property
+    def pattern(self) -> bool:
+        """Whether `relative_path` is a pattern: several stores may match, and the adapter then
+        runs on the folder they were copied to."""
+        return any(c in self.relative_path for c in "*?[")
 
     @property
     def media_folder(self) -> str | None:
@@ -119,6 +196,59 @@ SOURCES: tuple[Source, ...] = (
     Source("imessage", HOME, "Library/SMS/sms.db", media=(MEDIA, "Library/SMS/Attachments")),
     Source("ios-calendar", HOME, "Library/Calendar/Calendar.sqlitedb"),
     Source("ios-notes", NOTES, "NoteStore.sqlite"),
+    Source(
+        "ios-wallet", HOME, "Library/Passes/Cards", files="pass.json"
+    ),  # an unpacked .pkpass folder per pass
+    Source("easypark", EASYPARK, "Documents", files="recentparkings_*.json"),  # named after the user
+    Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
+    Source("flighty", FLIGHTY, "Documents/MainFlightyDatabase.db"),  # the same lines as the CSV export
+    Source("apple-reminders", REMINDERS, "Container_v1/Stores/Data-*.sqlite"),
+    Source("copilot", COPILOT, "database/CopilotDB.sqlite"),
+    Source("splitwise", SPLITWISE, "Library/Application Support/database.sqlite"),
+    Source("beeper", BEEPER, "BeeperStore.sqlite"),
+    Source(  # the companions first, so they are beside the store when the adapter reads it
+        "line",
+        LINE_APP,
+        LINE_STORE + "/Contacts Syncing/Contacts.sqlite",
+        adapter=False,
+        note="read beside Line.sqlite",
+    ),
+    Source(
+        "line",
+        LINE,
+        LINE_STORE + "/Messages/UnifiedGroup.sqlite",
+        adapter=False,
+        note="read beside Line.sqlite",
+    ),
+    Source("line", LINE, LINE_STORE + "/Messages/Line.sqlite"),
+    Source("twitter", TWITTER, "com.atebits.tweetie.databases/v1/*/*-dmv2.db"),
+    Source(  # `apple-books` (RFC 0022); the library that names the books is copied beside the store
+        "apple-books",
+        BOOKS,
+        "Documents/storeFiles/AEAnnotation*.sqlite",
+        companions=((BOOKS, "Documents/BKLibrary/BKLibrary*.sqlite"),),
+    ),
+    Source(  # `voice-memos` (RFC 0023); the audio beside the store on the phone lands under Recordings/
+        "voice-memos",
+        VOICE_MEMOS,
+        "Recordings/CloudRecordings.db",
+        media=(VOICE_MEMOS, "Recordings"),
+        media_suffixes=(".m4a", ".qta"),
+    ),
+    Source("apple-photos", CAMERA_ROLL, "Media/PhotoData/Photos.sqlite"),  # the library, not the pixels
+    Source(  # `withings` (RFC 0014): every profile's WTHealth and Measure stores, read as one folder
+        "withings",
+        WITHINGS,
+        "Library/Application Support/coredata/*_WTHealth.sqlite",
+        companions=((WITHINGS, "Library/Application Support/coredata/*_Measure.sqlite"),),
+    ),
+    Source("myfitnesspal", MYFITNESSPAL, "Documents/maindb.sqlite"),  # `myfitnesspal` (RFC 0014)
+    Source(  # `sbb` (RFC 0020): the tickets, with the past journeys from the app's own container beside them
+        "sbb",
+        SBB,
+        "SbbMobile.db",
+        companions=((SBB_APP, "Documents/ch.sbb.coredata.pasttrips.sqlite"),),
+    ),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
@@ -127,13 +257,21 @@ EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
         "health", HEALTH, "Health/healthdb.sqlite", adapter=False, note="read beside healthdb_secure.sqlite"
     ),
     Source("health", HEALTH, "Health/healthdb_secure.sqlite"),  # `apple-health` (RFC 0014)
-    Source("safari", HOME, "Library/Safari/History.db", adapter=False),  # HomeDomain, not the app's
+    Source("safari", HOME, "Library/Safari/History.db"),  # HomeDomain, not the app's; `safari` (RFC 0017)
 )
 
 
 def source(name: str) -> Source | None:
-    """The source called `name`; `contacts`, `calendar`, `notes` and `calls` stand for their `ios-` names."""
-    return next((s for s in SOURCES + EXTRAS if name in (s.name, s.name.removeprefix("ios-"))), None)
+    """The source called `name`; `contacts`, `calendar`, `notes`, `calls` and `reminders` stand for
+    their `ios-` and `apple-` names."""
+    return next(
+        (
+            s
+            for s in SOURCES + EXTRAS
+            if name in (s.name, s.name.removeprefix("ios-"), s.name.removeprefix("apple-"))
+        ),
+        None,
+    )
 
 
 @dataclass(frozen=True)
@@ -306,6 +444,26 @@ class Manifest:
                 return self._located(file_id, domain, relative_path, blob)
         return None
 
+    def files_matching(self, domain: str, pattern: str) -> list[BackupFile]:
+        """Every file row of `domain` whose whole relativePath matches `pattern` (fnmatch, case
+        kept), in path order. The rows of a domain are read once; the match is in Python, so a
+        bracket or a `?` in the pattern means what fnmatch says, not what SQL would."""
+        if not self.unlocked:
+            return []
+        with closing(self._open()) as con:
+            rows = con.execute(
+                "SELECT fileID, relativePath, flags, file FROM Files WHERE domain = ? ORDER BY relativePath",
+                (domain,),
+            ).fetchall()
+        return [
+            self._located(file_id, domain, relative_path, blob)
+            for file_id, relative_path, flags, blob in rows
+            if flags == FILE_FLAG
+            and isinstance(file_id, str)
+            and isinstance(relative_path, str)
+            and fnmatchcase(relative_path, pattern)
+        ]
+
     def files_under(self, domain: str, prefix: str) -> Iterator[BackupFile]:
         """Every file row below `prefix` in `domain`, in path order. A path that would leave the
         folder (`..`, an empty part) is never yielded: the copy stays inside its media folder."""
@@ -374,8 +532,10 @@ class Copy:
 @dataclass
 class Plan:
     """What one source would import: its store (None when the backup has no row for it), the
-    store's siblings and its media files. `found` is false when the row is there but the bytes
-    are not (`listed`)."""
+    store's siblings — its -wal/-shm, for a pattern source the other stores that matched, and the
+    source's companions, each with theirs — and its media files. `found` is false when the row is
+    there but the bytes are not (`listed`). A folder source (`Source.files`) has no store: its files
+    are `media`, and it is listed and found when at least one of them is."""
 
     source: Source
     store: BackupFile | None
@@ -385,15 +545,21 @@ class Plan:
 
     @property
     def listed(self) -> bool:
+        if self.source.files is not None:
+            return bool(self.media)
         return self.store is not None
 
     @property
     def found(self) -> bool:
+        if self.source.files is not None:
+            return any(f.size is not None for f in self.media)
         return self.store is not None and self.store.size is not None
 
     @property
     def files(self) -> list[BackupFile]:
         """Every file that would be copied, the store first; only the ones the backup really holds."""
+        if self.source.files is not None:
+            return [f for f in self.media if f.size is not None]
         if not self.found or self.store is None:
             return []
         return [f for f in (self.store, *self.siblings, *self.media) if f.size is not None]
@@ -407,15 +573,38 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
     """One Plan per source, in SOURCES order."""
     plans: list[Plan] = []
     for s in sources:
-        store = manifest.file(s.domain, s.relative_path)
+        if s.files is not None:
+            found = [f for f in manifest.files_under(s.domain, s.relative_path) if fnmatch(f.name, s.files)]
+            plans.append(Plan(s, None, media=found))
+            continue
+        stores = manifest.files_matching(s.domain, s.relative_path) if s.pattern else []
+        store = (stores[0] if stores else None) if s.pattern else manifest.file(s.domain, s.relative_path)
         p = Plan(s, store)
         if p.found:
-            for suffix in SIBLINGS:
-                sibling = manifest.file(s.domain, s.relative_path + suffix)
-                if sibling is not None:
-                    p.siblings.append(sibling)
+            for i, each in enumerate(stores if s.pattern else [p.store]):
+                if i and each is not None and each.size is not None:
+                    p.siblings.append(each)
+                if each is not None:
+                    for suffix in SIBLINGS:
+                        sibling = manifest.file(s.domain, each.relative_path + suffix)
+                        if sibling is not None:
+                            p.siblings.append(sibling)
+            for domain, glob in s.companions:
+                for other in manifest.files_matching(domain, glob):
+                    if other.relative_path.endswith(SIBLINGS):
+                        continue
+                    p.siblings.append(other)
+                    for suffix in SIBLINGS:
+                        sibling = manifest.file(domain, other.relative_path + suffix)
+                        if sibling is not None:
+                            p.siblings.append(sibling)
             if s.media is not None:
-                p.media.extend(manifest.files_under(*s.media))
+                suffixes = s.media_suffixes
+                p.media.extend(
+                    f
+                    for f in manifest.files_under(*s.media)
+                    if not suffixes or PurePosixPath(f.relative_path).suffix.lower() in suffixes
+                )
         plans.append(p)
     return plans
 
@@ -423,16 +612,26 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
 def copy(p: Plan, dest: Path) -> Path:
     """Copy the plan's files under `dest` with their original names and return the store's copy.
 
-    The store and its siblings land in `dest` itself; a sibling left by an earlier copy that this
-    backup does not have is removed, so the store is never read with someone else's journal. Media
+    The store and its siblings land in `dest` itself (a second store of a pattern source whose
+    name repeats the first's goes under its own parent folder's name); a sibling left by an
+    earlier copy that this backup does not have is removed, so the store is never read with
+    someone else's journal. Media
     lands under `dest/<media folder>/` with its path below the backup's media prefix. Every copy is
     checked against the stored blob (`_copy_file`); a mismatch raises CopyError, a stale manifest
     `Size` is only a warning on the Copy. An encrypted file is decrypted on the way, a chunk at a
-    time. Every copy is noted in `p.copied`."""
-    if not p.found or p.store is None:
+    time. Every copy is noted in `p.copied`. A folder source's files land under `dest` with their
+    paths below the backup's folder, and `dest` itself is returned: the adapter reads the folder."""
+    if not p.found:
         raise ValueError(f"{p.source.name}: nothing to copy")
     dest.mkdir(parents=True, exist_ok=True)
     p.copied.clear()
+    if p.source.files is not None:
+        head = len(PurePosixPath(p.source.relative_path).parts)
+        for f in p.files:
+            p.copied.append(_copy_file(f, dest.joinpath(*f.parts[head:])))
+        return dest
+    if p.store is None:
+        raise ValueError(f"{p.source.name}: nothing to copy")
     store_copy = _copy_file(p.store, dest / p.store.name)
     p.copied.append(store_copy)
     present = {f.name for f in p.siblings if f.size is not None}
@@ -440,9 +639,14 @@ def copy(p: Plan, dest: Path) -> Path:
         stale = dest / (p.store.name + suffix)
         if p.store.name + suffix not in present and stale.is_file():
             stale.unlink()
+    used = {p.store.name}
     for sibling in p.siblings:
         if sibling.size is not None:
-            p.copied.append(_copy_file(sibling, dest / sibling.name))
+            target = dest / sibling.name
+            if sibling.name in used and len(sibling.parts) > 1:
+                target = dest / sibling.parts[-2] / sibling.name
+            used.add(sibling.name)
+            p.copied.append(_copy_file(sibling, target))
     if p.source.media is not None and p.source.media_folder is not None:
         head = len(PurePosixPath(p.source.media[1]).parts)
         folder = dest / p.source.media_folder

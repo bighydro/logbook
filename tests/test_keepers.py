@@ -67,9 +67,8 @@ def test_infer_keepers_writes_a_memory_per_favourite_and_an_art_per_album_photo(
     }
     assert all(line["payload"]["source"] == "immich" for line in found)
     out = _run(capsys, "infer", "keepers")
-    assert (
-        "0 new keepers" in out and "4 already" in out and lb.meta["seq"] == seq + 4
-    ), "a re-run appends nothing"
+    assert "0 new keepers" in out and "4 already" in out, "a re-run appends nothing"
+    assert lb.meta["seq"] == seq + 4
     assert lb.verify()[2] == []
 
 
@@ -80,10 +79,11 @@ def test_apple_photos_marks_read_as_ios_photos_and_albums_may_be_a_list(
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
-    both = photo("2026-06-01T10:00:00Z", favorite=True, library="apple-photos")
-    both["payload"]["extra"]["albums"] = ["Holiday", "art"]
+    both = photo("2026-06-01T10:00:00Z", library="apple-photos")
+    both["payload"]["favorite"] = True  # apple-photos writes the marks at the payload's top
+    both["payload"]["albums"] = ["Holiday", "art"]
     neither = photo("2026-06-01T11:00:00Z", library="apple-photos")
-    neither["payload"]["extra"] = {"favorite": False, "albums": ["Holiday"]}
+    neither["payload"]["albums"] = ["Holiday"]
     lb.append_many([both, neither])
     _run(capsys, "infer", "keepers")
     found = _keepers(lb)

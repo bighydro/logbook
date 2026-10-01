@@ -1,0 +1,16 @@
+{
+  "color": "DEFAULT",
+  "isTrashed": false,
+  "isPinned": false,
+  "isArchived": false,
+  "title": "Missing photo",
+  "textContent": "the picture was not exported",
+  "attachments": [
+    {
+      "filePath": "nowhere.jpg",
+      "mimetype": "image/jpeg"
+    }
+  ],
+  "userEditedTimestampUsec": 1767312000000000,
+  "createdTimestampUsec": 1767312000000000
+}
