@@ -1,5 +1,5 @@
 """logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
-trips · keepers · verify · export · index · migrate · assets. Three verbs, fifteen rare."""
+trips · keepers · verify · export · index · migrate · assets · sources. Three verbs, sixteen rare."""
 
 from __future__ import annotations
 
@@ -102,9 +102,18 @@ def cmd_init(a: argparse.Namespace) -> None:
         print(f"refusing to init: {e}", file=sys.stderr)
         sys.exit(2)
     print(
-        f"created {lb.root}\ntimezone: {timezone_name}{hint}\n"
-        f'Drop any export into {lb.root / "inbox"}, or: logbook add "what happened"'
+        f"created {_under_home(lb.root)}\ntimezone: {timezone_name}{hint}\n"
+        f'Drop any export into {_under_home(lb.root / "inbox")}, or: logbook add "what happened"'
     )
+
+
+def _under_home(path: Path) -> str:
+    """`~/Logbook` for a path inside the home directory, else the path as given: what is printed
+    (and recorded in a demo) never spells the user's name."""
+    try:
+        return str(PurePath("~") / path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None) -> bool:
@@ -132,6 +141,8 @@ def _append_with(
     `only_labels`, `skip_labels`), passed when the adapter's `run` takes them; one it does not take
     exits 2, so a flag is never silently ignored. An adapter whose `run` takes `owner_emails` gets
     the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none."""
+    if _say_disabled(lb, adapter.NAME):
+        return 0
     counts: dict[str, int] = {}
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
     options: dict[str, Any] = {}
@@ -179,6 +190,26 @@ def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
     except assets.AssetError as e:
         print(f"{command}: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _disabled(lb: Logbook) -> dict[str, str]:
+    """The disabled sources of `policy/import.json` by adapter NAME (`books` stands for `apple-books`,
+    `health` for `apple-health`, as in `adapters.ALIASES`); a malformed file exits 2 naming it."""
+    try:
+        listed = policy.disabled(lb.root)
+    except policy.PolicyError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(2)
+    return {adapters.ALIASES.get(name, name): reason for name, reason in listed.items()}
+
+
+def _say_disabled(lb: Logbook, name: str) -> bool:
+    """True, having said so, when the owner disabled the source `name` in `policy/import.json`."""
+    reason = _disabled(lb).get(adapters.ALIASES.get(name, name))
+    if reason is None:
+        return False
+    print(f"{name}: disabled ({reason}); skipped — {policy.import_path(lb.root)}")
+    return True
 
 
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
@@ -491,6 +522,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
         known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
         print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
         sys.exit(2)
+    lb = Logbook.find()
+    if _say_disabled(lb, adapter.NAME):  # before the variables: a switched-off source needs none
+        return
     try:
         config = adapter.configure(os.environ)
     except ValueError as e:
@@ -505,7 +539,6 @@ def cmd_sync(a: argparse.Namespace) -> None:
             f"sync: --since must be RFC3339 UTC, e.g. 2026-03-01T00:00:00Z, not {a.since!r}", file=sys.stderr
         )
         sys.exit(2)
-    lb = Logbook.find()
     state_path = lb.root / "state" / f"{a.name}.json"
     stored = _read_state(state_path).get("since")
     since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
@@ -648,6 +681,29 @@ def cmd_infer(a: argparse.Namespace) -> None:
     else:
         print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")
     _report_skipped(counts)
+
+
+def cmd_sources(a: argparse.Namespace) -> None:
+    """`sources`: every adapter this build has, file and live, with its state under
+    `policy/import.json` — `enabled`, or `disabled (<reason>)`; then any disabled name that is no
+    adapter, so a typo in the file is seen rather than silently ignored."""
+    lb = Logbook.find()
+    disabled = _disabled(lb)
+    kinds: dict[str, list[str]] = {}
+    for file_adapter in adapters.file_adapters():
+        kinds.setdefault(file_adapter.NAME, []).append("file")
+    for live_adapter in adapters.live_adapters():
+        kinds.setdefault(live_adapter.NAME, []).append("live")
+    for name in sorted(kinds):
+        reason = disabled.get(name)
+        state = "enabled" if reason is None else f"disabled ({reason})"
+        print(f"{name:<20} {'+'.join(kinds[name]):<10} {state}")
+    for name, reason in disabled.items():
+        if name not in kinds:
+            print(f"{name:<20} {'-':<10} disabled ({reason}); no adapter by that name in this build")
+    n = len(kinds)
+    off = sum(name in kinds for name in disabled)
+    print(f"{n} adapters, {off} disabled; the list is {policy.import_path(lb.root)}")
 
 
 def _infer_keepers(a: argparse.Namespace) -> None:
@@ -905,14 +961,15 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
     encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
     through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
-    beside it), Safari's history through `safari` (RFC 0017)."""
+    beside it), Safari's history through `safari` (RFC 0017). A source the owner disabled in
+    `policy/import.json` is skipped and said so before anything is copied, `--only` or not."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
     except ios_backup.NotABackup as e:
         print(f"import-backup: {e}", file=sys.stderr)
         sys.exit(2)
-    sources = _only(a.only, manifest.encrypted)
+    sources = tuple(src for src in _only(a.only, manifest.encrypted) if not _say_disabled(lb, src.name))
     inbox = lb.root / "inbox" / f"ios-backup-{manifest.udid}"
     if manifest.encrypted:
         _unlock(manifest, inbox)
@@ -1481,7 +1538,13 @@ def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     return head + ("; " + ", ".join(parts) if parts else "")
 
 
-def _attendee(attendee: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+def _attendee(attendee: object, names: Mapping[Ref, str] | None) -> str:
+    """An attendee's name, else its ref. A string attendee is the shape before RFC 0009 (SPEC §3.2
+    reads it as an `email` ref); anything else is printed as it is, never a failure (SPEC §5)."""
+    if isinstance(attendee, str):
+        return _name({"kind": "email", "value": attendee}, names) or attendee
+    if not isinstance(attendee, dict):
+        return str(attendee)
     ref = attendee.get("ref")
     label = _name(ref, names)
     if label:
@@ -2510,6 +2573,10 @@ def main(argv: list[str] | None = None) -> None:
         "--dry-run", action="store_true", help="crossing: count and show the policy; write nothing"
     )
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser(
+        "sources", help="every adapter, file and live, and whether policy/import.json has disabled it"
+    )
+    s.set_defaults(fn=cmd_sources)
     s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
     verbs = s.add_subparsers(dest="verb", required=True)
     v = verbs.add_parser("list", help="one line per registered asset")

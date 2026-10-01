@@ -134,14 +134,14 @@ def test_declaration_minimal():
 
 def test_declaration_full():
     d = flights.parse_declaration(
-        "LX561 nce zrh 2026-09-27 pilot 07:05-08:20 A320 HB-JLT", Airports.load(), Airlines.load()
+        "LX561 nce zrh 2026-09-27 pilot 07:05-08:20 A320 ZZ-ABC", Airports.load(), Airlines.load()
     )
     p = d["payload"]
     assert p["carrier"] == "LX" and p["carrier_icao"] == "SWR" and p["number"] == "561"
     assert p["role"] == "pilot"
     assert p["actual_departure"] == "2026-09-27T05:05:00Z"  # Nice, CEST
     assert p["actual_arrival"] == "2026-09-27T06:20:00Z"
-    assert p["aircraft"] == {"type": "A320", "registration": "HB-JLT"}
+    assert p["aircraft"] == {"type": "A320", "registration": "ZZ-ABC"}
     assert d["at"] == p["actual_departure"] and d["end"] == p["actual_arrival"]
     assert d["tz"] == "Europe/Paris"
 

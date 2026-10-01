@@ -58,13 +58,13 @@ PERSONS = [
 LABELS = {1: "_$!<Mobile>!$_", 2: "_$!<Work>!$_", 3: "_$!<Home>!$_"}
 # (UID, record_id, property, label, value)
 VALUES = [
-    (10, 1, PHONE, 1, "+47 912 34 567"),  # spaces
+    (10, 1, PHONE, 1, "+47 900 00 567"),  # spaces
     (11, 1, EMAIL, 3, "Ines@Example.org"),
     (12, 1, EMAIL, 2, " ines@example.org "),  # the same address, other case, padded
-    (20, 2, PHONE, 1, "0047-22-33-44-55"),  # 00 prefix, dashes
-    (21, 2, PHONE, 2, "(22) 33.44.55"),  # no country code
+    (20, 2, PHONE, 1, "0047-90-00-00-55"),  # 00 prefix, dashes
+    (21, 2, PHONE, 2, "(90) 00.00.55"),  # no country code
     (22, 2, EMAIL, 2, "ola@example.org"),
-    (30, 3, PHONE, 2, "+47 21 00 00 00"),
+    (30, 3, PHONE, 2, "+47 90 00 00 09"),
     (31, 3, EMAIL, 2, "post@nordmann.example"),
     (50, 5, PHONE, 1, "+47 900 00 000"),
 ]
@@ -215,7 +215,7 @@ def test_run_yields_resolution_lines_at_the_import_time(tmp_path, no_dial_prefix
 def test_run_mints_one_uuid7_per_person_and_reuses_it_across_their_refs(tmp_path, no_dial_prefix):
     lines = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))
     ines = {k: v for k, v in lines.items() if v["payload"]["extra"]["record_id"] == 1}
-    assert set(ines) == {"phone:+4791234567", "email:ines@example.org"}
+    assert set(ines) == {"phone:+4790000567", "email:ines@example.org"}
     ids = {v["payload"]["entity"]["id"] for v in ines.values()}
     assert len(ids) == 1
     assert uuid.UUID(ids.pop()).version == 7
@@ -253,32 +253,32 @@ def test_run_person_without_refs_yields_nothing_and_is_counted(tmp_path, no_dial
 
 
 def test_run_phone_strips_spaces_and_keeps_the_entered_value(tmp_path, no_dial_prefix):
-    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:+4791234567"]["payload"]
-    assert p["ref"] == {"kind": "phone", "value": "+4791234567"}
-    assert p["extra"]["entered"] == "+47 912 34 567"
+    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:+4790000567"]["payload"]
+    assert p["ref"] == {"kind": "phone", "value": "+4790000567"}
+    assert p["extra"]["entered"] == "+47 900 00 567"
     assert "unnormalised" not in p["extra"]
 
 
 def test_run_phone_00_prefix_becomes_plus(tmp_path, no_dial_prefix):
     lines = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))
-    assert "phone:+4722334455" in lines
-    assert lines["phone:+4722334455"]["payload"]["extra"]["entered"] == "0047-22-33-44-55"
+    assert "phone:+4790000055" in lines
+    assert lines["phone:+4790000055"]["payload"]["extra"]["entered"] == "0047-90-00-00-55"
 
 
 def test_run_phone_without_country_code_is_kept_and_flagged(tmp_path, no_dial_prefix):
-    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:22334455"]["payload"]
-    assert p["ref"]["value"] == "22334455"
+    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:90000055"]["payload"]
+    assert p["ref"]["value"] == "90000055"
     assert p["extra"]["unnormalised"] is True
-    assert p["extra"]["entered"] == "(22) 33.44.55"
+    assert p["extra"]["entered"] == "(90) 00.00.55"
 
 
 def test_run_phone_without_country_code_takes_logbook_dial_prefix(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "47")
     lines = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))
-    assert "phone:22334455" not in lines
-    p = lines["phone:+4722334455"]["payload"]  # 0047… and (22)… now meet on the same ref
+    assert "phone:90000055" not in lines
+    p = lines["phone:+4790000055"]["payload"]  # 0047… and (22)… now meet on the same ref
     assert "unnormalised" not in p["extra"]
-    assert "phone:+4791234567" in lines  # a number that already had one is untouched
+    assert "phone:+4790000567" in lines  # a number that already had one is untouched
 
 
 def _one_phone(tmp_path: Path, entered: str) -> dict:
@@ -333,7 +333,7 @@ def test_run_raw_id_is_kind_and_normalised_value(tmp_path, no_dial_prefix):
 
 
 def test_run_extra_keeps_the_source_ids_labels_and_dates(tmp_path, no_dial_prefix):
-    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:+4791234567"]["payload"]
+    p = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))["phone:+4790000567"]["payload"]
     assert p["extra"]["record_id"] == 1 and p["extra"]["value_id"] == 10
     assert p["extra"]["label"] == "mobile"
     assert p["extra"]["created"] == datetime.fromtimestamp(APPLE_EPOCH + 700_000_000, UTC).strftime(
@@ -348,7 +348,7 @@ def test_run_missing_modification_date_is_omitted(tmp_path, no_dial_prefix):
     try:
         con.executescript(DDL)
         con.execute("INSERT INTO ABPerson VALUES (1,'Ines','Nordmann',NULL,NULL,NULL,700000000,NULL)")
-        con.execute("INSERT INTO ABMultiValue VALUES (1,1,?,0,'mobile','+47 912 34 567')", (PHONE,))
+        con.execute("INSERT INTO ABMultiValue VALUES (1,1,?,0,'mobile','+47 900 00 567')", (PHONE,))
         con.commit()
     finally:
         con.close()
@@ -359,8 +359,8 @@ def test_run_missing_modification_date_is_omitted(tmp_path, no_dial_prefix):
 
 def test_run_labels_lose_the_apple_wrapper_and_custom_labels_stay(tmp_path, no_dial_prefix):
     lines = _by_ref(list(ios_contacts.run(_address_book(tmp_path))))
-    assert lines["phone:+4722334455"]["payload"]["extra"]["label"] == "mobile"
-    assert lines["phone:22334455"]["payload"]["extra"]["label"] == "work"
+    assert lines["phone:+4790000055"]["payload"]["extra"]["label"] == "mobile"
+    assert lines["phone:90000055"]["payload"]["extra"]["label"] == "work"
     assert lines["email:ines@example.org"]["payload"]["extra"]["label"] == "home"
 
 

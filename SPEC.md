@@ -140,9 +140,19 @@ A reader here is `show`, `export`, or anything else that lists the record for a 
 
 Derived data inherits the highest tier of its evidence. Conformance requires the field; a later version will define the encryption envelope for tiers 2–3 (`payload_enc` replacing `payload`, age/X25519 recipient = the owner's key).
 
+Each payload profile (§5) names the tier its producers write by default. The table repeats what the RFCs say, and the RFC is authoritative where the two differ:
+
+| Default tier | Profiles (RFC) |
+|---|---|
+| 1 | `location/v1` (0001), `photo/v1` (0002), `event/v1` (0009; a source MAY set 2 on entries with attendees), `crossing/v1` (0011, MUST), `call/v1` (0012), `flight/v1` (0013), `trip/v1` (0020; 3 when it carries a `price`), `keeper/v1` (0024), `migration/v1` (§3.1) |
+| 2 | `retraction/v1` (0003), `transcript/v1` (0004), `resolution/v1` (0006; the highest tier of its evidence, 2 in practice), `commitment/v1` and `commitment-close/v1` (0007; the highest tier of their evidence, 2 when written by hand), `message/v1` (0008, MUST), `note/v1` (0010, MUST), `mail/v1` (0015), `task/v1` (0016, MUST), `browse/v1` (0017, MUST), `watch/v1` (0018, MUST), `listen/v1` (0019, MUST), `highlight/v1` (0022), `voice-memo/v1` (0023) |
+| 3 | `health-sample/v1` (0014), `transaction/v1` (0021, MUST; an import option MUST NOT lower it) |
+
+A default marked MUST is the profile's tier; the others are SHOULD: a producer MAY write a higher tier for a reason it states (the reference `transcript`, `granola` and `wispr-flow` adapters write `transcript/v1` at 3), and an import option (`logbook add --tier`) MAY set another tier for a whole run where the RFC allows it, never per line.
+
 ## 5. Payload profiles
 
-The envelope is the standard. Payloads are versioned by `payload.schema` and proposed as RFCs in `rfcs/`. Seed profiles: `location/v1`, `photo/v1`, `event/v1`, `message/v1`, `transaction/v1`, `health-sample/v1`, `note/v1`. A logbook with unknown schemas is still valid, and so is a line whose payload does not have the shape its profile describes: a profile constrains writers, and a reader MUST NOT fail on a payload it cannot interpret.
+The envelope is the standard. Payloads are versioned by `payload.schema` and proposed as RFCs in `rfcs/`; the profiles so far are those of the table in §4, listed with their RFCs in `rfcs/README.md`. A logbook with unknown schemas is still valid, and so is a line whose payload does not have the shape its profile describes: a profile constrains writers, and a reader MUST NOT fail on a payload it cannot interpret.
 
 ## 6. Conformance
 

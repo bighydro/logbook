@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 from datetime import timedelta, timezone
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePath, PureWindowsPath
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -114,3 +114,18 @@ def test_init_explicit_timezone_needs_no_detection(nothing_detectable, tmp_path,
     out = capsys.readouterr().out
     assert "timezone: Europe/Oslo" in out
     assert FALLBACK_HINT not in out
+
+
+def test_init_prints_the_record_under_a_tilde_never_the_home_directory(
+    nothing_detectable, monkeypatch, tmp_path, capsys
+):
+    """A demo recording of `init` must not spell the user's name; a record outside the home directory
+    is printed as given. `Path.home` is monkeypatched, never `HOME` alone (CLAUDE.md)."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    cli.main(["init", str(home / "Demo" / "Logbook"), "--timezone", "Europe/Oslo"])
+    out = capsys.readouterr().out
+    assert f"created {PurePath('~') / 'Demo' / 'Logbook'}" in out
+    assert str(home) not in out
+    cli.main(["init", str(tmp_path / "elsewhere"), "--timezone", "Europe/Oslo"])
+    assert f"created {tmp_path / 'elsewhere'}" in capsys.readouterr().out

@@ -1,4 +1,6 @@
 # Reproducible demo. Render with: vhs docs/demo.tape  (https://github.com/charmbracelet/vhs)
+# Record it from a throwaway home so the GIF never shows a real folder or name:
+#   HOME=$(mktemp -d) PATH=$PWD/.venv/bin:$PATH vhs docs/demo.tape
 Output docs/demo.gif
 Set FontFamily "IBM Plex Mono"
 Set FontSize 16

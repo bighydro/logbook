@@ -1,7 +1,14 @@
-"""The crossing policy (ADR 0016): `<root>/policy/crossing.json` maps a destination to the highest
-tier that may cross to it. A setting in the record, not a constant: the owner's circumstances
-change, so the ceiling is theirs to raise. `logbook init` and the first export write the default;
-nothing else writes it. Read-only from here on."""
+"""The record's policies: settings the owner keeps in `<root>/policy/`, never constants in the code.
+
+`crossing.json` (ADR 0016) maps a destination to the highest tier that may cross to it. The owner's
+circumstances change, so the ceiling is theirs to raise. `logbook init` and the first export write the
+default; nothing else writes it. Read-only from here on.
+
+`import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
+`add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
+adapter with its state. An adapter existing is not a decision to run it: demo, sample and placeholder
+data never enters the record. `logbook init` writes the empty list, and so does the first command that
+reads the file in a record made before it existed."""
 
 from __future__ import annotations
 
@@ -13,6 +20,8 @@ POLICY_FILE = PurePosixPath("policy/crossing.json")  # record-relative, as the m
 DEFAULT_DESTINATION = "hermes"
 DEFAULT_POLICY: dict[str, Any] = {DEFAULT_DESTINATION: {"max_tier": 2}}
 TIERS = (1, 2, 3)
+IMPORT_FILE = PurePosixPath("policy/import.json")
+DEFAULT_IMPORT: dict[str, Any] = {"disabled": []}
 
 
 class PolicyError(ValueError):
@@ -58,3 +67,40 @@ def ceiling(root: Path, destination: str) -> int:
             f'add {{"{destination}": {{"max_tier": 1}}}} to it to allow a crossing'
         )
     return int(entry["max_tier"])
+
+
+def import_path(root: Path) -> Path:
+    return Path(root).joinpath(*IMPORT_FILE.parts)
+
+
+def write_default_import(root: Path) -> Path:
+    """Write the empty import policy where none exists; never overwrite one. Returns the path."""
+    path = import_path(root)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(DEFAULT_IMPORT, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def disabled(root: Path) -> dict[str, str]:
+    """The disabled sources as `{source: reason}`, as the file spells them (aliases are the
+    caller's). A record without the file gets the empty one, so the owner finds it; a file that is
+    not the documented shape raises PolicyError naming it, and the caller writes nothing."""
+    path = write_default_import(root)
+    shape = f'{path} must be {{"disabled": [{{"source": "<adapter>", "reason": "<why>"}}, ...]}}'
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise PolicyError(f"{path} is not JSON: {e}") from e
+    if not isinstance(data, dict) or not isinstance(data.get("disabled"), list):
+        raise PolicyError(shape)
+    out: dict[str, str] = {}
+    for entry in data["disabled"]:
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("source"), str)
+            or not isinstance(entry.get("reason"), str)
+        ):
+            raise PolicyError(shape)
+        out[entry["source"]] = entry["reason"]
+    return out

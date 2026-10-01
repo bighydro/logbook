@@ -10,6 +10,10 @@ Hard rules — a change that needs to break one is wrong; stop and say so:
 - Never change the envelope (SPEC §2–3) without a spec version bump, a regenerated conformance fixture, and an ADR in `docs/adr/`.
 - Test first: write the failing test, run it, implement, run it, commit with `-s`. One issue per task, closed by the commit.
 - Tests never see `LOGBOOK_HOME` or the home directory (`HOME`, `USERPROFILE`) from the shell; `tests/conftest.py` pins them to a temp dir. Never remove that fixture.
+- A test never sets `HOME` alone: `Path.home()` reads `USERPROFILE` on Windows, so a test that needs its own home directory monkeypatches `Path.home` (or sets both variables, as `tests/conftest.py` does).
+- Every adapter that reads an app's own store (SQLite from a phone backup or this Mac) confirms the schema it needs with `PRAGMA table_info` before reading and tolerates drift: a column it does not need may be missing or renamed and the rows still read; a table it needs that is not there is a counted skip or one clear error naming the store, never a traceback.
+- `import-backup` is never run bare against a real backup: always `--only <sources>`, so a run reads only the stores it was asked for. A disabled source in `policy/import.json` stays skipped either way.
+- A long session commits after each step, signed, so a crash or a context reset loses one step at most.
 
 Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv run ruff check --fix .`, `uv run mypy logbook`). Conventional commits (`feat:`, `fix:`, `spec:`, `docs:`, `adapter:`). Plain English names inside the code: Logbook, Line, Day, Note — no metaphors.
 - Paths: never match or split them as strings; use `pathlib` parts. Windows runs the tests too.
