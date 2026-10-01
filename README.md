@@ -165,6 +165,7 @@ logbook sync granola                              # every Granola recording, and
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook infer flights                             # calendar entries + your location points leaving one airport for another: evidence inferred
+logbook transcribe voice-memos                    # a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing

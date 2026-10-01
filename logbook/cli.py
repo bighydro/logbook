@@ -1,5 +1,6 @@
-"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
-trips · keepers · verify · export · index · migrate · assets · sources. Three verbs, sixteen rare."""
+"""logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
+places · rollup · trips · keepers · verify · export · index · migrate · assets · sources. Three verbs,
+seventeen rare."""
 
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ from . import (
     repair,
     rollup,
     stays,
+    transcribe,
     trips,
 )
 from . import (
@@ -689,6 +691,37 @@ def cmd_infer(a: argparse.Namespace) -> None:
     else:
         print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")
     _report_skipped(counts)
+
+
+def cmd_transcribe(a: argparse.Namespace) -> None:
+    """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]`: a
+    transcript/v1 line per standing voice memo whose audio is in the store, heard by a local engine
+    (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is needed for a dry run."""
+    if a.what != "voice-memos":
+        print(f"transcribe: voice-memos can be transcribed, not {a.what!r}", file=sys.stderr)
+        sys.exit(2)
+    if a.since is not None:
+        try:
+            parse_day(a.since)
+        except ValueError as e:
+            print(f"transcribe: {e}", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    engine: transcribe.Engine | None = None
+    if not a.dry_run:
+        try:
+            engine = transcribe.detect(a.model)
+        except transcribe.EngineMissing as e:
+            print(f"transcribe: {e}", file=sys.stderr)
+            sys.exit(2)
+    try:
+        report = transcribe.run(
+            lb, engine, since=a.since, dry_run=a.dry_run, fetch_model=a.fetch_model, progress=print
+        )
+    except transcribe.ModelMissing as e:
+        print(f"transcribe: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(transcribe.describe(report))
 
 
 def cmd_sources(a: argparse.Namespace) -> None:
@@ -2413,6 +2446,26 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--dry-run", action="store_true", help="say what would be written; write nothing")
     s.set_defaults(fn=cmd_infer)
+    s = sub.add_parser(
+        "transcribe",
+        help="voice-memos: a transcript/v1 line per voice memo whose audio is in the store, by a local"
+        " engine (RFC 0004); nothing leaves the machine",
+    )
+    s.add_argument("what", help="what to transcribe: voice-memos")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="only memos from this local day on")
+    s.add_argument(
+        "--model",
+        default=transcribe.DEFAULT_MODEL,
+        help="the Whisper model: a size (tiny, base, small, medium, large-v3) or a Hugging Face"
+        f" repository (default {transcribe.DEFAULT_MODEL})",
+    )
+    s.add_argument("--dry-run", action="store_true", help="list what would be transcribed; write nothing")
+    s.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the model first when it is not on this machine (the only network use, ever)",
+    )
+    s.set_defaults(fn=cmd_transcribe)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
