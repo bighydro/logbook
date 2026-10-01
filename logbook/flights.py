@@ -28,7 +28,6 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
 from functools import cache
 from importlib import resources
-from itertools import pairwise
 from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
@@ -59,7 +58,9 @@ TIMES = (
 MERGED = ("carrier_icao", "from", "to", "diverted_to", *TIMES, "aircraft", "cancelled", "extra")
 
 NEAR_KM = 8.0  # a location point this close to an airport's reference point is at that airport
-MIN_GAP = timedelta(minutes=20)  # the shortest silence in the location points that can be a flight
+# The shortest time from the last point at one airport to the first at the next that can be a flight.
+MIN_LEG = timedelta(minutes=20)
+CELL_KM = 100.0  # up to this radius `nearest` searches the nine one-degree cells around a point
 BEFORE = timedelta(hours=4)  # location points are searched this long before a calendar entry
 AFTER = timedelta(hours=8)  # … and this long after its end (a delay, a long taxi, a late upload)
 NO_END = timedelta(hours=6)  # an entry with no end is given this span
@@ -86,6 +87,7 @@ class Airports:
     def __init__(self, rows: Iterable[Airport]):
         self._rows: list[Airport] = []
         self._by_code: dict[str, Airport] = {}
+        self._cells: dict[tuple[int, int], list[Airport]] = {}  # by whole degree of (lat, lon)
         for airport in rows:
             self._add(airport)
 
@@ -93,9 +95,11 @@ class Airports:
         previous = self._by_code.get(airport.iata)
         if previous is not None:  # an override replaces the built-in row
             self._rows.remove(previous)
+            self._cells[_cell(previous.lat, previous.lon)].remove(previous)
             for code in (previous.iata, previous.icao):
                 self._by_code.pop(code, None)
         self._rows.append(airport)
+        self._cells.setdefault(_cell(airport.lat, airport.lon), []).append(airport)
         self._by_code[airport.iata] = airport
         if airport.icao:
             self._by_code[airport.icao] = airport
@@ -119,17 +123,29 @@ class Airports:
         """The closest airport to a point, when one is within `within_km`."""
         best: Airport | None = None
         best_km = within_km
-        for airport in self._rows:
+        for airport in self._near(lat, lon) if within_km <= CELL_KM else self._rows:
             km = distance_km(lat, lon, airport.lat, airport.lon)
             if km <= best_km:
                 best, best_km = airport, km
         return best
+
+    def _near(self, lat: float, lon: float) -> Iterator[Airport]:
+        """The airports in the point's one-degree cell and the eight around it: every airport
+        within a degree of latitude (111 km) and a degree of longitude, the longitude wrapping."""
+        row, column = _cell(lat, lon)
+        for d_row in (-1, 0, 1):
+            for d_column in (-1, 0, 1):
+                yield from self._cells.get((row + d_row, (column + d_column + 180) % 360 - 180), ())
 
     def __iter__(self) -> Iterator[Airport]:
         return iter(self._rows)
 
     def __len__(self) -> int:
         return len(self._rows)
+
+
+def _cell(lat: float, lon: float) -> tuple[int, int]:
+    return math.floor(lat), math.floor((lon + 180) % 360) - 180
 
 
 @cache
@@ -213,14 +229,14 @@ def _builtin_airlines() -> tuple[tuple[str, str], ...]:
 # -- designators and routes in text --------------------------------------------------------------------------
 
 DESIGNATOR = re.compile(r"(?<![A-Z0-9])([A-Z][A-Z0-9]|[0-9][A-Z]|[A-Z]{3})[ -]?(\d{1,4})([A-Z])?(?![A-Z0-9])")
-FLIGHT_WORDS = ("flight", "✈")  # "flight", ✈
+FLIGHT_WORDS = ("flight", "flug", "✈")  # "flight", "Flug", ✈
 CODE = re.compile(r"(?<![A-Z0-9])([A-Z]{3,4})(?![A-Z0-9])")
 
 
 def designator(text: str, airlines: Airlines) -> tuple[str, str] | None:
     """(carrier, number) named in a calendar title: `LX 561`, `LX561`, `Flight to Zurich (LX 561)`.
     A code the airlines table knows is enough on its own; an unknown code counts only when the title
-    says it is a flight ("flight", ✈), so `Q3 review` and `Room 12` are not flights."""
+    says it is a flight ("flight", "Flug", ✈), so `Q3 review` and `Room 12` are not flights."""
     fallback: tuple[str, str] | None = None
     said_flight = any(word in text.lower() for word in FLIGHT_WORDS)
     for m in DESIGNATOR.finditer(text):
@@ -576,11 +592,16 @@ def reconcile(
 ) -> Iterator[dict[str, Any]]:
     """Pass drafts through; a flight draft whose key already stands in the record (or earlier in
     this stream) becomes the merged line that supersedes it. Every draft gets an id here so a later
-    one in the same stream can name it. `counts["merged"]` tallies the merges."""
+    one in the same stream can name it. `counts["merged"]` tallies the merges. A draft that repeats
+    an observation already in the stream (the same source and raw_id: four calendar entries for one
+    flight give four identical inferences) is dropped, so what comes out is what `append_many`
+    would write; one that repeats an observation already in the record is passed through for
+    `append_many` to dedupe and report."""
     counts = counts if counts is not None else {}
     airports = airports or Airports.load()
     last: dict[Key, Line] | None = None
     seen: set[tuple[str, str]] = set()
+    passed: set[tuple[str, str]] = set()
     for draft in drafts:
         if draft.get("kind") != KIND:
             yield draft
@@ -591,7 +612,11 @@ def reconcile(
                 seen = {
                     (str(line["source"]), str(line["payload"].get("raw_id"))) for line in idx.by_kind(KIND)
                 }
-        if (str(draft["source"]), str(draft["payload"].get("raw_id"))) in seen:
+        observation = (str(draft["source"]), str(draft["payload"].get("raw_id")))
+        if observation in passed:
+            continue  # the same observation earlier in this stream: the first one stands
+        passed.add(observation)
+        if observation in seen:
             yield draft  # an exact re-run of this observation: append_many dedupes it, nothing merges
             continue
         k = key(draft["payload"])
@@ -621,10 +646,13 @@ def infer(
     counts: dict[str, int] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One `inferred` flight/v1 draft per calendar entry (`event/v1`, its last version standing, not
-    cancelled) whose title names a flight and around which the record's location points fall
-    silent from one airport to another (RFC 0013 *Producers*). `since` and `until` are local days
-    that bound the entries considered. `counts` tallies `calendar_flights` (entries that name one)
-    and `no_gap` (those the location points do not confirm)."""
+    cancelled) whose title names a flight and around which the record's location points leave one
+    airport and next reach another (RFC 0013 *Producers*): a leg from the last point within NEAR_KM
+    of one airport to the first point within NEAR_KM of a different one, every point between them
+    (a tracker that keeps logging on the climb, or through the whole flight) near no airport, at
+    least MIN_LEG long. Silence in between is usual but not required. `since` and `until` are
+    local days that bound the entries considered. `counts` tallies `calendar_flights` (entries
+    that name one) and `no_gap` (those the location points do not confirm)."""
     counts = counts if counts is not None else {}
     airlines = Airlines.load()
     with lb.index() as idx:
@@ -667,23 +695,23 @@ def _infer_one(
     hint = route_in(str(payload.get("title") or ""), airports)
     best: tuple[Line, Line, Airport, Airport] | None = None
     best_score: tuple[int, float] = (0, 0.0)
-    for before, after in pairwise(points):
-        gap = _instant(str(after["at"])) - _instant(str(before["at"]))
-        if gap < MIN_GAP:
-            continue
-        if not all_day and not (
-            _instant(str(after["at"])) >= start and _instant(str(before["at"])) <= end + BEFORE
-        ):
-            continue  # the silence must overlap the entry, give or take
-        lat1, lon1 = _coordinates(before) or (0.0, 0.0)
-        lat2, lon2 = _coordinates(after) or (0.0, 0.0)
-        origin, destination = airports.nearest(lat1, lon1), airports.nearest(lat2, lon2)
-        if origin is None or destination is None or origin.iata == destination.iata:
-            continue
-        matches = int(hint is not None and (origin.iata, destination.iata) == hint)
-        score = (matches, gap.total_seconds())
-        if score > best_score:
-            best, best_score = (before, after, origin, destination), score
+    last: tuple[Line, Airport] | None = None  # the latest point at an airport
+    for point in points:
+        lat, lon = _coordinates(point) or (0.0, 0.0)
+        airport = airports.nearest(lat, lon)
+        if airport is None:
+            continue  # between airports: in the air, or on the ground somewhere else
+        if last is not None and airport.iata != last[1].iata:
+            before, origin = last
+            after, destination = point, airport
+            leg = _instant(str(after["at"])) - _instant(str(before["at"]))
+            overlaps = _instant(str(after["at"])) >= start and _instant(str(before["at"])) <= end + BEFORE
+            if leg >= MIN_LEG and (all_day or overlaps):  # the leg must overlap the entry, give or take
+                matches = int(hint is not None and (origin.iata, destination.iata) == hint)
+                score = (matches, leg.total_seconds())
+                if score > best_score:
+                    best, best_score = (before, after, origin, destination), score
+        last = (point, airport)
     if best is None:
         return None
     before, after, origin, destination = best

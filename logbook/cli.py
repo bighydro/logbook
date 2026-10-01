@@ -36,7 +36,16 @@ from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .index import local_date
 from .resolve import Ref, labels
-from .store import RETRACTION, CodeCheckoutError, FormatError, Logbook, UnsortedFile, now_utc, retractions
+from .store import (
+    RETRACTION,
+    CodeCheckoutError,
+    FormatError,
+    Logbook,
+    UnsortedFile,
+    _dedupe_key,
+    now_utc,
+    retractions,
+)
 
 _LOCALTIME = "/etc/localtime"
 
@@ -236,7 +245,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "merged": "merged into a flight already in the record",
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",
-    "no_gap": "calendar flights without a location gap",
+    "no_gap": "calendar flights the location points do not confirm",
     "no_message_id": "without a Message-ID, keyed by digest",
     "date_from_separator": "timed by the mbox separator (no Date header)",
     "body_from_html": "with the body taken from HTML",
@@ -571,19 +580,18 @@ def cmd_infer(a: argparse.Namespace) -> None:
 
     if a.dry_run:
         found = list(drafts)
-        entries = counts.pop("calendar_flights", 0)
-        entries_text = _plural(entries, "calendar entry", "calendar entries")
-        print(
-            f"dry run: {_plural(len(found), 'flight')} from {entries_text} would be written; nothing written"
-        )
+        with lb.index() as idx:  # what append_many would skip: the observations the record already holds
+            already = len(idx.existing({key for d in found if (key := _dedupe_key(d)) is not None}))
+        n = len(found) - already
     else:
         n = lb.append_many(drafts, skipped=skipped)
-        entries = counts.pop("calendar_flights", 0)
-        entries_text = _plural(entries, "calendar entry", "calendar entries")
-        print(
-            f"inferred {_plural(n, 'new flight')} from {entries_text}"
-            + (f" ({already} already in the record)" if already else "")
-        )
+    entries_text = _plural(counts.pop("calendar_flights", 0), "calendar entry", "calendar entries")
+    already_text = f" ({already} already in the record)" if already else ""
+    if a.dry_run:
+        would = f"{_plural(n, 'flight')} from {entries_text} would be written"
+        print(f"dry run: {would}{already_text}; nothing written")
+    else:
+        print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")
     _report_skipped(counts)
 
 
@@ -914,9 +922,11 @@ def _day_rows(
     superseded: Mapping[str, int] | None = None,
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
-    by any other row, collapses into one summary. `names` is the label map; None is the `--raw`
+    by any other row, collapses into one summary, and one calendar entry that several sources
+    carry (`_fold_events`) is one row naming them. `names` is the label map; None is the `--raw`
     path: refs exactly as the sources gave them, no label, no fallback."""
     run: list[Line] = []
+    rows, sources = _fold_events(rows, retracted)
     for line in rows:
         retraction = retracted.get(line["id"])
         point = line["kind"] == "location" and retraction is None
@@ -926,9 +936,54 @@ def _day_rows(
         if point:
             run.append(line)
         else:
-            yield _line_row(line, retraction, tz, names, superseded)
+            yield _line_row(line, retraction, tz, names, superseded, sources.get(str(line["id"])))
     if run:
         yield _run_row(run, tz)
+
+
+SAME_EVENT_WITHIN = timedelta(minutes=5)
+
+
+def _fold_events(rows: list[Line], retracted: Mapping[str, Line]) -> tuple[list[Line], dict[str, str]]:
+    """The rows with every calendar entry that repeats an earlier one from another source
+    dropped, and, for each entry kept in their place, its sources as `ics+ios-calendar`. Two
+    entries are one event when they carry the same title, or name the same flight (`Flight to
+    Zürich (LX 561)`, `Flug LX561 nach Zürich`), and start within five minutes of each other;
+    the fold happens only across sources — one calendar holding an entry twice is two entries."""
+    airlines = flights.Airlines.load()
+    clusters: list[list[Line]] = []
+    for line in rows:
+        if line["kind"] != "event" or line["id"] in retracted:
+            continue
+        for cluster in clusters:
+            first = cluster[0]
+            apart = abs(_instant(str(line["at"])) - _instant(str(first["at"])))
+            if apart <= SAME_EVENT_WITHIN and _same_event(first, line, airlines):
+                cluster.append(line)
+                break
+        else:
+            clusters.append([line])
+    dropped: set[str] = set()
+    sources: dict[str, str] = {}
+    for cluster in clusters:
+        seen = list(dict.fromkeys(str(line["source"]) for line in cluster))
+        if len(seen) < 2:
+            continue
+        sources[str(cluster[0]["id"])] = "+".join(seen)
+        dropped.update(str(line["id"]) for line in cluster[1:])
+    return [line for line in rows if str(line["id"]) not in dropped], sources
+
+
+def _same_event(a: Line, b: Line, airlines: flights.Airlines) -> bool:
+    title_a, title_b = (str((line.get("payload") or {}).get("title") or "") for line in (a, b))
+    if " ".join(title_a.split()).casefold() == " ".join(title_b.split()).casefold():
+        return True
+    flight = flights.designator(title_a, airlines)
+    return flight is not None and flight == flights.designator(title_b, airlines)
+
+
+def _instant(stamp: str) -> datetime:
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
 def _line_row(
@@ -937,7 +992,10 @@ def _line_row(
     tz: ZoneInfo,
     names: Mapping[Ref, str] | None,
     superseded: Mapping[str, int] | None = None,
+    sources: str | None = None,
 ) -> str:
+    """`sources` names every source of a folded calendar entry (`_fold_events`) in place of the
+    line's own."""
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
@@ -957,6 +1015,8 @@ def _line_row(
         text = _call_text(p, names)
     elif line["kind"] == "mail":
         text = _mail_text(p, names)
+    elif line["kind"] == "note":
+        text = _note_text(p, raw=names is None)
     else:
         text = (
             p.get("text")
@@ -964,7 +1024,22 @@ def _line_row(
             or p.get("name")
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
-    return f"  {clock}  {line['kind']:<10} {line['source']:<14} {text}"
+    return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+
+
+def _note_text(p: dict[str, Any], raw: bool) -> str:
+    """A note's first line, with `… (+N lines)` when there are more (RFC 0010); `--raw` prints the
+    whole text as written."""
+    text = str(p.get("text") or "")
+    if raw:
+        return text
+    lines = text.rstrip().splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return ""
+    rest = len(lines) - 1
+    return lines[0] if rest == 0 else f"{lines[0]} … (+{_plural(rest, 'line')})"
 
 
 def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
