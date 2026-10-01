@@ -13,4 +13,8 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: astral-sh/setup-uv@v3
       - run: uv python install 3.12
+      - name: Commit to gh-pages as github-actions[bot], never the runner identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - run: uvx --with mkdocs-material --with pymdown-extensions mkdocs gh-deploy --force --no-history

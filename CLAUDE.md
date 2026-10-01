@@ -33,6 +33,9 @@ Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv ru
   Storgata 1
   EOF
   ```
+- The shell `grep` on the maintainer's Mac is ugrep; every scrub or pattern check uses `/usr/bin/grep` or Python `re`, never bare `grep`.
+- The pattern file `~/.config/logbook/pii-patterns` is never printed, pasted or committed; checks print counts only.
+- Before any tag: `git log --all --format='%an %ae %cn %ce' | sort -u` must show only bighydro and bots; `/usr/bin/grep __version__ logbook/__init__.py` matches the tag; `CHANGELOG.md` has the version with today's date.
 
 ## Release routine
 
