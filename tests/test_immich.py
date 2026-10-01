@@ -96,6 +96,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "ios-calls",
         "ios-wallet",
         "easypark",
+        "wispr-flow",
         "flighty",
         "apple-health",
         "ics",

@@ -30,6 +30,7 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   Cards/, copied below ios-wallet/)
     easypark            AppDomain-net.easypark.app                    Documents/recentparkings_<user>.json
                                                                   (a folder source: the glob names the file)
+    wispr-flow          AppDomain-com.wispr.flowapp                   Documents/database.sqlite
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
@@ -85,6 +86,7 @@ WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
+WISPR = "AppDomain-com.wispr.flowapp"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -129,9 +131,8 @@ SOURCES: tuple[Source, ...] = (
     Source(
         "ios-wallet", HOME, "Library/Passes/Cards", files="pass.json"
     ),  # an unpacked .pkpass folder per pass
-    Source(
-        "easypark", EASYPARK, "Documents", files="recentparkings_*.json"
-    ),  # the file is named after the user
+    Source("easypark", EASYPARK, "Documents", files="recentparkings_*.json"),  # named after the user
+    Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

@@ -24,6 +24,8 @@ from test_ios_wallet import _passes
 from test_safari import _store as _safari_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
+from test_wispr_flow import LINES as WISPR_LINES
+from test_wispr_flow import _store as _wispr_store
 
 from logbook import cli, ios_backup
 from logbook.store import Logbook
@@ -40,6 +42,7 @@ ALL = (
     "ios-notes",
     "ios-wallet",
     "easypark",
+    "wispr-flow",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -50,6 +53,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "ios-notes": 4,
     "ios-wallet": WALLET_LINES,
     "easypark": EASYPARK_LINES,
+    "wispr-flow": WISPR_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -59,6 +63,7 @@ STORES = {
     "imessage": "sms.db",
     "ios-calendar": "Calendar.sqlitedb",
     "ios-notes": "NoteStore.sqlite",
+    "wispr-flow": "database.sqlite",
 }
 
 
@@ -136,6 +141,8 @@ def _backup(
     if "easypark" in sources:  # the recent-parkings file beside the find-my-car pin, which is not copied
         _put(backup, rows, ios_backup.EASYPARK, "Documents", None)
         _put_tree(backup, rows, ios_backup.EASYPARK, "Documents", _recent(_dir(stage, "easypark")))
+    if "wispr-flow" in sources:
+        _put(backup, rows, ios_backup.WISPR, "Documents/database.sqlite", _wispr_store(_dir(stage, "wispr")))
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")
