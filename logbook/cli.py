@@ -323,10 +323,20 @@ def _progress(n: int, elapsed: float) -> None:
     print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
 
 
-def _file_progress(file: str, n: int, total: int, elapsed: float) -> None:
-    """`verify --progress`: one line per month file as its last line is checked, on stderr, so
-    stdout stays the one line it always was."""
-    print(f"  {file}: {n:,} lines ({total:,} so far, {elapsed:,.0f}s)", file=sys.stderr)
+def _file_progress(n_files: int) -> Callable[[str, int, int, float], None]:
+    """`verify --progress`: one line per month file in path order, on stderr, so
+    stdout stays the one line it always was. `file i of N` is that path rank."""
+    i = 0
+
+    def report(file: str, n: int, total: int, elapsed: float) -> None:
+        nonlocal i
+        i += 1
+        print(
+            f"  file {i} of {n_files}: {file}: {n:,} lines ({total:,} so far, {elapsed:,.0f}s)",
+            file=sys.stderr,
+        )
+
+    return report
 
 
 def _page_progress(unit: str) -> Callable[[int, float], None]:
@@ -2099,7 +2109,7 @@ def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
-    seq, head, errors = lb.verify(warnings, progress=_file_progress if a.progress else None)
+    seq, head, errors = lb.verify(warnings, progress=_file_progress(len(lb.files())) if a.progress else None)
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
         if (exp["seq"], exp["head"]) != (seq, head):
@@ -2477,7 +2487,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--root", help="logbook folder (default: find)")
     s.add_argument("--expect", help="expected.json with seq and head (conformance)")
     s.add_argument(
-        "--progress", action="store_true", help="one line per month file on stderr, as each is finished"
+        "--progress",
+        action="store_true",
+        help="one line per month file on stderr, in path order, as file n of N",
     )
     s.set_defaults(fn=cmd_verify)
     s = sub.add_parser(
