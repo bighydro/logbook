@@ -101,6 +101,7 @@ BUILT_IN = (
     "apple_reminders",
     "copilot",
     "splitwise",
+    "beeper",
 )
 
 

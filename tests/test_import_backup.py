@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
+from test_beeper import _store as _beeper_store
 from test_copilot import _store as _copilot_store
 from test_easypark import LINES as EASYPARK_LINES
 from test_easypark import _recent
@@ -42,6 +43,7 @@ NOTES = "AppDomainGroup-group.com.apple.notes"
 REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 COPILOT = "AppDomainGroup-group.com.copilot.production"
 SPLITWISE = "AppDomain-com.Splitwise.SplitwiseMobile"
+BEEPER = "AppDomainGroup-group.beeper.chat.ios"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -56,6 +58,7 @@ ALL = (
     "apple-reminders",
     "copilot",
     "splitwise",
+    "beeper",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -71,6 +74,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "apple-reminders": 7,
     "copilot": 6,
     "splitwise": 5,
+    "beeper": 8,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -86,6 +90,7 @@ STORES = {
 }
 STORES["copilot"] = "CopilotDB.sqlite"
 STORES["splitwise"] = "database.sqlite"
+STORES["beeper"] = "BeeperStore.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -186,6 +191,9 @@ def _backup(
         _put(backup, rows, SPLITWISE, "Library/Application Support", None)
         store = _splitwise_store(_dir(stage, "splitwise"))
         _put(backup, rows, SPLITWISE, "Library/Application Support/database.sqlite", store)
+    if "beeper" in sources:
+        _put(backup, rows, BEEPER, "BeeperStore.sqlite", _beeper_store(_dir(stage, "beeper")))
+        _put(backup, rows, BEEPER, "Contacts.sqlite", _blob(stage, SAFARI_BYTES))  # beside it, never copied
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -318,6 +326,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (WHATSAPP, "Message/../escape.jpg"),
         (ios_backup.EASYPARK, "Documents/findmycar-pin_12345.json"),  # beside the file, not in the glob
         (REMINDERS, "Container_v1/MLModels/RDkNNReminder.json"),
+        (BEEPER, "Contacts.sqlite"),
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
