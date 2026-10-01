@@ -314,6 +314,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",
     "no_gap": "calendar flights the location points do not confirm",
+    "covered": "legs a tracked flight already covers",
     "no_message_id": "without a Message-ID, keyed by digest",
     "date_from_separator": "timed by the mbox separator (no Date header)",
     "body_from_html": "with the body taken from HTML",

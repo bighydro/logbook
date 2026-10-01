@@ -117,3 +117,19 @@ def test_the_decision_is_written_down() -> None:
     adr = (ROOT / "docs" / "adr" / "0019-trips-are-derived.md").read_text(encoding="utf-8")
     assert "ADR 0019" in adr and "note/v1" in adr
     assert "0019" in (ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+
+
+def test_a_codeshare_twin_shows_once_in_the_flights_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import flight
+
+    lb = persona_record(tmp_path, monkeypatch)
+    lb.append_many(
+        [flight("2026-06-15", "9561", "OSL", "ZRH", "2026-06-15T05:10:00Z", "2026-06-15T07:20:00Z")]
+    )
+    data = _json(capsys, "--year", "2026")
+    _boat, zurich = data["trips"]
+    assert [f["number"] for f in zurich["flights_in"]] == ["561"]
+    text = _run(capsys)
+    assert text.count("in XY 561 OSL") == 1 and "9561" not in text

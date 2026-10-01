@@ -59,12 +59,16 @@ TIMES = (
     "actual_arrival",
 )
 # Payload fields the merge decides one by one (rule 3); `role`, `evidence`, `observations`,
-# `supersedes`, `raw_id` and the key have rules of their own.
-MERGED = ("carrier_icao", "from", "to", "diverted_to", *TIMES, "aircraft", "cancelled", "extra")
+# `supersedes`, `raw_id` and the designator (rule 1) have rules of their own.
+MERGED = ("from", "to", "diverted_to", *TIMES, "aircraft", "cancelled", "extra")
+# Two lines on one day and route whose departures are this close apart are one flight under two
+# numbers, the operating carrier's and a marketing carrier's (rule 1).
+CODESHARE = timedelta(minutes=30)
 
 NEAR_KM = 8.0  # a location point this close to an airport's reference point is at that airport
 # The shortest time from the last point at one airport to the first at the next that can be a flight.
 MIN_LEG = timedelta(minutes=20)
+MIN_KM = 150.0  # … and the shortest great-circle distance between the two airports: closer is a drive
 CELL_KM = 100.0  # up to this radius `nearest` searches the nine one-degree cells around a point
 BEFORE = timedelta(hours=4)  # location points are searched this long before a calendar entry
 AFTER = timedelta(hours=8)  # … and this long after its end (a delay, a long taxi, a late upload)
@@ -288,11 +292,34 @@ def split_designator(text: str) -> tuple[str, str] | None:
 
 
 def key(payload: dict[str, Any]) -> Key:
-    return str(payload.get("date")), str(payload.get("carrier")), str(payload.get("number"))
+    """`(date, carrier, number)`; for an inferred leg the record has no number for (rule 1), the
+    date and the route: `(date, "", "ZRH>IST")`."""
+    date = str(payload.get("date"))
+    number = payload.get("number")
+    if number:
+        return date, str(payload.get("carrier")), str(number)
+    return date, "", ">".join(_route(payload))
 
 
 def key_text(k: Key) -> str:
     return ":".join(k)
+
+
+def designator_text(payload: dict[str, Any]) -> str:
+    """`XY 561`, or nothing for a flight with no number."""
+    carrier, number = payload.get("carrier"), payload.get("number")
+    return f"{carrier or ''} {number}".strip() if number else ""
+
+
+def _route(payload: dict[str, Any]) -> tuple[str, str]:
+    return _code(payload.get("from")), _code(payload.get("to"))
+
+
+def _code(ref: object) -> str:
+    if not isinstance(ref, dict):
+        return ""
+    code = ref.get("iata") or ref.get("icao")
+    return str(code).upper() if code else ""
 
 
 def build(
@@ -301,8 +328,8 @@ def build(
     raw_id: str,
     airports: Airports,
     date: str,
-    carrier: str,
-    number: str,
+    carrier: str | None,
+    number: str | None,
     from_: dict[str, str],
     to: dict[str, str],
     carrier_icao: str | None = None,
@@ -316,7 +343,8 @@ def build(
 ) -> dict[str, Any]:
     """One flight/v1 draft (the envelope minus the chain fields) from a producer's fields. `times`
     maps RFC 0013 time fields to RFC3339 UTC (or None: absent). `evidence` defaults to the
-    producer's (`EVIDENCE_OF`)."""
+    producer's (`EVIDENCE_OF`). `carrier` and `number` are None only for an inferred leg the
+    record has no number for (rule 1)."""
     times = times or {}
     unknown = set(times) - set(TIMES)
     if unknown:
@@ -324,15 +352,14 @@ def build(
     if role not in ROLES:
         raise ValueError(f"role must be one of {', '.join(ROLES)}, not {role!r}")
     evidence = evidence or EVIDENCE_OF[source]
-    payload: dict[str, Any] = {
-        "schema": SCHEMA,
-        "raw_id": raw_id,
-        "date": date,
-        "carrier": carrier,
-        "number": number,
-    }
-    if carrier_icao:
-        payload["carrier_icao"] = carrier_icao
+    if not number and evidence != "inferred":
+        raise ValueError(f"a {evidence} flight has a carrier and a number")
+    payload: dict[str, Any] = {"schema": SCHEMA, "raw_id": raw_id, "date": date}
+    if number:
+        payload["carrier"] = carrier
+        payload["number"] = number
+        if carrier_icao:
+            payload["carrier_icao"] = carrier_icao
     payload["from"] = from_
     payload["to"] = to
     if diverted_to:
@@ -520,7 +547,9 @@ def _clock_field(
 
 
 def standing(lines: Iterable[Line]) -> dict[Key, Line]:
-    """The last flight line standing per key: not retracted, not superseded by another flight line."""
+    """The last flight line standing per flight: not retracted, not superseded by another flight
+    line, and of two standing lines that are one flight under two numbers (rule 1, a codeshare
+    pair the record holds unmerged) the one whose designator the merge would keep."""
     lines = sorted(lines, key=lambda line: int(line["seq"]))
     retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
     live = [line for line in lines if line.get("kind") == KIND and str(line["id"]) not in retracted]
@@ -533,7 +562,58 @@ def standing(lines: Iterable[Line]) -> dict[Key, Line]:
     for line in live:
         if str(line["id"]) not in superseded:
             last[key(line["payload"])] = line
-    return last
+    folded: dict[Key, Line] = {}
+    for line in sorted(last.values(), key=lambda line: int(line["seq"])):
+        twin = codeshare_of(line["payload"], folded)
+        if twin is None:
+            folded[key(line["payload"])] = line
+        elif designated(twin["payload"], line["payload"]) is line["payload"]:
+            del folded[key(twin["payload"])]
+            folded[key(line["payload"])] = line
+    return folded
+
+
+def codeshare_of(payload: dict[str, Any], standing_lines: Mapping[Key, Line]) -> Line | None:
+    """The standing line that is this flight under another number (rule 1), if any."""
+    return next((line for line in standing_lines.values() if same_flight(line["payload"], payload)), None)
+
+
+def same_flight(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Whether two payloads with different designators are one flight: the same date and route,
+    departures within CODESHARE of each other (rule 1). Two lines with the same key are the same
+    flight by the key, not by this; a line is never its own codeshare."""
+    if key(a) == key(b) or str(a.get("date")) != str(b.get("date")) or _route(a) != _route(b):
+        return False
+    if not all(_route(a)):
+        return False
+    departures = _departures(a, b)
+    if departures is None:
+        return False
+    return abs(departures[0] - departures[1]) <= CODESHARE
+
+
+def _departures(a: dict[str, Any], b: dict[str, Any]) -> tuple[datetime, datetime] | None:
+    """The two departures compared like for like: both scheduled when both have one, else both
+    actual, else whatever each has; None when one has no departure time at all."""
+    for field in ("scheduled_departure", "actual_departure"):
+        if a.get(field) and b.get(field):
+            return _instant(str(a[field])), _instant(str(b[field]))
+    own = [p.get("actual_departure") or p.get("scheduled_departure") for p in (a, b)]
+    if not all(own):
+        return None
+    return _instant(str(own[0])), _instant(str(own[1]))
+
+
+def designated(first: dict[str, Any], second: dict[str, Any]) -> dict[str, Any]:
+    """Of two payloads for one flight, the one whose designator the merged line keeps (rule 1): the
+    one with a number when the other has none, else the operating carrier's (`extra.operating`
+    true) when exactly one is marked so, else the first seen."""
+    if bool(first.get("number")) != bool(second.get("number")):
+        return first if first.get("number") else second
+    operating = [bool((p.get("extra") or {}).get("operating")) for p in (first, second)]
+    if operating == [False, True]:
+        return second
+    return first
 
 
 def rank(evidence: object) -> int:
@@ -544,20 +624,25 @@ def merge(current: Line, new: dict[str, Any], airports: Airports | None = None) 
     """The draft that supersedes `current` with `new` folded in (RFC 0013 rule 3). The draft keeps
     `new`'s source and raw_id; the winner — the stronger evidence, the newer between equals — gives
     each field, the other fills what it lacks; a declared observation decides `role`; `evidence`
-    is the strongest of all; the observations list grows by one."""
+    is the strongest of all; the observations list grows by one. The designator is `current`'s
+    unless `new` is the one `designated` (a codeshare, rule 1)."""
     airports = airports or Airports.load()
     old: dict[str, Any] = current["payload"]
     own: dict[str, Any] = new["payload"]
     own_evidence = str(own["evidence"])
     new_wins = rank(own_evidence) >= rank(old.get("evidence"))
     winner, loser = (own, old) if new_wins else (old, own)
-    payload: dict[str, Any] = {
-        "schema": SCHEMA,
-        "raw_id": own["raw_id"],
-        "date": own["date"],
-        "carrier": own["carrier"],
-        "number": own["number"],
-    }
+    named = designated(old, own)
+    payload: dict[str, Any] = {"schema": SCHEMA, "raw_id": own["raw_id"], "date": own["date"]}
+    if named.get("number"):
+        payload["carrier"] = named["carrier"]
+        payload["number"] = named["number"]
+        other = own if named is old else old
+        icao = named.get("carrier_icao") or (
+            other.get("carrier_icao") if other.get("carrier") == named["carrier"] else None
+        )
+        if icao:
+            payload["carrier_icao"] = icao
     for field in MERGED:
         if field == "extra":
             extra = {**(loser.get("extra") or {}), **(winner.get("extra") or {})}
@@ -624,13 +709,15 @@ def reconcile(
         if observation in seen:
             yield draft  # an exact re-run of this observation: append_many dedupes it, nothing merges
             continue
-        k = key(draft["payload"])
-        current = last.get(k)
+        current = last.get(key(draft["payload"]))
+        if current is None:
+            current = codeshare_of(draft["payload"], last)
         if current is not None:
             draft = merge(current, draft, airports)
             counts["merged"] = counts.get("merged", 0) + 1
+            last.pop(key(current["payload"]), None)
         draft.setdefault("id", _uuid7())
-        last[k] = {**draft, "seq": 0}
+        last[key(draft["payload"])] = {**draft, "seq": 0}
         yield draft
 
 
@@ -655,15 +742,22 @@ def infer(
     airport and next reach another (RFC 0013 *Producers*): a leg from the last point within NEAR_KM
     of one airport to the first point within NEAR_KM of a different one, every point between them
     (a tracker that keeps logging on the climb, or through the whole flight) near no airport, at
-    least MIN_LEG long. Silence in between is usual but not required. `since` and `until` are
-    local days that bound the entries considered. `counts` tallies `calendar_flights` (entries
-    that name one) and `no_gap` (those the location points do not confirm)."""
+    least MIN_LEG long and between airports at least MIN_KM apart (closer, it was a drive).
+    Silence in between is usual but not required. A leg a tracked flight on the same route already
+    covers (its window, BEFORE its departure to AFTER its arrival, holds the leg) under another
+    key — an arrival after local midnight, a stale point — produces nothing. The leg carries the
+    entry's designator unless a tracked or declared flight in the window already holds it on
+    another route: then the leg is a flight the record has no number for, and is written with
+    none (rule 1). `since` and `until` are local days that bound the entries considered. `counts`
+    tallies `calendar_flights` (entries that name one), `no_gap` (those the location points do not
+    confirm) and `covered` (legs a tracked flight already covers)."""
     counts = counts if counts is not None else {}
     airlines = Airlines.load()
     with lb.index() as idx:
         events = idx.by_kind("event", since, until)
         retracted = retractions(idx.retractions())
         superseded = {s for e in events if isinstance(s := (e.get("payload") or {}).get("supersedes"), str)}
+        known = standing([*idx.by_kind(KIND), *idx.retractions()])
         for event in events:
             payload = event.get("payload") or {}
             if str(event["id"]) in retracted or str(event["id"]) in superseded:
@@ -674,16 +768,22 @@ def infer(
             if named is None:
                 continue
             counts["calendar_flights"] = counts.get("calendar_flights", 0) + 1
-            draft = _infer_one(event, named, idx, airports, airlines)
-            if draft is None:
-                counts["no_gap"] = counts.get("no_gap", 0) + 1
+            draft = _infer_one(event, named, idx, airports, airlines, known)
+            if isinstance(draft, str):
+                counts[draft] = counts.get(draft, 0) + 1
                 continue
             yield draft
 
 
 def _infer_one(
-    event: Line, named: tuple[str, str], idx: Any, airports: Airports, airlines: Airlines
-) -> dict[str, Any] | None:
+    event: Line,
+    named: tuple[str, str],
+    idx: Any,
+    airports: Airports,
+    airlines: Airlines,
+    known: Mapping[Key, Line],
+) -> dict[str, Any] | str:
+    """The entry's inferred draft, or the count it falls under: `no_gap`, `covered`."""
     payload = event.get("payload") or {}
     all_day = bool(payload.get("all_day"))
     start = _instant(str(event["at"]))
@@ -711,14 +811,15 @@ def _infer_one(
             after, destination = point, airport
             leg = _instant(str(after["at"])) - _instant(str(before["at"]))
             overlaps = _instant(str(after["at"])) >= start and _instant(str(before["at"])) <= end + BEFORE
-            if leg >= MIN_LEG and (all_day or overlaps):  # the leg must overlap the entry, give or take
+            far_enough = distance_km(origin.lat, origin.lon, destination.lat, destination.lon) >= MIN_KM
+            if leg >= MIN_LEG and far_enough and (all_day or overlaps):  # the leg overlaps the entry
                 matches = int(hint is not None and (origin.iata, destination.iata) == hint)
                 score = (matches, leg.total_seconds())
                 if score > best_score:
                     best, best_score = (before, after, origin, destination), score
         last = (point, airport)
     if best is None:
-        return None
+        return "no_gap"
     before, after, origin, destination = best
     carrier, number = named
     times: dict[str, str | None] = {
@@ -730,20 +831,61 @@ def _infer_one(
         times["scheduled_arrival"] = str(event["end"]) if event.get("end") else None
     departed = times["scheduled_departure"] if not all_day else times["actual_departure"]
     day = _instant(str(departed)).astimezone(ZoneInfo(origin.tz)).date().isoformat()
-    k = (day, carrier, number)
+    route = (origin.iata, destination.iata)
+    k: Key = (day, carrier, number)
+    if _covered(route, _instant(str(before["at"])), _instant(str(after["at"])), k, known):
+        return "covered"
+    if _held_elsewhere((carrier, number), route, window, known):
+        k = (day, "", ">".join(route))
     return build(
         source=INFERENCE,
         raw_id=f"{key_text(k)}@{times['actual_departure']}/{times['actual_arrival']}",
         airports=airports,
         date=day,
-        carrier=carrier,
-        number=number,
-        carrier_icao=airlines.icao(carrier),
+        carrier=carrier if k[2] == number else None,
+        number=number if k[2] == number else None,
+        carrier_icao=airlines.icao(carrier) if k[2] == number else None,
         from_=airport_ref(origin.iata, airports),
         to=airport_ref(destination.iata, airports),
         extra={"event": str(event["id"]), "gap": [str(before["id"]), str(after["id"])]},
         times=times,
     )
+
+
+def _covered(
+    route: tuple[str, str], departed: datetime, arrived: datetime, k: Key, known: Mapping[Key, Line]
+) -> bool:
+    """Whether a tracked flight standing under another key flies this route and its window holds
+    the leg: then the leg is that flight seen again (a red-eye landing after local midnight, a
+    stale point), not a flight of its own. The same key is the merge's business, not this."""
+    for other_key, line in known.items():
+        payload = line["payload"]
+        if other_key == k or payload.get("evidence") != "tracked" or _route(payload) != route:
+            continue
+        if not line.get("end"):
+            continue
+        if _instant(str(line["at"])) - BEFORE <= departed and arrived <= _instant(str(line["end"])) + AFTER:
+            return True
+    return False
+
+
+def _held_elsewhere(
+    designator_: tuple[str, str],
+    route: tuple[str, str],
+    window: tuple[datetime, datetime],
+    known: Mapping[Key, Line],
+) -> bool:
+    """Whether a tracked or declared flight in the window already holds the entry's designator on
+    another route: the entry named that flight, and this leg is some other one."""
+    for line in known.values():
+        payload = line["payload"]
+        if (payload.get("carrier"), payload.get("number")) != designator_:
+            continue
+        if payload.get("evidence") not in ("tracked", "declared") or _route(payload) == route:
+            continue
+        if window[0] <= _instant(str(line["at"])) <= window[1]:
+            return True
+    return False
 
 
 def _coordinates(line: Line) -> tuple[float, float] | None:

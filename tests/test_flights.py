@@ -298,3 +298,88 @@ def test_standing_is_the_last_flight_line_no_other_supersedes_and_not_retracted(
         line["kind"] = "flight"
     standing = flights.standing([a, b, other, retraction])
     assert standing == {("2026-09-27", "XY", "561"): b}
+
+
+# -- codeshares --------------------------------------------------------------------------------------------
+
+
+def test_same_flight_is_the_same_day_and_route_with_departures_within_thirty_minutes():
+    """XY 123 and XY 9123: the operating carrier's number and the marketing carrier's for one
+    aircraft leaving once (RFC 0013 rule 1). Forty minutes apart, or another route, is two."""
+    a = _tracked(number="123")["payload"]
+    twin = _tracked(number="9123", raw_id="fx-2@abc", scheduled_departure="2026-09-27T05:10:00Z")["payload"]
+    assert flights.same_flight(a, twin) and flights.same_flight(twin, a)
+    later = _tracked(number="9123", raw_id="fx-3@abc", scheduled_departure="2026-09-27T05:45:00Z")["payload"]
+    assert not flights.same_flight(a, later)
+    elsewhere = _tracked(number="9123", raw_id="fx-4@abc", to={"iata": "CPH", "icao": "EKCH"})["payload"]
+    assert not flights.same_flight(a, elsewhere)
+    other_day = _tracked(number="9123", raw_id="fx-5@abc", date="2026-09-28")["payload"]
+    assert not flights.same_flight(a, other_day)
+    assert not flights.same_flight(a, a), "a line is not its own codeshare"
+
+
+def test_merge_of_a_codeshare_keeps_the_number_first_seen_unless_the_other_is_the_operating_one():
+    first = _line(1, _tracked(number="9123"))
+    merged = flights.merge(first, _tracked(number="123", raw_id="fx-2@abc"))
+    p = merged["payload"]
+    assert (p["carrier"], p["number"]) == ("XY", "9123") and p["supersedes"] == "id-1"
+    assert [o["source"] for o in p["observations"]] == ["flighty", "flighty"]
+    operating = _tracked(number="123", raw_id="fx-3@abc", extra={"operating": True})
+    assert flights.merge(first, operating)["payload"]["number"] == "123"
+    marketing = _line(1, _tracked(number="9123", extra={"operating": False}))
+    assert flights.merge(marketing, operating)["payload"]["number"] == "123"
+
+
+def test_reconcile_merges_a_codeshare_pair_into_one_standing_flight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from logbook.store import Logbook
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    counts: dict[str, int] = {}
+    drafts = [
+        _tracked(number="123"),
+        _tracked(number="9123", raw_id="fx-2@abc", scheduled_departure="2026-09-27T05:10:00Z"),
+    ]
+    assert lb.append_many(flights.reconcile(lb, drafts, counts)) == 2
+    assert counts == {"merged": 1}
+    with lb.index() as idx:
+        standing = flights.standing(idx.by_kind("flight"))
+    [(k, line)] = standing.items()
+    assert k == ("2026-09-27", "XY", "123")
+    assert "supersedes" in line["payload"] and len(line["payload"]["observations"]) == 2
+    # a third observation under the marketing number finds the merged flight too
+    third = _tracked(number="9123", raw_id="fx-3@abc", scheduled_departure="2026-09-27T05:10:00Z")
+    assert lb.append_many(flights.reconcile(lb, [third], counts)) == 1
+    assert counts == {"merged": 2}
+    with lb.index() as idx:
+        standing = flights.standing(idx.by_kind("flight"))
+    [(k, line)] = standing.items()
+    assert k == ("2026-09-27", "XY", "123") and len(line["payload"]["observations"]) == 3
+
+
+def test_standing_folds_a_codeshare_pair_the_record_holds_unmerged():
+    """Two lines written before the merge knew codeshares: a reader shows one (rollup, trips)."""
+    a = _line(1, _tracked(number="9123"))
+    b = _line(2, _tracked(number="123", raw_id="fx-2@abc", scheduled_departure="2026-09-27T05:10:00Z"))
+    assert flights.standing([a, b]) == {("2026-09-27", "XY", "9123"): a}
+    b["payload"]["extra"] = {"operating": True}
+    assert flights.standing([a, b]) == {("2026-09-27", "XY", "123"): b}
+
+
+def test_key_of_a_flight_with_no_number_is_its_date_and_route():
+    numberless = flights.build(
+        source="flight-inference",
+        raw_id="x",
+        airports=Airports.load(),
+        date="2026-09-28",
+        carrier=None,
+        number=None,
+        from_={"iata": "ZRH"},
+        to={"iata": "IST"},
+    )["payload"]
+    assert "carrier" not in numberless and "number" not in numberless
+    assert flights.key(numberless) == ("2026-09-28", "", "ZRH>IST")
+    assert flights.designator_text(numberless) == ""
+    assert flights.designator_text(_tracked()["payload"]) == "XY 561"
