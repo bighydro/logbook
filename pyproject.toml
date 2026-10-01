@@ -23,6 +23,11 @@ dependencies = [
 [project.optional-dependencies]
 encrypted = ["cryptography>=42"]  # `openlogbook[encrypted]`: import-backup on an encrypted iOS backup
 ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
+# `openlogbook[transcribe]`: transcribe voice-memos, locally; mlx-whisper on Apple silicon, faster-whisper elsewhere
+transcribe = [
+  "mlx-whisper>=0.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "faster-whisper>=1.0; sys_platform != 'darwin' or platform_machine != 'arm64'",
+]
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
@@ -91,6 +96,10 @@ python_version = "3.12"
 [[tool.mypy.overrides]]
 module = "ijson"
 ignore_missing_imports = true  # no py.typed, no stubs
+
+[[tool.mypy.overrides]]
+module = ["mlx_whisper.*", "faster_whisper.*", "huggingface_hub.*"]
+ignore_missing_imports = true  # the `transcribe` extra, imported only when the command runs
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
