@@ -9,6 +9,7 @@ sharing `SOURCE` for the lines it writes:
     photos.py     Google Photos — the album folders and their JSON sidecars → photo/v1
     keep.py       Keep/ — one JSON per note, attachments beside → note/v1
     tasks.py      Tasks/ — Tasks.json, every list and task → task/v1
+    chrome.py     Chrome/ — History.json and Bookmarks.html → browse/v1
 
 Planned siblings, one file each: activity.
 
@@ -24,4 +25,4 @@ unpacked. Neither exists yet.
 from __future__ import annotations
 
 SOURCE = "google-takeout"
-SUB_ADAPTERS = ("location", "calendar", "photos", "keep", "tasks")
+SUB_ADAPTERS = ("location", "calendar", "photos", "keep", "tasks", "chrome")

@@ -72,6 +72,7 @@ BUILT_IN = (
     "takeout.photos",
     "takeout.keep",
     "takeout.tasks",
+    "takeout.chrome",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
@@ -89,6 +90,7 @@ BUILT_IN = (
     "ais",
     "adsb",
     "mail",
+    "safari",
 )
 
 

@@ -27,6 +27,8 @@ from test_apple_health import _store as _health_store
 from test_imessage import _store as _sms_store
 from test_ios_calls import LINES as CALL_LINES
 from test_ios_calls import _store as _call_store
+from test_safari import LINES as SAFARI_LINES
+from test_safari import _store as _safari_store
 
 from logbook import cli, ios_backup, ios_backup_crypto
 from logbook.store import Logbook
@@ -147,8 +149,7 @@ def _encrypted_backup(
         sms = _sms_store(stage / "sms")
         calls = _call_store(stage)
         health = _health_store(stage / "health")  # synthetic; healthdb.sqlite beside it names the sources
-        safari = stage / "History.db"
-        safari.write_bytes(b"SQLite format 3\0" + b"\x02" * 1000)
+        safari = _safari_store(stage / "safari")
         files = {
             ("HomeDomain", "Library/SMS/sms.db"): (sms, 3),
             ("MediaDomain", "Library/SMS/Attachments/ab/12/AT-100/stern.jpg"): (
@@ -255,7 +256,7 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     store = inbox / "ios-calls" / "CallHistory.storedata"
     assert store.read_bytes() == built.plain[("HomeDomain", "Library/CallHistoryDB/CallHistory.storedata")]
     assert f"added {CALL_LINES} lines from ios-calls" in out
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in out
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
     # Health: the companion is copied first, then the store, and the adapter runs on the store with
     # the companion beside it, so the lines carry the source names
     health = inbox / "health" / "healthdb_secure.sqlite"
@@ -267,10 +268,10 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     assert "copied, read beside healthdb_secure.sqlite" in out
     named = [ln for ln in lb.lines() if ln["source"] == "apple-health" and "source_name" in ln["payload"]]
     assert named and {ln["payload"]["source_name"] for ln in named} == {"Apple Watch", "iPhone"}
-    # Safari is copied out, no adapter yet
+    # Safari is copied out and read by its adapter (RFC 0017)
     safari = inbox / "safari" / "History.db"
     assert safari.read_bytes() == built.plain[("HomeDomain", "Library/Safari/History.db")]
-    assert "safari: History.db" in out and "copied, no adapter yet" in out
+    assert "safari: History.db" in out and f"added {SAFARI_LINES} lines from safari" in out
     assert "ios-calls: CallHistory.storedata" in out and "CallHistory.storedata not found" not in out
     assert "healthdb.sqlite not found" not in out and "healthdb_secure.sqlite not found" not in out
     # the decrypted Manifest.db is beside the copies, and it is the plaintext
@@ -316,7 +317,7 @@ def test_import_backup_warns_when_the_manifest_size_is_stale_and_the_blob_decryp
     assert len(warnings) == 1
     assert "Library/Safari/History.db" in warnings[0]
     assert f"{real:,}" in warnings[0] and "35,745,792" in warnings[0]
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in captured.out
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in captured.out
     assert captured.err == ""
     copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
     by_path = {(c["domain"], c["path"]): c for c in copies["files"]}
@@ -357,7 +358,7 @@ def test_import_backup_encrypted_again_adds_nothing(lb, tmp_path, monkeypatch, c
     out = capsys.readouterr().out
     assert "added 0 lines from imessage" in out and "added 0 lines from ios-calls" in out
     assert "added 0 lines from apple-health" in out
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES} lines" in out
+    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
 
 
 def test_import_backup_encrypted_dry_run_decrypts_only_the_manifest(lb, tmp_path, monkeypatch, capsys):

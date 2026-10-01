@@ -202,6 +202,7 @@ SKIP_PHRASES = {
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
     "skipped_no_title": "without a title",
+    "skipped_no_url": "without a url",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
@@ -232,6 +233,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
     "deleted": "marked for deletion",
+    "load_failed": "that did not load",
     "body_from_snippet": "with the body taken from the snippet",
     "no_identifier": "without an identifier, keyed by row id",
     "no_unique_identifier": "without a unique identifier, keyed by row id",
@@ -755,7 +757,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
     encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
     through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
-    beside it); Safari's history is copied out and reported as copied with no adapter yet."""
+    beside it), Safari's history through `safari` (RFC 0017)."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
@@ -1870,7 +1872,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
         + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
-        + "; calls, health and safari only from an encrypted backup, safari copied without an adapter yet)",
+        + "; calls, health and safari only from an encrypted backup)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser(

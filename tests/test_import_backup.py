@@ -17,6 +17,7 @@ from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
 from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
+from test_safari import _store as _safari_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 
@@ -113,8 +114,8 @@ def _backup(
         _put(backup, rows, "HomeDomain", "Library/Calendar/Calendar.sqlitedb", _calendar(_dir(stage, "cal")))
     if "ios-notes" in sources:
         _put(backup, rows, NOTES, "NoteStore.sqlite", _note_store(_dir(stage, "notes")))
-    if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
-        _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
+    if "safari" in sources:  # HomeDomain, as the phone backs it up
+        _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")
     try:
         con.execute(

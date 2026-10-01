@@ -30,7 +30,7 @@ Contacts come first so the record has its people before the chats that name them
 contacts come before its chats for the same reason (RFC 0006).
 
 EXTRAS are the stores only an encrypted backup carries — the call log, Health, Safari's
-history. The call log and Health have their adapters and run like the SOURCES:
+history. Each has its adapter and runs like the SOURCES:
 
     ios-calls           HomeDomain                                    Library/CallHistoryDB/
                                                                   CallHistory.storedata
@@ -38,9 +38,8 @@ history. The call log and Health have their adapters and run like the SOURCES:
                                                                   first: it names the sources),
                                                                   Health/healthdb_secure.sqlite
                                                                   (the samples; `apple-health` runs)
-
-Safari has none yet: it is copied out beside the others (`safari/`) so the adapter that follows
-finds it, and reported as "copied, no adapter yet".
+    safari              HomeDomain                                    Library/Safari/History.db
+                                                                  (`safari` runs, RFC 0017)
 
 An adapter never reads the backup in place. `plan` finds each source's store, its -wal/-shm
 siblings and its media files; `copy` puts them under one folder with their original names — the
@@ -127,7 +126,7 @@ EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
         "health", HEALTH, "Health/healthdb.sqlite", adapter=False, note="read beside healthdb_secure.sqlite"
     ),
     Source("health", HEALTH, "Health/healthdb_secure.sqlite"),  # `apple-health` (RFC 0014)
-    Source("safari", HOME, "Library/Safari/History.db", adapter=False),  # HomeDomain, not the app's
+    Source("safari", HOME, "Library/Safari/History.db"),  # HomeDomain, not the app's; `safari` (RFC 0017)
 )
 
 
