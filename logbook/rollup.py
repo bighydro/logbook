@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -17,7 +18,7 @@ from . import countries as country_table
 from . import flights as flight_lines
 from . import health as health_lines
 from . import places as named_places
-from . import present, stays
+from . import present, stays, trips
 from .chain import Line
 from .export import day_range
 from .reading import Reading, window_json
@@ -242,29 +243,46 @@ def _longest_trip(nights_of_year: Sequence[stays.Night]) -> dict[str, Any] | Non
 
 # -- places -------------------------------------------------------------------------------------------------
 
+UNNAMED_TOP = 5  # the unnamed clusters a year lists, by hours
 
-def places(reading: Reading) -> dict[str, Any]:
-    """Per named place (places.json) and per asset (assets.json), per year: stays, hours, first
-    and last visit, the nights (assets), and the people present, confirmed, through the with
-    module. An asset's stays are the owner's stays aboard it."""
+
+def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
+    """Per named place (places.json) and per asset (assets.json), per year: stays, hours, nights
+    (the days whose overnight stay is there), first and last visit, and the people confirmed
+    present through the with module, each with their stays, days and nights there. Then the top
+    `UNNAMED_TOP` unnamed clusters — the owner's stays at no named place, grouped as `places
+    propose` groups them and ranked by hours — the same way, each under the stay id `places name`
+    takes. An asset's stays are the owner's stays aboard it. The stays come from one derivation of
+    the window and the company of each from the evidence of its days (`present.Evidence`); nothing
+    is read per place. `with_table` adds the place × person table under `with`."""
     years: dict[str, dict[str, Any]] = {}
+    evidence = present.Evidence(reading.lines, reading.tz)
     days_of = _days_of_lines(reading)
+    company: dict[str, _Company] = {}
+    stay_year: dict[str, str] = {}
+    unnamed_stays: dict[str, list[stays.Segment]] = {}
     for stay in reading.owner_stays:
-        day = stay.start.astimezone(reading.tz).date().isoformat()
-        end_day = stay.end.astimezone(reading.tz).date().isoformat()
-        year = years.setdefault(_year_of(day), {"year": _year_of(day), "places": {}, "assets": {}})
+        day, end_day = _local_days(stay, reading)
+        key = _year_of(day)
+        year = years.setdefault(key, {"year": key, "places": {}, "assets": {}, "unnamed": {}})
         who = [
             c
-            for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner)
+            for c in present.company(
+                stay, evidence.near(stay), reading.identities, reading.places, reading.owner
+            )
             if c.status == present.CONFIRMED
         ]
-        who_days = {c: {days_of.get(id_, day) for id_ in c.lines} for c in who}
+        company[stay.id] = _Company(who, {c: {days_of.get(id_, day) for id_ in c.lines} for c in who})
+        stay_year[stay.id] = key
         if stay.place is not None:
             place = next((p for p in reading.places if p.name == stay.place), None)
             entry = year["places"].setdefault(
-                stay.place, {"place": stay.place, "kind": place.kind if place else None, **_visits()}
+                stay.place,
+                {"place": stay.place, "kind": place.kind if place else None, **_visits(), "nights": 0},
             )
-            _visit(entry, stay, day, end_day, who, who_days)
+            _visit(entry, stay, day, end_day, company[stay.id])
+        elif stay.lat is not None and stay.lon is not None:
+            unnamed_stays.setdefault(key, []).append(stay)
         if stay.aboard is not None:
             asset = reading.assets.get(stay.aboard)
             entry = year["assets"].setdefault(
@@ -277,28 +295,124 @@ def places(reading: Reading) -> dict[str, Any]:
                     "nights": 0,
                 },
             )
-            _visit(entry, stay, day, end_day, who, who_days)
+            _visit(entry, stay, day, end_day, company[stay.id])
+    cluster_of = _unnamed(years, unnamed_stays, company, reading)
     for night in reading.nights:
-        if night.stay is not None and night.stay.aboard:
-            aboard = years.get(_year_of(night.day), {"assets": {}})["assets"].get(night.stay.aboard)
-            if aboard is not None:
-                aboard["nights"] += 1
+        slept = night.stay
+        if slept is None:
+            continue
+        year = years[stay_year[slept.id]]
+        found = company[slept.id]
+        if slept.place is not None:
+            _night(year["places"][slept.place], night.day, found)
+        elif slept.id in cluster_of:
+            _night(cluster_of[slept.id], night.day, found)
+        if slept.aboard is not None:
+            _night(year["assets"][slept.aboard], night.day, found)
     out = _head("places", reading)
+    out["unnamed_top"] = UNNAMED_TOP
     out["years"] = []
     for key in sorted(years):
         entry = years[key]
-        out["years"].append(
-            {
-                "year": key,
-                "places": [
-                    _finish_visits(v) for v in sorted(entry["places"].values(), key=lambda v: -v["hours"])
-                ],
-                "assets": [
-                    _finish_visits(v) for v in sorted(entry["assets"].values(), key=lambda v: -v["hours"])
-                ],
-            }
-        )
+        year_out = {
+            "year": key,
+            "places": [
+                _finish_visits(v) for v in sorted(entry["places"].values(), key=lambda v: -v["hours"])
+            ],
+            "assets": [
+                _finish_visits(v) for v in sorted(entry["assets"].values(), key=lambda v: -v["hours"])
+            ],
+            "unnamed": [
+                _finish_visits(v) for v in sorted(entry["unnamed"].values(), key=lambda v: -v["hours"])
+            ],
+        }
+        if with_table:
+            year_out["with"] = _with_rows(year_out)
+        out["years"].append(year_out)
     return out
+
+
+@dataclass(frozen=True)
+class _Company:
+    """The people confirmed at one stay, and the local days each one's evidence is dated."""
+
+    who: list[present.Companion]
+    days: Mapping[present.Companion, set[str]]
+
+
+def _local_days(stay: stays.Segment, reading: Reading) -> tuple[str, str]:
+    return (
+        stay.start.astimezone(reading.tz).date().isoformat(),
+        stay.end.astimezone(reading.tz).date().isoformat(),
+    )
+
+
+def _unnamed(
+    years: Mapping[str, dict[str, Any]],
+    unnamed_stays: Mapping[str, Sequence[stays.Segment]],
+    company: Mapping[str, _Company],
+    reading: Reading,
+) -> dict[str, dict[str, Any]]:
+    """Fill each year's `unnamed` with its top clusters and return stay id → cluster entry for the
+    stays those clusters hold. The grouping is `places.propose`'s (within `GROUP_M` of a group's
+    first stay, ranked by hours) with no timeline visits, so a cluster here is the proposal there."""
+    cluster_of: dict[str, dict[str, Any]] = {}
+    for key, found in unnamed_stays.items():
+        by_id = {s.id: s for s in found}
+        proposals = named_places.propose(
+            [
+                named_places.Stay(
+                    s.id,
+                    s.start,
+                    s.end,
+                    s.lat or 0.0,
+                    s.lon or 0.0,
+                    s.aboard,
+                    s.first_line,
+                    s.last_line,
+                    s.points,
+                )
+                for s in found
+            ],
+            reading.places,
+            [],
+        )
+        for proposal in proposals[:UNNAMED_TOP]:
+            near = proposal.nearest
+            entry: dict[str, Any] = {
+                "id": proposal.id,
+                "lat": round(proposal.lat, 6),
+                "lon": round(proposal.lon, 6),
+                "label": unnamed_label(proposal.lat, proposal.lon, proposal.aboard, reading),
+                "aboard": proposal.aboard,
+                "nearest": None
+                if near is None
+                else {"name": near[0].name, "kind": near[0].kind, "metres": round(near[1])},
+                "city": trips.city_near(proposal.lat, proposal.lon, reading.airports),
+                **_visits(),
+                "nights": 0,
+            }
+            for member in proposal.stays:
+                stay = by_id[member.id]
+                day, end_day = _local_days(stay, reading)
+                _visit(entry, stay, day, end_day, company[stay.id])
+                cluster_of[stay.id] = entry
+            years[key]["unnamed"][proposal.id] = entry
+    return cluster_of
+
+
+def unnamed_label(lat: float, lon: float, aboard: str | None, reading: Reading) -> str:
+    """How an unnamed place reads: its coordinates; `aboard <asset>` when it is; `near <place>,
+    x km` for a named place within `trips.NEAR_KM`; else the city of the nearest large airport in
+    parentheses, the `trips` route's rule."""
+    label = f"{lat:.4f},{lon:.4f}"
+    if aboard:
+        label += f" aboard {aboard}"
+    near = named_places.nearest(lat, lon, reading.places)
+    if near is not None and near[1] <= trips.NEAR_KM * 1000:
+        return f"{label} near {near[0].name}, {near[1] / 1000:.1f} km"
+    city = trips.city_near(lat, lon, reading.airports)
+    return f"{label} ({city})" if city else label
 
 
 def _visits() -> dict[str, Any]:
@@ -307,32 +421,42 @@ def _visits() -> dict[str, Any]:
 
 def _days_of_lines(reading: Reading) -> dict[str, str]:
     """line id → its local day, for the evidence lines a companion rests on."""
-    return {str(line["id"]): reading.day_of(line) for line in reading.lines if line.get("kind") in EVIDENCE}
+    return {
+        str(line["id"]): reading.day_of(line)
+        for line in reading.lines
+        if line.get("kind") in present.EVIDENCE_KINDS
+    }
 
 
-EVIDENCE = ("event", "transcript", "note", "photo")
-
-
-def _visit(
-    entry: dict[str, Any],
-    stay: stays.Segment,
-    day: str,
-    end_day: str,
-    who: Sequence[present.Companion],
-    who_days: Mapping[present.Companion, set[str]],
-) -> None:
+def _visit(entry: dict[str, Any], stay: stays.Segment, day: str, end_day: str, found: _Company) -> None:
     entry["stays"] += 1
     entry["hours"] += stay.duration_s / 3600
     entry["first"] = day if entry["first"] is None else min(entry["first"], day)
     entry["last"] = end_day if entry["last"] is None else max(entry["last"], end_day)
     entry["lines"].extend(_stay_lines(stay))
-    for c in who:
-        person = entry["people"].setdefault(
-            (c.person, c.name), {"id": c.person, "name": c.name, "stays": 0, "days": set(), "lines": []}
-        )
+    for c in found.who:
+        person = _person_at(entry, c)
         person["stays"] += 1
-        person["days"].update(who_days[c])
+        person["days"].update(found.days[c])
         person["lines"].extend(c.lines)
+
+
+def _night(entry: dict[str, Any], day: str, found: _Company) -> None:
+    """One night at the entry's place; and one for each person whose evidence there is dated the
+    night's day — a dinner on the 16th is the night of the 16th together, not every night of the
+    stay."""
+    entry["nights"] += 1
+    for c in found.who:
+        if day in found.days[c]:
+            _person_at(entry, c)["nights"] += 1
+
+
+def _person_at(entry: dict[str, Any], c: present.Companion) -> dict[str, Any]:
+    person: dict[str, Any] = entry["people"].setdefault(
+        (c.person, c.name),
+        {"id": c.person, "name": c.name, "stays": 0, "days": set(), "nights": 0, "lines": []},
+    )
+    return person
 
 
 def _finish_visits(entry: dict[str, Any]) -> dict[str, Any]:
@@ -344,46 +468,101 @@ def _finish_visits(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _with_rows(year: dict[str, Any]) -> list[dict[str, Any]]:
+    """The place × person table of one year: a row per person per place, the places in the order
+    the rollup lists them (named, assets, unnamed), the people by days there."""
+    rows: list[dict[str, Any]] = []
+    for kind, key, entries in (
+        ("place", "place", year["places"]),
+        ("asset", "asset", year["assets"]),
+        ("unnamed", "id", year["unnamed"]),
+    ):
+        for entry in entries:
+            for p in entry["people"]:
+                rows.append(
+                    {
+                        "place": entry[key],
+                        "label": _entry_label(kind, entry),
+                        "kind": kind,
+                        "id": p["id"],
+                        "name": p["name"],
+                        "stays": p["stays"],
+                        "days": p["days"],
+                        "nights": p["nights"],
+                        "lines": p["lines"],
+                    }
+                )
+    return rows
+
+
+def _entry_label(kind: str, entry: dict[str, Any]) -> str:
+    if kind == "place":
+        return str(entry["place"])
+    if kind == "asset":
+        return f"{entry['name']} ({entry['asset']})" if entry.get("name") else str(entry["asset"])
+    return str(entry["label"])
+
+
 # -- people -------------------------------------------------------------------------------------------------
 
 
 def people(reading: Reading) -> dict[str, Any]:
-    """Per resolved person, per year: days together (days with confirmed company), the last real
+    """Per resolved person, per year, from the confirmed set of the with module only — a timed
+    calendar entry's attendee, a transcript's speaker, a note's `with <name>`; never the owner,
+    and a proposal (a tagged face, an all-day entry's attendee) is not a day together: days
+    together (days with confirmed evidence, by the evidence's own day), nights together (nights
+    whose overnight stay the person was confirmed at on that day), the stays shared, the last real
     contact (the last such day), the places shared (named places, `aboard <asset>`, else the
-    stay's coordinates), confirmed and proposed evidence counts, and the lines. Names that
-    resolve to no person are listed apart, under `unresolved`."""
+    unnamed place's label), the confirmed evidence count and the lines. A confirmed name the
+    record resolves to no person (an attendee with a display name and no resolution line) is
+    listed apart, under `unresolved`."""
     years: dict[str, dict[str, Any]] = {}
+    evidence = present.Evidence(reading.lines, reading.tz)
     days_of = _days_of_lines(reading)
+    at_stay: dict[str, dict[tuple[str, str], set[str]]] = {}  # stay id → (year, key) → evidence days
     for stay in reading.owner_stays:
-        for c in present.present(stay, reading.lines, reading.identities, reading.places, reading.owner):
-            day = days_of.get(c.line, stay.start.astimezone(reading.tz).date().isoformat())
+        stay_day, _end_day = _local_days(stay, reading)
+        found = present.present(stay, evidence.near(stay), reading.identities, reading.places, reading.owner)
+        for c in found:
+            if c.status != present.CONFIRMED:
+                continue
+            day = days_of.get(c.line, stay_day)
             year = years.setdefault(_year_of(day), {"year": _year_of(day), "people": {}, "unresolved": {}})
             bucket = year["people"] if c.person else year["unresolved"]
+            key = c.person or c.name.casefold()
             entry = bucket.setdefault(
-                c.person or c.name.casefold(),
+                key,
                 {
                     "id": c.person,
                     "name": c.name,
                     "days": set(),
+                    "nights": 0,
+                    "stays": set(),
                     "last_contact": None,
                     "places": [],
                     "confirmed": 0,
-                    "proposed": 0,
                     "lines": [],
                 },
             )
             entry["lines"].append(c.line)
-            if c.status == present.CONFIRMED:
-                entry["confirmed"] += 1
-                entry["days"].add(day)
-                entry["last_contact"] = (
-                    day if entry["last_contact"] is None else max(entry["last_contact"], day)
-                )
-                where = _where(stay)
-                if where not in entry["places"]:
-                    entry["places"].append(where)
-            else:
-                entry["proposed"] += 1
+            entry["confirmed"] += 1
+            entry["days"].add(day)
+            entry["stays"].add(stay.id)
+            entry["last_contact"] = day if entry["last_contact"] is None else max(entry["last_contact"], day)
+            where = _where(stay, reading)
+            if where not in entry["places"]:
+                entry["places"].append(where)
+            at_stay.setdefault(stay.id, {}).setdefault((_year_of(day), key), set()).add(day)
+    for night in reading.nights:
+        if night.stay is None:
+            continue
+        for (year_key, key), days in at_stay.get(night.stay.id, {}).items():
+            if night.day not in days:
+                continue
+            year = years[year_key]
+            entry = year["people"].get(key) or year["unresolved"].get(key)
+            if entry is not None:
+                entry["nights"] += 1
     out = _head("people", reading)
     out["years"] = []
     for key in sorted(years):
@@ -405,15 +584,17 @@ def _person_order(p: dict[str, Any]) -> tuple[int, str, str]:
 
 
 def _finish_person(p: dict[str, Any]) -> dict[str, Any]:
-    return {**p, "days": len(p["days"]), "lines": list(dict.fromkeys(p["lines"]))}
+    return {**p, "days": len(p["days"]), "stays": len(p["stays"]), "lines": list(dict.fromkeys(p["lines"]))}
 
 
-def _where(stay: stays.Segment) -> str:
+def _where(stay: stays.Segment, reading: Reading) -> str:
     if stay.place:
         return stay.place
     if stay.aboard:
         return f"aboard {stay.aboard}"
-    return f"{stay.lat:.4f},{stay.lon:.4f}" if stay.lat is not None and stay.lon is not None else "somewhere"
+    if stay.lat is None or stay.lon is None:
+        return "somewhere"
+    return unnamed_label(stay.lat, stay.lon, None, reading)
 
 
 # -- health -------------------------------------------------------------------------------------------------
@@ -514,6 +695,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         for period in data["periods"]:
             yield _period_row(period)
         return
+    if data["years"] and "with" in data["years"][0]:
+        head += " · with"
     yield head
     if data.get("warning"):
         yield f"  ({data['warning']})"
@@ -575,33 +758,61 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
                 f"longest trip {trip['start']} {EN_DASH} {trip['end']} ({_plural(trip['nights'], 'night')})"
             )
         yield f"  {year['year']}  {' · '.join(parts)}"
+    elif kind == "places" and "with" in year:
+        yield f"  {year['year']}"
+        yield from _with_table(year["with"])
     elif kind == "places":
         yield f"  {year['year']}"
+        heads = [
+            *(_entry_head(v["place"], v.get("kind")) for v in year["places"]),
+            *(_entry_head(_entry_label("asset", v), v.get("kind")) for v in year["assets"]),
+            *(v["label"] for v in year["unnamed"]),
+        ]
+        width = max(28, *(len(h) for h in heads)) if heads else 28
         for v in year["places"]:
-            yield _visit_row(v["place"], v.get("kind"), v)
+            yield _visit_row(_entry_head(v["place"], v.get("kind")), v, width, nights=v["nights"] or None)
         for v in year["assets"]:
-            name = f"{v['name']} ({v['asset']})" if v.get("name") else v["asset"]
-            yield _visit_row(name, v.get("kind"), v, nights=v["nights"])
+            yield _visit_row(
+                _entry_head(_entry_label("asset", v), v.get("kind")), v, width, nights=v["nights"]
+            )
+        if year["unnamed"]:
+            yield "        unnamed, by hours (the ids `places name` takes):"
+        for v in year["unnamed"]:
+            yield _visit_row(v["label"], v, width, nights=v["nights"] or None) + f"   {v['id']}"
     else:
         yield f"  {year['year']}"
         for p in [*year["people"], *year["unresolved"]]:
             parts = [
                 _plural(p["days"], "day"),
-                f"last {p['last_contact']}" if p["last_contact"] else "never confirmed",
+                _plural(p["nights"], "night"),
+                f"last {p['last_contact']}",
                 ", ".join(p["places"]) if p["places"] else "nowhere",
-                f"{p['confirmed']} confirmed, {p['proposed']} proposed",
+                f"{p['confirmed']} confirmed",
             ]
             yield f"        {p['name']:<24} {' · '.join(parts)}"
 
 
-def _visit_row(name: str, kind: str | None, v: dict[str, Any], nights: int | None = None) -> str:
+def _entry_head(name: str, kind: str | None) -> str:
+    return f"{name} ({kind})" if kind else name
+
+
+def _visit_row(head: str, v: dict[str, Any], width: int, nights: int | None = None) -> str:
     parts = [_plural(v["stays"], "stay"), f"{v['hours']:g} h", f"{v['first']} {EN_DASH} {v['last']}"]
     if nights is not None:
-        parts.append(_plural(nights, "night"))
+        parts.insert(0, _plural(nights, "night"))
     if v["people"]:
         parts.append("with " + ", ".join(p["name"] for p in v["people"]))
-    head = f"{name} ({kind})" if kind else name
-    return f"        {head:<28} {' · '.join(parts)}"
+    return f"        {head:<{width}} {' · '.join(parts)}"
+
+
+def _with_table(table: Sequence[dict[str, Any]]) -> Iterator[str]:
+    if not table:
+        yield "        nobody confirmed at any place"
+        return
+    width = max(28, *(len(r["label"]) for r in table))
+    yield f"        {'place':<{width}} {'person':<24} {'stays':>5} {'days':>5} {'nights':>6}"
+    for r in table:
+        yield f"        {r['label']:<{width}} {r['name']:<24} {r['stays']:>5} {r['days']:>5} {r['nights']:>6}"
 
 
 def _plural(n: int, noun: str) -> str:
