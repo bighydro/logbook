@@ -196,7 +196,12 @@ def _gap_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
         *dwell(after, "00:00", "08:00", HOME, every_min=5),
         event(utc(day, "12:00"), utc(day, "13:00"), "Lunch", [attendee(KARI["email"], "Kari Nordmann")]),
         event(
-            utc(day, "00:00"), utc(after, "00:00"), "Kari in town", [attendee(KARI["email"])], all_day=True
+            utc(day, "00:00"),
+            utc(after, "00:00"),
+            "Kari in town",
+            [attendee(KARI["email"])],
+            all_day=True,
+            location="Home",  # located at the stay through places.json: proposed there, nowhere else
         ),
         _health(utc(before, "23:00"), "sleep", 3 * 3600, "Watch7,1", end=utc(day, "02:00"), stage="core"),
         _health(utc(day, "02:00"), "sleep", 4 * 3600, "Watch7,1", end=utc(day, "06:00"), stage="deep"),

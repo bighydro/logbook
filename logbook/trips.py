@@ -1,12 +1,14 @@
 """Trips, derived from the nights: `logbook trips`.
 
 A trip is a run of consecutive days whose overnight stay is outside every home region (places.json,
-kind `home`) or in transit. It has a route (the night places in order: the named place, else
-`near <place>` for a named place within 25 km, else the nearest large airport's name — a coarse
-city — else the coordinates; consecutive repeats collapse), its nights, the named places visited
-and the people confirmed present (the with module) between the first day's midnight and the end
-of the return day, and the flights in (dated the first day) and out (dated the return day, the
-day after the last night). An asset trip is one whose every night was aboard one asset.
+kind `home`, or within 400 m of one) or in transit. It has a route (the night places in order: the
+named place, else a large airport's name when the stay is within 2 km of it, else the coordinates
+with `near <place>, x km` for the nearest named place within 5 km; consecutive points within 200 m
+of each other collapse into the first), its nights, the named places visited and the people
+confirmed present (the with module: never the owner, at most `WITH_MAX` names, most evidence
+first) between the first day's midnight and the end of the return day, and the flights in (dated
+the first day) and out (dated the return day, the day after the last night). An asset trip is one
+whose every night was aboard one asset.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
 captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
@@ -24,10 +26,13 @@ from typing import Any
 from . import flights as flight_lines
 from . import places as named_places
 from . import present, stays
+from .flights import Airports
 from .reading import Reading, window_json
 
-NEAR_KM = 25.0  # an unnamed night this close to a named place is `near <place>`
-CITY_KM = 100.0  # else the nearest large airport within this names the city
+AIRPORT_KM = 2.0  # an unnamed night this close to a large airport is named after it
+NEAR_KM = 5.0  # else its coordinates, with `near <place>, x km` for a named place this close
+MERGE_M = 200.0  # consecutive route points this close are one
+WITH_MAX = 12  # names listed under "with", most evidence first
 EN_DASH = "\u2013"
 ARROW = "\u2192"
 
@@ -111,13 +116,7 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
     first = datetime.combine(date.fromisoformat(start), datetime.min.time(), tzinfo=reading.tz)
     last = datetime.combine(date.fromisoformat(until), datetime.max.time(), tzinfo=reading.tz)
     visited = [s for s in reading.owner_stays if s.start < last and s.end > first]
-    route: list[str] = []
-    for night in nights:
-        if night.stay is None:
-            continue
-        name = _city(night.stay, reading)
-        if not route or route[-1] != name:
-            route.append(name)
+    route = route_of([n.stay for n in nights if n.stay is not None], reading.places, reading.airports)
     places = list(dict.fromkeys(s.place for s in visited if s.place and not stays.is_home(s, reading.places)))
     people = _people(visited, reading)
     flights = [f for f in _flights(reading) if start <= f["date"] <= until]
@@ -147,22 +146,50 @@ def _stay_lines(stay: stays.Segment | None) -> list[str]:
     return [id_ for id_ in (stay.first_line, stay.last_line) if id_]
 
 
-def _city(stay: stays.Segment, reading: Reading) -> str:
+def route_of(
+    night_stays: Sequence[stays.Segment], places: Sequence[named_places.Place], airports: Airports
+) -> list[str]:
+    """The route a trip's night stays make: one label per stay (`_label`), consecutive stays within
+    `MERGE_M` of each other (or of the same name) folded into the first."""
+    route: list[str] = []
+    last: stays.Segment | None = None
+    for stay in night_stays:
+        if last is not None and _same_point(last, stay):
+            continue
+        label = _label(stay, places, airports)
+        if not route or route[-1] != label:
+            route.append(label)
+        last = stay
+    return route
+
+
+def _same_point(a: stays.Segment, b: stays.Segment) -> bool:
+    if a.place is not None or b.place is not None:
+        return a.place == b.place
+    if a.lat is None or a.lon is None or b.lat is None or b.lon is None:
+        return False
+    return named_places.distance_m(a.lat, a.lon, b.lat, b.lon) <= MERGE_M
+
+
+def _label(stay: stays.Segment, places: Sequence[named_places.Place], airports: Airports) -> str:
     if stay.place:
         return stay.place
     assert stay.lat is not None and stay.lon is not None
-    near = named_places.nearest(stay.lat, stay.lon, reading.places)
-    if near is not None and near[1] <= NEAR_KM * 1000:
-        return f"near {near[0].name}"
-    airport = reading.airports.nearest(stay.lat, stay.lon, CITY_KM)
+    airport = airports.nearest(stay.lat, stay.lon, AIRPORT_KM)
     if airport is not None:
-        return _city_of_airport(airport.name)
-    return f"{stay.lat:.4f},{stay.lon:.4f}"
+        return airport.name
+    label = f"{stay.lat:.4f},{stay.lon:.4f}"
+    near = named_places.nearest(stay.lat, stay.lon, places)
+    if near is not None and near[1] <= NEAR_KM * 1000:
+        label += f" near {near[0].name}, {near[1] / 1000:.1f} km"
+    return label
 
 
 def _city_of_airport(name: str) -> str:
     """`Zürich Airport` is Zürich; `Sandefjord Airport, Torp` is Sandefjord (the table keeps
-    OurAirports' names, and a comma starts the part that is not the city)."""
+    OurAirports' names, and a comma starts the part that is not the city). A route labels a
+    night at an airport by the airport's own name (`_label`); this is for a reader that wants
+    the city."""
     name = name.split(",", 1)[0].strip()
     for suffix in (" International Airport", " Intl Airport", " Airport", " Intl"):
         if name.endswith(suffix):
@@ -173,7 +200,7 @@ def _city_of_airport(name: str) -> str:
 def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.Companion]:
     merged: dict[tuple[str | None, str], present.Companion] = {}
     for stay in visited:
-        for c in present.company(stay, reading.lines, reading.identities):
+        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner):
             if c.status != present.CONFIRMED:
                 continue
             key = (c.person, "" if c.person else c.name.casefold())
@@ -190,7 +217,7 @@ def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.
                     (*seen.reasons, *c.reasons),
                     tuple(dict.fromkeys([*seen.lines, *c.lines])),
                 )
-    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))
+    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))[:WITH_MAX]
 
 
 def _flights(reading: Reading) -> list[dict[str, Any]]:

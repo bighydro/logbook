@@ -41,7 +41,9 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         1,
         "2026-06-14",
     )
-    assert boat["asset"] == BOAT and boat["route"] == ["near Marina"]
+    assert boat["asset"] == BOAT
+    [anchorage] = boat["route"]
+    assert anchorage.startswith("59.85") and "near" not in anchorage, "11 km out: coordinates, no place near"
     assert "Marina" in boat["places"]
     assert [p["id"] for p in boat["people"]] == [OLA_ID]
     assert boat["flights_in"] == [] and boat["flights_out"] == []
@@ -52,7 +54,8 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         "2026-06-18",
     )
     assert zurich["asset"] is None and zurich["in_transit"] == 0
-    assert zurich["route"] == ["Zürich"], "an unnamed night takes the nearest large airport's name"
+    [hotel] = zurich["route"]
+    assert hotel.startswith("47.37"), "9 km from the airport and no named place near: the coordinates"
     assert zurich["places"] == [], "no named place in Zürich yet"
     assert [p["name"] for p in zurich["people"]] == ["Ola Nordmann"]
     [flight_in], [flight_out] = zurich["flights_in"], zurich["flights_out"]
@@ -64,7 +67,7 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
     assert all(len(id_) == 36 for id_ in zurich["lines"])
     assert lb.meta["head"] == head, "trips are read, never written"
     text = _run(capsys)
-    assert "2 trips" in text and "aboard solvind" in text and "Zürich" in text
+    assert "2 trips" in text and "aboard solvind" in text and "route 47.37" in text
     assert "XY 561" in text and "XY 562" in text and "Ola Nordmann" in text and "3 nights" in text
 
 
@@ -92,7 +95,7 @@ def test_a_night_in_transit_inside_a_trip_joins_it(
     data = _json(capsys, "--since", d1, "--until", d4)
     [trip] = data["trips"]
     assert (trip["start"], trip["end"], trip["nights"], trip["in_transit"]) == (d1, d2, 2, 1)
-    assert trip["route"] == ["Zürich"]
+    assert len(trip["route"]) == 1 and trip["route"][0].startswith("47.37")
 
 
 def test_without_a_home_place_there_are_no_trips_and_the_command_says_why(
@@ -141,3 +144,213 @@ def test_a_night_named_by_its_airport_drops_the_airport_words() -> None:
     assert _city_of_airport("Zürich Airport") == "Zürich"
     assert _city_of_airport("Oslo-Gardermoen International Airport") == "Oslo-Gardermoen"
     assert _city_of_airport("Sandefjord Airport, Torp") == "Sandefjord"
+
+
+# -- the home radius ---------------------------------------------------------------------------------------
+
+NEAR_HOME = (59.9139 + 250 / 111_320, 10.7522)  # 250 m north of Home, outside its 120 m radius
+
+
+def _home_places(lb: Logbook) -> None:
+    from persona import HOME
+
+    (lb.root / "places.json").write_text(
+        json.dumps({"Home": {"lat": HOME[0], "lon": HOME[1], "radius_m": 120, "kind": "home"}}),
+        encoding="utf-8",
+    )
+
+
+def test_a_night_250_m_from_home_is_home_so_it_makes_no_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import HOME, dwell, travel
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2 = "2026-06-10", "2026-06-11"
+    lb.append_many(
+        dwell(d1, "00:00", "18:00", HOME)
+        + travel(d1, "18:00", "18:10", HOME, NEAR_HOME, steps=3)
+        + dwell(d1, "18:10", "24:00", NEAR_HOME, noise_m=10)
+        + dwell(d2, "00:00", "08:00", NEAR_HOME, noise_m=10)
+        + travel(d2, "08:00", "08:10", NEAR_HOME, HOME, steps=3)
+        + dwell(d2, "08:10", "24:00", HOME)
+    )
+    _home_places(lb)
+    data = _json(capsys, "--since", d1, "--until", d2)
+    assert data["trips"] == [], "a night within 400 m of a home place is a night at home"
+    assert "no trips" in _run(capsys, "--since", d1, "--until", d2)
+
+
+def test_a_trip_never_starts_or_ends_with_a_night_near_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import HOME, ZURICH, dwell, travel
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2, d3, d4, d5 = "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13", "2026-06-14"
+    lb.append_many(
+        dwell(d1, "00:00", "24:00", NEAR_HOME, noise_m=10)  # the night before, 250 m from Home
+        + dwell(d2, "00:00", "06:00", NEAR_HOME, noise_m=10)
+        + dwell(d2, "10:00", "24:00", ZURICH)
+        + dwell(d3, "00:00", "24:00", ZURICH)
+        + dwell(d4, "00:00", "14:00", ZURICH)
+        + dwell(d4, "18:00", "24:00", NEAR_HOME, noise_m=10)  # the night after, 250 m from Home
+        + dwell(d5, "00:00", "08:00", NEAR_HOME, noise_m=10)
+        + travel(d5, "08:00", "08:10", NEAR_HOME, HOME, steps=3)
+        + dwell(d5, "08:10", "24:00", HOME)
+    )
+    _home_places(lb)
+    [trip] = _json(capsys, "--since", d1, "--until", d5)["trips"]
+    assert (trip["start"], trip["end"], trip["nights"]) == (d2, d3, 2)
+
+
+# -- route labels ------------------------------------------------------------------------------------------
+
+
+def _stay(where: tuple[float, float], place: str | None = None) -> Any:
+    from datetime import UTC, datetime
+
+    from logbook import stays
+
+    return stays.Segment(
+        kind=stays.STAY,
+        subject=None,
+        start=datetime(2026, 6, 10, 18, tzinfo=UTC),
+        end=datetime(2026, 6, 11, 8, tzinfo=UTC),
+        points=10,
+        lat=where[0],
+        lon=where[1],
+        place=place,
+    )
+
+
+def _places() -> list[Any]:
+    from persona import HOME, OFFICE
+
+    from logbook.places import Place
+
+    return [Place("Home", *HOME, 120, "home"), Place("Office", *OFFICE, 120)]
+
+
+def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
+    from persona import ZRH, ZURICH
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    airports = Airports.load()
+    [at_airport] = trips.route_of([_stay((47.4700, 8.5481))], _places(), airports)  # 1.3 km from ZRH
+    assert at_airport == "Zürich Airport"
+    [in_town] = trips.route_of([_stay(ZURICH)], _places(), airports)  # 9 km from ZRH, no place near
+    assert in_town == "47.3769,8.5417", "a stay far from every airport and named place is its coordinates"
+    assert trips.route_of([_stay(ZRH)], _places(), airports) == ["Zürich Airport"]
+
+
+def test_a_route_point_within_5_km_of_a_named_place_says_near_it_with_the_distance() -> None:
+    from persona import CAFE, FJORD
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    airports = Airports.load()
+    [label] = trips.route_of([_stay(CAFE)], _places(), airports)  # 1.6 km from Office, 960 m from Home
+    assert label == "59.9200,10.7400 near Home, 1.0 km"
+    [far] = trips.route_of([_stay(FJORD)], _places(), airports)  # 11 km out on the fjord
+    assert far == "59.8500,10.6000"
+    named = trips.route_of([_stay(CAFE, place="Cafe")], _places(), airports)
+    assert named == ["Cafe"], "a named stay is its name"
+
+
+def test_consecutive_route_points_within_200_m_collapse_to_one() -> None:
+    from persona import ZURICH
+
+    from logbook import trips
+    from logbook.flights import Airports
+
+    step = 10 / 111_320  # ten metres of latitude
+    three = [_stay((ZURICH[0] + i * step, ZURICH[1])) for i in range(3)]
+    assert trips.route_of(three, _places(), Airports.load()) == ["47.3769,8.5417"]
+    apart = [_stay(ZURICH), _stay((ZURICH[0] + 300 / 111_320, ZURICH[1])), _stay(ZURICH)]
+    assert len(trips.route_of(apart, _places(), Airports.load())) == 3, "300 m apart stays three points"
+
+
+# -- with ---------------------------------------------------------------------------------------------------
+
+INES_ID = "019cadd3-6bc0-7dcd-9133-000000000003"
+
+
+def _zurich_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: list[dict[str, Any]]) -> Logbook:
+    """Two nights at the Zürich hotel, home before and after, plus `extra` lines."""
+    from persona import HOME, OLA, OLA_ID, ZURICH, dwell, resolution
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    d1, d2, d3, d4 = "2026-06-10", "2026-06-11", "2026-06-12", "2026-06-13"
+    track = (
+        dwell(d1, "00:00", "24:00", HOME)
+        + dwell(d2, "00:00", "06:00", HOME)
+        + dwell(d2, "10:00", "24:00", ZURICH)
+        + dwell(d3, "00:00", "24:00", ZURICH)
+        + dwell(d4, "00:00", "08:00", ZURICH)
+        + dwell(d4, "14:00", "24:00", HOME)
+    )
+    lb.append_many([resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"), *track, *extra])
+    _home_places(lb)
+    return lb
+
+
+def test_the_owner_is_never_with_themselves_by_address_or_policy_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import OLA, attendee, event, note, resolution, utc
+
+    d2 = "2026-06-11"
+    lb = _zurich_record(
+        tmp_path,
+        monkeypatch,
+        [
+            resolution(("email", "ines@example.org"), INES_ID, "Ines Nordmann"),
+            event(
+                utc(d2, "19:00"),
+                utc(d2, "21:30"),
+                "Dinner",
+                [attendee("ines@example.org"), attendee(OLA["email"])],
+            ),
+            note(utc(d2, "22:00"), "Walked back with Nordmann"),
+        ],
+    )
+    meta = json.loads((lb.root / "logbook.json").read_text(encoding="utf-8"))
+    meta["owner_emails"] = ["ines@example.org"]
+    (lb.root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    owner_file = lb.root / "policy" / "owner.json"
+    empty = json.loads(owner_file.read_text(encoding="utf-8"))
+    assert empty == {"names": [], "emails": [], "phones": []}, "init writes the empty aliases file"
+    owner_file.write_text(json.dumps({"names": ["Nordmann"], "emails": [], "phones": []}), encoding="utf-8")
+    [trip] = _json(capsys, "--since", "2026-06-10", "--until", "2026-06-13")["trips"]
+    assert [p["name"] for p in trip["people"]] == ["Ola Nordmann"]
+    assert "with Ola Nordmann" in _run(capsys, "--since", "2026-06-10", "--until", "2026-06-13")
+
+
+def test_with_lists_at_most_twelve_names_most_evidence_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import attendee, event, resolution, transcript, utc
+
+    d2, d3 = "2026-06-11", "2026-06-12"
+    guests = [
+        (f"guest{n:02d}@example.org", f"Guest {n:02d}", f"019cadd3-6bc0-7dcd-9133-0000000001{n:02d}")
+        for n in range(14)
+    ]
+    lines = [resolution(("email", email), id_, name) for email, name, id_ in guests]
+    lines.append(
+        event(utc(d2, "19:00"), utc(d2, "22:00"), "Dinner", [attendee(email) for email, _, _ in guests])
+    )
+    lines.append(transcript(utc(d3, "10:00"), utc(d3, "11:00"), "Talk", [{"email": guests[13][0]}]))
+    _zurich_record(tmp_path, monkeypatch, lines)
+    [trip] = _json(capsys, "--since", "2026-06-10", "--until", "2026-06-13")["trips"]
+    names = [p["name"] for p in trip["people"]]
+    assert len(names) == 12
+    assert names[0] == "Guest 13", "two pieces of evidence come first"
+    assert names[1:] == [f"Guest {n:02d}" for n in range(11)]

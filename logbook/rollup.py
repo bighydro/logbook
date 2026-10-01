@@ -245,7 +245,7 @@ def places(reading: Reading) -> dict[str, Any]:
         year = years.setdefault(_year_of(day), {"year": _year_of(day), "places": {}, "assets": {}})
         who = [
             c
-            for c in present.company(stay, reading.lines, reading.identities)
+            for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner)
             if c.status == present.CONFIRMED
         ]
         who_days = {c: {days_of.get(id_, day) for id_ in c.lines} for c in who}
@@ -345,7 +345,7 @@ def people(reading: Reading) -> dict[str, Any]:
     years: dict[str, dict[str, Any]] = {}
     days_of = _days_of_lines(reading)
     for stay in reading.owner_stays:
-        for c in present.present(stay, reading.lines, reading.identities):
+        for c in present.present(stay, reading.lines, reading.identities, reading.places, reading.owner):
             day = days_of.get(c.line, stay.start.astimezone(reading.tz).date().isoformat())
             year = years.setdefault(_year_of(day), {"year": _year_of(day), "people": {}, "unresolved": {}})
             bucket = year["people"] if c.person else year["unresolved"]

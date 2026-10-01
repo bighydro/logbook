@@ -3,7 +3,8 @@
 `read(lb, first, last)` loads the window's lines through the index (from the first day's local
 midnight to the end of the night after the last day, so the last night is inside it), the
 settings, places and assets of the record, derives the stays (`stays.derive`) and the night of
-each day, and resolves the names of the record's refs (`resolve`). Readers — `places propose`,
+each day, resolves the names of the record's refs (`resolve`) and the owner's own identities
+(`present.owner_of`). Readers — `places propose`,
 `rollup`, `trips`, the pages — take a `Reading` and compute; none of them writes. A reading is a
 function of the record at one head: the same record, the same reading."""
 
@@ -14,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import assets, places, resolve, stays
+from . import assets, places, policy, present, resolve, stays
 from .chain import Line
 from .export import day_range
 from .flights import Airports
@@ -38,6 +39,7 @@ class Reading:
     names: dict[resolve.Ref, str]
     identities: dict[resolve.Ref, resolve.Identity]
     airports: Airports
+    owner: present.Owner = field(default_factory=lambda: present.Owner(frozenset(), frozenset(), frozenset()))
     retracted: dict[str, Line] = field(default_factory=dict)
 
     @property
@@ -104,6 +106,12 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
     standing = [line for line in window if str(line["id"]) not in retracted]
     identities = resolve.identities_from([*marks, *resolutions])
     names = {ref: who.label for ref, who in identities.items() if who.label}
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
     return Reading(
         lb=lb,
         tz=tz,
@@ -119,6 +127,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         names=names,
         identities=identities,
         airports=airports,
+        owner=owner,
         retracted=retracted,
     )
 
