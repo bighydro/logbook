@@ -106,6 +106,7 @@ BUILT_IN = (
     "twitter",
     "apple_books",
     "voice_memos",
+    "apple_photos",
 )
 
 
@@ -182,6 +183,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "wispr": "wispr-flow",
     "reminders": "apple-reminders",
     "books": "apple-books",
+    "photos": "apple-photos",
 }
 
 

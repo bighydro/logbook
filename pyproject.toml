@@ -51,6 +51,7 @@ apple-podcasts = "logbook.adapters.apple_podcasts"
 pocket = "logbook.adapters.pocket"
 apple-books = "logbook.adapters.apple_books"
 voice-memos = "logbook.adapters.voice_memos"
+apple-photos = "logbook.adapters.apple_photos"
 
 [dependency-groups]
 dev = [

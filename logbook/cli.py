@@ -247,6 +247,7 @@ SKIP_PHRASES = {
     "skipped_over_cap": "over the one-per-minute heart-rate cap",
     "skipped_reading_position": "reading positions",
     "skipped_deleted": "deleted",
+    "skipped_trashed": "in the trash",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",

@@ -53,6 +53,8 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   beside it: the titles)
     voice-memos         AppDomainGroup-group.com.apple.VoiceMemos.shared  Recordings/CloudRecordings.db,
                                                                   the .m4a/.qta files under Recordings/
+    apple-photos        CameraRollDomain                              Media/PhotoData/Photos.sqlite (the
+                                                                  library's metadata; no image is copied)
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -124,6 +126,7 @@ TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 HEALTH = "HealthDomain"
 BOOKS = "AppDomain-com.apple.iBooks"
 VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
+CAMERA_ROLL = "CameraRollDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
@@ -220,6 +223,7 @@ SOURCES: tuple[Source, ...] = (
         media=(VOICE_MEMOS, "Recordings"),
         media_suffixes=(".m4a", ".qta"),
     ),
+    Source("apple-photos", CAMERA_ROLL, "Media/PhotoData/Photos.sqlite"),  # the library, not the pixels
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

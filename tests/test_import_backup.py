@@ -14,6 +14,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_apple_books import LINES as BOOK_LINES
 from test_apple_books import _store as _books_store
+from test_apple_photos import LINES as PHOTO_LINES
+from test_apple_photos import _store as _photos_store
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
 from test_beeper import _store as _beeper_store
@@ -77,6 +79,7 @@ ALL = (
     "twitter",
     "apple-books",
     "voice-memos",
+    "apple-photos",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -97,6 +100,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "twitter": 6,
     "apple-books": BOOK_LINES,
     "voice-memos": MEMO_LINES,
+    "apple-photos": PHOTO_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -117,6 +121,7 @@ STORES["line"] = "Line.sqlite"
 STORES["twitter"] = "1000000000000000001-dmv2.db"
 STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
 STORES["voice-memos"] = "CloudRecordings.db"
+STORES["apple-photos"] = "Photos.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -275,6 +280,11 @@ def _backup(
             "Recordings/20260302 211407.composition/manifest.plist",
             _blob(stage, b"<plist/>"),
         )
+    if "apple-photos" in sources:
+        store = _photos_store(_dir(stage, "photos"))
+        _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite", store)
+        _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite-wal", _blob(stage, b""))
+        _put(backup, rows, "CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC", _blob(stage, b"pixels"))
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -428,6 +438,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (TWITTER, "com.atebits.tweetie.scribe/scribe.2-compact.sqlite"),
         (MEMOS, "Recordings/20260302 211407.waveform"),
         (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
+        ("CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC"),  # the pixels stay on the phone
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
