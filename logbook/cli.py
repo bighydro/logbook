@@ -24,6 +24,7 @@ from . import (
     FORMAT,
     __version__,
     adapters,
+    asset_status,
     assets,
     crossing,
     demo,
@@ -841,7 +842,9 @@ def cmd_keepers(a: argparse.Namespace) -> None:
 
 def cmd_assets(a: argparse.Namespace) -> None:
     """`assets list`: one line per registered asset. `assets add`: register one (ADR 0018). The
-    registry is <root>/assets.json, a setting of the record, outside the chain."""
+    registry is <root>/assets.json, a setting of the record, outside the chain. `assets status`:
+    per asset, its last known position (its latest standing location line, through the index,
+    `logbook/asset_status.py`) and the age of that fix; a table in local time, or JSON."""
     lb = Logbook.find()
     try:
         if a.verb == "add":
@@ -852,7 +855,8 @@ def cmd_assets(a: argparse.Namespace) -> None:
             print(_asset_row(asset))
             return
         registry = assets.read(lb.root)
-    except assets.AssetError as e:
+        named = places.read(lb.root) if a.verb == "status" else []
+    except (assets.AssetError, places.PlaceError) as e:
         print(f"assets: {e}", file=sys.stderr)
         sys.exit(2)
     if not registry:
@@ -861,8 +865,35 @@ def cmd_assets(a: argparse.Namespace) -> None:
             f"{'|'.join(assets.KINDS)} --name NAME [--mmsi N] [--icao24 HEX] [--registration REG]"
         )
         return
+    if a.verb == "status":
+        statuses = asset_status.read(lb, registry, named, datetime.now(UTC))
+        if a.json:
+            print(json.dumps({"assets": [s.to_json() for s in statuses]}, indent=2))
+            return
+        zone = ZoneInfo(str(lb.meta["timezone"]))
+        for status in statuses:
+            print(_status_row(status, zone))
+        return
     for asset in registry:
         print(_asset_row(asset))
+
+
+def _status_row(status: asset_status.Status, zone: ZoneInfo) -> str:
+    """`<id> <kind> <name>  <local time>  <lat>,<lon>  near <place>, x km  <speed> m/s  <age> ago`,
+    or `no fix yet`. The distance to the place is in metres under a kilometre."""
+    head = f"{status.asset.id:<16} {status.asset.kind:<9} {status.asset.name:<24}"
+    fix = status.fix
+    if fix is None:
+        return f"{head} no fix yet"
+    when = datetime.fromisoformat(fix.at.replace("Z", "+00:00")).astimezone(zone).strftime("%Y-%m-%d %H:%M")
+    parts = [when, f"{fix.lat:.4f},{fix.lon:.4f}"]
+    if fix.near is not None:
+        name, m = fix.near
+        parts.append(f"near {name}, {m:.0f} m" if m < 1000 else f"near {name}, {m / 1000:.1f} km")
+    if fix.speed_mps is not None:
+        parts.append(f"{fix.speed_mps:.1f} m/s")
+    parts.append(asset_status.age_text(fix.age_s))
+    return f"{head} {'  '.join(parts)}"
 
 
 def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
@@ -2706,6 +2737,11 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
     verbs = s.add_subparsers(dest="verb", required=True)
     v = verbs.add_parser("list", help="one line per registered asset")
+    v.set_defaults(fn=cmd_assets)
+    v = verbs.add_parser(
+        "status", help="per asset, its last known position (time, place, speed) and how old that fix is"
+    )
+    v.add_argument("--json", action="store_true", help="the statuses as JSON")
     v.set_defaults(fn=cmd_assets)
     v = verbs.add_parser("add", help="register one asset")
     v.add_argument("id", help="the subject id its positions carry: lower-case letters, digits, hyphens")

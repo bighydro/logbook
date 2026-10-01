@@ -369,6 +369,7 @@ each once in `assets.json`, then let `sync` ask the receivers that hear them:
 logbook assets add solvind --kind yacht --name Solvind --mmsi 999000001        # synthetic MMSI; use your own
 logbook assets add ln-zz1 --kind aircraft --name "the club's Cub" --icao24 000a01 --registration ZZ-ZZ1
 logbook assets list
+logbook assets status                                       # where each one last was, and how old that fix is
 export LOGBOOK_AISSTREAM_KEY=...                            # free key from aisstream.io
 uv sync --extra ais                                         # or: pip install 'openlogbook[ais]'
 logbook sync ais --dry-run                                  # listen for 60 s, count, write nothing

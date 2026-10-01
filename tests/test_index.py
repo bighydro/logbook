@@ -119,9 +119,10 @@ def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, c
         "supersedes",
         "entity",
         "media",
+        "subject",
     ]
     indexes = {r[0] for r in _rows(lb, "SELECT name FROM sqlite_master WHERE type = 'index'")}
-    assert {"lines_day_local", "lines_source_raw_id", "lines_kind_at"} <= indexes
+    assert {"lines_day_local", "lines_source_raw_id", "lines_kind_at", "lines_subject_at"} <= indexes
 
 
 def test_index_rows_carry_the_local_day_and_where_the_line_is_in_the_files(lb: Logbook):
