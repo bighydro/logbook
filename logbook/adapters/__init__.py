@@ -83,6 +83,7 @@ BUILT_IN = (
     "ios_calendar",
     "ios_calls",
     "ios_wallet",
+    "easypark",
     "flighty",
     "apple_health",
     "ics",

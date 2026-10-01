@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_easypark import LINES as EASYPARK_LINES
+from test_easypark import _recent
 from test_imessage import _store as _sms_store
 from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
@@ -29,7 +31,16 @@ from logbook.store import Logbook
 UDID = "00008030-000A1B2C3D4E5F60"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
-ALL = ("ios-contacts", "whatsapp-contacts", "whatsapp", "imessage", "ios-calendar", "ios-notes", "ios-wallet")
+ALL = (
+    "ios-contacts",
+    "whatsapp-contacts",
+    "whatsapp",
+    "imessage",
+    "ios-calendar",
+    "ios-notes",
+    "ios-wallet",
+    "easypark",
+)
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
     "whatsapp-contacts": 4,
@@ -38,6 +49,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "ios-calendar": 7,
     "ios-notes": 4,
     "ios-wallet": WALLET_LINES,
+    "easypark": EASYPARK_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -121,6 +133,9 @@ def _backup(
     if "ios-wallet" in sources:  # one unpacked .pkpass folder per pass, as the phone keeps them
         _put(backup, rows, "HomeDomain", "Library/Passes/Cards", None)
         _put_tree(backup, rows, "HomeDomain", "Library/Passes/Cards", _passes(_dir(stage, "wallet")))
+    if "easypark" in sources:  # the recent-parkings file beside the find-my-car pin, which is not copied
+        _put(backup, rows, ios_backup.EASYPARK, "Documents", None)
+        _put_tree(backup, rows, ios_backup.EASYPARK, "Documents", _recent(_dir(stage, "easypark")))
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -206,6 +221,9 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         "1 passes that would not parse" in out
         and "1 boarding passes whose year nothing on the pass gives" in out
     )
+    assert (inbox / "easypark" / "recentparkings_12345.json").is_file()
+    assert not (inbox / "easypark" / "findmycar-pin_12345.json").exists()
+    assert "easypark: 1 recentparkings_*.json file (" in out
     # the order is the one that lets each source build on the one before it
     positions = [out.index(f"{source}: ") for source in ALL]
     assert positions == sorted(positions)
@@ -247,6 +265,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     never = {
         ("HomeDomain", "Library/Preferences/com.apple.example.plist"),
         (WHATSAPP, "Message/../escape.jpg"),
+        (ios_backup.EASYPARK, "Documents/findmycar-pin_12345.json"),  # beside the file, not in the glob
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
