@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · verify · export · index · migrate · assets · sources. Three verbs,
-seventeen rare."""
+places · rollup · trips · keepers · verify · doctor · export · index · migrate · assets · sources. Three
+verbs, eighteen rare."""
 
 from __future__ import annotations
 
@@ -47,6 +47,9 @@ from . import (
 )
 from . import (
     day as day_reader,
+)
+from . import (
+    doctor as doctor_checks,
 )
 from .adapters import ios_contacts
 from .adapters.takeout import places as takeout_places
@@ -2289,6 +2292,18 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + w)
 
 
+def cmd_doctor(a: argparse.Namespace) -> None:
+    """One line per check of the record and this machine (`logbook/doctor.py`); exit 1 when one fails.
+    Reads only: a missing settings file is reported, never written."""
+    try:
+        lb: Logbook | None = Logbook.find()
+    except FileNotFoundError:
+        lb = None
+    status = doctor_checks.report(doctor_checks.run(lb, os.environ), sys.stdout)
+    if status:
+        sys.exit(status)
+
+
 def cmd_migrate(a: argparse.Namespace) -> None:
     """A logbook/0.1 record becomes logbook/0.2: same lines, hashes recomputed, lineage kept (SPEC §3.1)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
@@ -2693,6 +2708,10 @@ def main(argv: list[str] | None = None) -> None:
         help="one line per month file on stderr, in path order, as file n of N",
     )
     s.set_defaults(fn=cmd_verify)
+    s = sub.add_parser(
+        "doctor", help="is this machine set up to keep the record? one line per check; exit 1 on a fail"
+    )
+    s.set_defaults(fn=cmd_doctor)
     s = sub.add_parser(
         "export",
         help="the whole log as one .jsonl, one day-package/v1 per day, or `crossing`: a crossing-package/v1",
