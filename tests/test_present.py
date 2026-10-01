@@ -219,7 +219,7 @@ def test_a_speaker_in_a_transcript_recorded_inside_the_stay_is_confirmed() -> No
             transcript("2026-06-10T13:00:00Z", "2026-06-10T13:30:00Z", "Later", [{"email": OLA["email"]}]),
         ]
     )
-    ola, kari, stranger = present.present(STAY, lines, IDENTITIES)
+    ola, kari = present.present(STAY, lines, IDENTITIES)
     assert (ola.person, ola.source, ola.status, ola.confidence) == (
         OLA_ID,
         "transcript",
@@ -227,8 +227,31 @@ def test_a_speaker_in_a_transcript_recorded_inside_the_stay_is_confirmed() -> No
         0.9,
     )
     assert kari.person == KARI_ID, "a bare name matches a label"
-    assert stranger.person is None and stranger.name == "A Stranger"
     assert "Boat plans" in ola.reason
+
+
+def test_a_transcript_speaker_counts_only_when_resolved_to_a_person() -> None:
+    lines = _lines(
+        [
+            transcript(
+                "2026-06-10T10:15:00Z",
+                "2026-06-10T10:45:00Z",
+                "Standup",
+                [
+                    {"name": "Speaker A"},
+                    {"name": "me"},
+                    {"name": "them"},
+                    {"name": "Unknown"},
+                    {"name": "A Stranger"},
+                    {"name": "Speaker B", "email": "nobody@example.org"},
+                    {"name": "Speaker C", "email": OLA["email"]},
+                ],
+            )
+        ]
+    )
+    [ola] = present.present(STAY, lines, IDENTITIES)
+    assert ola.person == OLA_ID, "a diarization label resolves through its address"
+    assert ola.name == "Ola Nordmann"
 
 
 def test_a_note_that_says_with_someone_is_a_declaration() -> None:

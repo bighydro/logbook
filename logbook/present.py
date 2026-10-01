@@ -9,7 +9,7 @@ them per person. The sources, in the order a Day lists them:
 | `circle`     | a page another member of the circle shared (not built yet)      | confirmed | —          |
 | `calendar`   | an attendee of a timed `event/v1` held at the stay **            | confirmed | 0.8, 0.6 * |
 | `calendar`   | an attendee of an all-day `event/v1` located at the stay **     | proposed  | 0.3        |
-| `transcript` | a participant of a `transcript/v1` recorded inside the stay     | confirmed | 0.9        |
+| `transcript` | a participant of a `transcript/v1` recorded inside the stay *** | confirmed | 0.9        |
 | `note`       | a `note/v1` written inside the stay that says "with <name>"     | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
 
@@ -26,16 +26,19 @@ elsewhere that the owner joined from the hotel is not company. An attendee that 
 and has no display name is a bare address and is dropped, and a calendar system address
 (`@calendar.google.com`, `noreply`, `reservations@`, `invite@`) is never a person.
 
+*** Only a participant the record resolves to a person: by email, phone or provider id, else by
+the spoken name matching a label. A diarization label (`Speaker A`), `me`, `them`, `Unknown` or
+a name no resolution knows is not company.
+
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
 guess and stays proposed until the owner says otherwise, and so are the attendees of an all-day
-entry: it overlaps every stay of its day and places nobody at any one of them. Names resolve
-through the record's resolution lines (RFC 0006, `resolve.identities_from`): an email, a phone
-number or a library's person id (`provider_id`, `<library>:<id>`) to the person it names; a bare
-name in a transcript or a note to the person whose label it is. What does not resolve is kept as
-the source spelled it, with no person id. The owner is never listed as their own company: evidence
+entry located at the stay: it names no hour. Names resolve through the record's resolution lines
+(RFC 0006, `resolve.identities_from`): an email, a phone number or a library's person id
+(`provider_id`, `<library>:<id>`) to the person it names; a bare name in a transcript or a note to
+the person whose label it is. A note's name that does not resolve is kept as written, with no
+person id; a transcript's is dropped. The owner is never listed as their own company: evidence
 carrying one of the owner's own refs (`owner`, the addresses `logbook.json` lists under
-`owner_emails`) is dropped. Nothing here reads a file or
-writes a line."""
+`owner_emails`) is dropped. Nothing here reads a file or writes a line."""
 
 from __future__ import annotations
 
@@ -182,13 +185,12 @@ def from_transcript(
             spoken = spoken if isinstance(spoken, str) and spoken.strip() else None
             if person is None and spoken:
                 person, label = _by_name(spoken, identities)
-            name = label or spoken or (ref[1] if ref else "")
-            if not name:
-                continue
+            if person is None or not label:
+                continue  # Speaker A, me, them, Unknown, a name the record has no person for
             found.append(
                 Presence(
                     person,
-                    name,
+                    label,
                     ref,
                     TRANSCRIPT,
                     CONFIRMED,
