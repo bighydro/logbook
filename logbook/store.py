@@ -125,6 +125,7 @@ class Logbook:
         }
         (root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         policy.write_default(root)  # ADR 0016: the crossing ceiling is a setting in the record
+        policy.write_default_import(root)  # the disabled sources, an empty list to begin with
         return cls(root)
 
     @classmethod

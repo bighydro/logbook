@@ -655,6 +655,38 @@ def test_import_backup_only_takes_the_named_sources_in_the_fixed_order(lb, tmp_p
     }
 
 
+def test_import_backup_skips_a_disabled_source_and_says_so(lb, tmp_path, capsys):
+    """policy/import.json: a disabled source is neither copied nor run, with or without --only, and
+    the alias `health` stands for `apple-health` on both sides."""
+    (lb.root / "policy" / "import.json").write_text(
+        json.dumps(
+            {
+                "disabled": [
+                    {"source": "whatsapp", "reason": "a demo account"},
+                    {"source": "notes", "reason": "someone else's notes"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    backup = _backup(tmp_path)
+    _run(str(backup), "--only", "whatsapp,contacts,notes,whatsapp-contacts")
+    out = capsys.readouterr().out
+    assert "whatsapp: disabled (a demo account); skipped" in out
+    assert "ios-notes: disabled (someone else's notes); skipped" in out
+    assert "added 7 lines from ios-contacts" in out
+    assert "added 4 lines from whatsapp-contacts" in out
+    assert "added 14 lines from whatsapp" not in out and "ios-notes: NoteStore" not in out
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    assert sorted(p.name for p in inbox.iterdir()) == ["copies.json", "ios-contacts", "whatsapp-contacts"]
+    assert "valid — 11 lines" in out
+    # --dry-run says the same, and a disabled source is never counted as found
+    _run(str(backup), "--only", "whatsapp,contacts", "--dry-run")
+    out = capsys.readouterr().out
+    assert "whatsapp: disabled (a demo account); skipped" in out
+    assert "dry run: 1 of 1 sources found" in out
+
+
 def test_import_backup_dry_run_lists_files_and_sizes_and_writes_nothing(lb, tmp_path, capsys):
     backup = _backup(tmp_path)
     before = _snapshot(backup)
