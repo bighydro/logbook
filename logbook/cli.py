@@ -1,5 +1,5 @@
 """logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
-verify · export · index · migrate · assets. Three verbs, thirteen rare."""
+trips · verify · export · index · migrate · assets. Three verbs, fourteen rare."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ from . import (
     reading,
     rollup,
     stays,
+    trips,
 )
 from .adapters import ios_contacts
 from .chain import Line
@@ -1788,7 +1789,7 @@ def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
     first and last day; None for an empty record or a window the record has no day in."""
     if a.year and (a.since or a.until):
         raise ValueError("give --year, or --since and --until, not both")
-    whole = reading.record_days(lb, None if a.what == "flights" else "location")
+    whole = reading.record_days(lb, None if getattr(a, "what", None) == "flights" else "location")
     if whole is None:
         return None
     if a.year:
@@ -1806,6 +1807,35 @@ def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
 
 def _raise_backwards(since: str, until: str) -> tuple[str, str]:
     raise ValueError(f"range runs backwards: {since} > {until}")
+
+
+def cmd_trips(a: argparse.Namespace) -> None:
+    """`trips [--year YYYY | --since DAY --until DAY] [--json]`: runs of consecutive days whose
+    overnight stay is outside every home region, derived from one reading of the window and
+    never written (ADR 0019)."""
+    lb = Logbook.find()
+    try:
+        window = _rollup_days(lb, a)
+        if window is None:
+            print(
+                json.dumps({"window": None, "trips": []}, indent=2)
+                if a.json
+                else "no trips: the record has no days"
+            )
+            return
+        read = reading.read(lb, window[0], window[1], _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"trips: {e}", file=sys.stderr)
+        sys.exit(2)
+    found, warning = trips.trips(read)
+    if a.json:
+        out: dict[str, Any] = {"window": reading.window_json(read), "trips": [t.to_json() for t in found]}
+        if warning:
+            out["warning"] = warning
+        print(json.dumps(out, indent=2))
+        return
+    for text in trips.rows(read, found, warning):
+        print(text)
 
 
 def cmd_index(a: argparse.Namespace) -> None:
@@ -2160,6 +2190,19 @@ def main(argv: list[str] | None = None) -> None:
         "--json", action="store_true", help="the rollup as one JSON object, every number with its line ids"
     )
     s.set_defaults(fn=cmd_rollup)
+    s = sub.add_parser(
+        "trips", help="runs of nights away from home: route, places, people, flights in and out"
+    )
+    s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_trips)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
