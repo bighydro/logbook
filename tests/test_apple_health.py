@@ -548,6 +548,49 @@ def test_stats_health_sleep_is_the_night_that_ends_on_the_day_asleep_stages_only
     assert data["days"][0]["sleep_h"] == 7.3
 
 
+def _sleep(raw_id: str, start: str, end: str, stage: str, device: str) -> dict[str, Any]:
+    seconds = int((datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds())
+    return {
+        "at": start.replace("+00:00", "Z"),
+        "end": end.replace("+00:00", "Z"),
+        "tz": "Europe/Oslo",
+        "source": "apple-health",
+        "kind": "health",
+        "tier": 3,
+        "payload": {
+            "schema": "health-sample/v1",
+            "raw_id": raw_id,
+            "type": "sleep",
+            "value": seconds,
+            "unit": "s",
+            "stage": stage,
+            "device": device,
+        },
+    }
+
+
+def test_stats_health_sleep_counts_overlapping_stages_of_one_device_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+):
+    """A source that writes the night twice (two overlapping sets of stages from one phone) must
+    not double the night; nor do two devices add up. Per device the asleep spans are unioned, then
+    the longest device is the night."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    night = [  # the phone's first copy: 7 h asleep; its second copy, the same 7 h cut differently
+        _sleep("sleep:1", "2026-03-01T22:00:00+00:00", "2026-03-02T02:00:00+00:00", "core", "iPhone17,1"),
+        _sleep("sleep:2", "2026-03-02T02:00:00+00:00", "2026-03-02T05:00:00+00:00", "deep", "iPhone17,1"),
+        _sleep("sleep:3", "2026-03-01T22:00:00+00:00", "2026-03-02T00:00:00+00:00", "rem", "iPhone17,1"),
+        _sleep("sleep:4", "2026-03-02T00:00:00+00:00", "2026-03-02T05:00:00+00:00", "core", "iPhone17,1"),
+        _sleep("sleep:5", "2026-03-01T21:30:00+00:00", "2026-03-02T05:30:00+00:00", "in_bed", "iPhone17,1"),
+        # the watch saw six hours
+        _sleep("sleep:6", "2026-03-01T22:30:00+00:00", "2026-03-02T04:30:00+00:00", "asleep", "Watch7,1"),
+    ]
+    lb.append_many(night)
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert [d["sleep_h"] for d in data["days"]] == [7.0]
+
+
 def test_stats_health_steps_take_the_larger_device_per_quarter_hour(lb: Logbook, capsys):
     # 07:00Z: watch 250 vs phone 200 → 250; 07:15Z: watch 300 → 550. Next day: watch 400 vs phone 450 → 450
     data = json.loads(_stats(capsys, "--health", "--json"))
