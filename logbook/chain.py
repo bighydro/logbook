@@ -53,10 +53,8 @@ def _write(obj: object, out: list[str]) -> None:
         out.append("true")
     elif obj is False:
         out.append("false")
-    elif isinstance(obj, int):
-        out.append(int.__repr__(obj))
-    elif isinstance(obj, float):
-        out.append(_es6_number(obj))
+    elif isinstance(obj, int | float):
+        out.append(number_text(obj))
     elif isinstance(obj, str):
         out.append(json.dumps(obj, ensure_ascii=False))
     elif isinstance(obj, list | tuple):
@@ -98,6 +96,13 @@ def _collect(k: object) -> list[str]:
     parts: list[str] = []
     _write(k, parts)
     return parts
+
+
+def number_text(x: int | float) -> str:
+    """A JSON number as RFC 8785 writes it, by value: an int exactly, a float as ECMAScript spells it
+    (`100000000000000000000` for 1e20, `1e+21`, `0.000001`, `120` for 120.0). A reader prints a number
+    this way too (SPEC §3.2), so two implementations agree whatever text the writer stored."""
+    return int.__repr__(x) if isinstance(x, int) else _es6_number(x)
 
 
 def _es6_number(x: float) -> str:
