@@ -25,12 +25,15 @@ Data types this version maps (`data_type`): 3 body mass → `weight` (kg); 5 hea
 (ms). A row in `workouts` is a `workout` whatever its data_type. Any other type is skipped and counted
 (RFC 0014 rule 8), never mapped to a near type.
 
-The store keeps a quantity in HealthKit's canonical unit for its dimension: a count as a count, a
-length in metres, an energy in kilocalories, a mass in kilograms, a rate in count per second, a time
-in seconds. The profile's units are those, except that a heart rate is multiplied by 60 (count/s →
-bpm) and HRV by 1,000 (s → ms). When the row keeps the quantity as it was entered
+The store keeps a quantity in one unit per data type, checked against a real store (RFC 0014
+rule 6, the RFC's "Units as the store keeps them"): a count as a count, a length in metres, an
+energy in kilocalories, a mass in kilograms, a time in seconds; a heart rate (type 5) in count per
+second, but a resting heart rate (type 118) in count per minute and HRV SDNN (type 183) in
+milliseconds already. The profile's units are those, with one conversion: a heart rate is
+multiplied by 60 (count/s → bpm). Nothing else is rescaled; a factor of 60 on resting heart rate once made a
+resting rate of 62 read as 3,720. When the row keeps the quantity as it was entered
 (`original_quantity`, `original_unit`) that goes under `extra.original` so the conversion can be
-checked against a real store (RFC 0014 rule 6).
+checked against a real store.
 
 Steps, distance, energy and flights are summed into 15-minute buckets aligned to the UTC hour, one
 bucket per device (rule 2): `at` the bucket's start, `end` its end, `extra.samples` the count,
@@ -95,7 +98,7 @@ UNITS = {  # profile type → unit (RFC 0014)
     "sleep": "s",
     "workout": "s",
 }
-SCALE = {"heart_rate": 60, "resting_hr": 60, "hrv": 1000}  # canonical unit → profile unit
+SCALE = {"heart_rate": 60}  # the store's unit → the profile's; every other type is kept as stored
 BUCKETED = frozenset({"steps", "distance", "active_energy", "basal_energy", "flights_climbed"})
 CAPPED = frozenset({"heart_rate"})
 STAGES = {0: "in_bed", 1: "asleep", 2: "awake", 3: "core", 4: "deep", 5: "rem"}
