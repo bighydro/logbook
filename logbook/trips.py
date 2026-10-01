@@ -2,15 +2,17 @@
 
 A trip is a run of consecutive days whose overnight stay is outside every home region (places.json,
 kind `home`, or within 400 m of one) or in transit. It has a route (the night places in order: the
-named place, else a large airport's name when the stay is within 2 km of it, else the coordinates
-with `near <place>, x km` for the nearest named place within 5 km, else the coordinates with the
-city of the nearest large airport within 30 km in parentheses, `53.5998,10.0130 (Hamburg)` — the
-city only, never the airport's name, so a reader sees where a hotel is; consecutive points within
-200 m of each other collapse into the first), its nights, the named places visited and the people
-confirmed present (the with module: never the owner, at most `WITH_MAX` names, most evidence
-first) between the first day's midnight and the end of the return day, and the flights in (dated
-the first day) and out (dated the return day, the day after the last night). An asset trip is one
-whose every night was aboard one asset.
+named place, else an airport's code and city, `ZRH, Zurich`, when the stay is at it — within 3.5 km
+of its reference point for an airport with scheduled traffic (OurAirports type large or medium,
+whose terminal is often well off the runway midpoint the row marks), within 2 km for any other row
+— else the coordinates with `near <place>, x km` for the nearest named place within 5 km, else the
+coordinates with the city of the nearest large airport within 30 km in parentheses,
+`53.5998,10.0130 (Hamburg)` — the city only, never the airport's code, so a reader sees where a
+hotel is; consecutive points within 200 m of each other collapse into the first), its nights, the
+named places visited and the people confirmed present (the with module: never the owner, at most
+`WITH_MAX` names, most evidence first) between the first day's midnight and the end of the return
+day, and the flights in (dated the first day) and out (dated the return day, the day after the last
+night). An asset trip is one whose every night was aboard one asset.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
 captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
@@ -28,10 +30,11 @@ from typing import Any
 from . import flights as flight_lines
 from . import places as named_places
 from . import present, stays
-from .flights import Airports
+from .flights import Airport, Airports
 from .reading import Reading, window_json
 
-AIRPORT_KM = 2.0  # an unnamed night this close to a large airport is named after it
+AIRPORT_KM = 2.0  # an unnamed night this close to an airport's reference point is at that airport …
+SCHEDULED_AIRPORT_KM = 3.5  # … or this close, when the airport has scheduled traffic (large, medium)
 NEAR_KM = 5.0  # else its coordinates, with `near <place>, x km` for a named place this close
 CITY_KM = 30.0  # else its coordinates, with the city of the nearest large airport this close
 MERGE_M = 200.0  # consecutive route points this close are one
@@ -178,15 +181,32 @@ def _label(stay: stays.Segment, places: Sequence[named_places.Place], airports: 
     if stay.place:
         return stay.place
     assert stay.lat is not None and stay.lon is not None
-    airport = airports.nearest(stay.lat, stay.lon, AIRPORT_KM)
+    airport = airport_at(stay.lat, stay.lon, airports)
     if airport is not None:
-        return airport.name
+        return airport_label(airport)
     label = f"{stay.lat:.4f},{stay.lon:.4f}"
     near = named_places.nearest(stay.lat, stay.lon, places)
     if near is not None and near[1] <= NEAR_KM * 1000:
         return f"{label} near {near[0].name}, {near[1] / 1000:.1f} km"
     city = city_near(stay.lat, stay.lon, airports)
     return f"{label} ({city})" if city else label
+
+
+def airport_at(lat: float, lon: float, airports: Airports) -> Airport | None:
+    """The airport a point is at: the nearest whose radius holds it — `SCHEDULED_AIRPORT_KM` from
+    the reference point of an airport with scheduled traffic (`Airport.scheduled`: OurAirports type
+    large or medium, whose terminal is often 2 to 3 km from the runway midpoint the row marks),
+    `AIRPORT_KM` from any other row. None when no airport is that close."""
+    for airport, km in airports.within(lat, lon, max(AIRPORT_KM, SCHEDULED_AIRPORT_KM)):
+        if km <= (SCHEDULED_AIRPORT_KM if airport.scheduled else AIRPORT_KM):
+            return airport
+    return None
+
+
+def airport_label(airport: Airport) -> str:
+    """How a route names an airport: its IATA code and city, `ZRH, Zurich`; the code alone when
+    the row names no municipality."""
+    return f"{airport.iata}, {airport.city}" if airport.city else airport.iata
 
 
 def city_near(lat: float, lon: float, airports: Airports) -> str | None:

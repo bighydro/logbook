@@ -65,6 +65,40 @@ def test_airports_carry_the_municipality_and_its_city():
     assert all(a.municipality for a in airports), "every built-in row names its municipality"
 
 
+def test_airports_carry_their_type_and_whether_they_have_scheduled_traffic():
+    """OurAirports' `type`: every built-in row is a `large_airport`; `scheduled` is true for a large
+    or medium airport, the ones with scheduled traffic, and false for a strip or a row with no type."""
+    airports = Airports.load()
+    assert airports.get("ZRH").type == "large_airport" and airports.get("ZRH").scheduled
+    assert all(a.type == "large_airport" for a in airports), "the built-in table is the large airports"
+    medium = airports.get("ZRH")._replace(type="medium_airport")
+    assert medium.scheduled
+    assert not airports.get("ZRH")._replace(type="small_airport").scheduled
+    assert not airports.get("ZRH")._replace(type="").scheduled
+
+
+def test_airports_override_file_may_carry_a_type_or_omit_it(tmp_path: Path):
+    p = tmp_path / "airports.csv"
+    p.write_text(
+        "iata,lat,lon,tz,type\nZZZ,60.5,11.5,Europe/Oslo,medium_airport\nZZY,60.6,11.6,Europe/Oslo,\n",
+        encoding="utf-8",
+    )
+    airports = Airports.load(p)
+    assert airports.get("ZZZ").type == "medium_airport" and airports.get("ZZZ").scheduled
+    assert airports.get("ZZY").type == "" and not airports.get("ZZY").scheduled
+    p.write_text("iata,lat,lon,tz\nZZZ,60.5,11.5,Europe/Oslo\n", encoding="utf-8")
+    assert Airports.load(p).get("ZZZ").type == ""
+
+
+def test_airports_within_lists_every_airport_in_a_radius_nearest_first():
+    airports = Airports.load()
+    [(osl, km)] = airports.within(60.197, 11.104, 10.0)
+    assert osl.iata == "OSL" and 0 < km < 1
+    assert airports.within(59.913, 10.752, 10.0) == []  # Oslo city centre, 45 km from OSL
+    far = airports.within(59.913, 10.752, 120.0)
+    assert [a.iata for a, _ in far][:2] == ["OSL", "TRF"] and far[0][1] < far[1][1]
+
+
 def test_airports_override_file_may_omit_the_municipality(tmp_path: Path):
     p = tmp_path / "airports.csv"
     p.write_text("iata,lat,lon,tz\nZZZ,60.5,11.5,Europe/Oslo\n", encoding="utf-8")

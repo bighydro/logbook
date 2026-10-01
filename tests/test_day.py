@@ -126,6 +126,12 @@ def test_a_travel_day_has_its_flight_and_sleeps_away(
     assert hotel["kind"] == "stay" and hotel["place"] is None
     assert hotel["where"] == f"{hotel['lat']:.4f},{hotel['lon']:.4f} (Zurich)", "the stay's row says so too"
     assert "country       CH" in text
+    unnamed = [e for e in data["timeline"] if e["kind"] in ("stay", "stop") and e["place"] is None]
+    assert [e["where"] for e in unnamed][:2] == [
+        "OSL, Oslo",
+        "ZRH, Zurich",
+    ], "a stay at an airport is its code and city, the trips route's label"
+    assert "OSL, Oslo" in text and "ZRH, Zurich" in text
 
 
 # -- one calendar entry in several calendars -------------------------------------------------------------

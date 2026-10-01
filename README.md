@@ -228,8 +228,9 @@ the merge — the tracker's fields win, your declared role always wins — and l
 codeshare (two numbers, one aircraft leaving once) is one flight too. An inferred leg is a flight only between airports
 150 km or more apart, never one a tracked flight already covers, and carries a number only when it is the flight the
 calendar entry names.
-The package ships the world's 1,150 large airports with their zones; `--airports FILE` (or `LOGBOOK_AIRPORTS`)
-adds a private field. Tier 1; a booking reference is never kept.
+The package ships the world's 1,150 large airports with their zones and OurAirports' `type`; `--airports FILE`
+(or `LOGBOOK_AIRPORTS`) adds a private field (`type` optional: `medium_airport` for a regional field with
+scheduled traffic). Tier 1; a booking reference is never kept.
 
 Apple Health becomes `health-sample/v1` lines (RFC 0014) from the `healthdb_secure.sqlite` an encrypted backup
 carries: steps, distance, active and basal energy and flights climbed summed into quarter-hour buckets per device;
@@ -487,10 +488,12 @@ is printed with the numbers; name the place and give it a country when it matter
 
 **Trips are derived, never written** (ADR 0019). A trip is a run of consecutive days whose overnight stay is
 outside every home region, recomputed every time; a trip's name, when you give one, is a note. Its route is
-the night places in order: the named place, else a large airport's name when the stay is within 2 km of one,
-else the coordinates with `near <place>, x km` for a named place within 5 km, else the coordinates with the city
-of the nearest large airport within 30 km in parentheses (`53.5998,10.0130 (Hamburg)`; the city, never the
-airport's name); consecutive points within 200 m of each other are one. `logbook day` labels an unnamed stay the
+the night places in order: the named place, else an airport's code and city (`ZRH, Zurich`) when the stay is at
+one — within 3.5 km of the reference point of an airport with scheduled traffic (OurAirports type large or
+medium; a terminal often lies well off the runway midpoint the row marks), within 2 km of any other row — else
+the coordinates with `near <place>, x km` for a named place within 5 km, else the coordinates with the city of
+the nearest large airport within 30 km in parentheses (`53.5998,10.0130 (Hamburg)`; the city, never the
+airport's code); consecutive points within 200 m of each other are one. `logbook day` labels an unnamed stay the
 same way.
 
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album

@@ -12,6 +12,7 @@ import pytest
 from persona import BOAT, OLA_ID, persona_record
 
 from logbook import cli
+from logbook.flights import Airports
 from logbook.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -236,8 +237,8 @@ def test_an_unnamed_night_far_from_any_place_names_the_city_of_the_nearest_large
     airports = Airports.load()
     hamburg = _stay((53.5998, 10.0130))
     assert route_of([hamburg], [], airports) == ["53.5998,10.0130 (Hamburg)"]
-    at_the_airport = _stay((53.6310, 9.9890))  # within 2 km of HAM: the airport's own name
-    assert route_of([at_the_airport], [], airports) == ["Hamburg Helmut Schmidt Airport"]
+    at_the_airport = _stay((53.6310, 9.9890))  # within 2 km of HAM: its code and city
+    assert route_of([at_the_airport], [], airports) == ["HAM, Hamburg"]
     cabin = Place("Cabin", 53.5900, 10.0100, 150.0)  # a named place 1.1 km away wins over the city
     assert route_of([hamburg], [cabin], airports) == ["53.5998,10.0130 near Cabin, 1.1 km"]
     oslo_fjord = _stay((59.8500, 10.6000))  # 40 km from OSL: nothing within 30 km, bare coordinates
@@ -245,7 +246,7 @@ def test_an_unnamed_night_far_from_any_place_names_the_city_of_the_nearest_large
     assert route_of([_stay((53.5998, 10.0130), "Hotel")], [], airports) == ["Hotel"]
 
 
-def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
+def test_a_route_names_an_airport_by_its_code_and_city() -> None:
     from persona import ZRH, ZURICH
 
     from logbook import trips
@@ -253,10 +254,72 @@ def test_a_route_names_an_airport_only_within_2_km_of_it() -> None:
 
     airports = Airports.load()
     [at_airport] = trips.route_of([_stay((47.4700, 8.5481))], _places(), airports)  # 1.3 km from ZRH
-    assert at_airport == "Zürich Airport"
+    assert at_airport == "ZRH, Zurich"
     [in_town] = trips.route_of([_stay(ZURICH)], _places(), airports)  # 9 km from ZRH, no place near
     assert in_town == "47.3769,8.5417 (Zurich)", "far from every airport and named place: coordinates, city"
-    assert trips.route_of([_stay(ZRH)], _places(), airports) == ["Zürich Airport"]
+    assert trips.route_of([_stay(ZRH)], _places(), airports) == ["ZRH, Zurich"]
+
+
+# A synthetic field north of Oslo, far from every real airport; its terminal is 2.8 km from the
+# reference point, as at a large airport whose row marks the runway midpoint, not the building.
+FIELD = (60.5, 11.5)
+TERMINAL = (60.5 + 2.8 / 111.32, 11.5)  # 2.8 km north
+NEAR = (60.5 + 1.5 / 111.32, 11.5)  # 1.5 km north
+FAR = (60.5 + 3.7 / 111.32, 11.5)  # 3.7 km north
+
+
+def _field(kind: str, municipality: str = "Eidsvoll") -> Airports:
+    from logbook.flights import Airport
+
+    return Airports([Airport("ZZZ", "ENZZ", "Example Airport", *FIELD, "Europe/Oslo", municipality, kind)])
+
+
+def test_a_terminal_2_8_km_from_a_scheduled_airports_reference_point_is_at_that_airport() -> None:
+    """An airport with scheduled traffic (OurAirports type large or medium) is labelled within
+    3.5 km, since a terminal often lies well off the row's reference point; every other row keeps
+    the 2 km rule."""
+    from logbook import trips
+
+    for kind in ("large_airport", "medium_airport"):
+        airports = _field(kind)
+        assert trips.route_of([_stay(TERMINAL)], [], airports) == ["ZZZ, Eidsvoll"], kind
+        assert trips.route_of([_stay(NEAR)], [], airports) == ["ZZZ, Eidsvoll"], kind
+        [far] = trips.route_of([_stay(FAR)], [], airports)
+        assert far.startswith("60.53") and far.endswith(" (Eidsvoll)"), f"3.7 km: coordinates, city ({kind})"
+    for kind in ("small_airport", "heliport", ""):
+        airports = _field(kind)
+        assert trips.route_of([_stay(NEAR)], [], airports) == ["ZZZ, Eidsvoll"], kind
+        [terminal] = trips.route_of([_stay(TERMINAL)], [], airports)
+        assert terminal.startswith("60.52") and terminal.endswith(" (Eidsvoll)"), f"2.8 km from a {kind!r}"
+
+
+def test_an_airport_whose_row_names_no_city_is_labelled_by_its_code_alone() -> None:
+    from logbook import trips
+
+    assert trips.route_of([_stay(NEAR)], [], _field("large_airport", municipality="")) == ["ZZZ"]
+
+
+def test_airport_at_prefers_the_scheduled_airport_over_a_closer_small_field_out_of_its_radius() -> None:
+    """A small strip 2.5 km away is outside its 2 km; the large airport 3 km away is inside its 3.5."""
+    from logbook import trips
+    from logbook.flights import Airport, Airports
+
+    strip = Airport(
+        "ZZY", "ENZY", "Example strip", 60.5 + 2.5 / 111.32, 11.5, "Europe/Oslo", "", "small_airport"
+    )
+    large = Airport(
+        "ZZZ",
+        "ENZZ",
+        "Example Airport",
+        60.5 + 3.0 / 111.32,
+        11.5,
+        "Europe/Oslo",
+        "Eidsvoll",
+        "large_airport",
+    )
+    airports = Airports([strip, large])
+    assert trips.airport_at(*FIELD, airports) is large
+    assert trips.route_of([_stay(FIELD)], [], airports) == ["ZZZ, Eidsvoll"]
 
 
 def test_a_route_point_within_5_km_of_a_named_place_says_near_it_with_the_distance() -> None:
