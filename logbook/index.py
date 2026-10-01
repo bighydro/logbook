@@ -334,6 +334,16 @@ class Index:
         ).fetchone()
         return None if found is None or found[0] is None else str(found[0])
 
+    def span(self, kind: str | None = None) -> tuple[str, str] | None:
+        """The first and last local day with a line of `kind` (any kind when None); None when
+        there is none. Nothing is read from the files."""
+        found = self.db.execute(
+            "SELECT min(day_local), max(day_local) FROM lines WHERE kind = coalesce(?, kind)", (kind,)
+        ).fetchone()
+        if found is None or found[0] is None:
+            return None
+        return str(found[0]), str(found[1])
+
     # -- counting: `stats`; one SELECT per table, nothing read from the files ----------------------
     def totals(self) -> tuple[int, str | None, str | None]:
         """(lines, first `at`, last `at`); the stamps are None on an empty record."""

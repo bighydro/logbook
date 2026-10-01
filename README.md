@@ -115,7 +115,7 @@ logbook migrate                  # same lines, new hashes; keeps the old files a
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
                     stays.json: how long a stay is, how far a place reaches. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
-  places.json       optional: names for the places `derive stays` finds (lat, lon, radius_m).
+  places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
   state/            where each live source left off. bookkeeping, not the record.
   exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
@@ -382,6 +382,54 @@ speed (walk, car, train, flight; flight also when a gap starts and ends near air
 day is the longest stay between 22:00 and 08:00; a night with none is in transit. An asset registered in
 `assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
 marked `aboard`.
+
+## Reading the record
+
+The readers above the day page derive, and never append: every one of them is a function of the record at its
+head, and the same record reads the same way twice. The only lines they ever add are the captain's own namings.
+
+```bash
+logbook places propose                        # unnamed stays ranked by hours, with the nearest known place and a suggested name
+logbook places propose --write                # name the ones you accept: places.json, and one note/v1 line each
+logbook places add Home --lat 59.9139 --lon 10.7522 --kind home
+logbook places name 59.92,10.74 Cafe          # or a stay id from `propose`; the naming is a note in the record
+
+logbook rollup countries --year 2026          # days per country from the overnight stay; in transit apart
+logbook rollup flights                        # count, km, long-haul, by evidence, from the flight lines standing
+logbook rollup nights                         # home, away, in transit, nights aboard, the longest trip
+logbook rollup places                         # stays, hours, first and last, people, per named place and per asset
+logbook rollup people                         # days together, last real contact, places shared, per resolved person
+
+logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
+logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
+logbook show asset solvind                    # trips aboard, nights, people, the track's summary
+logbook show place Office                     # visits, people, photos
+
+logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
+logbook keepers --since 2026-06-01 --lane art
+```
+
+Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
+by its first and last location line (one unbroken run of points), a flight by the flight line standing, a person
+by the lines that put them there. A home region is a place of kind `home` in `places.json`; without one, no
+night is home, there are no trips, and the commands say so.
+
+**Who was there.** A stay's company comes from the record's own evidence: an attendee of a calendar entry whose
+span overlaps the stay, a participant of a transcript recorded inside it, a note written inside it that says
+`with <name>` — all confirmed — and a face the photo library tagged, proposed only. Names resolve through the
+record's resolution lines (RFC 0006); what does not resolve is listed as the source spelled it.
+
+**Countries, coarsely.** `rollup countries` has no map. The country of a night is the one a place in
+`places.json` carries (`country`, your word), else the nearest large airport within 300 km and the country its
+zone is filed under in the bundled `zone.tab`. That is wrong near borders and far from airports, and the method
+is printed with the numbers; name the place and give it a country when it matters.
+
+**Trips are derived, never written** (ADR 0019). A trip is a run of consecutive days whose overnight stay is
+outside every home region, recomputed every time; a trip's name, when you give one, is a note.
+
+**Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
+named Art is `art`. `infer keepers` reads the marks out of the photo lines once; `show <day>` lists the day's
+keepers first, as its hero photos.
 
 ## Handing a window to someone
 
