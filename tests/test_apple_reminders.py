@@ -185,8 +185,7 @@ def test_run_yields_task_lines_at_the_creation_time(tmp_path):
         assert set(line) == ENVELOPE
         assert line["end"] is None and line["tz"] is None
         assert line["source"] == "apple-reminders" and line["kind"] == "task" and line["tier"] == 2
-        assert line["payload"]["schema"] == "task/v1"
-        assert line["payload"]["source"] == "apple-reminders"
+        assert line["payload"]["schema"] == "task/v1" and "source" not in line["payload"]
     assert _by_pk(lines)[OPEN]["at"] == "2026-01-13T12:26:40Z"
 
 
@@ -210,16 +209,17 @@ def test_run_open_reminder_has_title_status_due_list_and_notes(tmp_path):
     assert p["due"] == "2026-01-14T12:26:40Z"  # a timed reminder: the instant
     assert p["list"] == "Boat"
     assert p["notes"] == "Ask the yard first"
+    assert p["priority"] == "high" and p["extra"]["priority_number"] == 1
+    assert p["modified_at"] == "2026-01-13T12:26:45Z"
     assert p["extra"]["list_group"] == "Projects"
-    assert p["extra"]["flagged"] is True and p["extra"]["priority"] == 1
+    assert p["extra"]["flagged"] is True
     assert p["extra"]["timezone"] == "Europe/Oslo"
-    assert p["extra"]["modified_at"] == "2026-01-13T12:26:45Z"
-    assert "deleted" not in p["extra"]
+    assert "deleted" not in p["extra"] and "parent" not in p
 
 
 def test_run_completed_reminder_has_completed_at(tmp_path):
     p = _by_pk(list(apple_reminders.run(_store(tmp_path))))[DONE]["payload"]
-    assert p["status"] == "completed" and p["completed_at"] == "2026-01-13T14:26:40Z"
+    assert p["status"] == "done" and p["completed_at"] == "2026-01-13T14:26:40Z"
     assert (
         "due" not in p and "notes" not in p and "flagged" not in p["extra"] and "priority" not in p["extra"]
     )
@@ -238,10 +238,17 @@ def test_run_floating_timed_due_is_the_display_instant(tmp_path):
     assert p["due"] == "2026-01-14T13:26:40Z"  # T0 + 90000, not T0 + 93600
 
 
+def test_priority_maps_apples_nine_levels_to_three_words():
+    assert [apple_reminders._priority(n) for n in range(10)] == [
+        None, "high", "high", "high", "high", "medium", "low", "low", "low", "low"
+    ]  # fmt: skip
+    assert apple_reminders._priority(None) is None and apple_reminders._priority(True) is None
+
+
 def test_run_raw_id_is_the_uuid_at_modification_time(tmp_path):
     lines = _by_pk(list(apple_reminders.run(_store(tmp_path))))
-    assert lines[OPEN]["payload"]["raw_id"] == f"{UUIDS[OPEN]}@2026-01-13T12:26:45Z"
-    assert lines[DONE]["payload"]["raw_id"] == f"{UUIDS[DONE]}@2026-01-13T14:26:40Z"
+    assert lines[OPEN]["payload"]["raw_id"] == f"reminders:{UUIDS[OPEN]}@2026-01-13T12:26:45Z"
+    assert lines[DONE]["payload"]["raw_id"] == f"reminders:{UUIDS[DONE]}@2026-01-13T14:26:40Z"
     assert lines[OPEN]["payload"]["extra"]["identifier"] == str(UUIDS[OPEN])
 
 
@@ -255,7 +262,7 @@ def test_run_deleted_reminder_is_a_line_flagged_and_counted(tmp_path):
 
 def test_run_subtask_names_its_parent(tmp_path):
     p = _by_pk(list(apple_reminders.run(_store(tmp_path))))[SUBTASK]["payload"]
-    assert p["extra"]["parent"] == str(UUIDS[OPEN])
+    assert p["parent"] == f"reminders:{UUIDS[OPEN]}"  # the parent's raw_id without its @ suffix
 
 
 def test_run_skips_and_counts_untitled_and_undated(tmp_path):
@@ -275,7 +282,7 @@ def test_run_on_the_folder_reads_every_store(tmp_path):
     assert len(lines) == 7
     local = next(line for line in lines if line["payload"]["title"] == "Stays on this phone")
     assert local["payload"]["list"] == "Local"
-    assert local["payload"]["raw_id"] == "00000099-0000-4000-8000-000000000099@2026-01-13T12:35:00Z"
+    assert local["payload"]["raw_id"] == "reminders:00000099-0000-4000-8000-000000000099@2026-01-13T12:35:00Z"
     assert local["payload"]["extra"]["store"] == "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite"
     # the container folder works too, and so does one file alone
     assert len(list(apple_reminders.run(tmp_path))) == 7
@@ -298,7 +305,7 @@ def test_add_dedupes_on_a_second_import(tmp_path, monkeypatch):
     for line in lb.lines():
         validator.validate(line)
     line = next(line for line in lb.lines() if line["payload"]["title"] == "Buy milk")
-    assert line["tz"] == "Europe/Oslo" and line["payload"]["status"] == "completed"
+    assert line["tz"] == "Europe/Oslo" and line["payload"]["status"] == "done"
 
 
 def test_rfc3339_converts_apple_epoch_seconds_and_rejects_the_rest():

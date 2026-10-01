@@ -12,16 +12,18 @@ group.com.apple.reminders domain, one store per account (iCloud, local, each Cal
                      dates are seconds since 2001-01-01 UTC)
     ZREMCDBASELIST  (Z_PK, ZNAME, ZISGROUP, ZPARENTLIST → the group it sits in, ZMARKEDFORDELETION)
 
-One task/v1 line per reminder: kind `task`, tier 2 (a reminder is the owner's own words, like a
-note), source `apple-reminders`, `at` the reminder's creation time in UTC. `raw_id` is
-`<uuid>@<last modified>`, so a reminder completed or edited after an import is a new line and one
-unchanged appends nothing. `status` is `completed` when ZCOMPLETED is set, else `open`;
-`completed_at` is ZCOMPLETIONDATE. `due`: an all-day reminder keeps its day as `YYYY-MM-DD` —
-Apple stores it as midnight UTC of that day in ZDUEDATE; a timed one is the instant the phone
-showed it at (ZDISPLAYDATEDATE: a reminder without a zone keeps its wall clock in ZDUEDATE as if it
-were UTC, and the display date is the real instant), as RFC 3339 UTC. `list` is the list's name,
-`notes` the notes text, `source` the app (`apple-reminders`). Priority, the flag, the zone, a
-parent reminder (a subtask), the list's group and the store's file name go under `extra`.
+One task/v1 line per reminder: kind `task`, tier 2 (RFC 0016: the owner's own words), source
+`apple-reminders`, `at` the reminder's creation time in UTC. `raw_id` is
+`reminders:<uuid>@<last modified>` (RFC 0016 rule 2), so a reminder completed or edited after an
+import is a new line and one unchanged appends nothing. `status` is `done` when ZCOMPLETED is set,
+else `open`; `completed_at` is ZCOMPLETIONDATE. `due`: an all-day reminder keeps its day as
+`YYYY-MM-DD` (rule 4) — Apple stores it as midnight UTC of that day in ZDUEDATE; a timed one is the
+instant the phone showed it at (ZDISPLAYDATEDATE: a reminder without a zone keeps its wall clock in
+ZDUEDATE as if it were UTC, and the display date is the real instant), as RFC 3339 UTC. `list` is
+the list's name, `notes` the notes text, `parent` the source id (`reminders:<uuid>`) of the
+reminder a subtask sits under, `priority` `high` for Apple's 1 to 4, `medium` for 5, `low` for 6 to 9
+(absent at 0), `modified_at` the last modification. The flag, the zone, a start, the list's group,
+the store's file name and a deleted mark go under `extra`.
 
 A reminder without a title is skipped and counted (its title lives only in an opaque
 ZTITLEDOCUMENT); one without a creation date too. A reminder marked for deletion (still in the
@@ -43,6 +45,7 @@ NAME = "apple-reminders"
 KIND = "task"
 TIER = 2
 SCHEMA = "task/v1"
+ID_PREFIX = "reminders:"  # RFC 0016: the app's prefix on the source id
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 REQUIRED_TABLES = frozenset({"ZREMCDREMINDER", "ZREMCDBASELIST"})
@@ -178,9 +181,9 @@ def _draft(row: tuple[Any, ...], store_name: str, counts: dict[str, int]) -> dic
     modified_at = _rfc3339(modified_date) or at
     payload: dict[str, Any] = {
         "schema": SCHEMA,
-        "raw_id": f"{key}@{modified_at}",
+        "raw_id": f"{ID_PREFIX}{key}@{modified_at}",
         "title": title,
-        "status": "completed" if completed else "open",
+        "status": "done" if completed else "open",
     }
     due = _due(due_date, display_date, bool(all_day))
     if due is not None:
@@ -191,13 +194,19 @@ def _draft(row: tuple[Any, ...], store_name: str, counts: dict[str, int]) -> dic
     list_name = _text(list_name)
     if list_name is not None:
         payload["list"] = list_name
-    payload["source"] = NAME
     notes = _text(notes)
     if notes is not None:
         payload["notes"] = notes
-    extra: dict[str, Any] = {"pk": pk, "store": store_name, "identifier": key, "modified_at": modified_at}
+    parent = _uuid(parent_identifier)
+    if parent is not None:
+        payload["parent"] = f"{ID_PREFIX}{parent}"
+    level = _priority(priority)
+    if level is not None:
+        payload["priority"] = level
+    payload["modified_at"] = modified_at
+    extra: dict[str, Any] = {"pk": pk, "store": store_name, "identifier": key}
     if isinstance(priority, int) and priority:
-        extra["priority"] = priority
+        extra["priority_number"] = priority
     if flagged:
         extra["flagged"] = True
     if all_day:
@@ -213,9 +222,6 @@ def _draft(row: tuple[Any, ...], store_name: str, counts: dict[str, int]) -> dic
         extra["list_group"] = group_name
     if list_deleted:
         extra["list_deleted"] = True
-    parent = _uuid(parent_identifier)
-    if parent is not None:
-        extra["parent"] = parent
     if deleted:
         extra["deleted"] = True
         _count(counts, "deleted")
@@ -237,6 +243,15 @@ def _due(due_date: object, display_date: object, all_day: bool) -> str | None:
         when = _datetime(due_date) or _datetime(display_date)
         return when.strftime("%Y-%m-%d") if when is not None else None
     return _rfc3339(display_date) or _rfc3339(due_date)
+
+
+def _priority(value: object) -> str | None:
+    """Apple's 1 to 9 as RFC 0016's three words: 1 to 4 high, 5 medium, 6 to 9 low; 0 (none) is absent."""
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return None
+    if value <= 4:
+        return "high"
+    return "medium" if value == 5 else "low"
 
 
 def _text(value: object) -> str | None:
