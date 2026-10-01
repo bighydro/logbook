@@ -28,6 +28,7 @@ from . import (
     flights,
     ios_backup,
     ios_backup_crypto,
+    pages,
     places,
     policy,
     reading,
@@ -898,6 +899,12 @@ def cmd_show(a: argparse.Namespace) -> None:
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
     lb = Logbook.find()
+    if a.day in pages.PAGES:
+        _show_page(lb, a)
+        return
+    if a.name is not None:
+        print(f"show: {a.day!r} takes no name; a page is `show person|asset|place <name>`", file=sys.stderr)
+        sys.exit(2)
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
     with lb.index() as idx:
@@ -916,6 +923,28 @@ def cmd_show(a: argparse.Namespace) -> None:
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
+
+
+def _show_page(lb: Logbook, a: argparse.Namespace) -> None:
+    """`show person|asset|place <name> [--json]`: a page read from the whole record (the days the
+    owner's track covers) through `pages`. Nothing is written."""
+    if a.name is None:
+        print(f"show {a.day}: say who or what, e.g. `logbook show {a.day} <name>`", file=sys.stderr)
+        sys.exit(2)
+    try:
+        whole = reading.record_days(lb, "location") or reading.record_days(lb)
+        if whole is None:
+            raise pages.PageError("the record has no lines")
+        read = reading.read(lb, whole[0], whole[1])
+        page = {"person": pages.person, "asset": pages.asset, "place": pages.place}[a.day](read, a.name)
+    except (pages.PageError, stays.SettingsError) as e:
+        print(f"show {a.day}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(page, indent=2, ensure_ascii=False))
+        return
+    for text in pages.rows(page):
+        print(text)
 
 
 def _day_rows(
@@ -2114,9 +2143,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("seq", type=int)
     s.add_argument("reason")
     s.set_defaults(fn=cmd_retract)
-    s = sub.add_parser("show", help="one day (default today)")
-    s.add_argument("day", nargs="?")
+    s = sub.add_parser("show", help="one day (default today), or a page: person, asset or place")
+    s.add_argument("day", nargs="?", help="YYYY-MM-DD, or person|asset|place")
+    s.add_argument("name", nargs="?", help="with person|asset|place: the name, entity id or asset id")
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
+    s.add_argument("--json", action="store_true", help="a page as one JSON object")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
