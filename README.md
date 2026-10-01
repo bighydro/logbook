@@ -212,7 +212,10 @@ Flights become `flight/v1` lines (RFC 0013), one per flight, from up to three pl
 location points leaving one airport and next reaching another, silent in between or not (`infer flights`,
 evidence `inferred`), and your own sentence (`add flight "LX 561 NCE ZRH 2026-09-27 pilot"`, evidence `declared`). A
 flight seen twice is not written twice as two flights: the later observation supersedes the standing line with
-the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in.
+the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in; a
+codeshare (two numbers, one aircraft leaving once) is one flight too. An inferred leg is a flight only between airports
+150 km or more apart, never one a tracked flight already covers, and carries a number only when it is the flight the
+calendar entry names.
 The package ships the world's 1,150 large airports with their zones; `--airports FILE` (or `LOGBOOK_AIRPORTS`)
 adds a private field. Tier 1; a booking reference is never kept.
 

@@ -441,7 +441,8 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
         for f in year["flights"]:
             km = "" if f["km"] is None else f" · {f['km']:,} km"
             route = f"{f['from']} {ARROW} {f['to']}"
-            yield f"        {f['date']}  {f['carrier']} {f['number']}  {route}{km} · {f['evidence']}"
+            name = f"{f['carrier']} {f['number']}  " if f["number"] else ""
+            yield f"        {f['date']}  {name}{route}{km} · {f['evidence']}"
     elif kind == "nights":
         parts = [f"{year['home']} home", f"{year['away']} away", f"{year['in_transit']} in transit"]
         for asset, n in sorted(year["aboard"].items()):

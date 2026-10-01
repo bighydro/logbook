@@ -244,7 +244,8 @@ def trip_rows(trip: Trip) -> Iterator[str]:
     parts = [nights, f"route {f' {ARROW} '.join(trip.route)}" if trip.route else "route unknown"]
     for label, flights in (("in", trip.flights_in), ("out", trip.flights_out)):
         for f in flights:
-            parts.append(f"{label} {f['carrier']} {f['number']} {f['from']} {ARROW} {f['to']}")
+            name = f"{f['carrier']} {f['number']} " if f["number"] else ""
+            parts.append(f"{label} {name}{f['from']} {ARROW} {f['to']}")
     if trip.places:
         parts.append("places " + ", ".join(trip.places))
     if trip.people:

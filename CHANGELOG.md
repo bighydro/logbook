@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+- `flight/v1` (RFC 0013 rule 1): a codeshare pair — two lines on one date and route whose departures are within 30 minutes, the operating carrier's number and a marketing carrier's (XY 123 and XY 9123) — is one flight: `reconcile` merges the second into the first under merge-and-supersede, keeping the operating carrier's designator when a producer marked it (`extra.operating` true), else the one first seen; `standing` folds a pair the record already holds unmerged the same way, so `rollup flights` and `trips` show it once (`in XY 561 OSL → ZRH`, not twice). Before, only identical numbers merged.
+- `infer flights` never copies a flight number onto a leg that is not the flight the calendar entry names: when a tracked or declared flight in the entry's window already holds the entry's designator on another route, the leg is written with neither `carrier` nor `number`, keyed by date and route (`(date, "", "ZRH>IST")`); `show`, `rollup` and `trips` print such a line as its route alone. Before, a two-day entry naming the tracked outbound put that number on the next day's onward leg.
+- `infer flights` emits nothing for a leg between airports under 150 km apart (`MIN_KM`): the points left one airport and reached the other, but it was a drive.
+- `infer flights` emits nothing for a leg a tracked flight on the same route already covers under another key — a flight landing after local midnight, a stale point at the origin after departure — counted as `covered` ("legs a tracked flight already covers"). The same key still merges into the tracked flight as before.
+
 ## 0.5.0 — 2026-10-01
 
 ### Profiles and spec

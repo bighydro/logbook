@@ -317,3 +317,91 @@ def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
 def test_cli_infer_rejects_anything_but_flights(lb: Logbook):
     r = _cli(lb, "infer", "trips")
     assert r.returncode == 2 and "flights" in r.stderr
+
+
+# -- what a leg is not -------------------------------------------------------------------------------------
+
+IST = (41.2749, 28.7321)
+DUS = (51.2895, 6.7668)
+CGN = (50.8659, 7.1427)
+
+
+def test_infer_a_leg_that_is_not_the_tracked_flight_the_entry_names_carries_no_number(lb: Logbook):
+    """The calendar's two-day entry names XY 123, which Flighty tracked OSL→ZRH on the first day;
+    the points then show ZRH→IST on the second, the longer leg. That leg is a flight the record
+    has no number for: it is written with neither carrier nor number, never XY 123's."""
+    from persona import flight
+
+    lb.append_many(
+        [
+            flight("2026-09-27", "123", "OSL", "ZRH", "2026-09-27T08:00:00Z", "2026-09-27T10:00:00Z"),
+            _event("2026-09-26T22:00:00Z", "2026-09-28T22:00:00Z", "Flight XY 123", all_day=True),
+            *_track("2026-09-27T06:00:00Z", OSL, 115, every=5),  # 06:00 … 07:55
+            *_track("2026-09-27T10:05:00Z", ZRH, 20),
+            *_track("2026-09-28T07:00:00Z", ZRH, 50),  # the next day, 07:00 … 07:50
+            *_track("2026-09-28T10:10:00Z", IST, 20),
+        ]
+    )
+    (d,) = _infer(lb)
+    p = d["payload"]
+    assert p["from"]["iata"] == "ZRH" and p["to"]["iata"] == "IST" and p["date"] == "2026-09-28"
+    assert "number" not in p and "carrier" not in p and "carrier_icao" not in p
+    assert flights.key(p) == ("2026-09-28", "", "ZRH>IST")
+    assert p["raw_id"].startswith("2026-09-28::ZRH>IST@")
+    r = _cli(lb, "infer", "flights")
+    assert r.returncode == 0 and r.stdout.startswith("inferred 1 new flight"), r.stdout + r.stderr
+    assert "flight-inference ZRH → IST, arrives 12:10, inferred" in _cli(lb, "show", "2026-09-28").stdout
+
+
+def test_infer_the_entry_keeps_its_number_when_the_leg_is_the_flight_it_names(lb: Logbook):
+    """The same two-day entry, but the points show only the tracked leg: the inference is XY 123 and
+    merges into the tracked flight (the existing behaviour, unchanged)."""
+    from persona import flight
+
+    lb.append_many(
+        [
+            flight("2026-09-27", "123", "OSL", "ZRH", "2026-09-27T08:00:00Z", "2026-09-27T10:00:00Z"),
+            _event("2026-09-26T22:00:00Z", "2026-09-28T22:00:00Z", "Flight XY 123", all_day=True),
+            *_track("2026-09-27T06:00:00Z", OSL, 115, every=5),
+            *_track("2026-09-27T10:05:00Z", ZRH, 20),
+        ]
+    )
+    (d,) = _infer(lb)
+    assert (d["payload"]["carrier"], d["payload"]["number"]) == ("XY", "123")
+
+
+def test_infer_a_leg_between_airports_under_150_km_is_a_drive_not_a_flight(lb: Logbook):
+    """Düsseldorf to Cologne is 54 km: the points leave one airport and reach the other, but nobody
+    flew; nothing is inferred and the entry counts as unconfirmed."""
+    lb.append_many(
+        [
+            _event("2026-09-27T08:00:00Z", "2026-09-27T09:00:00Z", "Flight XY 561"),
+            *_track("2026-09-27T07:30:00Z", DUS, 30),
+            *_track("2026-09-27T09:10:00Z", CGN, 20),
+        ]
+    )
+    counts: dict[str, int] = {}
+    assert _infer(lb, counts=counts) == []
+    assert counts == {"calendar_flights": 1, "no_gap": 1}
+    assert flights.MIN_KM == 150.0
+
+
+def test_infer_a_tracked_flight_arriving_after_midnight_covers_the_same_route_on_the_next_day(lb: Logbook):
+    """Flighty tracked XY 123 OSL→IST leaving 10:00 and landing 02:00 the next local day. A stale
+    point at Oslo airport after midnight and the points at Istanbul would otherwise infer OSL→IST a
+    second time, dated the next day: the tracked flight's window covers that leg, so nothing is
+    inferred and it is counted."""
+    from persona import flight
+
+    lb.append_many(
+        [
+            flight("2026-09-27", "123", "OSL", "IST", "2026-09-27T08:00:00Z", "2026-09-27T23:00:00Z"),
+            _event("2026-09-26T22:00:00Z", "2026-09-27T22:00:00Z", "Flight XY 123", all_day=True),
+            *_track("2026-09-27T06:00:00Z", OSL, 115, every=5),
+            _point("2026-09-27T22:30:00Z", OSL),  # 00:30 in Oslo: a stale fix while the phone is in the air
+            *_track("2026-09-27T23:05:00Z", IST, 30),
+        ]
+    )
+    counts: dict[str, int] = {}
+    assert _infer(lb, counts=counts) == []
+    assert counts == {"calendar_flights": 1, "covered": 1}

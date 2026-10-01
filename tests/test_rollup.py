@@ -257,3 +257,20 @@ def test_people_rollup_counts_days_together_and_the_last_real_contact(
     assert ola["confirmed"] == 3 and kari["confirmed"] == 1 and kari["proposed"] == 1
     text = _run(capsys, "people")
     assert "Ola Nordmann" in text and "3 days" in text and "Kari Nordmann" in text
+
+
+def test_a_codeshare_twin_is_not_a_second_flight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """XY 9561 OSL→ZRH five minutes after XY 561, the marketing carrier's number for the same
+    aircraft, written as its own line: the rollup reads the folded set and counts one."""
+    from persona import flight
+
+    lb = persona_record(tmp_path, monkeypatch)
+    lb.append_many(
+        [flight("2026-06-15", "9561", "OSL", "ZRH", "2026-06-15T05:10:00Z", "2026-06-15T07:20:00Z")]
+    )
+    data = _json(capsys, "flights", "--year", "2026")
+    [year] = data["years"]
+    assert year["count"] == 2 and [f["number"] for f in year["flights"]] == ["561", "562"]
+    assert "2 flights" in _run(capsys, "flights")
