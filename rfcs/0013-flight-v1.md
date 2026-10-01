@@ -22,7 +22,7 @@ One flight the owner was on: a carrier and a number, from one airport to another
 | `scheduled_departure`, `scheduled_arrival` | RFC3339 UTC | MAY | gate times as planned |
 | `actual_departure`, `actual_arrival` | RFC3339 UTC | MAY | gate times as they happened |
 | `scheduled_takeoff`, `actual_takeoff`, `scheduled_landing`, `actual_landing` | RFC3339 UTC | MAY | wheels-off and wheels-on, for sources that keep them |
-| `aircraft` | object | MAY | `{ type?, registration? }`, as the source spells them (`A320`, `Airbus A320`, `HB-JLT`) |
+| `aircraft` | object | MAY | `{ type?, registration? }`, as the source spells them (`A320`, `Airbus A320`, `ZZ-ABC`) |
 | `role` | string | MUST | `passenger` or `pilot` |
 | `cancelled` | boolean | MAY | true for a flight that did not operate; the plan existed (RFC 0009 rule 3) |
 | `evidence` | string | MUST | `tracked`, `inferred` or `declared`: the strongest evidence any observation folded into this line has (rule 3) |

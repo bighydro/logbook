@@ -114,6 +114,7 @@ logbook migrate                  # same lines, new hashes; keeps the old files a
   logbook.json      who this is, your timezone, the chain head.
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
                     stays.json: how long a stay is, how far a place reaches. yours to edit.
+                    import.json: the sources you switched off, each with a reason. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
   places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
   state/            where each live source left off. bookkeeping, not the record.
@@ -266,6 +267,16 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
+
+## What never enters the record
+
+Demo, sample or placeholder data never enters the record: an adapter existing is not a decision to run it.
+Your list of switched-off sources lives in `policy/import.json`, `{"disabled": [{"source": "sbb", "reason":
+"a demo account"}]}`; `add`, `sync` and `import-backup` skip a disabled source and say so, with or without
+`--only`, and `logbook sources` lists every adapter this build has, file and live, with its state and the
+reason. `init` writes the empty list, and a record made earlier gets it on the first run. An alias stands for
+its adapter (`books` for `apple-books`, `health` for `apple-health`), and a name no adapter carries is
+listed as such rather than silently ignored.
 
 ## Keep it flowing
 

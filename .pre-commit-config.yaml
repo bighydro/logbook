@@ -4,7 +4,17 @@ repos:
     hooks: [{ id: ruff, args: [--fix] }, { id: ruff-format }]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
-    hooks: [{ id: no-commit-to-branch, args: [--branch, main] }, { id: end-of-file-fixer }, { id: trailing-whitespace }, { id: check-json }, { id: check-yaml }, { id: detect-private-key }]
+    hooks:
+      - { id: no-commit-to-branch, args: [--branch, main] }
+      # docs/ mirrors the top-level pages as git symlinks (mode 120000). A checkout with
+      # core.symlinks=false writes each as a plain file holding its target, "../SPEC.md" with no
+      # newline, and these two hooks would then append one and break the link for every other
+      # checkout (the docs site builds from the symlinks). The ADRs under docs/adr/ are real files.
+      - { id: end-of-file-fixer, exclude: &mirror '^docs/(?:[^/]+|adapters/README|conformance/README|rfcs/[^/]+)\.md$' }
+      - { id: trailing-whitespace, exclude: *mirror }
+      - { id: check-json }
+      - { id: check-yaml }
+      - { id: detect-private-key }
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
     hooks: [{ id: gitleaks }]

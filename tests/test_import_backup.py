@@ -131,7 +131,7 @@ STORES = {
     "ios-notes": "NoteStore.sqlite",
     "wispr-flow": "database.sqlite",
     "flighty": "MainFlightyDatabase.db",
-    "apple-reminders": "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite",  # first in path order
+    "apple-reminders": "Data-AAAAAAAA-0000-4000-8000-000000000001.sqlite",  # first in path order
 }
 STORES["copilot"] = "CopilotDB.sqlite"
 STORES["splitwise"] = "database.sqlite"
@@ -141,10 +141,10 @@ STORES["twitter"] = "1000000000000000001-dmv2.db"
 STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
 STORES["voice-memos"] = "CloudRecordings.db"
 STORES["apple-photos"] = "Photos.sqlite"
-STORES["withings"] = "46567465_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
+STORES["withings"] = "10000001_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
 STORES["myfitnesspal"] = "maindb.sqlite"
 STORES["sbb"] = "SbbMobile.db"
-REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
+REMINDERS_OTHER = "Data-AAAAAAAA-0000-4000-8000-000000000002.sqlite"  # the bigger store, with a -wal
 
 
 SAFARI_BYTES = b"SQLite format 3\0" + b"\x02" * 1000
@@ -309,7 +309,7 @@ def _backup(
         _put(backup, rows, "CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC", _blob(stage, b"pixels"))
     if "withings" in sources:  # two profiles, two stores each, one of them with a -wal
         folder = _dir(stage, "withings")
-        for profile in ("46567466", "46567465"):
+        for profile in ("10000002", "10000001"):
             _put(
                 backup,
                 rows,
@@ -324,9 +324,9 @@ def _backup(
                 f"{COREDATA}/{profile}_Measure.sqlite",
                 _withings_measure(folder, profile),
             )
-        _put(backup, rows, WITHINGS, f"{COREDATA}/46567466_Measure.sqlite-wal", _blob(stage, b""))
+        _put(backup, rows, WITHINGS, f"{COREDATA}/10000002_Measure.sqlite-wal", _blob(stage, b""))
         _put(
-            backup, rows, WITHINGS, f"{COREDATA}/46567466_Food2.sqlite", _blob(stage, SAFARI_BYTES)
+            backup, rows, WITHINGS, f"{COREDATA}/10000002_Food2.sqlite", _blob(stage, SAFARI_BYTES)
         )  # not read
     if "myfitnesspal" in sources:
         _put(backup, rows, MFP, "Documents/maindb.sqlite", _mfp_store(_dir(stage, "mfp")))
@@ -459,11 +459,11 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     # and the companions beside it, with their -wal) and the adapter read the folder: both profiles are in
     withings_copies = sorted(p.name for p in (inbox / "withings").iterdir())
     assert withings_copies == [
-        "46567465_Measure.sqlite", "46567465_WTHealth.sqlite", "46567466_Measure.sqlite",
-        "46567466_Measure.sqlite-wal", "46567466_WTHealth.sqlite",
+        "10000001_Measure.sqlite", "10000001_WTHealth.sqlite", "10000002_Measure.sqlite",
+        "10000002_Measure.sqlite-wal", "10000002_WTHealth.sqlite",
     ]  # fmt: skip
     profiles = {line["payload"]["extra"]["profile"] for line in lb.lines() if line["source"] == "withings"}
-    assert profiles == {"46567465", "46567466"}
+    assert profiles == {"10000001", "10000002"}
     # a companion from another domain lands beside the store, and the adapter read both
     assert (inbox / "sbb" / "ch.sbb.coredata.pasttrips.sqlite").is_file()
     observed = {line["payload"]["extra"]["observed"] for line in lb.lines() if line["source"] == "sbb"}
@@ -476,7 +476,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     assert (seq, errors) == (TOTAL, [])
     # LOGBOOK_DIAL_PREFIX reached the adapters: the number saved without a country code got one
     refs = {line["payload"]["ref"]["value"] for line in lb.lines() if line["source"] == "ios-contacts"}
-    assert "+4722334455" in refs
+    assert "+4790000055" in refs
     # every copy is the size of its original
     con = sqlite3.connect(f"{(backup / 'Manifest.db').as_uri()}?mode=ro", uri=True)
     try:
@@ -506,7 +506,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (MEMOS, "Recordings/20260302 211407.waveform"),
         (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
         ("CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC"),  # the pixels stay on the phone
-        (WITHINGS, f"{COREDATA}/46567466_Food2.sqlite"),  # not a store the adapter reads
+        (WITHINGS, f"{COREDATA}/10000002_Food2.sqlite"),  # not a store the adapter reads
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -653,6 +653,38 @@ def test_import_backup_only_takes_the_named_sources_in_the_fixed_order(lb, tmp_p
         "whatsapp-contacts",
         "ios-notes",
     }
+
+
+def test_import_backup_skips_a_disabled_source_and_says_so(lb, tmp_path, capsys):
+    """policy/import.json: a disabled source is neither copied nor run, with or without --only, and
+    the alias `health` stands for `apple-health` on both sides."""
+    (lb.root / "policy" / "import.json").write_text(
+        json.dumps(
+            {
+                "disabled": [
+                    {"source": "whatsapp", "reason": "a demo account"},
+                    {"source": "notes", "reason": "someone else's notes"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    backup = _backup(tmp_path)
+    _run(str(backup), "--only", "whatsapp,contacts,notes,whatsapp-contacts")
+    out = capsys.readouterr().out
+    assert "whatsapp: disabled (a demo account); skipped" in out
+    assert "ios-notes: disabled (someone else's notes); skipped" in out
+    assert "added 7 lines from ios-contacts" in out
+    assert "added 4 lines from whatsapp-contacts" in out
+    assert "added 14 lines from whatsapp" not in out and "ios-notes: NoteStore" not in out
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    assert sorted(p.name for p in inbox.iterdir()) == ["copies.json", "ios-contacts", "whatsapp-contacts"]
+    assert "valid — 11 lines" in out
+    # --dry-run says the same, and a disabled source is never counted as found
+    _run(str(backup), "--only", "whatsapp,contacts", "--dry-run")
+    out = capsys.readouterr().out
+    assert "whatsapp: disabled (a demo account); skipped" in out
+    assert "dry run: 1 of 1 sources found" in out
 
 
 def test_import_backup_dry_run_lists_files_and_sizes_and_writes_nothing(lb, tmp_path, capsys):

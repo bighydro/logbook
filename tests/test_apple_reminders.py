@@ -75,7 +75,7 @@ REMINDERS = [
 ]  # fmt: skip
 
 
-def _store(folder: Path, name: str = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite") -> Path:
+def _store(folder: Path, name: str = "Data-AAAAAAAA-0000-4000-8000-000000000002.sqlite") -> Path:
     """One Reminders store under <folder>/Container_v1/Stores/, as the phone lays it out."""
     p = folder / "Container_v1" / "Stores" / name
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +111,7 @@ def _store(folder: Path, name: str = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.
 
 def _second_store(folder: Path) -> Path:
     """A second, local store beside the first: one open reminder in a list of its own, no CloudKit id."""
-    p = folder / "Container_v1" / "Stores" / "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite"
+    p = folder / "Container_v1" / "Stores" / "Data-AAAAAAAA-0000-4000-8000-000000000001.sqlite"
     con = sqlite3.connect(p)
     try:
         con.executescript(DDL)
@@ -283,7 +283,7 @@ def test_run_on_the_folder_reads_every_store(tmp_path):
     local = next(line for line in lines if line["payload"]["title"] == "Stays on this phone")
     assert local["payload"]["list"] == "Local"
     assert local["payload"]["raw_id"] == "reminders:00000099-0000-4000-8000-000000000099@2026-01-13T12:35:00Z"
-    assert local["payload"]["extra"]["store"] == "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite"
+    assert local["payload"]["extra"]["store"] == "Data-AAAAAAAA-0000-4000-8000-000000000001.sqlite"
     # the container folder works too, and so does one file alone
     assert len(list(apple_reminders.run(tmp_path))) == 7
     assert len(list(apple_reminders.run(first))) == 6

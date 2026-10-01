@@ -413,7 +413,7 @@ CLOCK = re.compile(r"(\d{1,2}:\d{2})(?:-(\d{1,2}:\d{2}))?")
 REGISTRATION = re.compile(r"(?:[A-Z0-9]{1,2}-[A-Z0-9]{2,5}|N\d{1,5}[A-Z]{0,2})")
 DECLARATION_FORMAT = (
     'flight "<carrier> <number> <from> <to> <YYYY-MM-DD> [passenger|pilot] [HH:MM[-HH:MM]]'
-    ' [type] [registration]", e.g. flight "LX 561 NCE ZRH 2026-09-27 pilot 07:05-08:20 A320 HB-JLT"'
+    ' [type] [registration]", e.g. flight "LX 561 NCE ZRH 2026-09-27 pilot 07:05-08:20 A320 ZZ-ABC"'
 )
 
 
