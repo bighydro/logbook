@@ -92,7 +92,7 @@ def test_an_asset_page_has_its_trips_nights_people_and_track(
     assert [p["id"] for p in data["people"]] == [OLA_ID]
     track = data["track"]
     assert track["points"] > 1000
-    assert (track["stays"], track["moves"]) == (4, 3), "a week at the berth, out, back"
+    assert (track["stays"], track["moves"]) == (3, 2), "a week at the berth (the AIS silent), out, back"
     assert 15_000 < track["distance_m"] < 25_000
     assert track["first"] == "2026-06-07T22:00:00Z" and track["last"].startswith("2026-06-14")
     assert len(track["lines"]) == 2

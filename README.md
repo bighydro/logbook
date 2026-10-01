@@ -390,7 +390,16 @@ it: a calendar event, a transcript, a note, a call, a message or a photo whose t
 Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
 flagged. A move is what lies between: its distance along the points, its duration, and a mode from the
 speed (walk, car, train, flight; flight also when a gap starts and ends near airports). The night of each
-day is the longest stay between 22:00 and 08:00; a night with none is in transit. An asset registered in
+day is the longest stay between 22:00 and 08:00; a night with none is in transit.
+
+A tracker such as Dawarich sends no points while you are still, so a silence is read as time at the place:
+a gap whose next point is back inside the stay's radius continues the stay however long it was, and a stay
+lasts until the tracker's next point when that point comes after a silence and lies within a short walk
+(1.2 km by default) — even when it is the next morning and already on your way out, so the night at home is
+seen. In `policy/stays.json`, `merge_gap_s` (600 s by default) governs an excursion, not a gap at the same
+place: step outside the radius and come back within it and the stay is one; come back later and it is two
+stays with a move between. A gap of `merge_gap_s` or more is a silence, and `walk_max_kmh` for `merge_gap_s`
+is the hop a silence may end with and still count as time at the place. An asset registered in
 `assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
 marked `aboard`.
 

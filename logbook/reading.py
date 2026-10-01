@@ -91,8 +91,14 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         and ((at := stays.instant(line["at"])) is not None and start <= at < end)
     ]
     window.sort(key=lambda line: int(line["seq"]))
+    following = _first_points_after(found, end)
     derived = stays.derive(
-        [*window, *marks], settings, known, {k: v.kind for k, v in registered.items()}, str(tz), airports
+        [*window, *following, *marks],
+        settings,
+        known,
+        {k: v.kind for k, v in registered.items()},
+        str(tz),
+        airports,
     )
     nights = [stays.night(derived.segments, day, tz, settings, known) for day in days]
     standing = [line for line in window if str(line["id"]) not in retracted]
@@ -115,6 +121,26 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         airports=airports,
         retracted=retracted,
     )
+
+
+def _first_points_after(lines: list[Line], end: datetime) -> list[Line]:
+    """Per subject, the first location line at or after `end` among `lines` (the index gave the
+    day after the window too): the point a stay that runs past the window's end lasts until, so the
+    night at home is seen when the tracker's first word of the morning comes after the night's end
+    (`stays._until`). It is given to the derivation only; it is not a line of the window."""
+    first: dict[str | None, Line] = {}
+    for line in lines:
+        if line.get("kind") != "location":
+            continue
+        at = stays.instant(line.get("at"))
+        if at is None or at < end:
+            continue
+        subject = (line.get("payload") or {}).get("subject")
+        key = subject if isinstance(subject, str) and subject else None
+        kept = first.get(key)
+        if kept is None or at < (stays.instant(kept["at"]) or at):
+            first[key] = line
+    return list(first.values())
 
 
 def window_json(reading: Reading) -> Mapping[str, object]:
