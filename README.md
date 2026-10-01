@@ -132,6 +132,7 @@ logbook repair health-units             # per wrong line a corrected line and a 
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
                     stays.json: how long a stay is, how far a place reaches. yours to edit.
                     import.json: the sources you switched off, each with a reason. yours to edit.
+                    owner.json: your own other names, emails and phones, so you are never your own company. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
   places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
   state/            where each live source left off. bookkeeping, not the record.
@@ -462,13 +463,21 @@ logbook keepers --since 2026-06-01 --lane art
 
 Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
 by its first and last location line (one unbroken run of points), a flight by the flight line standing, a person
-by the lines that put them there. A home region is a place of kind `home` in `places.json`; without one, no
-night is home, there are no trips, and the commands say so.
+by the lines that put them there. A home region is a place of kind `home` in `places.json`; a night whose stay
+is within 400 m of one is a night at home whatever that place's radius, so a trip never starts or ends with the
+guest room across the street. Without a home place no night is home, there are no trips, and the commands say so.
 
-**Who was there.** A stay's company comes from the record's own evidence: an attendee of a calendar entry whose
-span overlaps the stay, a participant of a transcript recorded inside it, a note written inside it that says
+**Who was there.** A stay's company comes from the record's own evidence: an attendee of a timed calendar entry
+held at the stay (its location geocodes within a kilometre of the stay — coordinates on the entry, or a
+location that names a place in `places.json` — or it has no location and overlaps the stay by more than an
+hour; an all-day entry places nobody), a participant of a transcript recorded inside it whom the record
+resolves to a person (`Speaker A`, `me` and `Unknown` are nobody), a note written inside it that says
 `with <name>` — all confirmed — and a face the photo library tagged, proposed only. Names resolve through the
-record's resolution lines (RFC 0006); what does not resolve is listed as the source spelled it.
+record's resolution lines (RFC 0006); a bare address nobody has named and a calendar system address
+(`calendar.google.com`, `noreply`, `reservations@`, `invite@`) are dropped. You are never your own company:
+the with module knows you by `owner_id` and `owner_emails` in `logbook.json`, by every resolution line that
+names those, and by `policy/owner.json`, `{"names": [...], "emails": [...], "phones": [...]}`, where your
+other spellings go; `init` writes it empty. `trips` lists at most twelve names, most evidence first.
 
 **Countries, coarsely.** `rollup countries` has no map. The country of a night is the one a place in
 `places.json` carries (`country`, your word), else the nearest large airport within 300 km and the country its
@@ -476,7 +485,10 @@ zone is filed under in the bundled `zone.tab`. That is wrong near borders and fa
 is printed with the numbers; name the place and give it a country when it matters.
 
 **Trips are derived, never written** (ADR 0019). A trip is a run of consecutive days whose overnight stay is
-outside every home region, recomputed every time; a trip's name, when you give one, is a note.
+outside every home region, recomputed every time; a trip's name, when you give one, is a note. Its route is
+the night places in order: the named place, else a large airport's name when the stay is within 2 km of one,
+else the coordinates with `near <place>, x km` for a named place within 5 km; consecutive points within 200 m
+of each other are one.
 
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
 named Art is `art`. `infer keepers` reads the marks out of the photo lines once; `show <day>` lists the day's

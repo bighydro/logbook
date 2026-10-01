@@ -145,7 +145,7 @@ def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(
     cabin, zurich, boat, copenhagen = data["trips"]
     assert (cabin["id"], cabin["nights"], cabin["route"]) == ("trip:2026-06-06:2026-06-06", 1, ["Cabin"])
     assert (zurich["start"], zurich["until"], zurich["nights"]) == ("2026-06-08", "2026-06-11", 3)
-    assert zurich["route"] == ["Zürich"]
+    assert zurich["route"] == ["47.3769,8.5417"], "a hotel 9 km from the airport, no named place near"
     assert [f["number"] for f in zurich["flights_in"]] == ["561"]
     assert [f["number"] for f in zurich["flights_out"]] == ["562"]
     assert [p["name"] for p in zurich["people"]], "someone was met in Zürich"
@@ -159,7 +159,7 @@ def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(
     assert [f["number"] for f in copenhagen["flights_in"]] == ["571"]
     assert [f["number"] for f in copenhagen["flights_out"]] == ["572"]
     text = _run(capsys, "trips")
-    assert "Cabin" in text and "Zürich" in text
+    assert "Cabin" in text and "route 47.3769" in text
 
 
 def test_rollup_countries_and_flights(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
