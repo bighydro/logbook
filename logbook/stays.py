@@ -56,6 +56,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from itertools import pairwise
+from operator import attrgetter
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
@@ -262,6 +263,8 @@ class Segment:
     airports: tuple[str, ...] = ()
     first_line: str | None = None  # the ids of the first and last location line of the segment
     last_line: str | None = None
+    first_seq: int | None = None  # and their seqs, for a reader whose points carry no id (the index's)
+    last_seq: int | None = None
 
     @property
     def duration_s(self) -> int:
@@ -400,16 +403,15 @@ def _place_of(lat: float, lon: float, places: Sequence[Place]) -> Place | None:
     return best
 
 
-def _inside(cluster: _Cluster, p: Point, settings: Settings) -> bool:
-    if cluster.place is not None:
-        return distance_m(p.lat, p.lon, cluster.place.lat, cluster.place.lon) <= cluster.place.radius_m
-    return distance_m(p.lat, p.lon, cluster.anchor_lat, cluster.anchor_lon) <= settings.radius_m
-
-
 def _joins(cluster: _Cluster, p: Point, settings: Settings) -> bool:
     """Inside the cluster's radius, whatever the gap since its last point: a tracker that is silent
-    while the owner is still has been silent at this place."""
-    return _inside(cluster, p, settings)
+    while the owner is still has been silent at this place. Called once per point of a track of
+    millions, so the distance is taken in kilometres here and not through `distance_m`."""
+    if cluster.place is not None:
+        return (
+            distance_km(p.lat, p.lon, cluster.place.lat, cluster.place.lon) * 1000 <= cluster.place.radius_m
+        )
+    return distance_km(p.lat, p.lon, cluster.anchor_lat, cluster.anchor_lon) * 1000 <= settings.radius_m
 
 
 def _start(i: int, p: Point, places: Sequence[Place]) -> _Cluster:
@@ -554,6 +556,8 @@ def _segments_of(
                 promoted=bool(attached) and not by_duration,
                 first_line=first.id or None,
                 last_line=last.id or None,
+                first_seq=first.seq,
+                last_seq=last.seq,
             )
         )
     return segments, len(noise)
@@ -600,6 +604,8 @@ def _move(
         airports=codes if len(codes) == 2 else (),
         first_line=start.id or None,
         last_line=end.id or None,
+        first_seq=start.seq,
+        last_seq=end.seq,
     )
 
 
@@ -741,7 +747,7 @@ def derive_tracks(
     ZoneInfo(tz)  # an unknown zone is an error here, not at print time
     airports = airports or Airports.load()
     for track in tracks.values():
-        track.sort(key=lambda p: (p.at, p.seq))
+        track.sort(key=attrgetter("at", "seq"))
     owner = tracks.get(None, [])
     present: list[str | None] = [None, *sorted(s for s in tracks if s is not None)]
     subjects = present if subjects is None else [s for s in present if s in subjects]

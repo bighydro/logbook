@@ -444,9 +444,10 @@ def test_superseded_maps_each_superseded_id_to_the_seq_that_superseded_it(lb: Lo
 
 def test_locations_serves_the_points_of_a_window_from_the_index_alone(lb: Logbook, monkeypatch):
     """`places propose` clusters the owner's points, and the points of the assets it asks for, from
-    the index's own `subject`, `lat` and `lon` columns: a location line whose coordinates are not
-    numbers has none and is left out, as `stays.derive` leaves it out; a subject not asked for is
-    left out; a point outside the days is left out. No month file is opened."""
+    the index's own `subject`, `lat` and `lon` columns: one subject per call; a location line whose
+    coordinates are not numbers has none and is left out, as `stays.derive` leaves it out; a point
+    outside the days is left out; a retracted point is left out, by the retraction's `supersedes`
+    column. No month file is opened."""
     boat = lb.append(
         at="2026-03-01T08:00:00Z",
         source="ais",
@@ -468,6 +469,14 @@ def test_locations_serves_the_points_of_a_window_from_the_index_alone(lb: Logboo
         tier=1,
         payload={"schema": "location/v1", "lat": "59.9", "lon": 10.7, "raw_id": "trk:bad"},
     )
+    retracted = lb.append(
+        at="2026-03-01T09:30:00Z",
+        source="sim-phone",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": 59.95, "lon": 10.75, "raw_id": "trk:gone"},
+    )
+    lb.retract(int(retracted["seq"]), "a test")
     lb.append(
         at="2026-03-03T09:00:00Z",
         source="sim-phone",
@@ -487,21 +496,29 @@ def test_locations_serves_the_points_of_a_window_from_the_index_alone(lb: Logboo
 
     monkeypatch.setattr(Path, "open", counting)
     with lb.index() as idx:
-        points = idx.locations("2026-03-01", "2026-03-02", ["boat"])
-        assert [(p.at, p.subject, p.lat, p.lon) for p in points] == [
-            ("2026-03-01T07:30:00Z", None, 59.911, 10.75),
-            ("2026-03-01T08:00:00Z", "boat", 59.9, 10.7),
-            ("2026-03-01T23:30:00Z", None, 59.92, 10.74),
+        assert idx.locations("2026-03-01", "2026-03-02") == [
+            (1, "2026-03-01T07:30:00Z", 59.911, 10.75),
+            (3, "2026-03-01T23:30:00Z", 59.92, 10.74),
         ]
-        assert points[1].id == boat["id"] and points[1].seq == int(boat["seq"])
-        assert [p.subject for p in idx.locations("2026-03-01", "2026-03-03")] == [None, None, None]
+        assert idx.locations("2026-03-01", "2026-03-02", "boat") == [
+            (int(boat["seq"]), boat["at"], 59.9, 10.7)
+        ]
+        assert idx.locations("2026-03-01", "2026-03-02", "nobody") == []
+        three_days = idx.locations("2026-03-01", "2026-03-03")
+        assert [at[:10] for _seq, at, _lat, _lon in three_days] == ["2026-03-01", "2026-03-01", "2026-03-03"]
+        assert idx.ids([1, 3, 999]) == {1: owner_id(lb, 1), 3: owner_id(lb, 3)}
     assert opened == []
+
+
+def owner_id(lb: Logbook, seq: int) -> str:
+    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+        return str(db.execute("SELECT id FROM lines WHERE seq = ?", (seq,)).fetchone()[0])
 
 
 def test_evidence_serves_the_kinds_that_promote_a_stay_with_their_spans(lb: Logbook, monkeypatch):
     """The `end` column is what `stays.derive` needs of a note, an event or a message to attach it to
     a stay: a line with an `end` counts when its span overlaps. Served from the index alone."""
-    meeting = lb.append(
+    lb.append(
         at="2026-03-01T09:00:00Z",
         end="2026-03-01T10:00:00Z",
         source="sim-calendar",
@@ -529,13 +546,12 @@ def test_evidence_serves_the_kinds_that_promote_a_stay_with_their_spans(lb: Logb
 
     monkeypatch.setattr(Path, "open", counting)
     with lb.index() as idx:
-        found = idx.evidence(("event", "note"), "2026-03-01", "2026-03-01")
-        assert [(e.kind, e.at, e.end) for e in found] == [
+        assert idx.evidence(("event", "note"), "2026-03-01", "2026-03-01") == [
             ("event", "2026-03-01T09:00:00Z", "2026-03-01T10:00:00Z"),
             ("note", "2026-03-01T22:00:00Z", None),
         ]
-        assert found[0].id == meeting["id"]
         assert idx.evidence(("event", "note"), "2026-03-02", "2026-03-02") == [
-            (int(e["seq"]), e["id"], "event", "2026-03-02T08:00:00Z", None) for e in standup
+            ("event", "2026-03-02T08:00:00Z", None) for _ in standup
         ]
+        assert idx.evidence(("event",), "2026-03-03", "2026-03-03") == []
     assert opened == []

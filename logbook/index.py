@@ -51,6 +51,8 @@ SCHEMA = (
 )
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
+RETRACTED = "SELECT supersedes FROM lines WHERE kind = 'retraction' AND supersedes IS NOT NULL"  # a subquery
+
 Row = tuple[
     int,
     str,
@@ -85,27 +87,13 @@ class Place(NamedTuple):
     offset: int
 
 
-class LocationRow(NamedTuple):
-    """What a clustering needs of one location line, served from the index alone (`locations`):
-    `subject` is None for the owner; `lat` and `lon` are the payload's numbers."""
-
-    seq: int
-    id: str
-    at: str
-    subject: str | None
-    lat: float
-    lon: float
-
-
-class EvidenceRow(NamedTuple):
-    """What a clustering needs of a line that can promote a stay (`evidence`): its kind, its
-    instant and its `end`, None when the line has none."""
-
-    seq: int
-    id: str
-    kind: str
-    at: str
-    end: str | None
+# What a clustering needs of one location line, served from the index alone (`locations`): its seq
+# (`ids` gives the line id of the few a stay keeps), its `at` and the payload's numbers. Plain tuples
+# as SQLite hands them over, no id: a million 36-character strings and a million named tuples are
+# what a fetch of a two-year track would spend its time making.
+LocationRow = tuple[int, str, float, float]  # seq, at, lat, lon
+# What a clustering needs of a line that can promote a stay (`evidence`): kind, at, end (None for none).
+EvidenceRow = tuple[str, str, str | None]
 
 
 # Open connections per index file, in this process. Windows refuses to delete a file that has an
@@ -369,40 +357,47 @@ class Index:
         ).fetchall()
         return self._read(found)
 
-    def locations(self, first_day: str, last_day: str, subjects: Sequence[str] = ()) -> list[LocationRow]:
-        """The location points of the owner (no subject) and of `subjects`, for every location
-        line whose local day is in [first_day, last_day] and whose payload has a point, ordered
-        by `at` then seq (as text; a caller that compares instants sorts again). Served from the
-        index's own columns: nothing is read from the files, whatever the range. Retracted lines
-        are among them; `superseded("retraction")` says which."""
-        wanted = [
-            "subject IS NULL",
-            *(["subject IN (" + ", ".join("?" * len(subjects)) + ")"] if subjects else []),
-        ]
-        found = self.db.execute(
-            "SELECT seq, id, at, subject, lat, lon FROM lines"
+    def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:
+        """The standing location points of one subject (None is the owner) for every location line
+        whose local day is in [first_day, last_day] and whose payload has a point, ordered by `at`
+        then seq (as text; a caller that compares instants sorts again). A retracted line is left
+        out here (the `supersedes` column of the retraction lines). Served from the index's own
+        columns: nothing is read from the files, whatever the range."""
+        cursor = self.db.execute(
+            "SELECT seq, at, lat, lon FROM lines"
             " WHERE kind = 'location' AND day_local BETWEEN ? AND ? AND lat IS NOT NULL AND lon IS NOT NULL"
-            f" AND ({' OR '.join(wanted)}) ORDER BY at, seq",
-            (first_day, last_day, *subjects),
-        ).fetchall()
-        return [
-            LocationRow(int(seq), str(id_), str(at), None if subject is None else str(subject), lat, lon)
-            for seq, id_, at, subject, lat, lon in found
-        ]
+            f" AND subject {'IS NULL' if subject is None else '= ?'} AND id NOT IN ({RETRACTED})"
+            " ORDER BY at, seq",
+            (first_day, last_day, *(() if subject is None else (subject,))),
+        )
+        rows: list[LocationRow] = cursor.fetchall()
+        return rows
 
     def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
-        """Every line of one of `kinds` whose local day is in [first_day, last_day], with its `end`,
-        ordered by `at` then seq. Served from the index's own columns; nothing is read from the
-        files. Retracted lines are among them."""
-        found = self.db.execute(
-            "SELECT seq, id, kind, at, end FROM lines"
-            f" WHERE kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ? ORDER BY at, seq",
+        """Every standing line of one of `kinds` whose local day is in [first_day, last_day], with
+        its `end`, ordered by `at` then seq; a retracted line is left out. Served from the index's
+        own columns; nothing is read from the files."""
+        cursor = self.db.execute(
+            "SELECT kind, at, end FROM lines"
+            f" WHERE kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ?"
+            f" AND id NOT IN ({RETRACTED}) ORDER BY at, seq",
             (*kinds, first_day, last_day),
-        ).fetchall()
-        return [
-            EvidenceRow(int(seq), str(id_), str(kind), str(at), None if end is None else str(end))
-            for seq, id_, kind, at, end in found
-        ]
+        )
+        rows: list[EvidenceRow] = cursor.fetchall()
+        return rows
+
+    def ids(self, seqs: Iterable[int]) -> dict[int, str]:
+        """seq → line id for these seqs (the primary key; a few hundred per statement)."""
+        wanted: list[int] = sorted(set(seqs))
+        found: dict[int, str] = {}
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            found.update(
+                self.db.execute(
+                    f"SELECT seq, id FROM lines WHERE seq IN ({', '.join('?' * len(chunk))})", chunk
+                ).fetchall()
+            )
+        return {int(seq): str(id_) for seq, id_ in found.items()}
 
     def of_source(
         self, kind: str, source: str, first_day: str, last_day: str, raw_id_prefix: str | None = None
