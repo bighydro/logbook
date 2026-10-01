@@ -92,7 +92,7 @@ def dwell(
     t1 = _local(day, end)
     out = []
     t = t0
-    while t <= t1:
+    while t <= t1 and (t < t1 or end != "24:00"):  # a day's last point stays on its day
         stamp = t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         out.append(point(stamp, jitter(where, noise_m, rng), subject))
         t += timedelta(minutes=every_min)
@@ -405,7 +405,7 @@ def persona_drafts() -> list[dict[str, Any]]:
     # The last weekend at home.
     for day, next_day in pairwise(DAYS[11:14]):
         drafts += _office_day(day) + _home_night(day, next_day)
-    drafts += dwell(DAYS[13], "07:30", "22:00", HOME, every_min=5)
+    drafts += dwell(DAYS[13], "07:30", "24:00", HOME, every_min=5)
     return drafts
 
 

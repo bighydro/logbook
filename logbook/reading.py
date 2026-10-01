@@ -58,14 +58,12 @@ class Reading:
         return [line for line in self.lines if line.get("kind") == kind]
 
 
-def record_days(lb: Logbook) -> tuple[str, str] | None:
-    """The first and last local day the record has a line on; None for an empty record."""
+def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
+    """The first and last local day the record has a line of `kind` on (any line when None);
+    None when it has none. A reader of the owner's track asks for `location`, so that a
+    resolution written before the first point does not open the window on empty days."""
     with lb.index() as idx:
-        _n, first, last = idx.totals()
-    if first is None or last is None:
-        return None
-    tz = str(lb.meta["timezone"])
-    return local_date(first, tz), local_date(last, tz)
+        return idx.span(kind)
 
 
 def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -> Reading:

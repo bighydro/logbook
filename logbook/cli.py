@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · verify ·
-export · index · migrate · assets. Three verbs, twelve rare."""
+"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
+verify · export · index · migrate · assets. Three verbs, thirteen rare."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from . import (
     places,
     policy,
     reading,
+    rollup,
     stays,
 )
 from .adapters import ios_contacts
@@ -1738,15 +1739,71 @@ def _ask_name(p: places.Proposal) -> str | None:
 
 
 def _reader_days(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str]:
-    """A reader's window: `--since` and `--until` (local days, each defaulting to the record's
-    first or last day); an empty record is today."""
-    whole = reading.record_days(lb)
+    """A reader's window: `--since` and `--until` (local days, each defaulting to the first or
+    last day with a location line); a record with none is today."""
+    whole = reading.record_days(lb, "location")
     today = date.today().isoformat()
     first = parse_day(since).isoformat() if since else (whole[0] if whole else today)
     last = parse_day(until).isoformat() if until else (whole[1] if whole else today)
     if last < first:
         raise ValueError(f"range runs backwards: {first} > {last}")
     return first, last
+
+
+def cmd_rollup(a: argparse.Namespace) -> None:
+    """`rollup countries|flights|nights|places|people [--year YYYY | --since DAY --until DAY] [--json]`:
+    the record summed up per year from one reading of the window, clipped to the days the owner's
+    track covers (the first to the last day with a location line; for flights, with any line), so
+    a day outside them is nothing, not a night in transit. Every number carries the ids of its
+    lines under --json. Nothing is written."""
+    lb = Logbook.find()
+    try:
+        window = _rollup_days(lb, a)
+        if window is None:
+            data = rollup.empty(a.what)
+        else:
+            read = reading.read(lb, window[0], window[1], _airports(a.airports))
+            data = ROLLUPS[a.what](read)
+    except (ValueError, stays.SettingsError) as e:
+        print(f"rollup: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2))
+        return
+    for text in rollup.rows(data):
+        print(text)
+
+
+ROLLUPS: dict[str, Callable[[reading.Reading], dict[str, Any]]] = {
+    "countries": rollup.countries,
+    "flights": rollup.flights,
+    "nights": rollup.nights,
+}
+
+
+def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
+    """The window of a rollup: `--year`, or `--since`/`--until`, each clipped to the record's
+    first and last day; None for an empty record or a window the record has no day in."""
+    if a.year and (a.since or a.until):
+        raise ValueError("give --year, or --since and --until, not both")
+    whole = reading.record_days(lb, None if a.what == "flights" else "location")
+    if whole is None:
+        return None
+    if a.year:
+        if not re.fullmatch(r"\d{4}", a.year):
+            raise ValueError(f"not a year (YYYY): {a.year!r}")
+        since, until = f"{a.year}-01-01", f"{a.year}-12-31"
+    else:
+        since = parse_day(a.since).isoformat() if a.since else whole[0]
+        until = parse_day(a.until).isoformat() if a.until else whole[1]
+    first, last = max(since, whole[0]), min(until, whole[1])
+    if last < first:
+        return None if a.year or since > whole[1] or until < whole[0] else _raise_backwards(since, until)
+    return first, last
+
+
+def _raise_backwards(since: str, until: str) -> tuple[str, str]:
+    raise ValueError(f"range runs backwards: {since} > {until}")
 
 
 def cmd_index(a: argparse.Namespace) -> None:
@@ -2087,6 +2144,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     v.add_argument("--json", action="store_true", help="the proposals as one JSON object")
     v.set_defaults(fn=cmd_places)
+    s = sub.add_parser("rollup", help="the record per year: countries, flights, nights, places, people")
+    s.add_argument("what", choices=rollup.KINDS, help="what to sum up")
+    s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--json", action="store_true", help="the rollup as one JSON object, every number with its line ids"
+    )
+    s.set_defaults(fn=cmd_rollup)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")

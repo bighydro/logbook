@@ -35,6 +35,7 @@ DEFAULT_RADIUS_M = 150.0
 GROUP_M = 300.0  # unnamed stays this close are one proposal
 STAY_ID = re.compile(r"^(?:stay|stop):[^@]+@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$")
 COORDINATES = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
+COUNTRY = re.compile(r"^[A-Z]{2}$")
 TIMELINE_SOURCE = "google-takeout"
 
 
@@ -49,6 +50,7 @@ class Place(NamedTuple):
     radius_m: float
     kind: str = OTHER
     tags: tuple[str, ...] = ()
+    country: str | None = None  # ISO 3166-1 alpha-2, the captain's word for `rollup countries`
 
     def to_json(self) -> dict[str, Any]:
         entry: dict[str, Any] = {
@@ -59,6 +61,8 @@ class Place(NamedTuple):
         }
         if self.tags:
             entry["tags"] = list(self.tags)
+        if self.country:
+            entry["country"] = self.country
         return entry
 
     @classmethod
@@ -74,7 +78,8 @@ class Place(NamedTuple):
         tags = entry.get("tags", [])
         if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
             raise PlaceError(f"{where}: {name!r}: tags must be a list of strings")
-        return cls(str(name), lat, lon, radius, str(kind), tuple(tags)).check(where)
+        country = entry.get("country")
+        return cls(str(name), lat, lon, radius, str(kind), tuple(tags), country).check(where)
 
     def check(self, where: str = PLACES_FILE) -> Place:
         if not self.name.strip():
