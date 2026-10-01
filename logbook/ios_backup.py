@@ -62,6 +62,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -100,10 +101,11 @@ class Source:
     media: tuple[str, str] | None = None  # (domain, folder prefix); copied beside the store as its last part
     adapter: bool = True  # False: copied out, nothing runs on it; `note` says why it is there
     note: str = "no adapter yet"
+    files: str | None = None  # a folder source: `relative_path` is a folder, this the file names under it
 
     @property
     def store_name(self) -> str:
-        return PurePosixPath(self.relative_path).name
+        return self.files if self.files is not None else PurePosixPath(self.relative_path).name
 
     @property
     def media_folder(self) -> str | None:
@@ -374,7 +376,8 @@ class Copy:
 class Plan:
     """What one source would import: its store (None when the backup has no row for it), the
     store's siblings and its media files. `found` is false when the row is there but the bytes
-    are not (`listed`)."""
+    are not (`listed`). A folder source (`Source.files`) has no store: its files are `media`, and
+    it is listed and found when at least one of them is."""
 
     source: Source
     store: BackupFile | None
@@ -384,15 +387,21 @@ class Plan:
 
     @property
     def listed(self) -> bool:
+        if self.source.files is not None:
+            return bool(self.media)
         return self.store is not None
 
     @property
     def found(self) -> bool:
+        if self.source.files is not None:
+            return any(f.size is not None for f in self.media)
         return self.store is not None and self.store.size is not None
 
     @property
     def files(self) -> list[BackupFile]:
         """Every file that would be copied, the store first; only the ones the backup really holds."""
+        if self.source.files is not None:
+            return [f for f in self.media if f.size is not None]
         if not self.found or self.store is None:
             return []
         return [f for f in (self.store, *self.siblings, *self.media) if f.size is not None]
@@ -406,6 +415,10 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
     """One Plan per source, in SOURCES order."""
     plans: list[Plan] = []
     for s in sources:
+        if s.files is not None:
+            found = [f for f in manifest.files_under(s.domain, s.relative_path) if fnmatch(f.name, s.files)]
+            plans.append(Plan(s, None, media=found))
+            continue
         store = manifest.file(s.domain, s.relative_path)
         p = Plan(s, store)
         if p.found:
@@ -427,11 +440,19 @@ def copy(p: Plan, dest: Path) -> Path:
     lands under `dest/<media folder>/` with its path below the backup's media prefix. Every copy is
     checked against the stored blob (`_copy_file`); a mismatch raises CopyError, a stale manifest
     `Size` is only a warning on the Copy. An encrypted file is decrypted on the way, a chunk at a
-    time. Every copy is noted in `p.copied`."""
-    if not p.found or p.store is None:
+    time. Every copy is noted in `p.copied`. A folder source's files land under `dest` with their
+    paths below the backup's folder, and `dest` itself is returned: the adapter reads the folder."""
+    if not p.found:
         raise ValueError(f"{p.source.name}: nothing to copy")
     dest.mkdir(parents=True, exist_ok=True)
     p.copied.clear()
+    if p.source.files is not None:
+        head = len(PurePosixPath(p.source.relative_path).parts)
+        for f in p.files:
+            p.copied.append(_copy_file(f, dest.joinpath(*f.parts[head:])))
+        return dest
+    if p.store is None:
+        raise ValueError(f"{p.source.name}: nothing to copy")
     store_copy = _copy_file(p.store, dest / p.store.name)
     p.copied.append(store_copy)
     present = {f.name for f in p.siblings if f.size is not None}

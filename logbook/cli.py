@@ -905,8 +905,17 @@ def _only(spec: str | None, encrypted: bool = False) -> tuple[ios_backup.Source,
 
 def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
     """`<source>: <store> (<size>) [+ siblings] [+ N media files (<size>) under <folder>/] → <dest>`,
-    or `<source>: <store> not found`."""
+    or `<source>: <store> not found`; a folder source: `<source>: N <files> files (<size>) under
+    <folder>/ → <dest>`, or `<source>: no <files> under <folder>`."""
     name = p.source.store_name
+    if p.source.files is not None:
+        if not p.found:
+            return f"{p.source.name}: no {name} under {p.source.relative_path}"
+        n = len(p.files)
+        return (
+            f"{p.source.name}: {n:,} {name} file{'s' if n != 1 else ''} ({p.bytes:,} bytes)"
+            f" under {p.source.relative_path}/ → {inbox / p.source.name}"
+        )
     if not p.found:
         why = " (listed in Manifest.db, file missing)" if p.listed else ""
         return f"{p.source.name}: {name} not found{why}"

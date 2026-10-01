@@ -458,3 +458,60 @@ def test_manifest_opens_read_only_and_finds_files(tmp_path):
     assert manifest.file(NOTES, "NoteStore.sqlite-wal") is None
     assert manifest.file("HomeDomain", "Library") is None  # a directory row is not a file
     assert _snapshot(backup) == before
+
+
+# -- folder sources: a glob of files under a folder, the adapter runs on the folder's copy ----------
+
+
+FOLDER = ios_backup.Source("cards", "HomeDomain", "Library/Cards", files="card.json", adapter=False)
+
+
+def _with_cards(tmp_path: Path, n: int = 2) -> Path:
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    con = sqlite3.connect(backup / "Manifest.db")
+    try:
+        for i in range(n):
+            rel = f"Library/Cards/{i:04d}.pkpass/card.json"
+            fid = _file_id("HomeDomain", rel)
+            (backup / fid[:2]).mkdir(exist_ok=True)
+            (backup / fid[:2] / fid).write_bytes(b'{"n": %d}' % i)
+            con.execute("INSERT INTO Files VALUES (?,?,?,?,NULL)", (fid, "HomeDomain", rel, 1))
+            con.execute(
+                "INSERT INTO Files VALUES (?,?,?,?,NULL)", (fid[::-1], "HomeDomain", rel.rsplit("/", 1)[0], 2)
+            )
+        other = "Library/Cards/0000.pkpass/logo.png"
+        con.execute(
+            "INSERT INTO Files VALUES (?,?,?,?,NULL)", (_file_id("HomeDomain", other), "HomeDomain", other, 1)
+        )
+        con.commit()
+    finally:
+        con.close()
+    return backup
+
+
+def test_folder_source_plans_every_matching_file_and_copies_them_below_the_folder(tmp_path):
+    backup = _with_cards(tmp_path)
+    (p,) = ios_backup.plan(ios_backup.Manifest(backup), (FOLDER,))
+    assert p.listed and p.found and p.store is None
+    assert [f.relative_path for f in p.files] == [
+        "Library/Cards/0000.pkpass/card.json",
+        "Library/Cards/0001.pkpass/card.json",
+    ]
+    assert p.bytes == 2 * len(b'{"n": 0}')
+    out = ios_backup.copy(p, tmp_path / "out")
+    assert out == tmp_path / "out"
+    assert (out / "0000.pkpass" / "card.json").read_bytes() == b'{"n": 0}'
+    assert (out / "0001.pkpass" / "card.json").read_bytes() == b'{"n": 1}'
+    assert not (out / "0000.pkpass" / "logo.png").exists()
+    assert len(p.copied) == 2
+    row = cli._plan_row(p, tmp_path / "inbox")
+    assert row.startswith("cards: 2 card.json files (16 bytes) under Library/Cards/ → ")
+
+
+def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    (p,) = ios_backup.plan(ios_backup.Manifest(backup), (FOLDER,))
+    assert not p.listed and not p.found and p.files == []
+    assert cli._plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
+    with pytest.raises(ValueError):
+        ios_backup.copy(p, tmp_path / "out")
