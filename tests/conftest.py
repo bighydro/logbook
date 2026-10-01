@@ -17,6 +17,8 @@ def _logbook_home_is_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "logbook-home"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    # The shell may hold the password of a real backup; a test that needs one sets its own.
+    monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD", raising=False)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
