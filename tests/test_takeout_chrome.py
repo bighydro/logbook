@@ -113,3 +113,15 @@ def test_cli_add_sniffs_the_chrome_folder_and_a_re_add_appends_nothing(tmp_path,
     assert "1 without a url" in out
     cli.main(["add", str(FIX)])
     assert "added 0 lines from google-takeout-chrome" in capsys.readouterr().out
+
+
+def test_show_prints_a_visit_by_its_title_or_else_its_url(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "lb"))
+    cli.main(["init", str(tmp_path / "lb"), "--timezone", TZ])
+    cli.main(["add", str(HISTORY)])
+    capsys.readouterr()
+    cli.main(["show", "2026-03-04"])
+    out = capsys.readouterr().out
+    assert "browse" in out and "https://havn.example.org/" in out  # the untitled reload: its url
+    cli.main(["show", "2026-02-11"])
+    assert "Van hire - Oslo" in capsys.readouterr().out

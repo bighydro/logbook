@@ -1068,6 +1068,7 @@ def _line_row(
             p.get("text")
             or p.get("title")
             or p.get("name")
+            or p.get("url")
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
