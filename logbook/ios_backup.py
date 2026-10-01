@@ -51,6 +51,8 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     apple-books         AppDomain-com.apple.iBooks                   Documents/storeFiles/AEAnnotation*.sqlite
                                                                   (+ Documents/BKLibrary/BKLibrary*.sqlite
                                                                   beside it: the titles)
+    voice-memos         AppDomainGroup-group.com.apple.VoiceMemos.shared  Recordings/CloudRecordings.db,
+                                                                  the .m4a/.qta files under Recordings/
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -121,6 +123,7 @@ LINE_STORE = "Library/Application Support/PrivateStore/P_*"
 TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 HEALTH = "HealthDomain"
 BOOKS = "AppDomain-com.apple.iBooks"
+VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
@@ -209,6 +212,13 @@ SOURCES: tuple[Source, ...] = (
         BOOKS,
         "Documents/storeFiles/AEAnnotation*.sqlite",
         companions=((BOOKS, "Documents/BKLibrary/BKLibrary*.sqlite"),),
+    ),
+    Source(  # `voice-memos` (RFC 0023); the audio beside the store on the phone lands under Recordings/
+        "voice-memos",
+        VOICE_MEMOS,
+        "Recordings/CloudRecordings.db",
+        media=(VOICE_MEMOS, "Recordings"),
+        media_suffixes=(".m4a", ".qta"),
     ),
 )
 

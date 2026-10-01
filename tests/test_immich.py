@@ -115,6 +115,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "line",
         "twitter",
         "apple-books",
+        "voice-memos",
     ]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")

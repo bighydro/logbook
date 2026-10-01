@@ -105,6 +105,7 @@ BUILT_IN = (
     "line",
     "twitter",
     "apple_books",
+    "voice_memos",
 )
 
 

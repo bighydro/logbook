@@ -50,6 +50,7 @@ shazam = "logbook.adapters.shazam"
 apple-podcasts = "logbook.adapters.apple_podcasts"
 pocket = "logbook.adapters.pocket"
 apple-books = "logbook.adapters.apple_books"
+voice-memos = "logbook.adapters.voice_memos"
 
 [dependency-groups]
 dev = [

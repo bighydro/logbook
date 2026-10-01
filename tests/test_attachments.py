@@ -115,3 +115,27 @@ def test_stats_counts_a_content_reference_as_an_attachment(lb: Logbook):
     )
     m = record_stats(lb)["attachments"]
     assert (m["referenced"], m["lines"], m["present"]) == (1, 1, 1)
+
+
+# -- files, streamed ---------------------------------------------------------------------------------
+
+
+def test_reference_path_and_write_path_stream_a_file_and_agree_with_the_bytes_forms(lb: Logbook, tmp_path):
+    src = tmp_path / "memo.m4a"
+    src.write_bytes(TEXT * 3000)  # several chunks
+    ref = attachments.reference_path(src, "audio/mp4")
+    assert ref == attachments.reference(src.read_bytes(), "audio/mp4")
+    target = lb.attach_file(src)
+    assert target == lb.root / "attachments" / ref["sha256"] and target.read_bytes() == src.read_bytes()
+    assert lb.attach_file(src) == target  # write-once: the second call checks and keeps the file
+    assert src.read_bytes() == TEXT * 3000  # the source is only read
+
+
+def test_write_path_refuses_a_file_whose_bytes_do_not_match_its_name(lb: Logbook, tmp_path):
+    src = tmp_path / "memo.m4a"
+    src.write_bytes(TEXT)
+    store = lb.root / "attachments"
+    store.mkdir()
+    (store / SHA).write_bytes(b"tampered")
+    with pytest.raises(ValueError, match=SHA[:12]):
+        lb.attach_file(src)

@@ -342,6 +342,10 @@ class Logbook:
         """Put `data` in the SPEC §1.1 store, `<root>/attachments/<sha256>`, once; the file."""
         return attachments.write(self.root, data)
 
+    def attach_file(self, path: Path) -> Path:
+        """Put the file at `path` in the SPEC §1.1 store, streamed, once; the file in the store."""
+        return attachments.write_path(self.root, path)
+
     def append_many(
         self,
         drafts: Iterable[dict[str, Any]],

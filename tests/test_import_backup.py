@@ -33,6 +33,9 @@ from test_line import _store as _line_store
 from test_safari import _store as _safari_store
 from test_splitwise import _store as _splitwise_store
 from test_twitter import _store as _twitter_store
+from test_voice_memos import LINES as MEMO_LINES
+from test_voice_memos import STORED as MEMO_FILES
+from test_voice_memos import _store as _memo_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 from test_wispr_flow import LINES as WISPR_LINES
@@ -54,6 +57,7 @@ LINE_STORE = "Library/Application Support/PrivateStore/P_u0000000000000000000000
 TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 TWITTER_STORE = "com.atebits.tweetie.databases/v1/1000000000000000001/1000000000000000001-dmv2.db"
 BOOKS = "AppDomain-com.apple.iBooks"
+MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -72,6 +76,7 @@ ALL = (
     "line",
     "twitter",
     "apple-books",
+    "voice-memos",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -91,6 +96,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "line": 8,
     "twitter": 6,
     "apple-books": BOOK_LINES,
+    "voice-memos": MEMO_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -110,6 +116,7 @@ STORES["beeper"] = "BeeperStore.sqlite"
 STORES["line"] = "Line.sqlite"
 STORES["twitter"] = "1000000000000000001-dmv2.db"
 STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
+STORES["voice-memos"] = "CloudRecordings.db"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -256,6 +263,18 @@ def _backup(
         _put(backup, rows, BOOKS, "Documents/BKLibrary", None)
         library = store.parent.parent / "BKLibrary" / "BKLibrary-1-091020131601.sqlite"
         _put(backup, rows, BOOKS, "Documents/BKLibrary/BKLibrary-1-091020131601.sqlite", library)
+    if "voice-memos" in sources:  # the store and the audio share one folder on the phone
+        store = _memo_store(_dir(stage, "memos"), layout="phone")
+        _put(backup, rows, MEMOS, "Recordings", None)
+        _put_tree(backup, rows, MEMOS, "Recordings", store.parent)
+        _put(backup, rows, MEMOS, "Recordings/20260302 211407.waveform", _blob(stage, b"\x00" * 64))
+        _put(
+            backup,
+            rows,
+            MEMOS,
+            "Recordings/20260302 211407.composition/manifest.plist",
+            _blob(stage, b"<plist/>"),
+        )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -363,6 +382,15 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     assert "BKLibrary-1-091020131601.sqlite (" in out
     titles = {line["payload"].get("title") for line in lb.lines() if line["source"] == "apple-books"}
     assert "The Long Ships" in titles
+    # only the audio travels with the voice memo store (the waveform and composition stay behind), under
+    # Recordings/ beside it, where the adapter found and hashed it; nothing was stored without --attachments
+    audio = sorted(p.name for p in (inbox / "voice-memos" / "Recordings").iterdir())
+    assert len(audio) == MEMO_FILES and all(p.rsplit(".", 1)[1] in ("m4a", "qta") for p in audio)
+    assert f"{MEMO_FILES} media files" in out and f"{MEMO_FILES} attachments referenced, not stored" in out
+    for line in lb.lines():
+        if line["source"] == "voice-memos" and "media" in line["payload"]:
+            assert "path" not in line["payload"]["media"]
+            assert not (lb.root / "attachments" / line["payload"]["media"]["sha256"]).exists()
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
@@ -398,6 +426,8 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (BEEPER, "Contacts.sqlite"),
         (LINE, LINE_STORE + "/Messages/ChatExt.sqlite"),
         (TWITTER, "com.atebits.tweetie.scribe/scribe.2-compact.sqlite"),
+        (MEMOS, "Recordings/20260302 211407.waveform"),
+        (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -735,3 +765,16 @@ def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
     assert cli._plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
     with pytest.raises(ValueError):
         ios_backup.copy(p, tmp_path / "out")
+
+
+def test_import_backup_attachments_stores_the_voice_memo_audio(lb, tmp_path, capsys):
+    backup = _backup(tmp_path, sources=("voice-memos",))
+    _run(str(backup), "--only", "voice-memos", "--attachments")
+    out = capsys.readouterr().out
+    assert f"added {MEMO_LINES} lines from voice-memos" in out and f"{MEMO_FILES} attachments stored" in out
+    stored = sorted(p.name for p in (lb.root / "attachments").iterdir())
+    assert len(stored) == MEMO_FILES
+    for line in lb.lines():
+        media = line["payload"].get("media")
+        if media is not None:
+            assert media["path"] == f"attachments/{media['sha256']}" and media["sha256"] in stored

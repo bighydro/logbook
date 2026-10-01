@@ -135,6 +135,8 @@ def _append_with(
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
         options["store"] = lb.attach
+    if _takes(adapter, "store_file"):
+        options["store_file"] = lb.attach_file
     if _takes(adapter, "assets"):
         options["assets"] = _registry(lb, "add")
     if _takes(adapter, "owner_emails"):
@@ -176,7 +178,8 @@ def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
     """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
-    times are floating), `store` (puts bytes in the attachment store), `lookup` (the id of a line by
+    times are floating), `store` (puts bytes in the attachment store), `store_file` (puts a file
+    there, streamed), `lookup` (the id of a line by
     source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
     `assets` (the asset registry, ADR 0018), or one of `add`'s own options."""
     if isinstance(adapter, adapters.Adapter):
@@ -859,7 +862,8 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy)
+        given = {"attachments": True} if a.attachments and _takes(adapter, "attachments") else None
+        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy, given)
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox, manifest, plans)
     seq, head, errors = lb.verify()
@@ -1092,6 +1096,8 @@ def _line_row(
         text = _note_text(p, raw=names is None)
     elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":
         text = _highlight_text(p)
+    elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
+        text = _voice_memo_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
     else:
@@ -1155,6 +1161,22 @@ def _highlight_text(p: dict[str, Any]) -> str:
     text = f"\u201c{p.get('quote', '')}\u201d" + (f" — {book}" if book else "")
     if p.get("note"):
         text += f" · {p['note']}"
+    return text
+
+
+def _voice_memo_text(p: dict[str, Any]) -> str:
+    """`Title (m:ss)`, then `audio missing` when the line has no media, `not stored` when it has
+    the digest and no file (RFC 0023)."""
+    text = str(p.get("title") or p.get("file_name") or "recording")
+    duration = p.get("duration_s")
+    if isinstance(duration, int | float) and not isinstance(duration, bool) and duration >= 0:
+        minutes, seconds = divmod(round(duration), 60)
+        text += f" ({minutes}:{seconds:02d})"
+    media = p.get("media")
+    if not isinstance(media, dict):
+        text += ", audio missing"
+    elif "path" not in media:
+        text += ", not stored"
     return text
 
 
@@ -1950,6 +1972,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("backup", help="the backup folder (Finder → Manage Backups → Show in Finder)")
     s.add_argument(
         "--dry-run", action="store_true", help="list what would be copied and imported; write nothing"
+    )
+    s.add_argument(
+        "--attachments",
+        action="store_true",
+        help="store the media of sources that keep it (voice memos' audio) under attachments/"
+        " (default: reference it by digest only)",
     )
     s.add_argument(
         "--only",
