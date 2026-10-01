@@ -107,6 +107,8 @@ BUILT_IN = (
     "apple_books",
     "voice_memos",
     "apple_photos",
+    "withings",
+    "myfitnesspal",
 )
 
 

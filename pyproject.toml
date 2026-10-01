@@ -52,6 +52,8 @@ pocket = "logbook.adapters.pocket"
 apple-books = "logbook.adapters.apple_books"
 voice-memos = "logbook.adapters.voice_memos"
 apple-photos = "logbook.adapters.apple_photos"
+withings = "logbook.adapters.withings"
+myfitnesspal = "logbook.adapters.myfitnesspal"
 
 [dependency-groups]
 dev = [

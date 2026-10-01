@@ -32,6 +32,8 @@ from test_ios_notes import _store as _note_store
 from test_ios_wallet import LINES as WALLET_LINES
 from test_ios_wallet import _passes
 from test_line import _store as _line_store
+from test_myfitnesspal import LINES as MFP_LINES
+from test_myfitnesspal import _store as _mfp_store
 from test_safari import _store as _safari_store
 from test_splitwise import _store as _splitwise_store
 from test_twitter import _store as _twitter_store
@@ -42,6 +44,9 @@ from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 from test_wispr_flow import LINES as WISPR_LINES
 from test_wispr_flow import _store as _wispr_store
+from test_withings import LINES as WITHINGS_LINES
+from test_withings import _health_store as _withings_health
+from test_withings import _measure_store as _withings_measure
 
 from logbook import cli, ios_backup
 from logbook.store import Logbook
@@ -60,6 +65,9 @@ TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 TWITTER_STORE = "com.atebits.tweetie.databases/v1/1000000000000000001/1000000000000000001-dmv2.db"
 BOOKS = "AppDomain-com.apple.iBooks"
 MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
+WITHINGS = "AppDomain-com.withings.wiScaleNG"
+MFP = "AppDomain-com.myfitnesspal.mfp"
+COREDATA = "Library/Application Support/coredata"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -80,6 +88,8 @@ ALL = (
     "apple-books",
     "voice-memos",
     "apple-photos",
+    "withings",
+    "myfitnesspal",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -101,6 +111,8 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "apple-books": BOOK_LINES,
     "voice-memos": MEMO_LINES,
     "apple-photos": PHOTO_LINES,
+    "withings": 2 * WITHINGS_LINES,  # two profiles
+    "myfitnesspal": MFP_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -122,6 +134,8 @@ STORES["twitter"] = "1000000000000000001-dmv2.db"
 STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
 STORES["voice-memos"] = "CloudRecordings.db"
 STORES["apple-photos"] = "Photos.sqlite"
+STORES["withings"] = "46567465_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
+STORES["myfitnesspal"] = "maindb.sqlite"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -285,6 +299,29 @@ def _backup(
         _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite", store)
         _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite-wal", _blob(stage, b""))
         _put(backup, rows, "CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC", _blob(stage, b"pixels"))
+    if "withings" in sources:  # two profiles, two stores each, one of them with a -wal
+        folder = _dir(stage, "withings")
+        for profile in ("46567466", "46567465"):
+            _put(
+                backup,
+                rows,
+                WITHINGS,
+                f"{COREDATA}/{profile}_WTHealth.sqlite",
+                _withings_health(folder, profile),
+            )
+            _put(
+                backup,
+                rows,
+                WITHINGS,
+                f"{COREDATA}/{profile}_Measure.sqlite",
+                _withings_measure(folder, profile),
+            )
+        _put(backup, rows, WITHINGS, f"{COREDATA}/46567466_Measure.sqlite-wal", _blob(stage, b""))
+        _put(
+            backup, rows, WITHINGS, f"{COREDATA}/46567466_Food2.sqlite", _blob(stage, SAFARI_BYTES)
+        )  # not read
+    if "myfitnesspal" in sources:
+        _put(backup, rows, MFP, "Documents/maindb.sqlite", _mfp_store(_dir(stage, "mfp")))
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -401,6 +438,15 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         if line["source"] == "voice-memos" and "media" in line["payload"]:
             assert "path" not in line["payload"]["media"]
             assert not (lb.root / "attachments" / line["payload"]["media"]["sha256"]).exists()
+    # every profile's Withings stores landed in one folder (the glob's first match is the store, the rest
+    # and the companions beside it, with their -wal) and the adapter read the folder: both profiles are in
+    withings_copies = sorted(p.name for p in (inbox / "withings").iterdir())
+    assert withings_copies == [
+        "46567465_Measure.sqlite", "46567465_WTHealth.sqlite", "46567466_Measure.sqlite",
+        "46567466_Measure.sqlite-wal", "46567466_WTHealth.sqlite",
+    ]  # fmt: skip
+    profiles = {line["payload"]["extra"]["profile"] for line in lb.lines() if line["source"] == "withings"}
+    assert profiles == {"46567465", "46567466"}
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
@@ -439,6 +485,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (MEMOS, "Recordings/20260302 211407.waveform"),
         (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
         ("CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC"),  # the pixels stay on the phone
+        (WITHINGS, f"{COREDATA}/46567466_Food2.sqlite"),  # not a store the adapter reads
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {

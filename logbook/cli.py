@@ -248,6 +248,8 @@ SKIP_PHRASES = {
     "skipped_reading_position": "reading positions",
     "skipped_deleted": "deleted",
     "skipped_trashed": "in the trash",
+    "skipped_relayed": "relayed from another app",
+    "skipped_daily_total": "daily totals",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",

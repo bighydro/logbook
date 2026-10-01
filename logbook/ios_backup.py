@@ -55,6 +55,11 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   the .m4a/.qta files under Recordings/
     apple-photos        CameraRollDomain                              Media/PhotoData/Photos.sqlite (the
                                                                   library's metadata; no image is copied)
+    withings            AppDomain-com.withings.wiScaleNG              Library/Application Support/coredata/
+                                                                  *_WTHealth.sqlite and *_Measure.sqlite
+                                                                  (every profile; the adapter runs on the
+                                                                  folder)
+    myfitnesspal        AppDomain-com.myfitnesspal.mfp                Documents/maindb.sqlite
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -127,6 +132,8 @@ HEALTH = "HealthDomain"
 BOOKS = "AppDomain-com.apple.iBooks"
 VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 CAMERA_ROLL = "CameraRollDomain"
+WITHINGS = "AppDomain-com.withings.wiScaleNG"
+MYFITNESSPAL = "AppDomain-com.myfitnesspal.mfp"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
@@ -224,6 +231,13 @@ SOURCES: tuple[Source, ...] = (
         media_suffixes=(".m4a", ".qta"),
     ),
     Source("apple-photos", CAMERA_ROLL, "Media/PhotoData/Photos.sqlite"),  # the library, not the pixels
+    Source(  # `withings` (RFC 0014): every profile's WTHealth and Measure stores, read as one folder
+        "withings",
+        WITHINGS,
+        "Library/Application Support/coredata/*_WTHealth.sqlite",
+        companions=((WITHINGS, "Library/Application Support/coredata/*_Measure.sqlite"),),
+    ),
+    Source("myfitnesspal", MYFITNESSPAL, "Documents/maindb.sqlite"),  # `myfitnesspal` (RFC 0014)
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
