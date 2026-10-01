@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources. Three
-verbs, eighteen rare."""
+places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources.
+Three verbs, eighteen rare."""
 
 from __future__ import annotations
 

@@ -505,6 +505,9 @@ logbook show place Office                     # visits, people, photos
 
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art
+
+logbook promises --since 2026-06-01           # "I'll send…", "ich melde mich…" in transcripts and notes, as proposals
+logbook promises done 3b9e5d0f2a71c846        # it was kept: one task/v1 line, so --open hides it
 ```
 
 Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
@@ -543,6 +546,14 @@ same way.
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
 named Art is `art`. `infer keepers` reads the marks out of the photo lines once; `show <day>` lists the day's
 keepers first, as its hero photos.
+
+**Promises** (`docs/promises.md`) are proposals, never facts: every sentence of a transcript or a note that reads
+as a first-person future or obligation, in English or German (`I'll send`, `we'll get back`, `let me`, `I need to`,
+`ich schicke`, `ich melde mich`, `ich muss`), with the day, the line, the speaker when the record resolves one and a
+due hint when a date phrase is in it (`by Friday`, `next week`, `bis Montag`), found by rules alone; no model runs,
+nothing leaves the machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done. The
+extractor is a value with a name and a version, so a local model can replace the rules without changing the
+command, the report or the ids.
 
 ## Handing a window to someone
 

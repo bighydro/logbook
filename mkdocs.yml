@@ -58,6 +58,7 @@ nav:
       - "0002 photo/v1": rfcs/0002-photo-v1.md
   - The Day: day.md
   - The rollups: rollups.md
+  - Promises: promises.md
   - Adapters:
       - Overview: adapters/README.md
       - "Voice memos and transcription": adapters/voice-memos.md
