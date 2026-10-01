@@ -205,6 +205,7 @@ SKIP_PHRASES = {
     "skipped_no_title": "without a title",
     "skipped_no_url": "without a url",
     "skipped_ad": "advertisements",
+    "skipped_never_played": "never played",
     "skipped_other_activity": "of another activity",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",

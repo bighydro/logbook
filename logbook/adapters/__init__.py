@@ -92,6 +92,8 @@ BUILT_IN = (
     "adsb",
     "mail",
     "safari",
+    "shazam",
+    "apple_podcasts",
 )
 
 

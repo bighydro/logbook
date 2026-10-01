@@ -69,6 +69,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "gcal",
         "ais",
         "adsb",
+        "apple-podcasts",
     ]
     assert adapters.live("immich") is immich
     assert adapters.live("nope") is None
@@ -101,6 +102,8 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "adsb",
         "mail",
         "safari",
+        "shazam",
+        "apple-podcasts",
     ]
     p = tmp_path / "notes.txt"
     p.write_text("just words\n", encoding="utf-8")
