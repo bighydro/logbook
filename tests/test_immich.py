@@ -85,6 +85,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "google-takeout-keep",
         "google-takeout-tasks",
         "google-takeout-chrome",
+        "google-takeout-youtube",
         "ios-contacts",
         "whatsapp",
         "whatsapp-contacts",

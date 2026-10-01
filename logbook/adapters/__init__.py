@@ -73,6 +73,7 @@ BUILT_IN = (
     "takeout.keep",
     "takeout.tasks",
     "takeout.chrome",
+    "takeout.youtube",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",

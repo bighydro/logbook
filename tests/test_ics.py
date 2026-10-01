@@ -800,7 +800,7 @@ def test_run_on_a_folder_reads_its_calendar_files_in_name_order_and_nothing_else
 
 
 def test_takeout_dispatch_stub_lists_calendar_beside_location():
-    assert takeout.SUB_ADAPTERS == ("location", "calendar", "photos", "keep", "tasks", "chrome")
+    assert takeout.SUB_ADAPTERS == ("location", "calendar", "photos", "keep", "tasks", "chrome", "youtube")
     assert takeout_calendar.NAME == ics.NAME == "ics"
 
 
