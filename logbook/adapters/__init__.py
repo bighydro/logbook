@@ -70,6 +70,7 @@ BUILT_IN = (
     "dawarich_live",
     "takeout.location",
     "takeout.photos",
+    "takeout.keep",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",

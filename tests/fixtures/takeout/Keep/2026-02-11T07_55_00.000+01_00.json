@@ -1,0 +1,24 @@
+{
+  "color": "DEFAULT",
+  "isTrashed": false,
+  "isPinned": false,
+  "isArchived": true,
+  "textContent": "Boxes: 14. Van booked for the 20th.\nCall Ola about the keys.",
+  "title": "",
+  "attachments": [
+    {
+      "filePath": "17a2b3c4d5e6f708.png",
+      "mimetype": "image/png"
+    }
+  ],
+  "annotations": [
+    {
+      "description": "Storgata 1, Oslo",
+      "source": "WEBLINK",
+      "title": "Van hire",
+      "url": "https://vans.example.org/booking/42"
+    }
+  ],
+  "userEditedTimestampUsec": 1770882000000000,
+  "createdTimestampUsec": 1770796500000000
+}

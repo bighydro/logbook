@@ -252,6 +252,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "decoding_errors": "with undecodable bytes replaced",
     "attachments_referenced": "attachments referenced, not stored",
     "attachments_stored": "attachments stored",
+    "attachments_missing": "attachments missing from the export",
+    "trashed": "marked trashed",
 }
 
 
@@ -1835,7 +1837,7 @@ def main(argv: list[str] | None = None) -> None:
         action="store_const",
         const=True,
         default=None,
-        help="mail: store attachments under attachments/ (default: reference them by digest only)",
+        help="mail, keep: store attachments under attachments/ (default: reference them by digest only)",
     )
     s.add_argument("--only-labels", metavar="A,B", help="mail: keep only messages with any of these labels")
     s.add_argument("--skip-labels", metavar="A,B", help="mail: drop messages with any of these labels")
