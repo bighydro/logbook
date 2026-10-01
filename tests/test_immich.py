@@ -242,6 +242,7 @@ def test_camera_photo_maps_every_field(server):
         "extra": {
             "checksum": "c3ludGhldGljLWNoZWNrc3VtLTAwMDE=",
             "original_path": "/data/library/owner-1/2026/2026-03-01/IMG_2041.HEIC",
+            "favorite": False,
             "updated_at": "2026-03-02T06:10:00Z",
         },
     }

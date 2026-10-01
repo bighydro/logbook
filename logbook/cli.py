@@ -1,5 +1,5 @@
-"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · verify · export ·
-index · migrate · assets. Three verbs, eleven rare."""
+"""logbook — init · add · sync · import-backup · infer · retract · show · stats · derive · places · rollup ·
+trips · keepers · verify · export · index · migrate · assets. Three verbs, fifteen rare."""
 
 from __future__ import annotations
 
@@ -28,11 +28,17 @@ from . import (
     flights,
     ios_backup,
     ios_backup_crypto,
+    keepers,
+    pages,
     places,
     policy,
+    reading,
+    rollup,
     stays,
+    trips,
 )
 from .adapters import ios_contacts
+from .adapters.takeout import places as takeout_places
 from .chain import Line
 from .export import day_packages, day_range, parse_day, write_package
 from .index import local_date
@@ -594,8 +600,11 @@ def cmd_infer(a: argparse.Namespace) -> None:
     """`infer flights [--since DAY] [--until DAY] [--airports FILE] [--dry-run]`: flight/v1 lines
     (RFC 0013, evidence `inferred`) from the record's own calendar entries and location points,
     merged into the flights already standing; a re-run appends nothing new."""
+    if a.what == "keepers":
+        _infer_keepers(a)
+        return
     if a.what != "flights":
-        print(f"infer: only flights can be inferred yet, not {a.what!r}", file=sys.stderr)
+        print(f"infer: flights or keepers can be inferred, not {a.what!r}", file=sys.stderr)
         sys.exit(2)
     for day in (a.since, a.until):
         if day is not None:
@@ -631,6 +640,74 @@ def cmd_infer(a: argparse.Namespace) -> None:
     _report_skipped(counts)
 
 
+def _infer_keepers(a: argparse.Namespace) -> None:
+    """`infer keepers [--dry-run]`: keeper/v1 lines (RFC 0024) from the marks on the record's
+    photo lines — a favourite is a `memory`, the Art album is `art` — through `append_many`, so a
+    mark already in the record, retracted or not, is never written twice."""
+    lb = Logbook.find()
+    counts: dict[str, int] = {}
+    with lb.index() as idx:
+        retracted = retractions(idx.retractions())
+        photos = [line for line in idx.of_kind("photo") if str(line["id"]) not in retracted]
+    drafts = list(keepers.infer(photos, counts))
+    already = 0
+
+    def skipped(_draft: dict[str, Any]) -> None:
+        nonlocal already
+        already += 1
+
+    if a.dry_run:
+        with lb.index() as idx:
+            already = len(idx.existing({key for d in drafts if (key := _dedupe_key(d)) is not None}))
+        n = len(drafts) - already
+    else:
+        n = lb.append_many(drafts, skipped=skipped)
+    photos_text = f"{_plural(counts.get('marked', 0), 'marked photo')} of {counts.get('photos', 0)}"
+    already_text = f" ({already} already in the record)" if already else ""
+    if a.dry_run:
+        would = f"{_plural(n, 'keeper')} from {photos_text} would be written"
+        print(f"dry run: {would}{already_text}; nothing written")
+    else:
+        print(f"inferred {_plural(n, 'new keeper')} from {photos_text}{already_text}")
+
+
+def cmd_keepers(a: argparse.Namespace) -> None:
+    """`keepers [--since DAY] [--until DAY] [--lane memory|art] [--json]`: the keeper lines
+    standing (RFC 0024), by day. Nothing is written."""
+    lb = Logbook.find()
+    for day in (a.since, a.until):
+        if day is not None:
+            try:
+                parse_day(day)
+            except ValueError as e:
+                print(f"keepers: {e}", file=sys.stderr)
+                sys.exit(2)
+    tz = str(lb.meta["timezone"])
+    with lb.index() as idx:
+        found = keepers.standing([*idx.by_kind(keepers.KIND, a.since, a.until), *idx.retractions()])
+    rows = [
+        keepers.summary(line, local_date(str(line["at"]), tz))
+        for line in found
+        if a.lane is None or (line.get("payload") or {}).get("lane") == a.lane
+    ]
+    rows.sort(key=lambda r: (r["day"], r["at"], r["lane"]))
+    if a.json:
+        print(json.dumps({"keepers": rows}, indent=2, ensure_ascii=False))
+        return
+    if not rows:
+        print(
+            "no keepers"
+            + (f" in lane {a.lane}" if a.lane else "")
+            + "; `logbook infer keepers` reads the marks"
+        )
+        return
+    zone = ZoneInfo(tz)
+    for r in rows:
+        photo = r["photo"] if isinstance(r["photo"], dict) else {}
+        name = photo.get("file_name") or photo.get("asset_id") or "?"
+        print(f"  {r['day']}  {_clock(r['at'], zone)}  {r['lane']:<6} {r['source']:<10} {name}")
+
+
 def cmd_assets(a: argparse.Namespace) -> None:
     """`assets list`: one line per registered asset. `assets add`: register one (ADR 0018). The
     registry is <root>/assets.json, a setting of the record, outside the chain."""
@@ -657,20 +734,16 @@ def cmd_assets(a: argparse.Namespace) -> None:
         print(_asset_row(asset))
 
 
-def cmd_places(a: argparse.Namespace) -> None:
+def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
     """`places import-takeout <path> [--write]`: Google Maps' saved and starred places (the Takeout
     `Maps (your places)/` and `Saved/` folders, or one file of them) proposed as entries of
     <root>/places.json — a setting of the record, outside the chain — and written only with
-    `--write`, never changing an entry already there (`logbook/places.py`)."""
-    lb = Logbook.find()
+    `--write`, never changing an entry already there (`logbook/adapters/takeout/places.py`)."""
     try:
-        proposals = places.read(Path(a.path).expanduser())
-        report = places.merge(lb.root, proposals, write=a.write)
+        proposals = takeout_places.read(Path(a.path).expanduser())
+        report = takeout_places.merge(lb.root, proposals, write=a.write)
     except FileNotFoundError as e:
         print(f"places: no such file or directory: {e}", file=sys.stderr)
-        sys.exit(2)
-    except ValueError as e:
-        print(f"places: {e}", file=sys.stderr)
         sys.exit(2)
     for p in report.new:
         print(f"  {p.name:<40} {p.lat:.4f}, {p.lon:.4f}  {p.category}")
@@ -974,6 +1047,12 @@ def cmd_show(a: argparse.Namespace) -> None:
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
     lb = Logbook.find()
+    if a.day in pages.PAGES:
+        _show_page(lb, a)
+        return
+    if a.name is not None:
+        print(f"show: {a.day!r} takes no name; a page is `show person|asset|place <name>`", file=sys.stderr)
+        sys.exit(2)
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
     with lb.index() as idx:
@@ -987,11 +1066,36 @@ def cmd_show(a: argparse.Namespace) -> None:
         return
     rows.sort(key=lambda line: (line["at"], line["seq"]))
     print(day)
+    hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
+    if hero:
+        print(f"  {hero}")
     for text in _day_rows(rows, retracted, tz, names, superseded):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
+
+
+def _show_page(lb: Logbook, a: argparse.Namespace) -> None:
+    """`show person|asset|place <name> [--json]`: a page read from the whole record (the days the
+    owner's track covers) through `pages`. Nothing is written."""
+    if a.name is None:
+        print(f"show {a.day}: say who or what, e.g. `logbook show {a.day} <name>`", file=sys.stderr)
+        sys.exit(2)
+    try:
+        whole = reading.record_days(lb, "location") or reading.record_days(lb)
+        if whole is None:
+            raise pages.PageError("the record has no lines")
+        read = reading.read(lb, whole[0], whole[1])
+        page = {"person": pages.person, "asset": pages.asset, "place": pages.place}[a.day](read, a.name)
+    except (pages.PageError, stays.SettingsError) as e:
+        print(f"show {a.day}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(page, indent=2, ensure_ascii=False))
+        return
+    for text in pages.rows(page):
+        print(text)
 
 
 def _day_rows(
@@ -1097,6 +1201,8 @@ def _line_row(
         text = _mail_text(p, names)
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
+    elif line["kind"] == keepers.KIND:
+        text = keepers.text(line)
     elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
@@ -1588,7 +1694,6 @@ def cmd_derive(a: argparse.Namespace) -> None:
         print(f"derive: {e}", file=sys.stderr)
         sys.exit(2)
     lb = Logbook.find()
-    tz = ZoneInfo(lb.meta["timezone"])
     try:
         path = stays.settings_path(lb.root)
         if a.dry_run:
@@ -1596,32 +1701,13 @@ def cmd_derive(a: argparse.Namespace) -> None:
             print(f"dry run: {note}", file=sys.stderr)
         else:
             stays.write_default_settings(lb.root)
-        settings = stays.read_settings(lb.root)
-        places = stays.read_places(lb.root, settings.radius_m)
-        registered = stays.read_assets(lb.root)
+        read = reading.read(lb, first, last, _airports(a.airports))
     except stays.SettingsError as e:
         print(f"derive: {e}", file=sys.stderr)
         sys.exit(2)
-    days = day_range(first, last)
+    tz, days, settings, registered, derived = read.tz, read.days, read.settings, read.assets, read.derived
     start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
     _night_start, end = stays.night_window(last, tz, settings)
-    with lb.index() as idx:
-        spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
-        lines = [line for _day, line in idx.between(first, spill)]
-        lines += idx.retractions()  # from every file: a retraction applies wherever its line is
-    window = [
-        line
-        for line in lines
-        if line["kind"] == RETRACTION or ((at := stays.instant(line["at"])) is not None and start <= at < end)
-    ]
-    derived = stays.derive(
-        window,
-        settings,
-        places,
-        {k: v.kind for k, v in registered.items()},
-        lb.meta["timezone"],
-        _airports(a.airports),
-    )
     subjects = derived.subjects
     if a.subject:
         wanted = None if a.subject == "owner" else a.subject
@@ -1634,7 +1720,7 @@ def cmd_derive(a: argparse.Namespace) -> None:
             sys.exit(2)
         subjects = [wanted]
     segments = [s for s in derived.segments if s.subject in subjects]
-    nights = [stays.night(segments, day, tz, settings) for day in days] if None in subjects else []
+    nights = read.nights if None in subjects else []
     if a.json:
         out = {
             "window": {"since": stays.instant_text(start), "until": stays.instant_text(end), "days": days},
@@ -1722,7 +1808,12 @@ def _segment_row(s: stays.Segment, tz: ZoneInfo) -> str:
 def _night_row(n: stays.Night, tz: ZoneInfo) -> str:
     if n.stay is None:
         return "  night          in transit"
-    return f"  night          {_where(n.stay)} · {_span(n.stay.start, n.stay.end, tz)}"
+    parts = [_where(n.stay), _span(n.stay.start, n.stay.end, tz)]
+    if n.stay.aboard:
+        parts.append(f"aboard {n.stay.aboard}")
+    if n.home:
+        parts.append("home")
+    return f"  night          {' · '.join(parts)}"
 
 
 def _where(s: stays.Segment) -> str:
@@ -1753,6 +1844,246 @@ def _distance_text(metres: float) -> str:
         return f"{round(metres)} m"
     km = metres / 1000
     return f"{km:.1f} km" if km < 100 else f"{round(km)} km"
+
+
+def cmd_places(a: argparse.Namespace) -> None:
+    """`places list|add|name|propose`: the named places of the record (`places.json`). `list` and
+    `add` touch the registry only. `name` adds a place and appends one note/v1 line, "named
+    <lat>,<lon> as <name>", so the naming is in the record. `propose` is a reader: the owner's
+    unnamed stays of the window, grouped and ranked by hours, with the nearest known place, any
+    Google Timeline visit overlapping them and a suggested name; `--write` asks for each and
+    names the ones accepted (a name, Enter for the suggestion, `s` to skip, `q` to stop).
+    `import-takeout` proposes entries from Google Maps' saved places (`_places_import_takeout`)."""
+    lb = Logbook.find()
+    try:
+        if a.verb == "list":
+            _places_list(lb)
+        elif a.verb == "add":
+            place = _place_from_args(a.name, a.lat, a.lon, a.radius, a.kind, a.tags)
+            places.add(lb.root, place)
+            print(f"added {_place_row(place)}")
+        elif a.verb == "name":
+            lat, lon = places.parse_stay_id(a.where)
+            _name_place(lb, _place_from_args(a.name, lat, lon, a.radius, a.kind, a.tags))
+        elif a.verb == "import-takeout":
+            _places_import_takeout(lb, a)
+        else:
+            _places_propose(lb, a)
+    except (places.PlaceError, stays.SettingsError, ValueError) as e:
+        print(f"places: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _place_from_args(
+    name: str, lat: float, lon: float, radius: float | None, kind: str | None, tags: str | None
+) -> places.Place:
+    return places.Place(
+        name.strip(),
+        float(lat),
+        float(lon),
+        places.DEFAULT_RADIUS_M if radius is None else float(radius),
+        kind or places.OTHER,
+        tuple(_csv(tags) or ()),
+    ).check()
+
+
+def _places_list(lb: Logbook) -> None:
+    found = places.read(lb.root)
+    if not found:
+        print(f"no places ({places.path_of(lb.root)}); `logbook places add` or `logbook places propose`")
+        return
+    for place in found:
+        print(_place_row(place))
+
+
+def _place_row(place: places.Place) -> str:
+    parts = [
+        f"{place.name:<24}",
+        f"{place.lat:.4f},{place.lon:.4f}",
+        f"{_number_text(place.radius_m)} m",
+        place.kind,
+    ]
+    if place.tags:
+        parts.append(", ".join(place.tags))
+    return "  ".join(parts)
+
+
+def _number_text(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
+def _name_place(lb: Logbook, place: places.Place) -> Line:
+    """Add the place to places.json and put the naming in the record as one note/v1 line."""
+    places.add(lb.root, place)
+    text = places.naming_text(place.lat, place.lon, place.name)
+    line = lb.append(
+        at=now_utc(), source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": text}
+    )
+    print(f"{text} (#{line['seq']}); {_place_row(place)}")
+    return line
+
+
+def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
+    first, last = _reader_days(lb, a.since, a.until)
+    read = reading.read(lb, first, last)
+    unnamed = [
+        places.Stay(s.id, s.start, s.end, s.lat, s.lon, s.aboard, s.first_line, s.last_line, s.points)
+        for s in read.owner_stays
+        if s.place is None and s.lat is not None and s.lon is not None
+    ]
+    proposals = places.propose(unnamed, read.places, places.timeline_visits(read.lines))
+    if a.top is not None:
+        proposals = proposals[: a.top]
+    if a.json:
+        print(
+            json.dumps(
+                {"window": reading.window_json(read), "proposals": [p.to_json() for p in proposals]}, indent=2
+            )
+        )
+        return
+    if not proposals:
+        print(f"{first} {EN_DASH} {last}: no unnamed stays")
+        return
+    print(f"{first} {EN_DASH} {last}: {_plural(len(proposals), 'unnamed place')}, by hours")
+    for n, proposal in enumerate(proposals, 1):
+        for text in _proposal_rows(n, proposal):
+            print(text)
+        if a.write:
+            accepted = _ask_name(proposal)
+            if accepted is None:
+                break
+            if accepted:
+                _name_place(lb, places.Place(accepted, proposal.lat, proposal.lon, read.settings.radius_m))
+
+
+def _proposal_rows(n: int, p: places.Proposal) -> Iterator[str]:
+    parts = [f"{p.hours:6.1f} h", f"{p.lat:.4f},{p.lon:.4f}", _plural(len(p.stays), "stay")]
+    if p.aboard:
+        parts.append(f"aboard {p.aboard}")
+    if p.nearest is not None:
+        parts.append(f"{_distance_text(p.nearest[1])} from {p.nearest[0].name}")
+    yield f"{n:3}. {' · '.join(parts)}   {p.id}"
+    details = []
+    for visit in p.timeline[:3]:
+        details.append(f"timeline {visit.semantic_type or 'visit'} {visit.place_id or ''}".rstrip())
+    if p.suggested:
+        details.append(f"suggested: {p.suggested}")
+    if details:
+        yield f"      {' · '.join(details)}"
+
+
+def _ask_name(p: places.Proposal) -> str | None:
+    """The name the captain gives a proposal: Enter for the suggestion, `s` (or Enter with none)
+    to skip (empty), `q` or the end of input to stop (None)."""
+    hint = f" [{p.suggested}]" if p.suggested else ""
+    try:
+        answer = input(f"      name{hint}, s to skip, q to stop: ").strip()
+    except EOFError:
+        return None
+    if answer.casefold() == "q":
+        return None
+    if answer.casefold() == "s" or (not answer and not p.suggested):
+        return ""
+    return answer or p.suggested
+
+
+def _reader_days(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str]:
+    """A reader's window: `--since` and `--until` (local days, each defaulting to the first or
+    last day with a location line); a record with none is today."""
+    whole = reading.record_days(lb, "location")
+    today = date.today().isoformat()
+    first = parse_day(since).isoformat() if since else (whole[0] if whole else today)
+    last = parse_day(until).isoformat() if until else (whole[1] if whole else today)
+    if last < first:
+        raise ValueError(f"range runs backwards: {first} > {last}")
+    return first, last
+
+
+def cmd_rollup(a: argparse.Namespace) -> None:
+    """`rollup countries|flights|nights|places|people [--year YYYY | --since DAY --until DAY] [--json]`:
+    the record summed up per year from one reading of the window, clipped to the days the owner's
+    track covers (the first to the last day with a location line; for flights, with any line), so
+    a day outside them is nothing, not a night in transit. Every number carries the ids of its
+    lines under --json. Nothing is written."""
+    lb = Logbook.find()
+    try:
+        window = _rollup_days(lb, a)
+        if window is None:
+            data = rollup.empty(a.what)
+        else:
+            read = reading.read(lb, window[0], window[1], _airports(a.airports))
+            data = ROLLUPS[a.what](read)
+    except (ValueError, stays.SettingsError) as e:
+        print(f"rollup: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2))
+        return
+    for text in rollup.rows(data):
+        print(text)
+
+
+ROLLUPS: dict[str, Callable[[reading.Reading], dict[str, Any]]] = {
+    "countries": rollup.countries,
+    "flights": rollup.flights,
+    "nights": rollup.nights,
+    "places": rollup.places,
+    "people": rollup.people,
+}
+
+
+def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
+    """The window of a rollup: `--year`, or `--since`/`--until`, each clipped to the record's
+    first and last day; None for an empty record or a window the record has no day in."""
+    if a.year and (a.since or a.until):
+        raise ValueError("give --year, or --since and --until, not both")
+    whole = reading.record_days(lb, None if getattr(a, "what", None) == "flights" else "location")
+    if whole is None:
+        return None
+    if a.year:
+        if not re.fullmatch(r"\d{4}", a.year):
+            raise ValueError(f"not a year (YYYY): {a.year!r}")
+        since, until = f"{a.year}-01-01", f"{a.year}-12-31"
+    else:
+        since = parse_day(a.since).isoformat() if a.since else whole[0]
+        until = parse_day(a.until).isoformat() if a.until else whole[1]
+    first, last = max(since, whole[0]), min(until, whole[1])
+    if last < first:
+        return None if a.year or since > whole[1] or until < whole[0] else _raise_backwards(since, until)
+    return first, last
+
+
+def _raise_backwards(since: str, until: str) -> tuple[str, str]:
+    raise ValueError(f"range runs backwards: {since} > {until}")
+
+
+def cmd_trips(a: argparse.Namespace) -> None:
+    """`trips [--year YYYY | --since DAY --until DAY] [--json]`: runs of consecutive days whose
+    overnight stay is outside every home region, derived from one reading of the window and
+    never written (ADR 0019)."""
+    lb = Logbook.find()
+    try:
+        window = _rollup_days(lb, a)
+        if window is None:
+            print(
+                json.dumps({"window": None, "trips": []}, indent=2)
+                if a.json
+                else "no trips: the record has no days"
+            )
+            return
+        read = reading.read(lb, window[0], window[1], _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"trips: {e}", file=sys.stderr)
+        sys.exit(2)
+    found, warning = trips.trips(read)
+    if a.json:
+        out: dict[str, Any] = {"window": reading.window_json(read), "trips": [t.to_json() for t in found]}
+        if warning:
+            out["warning"] = warning
+        print(json.dumps(out, indent=2))
+        return
+    for text in trips.rows(read, found, warning):
+        print(text)
 
 
 def cmd_index(a: argparse.Namespace) -> None:
@@ -2022,7 +2353,7 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser(
         "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
     )
-    s.add_argument("what", help="what to infer: flights")
+    s.add_argument("what", help="what to infer: flights, or keepers (favourites and the Art album, RFC 0024)")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only calendar entries from this local day")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="… up to this local day, inclusive")
     s.add_argument(
@@ -2037,9 +2368,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("seq", type=int)
     s.add_argument("reason")
     s.set_defaults(fn=cmd_retract)
-    s = sub.add_parser("show", help="one day (default today)")
-    s.add_argument("day", nargs="?")
+    s = sub.add_parser("show", help="one day (default today), or a page: person, asset or place")
+    s.add_argument("day", nargs="?", help="YYYY-MM-DD, or person|asset|place")
+    s.add_argument("name", nargs="?", help="with person|asset|place: the name, entity id or asset id")
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
+    s.add_argument("--json", action="store_true", help="a page as one JSON object")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
@@ -2067,6 +2400,77 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--dry-run", action="store_true", help="never create policy/stays.json; say what applies")
     s.add_argument("--json", action="store_true", help="the segments and nights as one JSON object")
     s.set_defaults(fn=cmd_derive)
+    s = sub.add_parser(
+        "places", help="the named places of the record (places.json): list, add, name, propose"
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser("list", help="one line per place")
+    v.set_defaults(fn=cmd_places)
+    for verb in ("add", "name"):
+        v = verbs.add_parser(
+            verb,
+            help="add one place"
+            if verb == "add"
+            else "name a stay (or lat,lon) and put the naming in the record",
+        )
+        if verb == "name":
+            v.add_argument("where", help="lat,lon or a stay id as `places propose` prints it")
+        v.add_argument("name", help="what you call it")
+        if verb == "add":
+            v.add_argument("--lat", type=float, required=True)
+            v.add_argument("--lon", type=float, required=True)
+        v.add_argument("--radius", type=float, metavar="M", help="metres (default 150)")
+        v.add_argument("--kind", choices=places.KINDS, help="home, asset-berth or other (default other)")
+        v.add_argument("--tags", metavar="A,B", help="free text, comma-separated")
+        v.set_defaults(fn=cmd_places)
+    v = verbs.add_parser(
+        "import-takeout", help="propose entries from Google Maps' saved and starred places (Takeout)"
+    )
+    v.add_argument("path", help="Takeout/, `Maps (your places)/`, `Saved/`, or one file of them")
+    v.add_argument("--write", action="store_true", help="add the new entries to places.json")
+    v.set_defaults(fn=cmd_places)
+    v = verbs.add_parser("propose", help="unnamed stays ranked by hours, with what is near; appends nothing")
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="first day (default: the record's first)")
+    v.add_argument("--until", metavar="YYYY-MM-DD", help="last day (default: the record's last)")
+    v.add_argument("--top", type=int, metavar="N", help="only the N biggest")
+    v.add_argument(
+        "--write", action="store_true", help="ask for each name; accepted ones become places and a note"
+    )
+    v.add_argument("--json", action="store_true", help="the proposals as one JSON object")
+    v.set_defaults(fn=cmd_places)
+    s = sub.add_parser("rollup", help="the record per year: countries, flights, nights, places, people")
+    s.add_argument("what", choices=rollup.KINDS, help="what to sum up")
+    s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--json", action="store_true", help="the rollup as one JSON object, every number with its line ids"
+    )
+    s.set_defaults(fn=cmd_rollup)
+    s = sub.add_parser(
+        "trips", help="runs of nights away from home: route, places, people, flights in and out"
+    )
+    s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_trips)
+    s = sub.add_parser("keepers", help="the photos marked keepers (RFC 0024), by day")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="from this local day")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="up to this local day, inclusive")
+    s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
+    s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
+    s.set_defaults(fn=cmd_keepers)
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
     s = sub.add_parser("verify", help="check the chain")
@@ -2106,14 +2510,6 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
     v.add_argument("--registration", help="call sign or plate, free text")
     v.set_defaults(fn=cmd_assets)
-    s = sub.add_parser("places", help="the named places derive stays uses (places.json)")
-    verbs = s.add_subparsers(dest="verb", required=True)
-    v = verbs.add_parser(
-        "import-takeout", help="propose entries from Google Maps' saved and starred places (Takeout)"
-    )
-    v.add_argument("path", help="Takeout/, `Maps (your places)/`, `Saved/`, or one file of them")
-    v.add_argument("--write", action="store_true", help="add the new entries to places.json")
-    v.set_defaults(fn=cmd_places)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)

@@ -50,12 +50,14 @@ from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from . import assets as registry
+from . import places as registry_of_places
 from .chain import Line
 from .flights import Airports, distance_km
+from .places import Place
 from .store import RETRACTION, retractions
 
 SETTINGS_FILE = PurePosixPath("policy/stays.json")  # record-relative
-PLACES_FILE = "places.json"
+PLACES_FILE = registry_of_places.PLACES_FILE
 EVIDENCE = ("event", "transcript", "note", "call", "message", "photo")
 STAY, STOP, MOVE = "stay", "stop", "move"
 MODES = ("walk", "car", "train", "boat", "flight")
@@ -179,38 +181,13 @@ def read_settings(root: Path) -> Settings:
 # -- places and assets -----------------------------------------------------------------------------------
 
 
-class Place(NamedTuple):
-    name: str
-    lat: float
-    lon: float
-    radius_m: float
-
-
 def read_places(root: Path, default_radius_m: float) -> list[Place]:
-    """`<root>/places.json`: `{"Home": {"lat": 59.91, "lon": 10.75, "radius_m": 120}}`, the radius
-    optional. An absent file is no places."""
-    path = Path(root) / PLACES_FILE
-    if not path.exists():
-        return []
+    """`<root>/places.json` through `logbook.places` (`{"Home": {"lat": 59.91, "lon": 10.75,
+    "radius_m": 120, "kind": "home"}}`, the radius and kind optional). An absent file is no places."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError as e:
-        raise SettingsError(f"{path} is not JSON: {e}") from e
-    if not isinstance(data, dict):
-        raise SettingsError(f"{path} must map a place name to {{lat, lon, radius_m}}")
-    places = []
-    for name, entry in data.items():
-        if not isinstance(entry, dict):
-            raise SettingsError(f"{path}: {name!r} must be an object with lat and lon")
-        try:
-            lat, lon = float(entry["lat"]), float(entry["lon"])
-            radius = float(entry.get("radius_m", default_radius_m))
-        except (KeyError, TypeError, ValueError) as e:
-            raise SettingsError(f"{path}: {name!r} needs numeric lat and lon (and radius_m)") from e
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180) or radius <= 0:
-            raise SettingsError(f"{path}: {name!r} has coordinates or a radius out of range")
-        places.append(Place(str(name), lat, lon, radius))
-    return places
+        return registry_of_places.read(root, default_radius_m)
+    except registry_of_places.PlaceError as e:
+        raise SettingsError(str(e)) from e
 
 
 def read_assets(root: Path) -> dict[str, registry.Asset]:
@@ -247,6 +224,7 @@ class Point(NamedTuple):
     lon: float
     subject: str | None
     seq: int
+    id: str = ""
 
 
 class Evidence(NamedTuple):
@@ -271,13 +249,27 @@ class Segment:
     distance_m: float | None = None  # moves
     mode: str | None = None
     airports: tuple[str, ...] = ()
+    first_line: str | None = None  # the ids of the first and last location line of the segment
+    last_line: str | None = None
 
     @property
     def duration_s(self) -> int:
         return int((self.end - self.start).total_seconds())
 
+    @property
+    def id(self) -> str:
+        """A derived id a recompute reproduces (ARCHITECTURE: derived is disposable, ids are
+        stable): the kind, the subject, the start to the minute, and for a stay or stop its
+        centre, `stay:owner:20260610T1000Z@59.9200,10.7400`. `places.parse_stay_id` reads it."""
+        start = self.start.astimezone(UTC).strftime("%Y%m%dT%H%MZ")
+        head = f"{self.kind}:{self.subject or 'owner'}:{start}"
+        if self.kind == MOVE or self.lat is None or self.lon is None:
+            return head
+        return f"{head}@{self.lat:.4f},{self.lon:.4f}"
+
     def to_json(self, tz: ZoneInfo) -> dict[str, Any]:
         out: dict[str, Any] = {
+            "id": self.id,
             "kind": self.kind,
             "subject": self.subject,
             "start": _stamp(self.start),
@@ -287,6 +279,7 @@ class Segment:
             "duration_s": self.duration_s,
             "points": self.points,
             "aboard": self.aboard,
+            "lines": {"first": self.first_line, "last": self.last_line, "points": self.points},
         }
         if self.kind == MOVE:
             out["distance_m"] = None if self.distance_m is None else round(self.distance_m)
@@ -305,6 +298,7 @@ class Segment:
 class Night:
     day: str
     stay: Segment | None
+    home: bool = False  # the stay lies in a home region (places.json, kind `home`)
 
     @property
     def in_transit(self) -> bool:
@@ -315,6 +309,7 @@ class Night:
             "day": self.day,
             "stay": None if self.stay is None else self.stay.to_json(tz),
             "in_transit": self.in_transit,
+            "home": self.home,
         }
 
 
@@ -367,7 +362,7 @@ def _split(lines: Iterable[Line]) -> tuple[dict[str | None, list[Point]], list[E
             subject = payload.get("subject")
             subject = subject if isinstance(subject, str) and subject else None
             tracks.setdefault(subject, []).append(
-                Point(at, float(lat), float(lon), subject, int(line.get("seq", 0)))
+                Point(at, float(lat), float(lon), subject, int(line.get("seq", 0)), str(line.get("id", "")))
             )
         elif line.get("kind") in EVIDENCE:
             evidence.append(Evidence(at, instant(line.get("end")), str(line["kind"])))
@@ -514,6 +509,8 @@ def _segments_of(
                 place=None if cluster.place is None else cluster.place.name,
                 attached=attached,
                 promoted=bool(attached) and not by_duration,
+                first_line=first.id or None,
+                last_line=last.id or None,
             )
         )
     return segments, len(noise)
@@ -557,6 +554,8 @@ def _move(
         distance_m=distance,
         mode=mode,
         airports=codes if len(codes) == 2 else (),
+        first_line=start.id or None,
+        last_line=end.id or None,
     )
 
 
@@ -701,9 +700,12 @@ def night_window(day: str, tz: ZoneInfo, settings: Settings) -> tuple[datetime, 
     return start, datetime.combine(end_day, end_clock, tzinfo=tz)
 
 
-def night(segments: Iterable[Segment], day: str, tz: ZoneInfo, settings: Settings) -> Night:
+def night(
+    segments: Iterable[Segment], day: str, tz: ZoneInfo, settings: Settings, places: Sequence[Place] = ()
+) -> Night:
     """The owner's stay with the longest overlap of the night window, when that overlap reaches
-    the stay minimum; else in transit."""
+    the stay minimum; else in transit. At home when the stay is a place of kind `home`, or its
+    centre lies in one's radius (`places`, from places.json)."""
     start, end = night_window(day, tz, settings)
     best: Segment | None = None
     best_overlap = 0.0
@@ -713,7 +715,21 @@ def night(segments: Iterable[Segment], day: str, tz: ZoneInfo, settings: Setting
         overlap = (min(s.end, end) - max(s.start, start)).total_seconds()
         if overlap > best_overlap:
             best, best_overlap = s, overlap
-    return Night(day, best if best_overlap >= settings.stay_min_s else None)
+    if best is None or best_overlap < settings.stay_min_s:
+        return Night(day, None)
+    return Night(day, best, is_home(best, places))
+
+
+def is_home(stay: Segment, places: Sequence[Place]) -> bool:
+    """Whether a stay lies in a home region: its named place is of kind `home`, or its centre is
+    within a home place's radius."""
+    if stay.place is not None:
+        named = next((p for p in places if p.name == stay.place), None)
+        if named is not None and named.kind == registry_of_places.HOME:
+            return True
+    if stay.lat is None or stay.lon is None:
+        return False
+    return registry_of_places.at_home(stay.lat, stay.lon, places) is not None
 
 
 def instant_text(instant: datetime) -> str:
