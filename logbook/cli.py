@@ -1538,7 +1538,13 @@ def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     return head + ("; " + ", ".join(parts) if parts else "")
 
 
-def _attendee(attendee: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
+def _attendee(attendee: object, names: Mapping[Ref, str] | None) -> str:
+    """An attendee's name, else its ref. A string attendee is the shape before RFC 0009 (SPEC §3.2
+    reads it as an `email` ref); anything else is printed as it is, never a failure (SPEC §5)."""
+    if isinstance(attendee, str):
+        return _name({"kind": "email", "value": attendee}, names) or attendee
+    if not isinstance(attendee, dict):
+        return str(attendee)
     ref = attendee.get("ref")
     label = _name(ref, names)
     if label:

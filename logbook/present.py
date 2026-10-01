@@ -12,7 +12,7 @@ them per person. The sources, in the order a Day lists them:
 | `note`       | a `note/v1` written inside the stay that says "with <name>"     | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
 
-\* 0.8 for an attendee who accepted, 0.6 for one who has not answered or is tentative; one who
+* 0.8 for an attendee who accepted, 0.6 for one who has not answered or is tentative; one who
 declined is not listed.
 
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's

@@ -643,3 +643,41 @@ def test_show_run_is_broken_by_a_change_of_subject_and_names_the_asset(tmp_path:
     assert "solvind: 2 points" in rows[0]
     assert "dinghy: 1 point" in rows[1]
     assert "2 points" in rows[2] and "solvind" not in rows[2] and "dinghy" not in rows[2]
+
+
+def test_show_reads_a_string_attendee_as_an_email_ref_and_never_fails(tmp_path: Path, monkeypatch, capsys):
+    """The conformance sample's first day has `attendees: ["ines@example.org"]`, the shape before
+    RFC 0009; SPEC §3.2 reads it as an email ref and SPEC §5 forbids failing on it. A resolution line
+    for that address names the person."""
+    event = _event(f"{DAY}T09:00:00Z", "Coffee with Ines")
+    event["payload"]["attendees"] = ["ines@example.org", 7]
+    _fresh(tmp_path, monkeypatch, [event])
+    rows = _show(capsys)
+    assert any("Coffee with Ines" in r and "with ines@example.org, 7" in r for r in rows), rows
+    named = _fresh(
+        tmp_path / "named",
+        monkeypatch,
+        [
+            event,
+            {
+                "at": f"{DAY}T08:00:00Z",
+                "source": "manual",
+                "kind": "resolution",
+                "tier": 2,
+                "payload": {
+                    "schema": "resolution/v1",
+                    "ref": {"kind": "email", "value": "ines@example.org"},
+                    "entity": {
+                        "type": "person",
+                        "id": "019cadd3-6bc0-7dcd-9133-043f5aabf2a9",
+                        "registry": "logbook",
+                    },
+                    "label": "Ines",
+                    "method": "owner",
+                },
+            },
+        ],
+    )
+    assert named.meta["seq"] == 2
+    rows = _show(capsys)
+    assert any("with Ines, 7" in r for r in rows), rows
