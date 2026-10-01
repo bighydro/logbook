@@ -63,7 +63,7 @@ SOURCES = [
     (1, None, "com.apple.Health", "iPhone", 0, 1, "iPhone14,2", 0, 0.0, None, 0),
     (2, None, "com.apple.health.Watch", "Apple Watch", 0, 1, "Watch7,1", 0, 0.0, None, 0),
 ]
-UNITS = [(1, "kg"), (2, "count/min")]
+UNITS = [(1, "kg"), (2, "count/min"), (3, "count/s"), (4, "g")]
 
 HEART_RATE, STEPS, DISTANCE, BASAL, ACTIVE, FLIGHTS, SLEEP, WEIGHT = 5, 7, 8, 9, 10, 12, 63, 3
 RESTING, HRV, WORKOUT_TYPE = 118, 183, 79
@@ -84,7 +84,9 @@ def q(
     prov: int | None = WATCH,
     **original: Any,
 ) -> dict[str, Any]:
-    """A quantity sample: `quantity` in Apple's canonical unit (count, m, kcal, count/s, kg, s)."""
+    """A quantity sample: `quantity` as the store keeps it — a count, metres, kcal, kg, seconds;
+    heart rate in count/s, resting heart rate in count/min, HRV in ms (checked against a real store,
+    RFC 0014 rule 6)."""
     return {
         "id": data_id,
         "type": kind,
@@ -147,8 +149,17 @@ ROWS: list[dict[str, Any]] = [
     q(12, HEART_RATE, _apple("2026-03-02T07:00:40Z"), _apple("2026-03-02T07:00:40Z"), 1.3),
     q(13, HEART_RATE, _apple("2026-03-02T07:01:00Z"), _apple("2026-03-02T07:01:00Z"), 1.1),
     q(14, HEART_RATE, _apple("2026-03-02T07:00:20Z"), _apple("2026-03-02T07:00:20Z"), 1.25, PHONE),
-    q(15, RESTING, _apple("2026-03-02T05:00:00Z"), _apple("2026-03-02T05:00:00Z"), 0.9333333),
-    q(16, HRV, _apple("2026-03-02T07:30:00Z"), _apple("2026-03-02T07:30:00Z"), 0.045),
+    # resting heart rate is kept in count/min (its original, when kept, in count/s); HRV in ms
+    q(
+        15,
+        RESTING,
+        _apple("2026-03-02T05:00:00Z"),
+        _apple("2026-03-02T05:00:00Z"),
+        56,
+        original_quantity=0.9333333,
+        original_unit=3,
+    ),
+    q(16, HRV, _apple("2026-03-02T07:30:00Z"), _apple("2026-03-02T07:30:00Z"), 45),
     q(
         17,
         WEIGHT,
@@ -170,7 +181,7 @@ ROWS: list[dict[str, Any]] = [
     w(25, "2026-03-02T16:00:00Z", "2026-03-02T16:35:00Z", 37, 2100.0, 350.5, 5200.0),
     # the next day: the watch and the phone both count the 10:00Z quarter
     q(26, STEPS, _apple("2026-03-03T10:00:00Z"), _apple("2026-03-03T10:05:00Z"), 400),
-    q(27, RESTING, _apple("2026-03-03T05:00:00Z"), _apple("2026-03-03T05:00:00Z"), 1.0),
+    q(27, RESTING, _apple("2026-03-03T05:00:00Z"), _apple("2026-03-03T05:00:00Z"), 60),
     q(28, STEPS, _apple("2026-03-03T10:01:00Z"), _apple("2026-03-03T10:03:00Z"), 450, PHONE),
     # what is skipped and counted
     q(29, 999, _apple("2026-03-03T11:00:00Z"), _apple("2026-03-03T11:00:00Z"), 1.0),
@@ -350,12 +361,13 @@ def test_run_heart_rate_is_bpm_at_native_resolution_capped_per_minute(tmp_path):
     assert lines["heart_rate:14"]["payload"]["value"] == 75  # the phone's own reading in the same minute
 
 
-def test_run_resting_hr_hrv_and_weight(tmp_path):
+def test_run_resting_hr_hrv_and_weight_are_taken_as_the_store_keeps_them(tmp_path):
+    """The store keeps resting heart rate in count/min and HRV in ms already: no rescaling, or a
+    resting rate comes out in the thousands."""
     lines = _by_raw_id(_lines(tmp_path))
-    assert (
-        lines["resting_hr:15"]["payload"]["value"] == 56
-        and lines["resting_hr:15"]["payload"]["unit"] == "bpm"
-    )
+    resting = lines["resting_hr:15"]["payload"]
+    assert resting["value"] == 56 and resting["unit"] == "bpm"
+    assert resting["extra"]["original"] == {"quantity": 0.933, "unit": "count/s"}
     assert lines["hrv:16"]["payload"]["value"] == 45 and lines["hrv:16"]["payload"]["unit"] == "ms"
     weight = lines["weight:17"]["payload"]
     assert weight["value"] == 78.4 and weight["unit"] == "kg" and weight["device"] == "iPhone14,2"
@@ -536,6 +548,49 @@ def test_stats_health_sleep_is_the_night_that_ends_on_the_day_asleep_stages_only
     assert data["days"][0]["sleep_h"] == 7.3
 
 
+def _sleep(raw_id: str, start: str, end: str, stage: str, device: str) -> dict[str, Any]:
+    seconds = int((datetime.fromisoformat(end) - datetime.fromisoformat(start)).total_seconds())
+    return {
+        "at": start.replace("+00:00", "Z"),
+        "end": end.replace("+00:00", "Z"),
+        "tz": "Europe/Oslo",
+        "source": "apple-health",
+        "kind": "health",
+        "tier": 3,
+        "payload": {
+            "schema": "health-sample/v1",
+            "raw_id": raw_id,
+            "type": "sleep",
+            "value": seconds,
+            "unit": "s",
+            "stage": stage,
+            "device": device,
+        },
+    }
+
+
+def test_stats_health_sleep_counts_overlapping_stages_of_one_device_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+):
+    """A source that writes the night twice (two overlapping sets of stages from one phone) must
+    not double the night; nor do two devices add up. Per device the asleep spans are unioned, then
+    the longest device is the night."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    night = [  # the phone's first copy: 7 h asleep; its second copy, the same 7 h cut differently
+        _sleep("sleep:1", "2026-03-01T22:00:00+00:00", "2026-03-02T02:00:00+00:00", "core", "iPhone17,1"),
+        _sleep("sleep:2", "2026-03-02T02:00:00+00:00", "2026-03-02T05:00:00+00:00", "deep", "iPhone17,1"),
+        _sleep("sleep:3", "2026-03-01T22:00:00+00:00", "2026-03-02T00:00:00+00:00", "rem", "iPhone17,1"),
+        _sleep("sleep:4", "2026-03-02T00:00:00+00:00", "2026-03-02T05:00:00+00:00", "core", "iPhone17,1"),
+        _sleep("sleep:5", "2026-03-01T21:30:00+00:00", "2026-03-02T05:30:00+00:00", "in_bed", "iPhone17,1"),
+        # the watch saw six hours
+        _sleep("sleep:6", "2026-03-01T22:30:00+00:00", "2026-03-02T04:30:00+00:00", "asleep", "Watch7,1"),
+    ]
+    lb.append_many(night)
+    data = json.loads(_stats(capsys, "--health", "--json"))
+    assert [d["sleep_h"] for d in data["days"]] == [7.0]
+
+
 def test_stats_health_steps_take_the_larger_device_per_quarter_hour(lb: Logbook, capsys):
     # 07:00Z: watch 250 vs phone 200 → 250; 07:15Z: watch 300 → 550. Next day: watch 400 vs phone 450 → 450
     data = json.loads(_stats(capsys, "--health", "--json"))
@@ -571,6 +626,7 @@ PROFILE = {
         "stage": {"enum": ["in_bed", "asleep", "awake", "core", "deep", "rem"]},
         "device": {"type": "string", "minLength": 1},
         "source_name": {"type": "string", "minLength": 1},
+        "supersedes": {"type": "string", "minLength": 1},
         "extra": {"type": "object"},
     },
     "additionalProperties": False,

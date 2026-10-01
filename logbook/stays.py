@@ -11,14 +11,24 @@ The rules:
 
 - Points of one subject are clustered in time order. A point joins the current cluster when it
   is within the place's radius (a named place) or the default radius of the cluster's first point
-  (an anchor, not a running centroid, so a slow walk cannot drift a cluster along) and it comes
-  less than `merge_gap_s` after the cluster's last point. A single point outside whose successor
-  is back inside is GPS noise and is dropped. A cluster shorter than `stop_min_s` is travel, not
-  a stop.
-- Two consecutive clusters at the same place with a gap under `merge_gap_s` (a brief excursion,
-  a burst of noise) are one; a gap of `merge_gap_s` or more at the same place is two stays with a
-  move of no distance between them, printed as a gap. A tracker that reports rarely when still
-  needs a larger `merge_gap_s`.
+  (an anchor, not a running centroid, so a slow walk cannot drift a cluster along), however long
+  after the cluster's last point it comes: the tracker sends no points while the owner is still,
+  so a silence whose next point is back inside the radius is time spent at the place, never a
+  gap row. A single point outside whose successor is back inside is GPS noise and is dropped. A
+  cluster shorter than `stop_min_s` is travel, not a stop.
+- A cluster lasts until the tracker's next point when that point comes after a silence of
+  `merge_gap_s` or more and lies within a short walk of the cluster's last point — `walk_max_kmh`
+  for `merge_gap_s`, 1.2 km by default, the hop a tracker reporting every `merge_gap_s` can miss:
+  the silence is read as stillness, as the tracker's behaviour says, so the stay held until the
+  tracker spoke again, even when that is the next morning and the first point is already on the
+  way out. A next point farther than that is travel the tracker did not see (a flight with the
+  phone off, a night train); that silence says nothing, and the cluster ends at its last point.
+  With the tracker reporting as usual, a cluster ends at its last point and the move starts there.
+- `merge_gap_s` governs an excursion: two consecutive clusters at the same place whose gap is
+  under it (the owner steps out of the radius and is back, a burst of noise) are one stay; back
+  after `merge_gap_s` or more is two stays with a move between. It is also the length of a gap
+  that counts as a silence (above). A gap at the same place never splits a stay, whatever its
+  length.
 - A cluster is a stay when it lasts `stay_min_s` or longer, or when any evidence is attached to
   it: an event, transcript, note, call, message or photo whose instant falls inside it (a line with
   an `end` counts when its span overlaps). Evidence promotes; duration is the fallback. Otherwise
@@ -75,7 +85,7 @@ class SettingsError(ValueError):
 class Settings:
     stay_min_s: int = 1200  # a span this long is a stay by duration alone
     stop_min_s: int = 180  # a cluster shorter than this is travel, not a stop
-    merge_gap_s: int = 600  # same place, a gap under this: one stay
+    merge_gap_s: int = 600  # out of the radius and back within this: one stay; a gap this long is a silence
     radius_m: float = 150.0  # the radius of an unnamed place
     airport_km: float = 8.0  # a point this close to an airport is at it
     night: tuple[str, str] = ("22:00", "08:00")  # the window the overnight stay is chosen in
@@ -397,11 +407,10 @@ def _inside(cluster: _Cluster, p: Point, settings: Settings) -> bool:
     return distance_m(p.lat, p.lon, cluster.anchor_lat, cluster.anchor_lon) <= settings.radius_m
 
 
-def _joins(cluster: _Cluster, p: Point, track: Sequence[Point], settings: Settings) -> bool:
-    """Inside the cluster's radius and not after a gap of `merge_gap_s` or more: a gap that long
-    at the same place is two stays with a gap between (the merge rule, applied while clustering)."""
-    gap = (p.at - track[cluster.members[-1]].at).total_seconds()
-    return gap < settings.merge_gap_s and _inside(cluster, p, settings)
+def _joins(cluster: _Cluster, p: Point, settings: Settings) -> bool:
+    """Inside the cluster's radius, whatever the gap since its last point: a tracker that is silent
+    while the owner is still has been silent at this place."""
+    return _inside(cluster, p, settings)
 
 
 def _start(i: int, p: Point, places: Sequence[Place]) -> _Cluster:
@@ -419,10 +428,10 @@ def _cluster(
         if current is None:
             current = _start(i, p, places)
             continue
-        if _joins(current, p, track, settings):
+        if _joins(current, p, settings):
             current.members.append(i)
             continue
-        if i + 1 < len(track) and _joins(current, track[i + 1], track, settings):
+        if i + 1 < len(track) and _joins(current, track[i + 1], settings):
             noise.add(i)  # one fix away and straight back: noise
             continue
         clusters.append(current)
@@ -430,6 +439,21 @@ def _cluster(
     if current is not None:
         clusters.append(current)
     return clusters, noise
+
+
+def _until(cluster: _Cluster, track: Sequence[Point], settings: Settings) -> datetime:
+    """When the cluster ends: at its last point, or at the track's next point when that comes after a
+    silence of `merge_gap_s` or more and lies within a walk of `merge_gap_s` (the hop the tracker can
+    miss) — a silent tracker is a still owner, unless the next point is too far for that."""
+    last = track[cluster.members[-1]]
+    following = cluster.members[-1] + 1
+    if following >= len(track):
+        return last.at
+    nxt = track[following]
+    if (nxt.at - last.at).total_seconds() < settings.merge_gap_s:
+        return last.at
+    hop_m = settings.walk_max_kmh * 1000 * settings.merge_gap_s / 3600
+    return nxt.at if distance_m(last.lat, last.lon, nxt.lat, nxt.lon) <= hop_m else last.at
 
 
 def _span_s(cluster: _Cluster, track: Sequence[Point]) -> float:
@@ -491,18 +515,19 @@ def _segments_of(
     segments: list[Segment] = []
     for n, cluster in enumerate(clusters):
         first, last = track[cluster.members[0]], track[cluster.members[-1]]
+        until = _until(cluster, track, settings)
         if n:
             prev = clusters[n - 1]
             segments.append(_move(subject, prev, cluster, track, noise, settings, asset_kind, airports))
-        attached = _attached(first.at, last.at, evidence) if subject is None else {}
-        by_duration = (last.at - first.at).total_seconds() >= settings.stay_min_s
+        attached = _attached(first.at, until, evidence) if subject is None else {}
+        by_duration = (until - first.at).total_seconds() >= settings.stay_min_s
         lat, lon = _centroid(cluster, track)
         segments.append(
             Segment(
                 kind=STAY if by_duration or attached else STOP,
                 subject=subject,
                 start=first.at,
-                end=last.at,
+                end=until,
                 points=len(cluster.members),
                 lat=lat,
                 lon=lon,
@@ -527,6 +552,7 @@ def _move(
     airports: Airports,
 ) -> Segment:
     start, end = track[prev.members[-1]], track[nxt.members[0]]
+    leaves = _until(prev, track, settings)  # the stay may hold through a silence; the move starts after
     between = [track[i] for i in range(prev.members[-1] + 1, nxt.members[0]) if i not in noise]
     path = [start, *between, end]
     distance = sum(distance_m(a.lat, a.lon, b.lat, b.lon) for a, b in pairwise(path))
@@ -540,7 +566,7 @@ def _move(
     )
     mode = _mode(
         distance,
-        (end.at - start.at).total_seconds(),
+        (end.at - leaves).total_seconds(),
         len(codes) == 2 and not between,
         settings,
         asset_kind,
@@ -548,7 +574,7 @@ def _move(
     return Segment(
         kind=MOVE,
         subject=subject,
-        start=start.at,
+        start=leaves,
         end=end.at,
         points=len(between),
         distance_m=distance,

@@ -239,15 +239,58 @@ def test_a_single_outlier_point_does_not_break_a_stay(
     assert data["noise_points"] == 1
 
 
-def test_same_place_with_a_short_gap_merges_and_a_long_gap_does_not(
+def test_a_silence_at_the_same_place_never_splits_a_stay(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    short = _dwell(DAY, "08:00", "08:30", HOME) + _dwell(DAY, "08:36", "09:00", HOME, seed=2)
-    _record(tmp_path, monkeypatch, short)
+    """The tracker sends nothing while the owner is still: a gap whose next point is back inside
+    the radius continues the stay, however long it was."""
+    quiet = _dwell(DAY, "10:00", "10:30", HOME) + _dwell(DAY, "10:45", "11:15", HOME, seed=2)
+    _record(tmp_path, monkeypatch, quiet)
     [stay] = _owner(_derive_json(capsys, "--day", DAY))
-    assert (stay["start"], stay["end"]) == (_utc(DAY, "08:00"), _utc(DAY, "09:00"))
+    assert stay["kind"] == "stay"
+    assert (stay["start"], stay["end"]) == (_utc(DAY, "10:00"), _utc(DAY, "11:15"))
+    assert "gap" not in _derive(capsys, "--day", DAY)
 
-    long = _dwell(DAY, "10:00", "10:30", HOME) + _dwell(DAY, "10:45", "11:15", HOME, seed=2)
+
+def test_fifteen_hours_at_home_with_eight_silences_is_one_stay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    silences = [
+        ("08:10", "08:40"),
+        ("09:00", "10:30"),
+        ("11:00", "11:15"),
+        ("12:00", "14:00"),
+        ("14:30", "15:00"),
+        ("16:00", "19:00"),
+        ("19:30", "20:00"),
+        ("21:00", "22:30"),
+    ]
+    drafts: list[dict[str, Any]] = []
+    cursor = "08:00"
+    for n, (quiet_from, quiet_until) in enumerate(silences):
+        drafts += _dwell(DAY, cursor, quiet_from, HOME, seed=n + 1)
+        cursor = quiet_until
+    drafts += _dwell(DAY, cursor, "23:00", HOME, seed=9)
+    _record(tmp_path, monkeypatch, drafts)
+    [stay] = _owner(_derive_json(capsys, "--day", DAY))
+    assert stay["kind"] == "stay"
+    assert (stay["start"], stay["end"]) == (_utc(DAY, "08:00"), _utc(DAY, "23:00"))
+    assert stay["points"] == len(drafts)
+    text = _derive(capsys, "--day", DAY)
+    assert "gap" not in text and text.count("stay") == 1
+
+
+def test_merge_gap_governs_an_excursion_outside_the_radius(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Out of the radius and back within `merge_gap_s`: one stay. Back later: two stays and a move."""
+    out = [_point(_utc(DAY, "10:33"), CAFE), _point(_utc(DAY, "10:34"), CAFE)]
+    brief = _dwell(DAY, "10:00", "10:30", HOME) + out + _dwell(DAY, "10:36", "11:00", HOME, seed=2)
+    _record(tmp_path, monkeypatch, brief)
+    [stay] = _owner(_derive_json(capsys, "--day", DAY))
+    assert (stay["start"], stay["end"]) == (_utc(DAY, "10:00"), _utc(DAY, "11:00"))
+
+    long = _dwell(DAY, "10:00", "10:30", HOME) + out + _dwell(DAY, "10:45", "11:15", HOME, seed=2)
     _record(tmp_path / "second", monkeypatch, long)
     kinds = [s["kind"] for s in _owner(_derive_json(capsys, "--day", DAY))]
     assert kinds == ["stay", "move", "stay"]
@@ -394,6 +437,49 @@ def test_overnight_stay_is_the_longest_stay_between_22_and_08(
     assert abs(night["stay"]["lat"] - HOME[0]) < 0.001
     text = _derive(capsys, "--day", DAY)
     assert "night" in text and "in transit" not in text
+
+
+def _evening_home() -> list[dict[str, Any]]:
+    """Two hours at the office, a walk home arriving 19:30, ten minutes of points there, then the
+    tracker falls silent for the night."""
+    return (
+        _dwell(DAY, "17:00", "19:00", OFFICE)
+        + _travel(DAY, "19:00", "19:30", OFFICE, HOME, steps=3)
+        + _dwell(DAY, "19:30", "19:40", HOME)
+    )
+
+
+def test_an_evening_at_home_with_no_points_until_morning_is_the_night(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    next_day = "2026-06-11"
+    _record(tmp_path, monkeypatch, _evening_home() + _dwell(next_day, "07:30", "08:30", HOME, seed=3))
+    data = _derive_json(capsys, "--day", DAY)
+    kinds = [s["kind"] for s in _owner(data)]
+    assert kinds == ["stay", "move", "stay"], "office, the walk, home: no gap row, no stop"
+    home = _owner(data)[-1]
+    assert home["start"] == _utc(DAY, "19:30") and home["end"] >= _utc(next_day, "07:58")
+    [night] = data["nights"]
+    assert night["in_transit"] is False and night["stay"]["start"] == _utc(DAY, "19:30")
+    text = _derive(capsys, "--day", DAY)
+    assert "gap" not in text and "in transit" not in text
+
+
+def test_the_last_stay_lasts_until_the_next_point_even_the_next_morning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The first point of the morning is already away from home and after the night window's end:
+    the stay still lasts until it, so the night is at home, not in transit."""
+    next_day = "2026-06-11"
+    _record(tmp_path, monkeypatch, _evening_home() + _dwell(next_day, "09:00", "10:00", OFFICE, seed=3))
+    data = _derive_json(capsys, "--day", DAY)
+    home = _owner(data)[-1]
+    assert home["kind"] == "stay"
+    assert (home["start"], home["end"]) == (_utc(DAY, "19:30"), _utc(next_day, "09:00"))
+    [night] = data["nights"]
+    assert night["in_transit"] is False and night["stay"]["start"] == _utc(DAY, "19:30")
+    text = _derive(capsys, "--day", DAY)
+    assert f"19:30{EN_DASH}09:00+1" in text and "in transit" not in text and next_day not in text
 
 
 def test_a_red_eye_night_is_in_transit(

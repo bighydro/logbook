@@ -103,6 +103,13 @@ cp -a ~/Logbook ~/Logbook.bak    # or wherever LOGBOOK_HOME points
 logbook migrate                  # same lines, new hashes; keeps the old files at logbook-0.1/
 ```
 
+0.5.0 corrects the units `apple-health` gave resting heart rate and HRV (RFC 0014). A record that imported a Health store with an earlier version carries those lines 60 and 1,000 times too large; put them right once:
+
+```bash
+logbook repair health-units --dry-run   # how many lines it would retract and re-emit
+logbook repair health-units             # per wrong line a corrected line and a retraction; nothing rewritten
+```
+
 ## What is in the folder
 
 ```
@@ -254,7 +261,7 @@ instant. A message with no `Message-ID` is keyed by the digest of its bytes and 
 `stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
 `stats --health` is one row per day from the health lines — hours asleep (the night that ends on that day, asleep
-stages only, the longest device), steps (per quarter hour the larger device, summed) and resting heart rate — and
+stages only — never in bed or awake — each device's spans unioned so a night written twice counts once, then the longest device, never a sum across devices), steps (per quarter hour the larger device, summed) and resting heart rate — and
 prints no device, zone or other field; `--json` gives the rows as `days`.
 
 | Source | Variables | What it logs |
@@ -390,7 +397,16 @@ it: a calendar event, a transcript, a note, a call, a message or a photo whose t
 Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
 flagged. A move is what lies between: its distance along the points, its duration, and a mode from the
 speed (walk, car, train, flight; flight also when a gap starts and ends near airports). The night of each
-day is the longest stay between 22:00 and 08:00; a night with none is in transit. An asset registered in
+day is the longest stay between 22:00 and 08:00; a night with none is in transit.
+
+A tracker such as Dawarich sends no points while you are still, so a silence is read as time at the place:
+a gap whose next point is back inside the stay's radius continues the stay however long it was, and a stay
+lasts until the tracker's next point when that point comes after a silence and lies within a short walk
+(1.2 km by default) — even when it is the next morning and already on your way out, so the night at home is
+seen. In `policy/stays.json`, `merge_gap_s` (600 s by default) governs an excursion, not a gap at the same
+place: step outside the radius and come back within it and the stay is one; come back later and it is two
+stays with a move between. A gap of `merge_gap_s` or more is a silence, and `walk_max_kmh` for `merge_gap_s`
+is the hop a silence may end with and still count as time at the place. An asset registered in
 `assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
 marked `aboard`.
 
