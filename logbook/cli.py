@@ -28,6 +28,7 @@ from . import (
     flights,
     ios_backup,
     ios_backup_crypto,
+    places,
     policy,
     stays,
 )
@@ -627,6 +628,40 @@ def cmd_assets(a: argparse.Namespace) -> None:
         return
     for asset in registry:
         print(_asset_row(asset))
+
+
+def cmd_places(a: argparse.Namespace) -> None:
+    """`places import-takeout <path> [--write]`: Google Maps' saved and starred places (the Takeout
+    `Maps (your places)/` and `Saved/` folders, or one file of them) proposed as entries of
+    <root>/places.json — a setting of the record, outside the chain — and written only with
+    `--write`, never changing an entry already there (`logbook/places.py`)."""
+    lb = Logbook.find()
+    try:
+        proposals = places.read(Path(a.path).expanduser())
+        report = places.merge(lb.root, proposals, write=a.write)
+    except FileNotFoundError as e:
+        print(f"places: no such file or directory: {e}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"places: {e}", file=sys.stderr)
+        sys.exit(2)
+    for p in report.new:
+        print(f"  {p.name:<40} {p.lat:.4f}, {p.lon:.4f}  {p.category}")
+    for p in report.existing:
+        print(f"  {p.name:<40} already in {places.PLACES_FILE}")
+    for p in report.without_coordinates:
+        print(f"  {p.name:<40} no coordinates in the export ({p.category})")
+    summary = [f"{_plural(len(report.new), 'place')} proposed"]
+    if report.existing:
+        summary.append(f"{len(report.existing)} already in {places.PLACES_FILE}")
+    if report.without_coordinates:
+        summary.append(f"{len(report.without_coordinates)} without coordinates")
+    if report.written:
+        print(f"wrote {_plural(len(report.new), 'place')} to {lb.root / places.PLACES_FILE}")
+    elif a.write:
+        print(f"{'; '.join(summary)}; nothing new to write")
+    else:
+        print(f"{'; '.join(summary)}; nothing written (add --write)")
 
 
 def _asset_row(asset: assets.Asset) -> str:
@@ -1965,6 +2000,14 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
     v.add_argument("--registration", help="call sign or plate, free text")
     v.set_defaults(fn=cmd_assets)
+    s = sub.add_parser("places", help="the named places derive stays uses (places.json)")
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser(
+        "import-takeout", help="propose entries from Google Maps' saved and starred places (Takeout)"
+    )
+    v.add_argument("path", help="Takeout/, `Maps (your places)/`, `Saved/`, or one file of them")
+    v.add_argument("--write", action="store_true", help="add the new entries to places.json")
+    v.set_defaults(fn=cmd_places)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
