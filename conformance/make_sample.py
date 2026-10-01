@@ -6,7 +6,7 @@ Three lines carry values that RFC 8785 lays out differently from Python's json.d
 cannot reproduce the head.
 
 The first sixteen lines are the v0.2 sample and never change. The lines after them, all on the
-Sunday, carry one payload of each profile added since (RFCs 0011 to 0023, and a location with a
+Sunday, carry one payload of each profile added since (RFCs 0011 to 0024, and a location with a
 `subject`), shaped as their RFCs describe, so a verifier meets every schema the reference writes.
 Nothing in it is real: the person, the boat, the flight, the book and the mail are made up."""
 
@@ -450,6 +450,27 @@ rows = [
             "policy": {"file": "policy/crossing.json", "max_tier": 2},
             "logbook_head": "53d39fdad121ce8e448221bbdaa9c86396c16347d050bf630035d6f1d37088e6",
             "package_sha256": "9afdd1bd5f7e4c3b2a1908f7e6d5c4b3a291807f6e5d4c3b2a1908f7e6d5c4b3",
+        },
+    ),
+    (  # keeper/v1 (RFC 0024): the first photo marked a memory; `at` is the photo's, so the line is
+        # written after the others and still belongs to the 1st (chain order is not time order)
+        "2026-03-01T09:12:00Z",
+        None,
+        "keeper-inference",
+        "keeper",
+        1,
+        {
+            "schema": "keeper/v1",
+            "raw_id": "00000000-0000-4000-8000-000000000004:memory",
+            "photo": {
+                "line": "00000000-0000-4000-8000-000000000004",
+                "asset_id": "IMG_0001",
+                "library": "sim-camera",
+                "file_name": "IMG_0001.jpg",
+            },
+            "at": "2026-03-01T09:12:00Z",
+            "lane": "memory",
+            "source": "sim-camera",
         },
     ),
 ]
