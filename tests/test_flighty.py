@@ -414,7 +414,7 @@ def _store(folder: Path) -> Path:
                 "2026-09-28T18:02:00Z",
                 None,
                 None,
-                "HB-JLT",
+                "ZZ-ABC",
                 "Airbus A321",
                 "al-lx",
                 0,

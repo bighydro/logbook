@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "rfcs" / "0014-health-sample-v1.md"
 TZ = "Europe/Oslo"
 APPLE_EPOCH = 978_307_200
-PROFILE = "46567466"
+PROFILE = "10000002"
 
 HEALTH_DDL = """
 CREATE TABLE Z_PRIMARYKEY (Z_ENT INTEGER PRIMARY KEY, Z_NAME VARCHAR, Z_SUPER INTEGER, Z_MAX INTEGER);
@@ -354,11 +354,11 @@ def test_either_store_brings_its_partner_and_a_store_alone_gives_only_its_own(tm
 def test_a_folder_reads_every_profile_in_it(tmp_path):
     folder = tmp_path / "coredata"
     _stores(folder)
-    _health_store(folder, "46567465")
-    _measure_store(folder, "46567465")
+    _health_store(folder, "10000001")
+    _measure_store(folder, "10000001")
     lines = list(withings.run(folder))
     assert len(lines) == 2 * LINES
-    assert {line["payload"]["extra"]["profile"] for line in lines} == {PROFILE, "46567465"}
+    assert {line["payload"]["extra"]["profile"] for line in lines} == {PROFILE, "10000001"}
     assert len({line["payload"]["raw_id"] for line in lines}) == 2 * LINES  # the profile is in the key
 
 

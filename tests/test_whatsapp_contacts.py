@@ -114,8 +114,8 @@ CONTACTS = [
         "Nordmann AS",
         None,
         None,
-        "22 33 44 55",
-        "4722334455@s.whatsapp.net",
+        "90 00 00 55",
+        "4790000055@s.whatsapp.net",
         COMPANY_LID,
         "h5",
         None,
@@ -416,7 +416,7 @@ def test_run_phone_without_country_code_is_skipped_without_a_dial_prefix(tmp_pat
 def test_run_phone_without_country_code_takes_logbook_dial_prefix(tmp_path, monkeypatch):
     monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "47")
     lines = _by_lid(list(whatsapp_contacts.run(_contacts(tmp_path))))
-    assert lines[f"{COMPANY_LID}@lid"]["payload"]["alias_of"] == {"kind": "phone", "value": "+4722334455"}
+    assert lines[f"{COMPANY_LID}@lid"]["payload"]["alias_of"] == {"kind": "phone", "value": "+4790000055"}
     assert lines[f"{OLA_LID}@lid"]["payload"]["alias_of"]["value"] == "+4790000001"  # untouched
 
 

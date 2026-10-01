@@ -102,9 +102,18 @@ def cmd_init(a: argparse.Namespace) -> None:
         print(f"refusing to init: {e}", file=sys.stderr)
         sys.exit(2)
     print(
-        f"created {lb.root}\ntimezone: {timezone_name}{hint}\n"
-        f'Drop any export into {lb.root / "inbox"}, or: logbook add "what happened"'
+        f"created {_under_home(lb.root)}\ntimezone: {timezone_name}{hint}\n"
+        f'Drop any export into {_under_home(lb.root / "inbox")}, or: logbook add "what happened"'
     )
+
+
+def _under_home(path: Path) -> str:
+    """`~/Logbook` for a path inside the home directory, else the path as given: what is printed
+    (and recorded in a demo) never spells the user's name."""
+    try:
+        return str(PurePath("~") / path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None) -> bool:
