@@ -227,7 +227,9 @@ def test_the_store_is_never_written(tmp_path):
 
 
 def test_configure_defaults_to_the_macs_own_store_and_reads_the_override(monkeypatch, tmp_path):
+    # Path.home() and expanduser() read HOME on POSIX and USERPROFILE on Windows; pin both
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     assert podcasts.configure({}).db == tmp_path.joinpath(*podcasts.DEFAULT_DB)
     assert podcasts.configure({podcasts.DB_ENV: "~/copy.sqlite"}).db == tmp_path / "copy.sqlite"
     assert podcasts.ENV == ("LOGBOOK_PODCASTS_DB",)
