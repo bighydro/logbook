@@ -472,6 +472,20 @@ class Index:
             return None
         return str(found[0]), str(found[1])
 
+    def source_days(self, first: str, last: str) -> tuple[int, dict[str, int]]:
+        """For `days`: how many local days in [first, last] have a line, and per source on how many
+        of them it has one; retractions aside (a retraction is a mark on another line, not a source
+        speaking). Two aggregates on the `day_local` index; nothing is read from the files."""
+        where = "day_local BETWEEN ? AND ? AND kind != 'retraction'"
+        (logged,) = self.db.execute(
+            f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", (first, last)
+        ).fetchone()
+        found = self.db.execute(
+            f"SELECT source, count(DISTINCT day_local) FROM lines WHERE {where} GROUP BY source",
+            (first, last),
+        ).fetchall()
+        return int(logged), {str(source): int(n) for source, n in found}
+
     # -- counting: `stats`; one SELECT per table, nothing read from the files ----------------------
     def totals(self) -> tuple[int, str | None, str | None]:
         """(lines, first `at`, last `at`); the stamps are None on an empty record."""

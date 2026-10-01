@@ -81,11 +81,29 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
     rd = reading.read(lb, before, day, airports)
+    with lb.index() as idx:
+        found = idx.by_kind(health.KIND, before, day)
+    return of_reading(rd, day, health_rows(found, rd).get(day))
+
+
+def of_reading(
+    rd: Reading, day: str, health_row: dict[str, Any] | None, lines: Sequence[Line] | None = None
+) -> dict[str, Any]:
+    """The Day of `day` from a reading that holds the day before it and the day, its night after
+    inside (as `reading.read` reads a window): what `read` builds, for a caller that read a window
+    once and asks for each day in it (`days`). `lines` are the day's lines when the caller has
+    bucketed the reading's by day already, else they are picked from the reading's; `health_row` is
+    the day's row of `health_rows`, None when the day has none."""
+    d = parse_day(day)
+    before = (d - timedelta(days=1)).isoformat()
     tz = rd.tz
     day_start = datetime.combine(d, time.min, tzinfo=tz)
     day_end = day_start + timedelta(days=1)
-    lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and day_start <= at < day_end]
-    lines.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
+    if lines is None:
+        lines = [
+            line for line in rd.lines if (at := stays.instant(line.get("at"))) and day_start <= at < day_end
+        ]
+    lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
     folded, stands_for = events.fold(lines, flight_lines.Airlines.load())  # one row per calendar entry
     owner = rd.owner
     segments = [s for s in rd.segments if s.subject is None and s.start < day_end and s.end > day_start]
@@ -118,7 +136,7 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
         "timeline": timeline,
         "flights": flights,
         "unplaced": _unplaced(folded, stands_for, entries, tz),
-        "health": _health(lb, before, day, rd),
+        "health": health_row,
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
 
@@ -571,16 +589,12 @@ def _unplaced(
 # -- health and sources ----------------------------------------------------------------------------------
 
 
-def _health(lb: Logbook, before: str, day: str, rd: Reading) -> dict[str, Any] | None:
-    """The day's row of `health.summary`, from the health lines of the day and the day before (the
-    night's sleep starts then), through the index; None when the day has none."""
-    with lb.index() as idx:
-        found = idx.by_kind(health.KIND, before, day)
+def health_rows(found: Iterable[Line], rd: Reading) -> dict[str, dict[str, Any]]:
+    """By day, the rows of `health.summary` over `found` — the health lines of the days asked for and
+    the day before the first (the night's sleep starts then), from the index — with the reading's
+    retractions, so a retracted line is out. A day with no health lines has no row."""
     rows = health.summary([*found, *rd.retracted.values()], str(rd.tz))
-    row = next((r for r in rows if r["day"] == day), None)
-    if row is None:
-        return None
-    return {k: v for k, v in row.items() if k != "day"}
+    return {str(row["day"]): {k: v for k, v in row.items() if k != "day"} for row in rows}
 
 
 def _sources(lines: Sequence[Line]) -> list[dict[str, Any]]:
@@ -630,7 +644,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             span = _span_text(item["at"], item["end"], tz)
             yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{_sources_text(item)}")
     yield ""
-    yield _row("health", _health_text(data["health"]))
+    yield _row("health", health_text(data["health"]))
     if data["sources"]:
         yield _row("sources", DOT.join(_source_text(s, tz) for s in data["sources"]))
     else:
@@ -677,9 +691,9 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
         parts = [_duration_text(entry["within_day"]["duration_s"])]
         if entry["gap"]:
             parts.append("no points")
-            parts.append(_distance_text(entry["distance_m"] or 0))
+            parts.append(distance_text(entry["distance_m"] or 0))
         else:
-            parts.insert(0, _distance_text(entry["distance_m"] or 0))
+            parts.insert(0, distance_text(entry["distance_m"] or 0))
             parts.append(entry["mode"] or "mode unknown")
             if entry["airports"]:
                 parts.append(f"{entry['airports'][0]} {ARROW} {entry['airports'][1]}")
@@ -729,10 +743,12 @@ def _sources_text(item: Mapping[str, Any]) -> str:
     return f"{DOT}×{len(sources)} sources" if len(sources) > 1 else ""
 
 
-def _counts_text(attached: dict[str, Any] | None) -> str:
+def counts(attached: Mapping[str, Any] | None) -> list[tuple[int, str]]:
+    """How many of each an entry has attached, as (count, noun), the empty kinds out; nothing for
+    a row with no attachments (a flight, an asset's inner row)."""
     if not attached:
-        return ""
-    counts = [
+        return []
+    found = [
         (len(attached["events"]), "event"),
         (len(attached["transcripts"]), "transcript"),
         (len(attached["notes"]), "note"),
@@ -742,7 +758,11 @@ def _counts_text(attached: dict[str, Any] | None) -> str:
         (attached["photos"]["count"], "photo"),
         (len(attached["keepers"]), "keeper"),
     ]
-    return ", ".join(_plural(n, noun) for n, noun in counts if n)
+    return [(n, noun) for n, noun in found if n]
+
+
+def _counts_text(attached: dict[str, Any] | None) -> str:
+    return ", ".join(_plural(n, noun) for n, noun in counts(attached))
 
 
 def _companion_text(c: dict[str, Any]) -> str:
@@ -759,7 +779,7 @@ def _call_text(c: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def _health_text(row: dict[str, Any] | None) -> str:
+def health_text(row: dict[str, Any] | None) -> str:
     if row is None:
         return "no lines"
     parts = []
@@ -801,7 +821,7 @@ def _duration_text(seconds: int) -> str:
     return f"{hours} h" if not minutes else f"{hours} h {minutes} min"
 
 
-def _distance_text(metres: float) -> str:
+def distance_text(metres: float) -> str:
     if metres < 1000:
         return f"{round(metres)} m"
     km = metres / 1000
