@@ -1,5 +1,5 @@
 """logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · verify · doctor · export · index · migrate · assets · sources. Three
+places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources. Three
 verbs, eighteen rare."""
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from . import (
     pages,
     places,
     policy,
+    promises,
     reading,
     repair,
     rollup,
@@ -69,6 +70,7 @@ from .store import (
     _dedupe_key,
     now_utc,
     retractions,
+    utc,
 )
 
 _LOCALTIME = "/etc/localtime"
@@ -921,6 +923,62 @@ def cmd_keepers(a: argparse.Namespace) -> None:
         photo = r["photo"] if isinstance(r["photo"], dict) else {}
         name = photo.get("file_name") or photo.get("asset_id") or "?"
         print(f"  {r['day']}  {_clock(r['at'], zone)}  {r['lane']:<6} {r['source']:<10} {name}")
+
+
+def cmd_promises(a: argparse.Namespace) -> None:
+    """`promises [--since DAY] [--open] [--json]`: the commitments the transcript and note lines
+    suggest, found by rules (`logbook.promises`), printed as proposals and never as facts; `promises
+    done <id>` appends the `task/v1` line (RFC 0016) that marks one done, so `--open` hides it.
+    Nothing else is written."""
+    since = a.since
+    if since is not None:
+        try:
+            parse_day(since)
+        except ValueError as e:
+            print(f"promises: {e}", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    if a.verb == "done":
+        _promises_done(lb, a)
+        return
+    report = promises.extract(lb, since)
+    found = [p for p in report.proposals if not a.open or p.status == "open"]
+    if a.json:
+        out = {
+            "since": report.since,
+            "open_only": bool(a.open),
+            "extractor": report.extractor,
+            "proposals": [p.to_json() for p in found],
+            "skipped": report.skipped,
+        }
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    for text in promises.rows(report, found, lambda at: _clock(at, zone), open_only=bool(a.open)):
+        print(text)
+
+
+def _promises_done(lb: Logbook, a: argparse.Namespace) -> None:
+    report = promises.extract(lb)
+    found = next((p for p in report.proposals if p.id == a.id), None)
+    if found is None:
+        print(f"promises: no proposal {a.id}; `logbook promises` lists them with their ids", file=sys.stderr)
+        sys.exit(2)
+    if found.closed_by:
+        print(f"already done: \u201c{found.match.quote}\u201d (task line {found.closed_by})")
+        return
+    at = utc(now_utc())
+    line = lb.append(
+        at=at,
+        source="manual",
+        kind=promises.TASK,
+        tier=promises.TASK_TIER,
+        payload=promises.draft_done(found, at, report.extractor, a.note),
+    )
+    print(
+        f"#{line['seq']} {line['at']}  done: \u201c{found.match.quote}\u201d"
+        f"  ({found.day}, task/v1 line {line['id']})"
+    )
 
 
 def cmd_assets(a: argparse.Namespace) -> None:
@@ -2856,6 +2914,19 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
     s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
     s.set_defaults(fn=cmd_keepers)
+    s = sub.add_parser(
+        "promises",
+        help="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>` closes one",
+    )
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="only lines from this local day on")
+    s.add_argument("--open", action="store_true", help="hide the ones a `promises done` closed")
+    s.add_argument("--json", action="store_true", help="the report as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_promises, verb=None)
+    verbs = s.add_subparsers(dest="verb", required=False)
+    v = verbs.add_parser("done", help="mark one proposal done: appends a task/v1 line (RFC 0016)")
+    v.add_argument("id", help="the proposal's id, as `promises` prints it")
+    v.add_argument("--note", metavar="TEXT", help="your words on how it was kept, kept in the task's notes")
+    v.set_defaults(fn=cmd_promises)
     s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
     s.add_argument(
         "--days", type=int, default=30, metavar="N", help="local days from 2026-06-01 (default 30)"
