@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import zlib
 from datetime import datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -87,7 +88,7 @@ def dwell(
 ) -> list[dict[str, Any]]:
     """Points every `every_min` minutes from `start` to `end` local, jittered around `where`.
     `end` may be `24:00` for midnight at the end of the day."""
-    rng = random.Random(seed if seed is not None else hash((day, start, where, subject)) & 0xFFFF)
+    rng = random.Random(seed if seed is not None else zlib.crc32(repr((day, start, where, subject)).encode()))
     t0 = _local(day, start)
     t1 = _local(day, end)
     out = []
