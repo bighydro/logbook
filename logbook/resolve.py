@@ -11,7 +11,7 @@ Nothing is written and nothing outside the record is consulted."""
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from .chain import Line
 from .store import RETRACTION, retractions
@@ -46,6 +46,35 @@ def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
         label = walk(ref, last)[-1]["payload"].get("label")
         if isinstance(label, str) and label:
             found[ref] = label
+    return found
+
+
+class Identity(NamedTuple):
+    """What a ref resolves to: the entity the deciding line names (its id and type, `person`,
+    `place` or `company`), when it names one, and the label it carries."""
+
+    entity: str | None
+    type: str | None
+    label: str | None
+
+
+def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
+    """(ref.kind, ref.value) → Identity for every ref with a resolution standing. The deciding
+    line is the last one of the alias walk (RFC 0006 rule 6): its `entity` when it has one (a walk
+    that ends on an alias line names no entity), and its `label` either way, as `labels_from`."""
+    last = standing(lines)
+    found: dict[Ref, Identity] = {}
+    for ref in last:
+        payload = walk(ref, last)[-1].get("payload") or {}
+        entity = payload.get("entity")
+        label = payload.get("label")
+        entity_id = entity.get("id") if isinstance(entity, dict) else None
+        entity_type = entity.get("type") if isinstance(entity, dict) else None
+        found[ref] = Identity(
+            entity_id if isinstance(entity_id, str) and entity_id else None,
+            entity_type if isinstance(entity_type, str) and entity_type else None,
+            label if isinstance(label, str) and label else None,
+        )
     return found
 
 

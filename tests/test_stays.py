@@ -512,7 +512,8 @@ def test_an_empty_day_says_so_and_a_bad_date_is_refused(
     text = _derive(capsys, "--day", DAY)
     assert "no location" in text
     data = _derive_json(capsys, "--day", DAY)
-    assert data["segments"] == [] and data["nights"] == [{"day": DAY, "stay": None, "in_transit": True}]
+    assert data["segments"] == []
+    assert data["nights"] == [{"day": DAY, "stay": None, "in_transit": True, "home": False}]
     with pytest.raises(SystemExit) as e:
         cli.main(["derive", "stays", "--day", "yesterday"])
     assert e.value.code == 2
