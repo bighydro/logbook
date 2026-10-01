@@ -104,6 +104,12 @@ BUILT_IN = (
     "beeper",
     "line",
     "twitter",
+    "apple_books",
+    "voice_memos",
+    "apple_photos",
+    "withings",
+    "myfitnesspal",
+    "sbb",
 )
 
 
@@ -179,6 +185,8 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "wallet": "ios-wallet",
     "wispr": "wispr-flow",
     "reminders": "apple-reminders",
+    "books": "apple-books",
+    "photos": "apple-photos",
 }
 
 

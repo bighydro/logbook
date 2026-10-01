@@ -48,10 +48,28 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   Line.sqlite
     twitter             AppDomainGroup-group.com.atebits.Tweetie2     com.atebits.tweetie.databases/v1/*/
                                                                   *-dmv2.db (one store per account)
+    apple-books         AppDomain-com.apple.iBooks                   Documents/storeFiles/AEAnnotation*.sqlite
+                                                                  (+ Documents/BKLibrary/BKLibrary*.sqlite
+                                                                  beside it: the titles)
+    voice-memos         AppDomainGroup-group.com.apple.VoiceMemos.shared  Recordings/CloudRecordings.db,
+                                                                  the .m4a/.qta files under Recordings/
+    apple-photos        CameraRollDomain                              Media/PhotoData/Photos.sqlite (the
+                                                                  library's metadata; no image is copied)
+    withings            AppDomain-com.withings.wiScaleNG              Library/Application Support/coredata/
+                                                                  *_WTHealth.sqlite and *_Measure.sqlite
+                                                                  (every profile; the adapter runs on the
+                                                                  folder)
+    myfitnesspal        AppDomain-com.myfitnesspal.mfp                Documents/maindb.sqlite
+    sbb                 AppDomainGroup-group.ch.sbb.SBBMobile         SbbMobile.db (+ the app container's
+                                                                  Documents/ch.sbb.coredata.pasttrips.sqlite
+                                                                  beside it)
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
 beside it like its -wal/-shm siblings, and the adapter runs on the copies' folder, not the store.
+A source's `companions` — other files, by path or glob and from any domain — are copied beside the
+store the same way, with their own -wal/-shm, so an adapter finds beside the copy what it finds
+beside the store on the phone (Books' library next to its annotations).
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
@@ -114,6 +132,13 @@ LINE = "AppDomainGroup-group.com.linecorp.line"
 LINE_STORE = "Library/Application Support/PrivateStore/P_*"
 TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 HEALTH = "HealthDomain"
+BOOKS = "AppDomain-com.apple.iBooks"
+VOICE_MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
+CAMERA_ROLL = "CameraRollDomain"
+WITHINGS = "AppDomain-com.withings.wiScaleNG"
+MYFITNESSPAL = "AppDomain-com.myfitnesspal.mfp"
+SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
+SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
@@ -140,6 +165,13 @@ class Source:
     adapter: bool = True  # False: copied out, nothing runs on it; `note` says why it is there
     note: str = "no adapter yet"
     files: str | None = None  # a folder source: `relative_path` is a folder, this the file names under it
+    # (domain, path or glob) of files copied beside the store under their own names, with their -wal/-shm:
+    # a library the adapter looks up beside the store, a store from another container (`fnmatch`, as
+    # `relative_path`). A plain path names one file.
+    companions: tuple[tuple[str, str], ...] = ()
+    media_suffixes: tuple[
+        str, ...
+    ] = ()  # when set, only media whose suffix (lower-case) is one of these is copied
 
     @property
     def store_name(self) -> str:
@@ -190,6 +222,33 @@ SOURCES: tuple[Source, ...] = (
     ),
     Source("line", LINE, LINE_STORE + "/Messages/Line.sqlite"),
     Source("twitter", TWITTER, "com.atebits.tweetie.databases/v1/*/*-dmv2.db"),
+    Source(  # `apple-books` (RFC 0022); the library that names the books is copied beside the store
+        "apple-books",
+        BOOKS,
+        "Documents/storeFiles/AEAnnotation*.sqlite",
+        companions=((BOOKS, "Documents/BKLibrary/BKLibrary*.sqlite"),),
+    ),
+    Source(  # `voice-memos` (RFC 0023); the audio beside the store on the phone lands under Recordings/
+        "voice-memos",
+        VOICE_MEMOS,
+        "Recordings/CloudRecordings.db",
+        media=(VOICE_MEMOS, "Recordings"),
+        media_suffixes=(".m4a", ".qta"),
+    ),
+    Source("apple-photos", CAMERA_ROLL, "Media/PhotoData/Photos.sqlite"),  # the library, not the pixels
+    Source(  # `withings` (RFC 0014): every profile's WTHealth and Measure stores, read as one folder
+        "withings",
+        WITHINGS,
+        "Library/Application Support/coredata/*_WTHealth.sqlite",
+        companions=((WITHINGS, "Library/Application Support/coredata/*_Measure.sqlite"),),
+    ),
+    Source("myfitnesspal", MYFITNESSPAL, "Documents/maindb.sqlite"),  # `myfitnesspal` (RFC 0014)
+    Source(  # `sbb` (RFC 0020): the tickets, with the past journeys from the app's own container beside them
+        "sbb",
+        SBB,
+        "SbbMobile.db",
+        companions=((SBB_APP, "Documents/ch.sbb.coredata.pasttrips.sqlite"),),
+    ),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
@@ -473,10 +532,10 @@ class Copy:
 @dataclass
 class Plan:
     """What one source would import: its store (None when the backup has no row for it), the
-    store's siblings — its -wal/-shm, and for a pattern source the other stores that matched,
-    with theirs — and its media files. `found` is false when the row is there but the bytes
-    are not (`listed`). A folder source (`Source.files`) has no store: its files are `media`, and
-    it is listed and found when at least one of them is."""
+    store's siblings — its -wal/-shm, for a pattern source the other stores that matched, and the
+    source's companions, each with theirs — and its media files. `found` is false when the row is
+    there but the bytes are not (`listed`). A folder source (`Source.files`) has no store: its files
+    are `media`, and it is listed and found when at least one of them is."""
 
     source: Source
     store: BackupFile | None
@@ -530,8 +589,22 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
                         sibling = manifest.file(s.domain, each.relative_path + suffix)
                         if sibling is not None:
                             p.siblings.append(sibling)
+            for domain, glob in s.companions:
+                for other in manifest.files_matching(domain, glob):
+                    if other.relative_path.endswith(SIBLINGS):
+                        continue
+                    p.siblings.append(other)
+                    for suffix in SIBLINGS:
+                        sibling = manifest.file(domain, other.relative_path + suffix)
+                        if sibling is not None:
+                            p.siblings.append(sibling)
             if s.media is not None:
-                p.media.extend(manifest.files_under(*s.media))
+                suffixes = s.media_suffixes
+                p.media.extend(
+                    f
+                    for f in manifest.files_under(*s.media)
+                    if not suffixes or PurePosixPath(f.relative_path).suffix.lower() in suffixes
+                )
         plans.append(p)
     return plans
 
