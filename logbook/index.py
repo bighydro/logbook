@@ -1,19 +1,23 @@
 """index.sqlite — a disposable locator for the log (ADR 0001, ADR 0007).
 
 The files are the record. This is a cache of where every line is (file, byte offset) and the few
-fields readers filter or count on, so `show`, `export --day`, `stats` and dedupe do not parse the
-whole log. Lines are always read back from the files; nothing but counts (`stats`) is ever served
-from here. It records the chain head, seq and timezone it was built at; a reader that finds it
-missing, unreadable, or built at another head or timezone rebuilds it from the files. `verify`
-never opens it. Deleting it loses nothing."""
+fields readers filter, count or cluster on, so `show`, `export --day`, `stats` and dedupe do not
+parse the whole log. A line is read back from the files whenever a reader needs its payload;
+what is served from here alone is counts (`stats`) and the columns of a point a clustering needs
+and nothing else — `subject`, `lat`, `lon` of a location line, `end` of an event or a note — so
+`places propose` clusters two years of the owner's track without opening a month file
+(`locations`, `evidence`). It records the chain head, seq and timezone it was built at; a reader
+that finds it missing, unreadable, or built at another head, timezone or schema rebuilds it from
+the files. `verify` never opens it. Deleting it loses nothing."""
 
 from __future__ import annotations
 
 import contextlib
+import math
 import sqlite3
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -25,8 +29,10 @@ if TYPE_CHECKING:
     from .store import Logbook
 
 FILE_NAME = "index.sqlite"
-SCHEMA_VERSION = "4"  # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too;
-# 4: subject (ADR 0018), for `assets status`
+# 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too; 4: subject
+# (ADR 0018), for `assets status`; 5: lat, lon and end, the columns `places propose` clusters from,
+# and the (kind, day_local) index that cuts a window
+SCHEMA_VERSION = "5"
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -35,17 +41,34 @@ SCHEMA = (
     " seq INTEGER PRIMARY KEY, id TEXT NOT NULL, at TEXT NOT NULL, day_local TEXT NOT NULL,"
     " kind TEXT NOT NULL, source TEXT NOT NULL, tier INTEGER NOT NULL, raw_id TEXT,"
     " file TEXT NOT NULL, offset INTEGER NOT NULL, supersedes TEXT, entity TEXT, media TEXT,"
-    " subject TEXT)",
+    " subject TEXT, lat REAL, lon REAL, end TEXT)",
     "CREATE INDEX lines_day_local ON lines (day_local)",
     "CREATE INDEX lines_source_raw_id ON lines (source, raw_id)",
     "CREATE INDEX lines_kind_at ON lines (kind, at)",
     "CREATE INDEX lines_subject_at ON lines (subject, at)",
+    "CREATE INDEX lines_kind_day_local ON lines (kind, day_local)",
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
-INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
 Row = tuple[
-    int, str, str, str, str, str, int, str | None, str, int, str | None, str | None, str | None, str | None
+    int,
+    str,
+    str,
+    str,
+    str,
+    str,
+    int,
+    str | None,
+    str,
+    int,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    float | None,
+    float | None,
+    str | None,
 ]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
 
@@ -62,6 +85,29 @@ class Place(NamedTuple):
     offset: int
 
 
+class LocationRow(NamedTuple):
+    """What a clustering needs of one location line, served from the index alone (`locations`):
+    `subject` is None for the owner; `lat` and `lon` are the payload's numbers."""
+
+    seq: int
+    id: str
+    at: str
+    subject: str | None
+    lat: float
+    lon: float
+
+
+class EvidenceRow(NamedTuple):
+    """What a clustering needs of a line that can promote a stay (`evidence`): its kind, its
+    instant and its `end`, None when the line has none."""
+
+    seq: int
+    id: str
+    kind: str
+    at: str
+    end: str | None
+
+
 # Open connections per index file, in this process. Windows refuses to delete a file that has an
 # open handle and Unix does not; `discard` consults this so the refusal is the same everywhere.
 _open: Counter[Path] = Counter()
@@ -75,9 +121,12 @@ def local_date(at: str, tz: str) -> str:
 
 def row(line: Line, tz: str, file: str, offset: int) -> Row:
     """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
-    line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), the digest of the
-    one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
-    SPEC §1.1), and the `subject` whose position a location line is (RFC 0001, ADR 0018)."""
+    line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
+    the one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
+    SPEC §1.1). The columns a clustering reads are the payload's `subject` (RFC 0001, ADR 0018; absent, empty
+    or not a string is the owner, NULL), its `lat` and `lon` when both are finite numbers (a bool
+    or a string is not one, as `stays.derive` reads them, so a line without a point has NULL), and
+    the line's `end`."""
     payload = line.get("payload") or {}
     raw_id = payload.get("raw_id")
     media = (
@@ -85,6 +134,9 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
         or _field(payload.get("content"), "sha256")
         or _field(_field(payload.get("extra"), "media"), "sha256")
     )
+    lat, lon = _coordinate(payload.get("lat")), _coordinate(payload.get("lon"))
+    if lat is None or lon is None:
+        lat = lon = None
     return (
         int(line["seq"]),
         str(line["id"]),
@@ -100,11 +152,20 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
         _string(_field(payload.get("entity"), "id")),
         _string(media),
         _string(payload.get("subject")),
+        lat,
+        lon,
+        _string(line.get("end")),
     )
 
 
 def _field(obj: object, key: str) -> object:
     return obj.get(key) if isinstance(obj, dict) else None
+
+
+def _coordinate(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
+        return None
+    return float(value)
 
 
 def _string(value: object) -> str | None:
@@ -305,6 +366,59 @@ class Index:
             "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
             " ORDER BY seq",
             (kind, first_day or "", last_day or "9999-12-31"),
+        ).fetchall()
+        return self._read(found)
+
+    def locations(self, first_day: str, last_day: str, subjects: Sequence[str] = ()) -> list[LocationRow]:
+        """The location points of the owner (no subject) and of `subjects`, for every location
+        line whose local day is in [first_day, last_day] and whose payload has a point, ordered
+        by `at` then seq (as text; a caller that compares instants sorts again). Served from the
+        index's own columns: nothing is read from the files, whatever the range. Retracted lines
+        are among them; `superseded("retraction")` says which."""
+        wanted = [
+            "subject IS NULL",
+            *(["subject IN (" + ", ".join("?" * len(subjects)) + ")"] if subjects else []),
+        ]
+        found = self.db.execute(
+            "SELECT seq, id, at, subject, lat, lon FROM lines"
+            " WHERE kind = 'location' AND day_local BETWEEN ? AND ? AND lat IS NOT NULL AND lon IS NOT NULL"
+            f" AND ({' OR '.join(wanted)}) ORDER BY at, seq",
+            (first_day, last_day, *subjects),
+        ).fetchall()
+        return [
+            LocationRow(int(seq), str(id_), str(at), None if subject is None else str(subject), lat, lon)
+            for seq, id_, at, subject, lat, lon in found
+        ]
+
+    def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
+        """Every line of one of `kinds` whose local day is in [first_day, last_day], with its `end`,
+        ordered by `at` then seq. Served from the index's own columns; nothing is read from the
+        files. Retracted lines are among them."""
+        found = self.db.execute(
+            "SELECT seq, id, kind, at, end FROM lines"
+            f" WHERE kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ? ORDER BY at, seq",
+            (*kinds, first_day, last_day),
+        ).fetchall()
+        return [
+            EvidenceRow(int(seq), str(id_), str(kind), str(at), None if end is None else str(end))
+            for seq, id_, kind, at, end in found
+        ]
+
+    def of_source(
+        self, kind: str, source: str, first_day: str, last_day: str, raw_id_prefix: str | None = None
+    ) -> list[Line]:
+        """Every line of one kind and source whose local day is in [first_day, last_day], in chain
+        order, read from the files; with `raw_id_prefix`, only those whose `raw_id` starts with it
+        (the (source, raw_id) index serves the cut). For the few lines a reader needs whole among
+        a kind it otherwise clusters from the index: the Google Timeline visits."""
+        cut, args = "", []
+        if raw_id_prefix is not None:
+            cut = " AND raw_id >= ? AND raw_id < ?"
+            args = [raw_id_prefix, raw_id_prefix[:-1] + chr(ord(raw_id_prefix[-1]) + 1)]
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE source = ? AND kind = ? AND day_local BETWEEN ? AND ?"
+            f"{cut} ORDER BY seq",
+            (source, kind, first_day, last_day, *args),
         ).fetchall()
         return self._read(found)
 

@@ -2069,14 +2069,16 @@ def _name_place(lb: Logbook, place: places.Place) -> Line:
 
 
 def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
+    """The owner's unnamed stays of the window, from the index alone (`reading.owner_track`): the
+    window cut in the query, the points and the evidence its own columns, no month file opened."""
     first, last = _reader_days(lb, a.since, a.until)
-    read = reading.read(lb, first, last)
+    read = reading.owner_track(lb, first, last)
     unnamed = [
         places.Stay(s.id, s.start, s.end, s.lat, s.lon, s.aboard, s.first_line, s.last_line, s.points)
-        for s in read.owner_stays
+        for s in read.stays
         if s.place is None and s.lat is not None and s.lon is not None
     ]
-    proposals = places.propose(unnamed, read.places, places.timeline_visits(read.lines))
+    proposals = places.propose(unnamed, read.places, read.timeline_visits)
     if a.top is not None:
         proposals = proposals[: a.top]
     if a.json:

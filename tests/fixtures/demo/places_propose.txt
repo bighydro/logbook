@@ -1,0 +1,23 @@
+2026-06-01 – 2026-06-30: 16 unnamed places, by hours
+  1.   58.5 h · 47.3769,8.5417 · 3 stays · 1400 km from Marina   stay:owner:20260608T0830Z@47.3769,8.5417
+  2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard nordlys · 103 km from Marina   stay:owner:20260617T1200Z@59.0500,10.0300
+      suggested: aboard nordlys
+  3.   40.0 h · 59.8500,10.6000 · 2 stays · aboard nordlys · 9.7 km from Marina   stay:owner:20260615T1100Z@59.8500,10.6000
+      suggested: aboard nordlys
+  4.   33.1 h · 55.6850,12.5500 · 2 stays · 481 km from Marina   stay:owner:20260625T1630Z@55.6850,12.5500
+  5.   17.9 h · 59.4300,10.4800 · 1 stay · aboard nordlys · 54.7 km from Marina   stay:owner:20260616T1300Z@59.4300,10.4800
+      suggested: aboard nordlys
+  6.   15.1 h · 47.3700,8.5300 · 2 stays · 1401 km from Marina   stay:owner:20260609T0650Z@47.3700,8.5300
+  7.    5.7 h · 55.6950,12.5700 · 1 stay · 481 km from Marina   stay:owner:20260626T0830Z@55.6950,12.5700
+  8.    3.5 h · 60.1939,11.1004 · 4 stays · 36.6 km from Home   stay:owner:20260608T0340Z@60.1939,11.1004
+  9.    2.2 h · 59.9261,10.6998 · 2 stays · 3.1 km from Marina   stay:owner:20260614T0830Z@59.9261,10.6999
+ 10.    2.0 h · 59.9136,10.7527 · 4 stays · 41 m from Home   stay:owner:20260602T1541Z@59.9136,10.7526
+      suggested: near Home
+ 11.    2.0 h · 47.4581,8.5481 · 2 stays · 1391 km from Marina   stay:owner:20260608T0720Z@47.4582,8.5481
+ 12.    1.8 h · 59.9200,10.7400 · 2 stays · 958 m from Home   stay:owner:20260603T1000Z@59.9200,10.7400
+      suggested: near Home
+ 13.    1.8 h · 55.6180,12.6508 · 2 stays · 490 km from Marina   stay:owner:20260625T1515Z@55.6180,12.6509
+ 14.    1.8 h · 59.0450,10.0450 · 1 stay · 103 km from Marina   stay:owner:20260618T0920Z@59.0450,10.0450
+ 15.    1.6 h · 47.3660,8.5481 · 1 stay · 1402 km from Marina   stay:owner:20260610T1430Z@47.3660,8.5481
+ 16.    1.5 h · 59.9102,10.7595 · 2 stays · 33 m from Office   stay:owner:20260601T0541Z@59.9102,10.7595
+      suggested: near Office

@@ -4,9 +4,17 @@
 midnight to the end of the night after the last day, so the last night is inside it), the
 settings, places and assets of the record, derives the stays (`stays.derive`) and the night of
 each day, resolves the names of the record's refs (`resolve`) and the owner's own identities
-(`present.owner_of`). Readers — `places propose`,
-`rollup`, `trips`, the pages — take a `Reading` and compute; none of them writes. A reading is a
-function of the record at one head: the same record, the same reading."""
+(`present.owner_of`). Readers — `rollup`, `trips`, the pages — take a `Reading` and compute; none
+of them writes. A reading is a function of the record at one head: the same record, the same
+reading.
+
+`owner_track(lb, first, last)` is the narrow reading `places propose` takes: the owner's stays of
+the same window, clustered from what the index serves without a line read from the files — the
+owner's points and the registered assets' (`Index.locations`), the evidence that promotes a stay
+(`Index.evidence`), the retracted ids (`Index.superseded`) — so two years of a record of millions
+of lines are read in seconds. The only lines read whole are the Google Timeline visits, found
+through the index by their `raw_id`. The same window and the same rules as `read`, so the stays
+are the same stays."""
 
 from __future__ import annotations
 
@@ -20,6 +28,7 @@ from .chain import Line
 from .export import day_range
 from .flights import Airports
 from .index import local_date
+from .places import TimelineVisit
 from .store import RETRACTION, Logbook, retractions
 
 
@@ -58,6 +67,24 @@ class Reading:
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
+
+
+@dataclass(frozen=True)
+class OwnerTrack:
+    """The owner's stays of a window, from the index alone (`owner_track`)."""
+
+    lb: Logbook
+    tz: ZoneInfo
+    first: str  # local days, inclusive
+    last: str
+    days: list[str]
+    settings: stays.Settings
+    places: list[places.Place]
+    assets: dict[str, assets.Asset]
+    stays: list[stays.Segment]  # the owner's stays, in time order (stops and moves left out)
+    timeline_visits: list[TimelineVisit]
+    noise_points: int
+    retracted: frozenset[str] = frozenset()  # the ids of the retracted lines of the record
 
 
 def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
@@ -132,6 +159,90 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
     )
 
 
+def owner_track(lb: Logbook, first: str, last: str, airports: Airports | None = None) -> OwnerTrack:
+    """The owner's stays of `[first, last]` (local days, inclusive), the window `read` takes, from
+    the index alone. The points are the owner's and those of every asset `assets.json` names, so a
+    stay aboard one says so; another subject's track is not read (it has no stays here and names
+    nothing the owner can be aboard). Raises `stays.SettingsError` as `read` does; writes nothing."""
+    tz = ZoneInfo(str(lb.meta["timezone"]))
+    settings = stays.read_settings(lb.root)
+    known = stays.read_places(lb.root, settings.radius_m)
+    registered = stays.read_assets(lb.root)
+    days = day_range(first, last)
+    start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
+    _night_start, end = stays.night_window(last, tz, settings)
+    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    with lb.index() as idx:
+        retracted = frozenset(idx.superseded(RETRACTION))
+        points = idx.locations(first, spill, sorted(registered))
+        marks = idx.evidence(stays.EVIDENCE, first, spill)
+        visits = idx.of_source("location", places.TIMELINE_SOURCE, first, spill, places.TIMELINE_VISIT_RAW_ID)
+    tracks: dict[str | None, list[stays.Point]] = {}
+    following: dict[str | None, stays.Point] = {}
+    for row in points:
+        if row.id in retracted:
+            continue
+        at = _instant(row.at)
+        if at is None or at < start:
+            continue
+        point = stays.Point(at, row.lat, row.lon, row.subject, row.seq, row.id)
+        if (
+            at >= end
+        ):  # the first point after the window, per subject: what a stay running past it lasts until
+            kept = following.get(row.subject)
+            if kept is None or at < kept.at:
+                following[row.subject] = point
+            continue
+        tracks.setdefault(row.subject, []).append(point)
+    for subject, point in following.items():
+        tracks.setdefault(subject, []).append(point)
+    evidence = [
+        stays.Evidence(at, _instant(mark.end), mark.kind)
+        for mark in marks
+        if mark.id not in retracted and (at := _instant(mark.at)) is not None and start <= at < end
+    ]
+    derived = stays.derive_tracks(
+        tracks,
+        evidence,
+        settings,
+        known,
+        {k: v.kind for k, v in registered.items()},
+        str(tz),
+        airports,
+        subjects=[None],
+    )
+    standing = [
+        line
+        for line in visits
+        if str(line["id"]) not in retracted
+        and ((at := stays.instant(line["at"])) is not None and start <= at < end)
+    ]
+    return OwnerTrack(
+        lb=lb,
+        tz=tz,
+        first=first,
+        last=last,
+        days=days,
+        settings=settings,
+        places=known,
+        assets=registered,
+        stays=[s for s in derived.segments if s.subject is None and s.kind == stays.STAY],
+        timeline_visits=places.timeline_visits(standing),
+        noise_points=derived.noise_points,
+        retracted=retracted,
+    )
+
+
+def _instant(text: str | None) -> datetime | None:
+    """An index column's RFC3339 UTC stamp as an aware instant; None for no stamp or not one."""
+    if text is None:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return stays.instant(text)
+
+
 def _first_points_after(lines: list[Line], end: datetime) -> list[Line]:
     """Per subject, the first location line at or after `end` among `lines` (the index gave the
     day after the window too): the point a stay that runs past the window's end lasts until, so the
@@ -152,7 +263,7 @@ def _first_points_after(lines: list[Line], end: datetime) -> list[Line]:
     return list(first.values())
 
 
-def window_json(reading: Reading) -> Mapping[str, object]:
+def window_json(reading: Reading | OwnerTrack) -> Mapping[str, object]:
     return {
         "since": reading.first,
         "until": reading.last,
