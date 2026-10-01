@@ -1,0 +1,31 @@
+{
+  "color": "BLUE",
+  "isTrashed": false,
+  "isPinned": true,
+  "isArchived": false,
+  "title": "Boat list",
+  "listContent": [
+    {
+      "text": "long rope",
+      "isChecked": true
+    },
+    {
+      "text": "fenders",
+      "isChecked": false
+    },
+    {
+      "text": "fuel can",
+      "isChecked": false
+    }
+  ],
+  "labels": [
+    {
+      "name": "Boat"
+    },
+    {
+      "name": "Weekend"
+    }
+  ],
+  "userEditedTimestampUsec": 1772960400000000,
+  "createdTimestampUsec": 1772614800000000
+}

@@ -1,0 +1,38 @@
+{
+  "Browser History": [
+    {
+      "favicon_url": "https://vans.example.org/favicon.ico",
+      "page_transition": "TYPED",
+      "title": "Van hire - Oslo",
+      "url": "https://vans.example.org/booking/42",
+      "client_id": "Zm9vYmFy",
+      "time_usec": 1770796800000000
+    },
+    {
+      "favicon_url": "https://vans.example.org/favicon.ico",
+      "page_transition_qualifier": "CLIENT_REDIRECT",
+      "page_transition": "LINK",
+      "title": "Van hire - booking confirmed",
+      "url": "https://vans.example.org/booking/42/confirmed",
+      "client_id": "Zm9vYmFy",
+      "time_usec": 1770796860500000
+    },
+    {
+      "page_transition": "RELOAD",
+      "title": "",
+      "url": "https://havn.example.org/",
+      "client_id": "Zm9vYmFy",
+      "time_usec": 1772614800000000
+    },
+    {
+      "page_transition": "LINK",
+      "title": "no time",
+      "url": "https://example.org/untimed"
+    },
+    {
+      "page_transition": "LINK",
+      "title": "no url",
+      "time_usec": 1772614900000000
+    }
+  ]
+}
