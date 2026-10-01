@@ -45,6 +45,10 @@ flighty = "logbook.adapters.flighty"
 transcript = "logbook.adapters.transcript"
 granola = "logbook.adapters.granola"
 mail = "logbook.adapters.mail"
+safari = "logbook.adapters.safari"
+shazam = "logbook.adapters.shazam"
+apple-podcasts = "logbook.adapters.apple_podcasts"
+pocket = "logbook.adapters.pocket"
 
 [dependency-groups]
 dev = [

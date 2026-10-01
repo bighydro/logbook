@@ -28,6 +28,7 @@ from . import (
     flights,
     ios_backup,
     ios_backup_crypto,
+    places,
     policy,
     stays,
 )
@@ -201,6 +202,11 @@ SKIP_PHRASES = {
     "skipped_no_body": "without a body",
     "skipped_password_protected": "password protected",
     "skipped_no_text": "without any text",
+    "skipped_no_title": "without a title",
+    "skipped_no_url": "without a url",
+    "skipped_ad": "advertisements",
+    "skipped_never_played": "never played",
+    "skipped_other_activity": "of another activity",
     "skipped_no_start": "without a start",
     "skipped_no_date": "without a date",
     "skipped_placeholder_date": "with a placeholder start (before 1900)",
@@ -231,6 +237,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
     "deleted": "marked for deletion",
+    "load_failed": "that did not load",
+    "no_url": "of a removed video, without a url",
     "body_from_snippet": "with the body taken from the snippet",
     "no_identifier": "without an identifier, keyed by row id",
     "no_unique_identifier": "without a unique identifier, keyed by row id",
@@ -252,6 +260,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "decoding_errors": "with undecodable bytes replaced",
     "attachments_referenced": "attachments referenced, not stored",
     "attachments_stored": "attachments stored",
+    "attachments_missing": "attachments missing from the export",
+    "trashed": "marked trashed",
 }
 
 
@@ -621,6 +631,40 @@ def cmd_assets(a: argparse.Namespace) -> None:
         print(_asset_row(asset))
 
 
+def cmd_places(a: argparse.Namespace) -> None:
+    """`places import-takeout <path> [--write]`: Google Maps' saved and starred places (the Takeout
+    `Maps (your places)/` and `Saved/` folders, or one file of them) proposed as entries of
+    <root>/places.json — a setting of the record, outside the chain — and written only with
+    `--write`, never changing an entry already there (`logbook/places.py`)."""
+    lb = Logbook.find()
+    try:
+        proposals = places.read(Path(a.path).expanduser())
+        report = places.merge(lb.root, proposals, write=a.write)
+    except FileNotFoundError as e:
+        print(f"places: no such file or directory: {e}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"places: {e}", file=sys.stderr)
+        sys.exit(2)
+    for p in report.new:
+        print(f"  {p.name:<40} {p.lat:.4f}, {p.lon:.4f}  {p.category}")
+    for p in report.existing:
+        print(f"  {p.name:<40} already in {places.PLACES_FILE}")
+    for p in report.without_coordinates:
+        print(f"  {p.name:<40} no coordinates in the export ({p.category})")
+    summary = [f"{_plural(len(report.new), 'place')} proposed"]
+    if report.existing:
+        summary.append(f"{len(report.existing)} already in {places.PLACES_FILE}")
+    if report.without_coordinates:
+        summary.append(f"{len(report.without_coordinates)} without coordinates")
+    if report.written:
+        print(f"wrote {_plural(len(report.new), 'place')} to {lb.root / places.PLACES_FILE}")
+    elif a.write:
+        print(f"{'; '.join(summary)}; nothing new to write")
+    else:
+        print(f"{'; '.join(summary)}; nothing written (add --write)")
+
+
 def _asset_row(asset: assets.Asset) -> str:
     ids = [f"{key} {value}" for key in ("mmsi", "icao24") if (value := getattr(asset, key)) is not None]
     if asset.registration is not None:
@@ -752,7 +796,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     the way, so the adapters run on the same layout as for an unencrypted backup. The stores only an
     encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
     through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
-    beside it); Safari's history is copied out and reported as copied with no adapter yet."""
+    beside it), Safari's history through `safari` (RFC 0017)."""
     lb = Logbook.find()
     try:
         manifest = ios_backup.Manifest(Path(a.backup).expanduser())
@@ -1024,6 +1068,7 @@ def _line_row(
             p.get("text")
             or p.get("title")
             or p.get("name")
+            or p.get("url")
             or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
         )
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
@@ -1835,7 +1880,7 @@ def main(argv: list[str] | None = None) -> None:
         action="store_const",
         const=True,
         default=None,
-        help="mail: store attachments under attachments/ (default: reference them by digest only)",
+        help="mail, keep: store attachments under attachments/ (default: reference them by digest only)",
     )
     s.add_argument("--only-labels", metavar="A,B", help="mail: keep only messages with any of these labels")
     s.add_argument("--skip-labels", metavar="A,B", help="mail: drop messages with any of these labels")
@@ -1867,7 +1912,7 @@ def main(argv: list[str] | None = None) -> None:
         metavar="NAMES",
         help="comma-separated sources, e.g. contacts,whatsapp (known: "
         + ", ".join(dict.fromkeys(src.name for src in ios_backup.SOURCES + ios_backup.EXTRAS))
-        + "; calls, health and safari only from an encrypted backup, safari copied without an adapter yet)",
+        + "; calls, health and safari only from an encrypted backup)",
     )
     s.set_defaults(fn=cmd_import_backup)
     s = sub.add_parser(
@@ -1957,6 +2002,14 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--icao24", help="six hex digits; `sync adsb` asks OpenSky for it")
     v.add_argument("--registration", help="call sign or plate, free text")
     v.set_defaults(fn=cmd_assets)
+    s = sub.add_parser("places", help="the named places derive stays uses (places.json)")
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser(
+        "import-takeout", help="propose entries from Google Maps' saved and starred places (Takeout)"
+    )
+    v.add_argument("path", help="Takeout/, `Maps (your places)/`, `Saved/`, or one file of them")
+    v.add_argument("--write", action="store_true", help="add the new entries to places.json")
+    v.set_defaults(fn=cmd_places)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)

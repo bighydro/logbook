@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": {"coordinates": [10.7389, 59.9075], "type": "Point"},
+      "properties": {
+        "Google Maps URL": "http://maps.google.com/?cid=1234567890123456789",
+        "Location": {
+          "Address": "Storgata 1, 0155 Oslo, Norway",
+          "Business Name": "Havnekontoret",
+          "Country Code": "NO",
+          "Geo Coordinates": {"Latitude": "59.9075", "Longitude": "10.7389"}
+        },
+        "Published": "2026-02-11T07:55:00Z",
+        "Title": "Havnekontoret",
+        "Updated": "2026-02-11T07:55:00Z"
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {"coordinates": [10.6500, 59.8500], "type": "Point"},
+      "properties": {
+        "Google Maps URL": "http://maps.google.com/?q=59.85,10.65",
+        "Location": {"Geo Coordinates": {"Latitude": "59.85", "Longitude": "10.65"}},
+        "Published": "2026-03-04T09:00:00Z",
+        "Title": "59°51'00.0\"N 10°39'00.0\"E",
+        "Updated": "2026-03-04T09:00:00Z"
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {"coordinates": [0, 0], "type": "Point"},
+      "properties": {"Title": "Nowhere", "Published": "2026-01-01T00:00:00Z"},
+      "type": "Feature"
+    }
+  ]
+}

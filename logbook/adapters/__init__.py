@@ -70,6 +70,10 @@ BUILT_IN = (
     "dawarich_live",
     "takeout.location",
     "takeout.photos",
+    "takeout.keep",
+    "takeout.tasks",
+    "takeout.chrome",
+    "takeout.youtube",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
@@ -87,6 +91,10 @@ BUILT_IN = (
     "ais",
     "adsb",
     "mail",
+    "safari",
+    "shazam",
+    "apple_podcasts",
+    "pocket",
 )
 
 
