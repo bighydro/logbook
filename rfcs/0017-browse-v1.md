@@ -21,7 +21,7 @@ A page the owner opened, bookmarked or saved for later: Chrome's history and boo
 | `transition` | string | MAY | how a visit came about, Chrome's `page_transition` lower-cased (`link`, `typed`, `auto_bookmark`, `reload`, `form_submit`, …); absent for a source that does not say |
 | `folder` | string | MAY | a bookmark's folder path, `/`-joined from the root (`Bookmarks bar/Boat`) |
 | `tags` | array of string | MAY | a saved page's tags, as the app spells them |
-| `status` | string | MAY | a saved page's state: `unread` or `archived` |
+| `status` | string | MAY | a saved page's state: `unread` or `archived` (Pocket's `archive` is written `archived`) |
 | `supersedes` | string | MAY | id of the earlier line this one replaces |
 
 Anything else the source reports MAY be kept under `extra`: Chrome's `page_transition_qualifier` and `client_id`, Safari's `load_successful` when false, a redirect's position.
@@ -44,6 +44,7 @@ Anything else the source reports MAY be kept under `extra`: Chrome's `page_trans
 
 ## Notes
 
+- **Why a Pocket save is here and not a `note/v1`.** RFC 0010 rule 4 makes a note the owner's own words; a saved page is somebody else's page with the owner's tags on it, which is what a bookmark is. The `pocket` adapter therefore writes `save` lines, decided 2026-10-01.
 - **Why one profile for visits and bookmarks.** A bookmark is a visit the owner chose to remember; the same `url`, `title` and time fields describe it, and `action` tells the two apart. A third profile for read-later apps would be the same fields a third time, so Pocket writes `save`.
 - **Why tier 2 and not 1.** SPEC §4 lists "public activity" at tier 1. Reading is not public: a browser's history says what the owner was looking up, which is the most private thing a record holds short of money and health.
 - **Why `raw_id` hashes the url.** A url can be two kilobytes; the id is for dedupe, not for reading, and sixteen hex digits of its digest beside the instant are enough to tell two visits in one microsecond apart.

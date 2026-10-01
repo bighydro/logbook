@@ -94,6 +94,7 @@ BUILT_IN = (
     "safari",
     "shazam",
     "apple_podcasts",
+    "pocket",
 )
 
 
