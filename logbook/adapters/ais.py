@@ -3,9 +3,19 @@
 Two entrances, one mapping (ADR 0017). The file mode reads a saved aisstream.io stream: one JSON
 message per line, as `websocat` or the site's own examples write it. The live mode, `logbook sync
 ais`, opens the aisstream.io websocket (`wss://stream.aisstream.io/v0/stream`), subscribes to the
-MMSI of every registered asset that has one, listens for a fixed window (`LOGBOOK_AISSTREAM_LISTEN_S`,
-default 60 s; a vessel under way reports every few seconds, a moored one every few minutes) and
-maps what it heard. Both call `draft(message, asset)`.
+MMSI of every registered asset that has one, listens for a window and maps what it heard. Both call
+`draft(message, asset)`.
+
+The window is `--listen SECONDS`, or `--until HH:MM` (the record's local time, the next time the
+clock shows it: `seconds_until`), or else `LOGBOOK_AISSTREAM_LISTEN_S`, default 60 s (a vessel
+under way reports every few seconds, a moored one every few minutes). While it listens, `pull`
+calls `progress` every `PROGRESS_S` (60 s) with the messages heard so far and tallies them per
+asset in `status["heard"]`, so the CLI can print one line a minute even when the socket is quiet.
+A socket that drops is reconnected and resubscribed after a wait that doubles from 1 s to 60 s and
+starts again at 1 s once a connection delivers (`status["reconnects"]`, each one said through
+`notice`); a refused subscription is never retried, and a first connection that cannot be made is
+an error at once. Ctrl-C stops the listening, not the run: what was heard is still yielded, in
+time order, with `status["interrupted"]` set so the command can write it and then exit 130.
 
 A message is `{"MessageType", "MetaData": {"MMSI", "ShipName", "latitude", "longitude", "time_utc"},
 "Message": {<MessageType>: {...}}}`. Only `PositionReport` (class A) and `StandardClassBPositionReport`
@@ -30,9 +40,10 @@ import json
 import math
 import re
 import time
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +60,7 @@ __all__ = [
     "group",
     "pull",
     "run",
+    "seconds_until",
     "sniff",
     "watermark",
 ]
@@ -63,9 +75,13 @@ URL_ENV = "LOGBOOK_AISSTREAM_URL"
 DEFAULT_URL = "wss://stream.aisstream.io/v0/stream"
 LISTEN_ENV = "LOGBOOK_AISSTREAM_LISTEN_S"
 LISTEN_S = 60.0
+PROGRESS_S = 60.0  # one progress call a minute while listening
+BACKOFF_S = 1.0  # the first wait before a reconnect; doubles up to BACKOFF_MAX_S
+BACKOFF_MAX_S = 60.0
 UNIT = "reports"
 GROUP_MARKS = True  # `sync` keeps a watermark per group (per asset) in the state file
 TIMEOUT_S = 30
+CLOCK = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")  # HH:MM, two digits each
 POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")
 KNOT_MPS = 0.514444
 NOT_AVAILABLE_SOG = 102.3
@@ -98,12 +114,36 @@ def configure(env: Mapping[str, str]) -> Config | None:
     listen = LISTEN_S
     if raw:
         try:
-            listen = float(raw)
-        except ValueError:
-            listen = -1.0
-        if not math.isfinite(listen) or listen <= 0:
-            raise ValueError(f"{LISTEN_ENV} must be a number of seconds above 0, not {raw!r}")
+            listen = seconds(raw)
+        except ValueError as e:
+            raise ValueError(f"{LISTEN_ENV} {e}") from None
     return Config(key=key, url=url, listen_s=listen)
+
+
+def seconds(raw: str) -> float:
+    """A listening window given as text (`--listen`, the variable): a finite number of seconds above
+    0, else ValueError saying what it must be."""
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        value = -1.0
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"must be a number of seconds above 0, not {raw!r}")
+    return value
+
+
+def seconds_until(clock: str, zone: tzinfo, now: datetime | None = None) -> float:
+    """How long until the clock in `zone` next shows `clock` (`HH:MM`): later today, else tomorrow.
+    Measured in real seconds, so a window across the night the clocks change is the hours that
+    pass, not the hours the clock shows. ValueError when `clock` is not HH:MM."""
+    m = CLOCK.match(clock.strip())
+    if m is None:
+        raise ValueError(f"must be a local time as HH:MM, not {clock!r}")
+    now = (now if now is not None else datetime.now(zone)).astimezone(zone)
+    target = now.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0, fold=0)
+    if target <= now:  # same zone: compared as the clock shows them
+        target += timedelta(days=1)  # wall-clock arithmetic: tomorrow at HH:MM, whatever the offset
+    return (target.astimezone(UTC) - now.astimezone(UTC)).total_seconds()
 
 
 # -- the file mode ---------------------------------------------------------------------------------
@@ -177,14 +217,22 @@ def pull(
     progress: Callable[[int, float], None] | None = None,
     counts: dict[str, int] | None = None,
     assets: Iterable[Asset] | None = None,
+    listen_s: float | None = None,
+    notice: Callable[[str], None] | None = None,
+    status: dict[str, Any] | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Listen to the stream for the configured window and yield one line draft per position report
-    of a registered vessel, oldest first (a message can arrive out of order). Everything heard is
-    mapped before the first line is yielded, so chain order is time order. `since` drops what is
-    older. Skips are tallied in `counts`; `progress(messages_so_far, elapsed_seconds)` is called
-    for every message heard. ValueError when no asset has an MMSI; OSError when the stream refuses
-    the key, closes early, or the websocket package is not installed."""
+    """Listen to the stream for `listen_s` seconds (default: the configured window) and yield one
+    line draft per position report of a registered vessel, oldest first (a message can arrive out
+    of order). Everything heard is mapped before the first line is yielded, so chain order is time
+    order. `since` drops what is older. Skips are tallied in `counts`; `progress(messages_so_far,
+    elapsed_seconds)` is called once a minute (PROGRESS_S), quiet socket or not; `notice(text)` is
+    told of a reconnect and of a Ctrl-C; `status` is kept up to date with `messages` (heard),
+    `heard` (per asset id), `reconnects`, `interrupted` and `elapsed`. A dropped socket is
+    reconnected with backoff until the window ends; a Ctrl-C ends the listening and what was
+    heard is still yielded. ValueError when no asset has an MMSI; OSError when the stream refuses
+    the key, the first connection cannot be made, or the websocket package is not installed."""
     counts = _counts(counts if counts is not None else {})
+    status = _status(status if status is not None else {})
     vessels = by_mmsi(assets or ())
     if not vessels:
         raise ValueError(
@@ -192,50 +240,135 @@ def pull(
             "logbook assets add <id> --kind yacht --name NAME --mmsi <nine digits>"
         )
     cutoff = utc(since) if since else None
-    started, heard = time.monotonic(), 0
+    window = config.listen_s if listen_s is None else float(listen_s)
+    started = _now()
     lines: list[dict[str, Any]] = []
-    for text in _stream(config, sorted(vessels)):
-        heard += 1
-        try:
-            message = json.loads(text)
-        except ValueError:
-            continue
-        if isinstance(message, dict) and "error" in message and "MessageType" not in message:
-            raise OSError(f"aisstream refused the subscription: {message['error']}")
-        line = _line(message, vessels, counts)
-        if line is not None and (cutoff is None or str(line["at"]) >= cutoff):
-            lines.append(line)
-        if progress is not None:
-            progress(heard, time.monotonic() - started)
+    try:
+        for text in _stream(config, sorted(vessels), window, started, progress, notice, status):
+            status["messages"] += 1
+            try:
+                message = json.loads(text)
+            except ValueError:
+                continue
+            if isinstance(message, dict) and "error" in message and "MessageType" not in message:
+                raise OSError(f"aisstream refused the subscription: {message['error']}")
+            if isinstance(message, dict) and (asset := vessels.get(_mmsi(message))) is not None:
+                status["heard"][asset.id] += 1
+            line = _line(message, vessels, counts)
+            if line is not None and (cutoff is None or str(line["at"]) >= cutoff):
+                lines.append(line)
+    except KeyboardInterrupt:
+        status["interrupted"] = True
+        status["elapsed"] = _now() - started
+        if notice is not None:
+            notice(f"stopped by Ctrl-C after {status['elapsed']:.0f}s; writing what was heard")
+    else:
+        status["elapsed"] = _now() - started
     lines.sort(key=lambda line: str(line["at"]))  # stable: equal seconds keep the order heard
     yield from lines
 
 
-def _stream(config: Config, mmsis: list[str]) -> Iterator[str | bytes]:
-    """Every message the socket delivers within the window. The only network code in this module."""
+_now = time.monotonic  # the listening clock; the tests move it by hand
+_sleep = time.sleep
+
+
+def _status(status: dict[str, Any]) -> dict[str, Any]:
+    status.setdefault("messages", 0)
+    status.setdefault("heard", Counter())
+    status.setdefault("reconnects", 0)
+    status.setdefault("interrupted", False)
+    status.setdefault("elapsed", 0.0)
+    return status
+
+
+def _stream(
+    config: Config,
+    mmsis: list[str],
+    window: float,
+    started: float,
+    progress: Callable[[int, float], None] | None,
+    notice: Callable[[str], None] | None,
+    status: dict[str, Any],
+) -> Iterator[str | bytes]:
+    """Every message the socket delivers within the window, across reconnects. The only network
+    code in this module. The first connection must succeed (OSError otherwise); after that a drop
+    or a failed reconnect is waited out (BACKOFF_S, doubling to BACKOFF_MAX_S, back to BACKOFF_S
+    once a connection delivers) and the subscription sent again, unless the window ends first.
+    `progress` is called at every PROGRESS_S of the window, so a recv never waits past the next
+    tick."""
     subscription = {
         "APIKey": config.key,
         "BoundingBoxes": [[[-90, -180], [90, 180]]],
         "FiltersShipMMSI": mmsis,
         "FilterMessageTypes": list(POSITION_TYPES),
     }
-    deadline = time.monotonic() + config.listen_s
+    deadline = started + window
+    next_tick = started + PROGRESS_S
+    backoff = BACKOFF_S
     try:
         socket = _connect(config.url, TIMEOUT_S)
     except ImportError:
         raise OSError(
             "sync ais needs the websockets package: pip install 'openlogbook[ais]' (or uv sync --extra ais)"
         ) from None
+    except _connect_errors() as e:
+        raise OSError(f"could not connect to aisstream: {e}") from None
     closed = _closed_exception()
-    with socket as ws:
-        ws.send(json.dumps(subscription))
-        while (remaining := deadline - time.monotonic()) > 0:
+    while True:
+        dropped: str | None = None
+        with socket as ws:
             try:
-                yield ws.recv(timeout=remaining)
-            except TimeoutError:
-                break
+                ws.send(json.dumps(subscription))
             except closed as e:  # websockets' ConnectionClosed is not an OSError
-                raise OSError(f"aisstream closed the connection: {e}") from None
+                dropped = f"connection dropped ({_reason(e)})"
+            while dropped is None:
+                now = _now()
+                if now >= next_tick:
+                    if progress is not None:
+                        progress(status["messages"], next_tick - started)
+                    while next_tick <= now:
+                        next_tick += PROGRESS_S
+                remaining = deadline - now
+                if remaining <= 0:
+                    return
+                try:
+                    text = ws.recv(timeout=min(remaining, next_tick - now))
+                except TimeoutError:
+                    continue
+                except closed as e:
+                    dropped = f"connection dropped ({_reason(e)})"
+                    break
+                backoff = BACKOFF_S
+                yield text
+        while True:  # the socket is closed: wait, then connect and subscribe again
+            remaining = deadline - _now()
+            if remaining <= backoff:
+                if notice is not None:
+                    notice(f"{dropped}; {remaining:.0f}s left of the window, not reconnecting")
+                return
+            if notice is not None:
+                notice(f"{dropped}; reconnecting in {backoff:g}s")
+            _sleep(backoff)
+            backoff = min(backoff * 2, BACKOFF_MAX_S)
+            status["reconnects"] += 1
+            try:
+                socket = _connect(config.url, TIMEOUT_S)
+                break
+            except _connect_errors() as e:
+                dropped = f"connection failed ({e})"
+
+
+def _reason(e: BaseException) -> str:
+    """Why the server closed: the close frame's reason, else its code, else the exception's text."""
+    close = getattr(e, "rcvd", None) or getattr(e, "sent", None)
+    if close is not None:
+        reason = getattr(close, "reason", None) or ""
+        code = getattr(close, "code", None)
+        if reason:
+            return str(reason)
+        if code is not None:
+            return f"close code {code}"
+    return str(e) or "closed"
 
 
 def _closed_exception() -> type[BaseException]:
@@ -246,6 +379,16 @@ def _closed_exception() -> type[BaseException]:
     except ImportError:
         return _NeverRaised
     return ConnectionClosed
+
+
+def _connect_errors() -> tuple[type[BaseException], ...]:
+    """What `_connect` raises when the server is unreachable or the handshake fails: OSError (DNS,
+    refused, timed out) and websockets' own exceptions (a rejected upgrade, a bad URI)."""
+    try:
+        from websockets.exceptions import WebSocketException
+    except ImportError:
+        return (OSError,)
+    return (OSError, WebSocketException)
 
 
 class _NeverRaised(Exception):

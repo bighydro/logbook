@@ -398,6 +398,8 @@ export LOGBOOK_AISSTREAM_KEY=...                            # free key from aiss
 uv sync --extra ais                                         # or: pip install 'openlogbook[ais]'
 logbook sync ais --dry-run                                  # listen for 60 s, count, write nothing
 logbook sync ais                                            # then: */10 * * * * logbook sync ais
+logbook sync ais --listen 3600                              # or: one long sitting, written at the end
+logbook sync ais --until 18:30                              # … until the record's clock next shows 18:30
 logbook sync adsb                                           # OpenSky, no key needed; LOGBOOK_OPENSKY_USER/PASS optional
 ```
 
@@ -406,9 +408,13 @@ receiver, the identifier and the fix time (`aisstream:<mmsi>:<unix seconds>`, `o
 so a report heard twice is one line, and a stream you saved to a file (`logbook add messages.jsonl`) and the same
 reports heard live are one line too. `state/ais.json` and `state/adsb.json` keep a watermark per asset. `show`
 lists the boat's points as their own run, named by the asset; whether you were aboard is for an engine to decide
-from the two tracks, never written on a line. `LOGBOOK_AISSTREAM_LISTEN_S` sets how long each `sync ais` listens
-(a vessel under way reports every few seconds); OpenSky's `states/all` is the present, one fix per aircraft per
-poll, so poll as often as its rate limit allows.
+from the two tracks, never written on a line. `sync ais` listens for `--listen SECONDS`, or `--until HH:MM` (the
+record's local time, the next time the clock shows it), or else `LOGBOOK_AISSTREAM_LISTEN_S` (default 60 s; a
+vessel under way reports every few seconds), and writes at the end; while it listens it prints one line a minute
+with the messages heard per asset, reconnects with a wait that doubles from 1 s to 60 s when the socket drops,
+and on Ctrl-C still writes what it heard, then exits 130. The key is read from `LOGBOOK_AISSTREAM_KEY` only and
+never printed. OpenSky's `states/all` is the present, one fix per aircraft per poll, so poll as often as its
+rate limit allows.
 
 **A secret iCal address is the whole calendar** to anyone who holds it; Google can reset it. Keep the
 URLs in the shell environment only, as the Dawarich key below: the logbook never prints one, naming a
