@@ -12,6 +12,10 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_apple_books import LINES as BOOK_LINES
+from test_apple_books import _store as _books_store
+from test_apple_photos import LINES as PHOTO_LINES
+from test_apple_photos import _store as _photos_store
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
 from test_beeper import _store as _beeper_store
@@ -28,13 +32,24 @@ from test_ios_notes import _store as _note_store
 from test_ios_wallet import LINES as WALLET_LINES
 from test_ios_wallet import _passes
 from test_line import _store as _line_store
+from test_myfitnesspal import LINES as MFP_LINES
+from test_myfitnesspal import _store as _mfp_store
 from test_safari import _store as _safari_store
+from test_sbb import LINES as SBB_LINES
+from test_sbb import _mobile_store as _sbb_mobile
+from test_sbb import _trips_store as _sbb_trips
 from test_splitwise import _store as _splitwise_store
 from test_twitter import _store as _twitter_store
+from test_voice_memos import LINES as MEMO_LINES
+from test_voice_memos import STORED as MEMO_FILES
+from test_voice_memos import _store as _memo_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
 from test_wispr_flow import LINES as WISPR_LINES
 from test_wispr_flow import _store as _wispr_store
+from test_withings import LINES as WITHINGS_LINES
+from test_withings import _health_store as _withings_health
+from test_withings import _measure_store as _withings_measure
 
 from logbook import cli, ios_backup
 from logbook.store import Logbook
@@ -51,6 +66,13 @@ LINE = "AppDomainGroup-group.com.linecorp.line"
 LINE_STORE = "Library/Application Support/PrivateStore/P_u0000000000000000000000000000000"
 TWITTER = "AppDomainGroup-group.com.atebits.Tweetie2"
 TWITTER_STORE = "com.atebits.tweetie.databases/v1/1000000000000000001/1000000000000000001-dmv2.db"
+BOOKS = "AppDomain-com.apple.iBooks"
+MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
+WITHINGS = "AppDomain-com.withings.wiScaleNG"
+MFP = "AppDomain-com.myfitnesspal.mfp"
+COREDATA = "Library/Application Support/coredata"
+SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
+SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -68,6 +90,12 @@ ALL = (
     "beeper",
     "line",
     "twitter",
+    "apple-books",
+    "voice-memos",
+    "apple-photos",
+    "withings",
+    "myfitnesspal",
+    "sbb",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -86,6 +114,12 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "beeper": 8,
     "line": 8,
     "twitter": 6,
+    "apple-books": BOOK_LINES,
+    "voice-memos": MEMO_LINES,
+    "apple-photos": PHOTO_LINES,
+    "withings": 2 * WITHINGS_LINES,  # two profiles
+    "myfitnesspal": MFP_LINES,
+    "sbb": SBB_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -104,6 +138,12 @@ STORES["splitwise"] = "database.sqlite"
 STORES["beeper"] = "BeeperStore.sqlite"
 STORES["line"] = "Line.sqlite"
 STORES["twitter"] = "1000000000000000001-dmv2.db"
+STORES["apple-books"] = "AEAnnotation_v10312011_1727_local.sqlite"
+STORES["voice-memos"] = "CloudRecordings.db"
+STORES["apple-photos"] = "Photos.sqlite"
+STORES["withings"] = "46567465_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
+STORES["myfitnesspal"] = "maindb.sqlite"
+STORES["sbb"] = "SbbMobile.db"
 REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
@@ -237,6 +277,68 @@ def _backup(
             "com.atebits.tweetie.scribe/scribe.2-compact.sqlite",
             _blob(stage, SAFARI_BYTES),
         )
+    if "apple-books" in sources:  # the store under storeFiles/, the library under BKLibrary/ beside it
+        store = _books_store(_dir(stage, "books") / "storeFiles", library="documents")
+        _put(backup, rows, BOOKS, "Documents/storeFiles/AEAnnotation_v10312011_1727_local.sqlite", store)
+        _put(
+            backup,
+            rows,
+            BOOKS,
+            "Documents/storeFiles/AEAnnotation_v10312011_1727_local.sqlite-wal",
+            _blob(stage, b""),
+        )
+        _put(backup, rows, BOOKS, "Documents/BKLibrary", None)
+        library = store.parent.parent / "BKLibrary" / "BKLibrary-1-091020131601.sqlite"
+        _put(backup, rows, BOOKS, "Documents/BKLibrary/BKLibrary-1-091020131601.sqlite", library)
+    if "voice-memos" in sources:  # the store and the audio share one folder on the phone
+        store = _memo_store(_dir(stage, "memos"), layout="phone")
+        _put(backup, rows, MEMOS, "Recordings", None)
+        _put_tree(backup, rows, MEMOS, "Recordings", store.parent)
+        _put(backup, rows, MEMOS, "Recordings/20260302 211407.waveform", _blob(stage, b"\x00" * 64))
+        _put(
+            backup,
+            rows,
+            MEMOS,
+            "Recordings/20260302 211407.composition/manifest.plist",
+            _blob(stage, b"<plist/>"),
+        )
+    if "apple-photos" in sources:
+        store = _photos_store(_dir(stage, "photos"))
+        _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite", store)
+        _put(backup, rows, "CameraRollDomain", "Media/PhotoData/Photos.sqlite-wal", _blob(stage, b""))
+        _put(backup, rows, "CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC", _blob(stage, b"pixels"))
+    if "withings" in sources:  # two profiles, two stores each, one of them with a -wal
+        folder = _dir(stage, "withings")
+        for profile in ("46567466", "46567465"):
+            _put(
+                backup,
+                rows,
+                WITHINGS,
+                f"{COREDATA}/{profile}_WTHealth.sqlite",
+                _withings_health(folder, profile),
+            )
+            _put(
+                backup,
+                rows,
+                WITHINGS,
+                f"{COREDATA}/{profile}_Measure.sqlite",
+                _withings_measure(folder, profile),
+            )
+        _put(backup, rows, WITHINGS, f"{COREDATA}/46567466_Measure.sqlite-wal", _blob(stage, b""))
+        _put(
+            backup, rows, WITHINGS, f"{COREDATA}/46567466_Food2.sqlite", _blob(stage, SAFARI_BYTES)
+        )  # not read
+    if "myfitnesspal" in sources:
+        _put(backup, rows, MFP, "Documents/maindb.sqlite", _mfp_store(_dir(stage, "mfp")))
+    if "sbb" in sources:  # two containers: the shared one holds the tickets, the app's own the past journeys
+        _put(backup, rows, SBB, "SbbMobile.db", _sbb_mobile(_dir(stage, "sbb")))
+        _put(
+            backup,
+            rows,
+            SBB_APP,
+            "Documents/ch.sbb.coredata.pasttrips.sqlite",
+            _sbb_trips(_dir(stage, "sbb-app")),
+        )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -337,6 +439,35 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     assert (inbox / "imessage" / "Attachments" / "ab" / "12" / "AT-100" / "stern.jpg").is_file()
     assert (inbox / "imessage" / "Attachments" / "ef" / "56" / "AT-103" / "note.caf").is_file()
     assert not (inbox / "whatsapp" / "escape.jpg").exists() and not (inbox / "escape.jpg").exists()
+    # a companion travels beside the store under its own name, with the store's -wal; the store was
+    # found by its glob, the adapter ran on the folder and found the library there (titles, not ids)
+    assert (inbox / "apple-books" / "BKLibrary-1-091020131601.sqlite").is_file()
+    assert (inbox / "apple-books" / "AEAnnotation_v10312011_1727_local.sqlite-wal").stat().st_size == 0
+    assert "BKLibrary-1-091020131601.sqlite (" in out
+    titles = {line["payload"].get("title") for line in lb.lines() if line["source"] == "apple-books"}
+    assert "The Long Ships" in titles
+    # only the audio travels with the voice memo store (the waveform and composition stay behind), under
+    # Recordings/ beside it, where the adapter found and hashed it; nothing was stored without --attachments
+    audio = sorted(p.name for p in (inbox / "voice-memos" / "Recordings").iterdir())
+    assert len(audio) == MEMO_FILES and all(p.rsplit(".", 1)[1] in ("m4a", "qta") for p in audio)
+    assert f"{MEMO_FILES} media files" in out and f"{MEMO_FILES} attachments referenced, not stored" in out
+    for line in lb.lines():
+        if line["source"] == "voice-memos" and "media" in line["payload"]:
+            assert "path" not in line["payload"]["media"]
+            assert not (lb.root / "attachments" / line["payload"]["media"]["sha256"]).exists()
+    # every profile's Withings stores landed in one folder (the glob's first match is the store, the rest
+    # and the companions beside it, with their -wal) and the adapter read the folder: both profiles are in
+    withings_copies = sorted(p.name for p in (inbox / "withings").iterdir())
+    assert withings_copies == [
+        "46567465_Measure.sqlite", "46567465_WTHealth.sqlite", "46567466_Measure.sqlite",
+        "46567466_Measure.sqlite-wal", "46567466_WTHealth.sqlite",
+    ]  # fmt: skip
+    profiles = {line["payload"]["extra"]["profile"] for line in lb.lines() if line["source"] == "withings"}
+    assert profiles == {"46567465", "46567466"}
+    # a companion from another domain lands beside the store, and the adapter read both
+    assert (inbox / "sbb" / "ch.sbb.coredata.pasttrips.sqlite").is_file()
+    observed = {line["payload"]["extra"]["observed"] for line in lb.lines() if line["source"] == "sbb"}
+    assert observed == {"ticket", "journey"}
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
@@ -372,6 +503,10 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (BEEPER, "Contacts.sqlite"),
         (LINE, LINE_STORE + "/Messages/ChatExt.sqlite"),
         (TWITTER, "com.atebits.tweetie.scribe/scribe.2-compact.sqlite"),
+        (MEMOS, "Recordings/20260302 211407.waveform"),
+        (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
+        ("CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC"),  # the pixels stay on the phone
+        (WITHINGS, f"{COREDATA}/46567466_Food2.sqlite"),  # not a store the adapter reads
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -709,3 +844,16 @@ def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
     assert cli._plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
     with pytest.raises(ValueError):
         ios_backup.copy(p, tmp_path / "out")
+
+
+def test_import_backup_attachments_stores_the_voice_memo_audio(lb, tmp_path, capsys):
+    backup = _backup(tmp_path, sources=("voice-memos",))
+    _run(str(backup), "--only", "voice-memos", "--attachments")
+    out = capsys.readouterr().out
+    assert f"added {MEMO_LINES} lines from voice-memos" in out and f"{MEMO_FILES} attachments stored" in out
+    stored = sorted(p.name for p in (lb.root / "attachments").iterdir())
+    assert len(stored) == MEMO_FILES
+    for line in lb.lines():
+        media = line["payload"].get("media")
+        if media is not None:
+            assert media["path"] == f"attachments/{media['sha256']}" and media["sha256"] in stored

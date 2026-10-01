@@ -135,6 +135,8 @@ def _append_with(
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
         options["store"] = lb.attach
+    if _takes(adapter, "store_file"):
+        options["store_file"] = lb.attach_file
     if _takes(adapter, "assets"):
         options["assets"] = _registry(lb, "add")
     if _takes(adapter, "owner_emails"):
@@ -176,7 +178,8 @@ def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
     """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
-    times are floating), `store` (puts bytes in the attachment store), `lookup` (the id of a line by
+    times are floating), `store` (puts bytes in the attachment store), `store_file` (puts a file
+    there, streamed), `lookup` (the id of a line by
     source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
     `assets` (the asset registry, ADR 0018), or one of `add`'s own options."""
     if isinstance(adapter, adapters.Adapter):
@@ -242,6 +245,11 @@ SKIP_PHRASES = {
     "skipped_other_type": "of a type this version does not know",
     "skipped_unknown_stage": "with a sleep stage this version does not know",
     "skipped_over_cap": "over the one-per-minute heart-rate cap",
+    "skipped_reading_position": "reading positions",
+    "skipped_deleted": "deleted",
+    "skipped_trashed": "in the trash",
+    "skipped_relayed": "relayed from another app",
+    "skipped_daily_total": "daily totals",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "no_stanza_id": "without a stanza id, keyed by row id",
@@ -279,6 +287,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "pending": "still pending",
     "from_last_message": "from a room's last-message row (not in the event cache)",
     "owner_guessed": "owner taken as the person on most expenses (no owner_emails matched)",
+    "no_title": "without a title",
 }
 
 
@@ -856,7 +865,8 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy)
+        given = {"attachments": True} if a.attachments and _takes(adapter, "attachments") else None
+        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy, given)
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox, manifest, plans)
     seq, head, errors = lb.verify()
@@ -1087,6 +1097,12 @@ def _line_row(
         text = _mail_text(p, names)
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
+    elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":
+        text = _highlight_text(p)
+    elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
+        text = _voice_memo_text(p)
+    elif line["kind"] == "trip" and p.get("schema") == "trip/v1":
+        text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
     else:
@@ -1138,6 +1154,62 @@ def _name(ref: object, names: Mapping[Ref, str] | None) -> str | None:
 
 def _ref_value(ref: object) -> str:
     return str(ref.get("value", "")) if isinstance(ref, dict) else ""
+
+
+def _highlight_text(p: dict[str, Any]) -> str:
+    """`“quote” — Title · note` for a highlight, `bookmark — Title @ location` for a bookmark
+    (RFC 0022); the title is the library's, else the asset id."""
+    book = p.get("title") or p.get("asset_id") or ""
+    if p.get("type") == "bookmark":
+        where = p.get("location")
+        return f"bookmark — {book}" + (f" @ {where}" if where else "")
+    text = f"\u201c{p.get('quote', '')}\u201d" + (f" — {book}" if book else "")
+    if p.get("note"):
+        text += f" · {p['note']}"
+    return text
+
+
+def _trip_text(p: dict[str, Any]) -> str:
+    """`From → To, transit, sbb, 58.00 CHF, 1 change` (RFC 0020); a parking session names one place."""
+    origin = _place_name(p.get("from"))
+    destination = _place_name(p.get("to"))
+    route = f"{origin} → {destination}" if destination and destination != origin else origin
+    parts = [part for part in (route, str(p.get("mode") or ""), str(p.get("provider") or "")) if part]
+    price = p.get("price")
+    if isinstance(price, dict) and price.get("amount"):
+        parts.append(f"{price['amount']} {price.get('currency', '')}".strip())
+    if p.get("status") == "cancelled":
+        parts.append("cancelled")
+    extra = p.get("extra")
+    if isinstance(extra, dict):
+        transfers = extra.get("transfers")
+        if isinstance(transfers, int) and not isinstance(transfers, bool) and transfers > 0:
+            parts.append(_plural(transfers, "change"))
+        if extra.get("observed") == "ticket":
+            parts.append("ticket")
+    return ", ".join(parts)
+
+
+def _place_name(place: object) -> str:
+    if isinstance(place, dict):
+        return str(place.get("name") or place.get("address") or place.get("code") or "")
+    return str(place) if isinstance(place, str) else ""
+
+
+def _voice_memo_text(p: dict[str, Any]) -> str:
+    """`Title (m:ss)`, then `audio missing` when the line has no media, `not stored` when it has
+    the digest and no file (RFC 0023)."""
+    text = str(p.get("title") or p.get("file_name") or "recording")
+    duration = p.get("duration_s")
+    if isinstance(duration, int | float) and not isinstance(duration, bool) and duration >= 0:
+        minutes, seconds = divmod(round(duration), 60)
+        text += f" ({minutes}:{seconds:02d})"
+    media = p.get("media")
+    if not isinstance(media, dict):
+        text += ", audio missing"
+    elif "path" not in media:
+        text += ", not stored"
+    return text
 
 
 def _flight_text(p: dict[str, Any], tz: ZoneInfo | None = None) -> str:
@@ -1932,6 +2004,12 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("backup", help="the backup folder (Finder → Manage Backups → Show in Finder)")
     s.add_argument(
         "--dry-run", action="store_true", help="list what would be copied and imported; write nothing"
+    )
+    s.add_argument(
+        "--attachments",
+        action="store_true",
+        help="store the media of sources that keep it (voice memos' audio) under attachments/"
+        " (default: reference it by digest only)",
     )
     s.add_argument(
         "--only",
