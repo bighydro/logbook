@@ -82,6 +82,7 @@ BUILT_IN = (
     "ios_notes",
     "ios_calendar",
     "ios_calls",
+    "ios_wallet",
     "flighty",
     "apple_health",
     "ics",
@@ -167,6 +168,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "contacts": "ios-contacts",
     "calendar": "ios-calendar",
     "notes": "ios-notes",
+    "wallet": "ios-wallet",
 }
 
 

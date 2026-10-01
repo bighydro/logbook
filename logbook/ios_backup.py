@@ -25,6 +25,9 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                         MediaDomain                                   media under Library/SMS/Attachments/
     ios-calendar        HomeDomain                                    Library/Calendar/Calendar.sqlitedb
     ios-notes           AppDomainGroup-group.com.apple.notes          NoteStore.sqlite
+    ios-wallet          HomeDomain                                    Library/Passes/Cards/…/pass.json (a
+                                                                  folder source: every pass.json under
+                                                                  Cards/, copied below ios-wallet/)
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
@@ -120,6 +123,9 @@ SOURCES: tuple[Source, ...] = (
     Source("imessage", HOME, "Library/SMS/sms.db", media=(MEDIA, "Library/SMS/Attachments")),
     Source("ios-calendar", HOME, "Library/Calendar/Calendar.sqlitedb"),
     Source("ios-notes", NOTES, "NoteStore.sqlite"),
+    Source(
+        "ios-wallet", HOME, "Library/Passes/Cards", files="pass.json"
+    ),  # one unpacked .pkpass folder per pass
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

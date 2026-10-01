@@ -17,6 +17,8 @@ from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
 from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
+from test_ios_wallet import LINES as WALLET_LINES
+from test_ios_wallet import _passes
 from test_safari import _store as _safari_store
 from test_whatsapp import _store as _chat_store
 from test_whatsapp_contacts import _contacts
@@ -27,7 +29,7 @@ from logbook.store import Logbook
 UDID = "00008030-000A1B2C3D4E5F60"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
-ALL = ("ios-contacts", "whatsapp-contacts", "whatsapp", "imessage", "ios-calendar", "ios-notes")
+ALL = ("ios-contacts", "whatsapp-contacts", "whatsapp", "imessage", "ios-calendar", "ios-notes", "ios-wallet")
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
     "whatsapp-contacts": 4,
@@ -35,7 +37,9 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "imessage": 13,
     "ios-calendar": 7,
     "ios-notes": 4,
+    "ios-wallet": WALLET_LINES,
 }
+TOTAL = sum(LINES.values())
 STORES = {
     "ios-contacts": "AddressBook.sqlitedb",
     "whatsapp-contacts": "ContactsV2.sqlite",
@@ -114,6 +118,9 @@ def _backup(
         _put(backup, rows, "HomeDomain", "Library/Calendar/Calendar.sqlitedb", _calendar(_dir(stage, "cal")))
     if "ios-notes" in sources:
         _put(backup, rows, NOTES, "NoteStore.sqlite", _note_store(_dir(stage, "notes")))
+    if "ios-wallet" in sources:  # one unpacked .pkpass folder per pass, as the phone keeps them
+        _put(backup, rows, "HomeDomain", "Library/Passes/Cards", None)
+        _put_tree(backup, rows, "HomeDomain", "Library/Passes/Cards", _passes(_dir(stage, "wallet")))
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
     con = sqlite3.connect(backup / "Manifest.db")
@@ -190,7 +197,15 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         copy = inbox / source / name
         assert copy.is_file(), source
         assert f"{source}: {name}" in out
+    for source in ALL:
         assert f"added {LINES[source]} lines from {source}" in out
+    # a folder source: every pass.json below the folder, the folder's path kept, nothing else
+    assert (inbox / "ios-wallet" / "01-swiss-style.pkpass" / "pass.json").is_file()
+    assert "ios-wallet: 18 pass.json files (" in out and "under Library/Passes/Cards/" in out
+    assert (
+        "1 passes that would not parse" in out
+        and "1 boarding passes whose year nothing on the pass gives" in out
+    )
     # the order is the one that lets each source build on the one before it
     positions = [out.index(f"{source}: ") for source in ALL]
     assert positions == sorted(positions)
@@ -205,9 +220,9 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     # the copies are what the adapters read: media was found and hashed, skips are reported
     assert "also 1 with media hashed, 1 with media missing, 1 without a stanza id, keyed by row id" in out
     assert "skipped 2 reactions, 1 group system events" in out
-    assert "valid — 49 lines" in out
+    assert f"valid — {TOTAL} lines" in out
     seq, _head, errors = lb.verify()
-    assert (seq, errors) == (49, [])
+    assert (seq, errors) == (TOTAL, [])
     # LOGBOOK_DIAL_PREFIX reached the adapters: the number saved without a country code got one
     refs = {line["payload"]["ref"]["value"] for line in lb.lines() if line["source"] == "ios-contacts"}
     assert "+4722334455" in refs
@@ -278,7 +293,7 @@ def test_import_backup_again_adds_nothing_and_leaves_one_copy(lb, tmp_path, caps
     out = capsys.readouterr().out
     for source in ALL:
         assert f"added 0 lines from {source}" in out
-    assert "valid — 49 lines" in out
+    assert f"valid — {TOTAL} lines" in out
     inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
     assert sorted(p.name for p in (inbox / "whatsapp").iterdir()) == [
         "ChatStorage.sqlite",
