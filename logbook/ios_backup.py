@@ -32,6 +32,12 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                                                                   (a folder source: the glob names the file)
     wispr-flow          AppDomain-com.wispr.flowapp                   Documents/database.sqlite
     flighty             AppDomain-com.flightyapp.flighty              Documents/MainFlightyDatabase.db
+    apple-reminders     AppDomainGroup-group.com.apple.reminders      Container_v1/Stores/Data-*.sqlite
+                                                                  (one store per account)
+
+A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
+domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
+beside it like its -wal/-shm siblings, and the adapter runs on the copies' folder, not the store.
 
 Contacts come first so the record has its people before the chats that name them; WhatsApp's own
 contacts come before its chats for the same reason (RFC 0006).
@@ -69,7 +75,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass, field
-from fnmatch import fnmatch
+from fnmatch import fnmatch, fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -85,6 +91,7 @@ HOME = "HomeDomain"
 MEDIA = "MediaDomain"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
+REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 HEALTH = "HealthDomain"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
@@ -107,7 +114,7 @@ class Source:
 
     name: str  # the adapter's NAME, and the copy's folder name
     domain: str
-    relative_path: str  # POSIX, as Manifest.db spells it
+    relative_path: str  # POSIX, as Manifest.db spells it; with `*` or `?` a pattern over the domain
     media: tuple[str, str] | None = None  # (domain, folder prefix); copied beside the store as its last part
     adapter: bool = True  # False: copied out, nothing runs on it; `note` says why it is there
     note: str = "no adapter yet"
@@ -116,6 +123,12 @@ class Source:
     @property
     def store_name(self) -> str:
         return self.files if self.files is not None else PurePosixPath(self.relative_path).name
+
+    @property
+    def pattern(self) -> bool:
+        """Whether `relative_path` is a pattern: several stores may match, and the adapter then
+        runs on the folder they were copied to."""
+        return any(c in self.relative_path for c in "*?[")
 
     @property
     def media_folder(self) -> str | None:
@@ -136,6 +149,7 @@ SOURCES: tuple[Source, ...] = (
     Source("easypark", EASYPARK, "Documents", files="recentparkings_*.json"),  # named after the user
     Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
     Source("flighty", FLIGHTY, "Documents/MainFlightyDatabase.db"),  # the same lines as the CSV export
+    Source("apple-reminders", REMINDERS, "Container_v1/Stores/Data-*.sqlite"),
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
@@ -149,8 +163,16 @@ EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these
 
 
 def source(name: str) -> Source | None:
-    """The source called `name`; `contacts`, `calendar`, `notes` and `calls` stand for their `ios-` names."""
-    return next((s for s in SOURCES + EXTRAS if name in (s.name, s.name.removeprefix("ios-"))), None)
+    """The source called `name`; `contacts`, `calendar`, `notes`, `calls` and `reminders` stand for
+    their `ios-` and `apple-` names."""
+    return next(
+        (
+            s
+            for s in SOURCES + EXTRAS
+            if name in (s.name, s.name.removeprefix("ios-"), s.name.removeprefix("apple-"))
+        ),
+        None,
+    )
 
 
 @dataclass(frozen=True)
@@ -323,6 +345,26 @@ class Manifest:
                 return self._located(file_id, domain, relative_path, blob)
         return None
 
+    def files_matching(self, domain: str, pattern: str) -> list[BackupFile]:
+        """Every file row of `domain` whose whole relativePath matches `pattern` (fnmatch, case
+        kept), in path order. The rows of a domain are read once; the match is in Python, so a
+        bracket or a `?` in the pattern means what fnmatch says, not what SQL would."""
+        if not self.unlocked:
+            return []
+        with closing(self._open()) as con:
+            rows = con.execute(
+                "SELECT fileID, relativePath, flags, file FROM Files WHERE domain = ? ORDER BY relativePath",
+                (domain,),
+            ).fetchall()
+        return [
+            self._located(file_id, domain, relative_path, blob)
+            for file_id, relative_path, flags, blob in rows
+            if flags == FILE_FLAG
+            and isinstance(file_id, str)
+            and isinstance(relative_path, str)
+            and fnmatchcase(relative_path, pattern)
+        ]
+
     def files_under(self, domain: str, prefix: str) -> Iterator[BackupFile]:
         """Every file row below `prefix` in `domain`, in path order. A path that would leave the
         folder (`..`, an empty part) is never yielded: the copy stays inside its media folder."""
@@ -391,7 +433,8 @@ class Copy:
 @dataclass
 class Plan:
     """What one source would import: its store (None when the backup has no row for it), the
-    store's siblings and its media files. `found` is false when the row is there but the bytes
+    store's siblings — its -wal/-shm, and for a pattern source the other stores that matched,
+    with theirs — and its media files. `found` is false when the row is there but the bytes
     are not (`listed`). A folder source (`Source.files`) has no store: its files are `media`, and
     it is listed and found when at least one of them is."""
 
@@ -435,13 +478,18 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
             found = [f for f in manifest.files_under(s.domain, s.relative_path) if fnmatch(f.name, s.files)]
             plans.append(Plan(s, None, media=found))
             continue
-        store = manifest.file(s.domain, s.relative_path)
+        stores = manifest.files_matching(s.domain, s.relative_path) if s.pattern else []
+        store = (stores[0] if stores else None) if s.pattern else manifest.file(s.domain, s.relative_path)
         p = Plan(s, store)
         if p.found:
-            for suffix in SIBLINGS:
-                sibling = manifest.file(s.domain, s.relative_path + suffix)
-                if sibling is not None:
-                    p.siblings.append(sibling)
+            for i, each in enumerate(stores if s.pattern else [p.store]):
+                if i and each is not None and each.size is not None:
+                    p.siblings.append(each)
+                if each is not None:
+                    for suffix in SIBLINGS:
+                        sibling = manifest.file(s.domain, each.relative_path + suffix)
+                        if sibling is not None:
+                            p.siblings.append(sibling)
             if s.media is not None:
                 p.media.extend(manifest.files_under(*s.media))
         plans.append(p)
@@ -451,8 +499,10 @@ def plan(manifest: Manifest, sources: tuple[Source, ...] = SOURCES) -> list[Plan
 def copy(p: Plan, dest: Path) -> Path:
     """Copy the plan's files under `dest` with their original names and return the store's copy.
 
-    The store and its siblings land in `dest` itself; a sibling left by an earlier copy that this
-    backup does not have is removed, so the store is never read with someone else's journal. Media
+    The store and its siblings land in `dest` itself (a second store of a pattern source whose
+    name repeats the first's goes under its own parent folder's name); a sibling left by an
+    earlier copy that this backup does not have is removed, so the store is never read with
+    someone else's journal. Media
     lands under `dest/<media folder>/` with its path below the backup's media prefix. Every copy is
     checked against the stored blob (`_copy_file`); a mismatch raises CopyError, a stale manifest
     `Size` is only a warning on the Copy. An encrypted file is decrypted on the way, a chunk at a
@@ -476,9 +526,14 @@ def copy(p: Plan, dest: Path) -> Path:
         stale = dest / (p.store.name + suffix)
         if p.store.name + suffix not in present and stale.is_file():
             stale.unlink()
+    used = {p.store.name}
     for sibling in p.siblings:
         if sibling.size is not None:
-            p.copied.append(_copy_file(sibling, dest / sibling.name))
+            target = dest / sibling.name
+            if sibling.name in used and len(sibling.parts) > 1:
+                target = dest / sibling.parts[-2] / sibling.name
+            used.add(sibling.name)
+            p.copied.append(_copy_file(sibling, target))
     if p.source.media is not None and p.source.media_folder is not None:
         head = len(PurePosixPath(p.source.media[1]).parts)
         folder = dest / p.source.media_folder

@@ -12,6 +12,8 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from test_apple_reminders import _second_store as _reminders_second_store
+from test_apple_reminders import _store as _reminders_store
 from test_easypark import LINES as EASYPARK_LINES
 from test_easypark import _recent
 from test_flighty import STORE_LINES as FLIGHTY_LINES
@@ -35,6 +37,7 @@ from logbook.store import Logbook
 UDID = "00008030-000A1B2C3D4E5F60"
 WHATSAPP = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared"
 NOTES = "AppDomainGroup-group.com.apple.notes"
+REMINDERS = "AppDomainGroup-group.com.apple.reminders"
 ALL = (
     "ios-contacts",
     "whatsapp-contacts",
@@ -46,6 +49,7 @@ ALL = (
     "easypark",
     "wispr-flow",
     "flighty",
+    "apple-reminders",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -58,6 +62,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "easypark": EASYPARK_LINES,
     "wispr-flow": WISPR_LINES,
     "flighty": FLIGHTY_LINES,
+    "apple-reminders": 7,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -69,7 +74,9 @@ STORES = {
     "ios-notes": "NoteStore.sqlite",
     "wispr-flow": "database.sqlite",
     "flighty": "MainFlightyDatabase.db",
+    "apple-reminders": "Data-7A556204-6B9C-4198-82BB-CFEFF7B79088.sqlite",  # first in path order
 }
+REMINDERS_OTHER = "Data-CD231143-F3F7-4B20-9128-1BB4D7A86BE4.sqlite"  # the bigger store, with a -wal
 
 
 SAFARI_BYTES = b"SQLite format 3\0" + b"\x02" * 1000
@@ -153,6 +160,17 @@ def _backup(
         _put(backup, rows, ios_backup.FLIGHTY, "Documents/MainFlightyDatabase.db", store)
     if "safari" in sources:  # HomeDomain, as the phone backs it up
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _safari_store(_dir(stage, "safari")))
+    if "apple-reminders" in sources:  # one store per account under Stores/, found by pattern
+        folder = _dir(stage, "rem")
+        first = _reminders_store(folder)
+        second = _reminders_second_store(folder)
+        _put(backup, rows, REMINDERS, "Container_v1/Stores", None)
+        _put(backup, rows, REMINDERS, "Container_v1/Stores/" + first.name, first)
+        _put(backup, rows, REMINDERS, "Container_v1/Stores/" + second.name, second)
+        _put(backup, rows, REMINDERS, "Container_v1/Stores/" + first.name + "-wal", _blob(stage, b"\0" * 16))
+        _put(backup, rows, REMINDERS, "Container_v1/MLModels/RDkNNReminder.json", _blob(stage, b"{}"))
+    if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
+        _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
     con = sqlite3.connect(backup / "Manifest.db")
     try:
         con.execute(
@@ -201,6 +219,7 @@ def _snapshot(folder: Path) -> dict[str, str]:
 @pytest.fixture
 def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "47")
+    monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD", raising=False)  # the shell's, never a test's
     monkeypatch.delenv("LOGBOOK_WHATSAPP_HASH_MEDIA", raising=False)
     monkeypatch.delenv("LOGBOOK_IMESSAGE_HASH_MEDIA", raising=False)
     root = tmp_path / "lb"
@@ -281,6 +300,7 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         ("HomeDomain", "Library/Preferences/com.apple.example.plist"),
         (WHATSAPP, "Message/../escape.jpg"),
         (ios_backup.EASYPARK, "Documents/findmycar-pin_12345.json"),  # beside the file, not in the glob
+        (REMINDERS, "Container_v1/MLModels/RDkNNReminder.json"),
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
@@ -453,6 +473,38 @@ def test_import_backup_dry_run_lists_files_and_sizes_and_writes_nothing(lb, tmp_
     assert "1 media file (" in out and "under Message/" in out
     assert "2 media files (" in out and "under Attachments/" in out
     assert "dry run" in out and "added" not in out and "valid" not in out
+
+
+def test_import_backup_copies_every_store_a_pattern_source_matches_and_runs_on_the_folder(
+    lb, tmp_path, capsys
+):
+    """Reminders keeps one store per account, `Data-<UUID>.sqlite`: the source names a pattern,
+    every match is copied beside the first with its -wal/-shm, and the adapter runs on the folder."""
+    backup = _backup(tmp_path, sources=("apple-reminders",))
+    _run(str(backup), "--dry-run")
+    out = capsys.readouterr().out
+    row = next(line for line in out.splitlines() if line.startswith("apple-reminders: "))
+    assert f"{STORES['apple-reminders']} (" in row and f"{REMINDERS_OTHER} (" in row  # path order
+    assert f"{REMINDERS_OTHER}-wal (16 bytes)" in row
+    assert "RDkNNReminder" not in out
+    _run(str(backup))
+    out = capsys.readouterr().out
+    folder = lb.root / "inbox" / f"ios-backup-{UDID}" / "apple-reminders"
+    assert sorted(p.name for p in folder.iterdir()) == sorted(
+        [STORES["apple-reminders"], REMINDERS_OTHER, REMINDERS_OTHER + "-wal"]
+    )
+    assert "added 7 lines from apple-reminders" in out
+    assert "skipped 1 without a title, 1 with an unusable date" in out
+    assert "also 1 marked for deletion" in out
+    stores = {line["payload"]["extra"]["store"] for line in lb.lines()}
+    assert stores == {STORES["apple-reminders"], REMINDERS_OTHER}
+
+
+def test_import_backup_pattern_source_with_no_match_is_not_found(lb, tmp_path, capsys):
+    backup = _backup(tmp_path, sources=("ios-notes",))
+    _run(str(backup), "--only", "reminders")
+    out = capsys.readouterr().out
+    assert "apple-reminders: Data-*.sqlite not found" in out
 
 
 # -- naming the folder ------------------------------------------------------------------

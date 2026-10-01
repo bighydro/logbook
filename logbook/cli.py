@@ -846,7 +846,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        _append_with(lb, adapter, store_copy)
+        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy)
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox, manifest, plans)
     seq, head, errors = lb.verify()
@@ -925,9 +925,9 @@ def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
         )
     if not p.found:
         why = " (listed in Manifest.db, file missing)" if p.listed else ""
-        return f"{p.source.name}: {name} not found{why}"
+        return f"{p.source.name}: {p.source.store_name} not found{why}"
     assert p.store is not None
-    parts = [f"{name} ({p.store.size or 0:,} bytes)"]
+    parts = [f"{p.store.name} ({p.store.size or 0:,} bytes)"]
     parts += [f"{s.name} ({s.size:,} bytes)" for s in p.siblings if s.size is not None]
     media = [m for m in p.media if m.size is not None]
     if media:

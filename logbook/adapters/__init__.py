@@ -98,6 +98,7 @@ BUILT_IN = (
     "shazam",
     "apple_podcasts",
     "pocket",
+    "apple_reminders",
 )
 
 
@@ -172,6 +173,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "notes": "ios-notes",
     "wallet": "ios-wallet",
     "wispr": "wispr-flow",
+    "reminders": "apple-reminders",
 }
 
 
