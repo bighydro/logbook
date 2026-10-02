@@ -559,6 +559,7 @@ logbook rollup places                         # nights, stays, hours, people per
 logbook rollup places --with                  # the place × person table: stays, days and nights at each place per person
 logbook rollup people                         # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week               # sleep, steps, resting heart rate, HRV per month or ISO week; — when missing
+logbook rollup listen --year 2026             # listens, hours, skips, the top artists by hours, hours by month, from every listen/v1 line
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints

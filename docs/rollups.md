@@ -15,6 +15,7 @@ logbook rollup places                  # nights, stays, hours, people per named 
 logbook rollup places --with           # the place × person table: stays, days and nights at each place per person
 logbook rollup people                  # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
+logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, hours by month
 ```
 
 The window is `--year`, or `--since` and `--until`, clipped to the days the owner's track covers
@@ -202,3 +203,16 @@ winning quarter hours, the readings.
 
 The same day rows feed `stats --health` and the health line of the [Day](day.md), so the three
 agree on every day.
+
+## Listening
+
+`rollup listen` is the year per `listen/v1` line standing (RFC 0019), whichever adapter wrote it:
+`spotify`, `apple-music`, `shazam`, `apple-podcasts`. Per year: the **listens**, the **hours** played
+(`played_s` summed; a line with no playhead is a listen with no hours, counted under `untimed`), the
+**skipped** lines, the lines per **service**, the podcast **episodes** with their hours, the **top
+artists** by hours played then listens (ten, the performers as the services spell them, never
+resolved), and **by month** every month the window touches with its hours, listens and skips — a
+month with no listen is an em dash, never a zero. The window is clipped to the days the listen
+lines cover; a correction that `supersedes` a line wins and a retracted line is out. It lives in
+`logbook/listen_rollup.py`, beside `rollup.py` and in its manner. The adapters and the rollup are
+described in [adapters/listen.md](adapters/listen.md).
