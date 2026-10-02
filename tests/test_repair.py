@@ -173,7 +173,8 @@ def test_repair_retracts_each_wrong_line_and_re_emits_it_corrected(
     assert {k: v for k, v in fixed["payload"].items() if k not in ("raw_id", "value", "supersedes")} == {
         k: v for k, v in original["payload"].items() if k not in ("raw_id", "value")
     }
-    assert standing["hrv:16:u2"]["payload"]["value"] == 45
+    hrv = standing["hrv:16:u2"]["payload"]
+    assert hrv["value"] == 45 and hrv["unit"] == "ms", "HRV is reported in ms (RFC 0014)"
     assert standing["resting_hr:27:u2"]["payload"]["value"] == 60
     with lb.index() as idx:
         retractions = idx.retractions()

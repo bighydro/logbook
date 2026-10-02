@@ -1,8 +1,11 @@
 """Days: a window of the record read back one line per day — `logbook days --from DATE --to DATE`.
 
 A line per day: the date and weekday; where the night was spent (the Day's night after: a named
-place, `aboard <asset>` or the coordinates with the city of the nearest large airport, and the
-country when the night is away; `in transit` when no stay reaches the minimum); the kilometres
+place, `aboard <asset>`, the home place a night within 400 m of it lies by (`stays.HOME_NEAR_M`),
+or the coordinates with `near <place>, x km` for a named place within 5 km (`trips.NEAR_KM`) or
+the city of the nearest large airport, and the country when the night is away; `in transit` when
+no stay reaches the minimum; `no location` when the day has no location line at all, since
+nothing then says the owner moved); the kilometres
 moved (every move that started on the day, a flight's included; aboard an asset, the passages);
 the flights of the day (`XY 561 OSL→ZRH`, with their evidence under `--json`); the stays (a stay
 or a run aboard an asset; a stop is not one) with how many lines are attached across the day's
@@ -38,6 +41,7 @@ from .store import Logbook
 CHUNK_DAYS = 31  # days per reading
 USUAL_SHARE = 0.8  # a source with a line on this share of the window's logged days is usual
 STAYS = (stays.STAY, day_reader.ABOARD)  # the rows counted as stays
+LOCATION = "location"  # the kind of line that says where the owner was; a day with none is `no location`
 NIGHT_WIDTH = 28
 ARROW = day_reader.ARROW
 DOT = day_reader.DOT
@@ -74,8 +78,9 @@ def read(
         health_of = day_reader.health_rows(found, rd)
         by_day = _by_day(rd)
         for day in chunk:
-            data = day_reader.of_reading(rd, day, health_of.get(day), by_day.get(day, []))
-            yield summarise(data, usual)
+            lines = by_day.get(day, [])
+            data = day_reader.of_reading(rd, day, health_of.get(day), lines)
+            yield summarise(data, usual, any(line.get("kind") == LOCATION for line in lines))
 
 
 def _by_day(rd: Reading) -> dict[str, list[Line]]:
@@ -88,10 +93,11 @@ def _by_day(rd: Reading) -> dict[str, list[Line]]:
     return out
 
 
-def summarise(data: Mapping[str, Any], usual: Sequence[str]) -> dict[str, Any]:
-    """One Day (`day.read`) as its line: the night after, the country, the metres moved, the
-    flights, the stays and attachments, the people confirmed, the health row, the sources, and
-    the usual sources with no line on the day."""
+def summarise(data: Mapping[str, Any], usual: Sequence[str], located: bool = True) -> dict[str, Any]:
+    """One Day (`day.read`) as its line: the night after (`located`: whether the day has any
+    location line, so a night in transit on a day without one reads `no location`), the country,
+    the metres moved, the flights, the stays and attachments, the people confirmed, the health
+    row, the sources, and the usual sources with no line on the day."""
     night = data["nights"]["after"]
     timeline = [e for e in data["timeline"] if e["kind"] != day_reader.FLIGHT]
     stay_rows = [e for e in timeline if e["kind"] in STAYS]
@@ -104,7 +110,10 @@ def summarise(data: Mapping[str, Any], usual: Sequence[str]) -> dict[str, Any]:
     return {
         "day": data["day"],
         "weekday": data["weekday"],
-        "night": {k: night[k] for k in ("where", "home", "aboard", "in_transit", "stay")},
+        "night": {
+            **{k: night[k] for k in ("where", "home", "aboard", "in_transit", "stay")},
+            "located": located,
+        },
         "country": data["country"]["code"],
         "moved_m": round(_moved(timeline)),
         "flights": [
@@ -164,7 +173,7 @@ def row(r: Mapping[str, Any]) -> str:
 def _night_text(r: Mapping[str, Any]) -> str:
     night = r["night"]
     if night["in_transit"]:
-        return "in transit"
+        return "in transit" if night.get("located", True) else "no location"
     where = str(night["where"])
     if night["home"] or r["country"] is None:
         return where

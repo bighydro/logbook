@@ -8,7 +8,8 @@ line stays in the chain, hidden; readers see the corrected one. Each repair is i
 run finds nothing standing to repair, and a run interrupted midway is finished by the next.
 
 `health_units`: `apple-health` wrote `resting_hr` 60 times and `hrv` 1,000 times too large before the
-store's own units were checked (RFC 0014, "Units as the store keeps them").
+store's own units were checked (RFC 0014, "Units as the store keeps them"); the corrected line carries
+the profile's unit, `bpm` and `ms` (`HEALTH_UNITS`).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from .store import RETRACTION, Logbook, now_utc
 
 HEALTH_SOURCE = "apple-health"
 HEALTH_FACTORS = {"resting_hr": 60, "hrv": 1000}  # type → how many times too large the value was
+HEALTH_UNITS = {"resting_hr": "bpm", "hrv": "ms"}  # type → the profile's unit the corrected line carries
 HEALTH_SUFFIX = ":u2"  # the corrected line's raw_id: `<old raw_id>:u2`
 REPAIR_SOURCE = "logbook"  # the retraction's source: the tool decided it, not the owner (RFC 0003)
 
@@ -80,6 +82,7 @@ def _health_drafts(wrong: Sequence[Line], at: str) -> Iterator[dict[str, Any]]:
         factor = HEALTH_FACTORS[kind]
         payload["raw_id"] = f"{payload['raw_id']}{HEALTH_SUFFIX}"
         payload["value"] = _round(float(payload["value"]) / factor)
+        payload["unit"] = HEALTH_UNITS[kind]  # a resting rate in bpm, HRV in ms (RFC 0014)
         payload["supersedes"] = line["id"]
         yield {
             "at": line["at"],

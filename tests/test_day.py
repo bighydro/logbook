@@ -392,7 +392,7 @@ def test_the_day_is_read_through_the_index_never_a_scan(
     monkeypatch.setattr(Index, "of_kind", scan)
     data = day_reader.read(lb, "2026-06-10")
     assert data["day"] == "2026-06-10"
-    [cafe] = [e for e in data["timeline"] if e["where"] == "59.9200,10.7400"]
+    [cafe] = [e for e in data["timeline"] if e["where"] == "59.9200,10.7400 near Home, 1.0 km"]
     assert [c["name"] for c in cafe["with"]["confirmed"]] == ["Kari Nordmann"]
     proposed = [c["name"] for c in cafe["with"]["proposed"]]
     assert proposed == [], "the face is the same person, already confirmed"

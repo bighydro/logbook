@@ -43,6 +43,7 @@ from . import (
     reading,
     repair,
     rollup,
+    schedule,
     stays,
     transcribe,
     trips,
@@ -555,6 +556,154 @@ def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
 
 
 def cmd_sync(a: argparse.Namespace) -> None:
+    """`sync <source>`: pull from a live source since its stored watermark (or --since), append,
+    advance the watermark. `sync --all`: every configured source in turn (`_sync_all`). `sync
+    --install-schedule` / `--uninstall-schedule`: `sync --all` twice a day by the machine's own
+    scheduler (`_sync_schedule`, `logbook.schedule`)."""
+    if a.install_schedule or a.uninstall_schedule:
+        _sync_schedule(a)
+        return
+    if a.all:
+        _sync_all(a)
+        return
+    if a.name is None:
+        known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
+        print(f"sync: say a source or --all, e.g. `logbook sync immich` (known: {known})", file=sys.stderr)
+        sys.exit(2)
+    _sync_source(a)
+
+
+def _sync_all(a: argparse.Namespace) -> None:
+    """Every live source that is configured — at least one of its `ENV` variables set, and its
+    `configure` taking the environment — pulled in turn, each from its own watermark; a source the
+    owner disabled or one with no variable set is skipped and said so. A failure in one (its exit
+    status, or an error its adapter let through) never stops the next: it is said on stderr as a
+    single run says it, and the run goes on. At the end one summary line per source — `ok`,
+    `failed (status N)`, `skipped (why)` — and exit 1 when any failed. A Ctrl-C while a source
+    listens to a stream (ais, status 130) ends the run there: the sources not reached are listed as
+    `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen` and `--until`
+    are a single source's and refused."""
+    if a.name is not None:
+        print(
+            f"sync: --all takes no source name; run `logbook sync {a.name}` for that one alone",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    for flag, value in (("--since", a.since), ("--listen", a.listen), ("--until", a.until)):
+        if value is not None:
+            print(f"sync: --all takes no {flag}: each source starts from its own watermark", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    disabled = _disabled(lb)
+    live = adapters.live_adapters()
+    results: list[tuple[str, str]] = []
+    interrupted = False
+    for adapter in live:
+        name = adapter.NAME
+        if interrupted:
+            results.append((name, "not run"))
+            continue
+        if name in disabled:
+            _say_disabled(lb, name)
+            results.append((name, "skipped (disabled)"))
+            continue
+        reason = _unconfigured(adapter)
+        if reason is not None:
+            print(f"{name}: {reason}; skipped")
+            results.append((name, f"skipped ({reason})"))
+            continue
+        status = 0
+        try:
+            _sync_source(argparse.Namespace(**{**vars(a), "name": name, "all": False}))
+        except SystemExit as e:
+            status = e.code if isinstance(e.code, int) else 1
+        except Exception as e:
+            print(f"sync: {name}: {type(e).__name__}: {e}", file=sys.stderr)
+            status = 1
+        if status == 130:  # Ctrl-C while the source listened: the owner wants out, not the next source
+            interrupted = True
+            results.append((name, "interrupted"))
+            continue
+        results.append((name, "ok" if status == 0 else f"failed (status {status})"))
+    ok = sum(1 for _, r in results if r == "ok")
+    failed = sum(1 for _, r in results if r.startswith("failed"))
+    skipped = sum(1 for _, r in results if r.startswith("skipped"))
+    print(
+        f"sync --all: {_plural(len(results), 'source')}: {ok} ok, {failed} failed, {skipped} skipped"
+        + (", interrupted" if interrupted else "")
+    )
+    width = max((len(name) for name, _ in results), default=0)
+    for name, result in results:
+        print(f"  {name:<{width}}  {result}")
+    if interrupted:
+        sys.exit(130)
+    if failed:
+        sys.exit(1)
+
+
+def _unconfigured(adapter: adapters.LiveAdapter) -> str | None:
+    """Why `sync --all` leaves a source out, or None when it is configured: none of its variables
+    set (`LOGBOOK_IMMICH_URL, LOGBOOK_IMMICH_KEY not set`), one still missing (`set
+    LOGBOOK_IMMICH_KEY`), or a value its `configure` refuses. A source whose variables are all
+    optional (`imessage`) joins the run once the owner sets one of them."""
+    if not adapter.ENV:
+        return "takes no variables; run it by name"
+    if not any(os.environ.get(v, "").strip() for v in adapter.ENV):
+        return f"{', '.join(adapter.ENV)} not set"
+    try:
+        config = adapter.configure(os.environ)
+    except ValueError as e:
+        return str(e)
+    if config is None:
+        missing = [v for v in adapter.ENV if not os.environ.get(v, "").strip()]
+        return f"set {' and '.join(missing)}"
+    return None
+
+
+def _sync_schedule(a: argparse.Namespace) -> None:
+    """`sync --install-schedule`: a launchd agent (macOS) or a systemd user timer (Linux) running
+    `logbook sync --all` at 07:00 and 19:00 local, the plist or units printed before they are
+    written, nothing written outside that one directory, then handed to the scheduler (or, when it
+    is not on PATH, the command to run said). `--uninstall-schedule`: the reverse. The record found
+    now is the one the agent is pointed at (`LOGBOOK_HOME`)."""
+    if a.install_schedule and a.uninstall_schedule:
+        print("sync: --install-schedule or --uninstall-schedule, not both", file=sys.stderr)
+        sys.exit(2)
+    flag = "--install-schedule" if a.install_schedule else "--uninstall-schedule"
+    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until)
+    if any(x is not None for x in others):
+        print(f"sync: {flag} takes no source and no other option", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    try:
+        plan = schedule.plan(
+            schedule.system(), Path.home(), sys.executable, lb.root, Path(xdg).expanduser() if xdg else None
+        )
+    except schedule.ScheduleError as e:
+        print(f"sync: {flag}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.uninstall_schedule:
+        if not any(path.exists() for path in plan.files):
+            print(f"no schedule installed ({plan.directory})")
+            return
+        problem = schedule.run(plan.deactivate, plan.tool, print)
+        for path in schedule.uninstall(plan):
+            print(f"removed {path}")
+        if problem is not None:
+            print(f"sync: {flag}: {problem}", file=sys.stderr)
+            sys.exit(1)
+        return
+    schedule.install(plan, print)
+    for text in schedule.summary(plan):
+        print(text)
+    problem = schedule.run(plan.activate, plan.tool, print)
+    if problem is not None:
+        print(f"sync: {flag}: {problem}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _sync_source(a: argparse.Namespace) -> None:
     """Pull from a live source since its stored watermark (or --since), append, advance the watermark.
     The watermark is the source's own clock (adapter.watermark), not the event time, so late uploads of
     old items are still picked up. It lives in <root>/state/<name>.json — bookkeeping, not the record."""
@@ -2734,13 +2883,27 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser(
         "sync",
         help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb);"
-        " safe to re-run",
+        " safe to re-run; --all for every configured source, --install-schedule for twice a day",
     )
     s.add_argument(
         "name",
+        nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), gcal (Google Calendar), granola,"
         " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky)",
     )
+    s.add_argument(
+        "--all",
+        action="store_true",
+        help="every configured live source in turn (one with its LOGBOOK_* variables set), a failure in one"
+        " never stopping the next; one summary line per source; exit 1 when any failed",
+    )
+    s.add_argument(
+        "--install-schedule",
+        action="store_true",
+        help="run `sync --all` at 07:00 and 19:00 local: a launchd agent (macOS) or a systemd user timer"
+        " (Linux), printed before it is written under your LaunchAgents or systemd user directory",
+    )
+    s.add_argument("--uninstall-schedule", action="store_true", help="remove that agent or timer")
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
     s.add_argument(
         "--listen",
@@ -3090,16 +3253,31 @@ def main(argv: list[str] | None = None) -> None:
     a = ap.parse_args(argv)
     try:
         a.fn(a)
+        sys.stdout.flush()  # a short listing sits in the buffer until exit: meet the closed pipe here
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
     except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
         _stdout_to_devnull()
+    except SystemExit:  # a command's own status (`sources --gaps` exits 1) stands; the pipe is still quiet
+        _flush_quietly()
+        raise
+
+
+def _flush_quietly() -> None:
+    """Flush stdout now, so a pipe whose reader is gone is seen here and not reported by the
+    interpreter's final flush."""
+    try:
+        sys.stdout.flush()
+    except BrokenPipeError:
+        _stdout_to_devnull()
 
 
 def _stdout_to_devnull() -> None:
     """Point stdout at the null device so the interpreter's final flush does not report the
-    broken pipe on stderr and turn the exit status into 120."""
+    broken pipe on stderr and turn the exit status into 120. Python ignores SIGPIPE at start-up,
+    so a write to a closed pipe is a BrokenPipeError, never a signal; this is where every reader
+    meets it."""
     with contextlib.suppress(OSError, ValueError):  # no real file behind stdout (a test capture)
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
