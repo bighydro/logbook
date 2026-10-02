@@ -92,6 +92,7 @@ nav:
       - "Screen Time": adapters/screentime.md
       - "Apple Photos: albums, favourites, faces": adapters/photos.md
       - "Weather": adapters/weather.md
+      - "Health: Apple Health, Withings, MyFitnessPal": adapters/health.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md
