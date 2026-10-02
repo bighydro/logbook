@@ -134,12 +134,75 @@ sources, reasons and lines); an `aboard` entry adds `asset` and `inside`; a `fli
 the flight line's fields and `line`; a move lists the `flights` that cover it — then `flights`,
 `unplaced`, `health` (with the ids of the lines each number came from) and `sources`.
 
+## A window of days
+
+`logbook days --from YYYY-MM-DD --to YYYY-MM-DD [--json]` reads a window back one line per day,
+composed from the Day of each: the date and weekday; where the night was spent (the night after,
+as the Day's header has it: a named place, `aboard <asset>` or the coordinates with the city of
+the nearest large airport, and the country when the night is away; `in transit` when no stay
+reaches the minimum); the kilometres moved (every move that started on the day, the flights'
+included, and aboard an asset its passages); the flights (`XY 561 OSL→ZRH`); the stays — a stay
+or a run aboard an asset; a stop is not one — with how many lines are attached across the day's
+rows; the people confirmed present (`with 2`; a proposed face is not counted); the health triple
+when the day has one; and a gap marker. Both bounds default to the days the owner's track covers.
+
+```bash
+logbook days --from 2026-06-08 --to 2026-06-21          # the persona's fortnight, as text
+logbook days --from 2026-01-01 --to 2026-12-31 --json   # a year, one JSON object per line
+logbook days                                            # the whole record
+```
+
+The fortnight of the test persona, who does not exist:
+
+```
+2026-06-08  Mon  Home                             1.2 km  3 stays
+2026-06-09  Tue  Home                             1.2 km  3 stays
+2026-06-10  Wed  Home                             4.4 km  5 stays (2 attached) · with 1
+2026-06-11  Thu  Home                             1.3 km  3 stays (2 attached) · with 1
+2026-06-12  Fri  Home                             1.2 km  3 stays
+2026-06-13  Sat  aboard Solvind NO               11.1 km  2 stays (2 attached) · with 1
+2026-06-14  Sun  Home                            11.1 km  2 stays
+2026-06-15  Mon  47.3769,8.5417 (Zurich) CH     1,471 km  XY 561 OSL→ZRH · 4 stays (1 attached)
+2026-06-16  Tue  47.3769,8.5417 (Zurich) CH       0.0 km  1 stay (2 attached) · with 1
+2026-06-17  Wed  47.3769,8.5417 (Zurich) CH       0.0 km  1 stay
+2026-06-18  Thu  Home                           1,471 km  XY 562 ZRH→OSL · 4 stays
+2026-06-19  Fri  Home                             1.2 km  3 stays
+2026-06-20  Sat  Home                             1.2 km  3 stays
+2026-06-21  Sun  Home                             0.0 km  1 stay
+```
+
+The **gap marker** names every usual source with no standing line on the day — `gap dawarich`
+when the tracker said nothing all day, `gap apple-health, dawarich` on a day with nothing logged
+(the line then reads `in transit` and `nothing logged`). A source is usual when it has a line on
+at least four in five of the window's days that have any line: the tracker, the watch, the boat's
+AIS, the messages; not the photos or the notes, which come every other day, and not a calendar
+that spoke once. The share is counted on the index in one aggregate (`Index.source_days`),
+nothing read from the files, before the first line is printed.
+
+Every number is the Day's: the night is `nights.after`, the country is the Day's, the flights are
+the Day's flight rows, the stays and their attachments are its timeline rows, the people are the
+union of its rows' confirmed company, the health row is its health line. What the window clips is
+a stay's start, and the night's stay id carries it: a hotel stay of three nights starts, in a
+reading that opens on its second day, at that day's midnight, as it does for `day` of that day.
+
+Under `--json` the output is JSON Lines — one object per day per line, so a year streams as text
+does: `day`, `weekday`, `night` (`where`, `home`, `aboard`, `in_transit`, `stay`), `country` (the
+code), `moved_m`, `flights` (`carrier`, `number`, `from`, `to`, `evidence`, `line`), `stays`
+(`count`, `attached`, `with_attachments`), `people` (`confirmed`, `names`), `health` (as the Day's,
+with its line ids), `sources` (as the Day's) and `gaps`.
+
 ## Performance
 
 A Day is located through `index.sqlite`: one reading of the day and the day before (the night
 before is that day's night), the retraction and resolution lines, and the health lines of the two
 days, each by an indexed column. A record of millions of lines reads a day in the time that day's
 lines take; the files are never swept.
+
+`days` reads the window in chunks of a month through one reading each — the chunk's days and the
+day before, so the first day has its night before, and the chunk's health lines in one indexed
+query — and asks that reading for each day in turn: a year is a dozen readings, never one per
+day, and the lines stream out as each chunk is read. A year of the demo record (`logbook demo
+--days 365`, 155,000 lines) prints in seconds, the first line within one.
 
 ## What it is not
 

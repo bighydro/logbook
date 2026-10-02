@@ -49,6 +49,9 @@ from . import (
     day as day_reader,
 )
 from . import (
+    days as days_reader,
+)
+from . import (
     doctor as doctor_checks,
 )
 from .adapters import ais, ios_contacts
@@ -1345,6 +1348,40 @@ def cmd_day(a: argparse.Namespace) -> None:
         return
     for text in day_reader.rows(data):
         print(text)
+
+
+def cmd_days(a: argparse.Namespace) -> None:
+    """`days [--from DAY] [--to DAY] [--json]`: a window of the record one line per day — the
+    night, the kilometres moved, the flights, the stays with what attached, the people confirmed,
+    the health triple, and a gap marker for a usual source with no line that day — streamed from
+    readings of the window in chunks through the index (`logbook.days`), never one per day. The
+    window defaults to the days the owner's track covers. `--json` is one object per line. Nothing
+    is written."""
+    lb = Logbook.find()
+    try:
+        window = _days_window(lb, a.since, a.until)
+        if window is None:
+            if not a.json:
+                print("no days: the record has no lines")
+            return
+        for r in days_reader.read(lb, window[0], window[1], _airports(a.airports)):
+            print(json.dumps(r, ensure_ascii=False) if a.json else days_reader.row(r))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"days: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _days_window(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str] | None:
+    """`--from` and `--to`, each defaulting to the record's first or last day with a location line
+    (else any line); None when a bound is missing and the record has no lines."""
+    if since is not None and until is not None:
+        return parse_day(since).isoformat(), parse_day(until).isoformat()
+    whole = reading.record_days(lb, "location") or reading.record_days(lb)
+    if whole is None:
+        return None
+    first = parse_day(since).isoformat() if since else whole[0]
+    last = parse_day(until).isoformat() if until else whole[1]
+    return first, last
 
 
 def _show_page(lb: Logbook, a: argparse.Namespace) -> None:
@@ -2680,6 +2717,18 @@ def main(argv: list[str] | None = None) -> None:
         "--json", action="store_true", help="the Day as one JSON object, every row with its line ids"
     )
     s.set_defaults(fn=cmd_day)
+    s = sub.add_parser(
+        "days", help="a window of days one line each: night, km moved, flights, stays, people, health, gaps"
+    )
+    s.add_argument("--from", dest="since", metavar="YYYY-MM-DD", help="the first day (default the record's)")
+    s.add_argument("--to", dest="until", metavar="YYYY-MM-DD", help="the last day (default the record's)")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="one JSON object per line (JSON Lines)")
+    s.set_defaults(fn=cmd_days)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
     s.add_argument(
