@@ -629,6 +629,26 @@ above the ceiling is refused with the file's name. Every real export appends one
 to the chain — destination, window, counts per tier, the ceiling in force, the package's digest — so the
 record itself shows every time anything left it. `--dry-run` writes nothing and appends nothing.
 
+## Asking an agent
+
+`logbook mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
+process's stdin and stdout and nothing else: no port, no socket. The host starts it, and the tools are the
+readers above — `day`, `days`, `trips`, `places`, `people`, `person`, `promises`, `gaps`, and a `search` over
+the index — plus two that write through `Logbook.append` and nothing else: `add_note` (one `note/v1` line, as
+`logbook add`) and `promise_done` (one `task/v1` line, as `logbook promises done`).
+
+```bash
+pip install "openlogbook[mcp]"                # the official Python MCP SDK
+logbook mcp --inspect                         # the tool table and a sample request; no record needed
+logbook mcp                                   # what a host runs; LOGBOOK_HOME or --root names the record
+```
+
+Every answer passes the crossing gate of ADR 0016: `policy/crossing.json` names the `mcp` destination and its
+ceiling, 1 unless you raise it, and the answer says how many lines sat above it and were left out
+(`gate.withheld`). At 1 the agent sees the record's shape and no note, message or name; at 2 your notes and
+your circle too; tier 3 only when the file allows it *and* you start the server with `--allow-tier-3`.
+[docs/mcp.md](docs/mcp.md) has the host's config snippet and the tools.
+
 ## Three rules
 
 1. **Append only.** Every line is hash-chained to the one before. A broken chain is an error, never repaired silently.
