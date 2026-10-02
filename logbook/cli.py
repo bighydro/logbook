@@ -51,7 +51,7 @@ from . import (
 from . import (
     doctor as doctor_checks,
 )
-from .adapters import ios_contacts
+from .adapters import ais, ios_contacts
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
@@ -226,17 +226,21 @@ def _say_disabled(lb: Logbook, name: str) -> bool:
     return True
 
 
-def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str) -> bool:
-    """Whether the adapter's `run` (or a live adapter's `pull`) accepts the optional keyword:
+def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: bool = False) -> bool:
+    """Whether the adapter's `run` (or, for `sync`, its `pull`: `live`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
     times are floating), `store` (puts bytes in the attachment store), `store_file` (puts a file
     there, streamed), `lookup` (the id of a line by
     source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
-    `assets` (the asset registry, ADR 0018), or one of `add`'s own options."""
+    `assets` (the asset registry, ADR 0018), `listen_s`, `notice` and `status` (a source that listens
+    to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
+    adapter (`ais`), so `sync` asks about `pull`, never `run`."""
+    if live and isinstance(adapter, adapters.LiveAdapter):
+        return option in inspect.signature(adapter.pull).parameters
     if isinstance(adapter, adapters.Adapter):
         return option in inspect.signature(adapter.run).parameters
-    live: adapters.LiveAdapter = adapter
-    return option in inspect.signature(live.pull).parameters
+    pulls: adapters.LiveAdapter = adapter
+    return option in inspect.signature(pulls.pull).parameters
 
 
 LOCATION_SKIPS = ("skipped_no_timestamp", "skipped_bad_coordinates")
@@ -385,13 +389,29 @@ def _file_progress(n_files: int) -> Callable[[str, int, int, float], None]:
     return report
 
 
-def _page_progress(unit: str) -> Callable[[int, float], None]:
-    """One line per page pulled from a live source, dry runs included, counting `unit`."""
+def _page_progress(unit: str, status: Mapping[str, Any] | None = None) -> Callable[[int, float], None]:
+    """One line per page pulled from a live source, dry runs included, counting `unit`. A source
+    that listens (`ais`) calls it once a minute and keeps a tally per asset in `status["heard"]`,
+    which the line carries in parentheses."""
 
     def report(n: int, elapsed: float) -> None:
-        print(f"  {n:,} {unit} in {elapsed:,.0f}s", file=sys.stderr)
+        heard = status.get("heard") if status is not None else None
+        per_asset = f" ({', '.join(f'{k} {v:,}' for k, v in sorted(heard.items()))})" if heard else ""
+        print(f"  {n:,} {unit} in {elapsed:,.0f}s{per_asset}", file=sys.stderr)
 
     return report
+
+
+def _window_text(seconds: float) -> str:
+    """A window in words: `45 s`, `5 min`, `2 h 12 min`."""
+    hours, rest = divmod(round(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    parts = [f"{hours} h"] if hours else []
+    if minutes:
+        parts.append(f"{minutes} min")
+    if secs or not parts:
+        parts.append(f"{secs} s")
+    return " ".join(parts)
 
 
 def _jsonl(p: Path) -> Iterator[dict[str, Any]]:
@@ -537,6 +557,8 @@ def cmd_sync(a: argparse.Namespace) -> None:
         known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
         print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
         sys.exit(2)
+    listens = _takes(adapter, "listen_s", live=True)  # a source that listens to a stream for a window (ais)
+    listen_s = _listen_flag(a, listens)
     lb = Logbook.find()
     if _say_disabled(lb, adapter.NAME):  # before the variables: a switched-off source needs none
         return
@@ -569,23 +591,41 @@ def cmd_sync(a: argparse.Namespace) -> None:
     unit = str(getattr(adapter, "UNIT", "assets"))
     item = unit.removesuffix("s")  # one of them: a point, a message, an asset
     options: dict[str, Any] = {}
-    if _takes(adapter, "store") and not a.dry_run:
+    if _takes(adapter, "store", live=True) and not a.dry_run:
         options["store"] = lb.attach
-    if _takes(adapter, "lookup"):
+    if _takes(adapter, "lookup", live=True):
         options["lookup"] = _lookup(lb)
-    if _takes(adapter, "timezone"):
+    if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     failed: list[str] = []  # one line per feed the adapter could not read, the others still pulled
-    if _takes(adapter, "failed"):
+    if _takes(adapter, "failed", live=True):
         options["failed"] = failed
-    if _takes(adapter, "assets"):
+    if _takes(adapter, "assets", live=True):
         options["assets"] = _registry(lb, "sync")
+    status: dict[str, Any] = {}  # what a listening source reports: messages per asset, reconnects, Ctrl-C
+    if listens:
+        zone = ZoneInfo(str(lb.meta["timezone"]))
+        if a.until is not None:
+            try:
+                listen_s = ais.seconds_until(a.until, zone, datetime.now(zone))
+            except ValueError as e:
+                print(f"sync: --until {e}", file=sys.stderr)
+                sys.exit(2)
+            print(
+                f"  listening until {a.until.strip()} {zone.key} ({_window_text(listen_s)})", file=sys.stderr
+            )
+        else:
+            listen_s = listen_s if listen_s is not None else float(getattr(config, "listen_s", 0.0))
+            print(f"  listening for {_window_text(listen_s)}", file=sys.stderr)
+        options["listen_s"] = listen_s
+        options["status"] = status
+        options["notice"] = lambda text: print(f"  {text}", file=sys.stderr)
     group: Callable[[dict[str, Any]], str] | None = getattr(adapter, "group", None)
     seen["groups"] = Counter()
     seen["group_marks"] = {}  # the largest watermark per group, kept in the state when GROUP_MARKS
     already_in_group: Counter[str] = Counter()
     drafts = _watch(
-        adapter.pull(config, since, progress=_page_progress(unit), counts=counts, **options),
+        adapter.pull(config, since, progress=_page_progress(unit, status), counts=counts, **options),
         adapter.watermark,
         seen,
         group,
@@ -624,8 +664,11 @@ def cmd_sync(a: argparse.Namespace) -> None:
             print(f"  {name}: {count} seen")
         _report_skipped(skipped)
         _report_pending(pending)
+        _report_listening(status)
         if failed:
             sys.exit(1)
+        if status.get("interrupted"):
+            sys.exit(130)
         return
     mark = seen["watermark"]
     if failed:  # a feed that was not read may hold changes older than the lookback: try again from here
@@ -650,8 +693,42 @@ def cmd_sync(a: argparse.Namespace) -> None:
         print(f"  {name}: {count - already_in_group[name]} new of {count} seen")
     _report_skipped(skipped)
     _report_pending(pending)
+    _report_listening(status)
     if failed:
         sys.exit(1)
+    if status.get("interrupted"):  # what was heard is written and summed up above; the shell still learns
+        sys.exit(130)
+
+
+def _listen_flag(a: argparse.Namespace, listens: bool) -> float | None:
+    """`--listen SECONDS` as a number, None when not given; exits 2 when the source does not listen,
+    when both --listen and --until are given, or when the seconds are not a number above 0.
+    `--until` is turned into seconds later, once the record's zone is known."""
+    if a.listen is None and a.until is None:
+        return None
+    if not listens:
+        print(
+            f"sync: --listen and --until are for a source that listens to a stream (ais), not {a.name}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if a.listen is not None and a.until is not None:
+        print("sync: give --listen or --until, not both", file=sys.stderr)
+        sys.exit(2)
+    if a.listen is None:
+        return None
+    try:
+        return ais.seconds(a.listen)
+    except ValueError as e:
+        print(f"sync: --listen {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _report_listening(status: Mapping[str, Any]) -> None:
+    """How a listening source's run went, after the counts: the reconnects, if any."""
+    n = int(status.get("reconnects", 0))
+    if n:
+        print(f"  reconnected {'once' if n == 1 else f'{n} times'}")
 
 
 def cmd_infer(a: argparse.Namespace) -> None:
@@ -2511,6 +2588,16 @@ def main(argv: list[str] | None = None) -> None:
         " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky)",
     )
     s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
+    s.add_argument(
+        "--listen",
+        metavar="SECONDS",
+        help="ais: listen this long, then write (default: LOGBOOK_AISSTREAM_LISTEN_S, 60 s)",
+    )
+    s.add_argument(
+        "--until",
+        metavar="HH:MM",
+        help="ais: listen until the record's local clock next shows this time, then write",
+    )
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)
     s = sub.add_parser(
