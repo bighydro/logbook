@@ -736,6 +736,25 @@ class Index:
         self.db.execute("DELETE FROM batch")
         return {(str(source), str(raw_id)) for source, raw_id in found}
 
+    def lines_of(self, keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], Line]:
+        """The line with each of these (source, raw_id) keys, read from the files, for the keys the
+        log has: the first written when it has more than one. One SELECT for the batch, through
+        the temp table `existing` uses, so an adapter checking an export against the record asks
+        once per batch, never once per line."""
+        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS batch (source TEXT, raw_id TEXT)")
+        self.db.execute("DELETE FROM batch")
+        self.db.executemany("INSERT INTO batch VALUES (?, ?)", keys)
+        found = self.db.execute(
+            "SELECT l.source, l.raw_id, l.file, l.offset FROM lines l"
+            " JOIN batch b ON b.source = l.source AND b.raw_id = l.raw_id ORDER BY l.seq"
+        ).fetchall()
+        self.db.execute("DELETE FROM batch")
+        places: dict[tuple[str, str], tuple[str, int]] = {}
+        for source, raw_id, file, offset in found:
+            places.setdefault((str(source), str(raw_id)), (str(file), int(offset)))
+        lines = self._read(list(places.values()))
+        return dict(zip(places, lines, strict=True))
+
     def _read(self, where: list[tuple[str, int]]) -> list[Line]:
         """The lines at these (file, offset) places, in the order given. Each file opened once."""
         from .store import read_line_at
