@@ -21,14 +21,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from . import policy, present
-from .adapters.transcript import Turn, parse_text
+from .adapters.transcript import SPEAKER, Turn, parse_text
 from .chain import Line
 from .index import local_date
 from .resolve import Identity, Ref, identities_from
@@ -45,8 +45,14 @@ CERTAINTY = "inferred"  # RFC 0007: the words were read into a commitment, never
 OWED_BY_OWNER, OWED_TO_OWNER = "owed_by_owner", "owed_to_owner"
 FUTURE, OBLIGATION, OFFER = "future", "obligation", "offer"
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
+DIARIZER = re.compile(
+    r"^(?:speaker|sprecher|spk)\s*[A-Z0-9]{1,2}$", re.IGNORECASE
+)  # `Speaker A`, `Speaker 2`
 QUOTE_WIDTH = 100
 ID_WIDTH = 16
+CONTEXT = 2  # sentences either side of a candidate that a judge sees
+THRESHOLD = 0.6  # a judged candidate shows when it is a commitment at this confidence or above
+OWNER, UNKNOWN = "owner", "unknown"  # a judgement's words for the owner and for nobody it could name
 
 
 # -- the matches ---------------------------------------------------------------------------------------
@@ -357,8 +363,53 @@ class Speaker:
 
 
 @dataclass(frozen=True)
+class Said:
+    """One sentence of the text around a candidate, with who said it as the report names them
+    (`you`, a resolved label, a diarizer's label, `?`)."""
+
+    speaker: str
+    text: str
+
+
+@dataclass(frozen=True)
+class Judgement:
+    """A local model's reading of one candidate (`logbook.judge`): whether it is a commitment, who
+    made it (`owner`, a name, `unknown`), to whom, what in a line, when it is due (`YYYY-MM-DD` or
+    None) and how sure the model was (0 to 1); with the engine and model that read it and when, since
+    a judgement is never redone and the model may change."""
+
+    is_commitment: bool
+    by: str
+    to: str
+    what: str
+    due: str | None
+    confidence: float
+    model: str
+    judged_at: str
+    engine: str = ""
+
+    def shows(self, threshold: float = THRESHOLD) -> bool:
+        return self.is_commitment and self.confidence >= threshold
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "is_commitment": self.is_commitment,
+            "by": self.by,
+            "to": self.to,
+            "what": self.what,
+            "due": self.due,
+            "confidence": self.confidence,
+            "engine": self.engine,
+            "model": self.model,
+            "judged_at": self.judged_at,
+        }
+
+
+@dataclass(frozen=True)
 class Proposal:
-    """One promise as proposed: where it was read, who said it, what, and when it may be due."""
+    """One promise as proposed: where it was read, who said it, what, and when it may be due; the
+    `CONTEXT` sentences before and after it in the same transcript or note, across turns, and the
+    names the record resolves in that line (its speakers and participants, the owner among them)."""
 
     id: str
     day: str
@@ -373,6 +424,10 @@ class Proposal:
     match: Match
     due: str | None
     closed_by: str | None = None
+    before: tuple[Said, ...] = ()
+    after: tuple[Said, ...] = ()
+    names: tuple[str, ...] = ()
+    judgement: Judgement | None = None
 
     @property
     def status(self) -> str:
@@ -401,6 +456,7 @@ class Proposal:
                 "phrase": self.match.due_phrase,
                 "date": self.due,
             },
+            "judgement": None if self.judgement is None else self.judgement.to_json(),
         }  # fmt: skip
 
 
@@ -412,6 +468,19 @@ class Report:
     skipped: dict[str, int]
     extractor: dict[str, Any]
     since: str | None
+    owner: str | None = None  # the owner's label, as the record resolves it
+
+    @property
+    def unjudged(self) -> list[Proposal]:
+        return [p for p in self.proposals if p.judgement is None]
+
+
+def with_judgements(report: Report, judgements: Mapping[str, Judgement]) -> Report:
+    """The report with each proposal carrying the judgement kept for its id, when there is one."""
+    proposals = [
+        replace(p, judgement=judgements[p.id]) if p.id in judgements else p for p in report.proposals
+    ]
+    return replace(report, proposals=proposals)
 
 
 def proposal_id(origin: str, quote: str) -> str:
@@ -457,38 +526,50 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
     seen: set[str] = set()
     for line in lines:
         payload = line.get("payload") or {}
+        participants = payload.get("participants")
+        participants = participants if isinstance(participants, list) else []
+        known = _known(participants, identities, owner)
         if line.get("kind") == TRANSCRIPT:
             turns = turns_of(lb, line)
             if turns is None:
                 skipped["transcripts_without_text"] = skipped.get("transcripts_without_text", 0) + 1
                 continue
-            participants = payload.get("participants")
+            turns = relabel(turns, known)
             spoken_by = {
-                turn.speaker: speaker_of(
-                    turn.speaker,
-                    participants if isinstance(participants, list) else [],
-                    identities,
-                    owner,
-                    owner_label,
-                )
+                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
                 for turn in turns
             }
-            title = payload.get("title")
         else:
             text = payload.get("text")
-            turns = [Turn(None, text)] if isinstance(text, str) else []
+            turns = relabel([Turn(None, text)] if isinstance(text, str) else [], known)
             spoken_by = {
-                None: Speaker(owner_label, None, next(iter(sorted(owner.entities)), None) or None, True)
+                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
+                for turn in turns
+                if turn.speaker is not None
             }
-            title = payload.get("title")
+            spoken_by[None] = Speaker(  # a note is the owner's, but for the speakers its text names
+                owner_label, None, next(iter(sorted(owner.entities)), None) or None, True
+            )
+        title = payload.get("title")
         day = local_date(str(line["at"]), tz)
+        names = _names(participants, spoken_by, identities, owner, owner_label)
+        said = [
+            Said(spoken_by[turn.speaker].display(), sentence)
+            for turn in turns
+            for sentence in sentences(turn.text)
+        ]
+        at_sentence = 0
         for turn in turns:
             speaker = spoken_by[turn.speaker]
+            own = sentences(turn.text)
             for match in extractor(turn.text):
                 pid = proposal_id(str(line["id"]), match.quote)
                 if pid in seen:
                     continue
                 seen.add(pid)
+                where = at_sentence + own.index(match.quote) if match.quote in own else None
+                before = () if where is None else tuple(said[max(0, where - CONTEXT) : where])
+                after = () if where is None else tuple(said[where + 1 : where + 1 + CONTEXT])
                 due = match.due
                 if due is None and match.due_phrase:
                     resolved = due_of(match.due_phrase, date.fromisoformat(day))
@@ -508,10 +589,14 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
                         match,
                         due,
                         closed.get(pid),
+                        before,
+                        after,
+                        names,
                     )
                 )
+            at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
-    return Report(proposals, skipped, describe(extractor), since)
+    return Report(proposals, skipped, describe(extractor), since, owner_label)
 
 
 def _direction(speaker: Speaker) -> str | None:
@@ -520,6 +605,45 @@ def _direction(speaker: Speaker) -> str | None:
     if speaker.person is not None:
         return OWED_TO_OWNER
     return None
+
+
+def _names(
+    participants: Sequence[Any],
+    spoken_by: Mapping[str | None, Speaker],
+    identities: Mapping[Ref, Identity],
+    owner: present.Owner,
+    owner_label: str | None,
+) -> tuple[str, ...]:
+    """The names the record resolves in one line: every speaker's and participant's label when a
+    person is behind it, the owner's included; sorted, each once."""
+    found = {who.label for who in spoken_by.values() if who.label and (who.person or who.owner)}
+    for participant in participants:
+        name = participant.get("name") if isinstance(participant, dict) else None
+        if isinstance(name, str) and name.strip():
+            who = speaker_of(name, participants, identities, owner, owner_label)
+            if who.label and (who.person or who.owner):
+                found.add(who.label)
+    return tuple(sorted(found))
+
+
+def _known(
+    participants: Sequence[Any], identities: Mapping[Ref, Identity], owner: present.Owner
+) -> Callable[[str], bool]:
+    """Whether a label before a colon names someone: a participant of the line, the owner by any of
+    their names or a diarizer's word for them, or a person the record resolves by that name."""
+    names = {
+        present._normal(p["name"])
+        for p in participants
+        if isinstance(p, dict) and isinstance(p.get("name"), str)
+    }
+
+    def known(label: str) -> bool:
+        normal = present._normal(label)
+        if normal in names or normal in OWNER_LABELS or normal in owner.names:
+            return True
+        return present._by_name(label, identities)[0] is not None
+
+    return known
 
 
 def _owner_label(owner: present.Owner, identities: Mapping[Ref, Identity]) -> str | None:
@@ -571,6 +695,31 @@ def speaker_of(
     if person is not None and person in owner.entities:
         return Speaker(owner_label or label, spoken, person, True)
     return Speaker(label if person else None, spoken, person, False)
+
+
+def relabel(turns: Sequence[Turn], known: Callable[[str], bool]) -> list[Turn]:
+    """The turns with the speakers their own text names: a line that begins `Speaker 2:` or
+    `<a name the record knows>:` starts a turn of that speaker, whatever label the source gave the
+    turn (a diarizer's `me` on a mixed segment, or a note, which is the owner's otherwise); a line
+    that begins with any other word before a colon (`Plan:`) is text. `known(label)` says whether a
+    label is a participant, the owner or a person the record resolves."""
+    out: list[Turn] = []
+    for turn in turns:
+        current: Turn | None = None
+        for raw in turn.text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            m = SPEAKER.match(raw)
+            label = m.group(1).strip() if m else None
+            if label is not None and (DIARIZER.match(label) or known(label)):
+                current = Turn(label, m.group(2).strip() if m else "")
+                out.append(current)
+                continue
+            if current is None:
+                current = Turn(turn.speaker, raw)
+                out.append(current)
+            else:
+                current = Turn(current.speaker, f"{current.text}\n{raw}")
+                out[-1] = current
+    return [turn for turn in out if turn.text.strip()]
 
 
 def turns_of(lb: Logbook, line: Line) -> list[Turn] | None:
@@ -695,42 +844,97 @@ def draft_done(
 # -- the text -------------------------------------------------------------------------------------------
 
 
-def rows(report: Report, proposals: Sequence[Proposal], clock: Any, open_only: bool = False) -> list[str]:
+def rows(
+    report: Report,
+    proposals: Sequence[Proposal],
+    clock: Any,
+    open_only: bool = False,
+    judged_only: bool = False,
+    judge: Mapping[str, Any] | None = None,
+) -> list[str]:
     """`logbook promises` as text: a header that says these are proposals, one row per proposal
-    (day, time, who, the sentence, the due hint with a `?`, `done` when closed, the id), and what
-    was skipped. `clock(at)` formats an instant as the record's wall clock."""
-    if not proposals:
-        since = f" since {report.since}" if report.since else ""
-        if open_only and report.proposals:
-            out = [f"no open promises proposed{since}; {_plural(len(report.proposals), 'proposal')} done"]
-        else:
-            out = [f"no promises proposed{since}"]
-    else:
-        head = _plural(len(proposals), "proposed promise") + (
-            f" since {report.since}" if report.since else ""
+    (day, time, who, the sentence, the due hint with a `?`, the judgement when there is one —
+    the confidence, whom it is to, `no` for a judged non-commitment — `done` when closed, the id),
+    and what was skipped. With `judged_only` the header counts the candidates left unjudged and
+    names the flags; `judge` is what a `--judge` run just did. `clock(at)` formats an instant as
+    the record's wall clock."""
+    since = f" since {report.since}" if report.since else ""
+    unjudged = len(report.unjudged)
+    out: list[str] = []
+    if judge is not None and judge.get("judged"):
+        out.append(
+            f"judged {_plural(int(judge['judged']), 'candidate')} with {judge['engine']} ({judge['model']})"
         )
-        head += ", read by rules, not facts; confirm one with `logbook promises done <id>`"
-        out = [head]
+    if not proposals:
+        if judged_only and report.proposals:
+            out.append(
+                f"no judged promises{since}; {_plural(len(report.proposals), 'candidate')}"
+                + (f", {unjudged} unjudged: run `logbook promises --judge`" if unjudged else "")
+                + ", or `logbook promises --all` for every candidate"
+            )
+        elif open_only and report.proposals:
+            out.append(f"no open promises proposed{since}; {_plural(len(report.proposals), 'proposal')} done")
+        else:
+            out.append(f"no promises proposed{since}")
+    else:
+        if judged_only:
+            head = _plural(len(proposals), "judged promise") + since
+            head += f" (a commitment at confidence {THRESHOLD:g} or above"
+            if judge is not None and judge.get("engine"):
+                head += f", read by {judge['engine']}"
+            head += ")"
+            if unjudged:
+                head += f", {_plural(unjudged, 'candidate')} unjudged (`--judge`)"
+            head += "; `--all` shows every candidate; confirm one with `logbook promises done <id>`"
+        else:
+            head = _plural(len(proposals), "proposed promise") + since
+            head += ", read by rules, not facts; confirm one with `logbook promises done <id>`"
+        out.append(head)
         who_width = min(24, max(len(p.speaker.display() if p.speaker else "?") for p in proposals))
         for p in proposals:
             who = p.speaker.display() if p.speaker else "?"
             quote = p.match.quote
             if len(quote) > QUOTE_WIDTH:
                 quote = quote[: QUOTE_WIDTH - 1].rstrip() + "…"
-            tail = ""
-            if p.due:
-                tail += f"  due {p.due}?"
-                if p.match.due_phrase:
-                    tail += f" ({p.match.due_phrase})"
-            elif p.match.due_phrase:
-                tail += f"  due? ({p.match.due_phrase})"
-            if p.closed_by:
-                tail += "  done"
-            out.append(f"  {p.day}  {clock(p.at)}  {who:<{who_width}}  “{quote}”{tail}  {p.id}")
+            out.append(f"  {p.day}  {clock(p.at)}  {who:<{who_width}}  “{quote}”{_tail(p)}  {p.id}")
     missing = report.skipped.get("transcripts_without_text", 0)
     if missing:
         out.append(f"  {_plural(missing, 'transcript')} whose text is not in the attachment store skipped")
+    if judge is not None and judge.get("unparsed"):
+        out.append(
+            f"  {_plural(int(judge['unparsed']), 'candidate')} could not be judged (no verdict in the"
+            " model's answer); the next `--judge` tries again"
+        )
     return out
+
+
+def _tail(p: Proposal) -> str:
+    """After the quote: the due hint (the judgement's day when it gave one, else the rules' with the
+    phrase), the judgement, `done`."""
+    tail = ""
+    verdict = p.judgement
+    if verdict is not None and verdict.due:
+        tail += f"  due {verdict.due}?"
+    elif p.due:
+        tail += f"  due {p.due}?"
+        if p.match.due_phrase:
+            tail += f" ({p.match.due_phrase})"
+    elif p.match.due_phrase:
+        tail += f"  due? ({p.match.due_phrase})"
+    if verdict is not None:
+        if not verdict.is_commitment:
+            tail += f"  no {verdict.confidence:g}"
+        else:
+            tail += f"  {verdict.confidence:g}"
+            who = p.speaker.display() if p.speaker else "?"
+            by = "you" if verdict.by == OWNER else verdict.by
+            if by != UNKNOWN and by != who:
+                tail += f" by {by}"
+            if verdict.to != UNKNOWN:
+                tail += f" to {'you' if verdict.to == OWNER else verdict.to}"
+    if p.closed_by:
+        tail += "  done"
+    return tail
 
 
 def _plural(n: int, noun: str) -> str:

@@ -174,7 +174,7 @@ def run(
             )
         engine.fetch()
     zone = ZoneInfo(str(lb.meta["timezone"]))
-    with _offline():
+    with offline():
         report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress))
     return report
 
@@ -361,10 +361,10 @@ class MlxWhisper:
         return model if "/" in model else f"mlx-community/whisper-{model}-mlx"
 
     def ready(self) -> bool:
-        return _cached(self._import, self.repo_id)
+        return cached(self._import, self.repo_id)
 
     def fetch(self) -> None:
-        _download(self._import, self.repo_id)
+        download(self._import, self.repo_id)
 
     def load(self, path: Path) -> tuple[Sequence[float], int]:
         audio = self._import("mlx_whisper.audio")
@@ -399,10 +399,10 @@ class FasterWhisper:
         return model if "/" in model else f"Systran/faster-whisper-{model}"
 
     def ready(self) -> bool:
-        return _cached(self._import, self.repo_id)
+        return cached(self._import, self.repo_id)
 
     def fetch(self) -> None:
-        _download(self._import, self.repo_id)
+        download(self._import, self.repo_id)
 
     def load(self, path: Path) -> tuple[Sequence[float], int]:
         samples: Sequence[float] = self._fw.decode_audio(str(path), sampling_rate=SAMPLE_RATE)
@@ -418,7 +418,7 @@ class FasterWhisper:
         return Result(segments, str(getattr(info, "language", None) or language or ""))
 
 
-def _cached(importer: Callable[[str], Any], repo_id: str) -> bool:
+def cached(importer: Callable[[str], Any], repo_id: str) -> bool:
     """Whether the hub's cache on this machine holds the model; asked without the network."""
     hub = importer("huggingface_hub")
     try:
@@ -428,12 +428,12 @@ def _cached(importer: Callable[[str], Any], repo_id: str) -> bool:
     return True
 
 
-def _download(importer: Callable[[str], Any], repo_id: str) -> None:
+def download(importer: Callable[[str], Any], repo_id: str) -> None:
     hub = importer("huggingface_hub")
     hub.snapshot_download(repo_id)
 
 
-class _offline:
+class offline:
     """While transcribing, the hub is offline: the engines never reach out, whatever they would do."""
 
     def __enter__(self) -> None:

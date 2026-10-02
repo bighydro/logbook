@@ -324,7 +324,7 @@ def test_ids_are_stable_across_extractors_that_quote_the_same_sentence(lb: Logbo
 
 
 def test_promises_prints_proposals_never_facts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = _run(capsys, "promises")
+    out = _run(capsys, "promises", "--all")
     head = out.splitlines()[0]
     assert head.startswith("10 proposed promises") and "rules" in head and "not facts" in head
     row = next(line for line in out.splitlines() if "mooring photos" in line)
@@ -341,8 +341,19 @@ def test_promises_prints_proposals_never_facts(lb: Logbook, capsys: pytest.Captu
 
 
 def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = json.loads(_run(capsys, "promises", "--json"))
-    assert set(out) == {"since", "open_only", "extractor", "proposals", "skipped"}
+    out = json.loads(_run(capsys, "promises", "--all", "--json"))
+    assert set(out) == {
+        "since",
+        "open_only",
+        "judged_only",
+        "threshold",
+        "extractor",
+        "judge",
+        "unjudged",
+        "proposals",
+        "skipped",
+    }
+    assert out["judged_only"] is False and out["judge"] is None and out["unjudged"] == 10
     assert out["since"] is None and out["open_only"] is False
     assert out["extractor"]["name"] == "rules" and out["skipped"] == {"transcripts_without_text": 1}
     row = next(p for p in out["proposals"] if "mooring" in p["quote"])
@@ -365,7 +376,9 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
         "class",
         "quote",
         "due",
+        "judgement",
     }
+    assert row["judgement"] is None
     assert row["speaker"] == {
         "label": "Ola Nordmann",
         "spoken": "Ola Nordmann",
@@ -384,7 +397,7 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
 
 
 def test_since_limits_to_lines_from_that_local_day(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = json.loads(_run(capsys, "promises", "--since", "2026-06-14", "--json"))
+    out = json.loads(_run(capsys, "promises", "--all", "--since", "2026-06-14", "--json"))
     assert out["since"] == "2026-06-14"
     assert all(p["day"] >= "2026-06-14" for p in out["proposals"]) and len(out["proposals"]) == 5
     assert out["skipped"] == {"transcripts_without_text": 1}
@@ -415,16 +428,16 @@ def test_done_writes_a_task_line_and_open_hides_it(lb: Logbook, capsys: pytest.C
         "extractor": {"name": "rules", "version": promises.RULES.version, "languages": ["en", "de"]},
     }
     assert lb.verify()[2] == []
-    listed = json.loads(_run(capsys, "promises", "--json"))
+    listed = json.loads(_run(capsys, "promises", "--all", "--json"))
     row = next(p for p in listed["proposals"] if p["id"] == ola.id)
     assert row["status"] == "done" and row["closed_by"] == task["id"]
     assert len(listed["proposals"]) == 10
-    open_only = json.loads(_run(capsys, "promises", "--open", "--json"))
+    open_only = json.loads(_run(capsys, "promises", "--all", "--open", "--json"))
     assert open_only["open_only"] is True
     assert ola.id not in {p["id"] for p in open_only["proposals"]} and len(open_only["proposals"]) == 9
-    text = _run(capsys, "promises", "--open")
+    text = _run(capsys, "promises", "--all", "--open")
     assert text.startswith("9 proposed promises") and "mooring photos" not in text
-    text = _run(capsys, "promises")
+    text = _run(capsys, "promises", "--all")
     assert "done" in next(line for line in text.splitlines() if "mooring photos" in line)
 
 
@@ -451,7 +464,7 @@ def test_a_record_with_nothing_to_propose_says_so(
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append("2026-06-01T10:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "Calm day."})
     assert _run(capsys, "promises").startswith("no promises proposed")
-    assert json.loads(_run(capsys, "promises", "--json"))["proposals"] == []
+    assert json.loads(_run(capsys, "promises", "--all", "--json"))["proposals"] == []
 
 
 class _Fake:
@@ -473,3 +486,115 @@ def test_the_extractor_is_replaceable_without_changing_the_report(lb: Logbook) -
     assert only.match.quote == "book the crane" and only.due == "2026-06-20"
     assert only.speaker is not None and only.speaker.owner and only.kind == "transcript"
     assert only.id == promises.proposal_id(only.line, "book the crane")
+
+
+# -- attribution -------------------------------------------------------------------------------------
+
+
+def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drafts: list[dict[str, Any]]) -> Logbook:
+    """A fresh record of the Oslo persona holding `drafts`, with Ola and the owner resolved."""
+    lb = Logbook.init(tmp_path / "fresh", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    meta = lb.meta
+    meta["owner_id"] = OWNER_ID
+    meta["owner_emails"] = [OWNER_EMAIL]
+    lb._save_meta(meta)
+    lb.append_many(
+        [
+            resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+            resolution(("email", OWNER_EMAIL), OWNER_ID, "Ines Nordmann"),
+            *drafts,
+        ]
+    )
+    return lb
+
+
+def test_a_note_whose_text_a_diarizer_labelled_belongs_to_those_speakers_never_to_the_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb = _record(
+        tmp_path,
+        monkeypatch,
+        [
+            _note(
+                "2026-06-13T17:00:00Z",
+                "Plan: I need to call the yard.\nSpeaker 1: I'll send the invoice tomorrow.\n"
+                "Speaker 2: Fine, we will wait.\nOla Nordmann: I'll bring the photos.",
+            )
+        ],
+    )
+    found = _by_quote(promises.extract(lb))
+    one = found["I'll send the invoice tomorrow."].speaker
+    assert one is not None and (one.spoken, one.person, one.owner) == ("Speaker 1", None, False)
+    assert found["I'll send the invoice tomorrow."].direction is None
+    two = found["Fine, we will wait."].speaker
+    assert two is not None and two.spoken == "Speaker 2" and not two.owner
+    ola = found["I'll bring the photos."].speaker
+    assert ola is not None and (ola.label, ola.person, ola.owner) == ("Ola Nordmann", OLA_ID, False)
+    plan = found["Plan: I need to call the yard."].speaker  # a word before a colon is no speaker
+    assert plan is not None and plan.owner and plan.person == OWNER_ID
+
+
+def test_a_turn_the_source_gave_the_owner_whose_text_names_another_speaker_is_theirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    segments = [
+        {"speaker": {"attribution": "me"}, "text": "Speaker 2: I'll bring the chart."},
+        {"speaker": {"attribution": "me"}, "text": "I'll check the tide tables."},
+        {"speaker": {"name": "Ola Nordmann"}, "text": "me: I'll pay the yard."},
+    ]
+    blob = json.dumps(segments).encode("utf-8")
+    lb = _record(
+        tmp_path,
+        monkeypatch,
+        [
+            _transcript(
+                "2026-06-16T17:00:00Z",
+                "2026-06-16T17:40:00Z",
+                "Chart",
+                [{"name": "Ola Nordmann", "email": OLA["email"]}],
+                attachments.reference(blob, "application/json"),
+            )
+        ],
+    )
+    lb.attach(blob)
+    found = _by_quote(promises.extract(lb))
+    chart = found["I'll bring the chart."].speaker
+    assert chart is not None and (chart.spoken, chart.person, chart.owner) == ("Speaker 2", None, False)
+    tide = found["I'll check the tide tables."].speaker
+    assert tide is not None and tide.owner and tide.person == OWNER_ID
+    pay = found["I'll pay the yard."].speaker  # the owner only when the label resolves to the owner
+    assert pay is not None and pay.owner and pay.spoken == "me"
+
+
+# -- the context -------------------------------------------------------------------------------------
+
+
+def test_a_proposal_carries_the_two_sentences_either_side_with_their_speakers_and_the_names(
+    lb: Logbook,
+) -> None:
+    found = _by_quote(promises.extract(lb))
+    crane = found["I will book the crane for next week."]
+    assert [(s.speaker, s.text) for s in crane.before] == [
+        ("Ola Nordmann", "I'll send you the mooring photos by Friday."),
+        ("you", "Good."),
+    ]
+    assert [(s.speaker, s.text) for s in crane.after] == [
+        ("Ola Nordmann", "Will you be at the marina on Saturday?"),
+        ("you", "Let me check the forecast first."),
+    ]
+    assert crane.names == ("Ines Nordmann", "Ola Nordmann")
+    first = found["I'll send you the mooring photos by Friday."]
+    assert [s.text for s in first.before] == ["The mooring lines are fine."]
+    assert len(first.after) == 2
+    last = found["Let me check the forecast first."]
+    assert last.after == () and len(last.before) == 2
+    tromso = found["We will see."]  # across turns of a JSON transcript, with the diarizer's label
+    assert [(s.speaker, s.text) for s in tromso.before] == [
+        ("Kari Nordmann", "Ich melde mich bis Montag wegen Tromsø."),
+        ("you", "Ich schicke dir die Liste morgen."),
+    ]
+    assert tromso.names == ("Ines Nordmann", "Kari Nordmann")
+    pump = found["I need to order the new bilge pump next week."]  # a note: its own sentences, the owner
+    assert [(s.speaker, s.text) for s in pump.before] == [("you", "Anchored in the bay.")]
+    assert pump.after == () and pump.names == ("Ines Nordmann",)
