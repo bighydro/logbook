@@ -1,0 +1,34 @@
+name: bench
+# The sealing benchmark (scripts/bench_seal.py, docs/rfcs/bench-encryption-2026-10.md) on the three
+# runner sizes GitHub offers. Dispatched by hand only, never on push or pull request: a full run is
+# 3,000,000 lines and takes an hour or more per runner.
+on:
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: "lines in the synthetic record (3000000 is the full run; 300000 a short one)"
+        default: "3000000"
+        required: false
+permissions: { contents: read }
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv python install 3.12
+      - run: uv sync --group dev
+      - name: machine
+        run: uv run python -c "import os, platform; print(platform.platform(), platform.machine(), os.cpu_count(), 'cpus')"
+      - name: bench_seal
+        # pyrage is the benchmark's own dependency, never the project's; psutil gives Windows a memory peak.
+        run: uv run --with pyrage --with psutil python scripts/bench_seal.py --lines ${{ inputs.lines }} --out bench-${{ matrix.os }}.json --markdown
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ matrix.os }}
+          path: bench-${{ matrix.os }}.json
