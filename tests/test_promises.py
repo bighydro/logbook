@@ -324,7 +324,7 @@ def test_ids_are_stable_across_extractors_that_quote_the_same_sentence(lb: Logbo
 
 
 def test_promises_prints_proposals_never_facts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = _run(capsys, "promises")
+    out = _run(capsys, "promises", "--all")
     head = out.splitlines()[0]
     assert head.startswith("10 proposed promises") and "rules" in head and "not facts" in head
     row = next(line for line in out.splitlines() if "mooring photos" in line)
@@ -341,8 +341,19 @@ def test_promises_prints_proposals_never_facts(lb: Logbook, capsys: pytest.Captu
 
 
 def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = json.loads(_run(capsys, "promises", "--json"))
-    assert set(out) == {"since", "open_only", "extractor", "proposals", "skipped"}
+    out = json.loads(_run(capsys, "promises", "--all", "--json"))
+    assert set(out) == {
+        "since",
+        "open_only",
+        "judged_only",
+        "threshold",
+        "extractor",
+        "judge",
+        "unjudged",
+        "proposals",
+        "skipped",
+    }
+    assert out["judged_only"] is False and out["judge"] is None and out["unjudged"] == 10
     assert out["since"] is None and out["open_only"] is False
     assert out["extractor"]["name"] == "rules" and out["skipped"] == {"transcripts_without_text": 1}
     row = next(p for p in out["proposals"] if "mooring" in p["quote"])
@@ -365,7 +376,9 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
         "class",
         "quote",
         "due",
+        "judgement",
     }
+    assert row["judgement"] is None
     assert row["speaker"] == {
         "label": "Ola Nordmann",
         "spoken": "Ola Nordmann",
@@ -384,7 +397,7 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
 
 
 def test_since_limits_to_lines_from_that_local_day(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = json.loads(_run(capsys, "promises", "--since", "2026-06-14", "--json"))
+    out = json.loads(_run(capsys, "promises", "--all", "--since", "2026-06-14", "--json"))
     assert out["since"] == "2026-06-14"
     assert all(p["day"] >= "2026-06-14" for p in out["proposals"]) and len(out["proposals"]) == 5
     assert out["skipped"] == {"transcripts_without_text": 1}
@@ -415,16 +428,16 @@ def test_done_writes_a_task_line_and_open_hides_it(lb: Logbook, capsys: pytest.C
         "extractor": {"name": "rules", "version": promises.RULES.version, "languages": ["en", "de"]},
     }
     assert lb.verify()[2] == []
-    listed = json.loads(_run(capsys, "promises", "--json"))
+    listed = json.loads(_run(capsys, "promises", "--all", "--json"))
     row = next(p for p in listed["proposals"] if p["id"] == ola.id)
     assert row["status"] == "done" and row["closed_by"] == task["id"]
     assert len(listed["proposals"]) == 10
-    open_only = json.loads(_run(capsys, "promises", "--open", "--json"))
+    open_only = json.loads(_run(capsys, "promises", "--all", "--open", "--json"))
     assert open_only["open_only"] is True
     assert ola.id not in {p["id"] for p in open_only["proposals"]} and len(open_only["proposals"]) == 9
-    text = _run(capsys, "promises", "--open")
+    text = _run(capsys, "promises", "--all", "--open")
     assert text.startswith("9 proposed promises") and "mooring photos" not in text
-    text = _run(capsys, "promises")
+    text = _run(capsys, "promises", "--all")
     assert "done" in next(line for line in text.splitlines() if "mooring photos" in line)
 
 
@@ -451,7 +464,7 @@ def test_a_record_with_nothing_to_propose_says_so(
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append("2026-06-01T10:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "Calm day."})
     assert _run(capsys, "promises").startswith("no promises proposed")
-    assert json.loads(_run(capsys, "promises", "--json"))["proposals"] == []
+    assert json.loads(_run(capsys, "promises", "--all", "--json"))["proposals"] == []
 
 
 class _Fake:

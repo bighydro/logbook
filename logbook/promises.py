@@ -22,7 +22,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Protocol
@@ -51,6 +51,8 @@ DIARIZER = re.compile(
 QUOTE_WIDTH = 100
 ID_WIDTH = 16
 CONTEXT = 2  # sentences either side of a candidate that a judge sees
+THRESHOLD = 0.6  # a judged candidate shows when it is a commitment at this confidence or above
+OWNER, UNKNOWN = "owner", "unknown"  # a judgement's words for the owner and for nobody it could name
 
 
 # -- the matches ---------------------------------------------------------------------------------------
@@ -370,6 +372,40 @@ class Said:
 
 
 @dataclass(frozen=True)
+class Judgement:
+    """A local model's reading of one candidate (`logbook.judge`): whether it is a commitment, who
+    made it (`owner`, a name, `unknown`), to whom, what in a line, when it is due (`YYYY-MM-DD` or
+    None) and how sure the model was (0 to 1); with the engine and model that read it and when, since
+    a judgement is never redone and the model may change."""
+
+    is_commitment: bool
+    by: str
+    to: str
+    what: str
+    due: str | None
+    confidence: float
+    model: str
+    judged_at: str
+    engine: str = ""
+
+    def shows(self, threshold: float = THRESHOLD) -> bool:
+        return self.is_commitment and self.confidence >= threshold
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "is_commitment": self.is_commitment,
+            "by": self.by,
+            "to": self.to,
+            "what": self.what,
+            "due": self.due,
+            "confidence": self.confidence,
+            "engine": self.engine,
+            "model": self.model,
+            "judged_at": self.judged_at,
+        }
+
+
+@dataclass(frozen=True)
 class Proposal:
     """One promise as proposed: where it was read, who said it, what, and when it may be due; the
     `CONTEXT` sentences before and after it in the same transcript or note, across turns, and the
@@ -391,6 +427,7 @@ class Proposal:
     before: tuple[Said, ...] = ()
     after: tuple[Said, ...] = ()
     names: tuple[str, ...] = ()
+    judgement: Judgement | None = None
 
     @property
     def status(self) -> str:
@@ -419,6 +456,7 @@ class Proposal:
                 "phrase": self.match.due_phrase,
                 "date": self.due,
             },
+            "judgement": None if self.judgement is None else self.judgement.to_json(),
         }  # fmt: skip
 
 
@@ -430,6 +468,19 @@ class Report:
     skipped: dict[str, int]
     extractor: dict[str, Any]
     since: str | None
+    owner: str | None = None  # the owner's label, as the record resolves it
+
+    @property
+    def unjudged(self) -> list[Proposal]:
+        return [p for p in self.proposals if p.judgement is None]
+
+
+def with_judgements(report: Report, judgements: Mapping[str, Judgement]) -> Report:
+    """The report with each proposal carrying the judgement kept for its id, when there is one."""
+    proposals = [
+        replace(p, judgement=judgements[p.id]) if p.id in judgements else p for p in report.proposals
+    ]
+    return replace(report, proposals=proposals)
 
 
 def proposal_id(origin: str, quote: str) -> str:
@@ -545,7 +596,7 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
                 )
             at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
-    return Report(proposals, skipped, describe(extractor), since)
+    return Report(proposals, skipped, describe(extractor), since, owner_label)
 
 
 def _direction(speaker: Speaker) -> str | None:
@@ -793,42 +844,97 @@ def draft_done(
 # -- the text -------------------------------------------------------------------------------------------
 
 
-def rows(report: Report, proposals: Sequence[Proposal], clock: Any, open_only: bool = False) -> list[str]:
+def rows(
+    report: Report,
+    proposals: Sequence[Proposal],
+    clock: Any,
+    open_only: bool = False,
+    judged_only: bool = False,
+    judge: Mapping[str, Any] | None = None,
+) -> list[str]:
     """`logbook promises` as text: a header that says these are proposals, one row per proposal
-    (day, time, who, the sentence, the due hint with a `?`, `done` when closed, the id), and what
-    was skipped. `clock(at)` formats an instant as the record's wall clock."""
-    if not proposals:
-        since = f" since {report.since}" if report.since else ""
-        if open_only and report.proposals:
-            out = [f"no open promises proposed{since}; {_plural(len(report.proposals), 'proposal')} done"]
-        else:
-            out = [f"no promises proposed{since}"]
-    else:
-        head = _plural(len(proposals), "proposed promise") + (
-            f" since {report.since}" if report.since else ""
+    (day, time, who, the sentence, the due hint with a `?`, the judgement when there is one —
+    the confidence, whom it is to, `no` for a judged non-commitment — `done` when closed, the id),
+    and what was skipped. With `judged_only` the header counts the candidates left unjudged and
+    names the flags; `judge` is what a `--judge` run just did. `clock(at)` formats an instant as
+    the record's wall clock."""
+    since = f" since {report.since}" if report.since else ""
+    unjudged = len(report.unjudged)
+    out: list[str] = []
+    if judge is not None and judge.get("judged"):
+        out.append(
+            f"judged {_plural(int(judge['judged']), 'candidate')} with {judge['engine']} ({judge['model']})"
         )
-        head += ", read by rules, not facts; confirm one with `logbook promises done <id>`"
-        out = [head]
+    if not proposals:
+        if judged_only and report.proposals:
+            out.append(
+                f"no judged promises{since}; {_plural(len(report.proposals), 'candidate')}"
+                + (f", {unjudged} unjudged: run `logbook promises --judge`" if unjudged else "")
+                + ", or `logbook promises --all` for every candidate"
+            )
+        elif open_only and report.proposals:
+            out.append(f"no open promises proposed{since}; {_plural(len(report.proposals), 'proposal')} done")
+        else:
+            out.append(f"no promises proposed{since}")
+    else:
+        if judged_only:
+            head = _plural(len(proposals), "judged promise") + since
+            head += f" (a commitment at confidence {THRESHOLD:g} or above"
+            if judge is not None and judge.get("engine"):
+                head += f", read by {judge['engine']}"
+            head += ")"
+            if unjudged:
+                head += f", {_plural(unjudged, 'candidate')} unjudged (`--judge`)"
+            head += "; `--all` shows every candidate; confirm one with `logbook promises done <id>`"
+        else:
+            head = _plural(len(proposals), "proposed promise") + since
+            head += ", read by rules, not facts; confirm one with `logbook promises done <id>`"
+        out.append(head)
         who_width = min(24, max(len(p.speaker.display() if p.speaker else "?") for p in proposals))
         for p in proposals:
             who = p.speaker.display() if p.speaker else "?"
             quote = p.match.quote
             if len(quote) > QUOTE_WIDTH:
                 quote = quote[: QUOTE_WIDTH - 1].rstrip() + "…"
-            tail = ""
-            if p.due:
-                tail += f"  due {p.due}?"
-                if p.match.due_phrase:
-                    tail += f" ({p.match.due_phrase})"
-            elif p.match.due_phrase:
-                tail += f"  due? ({p.match.due_phrase})"
-            if p.closed_by:
-                tail += "  done"
-            out.append(f"  {p.day}  {clock(p.at)}  {who:<{who_width}}  “{quote}”{tail}  {p.id}")
+            out.append(f"  {p.day}  {clock(p.at)}  {who:<{who_width}}  “{quote}”{_tail(p)}  {p.id}")
     missing = report.skipped.get("transcripts_without_text", 0)
     if missing:
         out.append(f"  {_plural(missing, 'transcript')} whose text is not in the attachment store skipped")
+    if judge is not None and judge.get("unparsed"):
+        out.append(
+            f"  {_plural(int(judge['unparsed']), 'candidate')} could not be judged (no verdict in the"
+            " model's answer); the next `--judge` tries again"
+        )
     return out
+
+
+def _tail(p: Proposal) -> str:
+    """After the quote: the due hint (the judgement's day when it gave one, else the rules' with the
+    phrase), the judgement, `done`."""
+    tail = ""
+    verdict = p.judgement
+    if verdict is not None and verdict.due:
+        tail += f"  due {verdict.due}?"
+    elif p.due:
+        tail += f"  due {p.due}?"
+        if p.match.due_phrase:
+            tail += f" ({p.match.due_phrase})"
+    elif p.match.due_phrase:
+        tail += f"  due? ({p.match.due_phrase})"
+    if verdict is not None:
+        if not verdict.is_commitment:
+            tail += f"  no {verdict.confidence:g}"
+        else:
+            tail += f"  {verdict.confidence:g}"
+            who = p.speaker.display() if p.speaker else "?"
+            by = "you" if verdict.by == OWNER else verdict.by
+            if by != UNKNOWN and by != who:
+                tail += f" by {by}"
+            if verdict.to != UNKNOWN:
+                tail += f" to {'you' if verdict.to == OWNER else verdict.to}"
+    if p.closed_by:
+        tail += "  done"
+    return tail
 
 
 def _plural(n: int, noun: str) -> str:

@@ -28,6 +28,8 @@ transcribe = [
   "mlx-whisper>=0.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
   "faster-whisper>=1.0; sys_platform != 'darwin' or platform_machine != 'arm64'",
 ]
+# `openlogbook[judge]`: `promises --judge` reads each candidate with a local instruct model, mlx-lm on Apple silicon
+judge = ["mlx-lm>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
@@ -98,8 +100,8 @@ module = "ijson"
 ignore_missing_imports = true  # no py.typed, no stubs
 
 [[tool.mypy.overrides]]
-module = ["mlx_whisper.*", "faster_whisper.*", "huggingface_hub.*"]
-ignore_missing_imports = true  # the `transcribe` extra, imported only when the command runs
+module = ["mlx_whisper.*", "faster_whisper.*", "huggingface_hub.*", "mlx_lm.*"]
+ignore_missing_imports = true  # the `transcribe` and `judge` extras, imported only when the command runs
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
