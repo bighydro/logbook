@@ -30,6 +30,7 @@ transcribe = [
 ]
 # `openlogbook[judge]`: `promises --judge` reads each candidate with a local instruct model, mlx-lm on Apple silicon
 judge = ["mlx-lm>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+mcp = ["mcp>=2"]  # `openlogbook[mcp]`: `logbook mcp` serves the record to an MCP host over stdio
 
 [project.urls]
 Homepage = "https://github.com/bighydro/logbook"
@@ -74,6 +75,7 @@ dev = [
   "jsonschema>=4",
   "cryptography>=42",  # the `encrypted` extra, so its tests and mypy see it
   "websockets>=13",  # the `ais` extra, so mypy sees it (the tests fake the socket)
+  "mcp>=2",  # the `mcp` extra, so its tests run and mypy sees it (an in-process client, no socket)
 ]
 
 [build-system]
