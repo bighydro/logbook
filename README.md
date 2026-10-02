@@ -209,6 +209,8 @@ logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook infer flights                             # calendar entries + your location points leaving one airport for another: evidence inferred
 logbook transcribe voice-memos                    # a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine
+logbook add screentime --mac                      # this Mac's Screen Time sessions (knowledgeC.db, behind Full Disk Access): app, span, device; never a title or URL
+logbook add screentime --backup ~/backup          # the phone's Screen Time store out of an iOS backup: hourly totals per app (docs/adapters/screentime.md)
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
@@ -560,6 +562,7 @@ logbook rollup places --with                  # the place × person table: stays
 logbook rollup people                         # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week               # sleep, steps, resting heart rate, HRV per month or ISO week; — when missing
 logbook rollup listen --year 2026             # listens, hours, skips, the top artists by hours, hours by month, from every listen/v1 line
+logbook rollup attention --year 2026          # hours by app and by category (communication, browser, media, work, other) from Screen Time
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints

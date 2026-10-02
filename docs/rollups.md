@@ -16,6 +16,7 @@ logbook rollup places --with           # the place × person table: stays, days 
 logbook rollup people                  # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
 logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, hours by month
+logbook rollup attention --year 2026    # hours by app and by category from the app-use lines; --by month|week
 ```
 
 The window is `--year`, or `--since` and `--until`, clipped to the days the owner's track covers
@@ -216,3 +217,29 @@ month with no listen is an em dash, never a zero. The window is clipped to the d
 lines cover; a correction that `supersedes` a line wins and a retracted line is out. It lives in
 `logbook/listen_rollup.py`, beside `rollup.py` and in its manner. The adapters and the rollup are
 described in [adapters/listen.md](adapters/listen.md).
+## Per year, month or week: attention
+
+`logbook rollup attention [--year YYYY | --since YYYY-MM-DD --until YYYY-MM-DD] [--by month|week] [--json]`
+sums the `app-use` lines (`logbook add screentime`) up as hours by app and by category —
+communication, browser, media, work, other — per calendar year, or per month or ISO week with `--by`.
+It reads the app-use lines of the window through the index and nothing else, clipped to the first and
+last day with one; a retracted line is out, and so is one another app-use line supersedes. An app is
+its bundle id, named by the built-in table or by `policy/apps.json`, which also re-sorts it; a period
+with no line is an em dash, and a period with lines carries every category, one with no app at zero.
+
+```
+attention 2026-06-08 – 2026-08-20 · by month
+  2026-06  6.2 h · communication 0.7 h · browser 1.5 h · media 0.8 h · work 3.0 h · other 0.2 h
+        Xcode                    3.0 h · work · 2 sessions · com.apple.dt.Xcode
+        Safari                   1.0 h · browser · 1 session · com.apple.Safari
+        …
+  2026-07  —
+  2026-08  1.0 h · communication 0.0 h · browser 1.0 h · media 0.0 h · work 0.0 h · other 0.0 h
+        Safari                   1.0 h · browser · 1 session · com.apple.Safari
+```
+
+Under `--json`: `kind` (`attention`), `window`, `by` (`year`, `month` or `week`), `categories` and
+`periods`, each with `hours`, `seconds`, `by_category` (`{hours, seconds}` per category, or `null`
+for a period with no line) and `apps` (`bundle_id`, `app`, `category`, `hours`, `seconds`,
+`sessions`, `devices` — seconds per device —, `lines`). The whole of it, the stores, the categories
+and the owner's table, is in [docs/adapters/screentime.md](adapters/screentime.md).
