@@ -66,6 +66,7 @@ nav:
       - About RFCs: rfcs/README.md
       - "0001 location/v1": rfcs/0001-location-v1.md
       - "0002 photo/v1": rfcs/0002-photo-v1.md
+      - "Benchmark: per-line sealing (2026-10)": rfcs/bench-encryption-2026-10.md
   - The Day: day.md
   - In a browser: serve.md
   - The rollups: rollups.md
