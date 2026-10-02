@@ -8,6 +8,8 @@ The Takeout package also has `google-takeout-pay` (the `Google Pay/` folder: the
 
 Rules: pure by default (no network), never write to the source, never invent `tier` lower than the source deserves, fixture-tested with **synthetic** data only. Backfill and live share one mapping (ADR 0017): where a source has both an export and an API, one function maps it and both `add` and `sync` call it, so a backfilled line and the same line pulled live have one `raw_id` and dedupe to one line.
 
+One live adapter asks a third party about your days: `weather` (`logbook sync weather`, RFC 0026, [weather.md](weather.md)) takes the places your own track says each day was spent at, rounds each to a tenth of a degree so no exact place leaves the machine, and fetches that day's weather from Open-Meteo's free archive, cached under `inbox/weather/` so nothing is asked twice. It runs only when named, or when `LOGBOOK_WEATHER=1` lists it in `sync --all`; no reader opens the network.
+
 Planned first (ADR 0008): `google-takeout`, `apple-health` (done), then `email` — the last now `mail`, file mode; its live IMAP mode is the next step under ADR 0017.
 
 Wanted — pick one and open an issue with the adapter template: strava, garmin, apple-fitness, eight-sleep, oura, withings, telegram, signal, imap (the live mode of `mail`), google-calendar, flightradar24, notion, obsidian, spotify, apple-music, letterboxd, goodreads, kindle-highlights, twitter-archive, instagram-export, bank-csv (generic, with per-bank mapping files), revolut, paypal, amazon-orders, uber, airbnb, vivino, steam, boat-passage logs.

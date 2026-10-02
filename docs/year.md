@@ -3,7 +3,8 @@
 `logbook year YYYY [--html PATH] [--json]` reads one calendar year back from the record: the days
 per country, the nights home, away and aboard each asset, the trips in order with their nights and
 companions, the flights and their kilometres, the places by nights, the people by days together,
-the health lines by month, the keepers by month, and twelve picks, **one day each**: for every
+the health lines by month, the weather of the year when the record has it (`adapters/weather.md`),
+the keepers by month, and twelve picks, **one day each**: for every
 month, the day with the most evidence, rendered with the day reader. It is a reader (ADR 0013): a
 function of the record at its head, composed from the readers that already exist — `rollup`,
 `trips`, `day` — over one reading of the year's days, derived every time and never written.

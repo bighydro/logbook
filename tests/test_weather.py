@@ -127,14 +127,13 @@ def test_clusters_take_the_night_and_every_stay_of_three_hours_rounded_and_dedup
     assert home == (59.9, 10.8)
     assert by_day["2026-06-09"] == [home], "home, the office 600 m away: one cluster, not two"
     fjord = (weather.round_coordinate(FJORD[0]), weather.round_coordinate(FJORD[1]))
-    assert fjord != home and sorted(by_day["2026-06-13"]) == sorted(
-        [home, fjord]
-    ), "the night at anchor and the morning at home, where the stay from the night before ran past 07:30"
+    # the night at anchor and the morning at home, where the stay from the night before ran past 07:30
+    assert fjord != home
+    assert sorted(by_day["2026-06-13"]) == sorted([home, fjord])
     zurich = (weather.round_coordinate(ZURICH[0]), weather.round_coordinate(ZURICH[1]))
     assert zurich == (47.4, 8.5) and by_day["2026-06-16"] == [zurich]
-    assert by_day["2026-06-15"] == [home, zurich] or sorted(by_day["2026-06-15"]) == sorted(
-        [home, zurich]
-    ), "the travel day: the morning's end of the home night and the hotel; the airports are under 3 h"
+    # the travel day: the morning's end of the home night and the hotel; the airports are under 3 h
+    assert sorted(by_day["2026-06-15"]) == sorted([home, zurich])
     assert found == sorted(found), "in day order, then by coordinates"
     assert len(found) == len(set(found)), "deduped on (day, lat, lon)"
     for c in found:
@@ -441,9 +440,8 @@ def test_span_sums_a_window_and_names_the_extremes() -> None:
         "value": 9.5,
         "day": "2026-01-11",
     }
-    assert (
-        span["precipitation_mm"] == 13.0 and span["wet_days"] == 2
-    ), "a day is wet at 1 mm; per day the wettest place"
+    assert span["precipitation_mm"] == 13.0, "per day the wettest place, never the sum of the places"
+    assert span["wet_days"] == 2, "a day is wet at 1 mm"
     assert span["wind_max"] == {"value": 80.0, "day": "2026-01-10"}
     assert len(span["lines"]) == 4
     assert (

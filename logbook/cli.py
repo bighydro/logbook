@@ -4053,14 +4053,15 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
         "sync",
-        help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb);"
-        " safe to re-run; --all for every configured source, --install-schedule for twice a day",
+        help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
+        " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day",
     )
     s.add_argument(
         "name",
         nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), gcal (Google Calendar), granola,"
-        " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky)",
+        " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky), weather (the places of your"
+        " days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",
@@ -4075,7 +4076,11 @@ def main(argv: list[str] | None = None) -> None:
         " (Linux), printed before it is written under your LaunchAgents or systemd user directory",
     )
     s.add_argument("--uninstall-schedule", action="store_true", help="remove that agent or timer")
-    s.add_argument("--since", metavar="RFC3339", help="pull from here instead of the stored watermark")
+    s.add_argument(
+        "--since",
+        metavar="RFC3339",
+        help="pull from here instead of the stored watermark (weather: a local day, YYYY-MM-DD)",
+    )
     s.add_argument(
         "--listen",
         metavar="SECONDS",
@@ -4084,7 +4089,8 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument(
         "--until",
         metavar="HH:MM",
-        help="ais: listen until the record's local clock next shows this time, then write",
+        help="ais: listen until the record's local clock next shows this time, then write;"
+        " weather: the last local day to cover, YYYY-MM-DD (default yesterday)",
     )
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.set_defaults(fn=cmd_sync)
