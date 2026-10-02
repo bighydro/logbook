@@ -89,12 +89,23 @@ class Airport(NamedTuple):
     lon: float
     tz: str
     municipality: str = ""  # as OurAirports writes it: `Oslo (Gardermoen)`, `Sandefjord(Torp)`
+    type: str = ""  # OurAirports' `type`: `large_airport`, `medium_airport`, `small_airport`, …
+
+    @property
+    def scheduled(self) -> bool:
+        """Whether the airport has scheduled traffic: a large or medium airport in OurAirports'
+        terms. Such an airport's terminal often lies well off the row's reference point (the
+        runway midpoint), so a reader allows it a wider radius than a strip or an untyped row."""
+        return self.type in SCHEDULED_TYPES
 
     @property
     def city(self) -> str:
         """The municipality's city alone: the part before a parenthesis or a comma, so
         `Paris (Roissy-en-France, Val-d'Oise)` is Paris. Empty when the row has none."""
         return re.split(r"[(,]", self.municipality, maxsplit=1)[0].strip()
+
+
+SCHEDULED_TYPES = frozenset({"large_airport", "medium_airport"})
 
 
 class Airports:
@@ -122,8 +133,8 @@ class Airports:
 
     @classmethod
     def load(cls, override: Path | None = None) -> Airports:
-        """The built-in table, then the rows of `override` (same columns; `icao`, `name` and
-        `municipality` may be absent) on top of it. A row without a code or coordinates, or with a
+        """The built-in table, then the rows of `override` (same columns; `icao`, `name`,
+        `municipality` and `type` may be absent) on top of it. A row without a code or coordinates, or with a
         zone the zone database does not know, is a ValueError naming its line."""
         airports = cls(_builtin_airports())
         if override is not None:
@@ -144,6 +155,15 @@ class Airports:
             if km <= best_km:
                 best, best_km = airport, km
         return best
+
+    def within(self, lat: float, lon: float, km: float) -> list[tuple[Airport, float]]:
+        """Every airport within `km` of a point with its distance in km, nearest first."""
+        found = []
+        for airport in self._near(lat, lon) if km <= CELL_KM else self._rows:
+            distance = distance_km(lat, lon, airport.lat, airport.lon)
+            if distance <= km:
+                found.append((airport, distance))
+        return sorted(found, key=lambda pair: pair[1])
 
     def _near(self, lat: float, lon: float) -> Iterator[Airport]:
         """The airports in the point's one-degree cell and the eight around it: every airport
@@ -195,6 +215,7 @@ def _read_airports(text: str, name: str) -> list[Airport]:
                 lon,
                 tz,
                 (row.get("municipality") or "").strip(),
+                (row.get("type") or "").strip().lower(),
             )
         )
     return found

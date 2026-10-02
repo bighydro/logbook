@@ -37,9 +37,10 @@ passage, an anchorage. The asset's movement never fragments the stay.
 2. **Timeline** — one row per stay, stop, move and flight that touches the day, in time order.
    A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`;
    the duration printed is the part on the day, and `--json` keeps the real span beside it. An
-   unnamed stay is its coordinates, with the city of the nearest large airport within 30 km in
-   parentheses when it is at no airport and near no named place (`53.5998,10.0130 (Hamburg)`, the
-   `trips` route's rule). A stop with nothing attached says so.
+   unnamed stay at an airport is the airport's code and city (`ZRH, Zurich`: within 3.5 km of the
+   reference point of an airport with scheduled traffic, 2 km of any other); else its coordinates,
+   with the city of the nearest large airport within 30 km in parentheses when it is near no named
+   place (`53.5998,10.0130 (Hamburg)`, the `trips` route's rule). A stop with nothing attached says so.
    A move prints its distance, duration and mode (walk, car, train, boat, flight), with the
    airports when it is a flight between two. A move with no points that lasts a silence or more
    (`merge_gap_s`) and is not a flight is a **gap**: the tracker did not see it, so it places

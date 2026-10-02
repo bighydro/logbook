@@ -138,14 +138,17 @@ def _where(s: stays.Segment, rd: Reading) -> str | None:
 
 
 def _coordinates(s: stays.Segment, rd: Reading) -> str | None:
-    """`lat,lon`, with the city of the nearest large airport within 30 km in parentheses when the
-    stay is at no airport and near no named place (`trips.city_near`, the route's rule), so a
-    reader sees `53.5998,10.0130 (Hamburg)`."""
+    """The airport's code and city, `ZRH, Zurich`, when the stay is at one (`trips.airport_at`, the
+    route's rule: 3.5 km from the reference point of an airport with scheduled traffic, 2 km from
+    any other); else `lat,lon`, with the city of the nearest large airport within 30 km in
+    parentheses when the stay is near no named place (`trips.city_near`), so a reader sees
+    `53.5998,10.0130 (Hamburg)`."""
     if s.lat is None or s.lon is None:
         return None
+    airport = trips.airport_at(s.lat, s.lon, rd.airports)
+    if airport is not None:
+        return trips.airport_label(airport)
     label = f"{s.lat:.4f},{s.lon:.4f}"
-    if rd.airports.nearest(s.lat, s.lon, trips.AIRPORT_KM) is not None:
-        return label
     near = named_places.nearest(s.lat, s.lon, rd.places)
     if near is not None and near[1] <= trips.NEAR_KM * 1000:
         return label

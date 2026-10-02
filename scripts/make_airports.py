@@ -5,9 +5,12 @@
 
 Downloads https://davidmegginson.github.io/ourairports-data/airports.csv (or reads the file given),
 keeps every `large_airport` with scheduled service and both an IATA and an ICAO code — the world's
-major airports, about 1,150 of them — and writes `iata,icao,name,lat,lon,tz,municipality`, sorted by
-IATA. `municipality` is OurAirports' own text (`Oslo (Gardermoen)`, `Paris (Roissy-en-France,
-Val-d'Oise)`); `flights.Airport.city` reduces it to the city.
+major airports, about 1,150 of them — and writes `iata,icao,name,lat,lon,tz,municipality,type`,
+sorted by IATA. `municipality` is OurAirports' own text (`Oslo (Gardermoen)`, `Paris
+(Roissy-en-France, Val-d'Oise)`); `flights.Airport.city` reduces it to the city. `type` is
+OurAirports' own (`large_airport` for every row this filter keeps); `flights.Airport.scheduled`
+reads it, and a private override file may carry `medium_airport` for a regional field with
+scheduled traffic or leave the column out.
 
 OurAirports has no timezone; the IANA zone comes from the maps below: one zone per country, and per
 region for the countries that span several. Every zone is checked against the zone database before
@@ -239,13 +242,13 @@ def main(argv: list[str]) -> int:
             continue
         zoneinfo.ZoneInfo(zone)  # raises on a name the zone database does not know
         lat, lon = round(float(r["latitude_deg"]), 4), round(float(r["longitude_deg"]), 4)
-        rows.append((iata, icao, r["name"], lat, lon, zone, r["municipality"].strip()))
+        rows.append((iata, icao, r["name"], lat, lon, zone, r["municipality"].strip(), r["type"]))
     rows.sort()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with OUT.open("w", encoding="utf-8", newline="") as fh:
         fh.write(HEADER)
         writer = csv.writer(fh, lineterminator="\n")
-        writer.writerow(("iata", "icao", "name", "lat", "lon", "tz", "municipality"))
+        writer.writerow(("iata", "icao", "name", "lat", "lon", "tz", "municipality", "type"))
         writer.writerows(rows)
     for m in missing:
         print(f"no zone: {m}", file=sys.stderr)
