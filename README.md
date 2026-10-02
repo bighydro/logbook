@@ -575,6 +575,7 @@ logbook people merge                          # the same person named twice: pro
 
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art
+logbook keepers --people                      # who appears on the keepers, per month: the faces the library named, proposed
 
 logbook promises --judge                      # a local model reads every "I'll…" the rules found; the commitments, as proposals
 logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
@@ -618,8 +619,10 @@ airport's code); consecutive points within 200 m of each other are one. `logbook
 same way.
 
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
-named Art is `art`. `infer keepers` reads the marks out of the photo lines once; `show <day>` lists the day's
-keepers first, as its hero photos.
+named Art is `art`. `add photos` writes them with the photo lines, and `infer keepers` reads the marks out of any
+library's photo lines once; `show <day>` lists the day's keepers first, as its hero photos. `keepers --people` is
+who appears on them per month, from the names your library gave its faces — proposed, never confirmed; a face's
+name is a person only when it is exactly a label a resolution line carries (`docs/adapters/photos.md`).
 
 **Promises** (`docs/promises.md`) are proposals, never facts: every sentence of a transcript or a note that reads
 as a first-person future or obligation, in English or German (`I'll send`, `we'll get back`, `let me`, `I need to`,
