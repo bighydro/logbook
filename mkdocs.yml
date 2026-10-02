@@ -83,6 +83,7 @@ nav:
       - "Google Takeout": adapters/takeout.md
       - Mail: adapters/mail.md
       - Bounties: adapter-bounties.md
+      - "Passages: a deck log as sea legs": adapters/passages.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md
