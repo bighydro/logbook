@@ -507,3 +507,9 @@ def _by_name(name: str, identities: Mapping[Ref, Identity]) -> tuple[str | None,
     if len(loose) == 1:
         return next(iter(loose.items()))
     return None, None
+
+
+# The two lookups other readers of people share (`people`): a ref to the person it resolves to, and a
+# spoken or written name to the person whose label it is.
+resolve_ref = _resolve
+by_name = _by_name

@@ -71,6 +71,7 @@ nav:
   - The rollups: rollups.md
   - Promises: promises.md
   - The digest: digest.md
+  - People: people.md
   - Adapters:
       - Overview: adapters/README.md
       - "Voice memos and transcription": adapters/voice-memos.md

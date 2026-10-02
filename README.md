@@ -534,6 +534,8 @@ logbook trips --year 2026                     # runs of nights away: route, plac
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
 logbook show asset solvind                    # trips aboard, nights, people, the track's summary
 logbook show place Office                     # visits, people, photos
+logbook people --year 2026                    # everyone the record names: channels, days and nights together, last real contact
+logbook person ola@example.org                # one page: the numbers, then the shared days, most recent first
 
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art
