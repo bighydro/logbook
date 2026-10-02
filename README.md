@@ -529,6 +529,9 @@ logbook keepers --since 2026-06-01 --lane art
 logbook promises --judge                      # a local model reads every "I'll…" the rules found; the commitments, as proposals
 logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
 logbook promises done 3b9e5d0f2a71c846        # it was kept: one task/v1 line, so --open hides it
+
+logbook digest                                # today in 25 lines at most, with one question you answer in a word
+logbook digest 2026-06-10 --markdown          # the same lines as Markdown; --json the sets behind them
 ```
 
 Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
@@ -577,6 +580,11 @@ Qwen2.5 by default) read each candidate in its context and say whether it is a c
 what and by when; the verdicts are kept in the record and never redone, and the command shows the commitments
 it is sure of (`--all` for everything). No model runs unless you ask, never a cloud one, and nothing leaves the
 machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done.
+
+**The digest** (`docs/digest.md`) is the day in 25 lines at most, composed from the readers above and never a
+list of everything: where, with whom confirmed, what attached; the flights; the open promises due within the week;
+the usual sources with no line; tomorrow's timed calendar entries; and one closing question you can answer in a
+word, so the day closes itself (ADR 0005). It writes nothing and sends nothing; delivery is a later decision.
 
 ## Handing a window to someone
 

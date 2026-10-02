@@ -55,6 +55,9 @@ from . import (
     days as days_reader,
 )
 from . import (
+    digest as digest_reader,
+)
+from . import (
     doctor as doctor_checks,
 )
 from .adapters import ais, ios_contacts
@@ -1598,6 +1601,31 @@ def cmd_day(a: argparse.Namespace) -> None:
         print(text)
 
 
+def _today() -> str:
+    """The local day, as one function so a test can pin it."""
+    return date.today().isoformat()
+
+
+def cmd_digest(a: argparse.Namespace) -> None:
+    """`digest [YYYY-MM-DD] [--json | --markdown]`: the day in at most `digest.LIMIT` lines — its
+    shape in three (where, with whom confirmed, what attached), the flights, the open promises due
+    within the week, the usual sources with no line, tomorrow's timed calendar entries and one
+    closing question the owner answers in a word (`logbook.digest`, composed from the readers).
+    Nothing is written and nothing is sent: delivery is a later decision (ADR 0005)."""
+    lb = Logbook.find()
+    day = _today() if a.day in (None, "today") else a.day
+    try:
+        data = digest_reader.read(lb, day, _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"digest: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    for text in digest_reader.markdown(data) if a.markdown else digest_reader.rows(data):
+        print(text)
+
+
 def cmd_days(a: argparse.Namespace) -> None:
     """`days [--from DAY] [--to DAY] [--json]`: a window of the record one line per day — the
     night, the kilometres moved, the flights, the stays with what attached, the people confirmed,
@@ -2997,6 +3025,21 @@ def main(argv: list[str] | None = None) -> None:
         "--json", action="store_true", help="the Day as one JSON object, every row with its line ids"
     )
     s.set_defaults(fn=cmd_day)
+    s = sub.add_parser(
+        "digest",
+        help="one day in 25 lines at most: where, with whom, what attached, flights, promises due, gaps,"
+        " tomorrow, one question",
+    )
+    s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    form = s.add_mutually_exclusive_group()
+    form.add_argument("--json", action="store_true", help="the digest as one JSON object, with line ids")
+    form.add_argument("--markdown", action="store_true", help="the same lines as Markdown")
+    s.set_defaults(fn=cmd_digest)
     s = sub.add_parser(
         "days", help="a window of days one line each: night, km moved, flights, stays, people, health, gaps"
     )
