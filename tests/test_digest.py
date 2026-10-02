@@ -75,7 +75,13 @@ def test_an_office_day_in_three_lines_plus_the_question(
     data = _json(capsys, "2026-06-10")
     assert data["day"] == "2026-06-10" and data["weekday"] == "Wednesday" and data["tz"] == TZ
     shape = data["shape"]
-    assert shape["where"] == ["Home", "Office", "59.9200,10.7400", "Office", "Home"], "the cafe is unnamed"
+    assert shape["where"] == [
+        "Home",
+        "Office",
+        "59.9200,10.7400 near Home, 1.0 km",
+        "Office",
+        "Home",
+    ], "the cafe is unnamed"
     assert shape["night"]["where"] == "Home" and shape["night"]["home"] is True
     assert shape["with"]["confirmed"] == ["Kari Nordmann"], "an attendee of the lunch at the cafe"
     assert shape["with"]["proposed"] == [], "the face in the photo is the same person, confirmed elsewhere"
