@@ -35,6 +35,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Try it: try-it.md
+  - Your life in a folder: launch-post.md
   - Vision: VISION.md
   - Lore: LORE.md
   - Specification v0.2: SPEC.md
@@ -79,6 +80,7 @@ nav:
       - Overview: adapters/README.md
       - "Voice memos and transcription": adapters/voice-memos.md
       - "Google Takeout": adapters/takeout.md
+      - Bounties: adapter-bounties.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md
