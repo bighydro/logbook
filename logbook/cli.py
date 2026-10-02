@@ -326,7 +326,7 @@ def _keepers_of_import(
                 continue
             drafts.extend(keepers.draft({**draft, "id": line_id}, lane) for lane in lanes)
         if dry_run:
-            already = len(idx.existing({key for d in drafts if (key := _dedupe_key(d)) is not None}))
+            already = len(idx.existing({key for d in drafts if (key := dedupe_key(d)) is not None}))
     photos = f"{_plural(len(marked), 'marked photo')} of {counts.get('photos', 0)}"
     if dry_run:
         n = len(drafts) - already + new_photos
