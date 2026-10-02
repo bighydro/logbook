@@ -22,7 +22,16 @@ theme:
       accent: amber
       toggle: { icon: material/weather-sunny, name: light }
   font: { text: IBM Plex Sans, code: IBM Plex Mono }
-markdown_extensions: [tables, admonition, toc, pymdownx.superfences, pymdownx.highlight]
+markdown_extensions:
+  - tables
+  - admonition
+  - toc
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
   - Try it: try-it.md
@@ -30,6 +39,7 @@ nav:
   - Lore: LORE.md
   - Specification v0.2: SPEC.md
   - Architecture: ARCHITECTURE.md
+  - How a line becomes a Day: line-to-day.md
   - Roadmap: ROADMAP.md
   - Decisions:
       - About ADRs: adr/README.md
