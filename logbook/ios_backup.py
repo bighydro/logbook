@@ -63,6 +63,10 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     sbb                 AppDomainGroup-group.ch.sbb.SBBMobile         SbbMobile.db (+ the app container's
                                                                   Documents/ch.sbb.coredata.pasttrips.sqlite
                                                                   beside it)
+    screentime          HomeDomain                                    Library/Application Support/
+                                                                  com.apple.remotemanagementd/
+                                                                  RMAdminStore-Local.sqlite (Screen
+                                                                  Time's hourly totals per app)
 
 A source whose `relative_path` has a wildcard (`pattern`) is found by matching every file row of its
 domain against it (`fnmatch`, the whole path): the first match is the store, the rest are copied
@@ -142,6 +146,7 @@ SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
 EASYPARK = "AppDomain-net.easypark.app"
 WISPR = "AppDomain-com.wispr.flowapp"
 FLIGHTY = "AppDomain-com.flightyapp.flighty"
+SCREEN_TIME = "Library/Application Support/com.apple.remotemanagementd/RMAdminStore-Local.sqlite"
 FILE_FLAG = 1
 SIBLINGS = ("-wal", "-shm")  # a SQLite store's write-ahead log and its index, when the backup has them
 
@@ -249,6 +254,7 @@ SOURCES: tuple[Source, ...] = (
         "SbbMobile.db",
         companions=((SBB_APP, "Documents/ch.sbb.coredata.pasttrips.sqlite"),),
     ),
+    Source("screentime", HOME, SCREEN_TIME),  # `screentime`: Screen Time's hourly totals per app
 )
 
 EXTRAS: tuple[Source, ...] = (  # only an encrypted backup carries these

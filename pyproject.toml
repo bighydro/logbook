@@ -65,6 +65,7 @@ myfitnesspal = "logbook.adapters.myfitnesspal"
 sbb = "logbook.adapters.sbb"
 spotify = "logbook.adapters.spotify"
 apple-music = "logbook.adapters.apple_music"
+screentime = "logbook.adapters.screentime"
 
 [dependency-groups]
 dev = [

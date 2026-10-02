@@ -14,17 +14,23 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from . import apps as app_table
 from . import countries as country_table
 from . import flights as flight_lines
 from . import health as health_lines
 from . import places as named_places
 from . import present, stays, trips
+from .adapters import screentime
 from .chain import Line
 from .export import day_range
+from .index import local_date
 from .reading import Reading, window_json
+from .store import retractions
 
-KINDS = ("countries", "flights", "nights", "places", "people", "health")
+KINDS = ("countries", "flights", "nights", "places", "people", "health", "attention")
 PERIODS = ("month", "week")
+YEAR = "year"  # attention's default period; health's is the month
+APPS_TOP = 20  # the apps a period lists in text; the JSON has them all
 LONG_HAUL_KM = 3500.0
 EN_DASH = "\u2013"
 EM_DASH = "\u2014"
@@ -45,11 +51,19 @@ def _head(kind: str, reading: Reading) -> dict[str, Any]:
     return {"kind": kind, "window": window_json(reading)}
 
 
-def empty(kind: str, by: str = "month") -> dict[str, Any]:
+def empty(kind: str, by: str | None = None) -> dict[str, Any]:
     """The rollup of a record with no lines."""
     window: dict[str, Any] = {"since": None, "until": None, "days": []}
     if kind == "health":
-        return {"kind": kind, "window": window, "by": by, "periods": []}
+        return {"kind": kind, "window": window, "by": by or "month", "periods": []}
+    if kind == "attention":
+        return {
+            "kind": kind,
+            "window": window,
+            "by": by or YEAR,
+            "categories": list(app_table.CATEGORIES),
+            "periods": [],
+        }
     return {"kind": kind, "window": window, "years": []}
 
 
@@ -657,12 +671,141 @@ def health(lines: Iterable[Line], tz: str, first: str, last: str, by: str = "mon
 
 
 def _period(day: str, by: str) -> str:
-    """`2026-06` for a month; `2026-W23` for an ISO week (the year is the ISO year, so the first
-    days of January can belong to the old year's last week)."""
+    """`2026` for a year; `2026-06` for a month; `2026-W23` for an ISO week (the year is the ISO
+    year, so the first days of January can belong to the old year's last week)."""
+    if by == YEAR:
+        return day[:4]
     if by == "month":
         return day[:7]
     year, week, _weekday = date.fromisoformat(day).isocalendar()
     return f"{year}-W{week:02d}"
+
+
+# -- attention ----------------------------------------------------------------------------------------------
+
+
+def attention(
+    lines: Iterable[Line],
+    tz: str,
+    first: str,
+    last: str,
+    by: str | None = None,
+    table: app_table.Apps | None = None,
+) -> dict[str, Any]:
+    """Hours by app and by category per year (`by` None), calendar month or ISO week of the window
+    `[first, last]`, from the `app-use` lines standing: a retracted line is out, and so is one
+    another app-use line `supersedes`. `lines` are the app-use lines whose local day is in the
+    window, with the retraction lines beside them. An app is its bundle id (the Mac's Safari and the
+    phone's are two rows); its name is the owner's (`policy/apps.json`), else the built-in table's,
+    else what the line itself carries; its category the owner's, else the built-in table's, else a
+    hint in the id, else `other` (`apps.Apps`). A line's seconds are its `extra.duration_s`, else
+    its span. Every period the window touches is listed; one with no line has no categories and no
+    apps, never a zero per category; a period with lines carries every category, a category no app
+    of the period falls in at zero."""
+    if by is not None and by not in PERIODS:
+        raise ValueError(f"--by is month or week, not {by!r}")
+    by = by or YEAR
+    table = table or app_table.Apps()
+    days = day_range(first, last)
+    periods: dict[str, dict[str, Any]] = {}
+    for day in days:
+        key = _period(day, by)
+        entry = periods.setdefault(key, {"period": key, "first": day, "last": day, "apps": {}})
+        entry["last"] = day
+    for line in _app_use_standing(lines):
+        payload = line["payload"]
+        extra = payload.get("extra") if isinstance(payload.get("extra"), dict) else {}
+        bundle_id = str(extra.get("bundle_id") or payload.get("title") or "")
+        if not bundle_id:
+            continue
+        day = local_date(str(line["at"]), tz)
+        if not first <= day <= last:
+            continue
+        seconds = _seconds(line, extra)
+        if seconds <= 0:
+            continue
+        device = str(extra.get("device") or "unknown")
+        app: dict[str, Any] = periods[_period(day, by)]["apps"].setdefault(
+            bundle_id,
+            {
+                "bundle_id": bundle_id,
+                "named": None,
+                "seconds": 0,
+                "sessions": 0,
+                "devices": Counter(),
+                "lines": [],
+            },
+        )
+        app["seconds"] += seconds
+        app["sessions"] += 1
+        app["devices"][device] += seconds
+        app["lines"].append(str(line["id"]))
+        if app["named"] is None and isinstance(extra.get("app"), str) and extra["app"]:
+            app["named"] = extra["app"]
+    out: dict[str, Any] = {
+        "kind": "attention",
+        "window": {"since": first, "until": last, "days": days},
+        "by": by,
+        "categories": list(app_table.CATEGORIES),
+        "periods": [_attention_period(entry, table) for entry in periods.values()],
+    }
+    return out
+
+
+def _app_use_standing(lines: Iterable[Line]) -> list[Line]:
+    """The app-use lines standing: not retracted, not superseded by another app-use line."""
+    found = list(lines)
+    retracted = retractions(found)
+    kept = [
+        line for line in found if line.get("kind") == screentime.KIND and str(line["id"]) not in retracted
+    ]
+    superseded = {
+        str(line["payload"]["supersedes"])
+        for line in kept
+        if isinstance(line["payload"].get("supersedes"), str)
+    }
+    return [line for line in kept if str(line["id"]) not in superseded]
+
+
+def _seconds(line: Line, extra: Mapping[str, Any]) -> int:
+    duration = extra.get("duration_s")
+    if isinstance(duration, int | float) and not isinstance(duration, bool):
+        return int(duration)
+    start, end = stays.instant(line.get("at")), stays.instant(line.get("end"))
+    if start is None or end is None:
+        return 0
+    return int((end - start).total_seconds())
+
+
+def _attention_period(entry: dict[str, Any], table: app_table.Apps) -> dict[str, Any]:
+    found: dict[str, dict[str, Any]] = entry.pop("apps")
+    apps_out = []
+    for app in sorted(found.values(), key=lambda a: (-a["seconds"], a["bundle_id"])):
+        bundle_id = app["bundle_id"]
+        apps_out.append(
+            {
+                "bundle_id": bundle_id,
+                "app": table.name(bundle_id) or app["named"],
+                "category": table.category(bundle_id),
+                "hours": _hours(app["seconds"]),
+                "seconds": app["seconds"],
+                "sessions": app["sessions"],
+                "devices": dict(app["devices"]),
+                "lines": app["lines"],
+            }
+        )
+    total = sum(a["seconds"] for a in apps_out)
+    by_category: dict[str, Any] | None = None
+    if apps_out:
+        by_category = {}
+        for category in app_table.CATEGORIES:
+            seconds = sum(a["seconds"] for a in apps_out if a["category"] == category)
+            by_category[category] = {"hours": _hours(seconds), "seconds": seconds}
+    return {**entry, "hours": _hours(total), "seconds": total, "by_category": by_category, "apps": apps_out}
+
+
+def _hours(seconds: int) -> float:
+    return round(seconds / 3600, 1)
 
 
 def _values(found: Sequence[dict[str, Any]], field: str) -> tuple[list[float], list[str]]:
@@ -702,12 +845,15 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     head = data["kind"]
     if window["since"]:
         head = f"{head} {window['since']} {EN_DASH} {window['until']}"
-    if data["kind"] == "health":
+    if data["kind"] in ("health", "attention"):
         yield f"{head} · by {data['by']}"
         if not data["periods"]:
             yield "  nothing in the window"
         for period in data["periods"]:
-            yield _period_row(period)
+            if data["kind"] == "health":
+                yield _period_row(period)
+            else:
+                yield from _attention_rows(period)
         return
     if data["years"] and "with" in data["years"][0]:
         head += " · with"
@@ -741,6 +887,24 @@ def _period_row(period: dict[str, Any]) -> str:
         f"hrv {EM_DASH}" if hrv is None else f"hrv {hrv['mean_ms']} ms ({_plural(hrv['days'], 'day')})",
     ]
     return f"  {period['period']}  {' · '.join(parts)}"
+
+
+def _attention_rows(period: dict[str, Any]) -> Iterator[str]:
+    """One period: the hours with every category's share, then the apps by hours (`APPS_TOP` at
+    most, the rest counted); a period with no line is an em dash."""
+    if period["by_category"] is None:
+        yield f"  {period['period']}  {EM_DASH}"
+        return
+    shares = " · ".join(f"{c} {v['hours']:.1f} h" for c, v in period["by_category"].items())
+    yield f"  {period['period']}  {period['hours']:.1f} h · {shares}"
+    shown = period["apps"][:APPS_TOP]
+    width = max(24, *(len(a["app"] or a["bundle_id"]) for a in shown)) if shown else 24
+    for a in shown:
+        parts = [f"{a['hours']:.1f} h", a["category"], _plural(a["sessions"], "session"), a["bundle_id"]]
+        yield f"        {a['app'] or a['bundle_id']:<{width}} {' · '.join(parts)}"
+    rest = len(period["apps"]) - len(shown)
+    if rest > 0:
+        yield f"        +{_plural(rest, 'more app')}"
 
 
 def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:

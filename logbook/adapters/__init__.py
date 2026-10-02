@@ -126,6 +126,7 @@ BUILT_IN = (
     "passages",
     "spotify",
     "apple_music",
+    "screentime",
 )
 
 

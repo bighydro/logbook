@@ -24,6 +24,7 @@ from . import (
     FORMAT,
     __version__,
     adapters,
+    apps,
     asset_status,
     assets,
     attachments,
@@ -71,7 +72,7 @@ from . import (
 from . import (
     year as year_reader,
 )
-from .adapters import ais, ios_contacts
+from .adapters import ais, ios_contacts, screentime
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
@@ -425,6 +426,10 @@ SKIP_PHRASES = {
     "skipped_no_uid": "without a uid",
     "skipped_todo": "to-do items",
     "skipped_journal": "journal entries",
+    "skipped_empty": "with nothing in them",
+    "skipped_no_bundle": "without a bundle id",
+    "skipped_duplicate": "already seen",
+    "skipped_web_domain": "per-site web time (the domain is never kept)",
     "skipped_sidecar_without_file": "sidecars without a media file",
     "skipped_unreadable_json": "JSON files that would not parse",
     "skipped_unreadable": "passes that would not parse",
@@ -464,6 +469,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_counterparty": "without a counterparty",
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
+    "no_name": "without an app name",
     "deleted": "marked for deletion",
     "load_failed": "that did not load",
     "no_url": "of a removed video, without a url",
@@ -612,6 +618,9 @@ def cmd_add(a: argparse.Namespace) -> None:
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
         return
+    if a.mac is not None or a.backup is not None or a.what == [screentime.NAME]:
+        _add_screentime(lb, a, given)
+        return
 
     if len(a.what) > 1 and (by_name := adapters.named(a.what[0])) is not None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
@@ -661,6 +670,77 @@ def _say_cleanable(lb: Logbook, imported: list[Path]) -> None:
     line = inbox.hint(lb.root, imported)
     if line is not None:
         print(line)
+
+
+FULL_DISK_ACCESS = (
+    "the Mac's Screen Time store is behind Full Disk Access: System Settings → Privacy & Security →"
+    " Full Disk Access, add your terminal, then run this again; or copy the store elsewhere and name"
+    " the copy with --mac"
+)
+
+
+def _add_screentime(lb: Logbook, a: argparse.Namespace, given: Mapping[str, Any]) -> None:
+    """`add screentime --mac [DB]` reads a Mac's knowledgeC.db (this Mac's own without a path;
+    a store that cannot be opened names Full Disk Access); `add screentime --backup DIR` copies
+    Screen Time's store out of an iOS backup into the inbox, as `import-backup --only screentime`
+    does, and runs the adapter on the copy; one or the other, with `screentime` and nothing else."""
+    if a.what != [screentime.NAME]:
+        print(f"add: --mac and --backup go with `add {screentime.NAME}`", file=sys.stderr)
+        sys.exit(2)
+    if a.mac is not None and a.backup is not None:
+        print("add screentime: give --mac DB or --backup DIR, not both", file=sys.stderr)
+        sys.exit(2)
+    if a.mac is None and a.backup is None:
+        print(
+            f"add screentime: --mac [DB] (this Mac's {screentime.MAC_DEFAULT}) or --backup DIR (an iOS"
+            f" backup folder), or a store's path: `add screentime <{screentime.MAC_STORE}|"
+            f"{screentime.PHONE_STORE}>`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if a.mac is not None:
+        store = Path(a.mac).expanduser()
+        readable = store.is_file()
+        if readable:
+            try:
+                with store.open("rb"):
+                    pass
+            except OSError:  # PermissionError on a Mac without Full Disk Access
+                readable = False
+        if not readable:
+            print(f"add screentime: cannot read {store}; {FULL_DISK_ACCESS}", file=sys.stderr)
+            sys.exit(2)
+        _append_with(lb, screentime, store, given, dry_run=a.dry_run)
+        return
+    try:
+        manifest = ios_backup.Manifest(Path(a.backup).expanduser())
+    except ios_backup.NotABackup as e:
+        print(f"add screentime: {e}", file=sys.stderr)
+        sys.exit(2)
+    if _say_disabled(lb, screentime.NAME):
+        return
+    source = ios_backup.source(screentime.NAME)
+    assert source is not None
+    inbox = lb.root / "inbox" / f"ios-backup-{manifest.udid}"
+    if manifest.encrypted:
+        _unlock(manifest, inbox)
+    (p,) = ios_backup.plan(manifest, (source,))
+    print(_plan_row(p, inbox))
+    if not p.found:
+        sys.exit(1)
+    if a.dry_run:
+        print(f"dry run: {p.bytes:,} bytes would be copied to {inbox / source.name}; nothing written")
+        return
+    try:
+        store_copy = ios_backup.copy(p, inbox / source.name)
+    except (ios_backup.CopyError, ios_backup.DecryptError, OSError) as e:
+        print(f"add screentime: {e}", file=sys.stderr)
+        sys.exit(1)
+    for c in p.copied:
+        if c.warning is not None:
+            print(f"  warning: {c.warning}")
+    ios_backup.write_copies(inbox, manifest, [p])
+    _append_with(lb, screentime, store_copy, given)
 
 
 def _since(value: str, timezone: str) -> str:
@@ -2054,6 +2134,8 @@ def _line_row(
         text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
+    elif line["kind"] == screentime.KIND and p.get("schema") == screentime.SCHEMA:
+        text = _app_use_text(p)
     else:
         text = (
             p.get("text")
@@ -2086,6 +2168,31 @@ def _value_repr(value: object) -> str:
     if isinstance(value, dict):
         return "{" + ", ".join(f"{_value_repr(k)}: {_value_repr(v)}" for k, v in value.items()) + "}"
     return repr(value)
+
+
+def _app_use_text(p: dict[str, Any]) -> str:
+    """An app-use line as `Safari · 25 min · mac`: the app (its name, else its bundle id), the span's
+    length, the device (its name, else its identifier). Never a title or a URL: the line has none."""
+    extra: dict[str, Any] = p["extra"] if isinstance(p.get("extra"), dict) else {}
+    app = p.get("title") or extra.get("bundle_id") or "an app"
+    parts = [str(app)]
+    seconds = extra.get("duration_s")
+    if isinstance(seconds, int | float) and not isinstance(seconds, bool):
+        parts.append(duration_text(int(seconds)))
+    device = extra.get("device_name") or extra.get("device")
+    if device:
+        parts.append(str(device))
+    return " · ".join(parts)
+
+
+def duration_text(seconds: int) -> str:
+    """`40 s`, `25 min`, `2 h 30 min`, `3 h`: whole units, the smaller one left out when zero."""
+    if seconds < 60:
+        return f"{seconds} s"
+    hours, minutes = divmod(round(seconds / 60), 60)
+    if not hours:
+        return f"{minutes} min"
+    return f"{hours} h {minutes:02d} min" if minutes else f"{hours} h"
 
 
 def _crossing_text(p: dict[str, Any]) -> str:
@@ -2869,18 +2976,23 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     of its lines under --json. Nothing is written."""
     lb = Logbook.find()
     try:
-        if a.by and a.what != "health":
-            raise ValueError("--by is for rollup health")
+        if a.by and a.what not in ("health", "attention"):
+            raise ValueError("--by is for rollup health and rollup attention")
         if a.with_ and a.what != "places":
             raise ValueError("--with goes with `rollup places`: the place × person table")
         window = _rollup_days(lb, a)
         if window is None:
-            data = listen_rollup.empty() if a.what == "listen" else rollup.empty(a.what, a.by or "month")
+            data = listen_rollup.empty() if a.what == "listen" else rollup.empty(a.what, a.by)
         elif a.what == "health":
             tz = str(lb.meta["timezone"])
             data = rollup.health(_health_window(lb, *window), tz, *window, a.by or "month")
         elif a.what == "listen":
             data = listen_rollup.listen(_listen_window(lb, *window), str(lb.meta["timezone"]), *window)
+        elif a.what == "attention":
+            tz = str(lb.meta["timezone"])
+            data = rollup.attention(
+                _kind_window(lb, screentime.KIND, *window), tz, *window, a.by, apps.read(lb.root)
+            )
         else:
             read = reading.read(lb, window[0], window[1], _airports(a.airports))
             data = rollup.places(read, with_table=a.with_) if a.what == "places" else ROLLUPS[a.what](read)
@@ -2909,6 +3021,13 @@ def _health_window(lb: Logbook, first: str, last: str) -> list[Line]:
         return [*idx.by_kind(health.KIND, before, last), *idx.retractions()]
 
 
+def _kind_window(lb: Logbook, kind: str, first: str, last: str) -> list[Line]:
+    """The lines of one kind whose local day is in `[first, last]`, through the index, with every
+    retraction line (a retraction applies wherever its line is)."""
+    with lb.index() as idx:
+        return [*idx.by_kind(kind, first, last), *idx.retractions()]
+
+
 ROLLUPS: dict[str, Callable[[reading.Reading], dict[str, Any]]] = {
     "countries": rollup.countries,
     "flights": rollup.flights,
@@ -2924,7 +3043,12 @@ def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
     if a.year and (a.since or a.until):
         raise ValueError("give --year, or --since and --until, not both")
     what = str(getattr(a, "what", None) or "")
-    kinds = {"flights": None, "health": health.KIND, "listen": listen_rollup.KIND}
+    kinds = {
+        "flights": None,
+        "health": health.KIND,
+        "listen": listen_rollup.KIND,
+        "attention": screentime.KIND,
+    }
     whole = reading.record_days(lb, kinds.get(what, "location"))
     if whole is None:
         return None
@@ -3472,6 +3596,18 @@ def main(argv: list[str] | None = None) -> None:
         help="passages: a folder of ECDIS route files (RTZ) that position the legs they name",
     )
     s.add_argument(
+        "--mac",
+        nargs="?",
+        const=str(screentime.MAC_DEFAULT),
+        metavar="DB",
+        help=f"screentime: a Mac's {screentime.MAC_STORE} (default this Mac's own, behind Full Disk Access)",
+    )
+    s.add_argument(
+        "--backup",
+        metavar="DIR",
+        help=f"screentime: an iOS backup folder; its {screentime.PHONE_STORE} is copied into inbox/ and read",
+    )
+    s.add_argument(
         "--dry-run",
         action="store_true",
         help="run the adapter, say how many lines would be added and how many are already in the record;"
@@ -3756,15 +3892,18 @@ def main(argv: list[str] | None = None) -> None:
     v.set_defaults(fn=cmd_places)
     s = sub.add_parser(
         "rollup",
-        help="the record per year: countries, flights, nights, places, people, listen;"
-        " per month or week: health",
+        help="the record per year: countries, flights, nights, places, people, listen, attention (hours by"
+        " app and category); per month or week: health, attention",
     )
     s.add_argument("what", choices=(*rollup.KINDS, listen_rollup.KIND), help="what to sum up")
     s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
     s.add_argument(
-        "--by", choices=rollup.PERIODS, help="health only: per calendar month (default) or per ISO week"
+        "--by",
+        choices=rollup.PERIODS,
+        help="health and attention: per calendar month (health's default) or per ISO week; attention is"
+        " per year without it",
     )
     s.add_argument(
         "--airports",
