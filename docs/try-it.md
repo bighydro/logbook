@@ -200,6 +200,15 @@ nights 2026-06-01 – 2026-06-30
 
 `--json` on any of them carries the ids of the lines every number came from.
 
+The whole year on one page — the rollups, the trips in order, the places by nights, the people by
+days together, health and keepers by month, and one day a month read back with the day reader,
+the day with the most evidence ([docs/year.md](year.md)):
+
+```bash
+logbook year 2026                        # as text
+logbook year 2026 --html ~/Demo/2026.html  # one self-contained page that prints
+```
+
 ## Keepers and pages
 
 ```bash
