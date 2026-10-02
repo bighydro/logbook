@@ -62,7 +62,8 @@ def test_the_folder_reads_all_contacts_alone_so_a_label_file_repeats_nothing():
     assert len(_lines(FIX / "Sailing")) == 8  # a label folder on its own is read too
 
 
-def test_one_entity_per_contact_and_the_refs_are_normalised():
+def test_one_entity_per_contact_and_the_refs_are_normalised(monkeypatch):
+    monkeypatch.delenv(ios_contacts.DIAL_PREFIX_ENV, raising=False)  # the shell's prefix never reaches a test
     by = _by_ref(_lines())
     kari = by[("email", "kari.nordmann@example.org")]  # lower-cased
     assert kari["label"] == "Kari Nordmann" and kari["entity"]["type"] == "person"
