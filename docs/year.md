@@ -153,3 +153,106 @@ and `city`); `people` (`id`, `name`, `days`, `nights`, `stays`, `last_contact`, 
 `picks`, twelve entries of `month`, `day`, `evidence` (`attachments`, `people`, `flight`,
 `new_place`, `lines`, `score`) and `page`, the Day as `logbook day --json` gives it; and `scored`,
 the evidence of every day of the window. Nothing is written.
+
+## One trip
+
+`logbook trip <id-or-date> [--html PATH] [--json]` reads one trip back the same way: one of the
+runs of nights away that `trips` lists, named by its derived id (`trip:2026-06-15:2026-06-20`, the
+last part of every `trips` row) or by any day inside it, the return day included. It is a reader
+too (ADR 0013, ADR 0019): composed from `trips`, `days`, `rollup health`, the keepers and the
+transaction lines over one reading of the days around the trip — a week either side, widened
+while the run of nights away touches the window's edge, so a week is read from a month and never
+from a year — derived every time and never written.
+
+```bash
+logbook trips --year 2026                            # every trip of the year, its id last on the row
+logbook trip trip:2026-06-15:2026-06-20              # the yacht week as text
+logbook trip 2026-06-17 --html ~/yacht-week.html     # the same trip, named by a day inside it, as one page
+logbook trip 2026-06-17 --json                       # the Trip as one JSON object
+```
+
+The sections, in order:
+
+1. **Route** — the stays slept at, in night order, each with its nights and dates: a named place,
+   else the coordinates labelled as the Day labels them (the airport, `near <place>, x km`, the
+   city in parentheses). A week aboard is its anchorages, one stay each, with the asset beside
+   them — where `trips` folds the week into `aboard Nordlys`, the page says where the boat lay
+   each night. Consecutive nights at one point (within 200 m) are one stay; a night in transit is
+   a stay with no place. The **legs** between consecutive located stays carry their great-circle
+   kilometres, and a leg that crosses a night in transit says so.
+2. **Flights** — in (dated the leaving day) and out (dated the return day), as `trips` has them.
+3. **People** — the people confirmed present at the trip's stays (the calendar, a transcript, a
+   note, a resolved face), and apart the ones only *proposed* (a tagged face the record does not
+   confirm, an all-day entry's attendee); someone confirmed at one stay is never a proposal at
+   another.
+4. **Nights aboard** — per asset, when any night was spent on one; an asset trip says so in the
+   header (`6 nights aboard Nordlys`).
+5. **Days** — from the leaving day to the return day, one line each exactly as `logbook days`
+   prints it: the night, the kilometres moved, the flights, the stays and what attached, the
+   people, the health triple, the gaps.
+6. **Keepers** — per day of the span, by lane, with the photos' names (RFC 0024).
+7. **Health** — sleep, steps, resting heart rate and HRV over the span as one period, the
+   `rollup health` rule; a field no day has a line for is an em dash, never a zero.
+8. **Spend** — every `transaction/v1` line (RFC 0021) dated inside the span, summed per currency
+   with a minus sign for money that left (`−119 NOK (1 transaction)`), then each transaction with
+   its merchant and category. The section is there only when the record holds a transaction in
+   the span.
+
+On the demo record's yacht week (`logbook demo`; nobody in it is real):
+
+```
+trip:2026-06-15:2026-06-20  2026-06-15 – 2026-06-20 · 6 nights aboard Nordlys · until 2026-06-21
+  route
+     1  2026-06-15               1 night   59.8500,10.6000 · aboard Nordlys
+     2  2026-06-16               1 night   59.4300,10.4800 (Sandefjord) · aboard Nordlys
+     3  2026-06-17 – 2026-06-18  2 nights  59.0500,10.0300 (Sandefjord) · aboard Nordlys
+     4  2026-06-19               1 night   59.8500,10.6000 · aboard Nordlys
+     5  2026-06-20               1 night   Marina · aboard Nordlys
+  legs          1 → 2 47 km · 2 → 3 49 km · 3 → 4 95 km · 4 → 5 9.7 km
+  flights       none
+  with          Anders Vik, Ola Nordmann
+  aboard        6 nights aboard Nordlys
+  days
+    2026-06-15  Mon  aboard Nordlys NO               11.1 km  2 stays (2 attached) · with 2 · sleep 6.2 h · 6,671 steps · resting 54 bpm · gap immich
+    2026-06-16  Tue  aboard Nordlys NO               47.2 km  1 stay (4 attached) · sleep 6.2 h · 5,978 steps · resting 56 bpm
+    …
+    2026-06-21  Sun  Home                             1.4 km  2 stays (3 attached) · sleep 7.5 h · 6,703 steps · resting 55 bpm
+  keepers       3 (3 memory, 0 art)
+    2026-06-16  1 memory  IMG_06161730.HEIC
+    …
+  health        sleep 6.7 h (7 nights) · 6,417 steps (7 days) · resting 56 bpm (52–61, 7 days) · hrv —
+  spend         −119 NOK (1 transaction)
+    2026-06-18  Havnekiosken  −119 NOK  groceries
+```
+
+A day whose night was at home names no trip (`no trip on 2026-06-02: the night was at home`);
+an id that names none says which trip its first day belongs to; without a place of kind `home`
+in `places.json` nothing is away, as `trips` says.
+
+### The trip page
+
+`--html PATH` writes the Trip as one HTML file and prints `trip <id>: wrote PATH`. Like the
+Year's it is self-contained — inline CSS, no script, no font, image or stylesheet fetched, nothing
+linked — and prints with table headers on every sheet. Its route section opens with a **map**:
+an inline SVG drawn from the stays' coordinates in an equirectangular projection about the
+route's mean latitude (longitude scaled by the cosine of it, so a kilometre is the same length
+either way), one `path` per leg — dashed when a night in transit lies between — one mark per
+point with the numbers of the stays at it (a bay slept in on the way out and the way back is
+one mark, `1, 4`), and a scale bar in whole kilometres. No tiles and no external map: the page
+shows the shape of the trip, and the table under it says where each point is. A single stay is
+still a map, drawn at a twentieth of a degree across. Everything the record says is escaped.
+
+### The trip JSON
+
+`--json` prints one object: `id`, `start`, `end`, `until` (the return day), `nights`,
+`in_transit`, `asset` (the asset every night was aboard, else `null`) and `nights_aboard`
+(`{asset, name, nights}`); `head`, the chain head it was read at; `window`, the reading's days;
+`warnings`; `route`, one entry per stay with `n`, `first`, `last`, `nights`, `label`, `place`,
+`lat`, `lon`, `aboard`, `asset`, `stay` (the stay id) and `in_transit`; `legs` (`from`, `to`, `km`,
+`through_transit`); `places`; `days`, one object per day as `days --json` gives it; `flights_in`,
+`flights_out` and `flights`; `people` (`confirmed` and `proposed`, each `id`, `name`, `status`,
+`confidence`, `sources`, `lines`); `keepers` (`count`, `memory`, `art`, and `days` with each day's
+counts and `photos`); `health` (`sleep`, `steps`, `resting_hr`, `hrv`, the rollup's shape with
+line ids); `spend` (`by_currency` as `{currency, amount, count}` and `transactions` with `date`,
+`merchant`, `amount`, `currency`, `category`, `provider`, `line`; `null` when there is none); and
+`lines`, the trip's line ids. Nothing is written.

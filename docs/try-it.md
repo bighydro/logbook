@@ -145,15 +145,26 @@ logbook trips
 
 ```
 trips 2026-06-01 – 2026-06-30: 4 trips
-  2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann
-  2026-06-08 – 2026-06-10  3 nights · route Zürich · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
-  2026-06-15 – 2026-06-20  6 nights aboard nordlys · route near Marina → Sandefjord → near Marina → Marina · places Marina · with Ola Nordmann, Anders Vik, Sigrid Moen
-  2026-06-25 – 2026-06-26  2 nights · route Copenhagen Kastrup · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen
+  2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann · trip:2026-06-06:2026-06-06
+  2026-06-08 – 2026-06-10  3 nights · route 47.3769,8.5417 (Zurich) · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber · trip:2026-06-08:2026-06-10
+  2026-06-15 – 2026-06-20  6 nights aboard Nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann · trip:2026-06-15:2026-06-20
+  2026-06-25 – 2026-06-26  2 nights · route 55.6850,12.5500 (Copenhagen) · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen · trip:2026-06-25:2026-06-26
 ```
 
 A trip is a run of nights away from every place of kind `home`, with the flights in and out and
 the people the calendar, a transcript, a note or a tagged face put there. Derived, never written
 (ADR 0019).
+
+One trip read back whole, by the id at the end of its row or by any day inside it
+([docs/year.md](year.md), *One trip*): the route as the stays slept at — the week aboard is its
+five anchorages, each with its nights — the legs between them, the days one line each, the
+flights, the crew confirmed and proposed, the keepers, the health of the span, the spend; `--html`
+writes one page with an inline SVG map of the route, no tiles:
+
+```bash
+logbook trip trip:2026-06-15:2026-06-20
+logbook trip 2026-06-17 --html ~/Demo/yacht-week.html
+```
 
 ```bash
 logbook rollup flights

@@ -568,6 +568,7 @@ logbook rollup money --year 2026              # the transactions by month, by co
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
 logbook ledger --month 2026-06                # the transactions at the stay and in the trip, per day; shares per person
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints
+logbook trip trip:2026-06-15:2026-06-20       # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
 logbook show asset solvind                    # trips aboard, nights, people, the track's summary
 logbook show place Office                     # visits, people, photos
