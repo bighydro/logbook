@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 from zoneinfo import ZoneInfo
 
+from . import search as _search
 from .chain import Line
 
 if TYPE_CHECKING:
@@ -31,10 +32,28 @@ if TYPE_CHECKING:
 FILE_NAME = "index.sqlite"
 # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too; 4: subject
 # (ADR 0018), for `assets status`; 5: lat, lon and end, the columns `places propose` clusters from,
-# and the (kind, day_local) index that cuts a window
-SCHEMA_VERSION = "5"
+# and the (kind, day_local) index that cuts a window; 6: the `search` FTS5 table, the words of every
+# line that carries any, for `logbook search`
+SCHEMA_VERSION = "6"
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
+
+SEARCH = "search"  # the FTS5 table: rowid is the line's seq; kind, tier and day cut a query, unindexed
+
+
+def _fts5_available() -> bool:
+    """Whether this Python's SQLite was built with FTS5 (every official build is; a distribution's
+    may not be). Without it the index has no search table and `logbook search` says so."""
+    with contextlib.closing(sqlite3.connect(":memory:")) as db:
+        try:
+            db.execute("CREATE VIRTUAL TABLE probe USING fts5(body)")
+        except sqlite3.OperationalError:
+            return False
+    return True
+
+
+HAS_FTS5 = _fts5_available()
+NO_FTS5 = "this Python's SQLite has no FTS5 module, so the index holds no search table"
 
 SCHEMA = (
     "CREATE TABLE lines ("
@@ -48,8 +67,19 @@ SCHEMA = (
     "CREATE INDEX lines_subject_at ON lines (subject, at)",
     "CREATE INDEX lines_kind_day_local ON lines (kind, day_local)",
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    *(
+        (
+            # unicode61: case and diacritics folded, no stemmer in any language — a word matches
+            # itself and never a stem of it (`logbook/search.py`)
+            f"CREATE VIRTUAL TABLE {SEARCH} USING fts5("
+            "body, kind UNINDEXED, tier UNINDEXED, day UNINDEXED, tokenize = 'unicode61')",
+        )
+        if HAS_FTS5
+        else ()
+    ),
 )
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+INSERT_TEXT = f"INSERT INTO {SEARCH} (rowid, body, kind, tier, day) VALUES (?, ?, ?, ?, ?)"
 
 RETRACTED = "SELECT supersedes FROM lines WHERE kind = 'retraction' AND supersedes IS NOT NULL"  # a subquery
 
@@ -73,6 +103,9 @@ Row = tuple[
     str | None,
 ]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
+TextRow = tuple[int, str, str, int, str]  # seq, body, kind, tier, day_local: one row of the search table
+# One hit of `Index.search`: seq, day_local, rank (bm25, lower is better), snippet, file, offset
+SearchRow = tuple[int, str, float, str, str, int]
 
 
 class Place(NamedTuple):
@@ -144,6 +177,18 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
         lon,
         _string(line.get("end")),
     )
+
+
+def text_row(line: Line, root: Path, line_row: Row) -> TextRow | None:
+    """The search table's row for a line that carries words (`search.body_of`: the payload's
+    strings, a transcript's text from the attachment store under `root`), beside its `line_row`;
+    None for a line that carries none, or when this SQLite has no FTS5."""
+    if not HAS_FTS5:
+        return None
+    body = _search.body_of(line, root)
+    if body is None:
+        return None
+    return (line_row[0], body, line_row[4], line_row[6], line_row[3])
 
 
 def _field(obj: object, key: str) -> object:
@@ -245,19 +290,32 @@ class Index:
         tz = str(meta["timezone"])
         n, started = 0, time.monotonic()
         batch: list[Row] = []
+        texts: list[TextRow] = []
         self.db.execute("BEGIN")
         try:
-            for statement in ("DROP TABLE IF EXISTS lines", "DROP TABLE IF EXISTS meta", *SCHEMA):
+            for statement in (
+                "DROP TABLE IF EXISTS lines",
+                "DROP TABLE IF EXISTS meta",
+                f"DROP TABLE IF EXISTS {SEARCH}",
+                *SCHEMA,
+            ):
                 self.db.execute(statement)
             for file, offset, line in self.lb.located_lines():
-                batch.append(row(line, tz, file, offset))
+                line_row = row(line, tz, file, offset)
+                batch.append(line_row)
+                words = text_row(line, self.lb.root, line_row)
+                if words is not None:
+                    texts.append(words)
                 n += 1
                 if len(batch) >= INSERT_EVERY:
                     self.db.executemany(INSERT, batch)
+                    self.db.executemany(INSERT_TEXT, texts)
                     batch.clear()
+                    texts.clear()
                 if progress is not None and n % BUILD_PROGRESS_EVERY == 0:
                     progress(n, time.monotonic() - started)
             self.db.executemany(INSERT, batch)
+            self.db.executemany(INSERT_TEXT, texts)
             self._set_meta(meta)
             self.db.execute("COMMIT")
         except BaseException:
@@ -265,11 +323,13 @@ class Index:
             raise
         return n
 
-    def add(self, rows: Iterable[Row], meta: dict[str, Any]) -> None:
-        """Lines just appended, and the head they brought logbook.json to."""
+    def add(self, rows: Iterable[Row], meta: dict[str, Any], texts: Iterable[TextRow] = ()) -> None:
+        """Lines just appended, the search rows of those that carry words (`text_row`), and the
+        head they brought logbook.json to."""
         self.db.execute("BEGIN")
         try:
             self.db.executemany(INSERT, rows)
+            self.db.executemany(INSERT_TEXT, texts)
             self._set_meta(meta)
             self.db.execute("COMMIT")
         except BaseException:
@@ -605,6 +665,54 @@ class Index:
                 "stretch": stretches.get(str(source)),
             }
             for source, n, first, last in totals
+        ]
+
+    # -- searching: the FTS5 table says which, the files say what -----------------------------------
+    def search(
+        self,
+        expression: str,
+        max_tier: int,
+        first_day: str,
+        last_day: str,
+        kinds: Sequence[str] | None,
+        limit: int,
+    ) -> list[SearchRow]:
+        """The `limit` best hits of an FTS5 MATCH `expression` (`search.expression` builds one)
+        among the lines at or below `max_tier` whose local day is in [first_day, last_day], of one
+        of `kinds` when given, ranked by bm25 (the best first; the later line first among equals),
+        each with its day, rank, a snippet of the matching words marked `search.MARK`, and where
+        the line is. A retracted line is left out. The MATCH, the cut and the ranking run inside
+        the table in one query (the subquery keeps the LIMIT at the match); the join to `lines` is
+        one primary-key lookup per hit kept, so the cost is the matches of the words, never the
+        size of the record. Nothing is read from the files here."""
+        if not HAS_FTS5:
+            raise RuntimeError(NO_FTS5)
+        cut = "" if kinds is None else f" AND kind IN ({', '.join('?' * len(kinds))})"
+        hidden = self.retraction_counts()["hidden"]  # the hits a retraction can take, fetched over the limit
+        found = self.db.execute(
+            "SELECT s.seq, l.day_local, s.rank, s.snippet, l.file, l.offset FROM ("
+            f" SELECT rowid AS seq, rank AS rank, snippet({SEARCH}, 0, ?, ?, ?, ?) AS snippet FROM {SEARCH}"
+            f" WHERE {SEARCH} MATCH ? AND tier <= ? AND day BETWEEN ? AND ?{cut}"
+            " ORDER BY rank, rowid DESC LIMIT ?) AS s"
+            f" JOIN lines l ON l.seq = s.seq WHERE l.id NOT IN ({RETRACTED})"
+            " ORDER BY s.rank, s.seq DESC LIMIT ?",
+            (
+                _search.MARK[0],
+                _search.MARK[1],
+                _search.ELLIPSIS,
+                _search.SNIPPET_TOKENS,
+                expression,
+                max_tier,
+                first_day,
+                last_day,
+                *(kinds or ()),
+                limit + hidden,
+                limit,
+            ),
+        ).fetchall()
+        return [
+            (int(seq), str(day), float(rank), str(snippet), str(file), int(offset))
+            for seq, day, rank, snippet, file, offset in found
         ]
 
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
