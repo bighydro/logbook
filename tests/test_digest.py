@@ -183,7 +183,7 @@ def test_a_judged_set_on_the_report_narrows_the_promises() -> None:
     )
     plain = promises.Report([a, b], {}, {"name": "rules", "version": "1"}, None)
     assert [p.id for p in digest.due_promises(plain, "2026-06-10")] == [a.id, b.id]
-    judged = Judged([a, b], {}, {"name": "model", "version": "1"}, None, frozenset({b.id}))
+    judged = Judged([a, b], {}, {"name": "model", "version": "1"}, None, judged=frozenset({b.id}))
     assert [p.id for p in digest.due_promises(judged, "2026-06-10")] == [b.id]
     assert digest.due_promises(plain, "2026-06-13") == [], "due in the past is not due within the week"
     assert digest.due_promises(plain, "2026-06-05") == [a, b], "seven days ahead, inclusive"
