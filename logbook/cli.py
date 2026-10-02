@@ -26,6 +26,7 @@ from . import (
     adapters,
     asset_status,
     assets,
+    attachments,
     crossing,
     demo,
     events,
@@ -71,7 +72,7 @@ from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
 from .index import local_date
-from .resolve import Ref, labels
+from .resolve import Ref, identities_from, labels
 from .store import (
     RETRACTION,
     CodeCheckoutError,
@@ -146,13 +147,16 @@ def _under_home(path: Path) -> str:
         return str(path)
 
 
-def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None) -> bool:
+def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None, dry_run: bool = False) -> bool:
     """Append one file through the adapter that recognises it. False when nothing does."""
     adapter = adapters.find(p)
     if adapter is not None:
-        _append_with(lb, adapter, p, options)
+        _append_with(lb, adapter, p, options, dry_run=dry_run)
         return True
     if p.suffix == ".jsonl":  # observations produced by an adapter run by hand
+        if dry_run:
+            _say_dry_run(lb, p.name, _jsonl(p))
+            return True
         n = lb.append_many(_jsonl(p), progress=_progress)
         print(f"added {n} lines from {p.name}")
         return True
@@ -164,13 +168,21 @@ def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None) ->
 
 
 def _append_with(
-    lb: Logbook, adapter: adapters.Adapter, p: Path, given: Mapping[str, Any] | None = None
+    lb: Logbook,
+    adapter: adapters.Adapter,
+    p: Path,
+    given: Mapping[str, Any] | None = None,
+    dry_run: bool = False,
 ) -> int:
     """Run one file adapter on `p`, append, print what was added and what it skipped; the count.
     `given` are the command's own options (`source`, `tier`, `at`, `since`, `account`, `attachments`,
     `only_labels`, `skip_labels`), passed when the adapter's `run` takes them; one it does not take
     exits 2, so a flag is never silently ignored. An adapter whose `run` takes `owner_emails` gets
-    the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none."""
+    the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none; one
+    whose `run` takes `resolved` gets the refs the record already resolves, as `{(kind, value):
+    entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows.
+    With `dry_run` the adapter runs, the drafts are counted against the record and nothing is
+    written: not a line, not an attachment."""
     if _say_disabled(lb, adapter.NAME):
         return 0
     counts: dict[str, int] = {}
@@ -181,11 +193,13 @@ def _append_with(
     if _takes(adapter, "timezone"):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
-        options["store"] = lb.attach
+        options["store"] = (lambda data: Path(attachments.DIR)) if dry_run else lb.attach
     if _takes(adapter, "store_file"):
-        options["store_file"] = lb.attach_file
+        options["store_file"] = (lambda path: Path(attachments.DIR)) if dry_run else lb.attach_file
     if _takes(adapter, "assets"):
         options["assets"] = _registry(lb, "add")
+    if _takes(adapter, "resolved"):
+        options["resolved"] = _resolved(lb)
     if _takes(adapter, "owner_emails"):
         owner_emails = lb.meta.get("owner_emails") or []
         options["owner_emails"] = owner_emails
@@ -207,10 +221,39 @@ def _append_with(
     if _takes(adapter, "airports") and "airports" not in options:
         options["airports"] = _airports(None)
     drafts = flights.reconcile(lb, run(p, **options), counts, options.get("airports"))
+    if dry_run:
+        _say_dry_run(lb, adapter.NAME, drafts)
+        _report_skipped(counts)
+        return 0
     n = lb.append_many(drafts, progress=_progress)
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
     return n
+
+
+def _say_dry_run(lb: Logbook, name: str, drafts: Iterable[dict[str, Any]]) -> None:
+    """`add --dry-run`: run the drafts out, count those the record already holds by (source,
+    raw_id) through the index, say both, write nothing."""
+    n = already = 0
+    with lb.index() as idx:
+        for draft in drafts:
+            n += 1
+            raw_id = (draft.get("payload") or {}).get("raw_id")
+            if raw_id is not None and idx.line_id(str(draft.get("source")), str(raw_id)) is not None:
+                already += 1
+    print(
+        f"{name}: {n - already} lines would be added, {already} already in the record"
+        " (dry run, nothing written)"
+    )
+
+
+def _resolved(lb: Logbook) -> dict[Ref, str]:
+    """For an adapter whose `run` takes `resolved`: every ref the record resolves to an entity,
+    `{(kind, value): entity id}`, from the resolution lines standing (RFC 0006, through the alias
+    walk), read through the index."""
+    with lb.index() as idx:
+        found = identities_from([*idx.retractions(), *idx.resolutions()])
+    return {ref: identity.entity for ref, identity in found.items() if identity.entity}
 
 
 def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
@@ -247,7 +290,8 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
     times are floating), `store` (puts bytes in the attachment store), `store_file` (puts a file
     there, streamed), `lookup` (the id of a line by
-    source and raw_id), `failed` (a live adapter's list for the feeds it could not read), or one of
+    source and raw_id), `resolved` (the refs the record resolves, `{(kind, value): entity id}`), `failed`
+    (a live adapter's list for the feeds it could not read), or one of
     `assets` (the asset registry, ADR 0018), `listen_s`, `notice` and `status` (a source that listens
     to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
@@ -266,6 +310,7 @@ SKIP_PHRASES = {
     "skipped_no_ref": "without a phone or email",
     "skipped_empty_ref": "with an empty phone or email",
     "skipped_duplicate_ref": "with a phone or email already seen",
+    "skipped_already_resolved": "already resolved in the record",
     "skipped_no_lid": "without a linked-device id",
     "skipped_no_phone": "without a usable phone number",
     "skipped_duplicate_lid": "with a linked-device id already seen",
@@ -323,6 +368,7 @@ SKIP_PHRASES = {
     "skipped_daily_total": "daily totals",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
+    "merged_into_known_people": "contacts merged into people the record knows",
     "no_stanza_id": "without a stanza id, keyed by row id",
     "no_guid": "without a guid, keyed by row id",
     "no_unique_id": "without a unique id, keyed by row id",
@@ -467,12 +513,15 @@ def cmd_add(a: argparse.Namespace) -> None:
     if len(a.what) > 1 and (by_name := adapters.named(a.what[0])) is not None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
-            _add_named(lb, by_name, paths, given)
+            _add_named(lb, by_name, paths, given, dry_run=a.dry_run)
             return
     paths = [Path(w).expanduser() for w in a.what]
     # When nothing exists, the arguments are a sentence unless every one of them looks like a
     # path: "had 5/10 sleep" is a note, "~/Downloads/typo.json" is a typo.
     if not any(p.exists() for p in paths) and not all(looks_like_path(w) for w in a.what):
+        if a.dry_run:
+            print("manual: 1 line would be added (dry run, nothing written)")
+            return
         _add_sentence(lb, " ".join(a.what).strip(), a.at)
         return
     # Something exists, so every argument is a path. A glob that matched two files must never
@@ -485,12 +534,12 @@ def cmd_add(a: argparse.Namespace) -> None:
     ok = True
     for p in paths:
         if p.is_dir() and adapters.find(p) is not None:  # a folder one adapter reads as a whole
-            _add_file(lb, p, given)
+            _add_file(lb, p, given, dry_run=a.dry_run)
         elif p.is_dir():  # every file in it, in name order; hidden files are not exports
             for f in sorted(p.iterdir()):
                 if f.is_file() and not f.name.startswith("."):
-                    _add_file(lb, f, given)
-        elif not _add_file(lb, p, given):
+                    _add_file(lb, f, given, dry_run=a.dry_run)
+        elif not _add_file(lb, p, given, dry_run=a.dry_run):
             ok = False
     if not ok:
         sys.exit(2)
@@ -516,12 +565,14 @@ def _csv(value: str | None) -> list[str] | None:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _add_named(lb: Logbook, adapter: adapters.Adapter, paths: list[Path], given: Mapping[str, Any]) -> None:
+def _add_named(
+    lb: Logbook, adapter: adapters.Adapter, paths: list[Path], given: Mapping[str, Any], dry_run: bool = False
+) -> None:
     """`add <adapter> <file|folder>...`: every path through the named adapter, sniffed or not
     (`transcript` reads Markdown and plain text this way only; `ios-calls` a store copied out of a
     backup under any name), with `--source`, `--tier` and `--at` when it takes them."""
     for p in paths:
-        _append_with(lb, adapter, p, given)
+        _append_with(lb, adapter, p, given, dry_run=dry_run)
 
 
 def _airports(given: str | None) -> flights.Airports:
@@ -3060,6 +3111,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--only-labels", metavar="A,B", help="mail: keep only messages with any of these labels")
     s.add_argument("--skip-labels", metavar="A,B", help="mail: drop messages with any of these labels")
+    s.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run the adapter, say how many lines would be added and how many are already in the record;"
+        " write nothing",
+    )
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(
         "sync",
