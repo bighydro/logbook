@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources.
-Three verbs, eighteen rare."""
+places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources ·
+mcp. Three verbs, nineteen rare."""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from . import (
     ios_backup,
     ios_backup_crypto,
     keepers,
+    mcp_server,
     pages,
     places,
     policy,
@@ -2426,6 +2427,25 @@ def cmd_trips(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_mcp(a: argparse.Namespace) -> None:
+    """`mcp [--root DIR] [--allow-tier-3]`: serve the record to an MCP host over this process's
+    stdin and stdout, nothing else open, until the host closes them (`logbook.mcp_server`; the
+    tools and the ceiling are documented in `docs/mcp.md`). `--inspect` prints the tool table and
+    one sample request and needs neither a record nor the `mcp` extra."""
+    if a.inspect:
+        print(mcp_server.inspect_text())
+        return
+    lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
+    if not lb.meta_path.exists():
+        print(f"mcp: {lb.root} is not a logbook (no logbook.json)", file=sys.stderr)
+        sys.exit(2)
+    try:
+        mcp_server.serve(lb.root, allow_tier_3=a.allow_tier_3)
+    except ImportError as e:
+        print(f"mcp: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
 def cmd_demo(a: argparse.Namespace) -> None:
     """`demo [--days N] [--seed S] --out DIR`: a complete synthetic record of the Oslo persona,
     invented in `logbook/demo.py`, written to a new folder; the same days and seed give the same
@@ -2927,6 +2947,21 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("id", help="the proposal's id, as `promises` prints it")
     v.add_argument("--note", metavar="TEXT", help="your words on how it was kept, kept in the task's notes")
     v.set_defaults(fn=cmd_promises)
+    s = sub.add_parser(
+        "mcp",
+        help="serve the record to an MCP host over stdin and stdout; every tool behind the mcp ceiling of"
+        " policy/crossing.json (docs/mcp.md)",
+    )
+    s.add_argument("--root", metavar="DIR", help="logbook folder (default: find)")
+    s.add_argument(
+        "--allow-tier-3",
+        action="store_true",
+        help="let tier 3 cross when policy/crossing.json allows it for mcp; without this flag 2 is the most",
+    )
+    s.add_argument(
+        "--inspect", action="store_true", help="print the tool list and a sample call; serve nothing"
+    )
+    s.set_defaults(fn=cmd_mcp)
     s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
     s.add_argument(
         "--days", type=int, default=30, metavar="N", help="local days from 2026-06-01 (default 30)"

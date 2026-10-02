@@ -158,14 +158,14 @@ def _policy(lb: Logbook, max_tier: int, destination: str = "hermes") -> Path:
 def test_init_writes_the_default_policy(tmp_path: Path):
     lb = Logbook.init(tmp_path / "fresh", TZ)
     policy = json.loads((lb.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
-    assert policy == {"hermes": {"max_tier": 2}}
+    assert policy == {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
 
 
 def test_first_export_writes_the_default_policy_when_missing(lb: Logbook, tmp_path: Path):
     (lb.root / "policy" / "crossing.json").unlink()  # a record made before ADR 0016
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))
     policy = json.loads((lb.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
-    assert policy == {"hermes": {"max_tier": 2}}
+    assert policy == {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
 
 
 def test_request_above_the_ceiling_is_refused_naming_the_file(lb: Logbook, tmp_path: Path, capsys):

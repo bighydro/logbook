@@ -24,7 +24,12 @@ from typing import Any
 
 POLICY_FILE = PurePosixPath("policy/crossing.json")  # record-relative, as the manifest names it
 DEFAULT_DESTINATION = "hermes"
-DEFAULT_POLICY: dict[str, Any] = {DEFAULT_DESTINATION: {"max_tier": 2}}
+MCP_DESTINATION = "mcp"  # `logbook mcp`: an agent on this machine, reading through the ceiling
+MCP_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name the mcp destination
+DEFAULT_POLICY: dict[str, Any] = {
+    DEFAULT_DESTINATION: {"max_tier": 2},
+    MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
+}
 TIERS = (1, 2, 3)
 IMPORT_FILE = PurePosixPath("policy/import.json")
 DEFAULT_IMPORT: dict[str, Any] = {"disabled": []}
@@ -74,6 +79,22 @@ def ceiling(root: Path, destination: str) -> int:
         raise PolicyError(
             f"{path} names no destination {destination!r} with a max_tier of 1, 2 or 3; "
             f'add {{"{destination}": {{"max_tier": 1}}}} to it to allow a crossing'
+        )
+    return int(entry["max_tier"])
+
+
+def mcp_ceiling(root: Path) -> int:
+    """The highest tier `logbook mcp` may hand to its client: the `mcp` entry of the policy, or
+    tier 1 when the file does not name it — the one destination with a default, since the client is
+    an agent on the owner's own machine and tier 1 is what crosses on its own (ADR 0016). An entry
+    that is there but not a tier of 1, 2 or 3 is refused naming the file, never read as a default."""
+    path = policy_path(root)
+    entry = read(root).get(MCP_DESTINATION)
+    if entry is None:
+        return MCP_DEFAULT_TIER
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        raise PolicyError(
+            f'{path} names {MCP_DESTINATION!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": 1}}'
         )
     return int(entry["max_tier"])
 
