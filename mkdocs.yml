@@ -81,6 +81,7 @@ nav:
       - Overview: adapters/README.md
       - "Voice memos and transcription": adapters/voice-memos.md
       - "Google Takeout": adapters/takeout.md
+      - Mail: adapters/mail.md
       - Bounties: adapter-bounties.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md

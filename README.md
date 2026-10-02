@@ -332,13 +332,19 @@ mailbox when `--account` names it, so a re-import and a later live puller append
 `References`, the sender and recipients as `{email, name}` exactly as the headers spell them (a resolution of the
 address names them in `show`, as for a message's sender), the subject, the `Date` header with its offset kept and
 `at` in UTC, Gmail's labels, the body as plain text (an HTML-only message stripped to its text, no library), the
-size, and every attachment by name, media type, digest and length. Attachments go into `attachments/` only with
-`--attachments`; otherwise the line names their digests and the record holds no bytes. `direction` is `sent` when
+size, and every attachment by name, media type and length — never decoded. Attachments are decoded, hashed and put
+into `attachments/` only with `--attachments`; otherwise the line names them and the record holds no bytes.
+`direction` is `sent` when
 the sender is one of your addresses — put `"owner_emails": ["you@example.org"]` in `logbook.json`, or pass
 `--account` — else `received`. `--only-labels`/`--skip-labels` keep or drop by Gmail label, `--since` cuts by day or
 instant. A message with no `Message-ID` is keyed by the digest of its bytes and counted; a message with no readable
-`Date` is timed by its mbox separator and counted; nothing is dropped silently. `show` prints
+`Date` is timed by its mbox separator and counted; a body longer than 64 KB is cut and counted; nothing is dropped
+silently. Built for a 20 GB Takeout: read in chunks at well over 40 MB/s with one message in memory, a progress line
+every 10,000 messages with the rate, and resumable — `inbox/manifest.json` keeps the byte offset of the last message
+the record holds, so an interrupted `add mail` picks up there and a finished one reads nothing (`--restart` reads
+it all again). `show` prints
 `✉ subject — from → to (n attachments)`, never the body; `show --raw` prints the body under the row.
+[docs/adapters/mail.md](docs/adapters/mail.md) has the whole of it.
 
 `stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
