@@ -150,6 +150,17 @@ class Logbook:
         tmp.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         os.replace(tmp, self.meta_path)  # never a half-written logbook.json
 
+    def set_meta(self, **fields: Any) -> dict[str, Any]:
+        """Set keys of `logbook.json` that are not the chain's — `share_key`, an `owner_id` a
+        generator fixes — keeping every key already there (SPEC §1: read, change, write back),
+        atomically. `seq` and `head` are `append`'s alone and are refused. Returns the new meta."""
+        if "seq" in fields or "head" in fields:
+            raise ValueError("seq and head are set by append only")
+        meta = self.meta
+        meta.update(fields)
+        self._save_meta(meta)
+        return meta
+
     def _check_format(self, meta: dict[str, Any]) -> None:
         """verify and every writer refuse a record hashed by another rule (SPEC §3.1)."""
         found = meta.get("format")

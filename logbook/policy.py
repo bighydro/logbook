@@ -11,6 +11,11 @@ data never enters the record. `logbook init` writes the default list (`DEFAULT_I
 Takeout products off, everything else on), and so does the first command that reads the file in a
 record made before it existed.
 
+`circle.json` (RFC 0025) maps a member of the owner's circle, by the name the owner calls them, to the
+public half of their sharing key: `{"ola": {"key": "<64 hex>"}}`. `logbook circle add NAME KEY` adds
+one, once; `logbook receive` verifies a page's signature under the key held here and never under a key
+the page brought. Nothing else writes it.
+
 `owner.json` lists the owner's own aliases beyond what the record resolves: `{"names": [...], "emails":
 [...], "phones": [...]}`. The with module (`present.owner_of`) joins them with `owner_id` and `owner_emails`
 from `logbook.json` and every resolution line that names the owner, so the owner is never listed as their
@@ -20,6 +25,7 @@ and so does the first reading of a record made before it existed."""
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -32,6 +38,7 @@ DEFAULT_POLICY: dict[str, Any] = {
     MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
 }
 TIERS = (1, 2, 3)
+KEY = re.compile(r"[0-9a-fA-F]{64}")  # an Ed25519 public key as the circle file spells it
 IMPORT_FILE = PurePosixPath("policy/import.json")
 # Switched off until the owner says otherwise: the two Takeout products that record every sign-in
 # and every search or app opened, which few owners want in the record unasked. `logbook init`
@@ -43,6 +50,7 @@ DEFAULT_IMPORT: dict[str, Any] = {
         {"source": "google-takeout-activity", "reason": "every search and app opened; opt in"},
     ]
 }
+CIRCLE_FILE = PurePosixPath("policy/circle.json")  # name → the sharing key a received page must verify under
 OWNER_FILE = PurePosixPath("policy/owner.json")
 OWNER_KEYS = ("names", "emails", "phones")
 DEFAULT_OWNER: dict[str, list[str]] = {key: [] for key in OWNER_KEYS}
@@ -178,3 +186,46 @@ def owner_aliases(root: Path) -> dict[str, list[str]]:
             raise PolicyError(shape)
         out[key] = [v.strip() for v in values if v.strip()]
     return out
+
+
+def circle_path(root: Path) -> Path:
+    return Path(root).joinpath(*CIRCLE_FILE.parts)
+
+
+def circle(root: Path) -> dict[str, str]:
+    """The circle as `{name: key}`, keys lowercase hex; empty when the file is not there. A file
+    that is not the documented shape raises PolicyError naming it."""
+    path = circle_path(root)
+    if not path.exists():
+        return {}
+    shape = f'{path} must be {{"<name>": {{"key": "<64 hex characters>"}}, ...}}'
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise PolicyError(f"{path} is not JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise PolicyError(shape)
+    out: dict[str, str] = {}
+    for name, entry in data.items():
+        key = entry.get("key") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not isinstance(key, str) or not KEY.fullmatch(key):
+            raise PolicyError(shape)
+        out[name] = key.lower()
+    return out
+
+
+def circle_add(root: Path, name: str, key: str) -> bool:
+    """Add `name` with `key` to the circle; False when the same pair is there already. A name that
+    is there under another key is refused naming the file: a key is never swapped by mistake."""
+    path = circle_path(root)
+    known = circle(root)
+    key = key.lower()
+    if known.get(name) == key:
+        return False
+    if name in known:
+        raise PolicyError(f"{path} already names {name!r} with another key; edit the file to change it")
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data[name] = {"key": key}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return True

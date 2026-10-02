@@ -1,0 +1,24 @@
+{
+  "attachments": [
+    {
+      "bytes": 64,
+      "media_type": "image/jpeg",
+      "sha256": "b829d2ec5641c7e84d91873c3ae9af0eb49ff5e32620b9da5a8f70433e509d4a"
+    }
+  ],
+  "bundle_id": "019cadd3-6bc0-7dcd-9133-00000000a001",
+  "created": "2026-06-14T18:00:00Z",
+  "date": "2026-06-13",
+  "from": "c70add25-fcbe-510a-9253-92b542a897e7",
+  "held_back": 1,
+  "key": "8965232af604be3294fb964cf0bb9932af098f5f29fe58377578540b4478e9c7",
+  "lines": 4,
+  "lines_sha256": "8ccd94815cd6eae339b74c59352de14aefe89699c38c5558e8d7b5d8284888dc",
+  "logbook_head": "bb97e90d3f946f6cc637e5e223b080ada65e2beb12b07293727e28d2a279b3d8",
+  "max_tier": 2,
+  "package_sha256": "0f854a6a562eb7b795b5b51cfdd6b52d43db4545d737f402e480152c290bb1a5",
+  "schema": "shared-page/v1",
+  "signature": "70f78519c336856f915cdbd0352f932e4dedccda555dda81b84abb534ced8f7967e19cec2460aaba17babfbdc8030cf51135b204143c45a50825239aa96fc40c",
+  "to": "ola",
+  "tz": "Europe/Oslo"
+}

@@ -296,6 +296,15 @@ class Site:
             parts.append(_table(["source", ("lines", "num"), "first", "last"], rows))
         else:
             parts.append('<p class="mute">none</p>\n')
+        for page in data.get("received") or []:  # a page someone shared for the day (RFC 0025)
+            parts.append(f"<h2>From {escape(str(page['from']))}</h2>\n")
+            parts.append(f"<p>{escape(day_reader.received_text(page))}</p>\n")
+            if page["named"]:
+                parts.append('<ul class="unplaced">\n')
+                for item in page["named"]:
+                    line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
+                    parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
+                parts.append("</ul>\n")
         return self._document(f"{day} {data['weekday']}", "".join(parts))
 
     # -- /days ----------------------------------------------------------------------------------------------

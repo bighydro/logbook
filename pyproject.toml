@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 encrypted = ["cryptography>=42"]  # `openlogbook[encrypted]`: import-backup on an encrypted iOS backup
+share = ["cryptography>=42"]  # `openlogbook[share]`: share and receive a signed page (Ed25519)
 ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
 # `openlogbook[transcribe]`: transcribe voice-memos, locally; mlx-whisper on Apple silicon, faster-whisper elsewhere
 transcribe = [

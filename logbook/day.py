@@ -44,19 +44,24 @@ What a Day shows, in order:
    the first, every cluster of the day under `places`; a day without them has no row.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent at 14:02 is seen to have.
+6. From the circle: for every page another record shared for this day and `logbook receive`
+   verified (`share.pages`, RFC 0025), a `from <name>` section — how many lines, by kind, the tier
+   it was shared at and when, and the titles of its events, transcripts, notes, mail and calls.
+   A received page is read from `<root>/circle/<from>/<date>/`, never from the chain.
 
 Thresholds are the record's (`policy/stays.json`), places and assets its own; nothing here is a
 setting of the Day. ADR 0013: derived is disposable."""
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
-from . import events, health, keepers, ledger, present, reading, stays, trips, weather
+from . import events, health, keepers, ledger, present, reading, share, stays, trips, weather
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -89,7 +94,9 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     rd = reading.read(lb, before, day, airports)
     with lb.index() as idx:
         found = idx.by_kind(health.KIND, before, day)
-    return of_reading(rd, day, health_rows(found, rd).get(day))
+    data = of_reading(rd, day, health_rows(found, rd).get(day))
+    data["received"] = received(lb, day)
+    return data
 
 
 def of_reading(
@@ -614,6 +621,40 @@ def _sources(lines: Sequence[Line]) -> list[dict[str, Any]]:
     return sorted(found.values(), key=lambda e: (-e["lines"], e["source"]))
 
 
+# -- from the circle ---------------------------------------------------------------------------------------
+
+
+def received(lb: Logbook, day: str) -> list[dict[str, Any]]:
+    """The pages the circle shared for `day` that `receive` kept, one row each: who, when, at what
+    tier, how many lines by kind, and the titles of the named kinds with their line ids."""
+    rows: list[dict[str, Any]] = []
+    for page in share.pages(lb, day):
+        kinds = Counter(str(line.get("kind")) for line in page.lines)
+        rows.append(
+            {
+                "from": page.sender,
+                "owner_id": page.manifest.get("from"),
+                "created": page.manifest.get("created"),
+                "max_tier": page.manifest.get("max_tier"),
+                "lines": len(page.lines),
+                "held_back": page.manifest.get("held_back"),
+                "by_kind": dict(sorted(kinds.items())),
+                "named": [
+                    {
+                        "kind": str(line["kind"]),
+                        "at": str(line["at"]),
+                        "title": _title(line),
+                        "line": str(line["id"]),
+                    }
+                    for line in page.lines
+                    if line.get("kind") in PLACED
+                ],
+                "attachments": len(page.manifest.get("attachments") or []),
+            }
+        )
+    return rows
+
+
 # -- helpers -----------------------------------------------------------------------------------------------
 
 
@@ -657,6 +698,22 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row("sources", DOT.join(_source_text(s, tz) for s in data["sources"]))
     else:
         yield _row("sources", "none")
+    for page in data.get("received") or []:
+        yield ""
+        yield _row(f"from {page['from']}", received_text(page))
+        for item in page["named"]:
+            yield f"      {item['kind']:<10} {item['title']}"
+
+
+def received_text(page: dict[str, Any]) -> str:
+    """`4 lines · location 2 · note 1 · photo 1 · tier 2 · shared 2026-06-14`."""
+    parts = [_plural(int(page["lines"]), "line")]
+    parts += [f"{kind} {n}" for kind, n in page["by_kind"].items()]
+    parts.append(f"tier {page['max_tier']}")
+    created = str(page.get("created") or "")
+    if created:
+        parts.append(f"shared {created[:10]}")
+    return DOT.join(parts)
 
 
 def _row(label: str, text: str) -> str:

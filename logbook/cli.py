@@ -1,6 +1,7 @@
 """logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
 derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve · verify · doctor ·
-export · index · migrate · assets · sources · mcp · backup. Three verbs, twenty-three rare."""
+export · share · receive · circle · index · migrate · assets · sources · mcp · backup. Three verbs,
+twenty-six rare."""
 
 from __future__ import annotations
 
@@ -56,6 +57,7 @@ from . import (
     schedule,
     search,
     serve,
+    share,
     stays,
     taskdone,
     transcribe,
@@ -4109,6 +4111,105 @@ def _tier3_warning(req: crossing.Request, sel: crossing.Selection) -> None:
     print(text, file=sys.stderr)
 
 
+def cmd_share(a: argparse.Namespace) -> None:
+    """`share day YYYY-MM-DD --to NAME [--tier 1|2|3] [--out FILE]`: one local day as a signed page
+    for a member of the circle (RFC 0025, `logbook.share`): the day's lines at or under the tier,
+    verbatim, the attachments they point at, the day-package summary and a manifest signed with
+    this record's sharing key (made on first use). The tier may not exceed the destination's ceiling
+    in policy/crossing.json (ADR 0016); the page is recorded as a crossing/v1 line."""
+    lb = Logbook.find()
+    try:
+        day = parse_day(a.day).isoformat()
+        to = share.check_name(a.to)
+        tier = share.parse_tier(a.tier)
+        out = Path(a.out).expanduser() if a.out else share.default_out(lb, to, day)
+        result = share.share_day(lb, day, to, tier, out)
+    except (ValueError, share.MissingExtra) as e:  # ShareError and PolicyError are ValueErrors
+        print(f"share: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"share: {e}", file=sys.stderr)
+        sys.exit(1)
+    sel = result.selection
+    print(f"{to}: {day}, {_plural(len(sel.lines), 'line')} at tier {tier} {ARROW} {result.out}")
+    print(f"  {sel.logged} lines on the day, {len(sel.lines)} shared, {sel.held_back} held back")
+    if sel.by_kind:
+        print("  " + "   ".join(f"{k}: {n}" for k, n in sel.by_kind.items()))
+    m = sel.counts()["attachments"]
+    files, missing = _plural(m["included"], "file"), m["missing"]
+    print(f"  attachments: {files}, {m['bytes']:,} bytes; {missing} missing from the store")
+    if tier == 3:
+        text = f"WARNING: {share.TIER3_WARNING}: {_plural(sel.by_tier['3'], 'tier-3 line')} for {to}"
+        print(text)
+        print(text, file=sys.stderr)
+    print(f"  signed with key {result.manifest['key'][:12]}…; recorded as #{result.line['seq']} crossing/v1")
+
+
+def cmd_receive(a: argparse.Namespace) -> None:
+    """`receive FILE [--from NAME]`: verify a page someone shared — its signature under the key
+    policy/circle.json holds for them, every line's hash, every file against the manifest — and keep
+    it under <root>/circle/<from>/<date>/, outside the chain. Nothing is appended."""
+    lb = Logbook.find()
+    try:
+        result = share.receive(lb, Path(a.file).expanduser(), a.sender)
+    except share.AlreadyReceived as e:
+        print(f"{e}; nothing changed")
+        return
+    except (share.ShareError, share.MissingExtra) as e:
+        print(f"receive: {e}", file=sys.stderr)
+        sys.exit(2)
+    except (share.ReceiveError, OSError, ValueError) as e:
+        print(f"receive: refused: {e}", file=sys.stderr)
+        sys.exit(1)
+    manifest = result.manifest
+    state = "replaced the page held before" if result.replaced else "kept"
+    lines, files = (
+        _plural(int(manifest["lines"]), "line"),
+        _plural(len(manifest["attachments"]), "attachment"),
+    )
+    print(
+        f"from {result.sender}: {manifest['date']}, {lines} at tier {manifest['max_tier']}, {files} "
+        f"{ARROW} {result.page} ({state})"
+    )
+    print(f"  signature verified under the key held for {result.sender}; every line's hash recomputes")
+    print(f"  logbook day {manifest['date']} shows it as a `from {result.sender}` section")
+
+
+def cmd_circle(a: argparse.Namespace) -> None:
+    """`circle` lists the people whose pages this record accepts, with their keys; `circle add NAME
+    KEY` adds one, once; `circle key` prints this record's own public key for handing to a friend
+    (made on first use)."""
+    lb = Logbook.find()
+    try:
+        if a.verb == "add":
+            name = share.check_name(a.name, "name")
+            if not policy.KEY.fullmatch(a.key):
+                raise share.ShareError(f"a sharing key is 64 hex characters, not {a.key!r}")
+            if policy.circle_add(lb.root, name, a.key):
+                print(f"{name}: key {a.key.lower()[:12]}… added to {policy.CIRCLE_FILE.as_posix()}")
+            else:
+                print(f"{name}: already in the circle with that key; nothing changed")
+            return
+        if a.verb == "key":
+            _, public = share.owner_key(lb)
+            print(public)
+            print(
+                f"  this record's sharing key; hand it to a friend: logbook circle add <you> {public}",
+                file=sys.stderr,
+            )
+            return
+        circle = policy.circle(lb.root)
+    except (ValueError, share.MissingExtra) as e:
+        print(f"circle: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not circle:
+        print("nobody in the circle yet: logbook circle add NAME KEY")
+        return
+    width = max(len(name) for name in circle)
+    for name, key in circle.items():
+        print(f"{name:<{width}}  {key}")
+
+
 def main(argv: list[str] | None = None) -> None:
     for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; the CLI speaks UTF-8
         if hasattr(stream, "reconfigure"):
@@ -4793,6 +4894,39 @@ def main(argv: list[str] | None = None) -> None:
         "--dry-run", action="store_true", help="print how many lines would be appended; write nothing"
     )
     v.set_defaults(fn=cmd_repair)
+    s = sub.add_parser("share", help="hand one day to a member of the circle as a signed page (RFC 0025)")
+    verbs = s.add_subparsers(dest="what", required=True)
+    v = verbs.add_parser(
+        "day", help="one local day: its lines at or under the tier, their attachments, signed"
+    )
+    v.add_argument("day", metavar="YYYY-MM-DD", help="the local day")
+    v.add_argument(
+        "--to", required=True, metavar="NAME", help="the circle member, as policy/crossing.json names them"
+    )
+    v.add_argument(
+        "--tier", metavar="1|2|3", help="the highest tier to share (default 1; never above the ceiling)"
+    )
+    v.add_argument(
+        "--out", metavar="FILE", help="the zip to write (default <root>/export/share/<to>/<date>.zip)"
+    )
+    v.set_defaults(fn=cmd_share)
+    s = sub.add_parser(
+        "receive", help="verify a page someone shared and keep it beside the record, never in the chain"
+    )
+    s.add_argument("file", metavar="FILE", help="the page, a zip")
+    s.add_argument("--from", dest="sender", metavar="NAME", help="check against this circle member's key")
+    s.set_defaults(fn=cmd_receive)
+    s = sub.add_parser("circle", help="the people whose pages this record accepts: their sharing keys")
+    s.set_defaults(fn=cmd_circle, verb=None)
+    verbs = s.add_subparsers(dest="verb", required=False)
+    v = verbs.add_parser("add", help="add one person's public sharing key, once")
+    v.add_argument("name", metavar="NAME", help="what you call them; the folder their pages go under")
+    v.add_argument(
+        "key", metavar="KEY", help="their public key, 64 hex characters (`logbook circle key` on their side)"
+    )
+    v.set_defaults(fn=cmd_circle)
+    v = verbs.add_parser("key", help="print this record's own public sharing key (made on first use)")
+    v.set_defaults(fn=cmd_circle)
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
