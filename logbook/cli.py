@@ -332,6 +332,7 @@ SKIP_PHRASES = {
     "skipped_no_amount": "without an amount",
     "skipped_no_currency": "without a currency",
     "skipped_gift_cards": "gift cards",
+    "skipped_covered_by_chrome": "Chrome visits, which google-takeout-chrome reads from Chrome/History.json",
     "skipped_encrypted": "encrypted with no decrypted copy in the store",
     "skipped_redacted": "redacted, or redactions",
     "skipped_call": "calls, not messages",

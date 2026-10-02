@@ -37,16 +37,34 @@ def _disable(lb: Logbook, *entries: tuple[str, str]) -> Path:
 # -- the file ------------------------------------------------------------------------------------
 
 
-def test_init_writes_an_empty_import_policy(lb: Logbook):
+DEFAULT_OFF = ("google-takeout-access-log", "google-takeout-activity")  # the noisy Takeout products
+
+
+def test_init_writes_the_default_import_policy_with_the_noisy_takeout_products_off(lb: Logbook):
     path = lb.root / "policy" / "import.json"
-    assert json.loads(path.read_text(encoding="utf-8")) == {"disabled": []}
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert written == policy.DEFAULT_IMPORT
+    assert [entry["source"] for entry in written["disabled"]] == list(DEFAULT_OFF)
+    assert all(entry["reason"] for entry in written["disabled"])
+    assert all(adapters.named(name) is not None for name in DEFAULT_OFF)  # every default names an adapter
 
 
-def test_a_record_without_the_file_gets_an_empty_one_on_first_read(lb: Logbook):
+def test_a_record_without_the_file_gets_the_default_one_on_first_read(lb: Logbook):
     path = lb.root / "policy" / "import.json"
     path.unlink()  # a record made before 0.5.0
-    assert policy.disabled(lb.root) == {}
-    assert json.loads(path.read_text(encoding="utf-8")) == {"disabled": []}
+    assert set(policy.disabled(lb.root)) == set(DEFAULT_OFF)
+    assert json.loads(path.read_text(encoding="utf-8")) == policy.DEFAULT_IMPORT
+
+
+def test_the_other_takeout_products_are_enabled_by_default(lb: Logbook, capsys):
+    cli.main(["sources"])
+    out = capsys.readouterr().out
+    for short in ("pay", "chat", "meet", "contacts"):
+        row = next(line for line in out.splitlines() if line.startswith(f"google-takeout-{short} "))
+        assert "enabled" in row, row
+    for name in DEFAULT_OFF:
+        row = next(line for line in out.splitlines() if line.startswith(f"{name} "))
+        assert "disabled" in row and "opt in" in row, row
 
 
 def test_disabled_maps_source_to_reason_and_never_overwrites(lb: Logbook):
@@ -77,14 +95,16 @@ def test_a_malformed_policy_is_refused_naming_the_file(lb: Logbook, text: str):
 # -- logbook sources -----------------------------------------------------------------------------
 
 
-def test_sources_lists_every_adapter_as_enabled_by_default(lb: Logbook, capsys):
+def test_sources_lists_every_adapter_as_enabled_by_default_but_the_noisy_two(lb: Logbook, capsys):
     cli.main(["sources"])
     out = capsys.readouterr().out
     rows = {line.split()[0]: line for line in out.splitlines() if line and not line.startswith(" ")}
     names = {a.NAME for a in adapters.all_adapters()}
     assert names <= set(rows)
-    for name in names:
+    for name in names - set(DEFAULT_OFF):
         assert "enabled" in rows[name] and "disabled" not in rows[name]
+    for name in DEFAULT_OFF:
+        assert "disabled" in rows[name]
     assert "file+live" in rows["dawarich"]  # an export and a live pull under one name
     assert "file+live" in rows["imessage"]
     assert rows["pocket"].split()[1] == "file"
@@ -114,7 +134,7 @@ def test_sources_writes_the_file_when_missing(lb: Logbook, capsys):
     path = lb.root / "policy" / "import.json"
     path.unlink()
     cli.main(["sources"])
-    assert json.loads(path.read_text(encoding="utf-8")) == {"disabled": []}
+    assert json.loads(path.read_text(encoding="utf-8")) == policy.DEFAULT_IMPORT
 
 
 def test_sources_exits_2_on_a_malformed_policy(lb: Logbook, capsys):
