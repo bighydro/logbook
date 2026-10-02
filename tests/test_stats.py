@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, store
+from logbook import cli, index, store
 from logbook.store import Logbook
 
 # Every string here is synthetic; the person lives in Oslo and does not exist.
@@ -312,4 +312,4 @@ def test_stats_rebuilds_an_index_built_by_an_earlier_schema(lb: Logbook, capsys)
         db.commit()
     assert _json(capsys)["attachments"] == {"referenced": 2, "lines": 3, "present": 1}
     with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
-        assert list(db.execute("SELECT value FROM meta WHERE key = 'schema'")) == [("3",)]
+        assert list(db.execute("SELECT value FROM meta WHERE key = 'schema'")) == [(index.SCHEMA_VERSION,)]

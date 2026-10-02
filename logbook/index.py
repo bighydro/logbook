@@ -25,7 +25,8 @@ if TYPE_CHECKING:
     from .store import Logbook
 
 FILE_NAME = "index.sqlite"
-SCHEMA_VERSION = "3"  # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too
+SCHEMA_VERSION = "4"  # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too;
+# 4: subject (ADR 0018), for `assets status`
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -33,15 +34,19 @@ SCHEMA = (
     "CREATE TABLE lines ("
     " seq INTEGER PRIMARY KEY, id TEXT NOT NULL, at TEXT NOT NULL, day_local TEXT NOT NULL,"
     " kind TEXT NOT NULL, source TEXT NOT NULL, tier INTEGER NOT NULL, raw_id TEXT,"
-    " file TEXT NOT NULL, offset INTEGER NOT NULL, supersedes TEXT, entity TEXT, media TEXT)",
+    " file TEXT NOT NULL, offset INTEGER NOT NULL, supersedes TEXT, entity TEXT, media TEXT,"
+    " subject TEXT)",
     "CREATE INDEX lines_day_local ON lines (day_local)",
     "CREATE INDEX lines_source_raw_id ON lines (source, raw_id)",
     "CREATE INDEX lines_kind_at ON lines (kind, at)",
+    "CREATE INDEX lines_subject_at ON lines (subject, at)",
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
 )
-INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-Row = tuple[int, str, str, str, str, str, int, str | None, str, int, str | None, str | None, str | None]
+Row = tuple[
+    int, str, str, str, str, str, int, str | None, str, int, str | None, str | None, str | None, str | None
+]
 Located = tuple[str, int, Line]  # file (relative to the root, posix), byte offset, the line
 
 
@@ -70,9 +75,9 @@ def local_date(at: str, tz: str) -> str:
 
 def row(line: Line, tz: str, file: str, offset: int) -> Row:
     """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
-    line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
-    the one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
-    SPEC §1.1)."""
+    line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), the digest of the
+    one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
+    SPEC §1.1), and the `subject` whose position a location line is (RFC 0001, ADR 0018)."""
     payload = line.get("payload") or {}
     raw_id = payload.get("raw_id")
     media = (
@@ -94,6 +99,7 @@ def row(line: Line, tz: str, file: str, offset: int) -> Row:
         _string(payload.get("supersedes")),
         _string(_field(payload.get("entity"), "id")),
         _string(media),
+        _string(payload.get("subject")),
     )
 
 
@@ -277,6 +283,19 @@ class Index:
             "SELECT file, offset FROM lines WHERE kind = 'resolution' ORDER BY seq"
         ).fetchall()
         return self._read(found)
+
+    def last_fix(self, subject: str) -> Line | None:
+        """The standing location line of this `subject` (RFC 0001, ADR 0018) with the latest `at`
+        (the latest seq when two share it), or None when the record has none: an asset's last
+        known position. A line another line `supersedes` (a retraction, a correction) is out.
+        Served by the (subject, at) index; one line is read from the files."""
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE kind = 'location' AND subject = ?"
+            " AND id NOT IN (SELECT supersedes FROM lines WHERE supersedes IS NOT NULL)"
+            " ORDER BY at DESC, seq DESC LIMIT 1",
+            (subject,),
+        ).fetchall()
+        return self._read(found)[0] if found else None
 
     def by_kind(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> list[Line]:
         """Every line of one kind, in chain order, optionally only those whose local day is in
