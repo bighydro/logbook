@@ -21,14 +21,14 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from . import policy, present
-from .adapters.transcript import Turn, parse_text
+from .adapters.transcript import SPEAKER, Turn, parse_text
 from .chain import Line
 from .index import local_date
 from .resolve import Identity, Ref, identities_from
@@ -45,6 +45,9 @@ CERTAINTY = "inferred"  # RFC 0007: the words were read into a commitment, never
 OWED_BY_OWNER, OWED_TO_OWNER = "owed_by_owner", "owed_to_owner"
 FUTURE, OBLIGATION, OFFER = "future", "obligation", "offer"
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
+DIARIZER = re.compile(
+    r"^(?:speaker|sprecher|spk)\s*[A-Z0-9]{1,2}$", re.IGNORECASE
+)  # `Speaker A`, `Speaker 2`
 QUOTE_WIDTH = 100
 ID_WIDTH = 16
 
@@ -457,30 +460,31 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
     seen: set[str] = set()
     for line in lines:
         payload = line.get("payload") or {}
+        participants = payload.get("participants")
+        participants = participants if isinstance(participants, list) else []
+        known = _known(participants, identities, owner)
         if line.get("kind") == TRANSCRIPT:
             turns = turns_of(lb, line)
             if turns is None:
                 skipped["transcripts_without_text"] = skipped.get("transcripts_without_text", 0) + 1
                 continue
-            participants = payload.get("participants")
+            turns = relabel(turns, known)
             spoken_by = {
-                turn.speaker: speaker_of(
-                    turn.speaker,
-                    participants if isinstance(participants, list) else [],
-                    identities,
-                    owner,
-                    owner_label,
-                )
+                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
                 for turn in turns
             }
-            title = payload.get("title")
         else:
             text = payload.get("text")
-            turns = [Turn(None, text)] if isinstance(text, str) else []
+            turns = relabel([Turn(None, text)] if isinstance(text, str) else [], known)
             spoken_by = {
-                None: Speaker(owner_label, None, next(iter(sorted(owner.entities)), None) or None, True)
+                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
+                for turn in turns
+                if turn.speaker is not None
             }
-            title = payload.get("title")
+            spoken_by[None] = Speaker(  # a note is the owner's, but for the speakers its text names
+                owner_label, None, next(iter(sorted(owner.entities)), None) or None, True
+            )
+        title = payload.get("title")
         day = local_date(str(line["at"]), tz)
         for turn in turns:
             speaker = spoken_by[turn.speaker]
@@ -520,6 +524,26 @@ def _direction(speaker: Speaker) -> str | None:
     if speaker.person is not None:
         return OWED_TO_OWNER
     return None
+
+
+def _known(
+    participants: Sequence[Any], identities: Mapping[Ref, Identity], owner: present.Owner
+) -> Callable[[str], bool]:
+    """Whether a label before a colon names someone: a participant of the line, the owner by any of
+    their names or a diarizer's word for them, or a person the record resolves by that name."""
+    names = {
+        present._normal(p["name"])
+        for p in participants
+        if isinstance(p, dict) and isinstance(p.get("name"), str)
+    }
+
+    def known(label: str) -> bool:
+        normal = present._normal(label)
+        if normal in names or normal in OWNER_LABELS or normal in owner.names:
+            return True
+        return present._by_name(label, identities)[0] is not None
+
+    return known
 
 
 def _owner_label(owner: present.Owner, identities: Mapping[Ref, Identity]) -> str | None:
@@ -571,6 +595,31 @@ def speaker_of(
     if person is not None and person in owner.entities:
         return Speaker(owner_label or label, spoken, person, True)
     return Speaker(label if person else None, spoken, person, False)
+
+
+def relabel(turns: Sequence[Turn], known: Callable[[str], bool]) -> list[Turn]:
+    """The turns with the speakers their own text names: a line that begins `Speaker 2:` or
+    `<a name the record knows>:` starts a turn of that speaker, whatever label the source gave the
+    turn (a diarizer's `me` on a mixed segment, or a note, which is the owner's otherwise); a line
+    that begins with any other word before a colon (`Plan:`) is text. `known(label)` says whether a
+    label is a participant, the owner or a person the record resolves."""
+    out: list[Turn] = []
+    for turn in turns:
+        current: Turn | None = None
+        for raw in turn.text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+            m = SPEAKER.match(raw)
+            label = m.group(1).strip() if m else None
+            if label is not None and (DIARIZER.match(label) or known(label)):
+                current = Turn(label, m.group(2).strip() if m else "")
+                out.append(current)
+                continue
+            if current is None:
+                current = Turn(turn.speaker, raw)
+                out.append(current)
+            else:
+                current = Turn(current.speaker, f"{current.text}\n{raw}")
+                out[-1] = current
+    return [turn for turn in out if turn.text.strip()]
 
 
 def turns_of(lb: Logbook, line: Line) -> list[Turn] | None:

@@ -473,3 +473,82 @@ def test_the_extractor_is_replaceable_without_changing_the_report(lb: Logbook) -
     assert only.match.quote == "book the crane" and only.due == "2026-06-20"
     assert only.speaker is not None and only.speaker.owner and only.kind == "transcript"
     assert only.id == promises.proposal_id(only.line, "book the crane")
+
+
+# -- attribution -------------------------------------------------------------------------------------
+
+
+def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drafts: list[dict[str, Any]]) -> Logbook:
+    """A fresh record of the Oslo persona holding `drafts`, with Ola and the owner resolved."""
+    lb = Logbook.init(tmp_path / "fresh", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    meta = lb.meta
+    meta["owner_id"] = OWNER_ID
+    meta["owner_emails"] = [OWNER_EMAIL]
+    lb._save_meta(meta)
+    lb.append_many(
+        [
+            resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+            resolution(("email", OWNER_EMAIL), OWNER_ID, "Ines Nordmann"),
+            *drafts,
+        ]
+    )
+    return lb
+
+
+def test_a_note_whose_text_a_diarizer_labelled_belongs_to_those_speakers_never_to_the_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb = _record(
+        tmp_path,
+        monkeypatch,
+        [
+            _note(
+                "2026-06-13T17:00:00Z",
+                "Plan: I need to call the yard.\nSpeaker 1: I'll send the invoice tomorrow.\n"
+                "Speaker 2: Fine, we will wait.\nOla Nordmann: I'll bring the photos.",
+            )
+        ],
+    )
+    found = _by_quote(promises.extract(lb))
+    one = found["I'll send the invoice tomorrow."].speaker
+    assert one is not None and (one.spoken, one.person, one.owner) == ("Speaker 1", None, False)
+    assert found["I'll send the invoice tomorrow."].direction is None
+    two = found["Fine, we will wait."].speaker
+    assert two is not None and two.spoken == "Speaker 2" and not two.owner
+    ola = found["I'll bring the photos."].speaker
+    assert ola is not None and (ola.label, ola.person, ola.owner) == ("Ola Nordmann", OLA_ID, False)
+    plan = found["Plan: I need to call the yard."].speaker  # a word before a colon is no speaker
+    assert plan is not None and plan.owner and plan.person == OWNER_ID
+
+
+def test_a_turn_the_source_gave_the_owner_whose_text_names_another_speaker_is_theirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    segments = [
+        {"speaker": {"attribution": "me"}, "text": "Speaker 2: I'll bring the chart."},
+        {"speaker": {"attribution": "me"}, "text": "I'll check the tide tables."},
+        {"speaker": {"name": "Ola Nordmann"}, "text": "me: I'll pay the yard."},
+    ]
+    blob = json.dumps(segments).encode("utf-8")
+    lb = _record(
+        tmp_path,
+        monkeypatch,
+        [
+            _transcript(
+                "2026-06-16T17:00:00Z",
+                "2026-06-16T17:40:00Z",
+                "Chart",
+                [{"name": "Ola Nordmann", "email": OLA["email"]}],
+                attachments.reference(blob, "application/json"),
+            )
+        ],
+    )
+    lb.attach(blob)
+    found = _by_quote(promises.extract(lb))
+    chart = found["I'll bring the chart."].speaker
+    assert chart is not None and (chart.spoken, chart.person, chart.owner) == ("Speaker 2", None, False)
+    tide = found["I'll check the tide tables."].speaker
+    assert tide is not None and tide.owner and tide.person == OWNER_ID
+    pay = found["I'll pay the yard."].speaker  # the owner only when the label resolves to the owner
+    assert pay is not None and pay.owner and pay.spoken == "me"
