@@ -95,6 +95,30 @@ export LOGBOOK_HOME=~/Records/Logbook    # in your shell profile, so every comma
 
 Back it up with Time Machine or an equivalent that copies the folder as it is.
 
+`logbook doctor` checks that this machine is set up to keep the record, one line per check, `pass`, `warn` or
+`fail`, and exits 1 when anything fails: the record is found and `verify` is green with `logbook.json` at
+the head; `index.sqlite` is current; `policy/owner.json` names at least one alias; `places.json` has a
+home; `assets.json` is a registry; each optional extra (`ais`, `encrypted`, `transcribe`) is installed,
+with its install line when not; the variables of every live source the record uses are set, by name only,
+never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
+Drive syncs, which is a fail with the reason. It reads and never writes, so it is safe to run any time.
+
+```bash
+logbook doctor
+pass  record             12,772 lines, head 53d39fda0b2c…, verified; /Users/ines/Records/Logbook
+pass  index              index.sqlite is current with logbook.json
+warn  owner              policy/owner.json is empty: add your other names, emails and phones so you are never your own company
+pass  places             4 place(s), home: Home
+pass  assets             1 asset(s): nordlys
+pass  extra:ais          websockets is installed
+pass  extra:encrypted    cryptography is installed
+warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
+warn  sync:dawarich      set LOGBOOK_DAWARICH_KEY
+pass  disk               184.2 GiB free on the record's volume
+pass  folder             a plain local folder, no sync client
+11 checks: 8 pass, 3 warn, 0 fail
+```
+
 ## Implementations
 
 | Implementation | Language | Status |
