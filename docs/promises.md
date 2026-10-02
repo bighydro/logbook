@@ -212,6 +212,8 @@ answers.
 
 It does not read the free-text notes files (`notes/<YYYY>/<date>.md`), messages (`message/v1`),
 mail or calendar entries; a first-person promise in a chat message is a later source, under the same
-contract. The rules do not know who a promise is *to*: the `direction` says who made it, not whom
+contract. Whether a task the apps hold was *done* is `logbook tasks --propose-done`'s question
+([docs/tasks.md](tasks.md)), asked of the mail, the calendar and the transactions under a matcher of
+the same shape. The rules do not know who a promise is *to*: the `direction` says who made it, not whom
 it binds; only a judgement's `to` does, and it is the model's reading. It does not write
 commitments, retract anything, or run a model you did not ask for.

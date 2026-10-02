@@ -585,6 +585,10 @@ logbook promises --judge                      # a local model reads every "I'll�
 logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
 logbook promises done 3b9e5d0f2a71c846        # it was kept: one task/v1 line, so --open hides it
 
+logbook tasks --open                          # the task/v1 lines as they stand: the latest snapshot of each
+logbook tasks --propose-done                  # the mail, calendar entry or transaction that says an open task was done
+logbook tasks done 0dd9108fb6d5d715 --evidence 01a0fda3-99b0-7af6-a986-0a377117a94b   # one task/v1 line, done
+
 logbook digest                                # today in 25 lines at most, with one question you answer in a word
 logbook digest 2026-06-10 --markdown          # the same lines as Markdown; --json the sets behind them
 ```
@@ -637,6 +641,14 @@ Qwen2.5 by default) read each candidate in its context and say whether it is a c
 what and by when; the verdicts are kept in the record and never redone, and the command shows the commitments
 it is sure of (`--all` for everything). No model runs unless you ask, never a cloud one, and nothing leaves the
 machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done.
+
+**Tasks** (`docs/tasks.md`) are the `task/v1` lines a task app's export left, each as its latest snapshot (RFC 0016);
+`tasks --propose-done` asks the record whether an open one was done without anyone ticking it off: within the
+fortnight after the task, a mail subject that names its key nouns and confirms something (a booking confirmation
+for "book flights to Zürich"), a calendar entry for an appointment ("Call with Ola" for "call Ola"), a transaction
+at a merchant the task names — by rules, English and German, no model, no network — each a proposal with the
+evidence line's id. `tasks done <id> --evidence <line>` appends the closing `task/v1` line and nothing else. The
+matcher is a value, so the promises judge's engine can replace the rules later without changing the report.
 
 **The digest** (`docs/digest.md`) is the day in 25 lines at most, composed from the readers above and never a
 list of everything: where, with whom confirmed, what attached; the flights; the open promises due within the week;
