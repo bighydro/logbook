@@ -1,0 +1,8 @@
+{
+  "name": "Solvind crew",
+  "members": [
+    {"name": "Per Persona", "email": "per.persona@example.org", "user_type": "Human"},
+    {"name": "Kari Nordmann", "email": "kari.nordmann@example.org", "user_type": "Human"},
+    {"name": "Ola Nordmann", "email": "ola@example.org", "user_type": "Human"}
+  ]
+}

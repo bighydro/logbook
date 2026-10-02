@@ -369,6 +369,9 @@ SKIP_PHRASES = {
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "merged_into_known_people": "contacts merged into people the record knows",
+    "no_chat_message_id": "without a message id, keyed by time and text",
+    "no_owner": "with nobody named as the owner, so every message is received",
+    "media_stored": "with media stored",
     "no_stanza_id": "without a stanza id, keyed by row id",
     "no_guid": "without a guid, keyed by row id",
     "no_unique_id": "without a unique id, keyed by row id",
