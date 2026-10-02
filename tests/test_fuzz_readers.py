@@ -483,3 +483,35 @@ def test_a_window_that_runs_backwards_is_refused_without_a_traceback(short: Logb
             code, out, err = run("backwards window", args)
             assert code == 2 and "backwards" in err and "Traceback" not in err, (args, code, err)
             assert out == ""
+
+
+def test_a_record_timezone_the_host_lacks_is_said_never_a_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SPEC §2: a reader that must localise a time and does not know the zone MUST say so, and MUST NOT
+    substitute another zone. `logbook.json` names the zone; every reader that localises exits 2 naming it."""
+    lb = demo.generate(tmp_path / "Demo", days=2, seed=5)
+    meta = lb.meta
+    meta["timezone"] = UNKNOWN_TZ
+    lb._save_meta(meta)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    readers = [
+        ["show", "2026-06-01"],
+        ["day", "2026-06-01", "--json"],
+        ["days", "--json"],
+        ["trips", "--json"],
+        ["derive", "stays", "--day", "2026-06-01", "--dry-run", "--json"],
+        ["infer", "flights", "--dry-run"],
+        ["rollup", "countries", "--json"],
+        ["places", "propose", "--json"],
+        ["keepers", "--json"],
+        ["sources", "--gaps", "--json"],
+        ["promises", "--all", "--json"],
+        ["assets", "status", "--json"],
+    ]
+    for args in readers:
+        code, out, err = run("unknown record timezone", args)
+        assert "Traceback" not in err, (args, err[-500:])
+        assert code == 2, (args, code, err)
+        assert UNKNOWN_TZ in err and "zone" in err, (args, err)
+        assert out == "", (args, out[:200])

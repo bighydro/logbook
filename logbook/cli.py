@@ -3572,6 +3572,10 @@ def main(argv: list[str] | None = None) -> None:
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
+    except zoneinfo.ZoneInfoNotFoundError as e:  # SPEC §2: a zone this host lacks is said, never swapped
+        reason = e.args[0] if e.args else str(e)
+        print(f"{a.cmd}: {reason}; this machine's zone database does not know it", file=sys.stderr)
+        sys.exit(2)
     except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
         _stdout_to_devnull()
     except SystemExit:  # a command's own status (`sources --gaps` exits 1) stands; the pipe is still quiet
