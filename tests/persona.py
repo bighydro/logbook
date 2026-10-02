@@ -108,9 +108,11 @@ def travel(
     b: tuple[float, float],
     steps: int = 6,
     subject: str | None = None,
+    end_day: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Points on a straight line from `a` (at `start`) to `b` (at `end`), the ends excluded."""
-    t0, t1 = _local(day, start), _local(day, end)
+    """Points on a straight line from `a` (at `start`) to `b` (at `end`), the ends excluded; `end`
+    is on `end_day` when that is given (a passage through the night), else on `day`."""
+    t0, t1 = _local(day, start), _local(end_day or day, end)
     out = []
     for i in range(1, steps):
         f = i / steps
@@ -432,4 +434,75 @@ def persona_record(
     )
     if places:
         (lb.root / "places.json").write_text(json.dumps(places, indent=2), encoding="utf-8")
+    return lb
+
+
+# -- a night under way: the yacht REDUCE -----------------------------------------------------------------
+
+REDUCE = "reduce"  # a second yacht, which does not exist either
+REDUCE_NAME = "REDUCE"
+REDUCE_MMSI = "970123456"
+ANCHORAGE_A = (59.7000, 10.5500)  # where REDUCE lies on the Friday evening
+ANCHORAGE_B = (59.3400, 10.5500)  # 40 km south: where she lies by Saturday morning
+CABIN = (59.7000, 10.6034)  # ashore, 3 km east of the first anchorage: the control case
+PASSAGE_DAY = "2026-07-03"  # a Friday
+PASSAGE_NEXT = "2026-07-04"
+
+
+def passage_drafts(aboard: bool = True) -> list[dict[str, Any]]:
+    """A Friday to a Saturday with the yacht REDUCE, which weighs anchor at 22:30 and motors 40 km
+    south through the night, at anchor again by 03:00. Aboard, the owner's points follow the
+    boat's: the phone every five minutes, the AIS every minute under way. Ashore (`aboard=False`,
+    the control case), the owner spends the same night at a cabin 3 km from the first anchorage
+    while the boat moves without them; the boat's track is the same either way."""
+    fri, sat = PASSAGE_DAY, PASSAGE_NEXT
+    drafts = dwell(fri, "00:00", "16:00", HOME, every_min=5)
+    if aboard:
+        drafts += (
+            travel(fri, "16:00", "16:30", HOME, ANCHORAGE_A, steps=6)
+            + dwell(fri, "16:30", "22:30", ANCHORAGE_A, every_min=5, noise_m=15)
+            + travel(fri, "22:30", "03:00", ANCHORAGE_A, ANCHORAGE_B, steps=54, end_day=sat)
+            + dwell(sat, "03:00", "12:00", ANCHORAGE_B, every_min=5, noise_m=15)
+            + travel(sat, "12:00", "13:00", ANCHORAGE_B, HOME, steps=6)
+        )
+    else:
+        drafts += (
+            travel(fri, "16:00", "16:30", HOME, CABIN, steps=6)
+            + dwell(fri, "16:30", "24:00", CABIN, every_min=5)
+            + dwell(sat, "00:00", "12:00", CABIN, every_min=5)
+            + travel(sat, "12:00", "13:00", CABIN, HOME, steps=6)
+        )
+    drafts += dwell(sat, "13:00", "24:00", HOME, every_min=5)
+    # the boat's AIS track: at anchor all Friday, the passage, at anchor all Saturday
+    drafts += (
+        dwell(fri, "00:00", "22:30", ANCHORAGE_A, every_min=2, noise_m=5, subject=REDUCE)
+        + travel(fri, "22:30", "03:00", ANCHORAGE_A, ANCHORAGE_B, steps=270, subject=REDUCE, end_day=sat)
+        + dwell(sat, "03:00", "24:00", ANCHORAGE_B, every_min=2, noise_m=5, subject=REDUCE)
+    )
+    drafts.append(note(utc(fri, "20:00"), "Anchored for the night with Ola Nordmann; off at 22:30."))
+    return drafts
+
+
+def passage_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, aboard: bool = True) -> Logbook:
+    """`passage_drafts` written into a fresh record, both yachts registered, the persona's places."""
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many(
+        [
+            resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+            *passage_drafts(aboard),
+        ]
+    )
+    (lb.root / "assets.json").write_text(
+        json.dumps(
+            {
+                "assets": [
+                    {"id": BOAT, "kind": "yacht", "name": "Solvind", "mmsi": "999000001"},
+                    {"id": REDUCE, "kind": "yacht", "name": REDUCE_NAME, "mmsi": REDUCE_MMSI},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (lb.root / "places.json").write_text(json.dumps(PLACES, indent=2), encoding="utf-8")
     return lb

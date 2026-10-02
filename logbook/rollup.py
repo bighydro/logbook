@@ -57,8 +57,9 @@ def empty(kind: str, by: str = "month") -> dict[str, Any]:
 
 
 def countries(reading: Reading, table: country_table.Countries | None = None) -> dict[str, Any]:
-    """Days per country per year from the overnight stay; in-transit nights and nights whose
-    country is unknown listed separately. The method is reported with the numbers."""
+    """Days per country per year from the overnight stay's position (aboard an asset, where it
+    lay for the longest part of the night); in-transit nights and nights whose country is unknown
+    listed separately. The method is reported with the numbers."""
     table = table or country_table.Countries.load()
     years: dict[str, dict[str, Any]] = {}
     for night in reading.nights:
@@ -66,13 +67,11 @@ def countries(reading: Reading, table: country_table.Countries | None = None) ->
             _year_of(night.day),
             {"year": _year_of(night.day), "countries": {}, "in_transit": _bucket(), "unknown": _bucket()},
         )
-        if night.stay is None:
+        position = night.position
+        if night.stay is None or position is None:
             _count(year["in_transit"], night.day, [])
             continue
-        assert night.stay.lat is not None and night.stay.lon is not None
-        found = country_table.country_of(
-            night.stay.lat, night.stay.lon, reading.places, reading.airports, table
-        )
+        found = country_table.country_of(position[0], position[1], reading.places, reading.airports, table)
         if found.code is None:
             _count(year["unknown"], night.day, _stay_lines(night.stay))
             continue
@@ -247,24 +246,29 @@ UNNAMED_TOP = 5  # the unnamed clusters a year lists, by hours
 
 
 def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
-    """Per named place (places.json) and per asset (assets.json), per year: stays, hours, nights
-    (the days whose overnight stay is there), first and last visit, and the people confirmed
-    present through the with module, each with their stays, days and nights there. Then the top
-    `UNNAMED_TOP` unnamed clusters — the owner's stays at no named place, grouped as `places
+    """Per named place (places.json), per year: stays, hours, nights (the days whose overnight stay
+    is there), first and last visit, and the people confirmed present through the with module,
+    each with their stays, days and nights there. Then `aboard`, per asset (assets.json), the same
+    way: a stay aboard is one run of the owner's stays and moves aboard it (`stays.fold`), however
+    the asset moved inside it, its hours the run's whole span, its nights the nights whose
+    overnight stay was aboard. Then the top `UNNAMED_TOP` unnamed clusters — the owner's stays at
+    no named place, the berths and anchorages inside a stay aboard among them, grouped as `places
     propose` groups them and ranked by hours — the same way, each under the stay id `places name`
-    takes. An asset's stays are the owner's stays aboard it. The stays come from one derivation of
-    the window and the company of each from the evidence of its days (`present.Evidence`); nothing
-    is read per place. `with_table` adds the place × person table under `with`."""
+    takes; a night aboard counts at the anchorage the asset lay at. The stays come from one
+    derivation of the window and the company of each from the evidence of its days
+    (`present.Evidence`); nothing is read per place. `with_table` adds the place × person table
+    under `with`."""
     years: dict[str, dict[str, Any]] = {}
     evidence = present.Evidence(reading.lines, reading.tz)
     days_of = _days_of_lines(reading)
     company: dict[str, _Company] = {}
     stay_year: dict[str, str] = {}
     unnamed_stays: dict[str, list[stays.Segment]] = {}
-    for stay in reading.owner_stays:
+
+    def year_and_company(stay: stays.Segment) -> tuple[dict[str, Any], str, str]:
         day, end_day = _local_days(stay, reading)
         key = _year_of(day)
-        year = years.setdefault(key, {"year": key, "places": {}, "assets": {}, "unnamed": {}})
+        year = years.setdefault(key, {"year": key, "places": {}, "aboard": {}, "unnamed": {}})
         who = [
             c
             for c in present.company(
@@ -274,6 +278,10 @@ def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
         ]
         company[stay.id] = _Company(who, {c: {days_of.get(id_, day) for id_ in c.lines} for c in who})
         stay_year[stay.id] = key
+        return year, day, end_day
+
+    for stay in reading.owner_stays:
+        year, day, end_day = year_and_company(stay)
         if stay.place is not None:
             place = next((p for p in reading.places if p.name == stay.place), None)
             entry = year["places"].setdefault(
@@ -282,33 +290,38 @@ def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
             )
             _visit(entry, stay, day, end_day, company[stay.id])
         elif stay.lat is not None and stay.lon is not None:
-            unnamed_stays.setdefault(key, []).append(stay)
-        if stay.aboard is not None:
-            asset = reading.assets.get(stay.aboard)
-            entry = year["assets"].setdefault(
-                stay.aboard,
-                {
-                    "asset": stay.aboard,
-                    "name": asset.name if asset else None,
-                    "kind": asset.kind if asset else None,
-                    **_visits(),
-                    "nights": 0,
-                },
-            )
-            _visit(entry, stay, day, end_day, company[stay.id])
+            unnamed_stays.setdefault(stay_year[stay.id], []).append(stay)
+    for stay in reading.derived.folded:
+        if stay.kind != stays.STAY or stay.aboard is None or not stay.inside:
+            continue
+        year, day, end_day = year_and_company(stay)
+        asset = reading.assets.get(stay.aboard)
+        entry = year["aboard"].setdefault(
+            stay.aboard,
+            {
+                "asset": stay.aboard,
+                "name": asset.name if asset else None,
+                "kind": asset.kind if asset else None,
+                **_visits(),
+                "nights": 0,
+            },
+        )
+        _visit(entry, stay, day, end_day, company[stay.id])
     cluster_of = _unnamed(years, unnamed_stays, company, reading)
     for night in reading.nights:
-        slept = night.stay
-        if slept is None:
+        slept, lay = night.stay, night.innermost
+        if slept is None or lay is None:
             continue
-        year = years[stay_year[slept.id]]
-        found = company[slept.id]
-        if slept.place is not None:
-            _night(year["places"][slept.place], night.day, found)
-        elif slept.id in cluster_of:
-            _night(cluster_of[slept.id], night.day, found)
-        if slept.aboard is not None:
-            _night(year["assets"][slept.aboard], night.day, found)
+        if slept.aboard is not None and slept.id in company:
+            _night(years[stay_year[slept.id]]["aboard"][slept.aboard], night.day, company[slept.id])
+        if lay.id not in company:
+            continue  # a passage the owner was aboard for: it is at no place
+        year = years[stay_year[lay.id]]
+        found = company[lay.id]
+        if lay.place is not None:
+            _night(year["places"][lay.place], night.day, found)
+        elif lay.id in cluster_of:
+            _night(cluster_of[lay.id], night.day, found)
     out = _head("places", reading)
     out["unnamed_top"] = UNNAMED_TOP
     out["years"] = []
@@ -319,8 +332,8 @@ def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
             "places": [
                 _finish_visits(v) for v in sorted(entry["places"].values(), key=lambda v: -v["hours"])
             ],
-            "assets": [
-                _finish_visits(v) for v in sorted(entry["assets"].values(), key=lambda v: -v["hours"])
+            "aboard": [
+                _finish_visits(v) for v in sorted(entry["aboard"].values(), key=lambda v: -v["hours"])
             ],
             "unnamed": [
                 _finish_visits(v) for v in sorted(entry["unnamed"].values(), key=lambda v: -v["hours"])
@@ -470,11 +483,11 @@ def _finish_visits(entry: dict[str, Any]) -> dict[str, Any]:
 
 def _with_rows(year: dict[str, Any]) -> list[dict[str, Any]]:
     """The place × person table of one year: a row per person per place, the places in the order
-    the rollup lists them (named, assets, unnamed), the people by days there."""
+    the rollup lists them (named, aboard, unnamed), the people by days there."""
     rows: list[dict[str, Any]] = []
     for kind, key, entries in (
         ("place", "place", year["places"]),
-        ("asset", "asset", year["assets"]),
+        ("asset", "asset", year["aboard"]),
         ("unnamed", "id", year["unnamed"]),
     ):
         for entry in entries:
@@ -554,9 +567,10 @@ def people(reading: Reading) -> dict[str, Any]:
                 entry["places"].append(where)
             at_stay.setdefault(stay.id, {}).setdefault((_year_of(day), key), set()).add(day)
     for night in reading.nights:
-        if night.stay is None:
+        lay = night.innermost  # the night's place: the inner stay of a night aboard, else the stay
+        if lay is None:
             continue
-        for (year_key, key), days in at_stay.get(night.stay.id, {}).items():
+        for (year_key, key), days in at_stay.get(lay.id, {}).items():
             if night.day not in days:
                 continue
             year = years[year_key]
@@ -765,13 +779,15 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
         yield f"  {year['year']}"
         heads = [
             *(_entry_head(v["place"], v.get("kind")) for v in year["places"]),
-            *(_entry_head(_entry_label("asset", v), v.get("kind")) for v in year["assets"]),
+            *(_entry_head(_entry_label("asset", v), v.get("kind")) for v in year["aboard"]),
             *(v["label"] for v in year["unnamed"]),
         ]
         width = max(28, *(len(h) for h in heads)) if heads else 28
         for v in year["places"]:
             yield _visit_row(_entry_head(v["place"], v.get("kind")), v, width, nights=v["nights"] or None)
-        for v in year["assets"]:
+        if year["aboard"]:
+            yield "        aboard, by hours (a stay is one run aboard, whatever the asset did inside it):"
+        for v in year["aboard"]:
             yield _visit_row(
                 _entry_head(_entry_label("asset", v), v.get("kind")), v, width, nights=v["nights"]
             )

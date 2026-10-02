@@ -549,12 +549,16 @@ def test_a_stay_matching_an_asset_is_aboard_and_the_asset_has_its_own_stays(
     _boat_day(tmp_path, monkeypatch)
     data = _derive_json(capsys, "--day", DAY)
     owner = _owner(data)
-    assert [s["kind"] for s in owner] == ["stay", "move", "stay", "move", "stay"]
-    home, _walk, marina, sail, fjord = owner
-    assert home["aboard"] is None
-    assert marina["aboard"] == "solvind"
+    assert [s["kind"] for s in owner] == ["stay", "move", "stay"], "the run aboard is one stay"
+    home, _walk, aboard = owner
+    assert home["aboard"] is None and "inside" not in home
+    assert aboard["aboard"] == "solvind" and aboard["place"] is None
+    assert (aboard["start"], aboard["end"]) == (_utc(DAY, "09:10"), _utc(DAY, "14:00"))
+    marina, sail, fjord = aboard["inside"]
+    assert marina["aboard"] == "solvind" and abs(marina["lat"] - MARINA[0]) < 0.001
     assert sail["aboard"] == "solvind" and sail["mode"] == "boat"
-    assert fjord["aboard"] == "solvind"
+    assert fjord["aboard"] == "solvind" and abs(fjord["lat"] - FJORD[0]) < 0.001
+    assert aboard["lat"] == fjord["lat"], "the stay's centre is the inner stay the owner spent longest at"
     boat = [s for s in data["segments"] if s["subject"] == "solvind"]
     assert [s["kind"] for s in boat] == ["stay", "move", "stay"]
     assert all(s["aboard"] is None for s in boat), "aboard is the owner's relation, never the asset's"
@@ -599,7 +603,17 @@ def test_an_empty_day_says_so_and_a_bad_date_is_refused(
     assert "no location" in text
     data = _derive_json(capsys, "--day", DAY)
     assert data["segments"] == []
-    assert data["nights"] == [{"day": DAY, "stay": None, "in_transit": True, "home": False}]
+    assert data["nights"] == [
+        {
+            "day": DAY,
+            "stay": None,
+            "in_transit": True,
+            "home": False,
+            "aboard": None,
+            "inside": None,
+            "position": None,
+        }
+    ]
     with pytest.raises(SystemExit) as e:
         cli.main(["derive", "stays", "--day", "yesterday"])
     assert e.value.code == 2

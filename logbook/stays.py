@@ -37,13 +37,23 @@ The rules:
   the points between them, its mode from the average speed (walk, car, train, flight), or flight
   when a gap starts and ends near airports (the flights table, RFC 0013), or, when the owner is
   aboard an asset, by the asset's kind (a yacht moves by boat, an aircraft by flight, a car by car).
-- The owner is aboard an asset during a stay when the asset's positions in that span fall within
-  the stay's radius, and during a move when at least half the owner's points have an asset position
-  within the radius at nearly the same instant (`aboard_window_s`). Aboard is the owner's relation
-  to the asset (ADR 0018 rule 3); an asset's own segments never carry it.
+- The owner is aboard an asset when the asset's own positions lie within the radius of the
+  owner's points for `aboard_min_s` (20 minutes by default) or longer: during a stay, the asset's
+  points in that span within the stay's radius, measured from the first such point to the last;
+  during a move, at least half the owner's points with an asset position within the radius at
+  nearly the same instant (`aboard_window_s`), measured across the matched points. A run of
+  consecutive segments matched to one asset is aboard it when the matched time adds up to the
+  minimum; a boat that passes the quay once is not boarded. Aboard is the owner's relation to the
+  asset (ADR 0018 rule 3); an asset's own segments never carry it.
+- A stay aboard is a container (`fold`): the run of the owner's stays and moves aboard one asset is
+  one stay `aboard <asset>`, from the first's start to the last's end, with the run inside it
+  (`Segment.inside`) — a berth, a passage, an anchorage — so the asset's movement never fragments
+  the owner's stay. Its centre is that of the inner stay the owner spent longest at. A run that is
+  one move (a passage walked on and off) stays a move.
 - The overnight stay of a day is the owner's stay with the longest overlap of the night window,
-  22:00 to 08:00 next morning by default; when no overlap reaches `stay_min_s`, the day is in
-  transit.
+  22:00 to 08:00 next morning by default, a stay aboard counting whole; when no overlap reaches
+  `stay_min_s`, the day is in transit. A night aboard names the asset and carries the asset's
+  position: the inner stay that held the longest part of the night (`Night.inside`).
 """
 
 from __future__ import annotations
@@ -95,6 +105,7 @@ class Settings:
     car_max_kmh: float = 130.0
     flight_min_kmh: float = 150.0
     aboard_window_s: int = 300  # an asset position this close in time can match an owner point
+    aboard_min_s: int = 1200  # the asset within the owner's radius this long, and the owner is aboard
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -110,6 +121,7 @@ class Settings:
                 "flight_min_kmh": _number(self.flight_min_kmh),
             },
             "aboard_window_s": self.aboard_window_s,
+            "aboard_min_s": self.aboard_min_s,
         }
 
     @classmethod
@@ -134,6 +146,7 @@ class Settings:
                 car_max_kmh=_positive(modes, "car_max_kmh", cls.car_max_kmh, where),
                 flight_min_kmh=_positive(modes, "flight_min_kmh", cls.flight_min_kmh, where),
                 aboard_window_s=_seconds(data, "aboard_window_s", cls.aboard_window_s, where),
+                aboard_min_s=_seconds(data, "aboard_min_s", cls.aboard_min_s, where),
             )
         except (TypeError, ValueError) as e:
             raise SettingsError(f"{where}: {e}") from e
@@ -265,6 +278,7 @@ class Segment:
     last_line: str | None = None
     first_seq: int | None = None  # and their seqs, for a reader whose points carry no id (the index's)
     last_seq: int | None = None
+    inside: tuple[Segment, ...] = ()  # a stay aboard an asset: the owner's run of segments aboard it
 
     @property
     def duration_s(self) -> int:
@@ -305,6 +319,8 @@ class Segment:
             out["place"] = self.place
             out["attached"] = dict(self.attached)
             out["promoted"] = self.promoted
+        if self.inside:
+            out["inside"] = [s.to_json(tz) for s in self.inside]
         return out
 
 
@@ -313,17 +329,45 @@ class Night:
     day: str
     stay: Segment | None
     home: bool = False  # the stay lies in a home region (places.json, kind `home`)
+    inside: Segment | None = None  # a night aboard: the inner segment that held the longest part of it
 
     @property
     def in_transit(self) -> bool:
         return self.stay is None
 
+    @property
+    def aboard(self) -> str | None:
+        return None if self.stay is None else self.stay.aboard
+
+    @property
+    def innermost(self) -> Segment | None:
+        """The stay the night's place is read from: the inner stay of a night aboard (where the
+        asset lay), else the stay itself. A night whose longest part was a passage falls back to
+        the stay aboard, whose centre is the anchorage the owner spent longest at."""
+        if self.inside is not None and self.inside.kind != MOVE:
+            return self.inside
+        return self.stay
+
+    @property
+    def position(self) -> tuple[float, float] | None:
+        """The night's position: the asset's for a night aboard, else the stay's centre."""
+        at = self.innermost
+        if at is None or at.lat is None or at.lon is None:
+            return None
+        return at.lat, at.lon
+
     def to_json(self, tz: ZoneInfo) -> dict[str, Any]:
+        position = self.position
         return {
             "day": self.day,
             "stay": None if self.stay is None else self.stay.to_json(tz),
             "in_transit": self.in_transit,
             "home": self.home,
+            "aboard": self.aboard,
+            "inside": None if self.inside is None else self.inside.to_json(tz),
+            "position": None
+            if position is None
+            else {"lat": round(position[0], 6), "lon": round(position[1], 6)},
         }
 
 
@@ -332,6 +376,7 @@ class Derived:
     segments: list[Segment]  # every subject's, the owner's first, each in time order
     subjects: list[str | None]  # None is the owner; then asset ids, sorted
     noise_points: int
+    folded: list[Segment] = field(default_factory=list)  # the owner's, a run aboard one stay (`fold`)
 
 
 def _stamp(instant: datetime) -> str:
@@ -653,60 +698,147 @@ def _aboard(
     settings: Settings,
     assets: Mapping[str, str],
 ) -> list[Segment]:
-    """The owner's segments with `aboard` set where an asset's track matches, and a move's mode
-    taken from the asset's kind when aboard."""
-    asset_ids = sorted(s for s in tracks if s is not None)
+    """The owner's segments with `aboard` set where an asset's track matches for `aboard_min_s`
+    or longer, and a move's mode taken from the asset's kind when aboard. Each segment is matched
+    to the asset it shares the most time with (`_matched_s`); a move with no points between two
+    segments matched to one asset is matched to it too (the tracker slept through the passage);
+    then a run of consecutive segments matched to one asset is aboard it when the matched time
+    adds up to the minimum, and not at all when it does not."""
+    asset_ids = sorted(a for a in tracks if a is not None)
     if not asset_ids:
         return segments
     owner_instants = [p.at for p in owner]
     instants = {asset: [p.at for p in tracks[asset]] for asset in asset_ids}
-    out: list[Segment] = []
+    matched: list[tuple[str, float] | None] = []
     for segment in segments:
-        aboard = None
+        best: tuple[str, float] | None = None
         for asset in asset_ids:
-            if _matches(segment, owner, owner_instants, tracks[asset], instants[asset], settings):
-                aboard = asset
-                break
-        out.append(replace(segment, aboard=aboard))
-    # A gap between two stays aboard the same asset is a move aboard it.
-    for n, segment in enumerate(out):
-        if segment.kind == MOVE and segment.aboard is None and segment.points == 0 and 0 < n < len(out) - 1:
-            before, after = out[n - 1].aboard, out[n + 1].aboard
-            if before is not None and before == after:
-                out[n] = replace(segment, aboard=before)
-    return [
-        replace(s, mode=KIND_MODE[assets[s.aboard]])
-        if s.kind == MOVE and s.aboard is not None and assets.get(s.aboard) in KIND_MODE
-        else s
-        for s in out
-    ]
+            seconds = _matched_s(segment, owner, owner_instants, tracks[asset], instants[asset], settings)
+            if seconds is not None and (best is None or seconds > best[1]):
+                best = (asset, seconds)
+        matched.append(best)
+    for n in range(1, len(segments) - 1):
+        s = segments[n]
+        if s.kind == MOVE and s.points == 0 and matched[n] is None:
+            before, after = matched[n - 1], matched[n + 1]
+            if before is not None and after is not None and before[0] == after[0]:
+                matched[n] = (before[0], 0.0)
+    out = list(segments)
+    n = 0
+    while n < len(segments):
+        found = matched[n]
+        if found is None:
+            n += 1
+            continue
+        asset = found[0]
+        m = n
+        while m < len(segments) and (hit := matched[m]) is not None and hit[0] == asset:
+            m += 1
+        if sum(hit[1] for hit in matched[n:m] if hit is not None) >= settings.aboard_min_s:
+            mode = KIND_MODE.get(assets.get(asset, ""))
+            for k in range(n, m):
+                s = segments[k]
+                out[k] = replace(s, aboard=asset, mode=mode if s.kind == MOVE and mode else s.mode)
+        n = m
+    return out
 
 
-def _matches(
+def _matched_s(
     segment: Segment,
     owner: Sequence[Point],
     owner_instants: Sequence[datetime],
     asset: Sequence[Point],
     asset_instants: Sequence[datetime],
     settings: Settings,
-) -> bool:
-    """Both tracks are in time order and `*_instants` are their instants, so the points of a span
-    are found by binary search (two years of a track is a million points; a span is minutes)."""
+) -> float | None:
+    """How long the asset was within the radius of the owner during the segment, in seconds; None
+    when it was not there at all. For a stay or stop: the asset's points in the span within the
+    radius of the stay's centre, from the first such point to the last (one point is 0 s: a boat
+    passing the quay). For a move: when at least half the owner's points have an asset point
+    within the radius at nearly the same instant (`aboard_window_s`), the span of the matched
+    points; else None. Both tracks are in time order and `*_instants` are their instants, so the
+    points of a span are found by binary search (two years of a track is a million points; a span
+    is minutes)."""
     if segment.kind != MOVE:
         assert segment.lat is not None and segment.lon is not None
         radius = settings.radius_m
         lo, hi = bisect_left(asset_instants, segment.start), bisect_right(asset_instants, segment.end)
-        return any(distance_m(p.lat, p.lon, segment.lat, segment.lon) <= radius for p in asset[lo:hi])
+        inside = [p.at for p in asset[lo:hi] if distance_m(p.lat, p.lon, segment.lat, segment.lon) <= radius]
+        if not inside:
+            return None
+        return (inside[-1] - inside[0]).total_seconds()
     lo, hi = bisect_right(owner_instants, segment.start), bisect_left(owner_instants, segment.end)
     mine = owner[lo:hi]
     if not mine:
-        return False
-    matched = 0
+        return None
+    hits: list[datetime] = []
     for p in mine:
         q = _nearest_in_time(asset, p.at, settings.aboard_window_s)
         if q is not None and distance_m(p.lat, p.lon, q.lat, q.lon) <= settings.radius_m:
-            matched += 1
-    return matched * 2 >= len(mine)
+            hits.append(p.at)
+    if len(hits) * 2 < len(mine):
+        return None
+    return (hits[-1] - hits[0]).total_seconds()
+
+
+# -- the container -------------------------------------------------------------------------------------
+
+
+def fold(segments: Iterable[Segment]) -> list[Segment]:
+    """The owner's segments with every run of consecutive segments aboard one asset folded into one
+    stay aboard it, the run inside (`Segment.inside`): a container the asset's movement never
+    fragments. A run that is one move (a passage walked on and off) stays a move. A segment that
+    is a container already passes through, so folding twice is folding once; so does a segment
+    not aboard, and an asset's own segments, which never carry `aboard`."""
+    out: list[Segment] = []
+    run: list[Segment] = []
+
+    def flush() -> None:
+        if all(s.kind == MOVE for s in run):
+            out.extend(run)  # a passage walked on and off; segments alternate, so at most one
+        else:
+            out.append(_container(run))
+        run.clear()
+
+    for s in segments:
+        if s.aboard is None or s.inside:
+            flush()
+            out.append(s)
+            continue
+        if run and run[-1].aboard != s.aboard:
+            flush()
+        run.append(s)
+    flush()
+    return out
+
+
+def _container(run: Sequence[Segment]) -> Segment:
+    """One stay aboard from a run of segments aboard one asset: its centre is that of the inner
+    stay the owner spent longest at (the anchorage of the night, not the berth of the morning),
+    its attachments the run's added up, its lines the first's first and the last's last."""
+    held = [s for s in run if s.kind != MOVE]
+    anchor = max(held, key=lambda s: s.duration_s)
+    attached: Counter[str] = Counter()
+    for s in run:
+        attached.update(s.attached)
+    return Segment(
+        kind=STAY if any(s.kind == STAY for s in held) else STOP,
+        subject=run[0].subject,
+        start=run[0].start,
+        end=run[-1].end,
+        points=sum(s.points for s in run),
+        lat=anchor.lat,
+        lon=anchor.lon,
+        place=None,
+        attached=dict(sorted(attached.items(), key=lambda kv: EVIDENCE.index(kv[0]))),
+        promoted=any(s.promoted for s in run),
+        aboard=run[0].aboard,
+        first_line=run[0].first_line,
+        last_line=run[-1].last_line,
+        first_seq=run[0].first_seq,
+        last_seq=run[-1].last_seq,
+        inside=tuple(run),
+    )
 
 
 # -- the pass ---------------------------------------------------------------------------------------------
@@ -768,7 +900,7 @@ def derive_tracks(
         if subject is None:
             found = _aboard(found, owner, tracks, settings, assets)
         segments.extend(found)
-    return Derived(segments, subjects, noise)
+    return Derived(segments, subjects, noise, fold(s for s in segments if s.subject is None))
 
 
 def night_window(day: str, tz: ZoneInfo, settings: Settings) -> tuple[datetime, datetime]:
@@ -784,20 +916,28 @@ def night(
     segments: Iterable[Segment], day: str, tz: ZoneInfo, settings: Settings, places: Sequence[Place] = ()
 ) -> Night:
     """The owner's stay with the longest overlap of the night window, when that overlap reaches
-    the stay minimum; else in transit. At home when the stay is a place of kind `home`, or its
-    centre lies in one's radius (`places`, from places.json)."""
+    the stay minimum; else in transit. A stay aboard an asset counts whole (`fold`): a passage
+    through the night is a night aboard, not a night in transit, and the night carries the inner
+    segment that held the longest part of it, so the asset's position that night is known. At
+    home when the stay is a place of kind `home`, or its centre lies in one's radius (`places`,
+    from places.json)."""
     start, end = night_window(day, tz, settings)
+
+    def overlap_s(s: Segment) -> float:
+        return (min(s.end, end) - max(s.start, start)).total_seconds()
+
     best: Segment | None = None
     best_overlap = 0.0
-    for s in segments:
-        if s.subject is not None or s.kind != STAY:
+    for s in fold(s for s in segments if s.subject is None):
+        if s.kind != STAY:
             continue
-        overlap = (min(s.end, end) - max(s.start, start)).total_seconds()
+        overlap = overlap_s(s)
         if overlap > best_overlap:
             best, best_overlap = s, overlap
     if best is None or best_overlap < settings.stay_min_s:
         return Night(day, None)
-    return Night(day, best, is_home(best, places))
+    inside = max(best.inside, key=overlap_s) if best.inside else None
+    return Night(day, best, is_home(best, places), inside)
 
 
 HOME_NEAR_M = 400.0  # a night whose stay centre is this close to a home place is a night at home
