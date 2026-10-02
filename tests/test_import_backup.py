@@ -887,6 +887,45 @@ def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
         ios_backup.copy(p, tmp_path / "out")
 
 
+def test_import_backup_hashes_the_photos_pixels_from_the_backup_without_copying_them(lb, tmp_path, capsys):
+    """`apple-photos`: the line carries the pixels' digest (RFC 0002 `content_hash`, and `extra.media`
+    as the message adapters write it), hashed straight from the backup, decrypted on the way when
+    need be, and never copied: the inbox holds the library and nothing under DCIM/."""
+    backup = _backup(tmp_path, sources=("apple-photos",))
+    _run(str(backup), "--only", "photos")
+    out = capsys.readouterr().out
+    assert f"added {PHOTO_LINES} lines from apple-photos" in out
+    assert f"also 1 with media hashed, {PHOTO_LINES - 1} with media missing" in out
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    copies = sorted(p.name for p in (inbox / "apple-photos").iterdir())
+    assert copies == ["Photos.sqlite", "Photos.sqlite-wal"]
+    assert not list(inbox.rglob("IMG_0001.HEIC")) and not list(lb.root.glob("attachments"))
+    photos = {line["payload"]["file_name"]: line["payload"] for line in lb.lines()}
+    pixels = hashlib.sha256(b"pixels").hexdigest()
+    assert photos["IMG_0001.HEIC"]["content_hash"] == pixels
+    assert photos["IMG_0001.HEIC"]["extra"]["media"] == {
+        "local_path": "DCIM/100APPLE/IMG_0001.HEIC",
+        "sha256": pixels,
+        "bytes": len(b"pixels"),
+    }
+    assert photos["IMG_0002.PNG"]["extra"]["media"] == {"local_path": "DCIM/100APPLE/IMG_0002.PNG"}
+    assert photos["IMG_0002.PNG"]["extra"]["media_missing"] is True
+    with lb.index() as idx:
+        assert idx.attachment_counts(lambda sha: False) == {"referenced": 1, "lines": 1, "present": 0}
+
+
+def test_import_backup_skips_hashing_the_photos_when_told_to(lb, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("LOGBOOK_APPLE_PHOTOS_HASH_MEDIA", "0")
+    backup = _backup(tmp_path, sources=("apple-photos",))
+    _run(str(backup), "--only", "photos")
+    out = capsys.readouterr().out
+    assert f"added {PHOTO_LINES} lines from apple-photos" in out and "media" not in out
+    for line in lb.lines():
+        p = line["payload"]
+        assert "content_hash" not in p and "media_missing" not in p["extra"]
+        assert set(p["extra"]["media"]) == {"local_path"}
+
+
 def test_import_backup_attachments_stores_the_voice_memo_audio(lb, tmp_path, capsys):
     backup = _backup(tmp_path, sources=("voice-memos",))
     _run(str(backup), "--only", "voice-memos", "--attachments")

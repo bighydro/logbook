@@ -8,7 +8,8 @@ Reads the library store an iPhone keeps at `Media/PhotoData/Photos.sqlite` (`Cam
                                   1 video, ZKINDSUBTYPE 2 live photo 10 screenshot 1 panorama 100-103
                                   video kinds, ZFAVORITE, ZHIDDEN, ZTRASHEDSTATE, ZWIDTH, ZHEIGHT,
                                   ZDURATION, ZLATITUDE, ZLONGITUDE (-180 when none), ZFILENAME,
-                                  ZUNIFORMTYPEIDENTIFIER)
+                                  ZDIRECTORY — where the pixels are below the library's Media/ folder,
+                                  `DCIM/100APPLE` —, ZUNIFORMTYPEIDENTIFIER)
     ZADDITIONALASSETATTRIBUTES   (ZASSET → ZASSET.Z_PK, ZORIGINALFILENAME, ZTIMEZONENAME, ZIMPORTEDBY,
                                   ZIMPORTEDBYBUNDLEIDENTIFIER)
     ZGENERICALBUM                (ZKIND 2 the owner's own albums, ZTITLE, ZTRASHEDSTATE)
@@ -35,6 +36,17 @@ Favourites and the Art album are keepers (RFC 0024): `KEEPERS` tells `logbook ad
 `keeper/v1` line per mark through `keepers.draft` once the photo lines are in the record, keyed by
 the photo line's id and lane so a re-import, and `infer keepers` after it, write nothing twice.
 
+The pixels are never copied here. `extra.media.local_path` is where the phone keeps them below its
+`Media/` folder (`ZDIRECTORY/ZFILENAME`, `DCIM/100APPLE/IMG_0001.HEIC`), the same shape the
+`whatsapp` and `imessage` adapters write. With `media_digest`, a callable the caller builds that
+hashes the file at such a path a chunk at a time and answers `(sha256, bytes)` or None when the file
+is not there (`import-backup` reads it straight from the backup, decrypted on the way, and copies
+nothing), the line also carries the digest and the size under `extra.media` and the digest as
+`content_hash` (RFC 0002), so `logbook attach import-backup --only photos` can put the bytes in the
+§1.1 store and check them against the line; a file the callable does not find is `extra.media_missing`
+and counted. Without `media_digest` the line carries the path alone and nothing is missing: the
+import simply did not look. A store without `ZDIRECTORY` names no path.
+
 Provenance follows the store's own record of how the asset arrived (RFC 0002): `screenshot` when the
 subtype says so; `camera` for a live photo, a camera video kind, or an import by the back or front
 camera (`ZIMPORTEDBY` 1 or 2, or the camera's bundle id); `received` for an import by another app
@@ -56,9 +68,9 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 NAME = "apple-photos"
@@ -96,8 +108,11 @@ ASSET_COLUMNS = (
     "ZLATITUDE",
     "ZLONGITUDE",
     "ZFILENAME",
+    "ZDIRECTORY",
     "ZUNIFORMTYPEIDENTIFIER",
 )
+# The pixels' (sha256, bytes) at a path below the library's Media/ folder, or None when they are not there.
+MediaDigest = Callable[[str], tuple[str, int] | None]
 ATTRIBUTE_COLUMNS = ("ZORIGINALFILENAME", "ZTIMEZONENAME", "ZIMPORTEDBY", "ZIMPORTEDBYBUNDLEIDENTIFIER")
 
 
@@ -141,12 +156,15 @@ def run(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     tier: int | None = None,
+    media_digest: MediaDigest | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One photo/v1 line per asset, in capture order.
 
     `since` is RFC3339 UTC; lines with `at` before it are not yielded. `counts` tallies
-    `skipped_trashed`, `skipped_no_timestamp` and `skipped_placeholder_date`. `timezone` is the
-    record's zone, the line's `tz` when the asset has no IANA zone of its own. `tier` overrides 1."""
+    `skipped_trashed`, `skipped_no_timestamp`, `skipped_placeholder_date` and, with `media_digest`,
+    `media_hashed` and `media_missing`. `timezone` is the record's zone, the line's `tz` when the
+    asset has no IANA zone of its own. `tier` overrides 1. `media_digest` hashes the pixels at a
+    path below the library's `Media/` folder (module docstring)."""
     path = Path(path)
     counts = counts if counts is not None else {}
     con = _open(path)
@@ -167,7 +185,7 @@ def run(
         columns = ASSET_COLUMNS + ATTRIBUTE_COLUMNS
         for row in con.execute(f"SELECT {', '.join(select)} FROM ZASSET a {join} ORDER BY {order}"):
             values = dict(zip(columns, row, strict=True))
-            line = _line(values, albums, faces, people, names, counts, timezone, tier or TIER)
+            line = _line(values, albums, faces, people, names, counts, timezone, tier or TIER, media_digest)
             if line is None or (since and line["at"] < since):
                 continue
             yield line
@@ -274,6 +292,7 @@ def _line(
     counts: dict[str, int],
     timezone: str | None,
     tier: int,
+    media_digest: MediaDigest | None = None,
 ) -> dict[str, Any] | None:
     if values.get("ZTRASHEDSTATE"):
         _count(counts, "skipped_trashed")
@@ -332,6 +351,19 @@ def _line(
         extra["imported_by_bundle"] = bundle
     if pk in names:
         extra["faces"] = names[pk]
+    local_path = _local_path(values.get("ZDIRECTORY"), values.get("ZFILENAME"))
+    if local_path is not None:
+        media: dict[str, Any] = {"local_path": local_path}
+        if media_digest is not None:
+            found = media_digest(local_path)
+            if found is None:
+                extra["media_missing"] = True
+                _count(counts, "media_missing")
+            else:
+                media["sha256"], media["bytes"] = found
+                payload["content_hash"] = found[0]
+                _count(counts, "media_hashed")
+        extra["media"] = media
     if extra:
         payload["extra"] = extra
     return {
@@ -343,6 +375,18 @@ def _line(
         "tier": tier,
         "payload": payload,
     }
+
+
+def _local_path(directory: object, file_name: object) -> str | None:
+    """`ZDIRECTORY/ZFILENAME` as a POSIX path below the library's `Media/` folder, or None when the
+    store names no directory or no file, or a part would leave the folder (`..`, an empty part)."""
+    folder, name = _text(directory), _text(file_name)
+    if not folder or not name:
+        return None
+    parts = (*PurePosixPath(folder).parts, *PurePosixPath(name).parts)
+    if any(part in ("..", "", "/") for part in parts) or parts[0] == "/":
+        return None
+    return PurePosixPath(*parts).as_posix()
 
 
 def _provenance(subtype: object, imported_by: object, bundle: str) -> str:

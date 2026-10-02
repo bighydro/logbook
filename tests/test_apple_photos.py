@@ -30,7 +30,7 @@ CREATE TABLE ZASSET (
     ZKIND INTEGER, ZKINDSUBTYPE INTEGER, ZSAVEDASSETTYPE INTEGER, ZTRASHEDSTATE INTEGER,
     ZWIDTH INTEGER, ZHEIGHT INTEGER, ZADDITIONALATTRIBUTES INTEGER, ZDATECREATED TIMESTAMP,
     ZDURATION FLOAT, ZLATITUDE FLOAT, ZLONGITUDE FLOAT, ZMODIFICATIONDATE TIMESTAMP,
-    ZFILENAME VARCHAR, ZUNIFORMTYPEIDENTIFIER VARCHAR, ZUUID VARCHAR);
+    ZFILENAME VARCHAR, ZUNIFORMTYPEIDENTIFIER VARCHAR, ZUUID VARCHAR, ZDIRECTORY VARCHAR);
 CREATE TABLE ZADDITIONALASSETATTRIBUTES (
     Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER, ZIMPORTEDBY INTEGER, ZASSET INTEGER,
     ZTIMEZONEOFFSET INTEGER, ZEXIFTIMESTAMPSTRING VARCHAR, ZIMPORTEDBYBUNDLEIDENTIFIER VARCHAR,
@@ -118,6 +118,8 @@ FACES = [  # (pk, asset pk, person pk)
 ]  # fmt: skip
 LINES = 6  # eight assets less the trashed one and the undated one
 KEEPERS = 1  # the one favourite (IMG_0001.HEIC) is a `memory` keeper on import (RFC 0024); no Art album
+DIRECTORY = "DCIM/100APPLE"  # ZDIRECTORY: where the phone keeps the pixels below Media/
+PIXELS = b"pixels"  # what the backup fixture holds for IMG_0001.HEIC (test_import_backup)
 
 
 def _store(folder: Path, *, name: str = "Photos.sqlite") -> Path:
@@ -129,10 +131,10 @@ def _store(folder: Path, *, name: str = "Photos.sqlite") -> Path:
         con.executemany("INSERT INTO Z_PRIMARYKEY VALUES (?,?,?,?)", ENTITIES)
         for a in ASSETS:
             con.execute(
-                "INSERT INTO ZASSET VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO ZASSET VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (a["pk"], 3, 1, a["favorite"], a["hidden"], a["kind"], a["subtype"], 3, a["trashed"], a["w"],
                  a["h"], a["pk"], _apple(a["date"]) if a["date"] else None, a["duration"], a["lat"], a["lon"],
-                 None, a["filename"], a["uti"], a["uuid"]),
+                 None, a["filename"], a["uti"], a["uuid"], DIRECTORY),
             )  # fmt: skip
             con.execute(
                 "INSERT INTO ZADDITIONALASSETATTRIBUTES VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -236,6 +238,7 @@ def test_a_live_photo_from_the_camera_with_its_albums_favourite_and_named_people
             "imported_by": 1,
             "imported_by_bundle": "com.apple.camera",
             "faces": ["Kari Nordmann"],
+            "media": {"local_path": "DCIM/100APPLE/IMG_0001.HEIC"},
         },
     }
 
@@ -313,6 +316,66 @@ def test_the_merge_key_matches_an_immich_line_for_the_same_asset(tmp_path):
     theirs = {"at": "2026-03-01T09:12:00Z", "payload": {"file_name": "img_0001.heic", "library": "immich"}}
     assert ours["payload"]["file_name"].lower() == theirs["payload"]["file_name"].lower()
     assert ours["at"] == theirs["at"]
+
+
+# -- the pixels: a digest on the line when the import can reach them --------------------------------
+
+
+def test_media_digest_puts_the_pixels_digest_on_the_line_as_content_hash_and_extra_media(tmp_path):
+    """RFC 0002 `content_hash` and the `extra.media` shape the message adapters write, so the attach
+    pass finds the bytes by the same path and checks them against the same digest."""
+    import hashlib
+
+    asked: list[str] = []
+
+    def media_digest(local_path: str) -> tuple[str, int] | None:
+        asked.append(local_path)
+        if local_path == "DCIM/100APPLE/IMG_0001.HEIC":
+            return hashlib.sha256(PIXELS).hexdigest(), len(PIXELS)
+        return None  # not in the backup: an iCloud-optimised library keeps a thumbnail
+
+    counts: dict[str, int] = {}
+    store = _store(tmp_path / "photos")
+    by = _by_name(list(apple_photos.run(store, counts=counts, media_digest=media_digest)))
+    hashed = by["IMG_0001.HEIC"]["payload"]
+    assert hashed["content_hash"] == hashlib.sha256(PIXELS).hexdigest()
+    assert hashed["extra"]["media"] == {
+        "local_path": "DCIM/100APPLE/IMG_0001.HEIC",
+        "sha256": hashlib.sha256(PIXELS).hexdigest(),
+        "bytes": len(PIXELS),
+    }
+    assert "media_missing" not in hashed["extra"]
+    missing = by["IMG_0002.PNG"]["payload"]
+    assert "content_hash" not in missing
+    assert missing["extra"]["media"] == {"local_path": "DCIM/100APPLE/IMG_0002.PNG"}
+    assert missing["extra"]["media_missing"] is True
+    assert counts["media_hashed"] == 1 and counts["media_missing"] == LINES - 1
+    kept = [a for a in ASSETS if a["date"] and not a["trashed"]]
+    assert sorted(asked) == sorted(f"{DIRECTORY}/{a['filename']}" for a in kept)
+
+
+def test_without_media_digest_the_line_carries_the_path_alone_and_is_not_missing(tmp_path):
+    counts: dict[str, int] = {}
+    by = _by_name(list(apple_photos.run(_store(tmp_path / "photos"), counts=counts)))
+    for line in by.values():
+        extra = line["payload"]["extra"]
+        assert extra["media"] == {"local_path": f"{DIRECTORY}/{line['payload']['file_name']}"} or (
+            line["payload"]["file_name"] != extra["media"]["local_path"].rsplit("/", 1)[1]
+        )
+        assert "media_missing" not in extra and "content_hash" not in line["payload"]
+    assert "media_hashed" not in counts and "media_missing" not in counts
+    received = by["IMG-20260302-WA0012.jpg"]["payload"]  # the library's own file name, not the original
+    assert received["extra"]["media"] == {"local_path": "DCIM/100APPLE/IMG_0003.JPG"}
+
+
+def test_a_store_without_zdirectory_names_no_path_and_is_never_asked(tmp_path):
+    store = _store(tmp_path / "photos")
+    with closing(sqlite3.connect(store)) as con:
+        con.execute("ALTER TABLE ZASSET DROP COLUMN ZDIRECTORY")
+        con.commit()
+    lines = list(apple_photos.run(store, media_digest=lambda local_path: pytest.fail(local_path)))
+    assert len(lines) == LINES
+    assert all("media" not in line["payload"].get("extra", {}) for line in lines)
 
 
 # -- through the CLI --------------------------------------------------------------------------------

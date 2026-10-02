@@ -16,7 +16,7 @@ import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -79,7 +79,7 @@ from . import (
 from . import (
     year as year_reader,
 )
-from .adapters import ais, ios_contacts, screentime
+from .adapters import ais, apple_photos, ios_contacts, screentime
 from .adapters import weather as weather_adapter
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
@@ -2022,14 +2022,22 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        given = {"attachments": True} if a.attachments and _takes(adapter, "attachments") else None
-        _append_with(
-            lb,
-            adapter,
-            store_copy.parent if p.source.pattern else store_copy,
-            given,
-            recorded_as=inbox_folder / p.source.name,
-        )
+        given: dict[str, Any] = {}
+        if a.attachments and _takes(adapter, "attachments"):
+            given["attachments"] = True
+        if _takes(adapter, "media_digest") and os.environ.get(PHOTOS_HASH_MEDIA_ENV, "1").strip() != "0":
+            given["media_digest"] = _media_digest(manifest, p.source)  # hashed in place, never copied
+        try:
+            _append_with(
+                lb,
+                adapter,
+                store_copy.parent if p.source.pattern else store_copy,
+                given or None,
+                recorded_as=inbox_folder / p.source.name,
+            )
+        except (ios_backup.DecryptError, OSError) as e:  # a blob that will not decrypt or read while hashing
+            print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
+            sys.exit(1)
         imported += 1
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox_folder, manifest, plans)
@@ -2043,6 +2051,29 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     said = inbox.backup_hint(lb.root, inbox_folder, imported)
     if said is not None:
         print(said)
+
+
+PHOTOS_HASH_MEDIA_ENV = "LOGBOOK_APPLE_PHOTOS_HASH_MEDIA"
+
+
+def _media_digest(manifest: ios_backup.Manifest, source: ios_backup.Source) -> apple_photos.MediaDigest:
+    """For an adapter whose `run` takes `media_digest` (`apple-photos`): the (sha256, bytes) of the
+    file at a path below the phone's `Media/` folder, hashed straight from the backup through
+    `ios_backup.digest` — decrypted on the way when the backup is, never copied — or None when the
+    backup has no such file (an iCloud-optimised library keeps a thumbnail on the phone). Set
+    LOGBOOK_APPLE_PHOTOS_HASH_MEDIA=0 to skip the hashing on a large library."""
+    media_root = PurePosixPath(source.relative_path).parts[0]  # `Media`, of `Media/PhotoData/Photos.sqlite`
+
+    def found(local_path: str) -> tuple[str, int] | None:
+        parts = PurePosixPath(local_path).parts
+        if not parts or any(part in ("..", "", "/") for part in parts):
+            return None
+        f = manifest.file(source.domain, PurePosixPath(media_root, *parts).as_posix())
+        if f is None or f.size is None:
+            return None
+        return ios_backup.digest(f)
+
+    return found
 
 
 def _unlock(manifest: ios_backup.Manifest, inbox_folder: Path) -> None:
