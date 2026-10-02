@@ -39,6 +39,7 @@ from . import (
     ios_backup_crypto,
     judge,
     keepers,
+    listen_rollup,
     mcp_server,
     pages,
     people,
@@ -2858,13 +2859,14 @@ def _reader_days(lb: Logbook, since: str | None, until: str | None) -> tuple[str
 
 
 def cmd_rollup(a: argparse.Namespace) -> None:
-    """`rollup countries|flights|nights|places|people|health [--year YYYY | --since DAY --until DAY]
-    [--by month|week] [--json]`: the record summed up per year from one reading of the window,
+    """`rollup countries|flights|nights|places|people|health|listen [--year YYYY | --since DAY
+    --until DAY] [--by month|week] [--json]`: the record summed up per year from one reading of the window,
     clipped to the days the owner's track covers (the first to the last day with a location line;
     for flights, with any line), so a day outside them is nothing, not a night in transit; or, for
     health, per month or ISO week from the health lines of the window, clipped to the days they
-    cover, with no reading of the track. Every number carries the ids of its lines under --json.
-    Nothing is written."""
+    cover, with no reading of the track; or, for listen, per year with the months inside it from
+    the listen lines of the window (`listen_rollup`), the same way. Every number carries the ids
+    of its lines under --json. Nothing is written."""
     lb = Logbook.find()
     try:
         if a.by and a.what != "health":
@@ -2873,10 +2875,12 @@ def cmd_rollup(a: argparse.Namespace) -> None:
             raise ValueError("--with goes with `rollup places`: the place × person table")
         window = _rollup_days(lb, a)
         if window is None:
-            data = rollup.empty(a.what, a.by or "month")
+            data = listen_rollup.empty() if a.what == "listen" else rollup.empty(a.what, a.by or "month")
         elif a.what == "health":
             tz = str(lb.meta["timezone"])
             data = rollup.health(_health_window(lb, *window), tz, *window, a.by or "month")
+        elif a.what == "listen":
+            data = listen_rollup.listen(_listen_window(lb, *window), str(lb.meta["timezone"]), *window)
         else:
             read = reading.read(lb, window[0], window[1], _airports(a.airports))
             data = rollup.places(read, with_table=a.with_) if a.what == "places" else ROLLUPS[a.what](read)
@@ -2886,8 +2890,15 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     if a.json:
         print(json.dumps(data, indent=2))
         return
-    for text in rollup.rows(data):
+    for text in (listen_rollup.rows if a.what == "listen" else rollup.rows)(data):
         print(text)
+
+
+def _listen_window(lb: Logbook, first: str, last: str) -> list[Line]:
+    """The listen lines whose local day is in `[first, last]`, through the index, with every
+    retraction line."""
+    with lb.index() as idx:
+        return [*idx.by_kind(listen_rollup.KIND, first, last), *idx.retractions()]
 
 
 def _health_window(lb: Logbook, first: str, last: str) -> list[Line]:
@@ -2913,7 +2924,8 @@ def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
     if a.year and (a.since or a.until):
         raise ValueError("give --year, or --since and --until, not both")
     what = str(getattr(a, "what", None) or "")
-    whole = reading.record_days(lb, {"flights": None, "health": health.KIND}.get(what, "location"))
+    kinds = {"flights": None, "health": health.KIND, "listen": listen_rollup.KIND}
+    whole = reading.record_days(lb, kinds.get(what, "location"))
     if whole is None:
         return None
     if a.year:
@@ -3744,9 +3756,10 @@ def main(argv: list[str] | None = None) -> None:
     v.set_defaults(fn=cmd_places)
     s = sub.add_parser(
         "rollup",
-        help="the record per year: countries, flights, nights, places, people; per month or week: health",
+        help="the record per year: countries, flights, nights, places, people, listen;"
+        " per month or week: health",
     )
-    s.add_argument("what", choices=rollup.KINDS, help="what to sum up")
+    s.add_argument("what", choices=(*rollup.KINDS, listen_rollup.KIND), help="what to sum up")
     s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
