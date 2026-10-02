@@ -499,6 +499,18 @@ and which sources spoke and when they last did. A run of stays and moves aboard 
 `aboard <asset>` with the anchorages inside it; a silence of the tracker is a `gap` row that places nothing. `--json`
 gives the Day as one object, every row with the ids of its lines. Nothing is written.
 
+## In a browser
+
+`logbook serve` is the record read in a browser, on this machine only ([docs/serve.md](docs/serve.md)): the Day as a
+timeline with each row's attachments under a toggle (`/day/2026-06-17`), a window one row per day (`/days`), the trips of
+a year (`/trips`), the places, the assets with their last fix, and where each source went quiet — the same readers as the
+commands, rendered as HTML with one inline stylesheet and no script, nothing fetched from anywhere. The server binds
+`127.0.0.1` and refuses any other host; no page references a URL outside itself; nothing is written.
+
+```bash
+logbook serve                                 # http://127.0.0.1:8765/
+```
+
 ## Reading the record
 
 The readers above the day page derive, and never append: every one of them is a function of the record at its
