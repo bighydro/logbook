@@ -717,3 +717,12 @@ def test_cli_add_folder_of_location_files_still_walks_its_files(tmp_path):
     folder.mkdir()
     (folder / "Records.json").write_bytes(RECORDS.read_bytes())
     assert "added 6 lines from google-takeout-location" in run("add", str(folder)).stdout
+
+
+def test_int_reads_ascii_digits_only_and_never_raises_on_other_digit_characters():
+    # str.isdigit() is true of a superscript two, which int() refuses: the helper must use isdecimal().
+    assert photos._int(" 42 ") == 42
+    assert photos._int("²") is None
+    assert photos._int("١٢") == 12  # Arabic-Indic digits are decimal: int() reads them
+    assert photos._int(True) is None
+    assert photos._int(2**53 + 1) is None
