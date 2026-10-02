@@ -150,7 +150,7 @@ logbook repair health-units             # per wrong line a corrected line and a 
 ~/Logbook/
   logbook/          the record. one file per month. append only. never edit.
     2026/09.jsonl
-  inbox/            drop anything here. it gets read, then moved to done/.
+  inbox/            drop anything here. `logbook inbox list` says what was read; `inbox clean` moves or deletes it.
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head.
   policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
@@ -184,6 +184,8 @@ logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.s
 logbook add ios-calls ~/inbox/ios-backup-<udid>/ios-calls/CallHistory.storedata   # the call log, by adapter name
 logbook add health ~/inbox/ios-backup-<udid>/health/healthdb_secure.sqlite   # Apple Health, by adapter name (or apple-health)
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
+logbook inbox list                                # every file under inbox/: size, the import that read it, whether every line is in
+logbook inbox clean --to /Volumes/Archive        # move what is imported in full to an external disk (or --delete it); the rest stays
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message

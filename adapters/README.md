@@ -11,3 +11,15 @@ Rules: pure by default (no network), never write to the source, never invent `ti
 Planned first (ADR 0008): `google-takeout`, `apple-health` (done), then `email` — the last now `mail`, file mode; its live IMAP mode is the next step under ADR 0017.
 
 Wanted — pick one and open an issue with the adapter template: strava, garmin, apple-fitness, eight-sleep, oura, withings, telegram, signal, imap (the live mode of `mail`), google-calendar, flightradar24, notion, obsidian, spotify, apple-music, letterboxd, goodreads, kindle-highlights, twitter-archive, instagram-export, bank-csv (generic, with per-bank mapping files), revolut, paypal, amazon-orders, uber, airbnb, vivino, steam, boat-passage logs.
+
+## Delete after import
+
+An export is read once and then only takes up disk: a Takeout is tens of gigabytes, a phone backup's copies under `inbox/ios-backup-<udid>/` a few more. The record does not need the input again — every line is in `logbook/`, every file worth keeping is in `attachments/` by digest — and `add` and `import-backup` say so with their last line (`inbox: Records.json can be cleaned now …`). Nothing is deleted for you; two commands do it on request:
+
+```bash
+logbook inbox list                        # every file under inbox/: size, the import that read it, whether its lines are all in
+logbook inbox clean --to /Volumes/Archive # move what is imported in full to the external disk, keeping its path under inbox/
+logbook inbox clean --delete --dry-run    # or remove it; --dry-run says what would go and how much, and touches nothing
+```
+
+How `list` knows: a run of `add` or `import-backup` that reaches its end appends one entry to `state/imports.jsonl` (bookkeeping, like the sync watermarks; never the record) — the input, the adapter, how many lines it produced and how many were new, the `seq` span appended and the hash of its last line, the record's `owner_id`, the input's size. A file is *ready* when its run wrote to this record, the file has not changed since (size, and a lone file's modification time), and the run's last line still stands at its `seq` with its hash: the record is append-only, so that line standing means every line before it stands, and a line the run skipped was already there. A run that stopped early (an adapter error, Ctrl-C) records nothing, so its input reads `not imported` and `clean` keeps it, as it keeps a changed file, a file imported into another record and a file already at the destination — each said so with its reason. A store's `-wal`/`-shm` sibling goes with the store; a backup's `copies.json` and decrypted `Manifest.db` go when every other file in their folder has. Adapters need do nothing for this: the CLI records the run, and an adapter that is pure (never writes to its source) leaves the input exactly as it found it, which is what the size and time check relies on.
