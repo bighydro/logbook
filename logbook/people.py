@@ -657,8 +657,8 @@ def page(report: Report, person: Person) -> dict[str, Any]:
 
 def rows(report: Report) -> Iterator[str]:
     """One row per person, most days together first."""
-    n = len(report.people)
-    yield f"{_plural(n, 'person', 'people')} · {report.first} {EN_DASH} {report.last} · tier {report.tier}"
+    head = f"{_plural(len(report.people), 'person', 'people')} · {report.first} {EN_DASH} {report.last}"
+    yield head if report.tier is None else f"{head} · tier {report.tier}"
     width = max((len(p.name) for p in report.people), default=0)
     for p in report.people:
         yield f"  {p.name:<{width}}  {' · '.join(_summary(p))}"

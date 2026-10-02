@@ -220,6 +220,20 @@ def test_an_empty_record_has_no_people(
     assert e.value.code == 2
 
 
+def test_a_record_that_names_nobody_has_no_people_and_no_tier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from persona import HOME, point, utc
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many([point(utc("2026-06-08", "08:00"), HOME)])
+    data = _json(capsys, "people")
+    assert data == {"window": {"since": "2026-06-08", "until": "2026-06-08"}, "tier": None, "people": []}
+    text = _run(capsys, "people")
+    assert text.startswith("0 people") and "None" not in text
+
+
 # -- person -------------------------------------------------------------------------------------------------
 
 
