@@ -42,10 +42,9 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         1,
         "2026-06-14",
     )
-    assert boat["asset"] == BOAT
-    [anchorage] = boat["route"]
-    assert anchorage.startswith("59.85") and "near" not in anchorage, "11 km out: coordinates, no place near"
-    assert "Marina" in boat["places"]
+    assert boat["asset"] == BOAT and boat["nights_aboard"] == {BOAT: 1}
+    assert boat["route"] == ["aboard Solvind"], "a night aboard is a route element, by the asset's name"
+    assert "Marina" in boat["places"], "the berth inside the stay aboard is still a place visited"
     assert [p["id"] for p in boat["people"]] == [OLA_ID]
     assert boat["flights_in"] == [] and boat["flights_out"] == []
     assert (zurich["start"], zurich["end"], zurich["nights"], zurich["until"]) == (
@@ -54,7 +53,7 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
         3,
         "2026-06-18",
     )
-    assert zurich["asset"] is None and zurich["in_transit"] == 0
+    assert zurich["asset"] is None and zurich["in_transit"] == 0 and zurich["nights_aboard"] == {}
     [hotel] = zurich["route"]
     assert hotel.startswith("47.37"), "9 km from the airport and no named place near: the coordinates"
     assert zurich["places"] == [], "no named place in Zürich yet"
@@ -68,7 +67,8 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
     assert all(len(id_) == 36 for id_ in zurich["lines"])
     assert lb.meta["head"] == head, "trips are read, never written"
     text = _run(capsys)
-    assert "2 trips" in text and "aboard solvind" in text and "route 47.37" in text
+    assert "2 trips" in text and "1 night aboard Solvind" in text and "route aboard Solvind" in text
+    assert "route 47.37" in text
     assert "XY 561" in text and "XY 562" in text and "Ola Nordmann" in text and "3 nights" in text
 
 

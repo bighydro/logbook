@@ -12,7 +12,9 @@ hotel is; consecutive points within 200 m of each other collapse into the first)
 named places visited and the people confirmed present (the with module: never the owner, at most
 `WITH_MAX` names, most evidence first) between the first day's midnight and the end of the return
 day, and the flights in (dated the first day) and out (dated the return day, the day after the last
-night). An asset trip is one whose every night was aboard one asset.
+night). A night aboard an asset is a route element `aboard <asset>` (the asset's name, as the
+Day has it), and the trip counts its nights aboard per asset; an asset trip is one whose every
+night was aboard one asset.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
 captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
@@ -22,7 +24,8 @@ can be outside home, so there are no trips and the reader says so."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections import Counter
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -30,6 +33,7 @@ from typing import Any
 from . import flights as flight_lines
 from . import places as named_places
 from . import present, stays
+from .assets import Asset
 from .flights import Airport, Airports
 from .reading import Reading, window_json
 
@@ -54,8 +58,10 @@ class Trip:
     places: list[str]
     people: list[present.Companion]
     flights: list[dict[str, Any]]  # every flight dated inside the trip, in date order
-    asset: str | None
+    asset: str | None  # the asset every night was aboard, when there is one
     lines: list[str] = field(default_factory=list)
+    nights_aboard: dict[str, int] = field(default_factory=dict)  # nights aboard, per asset id
+    names: dict[str, str] = field(default_factory=dict)  # asset id → its name, for the assets aboard
 
     @property
     def id(self) -> str:
@@ -78,6 +84,7 @@ class Trip:
             "nights": self.nights,
             "in_transit": self.in_transit,
             "asset": self.asset,
+            "nights_aboard": dict(self.nights_aboard),
             "route": list(self.route),
             "places": list(self.places),
             "people": [
@@ -122,12 +129,15 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
     first = datetime.combine(date.fromisoformat(start), datetime.min.time(), tzinfo=reading.tz)
     last = datetime.combine(date.fromisoformat(until), datetime.max.time(), tzinfo=reading.tz)
     visited = [s for s in reading.owner_stays if s.start < last and s.end > first]
-    route = route_of([n.stay for n in nights if n.stay is not None], reading.places, reading.airports)
+    route = route_of(
+        [n.stay for n in nights if n.stay is not None], reading.places, reading.airports, reading.assets
+    )
     places = list(dict.fromkeys(s.place for s in visited if s.place and not stays.is_home(s, reading.places)))
     people = _people(visited, reading)
     flights = [f for f in _flights(reading) if start <= f["date"] <= until]
     aboard = {n.stay.aboard for n in nights if n.stay is not None}
     asset = next(iter(aboard)) if len(aboard) == 1 and None not in aboard else None
+    nights_aboard = Counter(n.stay.aboard for n in nights if n.stay is not None and n.stay.aboard)
     lines = [id_ for n in nights for id_ in _stay_lines(n.stay)]
     lines += [id_ for f in flights for id_ in f["lines"]]
     lines += [id_ for c in people for id_ in c.lines]
@@ -143,7 +153,15 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
         flights,
         asset,
         list(dict.fromkeys(lines)),
+        dict(sorted(nights_aboard.items())),
+        {a: asset_name(a, reading.assets) for a in sorted(nights_aboard)},
     )
+
+
+def asset_name(asset_id: str, assets: Mapping[str, Asset]) -> str:
+    """How a trip names an asset: its registry name, the id when the registry does not know it."""
+    asset = assets.get(asset_id)
+    return asset.name if asset else asset_id
 
 
 def _stay_lines(stay: stays.Segment | None) -> list[str]:
@@ -153,16 +171,20 @@ def _stay_lines(stay: stays.Segment | None) -> list[str]:
 
 
 def route_of(
-    night_stays: Sequence[stays.Segment], places: Sequence[named_places.Place], airports: Airports
+    night_stays: Sequence[stays.Segment],
+    places: Sequence[named_places.Place],
+    airports: Airports,
+    assets: Mapping[str, Asset] | None = None,
 ) -> list[str]:
     """The route a trip's night stays make: one label per stay (`_label`), consecutive stays within
-    `MERGE_M` of each other (or of the same name) folded into the first."""
+    `MERGE_M` of each other (or of the same name) folded into the first; nights aboard one asset,
+    wherever it lay, are one element `aboard <asset>`."""
     route: list[str] = []
     last: stays.Segment | None = None
     for stay in night_stays:
         if last is not None and _same_point(last, stay):
             continue
-        label = _label(stay, places, airports)
+        label = _label(stay, places, airports, assets or {})
         if not route or route[-1] != label:
             route.append(label)
         last = stay
@@ -170,6 +192,8 @@ def route_of(
 
 
 def _same_point(a: stays.Segment, b: stays.Segment) -> bool:
+    if a.aboard is not None or b.aboard is not None:
+        return a.aboard == b.aboard
     if a.place is not None or b.place is not None:
         return a.place == b.place
     if a.lat is None or a.lon is None or b.lat is None or b.lon is None:
@@ -177,7 +201,14 @@ def _same_point(a: stays.Segment, b: stays.Segment) -> bool:
     return named_places.distance_m(a.lat, a.lon, b.lat, b.lon) <= MERGE_M
 
 
-def _label(stay: stays.Segment, places: Sequence[named_places.Place], airports: Airports) -> str:
+def _label(
+    stay: stays.Segment,
+    places: Sequence[named_places.Place],
+    airports: Airports,
+    assets: Mapping[str, Asset],
+) -> str:
+    if stay.aboard:
+        return f"aboard {asset_name(stay.aboard, assets)}"
     if stay.place:
         return stay.place
     assert stay.lat is not None and stay.lon is not None
@@ -297,11 +328,18 @@ def rows(reading: Reading, found: Sequence[Trip], warning: str | None) -> Iterat
 
 
 def trip_rows(trip: Trip) -> Iterator[str]:
+    """`1 night aboard Solvind · route aboard Solvind · places Marina · with Ola Nordmann`; a trip
+    with some nights aboard counts them per asset in parentheses, `5 nights (2 aboard Solvind)`."""
     nights = _plural(trip.nights, "night")
+    aside: list[str] = []
     if trip.asset:
-        nights += f" aboard {trip.asset}"
+        nights += f" aboard {trip.names.get(trip.asset, trip.asset)}"
+    else:
+        aside += [f"{n} aboard {trip.names.get(a, a)}" for a, n in trip.nights_aboard.items()]
     if trip.in_transit:
-        nights += f" ({trip.in_transit} in transit)"
+        aside.append(f"{trip.in_transit} in transit")
+    if aside:
+        nights += f" ({', '.join(aside)})"
     parts = [nights, f"route {f' {ARROW} '.join(trip.route)}" if trip.route else "route unknown"]
     for label, flights in (("in", trip.flights_in), ("out", trip.flights_out)):
         for f in flights:

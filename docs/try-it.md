@@ -68,13 +68,14 @@ logbook day 2026-06-17
 
 ```
 2026-06-17  Wednesday
-  night before  aboard Nordlys · away
-  night after   aboard Nordlys · away
+  night before  aboard Nordlys · 59.4300,10.4800 · away
+  night after   aboard Nordlys · 59.0500,10.0300 · away
   country       NO (nearest airport TRF)
 
-  00:00–08:55  stay   59.4300,10.4800 · 8 h 55 min · aboard nordlys · 1 message
-  08:55–14:00  move   49.4 km · 5 h 5 min · car
-  14:00–24:00  stay   59.0500,10.0300 · 10 h · aboard nordlys · 1 note, 1 photo
+  00:00–24:00  aboard Nordlys (yacht) · 24 h · 1 note, 1 message, 1 photo
+      00:00–08:55  stay   59.4300,10.4800 (Sandefjord) · 8 h 55 min
+      08:55–14:00  move   49.4 km · 5 h 5 min · boat
+      14:00–24:00  stay   59.0500,10.0300 (Sandefjord) · 10 h
       note         Anchored by nine. Grilled.
       with         proposed Anders Vik (photo)
 
@@ -84,7 +85,9 @@ logbook day 2026-06-17
 
 One day read back: the nights around it, the country, the stays and moves with what was attached
 to them and who was there, the flights, the health line, and every source's newest line, so a
-tracker's silence is seen. Then every line of the day as the sources wrote it:
+tracker's silence is seen. A day aboard the boat is one stay `aboard Nordlys`, with the anchorage,
+the passage and the next anchorage inside it; the night names the boat and where she lay. Then
+every line of the day as the sources wrote it:
 
 ```bash
 logbook show 2026-06-08             # the morning flight to Zürich
@@ -99,10 +102,11 @@ logbook derive stays --day 2026-06-17
 
 ```
 2026-06-17
-  00:00–08:55    stay  59.4300,10.4800 · 8 h 55 min · 1 message · aboard nordlys
-  08:55–14:00    move  49.4 km · 5 h 5 min · car
-  14:00–08:00+1  stay  59.0500,10.0300 · 18 h · 1 note, 1 photo · aboard nordlys
-  night          59.0500,10.0300 · 14:00–08:00+1 · aboard nordlys
+  00:00–08:00+1  stay  aboard nordlys · 32 h · 1 note, 1 message, 1 photo
+      00:00–08:55    stay  59.4300,10.4800 · 8 h 55 min · 1 message
+      08:55–14:00    move  49.4 km · 5 h 5 min · boat
+      14:00–08:00+1  stay  59.0500,10.0300 · 18 h · 1 note, 1 photo
+  night          aboard nordlys · 59.0500,10.0300 · 00:00–08:00+1
 — nordlys (Nordlys, yacht)
 2026-06-17
   00:00–09:05    stay  59.4300,10.4800 · 9 h 5 min
@@ -111,7 +115,9 @@ logbook derive stays --day 2026-06-17
 ```
 
 Stays, moves and the overnight stay, derived from the points and never written (ADR 0013). The
-owner's track first, then each asset's; a stay that matches the boat's track is *aboard*. A
+owner's track first, then each asset's; when the boat's track lies within the radius of the
+owner's points for twenty minutes or longer the owner is *aboard*, and the run of stays and
+moves aboard is one stay with the run under it ([day.md](day.md), *Aboard an asset*). A
 range: `--since 2026-06-15 --until 2026-06-21`; one subject: `--subject nordlys`; `--json` for
 the numbers.
 

@@ -23,14 +23,17 @@ them is nothing, not a night in transit. Without either, the whole record.
 
 ## Places
 
-`rollup places` is the year per place. For every named place in `places.json` and every asset in
-`assets.json` (an asset's stays are your stays aboard it): the **nights** whose overnight stay is
-there, the **stays**, the **hours**, the **first and last** visit (the first stay's start day, the
-last stay's end day), and **with**, the people confirmed present through the with module, most
-days first. Then the **unnamed** places: your stays at no named place, grouped as `places propose`
-groups them (within 300 m of a group's first stay) and ranked by hours, the top five of the year,
-each under the stay id `places name` takes, so a hotel you keep returning to is one line and one
-command away from a name.
+`rollup places` is the year per place. For every named place in `places.json`: the **nights**
+whose overnight stay is there, the **stays**, the **hours**, the **first and last** visit (the first
+stay's start day, the last stay's end day), and **with**, the people confirmed present through the
+with module, most days first. Then **aboard**, the same per asset in `assets.json`: a stay aboard
+is one run of your stays and moves aboard it, whatever the asset did inside it ([docs/day.md](day.md),
+*Aboard an asset*), its hours the run's whole span, its nights the nights whose overnight stay was
+aboard. Then the **unnamed** places: your stays at no named place — the berths and anchorages
+inside a stay aboard among them, each marked `aboard <asset>` — grouped as `places propose` groups
+them (within 300 m of a group's first stay) and ranked by hours, the top five of the year, each
+under the stay id `places name` takes, so a hotel you keep returning to is one line and one command
+away from a name. A night aboard counts at the anchorage the asset lay at.
 
 ```
 places 2026-06-01 – 2026-06-30
@@ -39,7 +42,8 @@ places 2026-06-01 – 2026-06-30
         Office (other)                              14 stays · 107 h · 2026-06-01 – 2026-06-30 · with Per Hansen, Liv Berg
         Marina (asset-berth)                        1 night · 3 stays · 26.8 h · 2026-06-13 – 2026-06-21 · with Anders Vik, Ola Nordmann, Sigrid Moen
         Cabin (other)                               1 night · 1 stay · 25.9 h · 2026-06-06 – 2026-06-07 · with Ola Nordmann
-        Nordlys (nordlys) (yacht)                   6 nights · 8 stays · 125.4 h · 2026-06-13 – 2026-06-21 · with Anders Vik, Ola Nordmann, Sigrid Moen
+        aboard, by hours (a stay is one run aboard, whatever the asset did inside it):
+        Nordlys (nordlys) (yacht)                   6 nights · 3 stays · 148.4 h · 2026-06-13 – 2026-06-21 · with Anders Vik, Ola Nordmann, Sigrid Moen
         unnamed, by hours (the ids `places name` takes):
         47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58.5 h · 2026-06-08 – 2026-06-11 · with Marta Keller   stay:owner:20260608T0830Z@47.3769,8.5417
         59.0500,10.0300 aboard nordlys (Sandefjord) 2 nights · 2 stays · 40.7 h · 2026-06-17 – 2026-06-19   stay:owner:20260617T1200Z@59.0500,10.0300
@@ -53,8 +57,9 @@ An unnamed place reads as its coordinates; `aboard <asset>` when the stays were 
 within 30 km in parentheses, the rule `trips` and `day` label an unnamed stay by. A place's nights
 are printed when there are any; an asset's always, since zero nights aboard a car is the point.
 
-Under `--json`, each place, asset and unnamed cluster carries `stays`, `hours`, `nights`, `first`,
-`last`, `people` and `lines`; an unnamed cluster also `id`, `lat`, `lon`, `label`, `aboard`,
+Under `--json`, each year has `places`, `aboard` and `unnamed`; each place, asset and unnamed
+cluster carries `stays`, `hours`, `nights`, `first`, `last`, `people` and `lines`; an asset also
+`asset`, `name` and `kind`; an unnamed cluster also `id`, `lat`, `lon`, `label`, `aboard`,
 `nearest` (`{name, kind, metres}`, the closest named place whatever the distance) and `city`. Each
 person under `people` carries their `stays`, `days` and `nights` at that place and the `lines`
 that put them there. `unnamed_top` says how many clusters a year lists.

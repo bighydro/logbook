@@ -2251,8 +2251,9 @@ def _plural(n: int, noun: str, plural: str | None = None) -> str:
 
 def cmd_derive(a: argparse.Namespace) -> None:
     """`derive stays`: the location lines of a window read into stays, stops and moves, the owner's
-    first and every asset's after (ADR 0018), the owner's stays marked aboard where an asset's
-    track matches, and the overnight stay of each day; a table in local time, or JSON. The window
+    first and every asset's after (ADR 0018), the owner's run of stays and moves aboard an asset
+    one stay `aboard <asset>` with the run inside it (`stays.fold`), and the overnight stay of each
+    day, a night aboard with the asset's position; a table in local time, or JSON. The window
     runs from the first day's midnight to the night's end after the last day, so the night is
     inside it. Read through the index. The only thing written is `policy/stays.json` with the
     defaults, on the first run and never again; `--dry-run` writes nothing at all. Never a line:
@@ -2288,7 +2289,10 @@ def cmd_derive(a: argparse.Namespace) -> None:
             )
             sys.exit(2)
         subjects = [wanted]
-    segments = [s for s in derived.segments if s.subject in subjects]
+    segments = [
+        *(derived.folded if None in subjects else []),
+        *(s for s in derived.segments if s.subject is not None and s.subject in subjects),
+    ]
     nights = read.nights if None in subjects else []
     if a.json:
         out = {
@@ -2333,7 +2337,8 @@ def _stays_rows(
     tz: ZoneInfo,
 ) -> Iterator[str]:
     """One section per subject (the owner unheaded, an asset headed by its id and registry entry),
-    each day's rows under its date, the owner's night after each day's rows."""
+    each day's rows under its date, a stay aboard an asset with its run indented under it, the
+    owner's night after each day's rows."""
     by_night = {n.day: n for n in nights}
     for subject in subjects:
         mine = [s for s in segments if s.subject == subject]
@@ -2349,13 +2354,16 @@ def _stays_rows(
                 yield day
                 for s in rows:
                     yield _segment_row(s, tz)
+                    for inner in s.inside:
+                        yield _segment_row(inner, tz, inside=True)
             elif day in days:
                 yield f"{day}: no location lines"
             if subject is None and day in by_night:
                 yield _night_row(by_night[day], tz)
 
 
-def _segment_row(s: stays.Segment, tz: ZoneInfo) -> str:
+def _segment_row(s: stays.Segment, tz: ZoneInfo, inside: bool = False) -> str:
+    """One row; an `inside` row is part of a stay aboard and does not repeat the asset's name."""
     parts: list[str]
     if s.kind == stays.MOVE:
         parts = [_distance_text(s.distance_m or 0), _duration_text(s.duration_s), s.mode or "gap"]
@@ -2369,16 +2377,22 @@ def _segment_row(s: stays.Segment, tz: ZoneInfo) -> str:
             parts.append("nothing attached")
         if s.promoted:
             parts.append("promoted")
-    if s.aboard:
+    if s.aboard and not s.inside and not inside:
         parts.append(f"aboard {s.aboard}")
-    return f"  {_span(s.start, s.end, tz):<14} {s.kind:<5} {' · '.join(parts)}"
+    indent = "      " if inside else "  "
+    return f"{indent}{_span(s.start, s.end, tz):<14} {s.kind:<5} {' · '.join(parts)}"
 
 
 def _night_row(n: stays.Night, tz: ZoneInfo) -> str:
+    """The night's stay, a night aboard with the asset's position (where it lay for the longest
+    part of the night)."""
     if n.stay is None:
         return "  night          in transit"
-    parts = [_where(n.stay), _span(n.stay.start, n.stay.end, tz)]
-    if n.stay.aboard:
+    parts = [_where(n.stay)]
+    if n.stay.aboard and n.position is not None:
+        parts.append(f"{n.position[0]:.4f},{n.position[1]:.4f}")
+    parts.append(_span(n.stay.start, n.stay.end, tz))
+    if n.stay.aboard and not n.stay.inside:
         parts.append(f"aboard {n.stay.aboard}")
     if n.home:
         parts.append("home")
@@ -2386,6 +2400,9 @@ def _night_row(n: stays.Night, tz: ZoneInfo) -> str:
 
 
 def _where(s: stays.Segment) -> str:
+    """A stay's place: `aboard <asset>` for a stay aboard one, else its name, else its centre."""
+    if s.inside:
+        return f"aboard {s.aboard}"
     if s.place:
         return s.place
     assert s.lat is not None and s.lon is not None

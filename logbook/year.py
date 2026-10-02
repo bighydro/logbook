@@ -218,7 +218,7 @@ def _places(rd: Reading, year: str) -> dict[str, Any]:
 
     return {
         "places": by_nights(found["places"], "place", "kind"),
-        "assets": by_nights(found["assets"], "asset", "name", "kind"),
+        "assets": by_nights(found["aboard"], "asset", "name", "kind"),  # the rollup calls them aboard
         "unnamed": by_nights(found["unnamed"], "id", "label", "lat", "lon", "aboard", "city"),
     }
 

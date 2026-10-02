@@ -236,13 +236,16 @@ def test_places_rollup_counts_stays_hours_nights_visits_and_company(
     assert len(office["lines"]) == 16
     marina = by_name["Marina"]
     assert marina["kind"] == "asset-berth" and marina["stays"] == 2 and marina["nights"] == 0
-    [solvind] = year["assets"]
-    assert solvind["asset"] == BOAT and solvind["name"] == "Solvind"
-    assert solvind["stays"] == 3 and solvind["hours"] > 26 and solvind["nights"] == 1
+    [solvind] = year["aboard"]
+    assert solvind["asset"] == BOAT and solvind["name"] == "Solvind" and solvind["kind"] == "yacht"
+    assert solvind["stays"] == 1, "one run aboard: the berth, the passage and the anchorage are inside it"
+    assert 31 < solvind["hours"] < 32 and solvind["nights"] == 1
+    assert (solvind["first"], solvind["last"]) == ("2026-06-13", "2026-06-14")
     [aboard_ola] = solvind["people"]
     assert aboard_ola["id"] == OLA_ID and aboard_ola["nights"] == 1, "the note at anchor, the night at anchor"
     text = _run(capsys, "places")
-    assert "Home" in text and "10 nights" in text and "Solvind" in text and "Ola Nordmann" in text
+    assert "Home" in text and "10 nights" in text and "Solvind (solvind) (yacht)" in text
+    assert "aboard, by hours" in text and "Ola Nordmann" in text
 
 
 def test_places_rollup_lists_the_top_unnamed_clusters(

@@ -485,8 +485,10 @@ seen. In `policy/stays.json`, `merge_gap_s` (600 s by default) governs an excurs
 place: step outside the radius and come back within it and the stay is one; come back later and it is two
 stays with a move between. A gap of `merge_gap_s` or more is a silence, and `walk_max_kmh` for `merge_gap_s`
 is the hop a silence may end with and still count as time at the place. An asset registered in
-`assets.json` (ADR 0018) gets its own stays and moves, and a stay of yours that matches its position is
-marked `aboard`.
+`assets.json` (ADR 0018) gets its own stays and moves; when its position lies within the radius of yours for
+`aboard_min_s` (20 minutes) or longer you are aboard it, and the run of your stays and moves aboard it is one
+stay `aboard <asset>` with the run inside it, so the asset's movement never fragments your stay
+([docs/day.md](docs/day.md), *Aboard an asset*). A night aboard names the asset and carries its position.
 
 ## The Day
 
