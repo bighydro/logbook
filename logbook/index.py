@@ -402,6 +402,47 @@ class Index:
                 found += 1
         return {"referenced": referenced, "lines": lines, "present": found}
 
+    def activity(self, first_day: str, last_day: str) -> list[dict[str, Any]]:
+        """Per source, most lines first, over the lines whose local day is in [first_day, last_day]
+        (`sources --gaps`): lines, first and last `at`, the local days with a line, and the longest
+        stretch between two consecutive lines as its (from, to) stamps, None for a source with one
+        line. Three SELECTs over the columns, nothing read from the files; the stretch is one window
+        query (LAG over each source's lines in `at` order), and SQLite's rule that bare columns
+        beside max() come from the row holding the maximum picks the pair."""
+        cut = (first_day, last_day)
+        totals = self.db.execute(
+            "SELECT source, count(*), min(at), max(at) FROM lines WHERE day_local BETWEEN ? AND ?"
+            " GROUP BY source ORDER BY count(*) DESC, source",
+            cut,
+        ).fetchall()
+        days: dict[str, list[str]] = {}
+        for source, day in self.db.execute(
+            "SELECT source, day_local FROM lines WHERE day_local BETWEEN ? AND ?"
+            " GROUP BY source, day_local ORDER BY source, day_local",
+            cut,
+        ):
+            days.setdefault(str(source), []).append(str(day))
+        stretches = {
+            str(source): (str(start), str(end))
+            for source, start, end, _days in self.db.execute(
+                "SELECT source, prev, at, max(julianday(at) - julianday(prev)) FROM ("
+                " SELECT source, at, lag(at) OVER (PARTITION BY source ORDER BY at) AS prev"
+                " FROM lines WHERE day_local BETWEEN ? AND ?) WHERE prev IS NOT NULL GROUP BY source",
+                cut,
+            )
+        }
+        return [
+            {
+                "source": str(source),
+                "lines": int(n),
+                "first": str(first),
+                "last": str(last),
+                "days": days.get(str(source), []),
+                "stretch": stretches.get(str(source)),
+            }
+            for source, n, first, last in totals
+        ]
+
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
         """Which of these (source, raw_id) keys the log already has: one SELECT for the batch,
         through a temp table so a batch of any size stays one statement."""
