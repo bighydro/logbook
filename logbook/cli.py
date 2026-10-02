@@ -49,7 +49,7 @@ from . import (
 )
 from .adapters import ios_contacts
 from .adapters.takeout import places as takeout_places
-from .chain import Line
+from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
 from .index import local_date
 from .resolve import Ref, labels
@@ -1334,9 +1334,32 @@ def _line_row(
             or p.get("title")
             or p.get("name")
             or p.get("url")
-            or ", ".join(f"{k}={v}" for k, v in p.items() if k != "schema")
+            or ", ".join(f"{k}={_value_text(v)}" for k, v in p.items() if k != "schema")
         )
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+
+
+def _value_text(value: object) -> str:
+    """A payload value in the generic row: a string as itself, anything else as `_value_repr`."""
+    return value if isinstance(value, str) else _value_repr(value)
+
+
+def _value_repr(value: object) -> str:
+    """Python's repr of a JSON value, except that a number is spelled as RFC 8785 writes it
+    (`chain.number_text`): `100000000000000000000`, not the stored `1e+20`; `0.000001`; `120`. The
+    row then depends on the value alone, never on the text the writer chose, so another
+    implementation can print the same row from the same record (SPEC §3.2)."""
+    if value is None:
+        return "None"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, int | float):
+        return number_text(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_value_repr(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ", ".join(f"{_value_repr(k)}: {_value_repr(v)}" for k, v in value.items()) + "}"
+    return repr(value)
 
 
 def _crossing_text(p: dict[str, Any]) -> str:
@@ -1527,7 +1550,12 @@ def _message_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     else the name the source showed for it (`sender.name`), else the direct chat's own name, else
     the ref as given. A group is its name, else its id: a chat is not an entity (RFC 0006), so its
     id is never looked up. Raw (`names` None): the ref."""
-    chat = p.get("chat") or {}
+    chat = p.get("chat")
+    if isinstance(chat, str):
+        # SPEC §3.2: a string `chat` (the conformance sample's shape, before RFC 0008) is a direct chat's name
+        chat = {"type": "direct", "name": chat}
+    elif not isinstance(chat, dict):
+        chat = {}
     chat_id = str(chat.get("id") or "")
     direct = chat.get("type") == "direct"
     chat_name = str(chat.get("name") or "")
@@ -1606,8 +1634,12 @@ def _attendee(attendee: object, names: Mapping[Ref, str] | None) -> str:
 
 
 def _run_row(run: list[Line], tz: ZoneInfo) -> str:
-    """Time span, count, and the first and last named place of a run of location points."""
-    first, last = _clock(run[0]["at"], tz), _clock(run[-1]["at"], tz)
+    """Time span, count, and the first and last named place of a run of location points. The span
+    ends at the last point's `end` when it has one, else at its `at` (SPEC §3.2); one point is a row
+    of its own and prints its `at`, as every other row does."""
+    until = run[-1].get("end") if len(run) > 1 else None
+    first = _clock(run[0]["at"], tz)
+    last = _clock(until, tz) if isinstance(until, str) else _clock(run[-1]["at"], tz)
     span = first if first == last else f"{first}{EN_DASH}{last}"
     n = len(run)
     text = f"{n:,} point{'s' if n != 1 else ''}"

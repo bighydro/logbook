@@ -710,3 +710,138 @@ def test_show_reads_a_string_attendee_as_an_email_ref_and_never_fails(tmp_path: 
     assert named.meta["seq"] == 2
     rows = _show(capsys)
     assert any("with Ines, 7" in r for r in rows), rows
+
+
+# -- SPEC §3.2 on the conformance sample (SPEC-QUESTIONS 24, 25, 27 and 40 of logbook-ts) ----------
+
+SAMPLE = ROOT / "conformance" / "sample-logbook"
+
+
+def _sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    """A copy of the conformance sample, so the index `show` builds never lands in the repository."""
+    shutil.copytree(SAMPLE, tmp_path / "sample")
+    monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "sample"))
+    return Logbook(tmp_path / "sample")
+
+
+def test_show_run_ends_at_the_last_points_end_when_it_has_one(tmp_path: Path, monkeypatch, capsys):
+    """SPEC §3.2: a collapsed run spans from the first point's `at` to the last point's `end` when
+    that is not null, else to its `at`. The conformance sample's first day has such a run."""
+    first = _location(f"{DAY}T07:30:00Z", source="sim-phone")
+    second = _location(f"{DAY}T08:05:00Z", source="sim-phone")
+    second["end"] = f"{DAY}T08:40:00Z"
+    _fresh(tmp_path, monkeypatch, [first, second])
+    rows = _show(capsys)
+    assert rows[1].startswith(f"  08:30{DASH}09:40  location   sim-phone      2 points"), rows
+    # an `end` on a point that is not the last says nothing about the run
+    third = _location(f"{DAY}T09:00:00Z", source="sim-phone")
+    _fresh(tmp_path / "three", monkeypatch, [first, second, third])
+    rows = _show(capsys)
+    assert rows[1].startswith(f"  08:30{DASH}10:00  location   sim-phone      3 points"), rows
+
+
+def test_show_a_run_of_one_point_prints_its_clock_only_even_with_an_end(tmp_path: Path, monkeypatch, capsys):
+    """One point is a row of its own, and a row prints its `at`, as every other kind's row does."""
+    point = _location(f"{DAY}T07:30:00Z", source="sim-phone")
+    point["end"] = f"{DAY}T08:40:00Z"
+    _fresh(tmp_path, monkeypatch, [point])
+    rows = _show(capsys)
+    assert rows[1].startswith("  08:30  location   sim-phone      1 point"), rows
+
+
+def test_show_generic_row_writes_numbers_as_the_spec_does(tmp_path: Path, monkeypatch, capsys):
+    """A payload without a renderer prints `key=value`; a number is spelled as RFC 8785 (SPEC §3)
+    writes it, by value and never by the text the writer stored: `100000000000000000000`, not
+    `1e+20`; `0.000001`, not `1e-06`; `120`, not `120.0`. Everything else keeps Python's spelling."""
+    sleep = {
+        "at": f"{DAY}T22:30:00Z",
+        "end": f"{DAY}T23:45:00Z",
+        "source": "sim-watch",
+        "kind": "sleep",
+        "tier": 3,
+        "payload": {
+            "schema": "health-sample/v1",
+            "metric": "sleep",
+            "hours": 8.25,
+            "alt_m": 120.0,
+            "zero": 0.0,
+            "big": 12345678901234567890123,
+            "calibration": {"gain": 1e21, "offset": 1e20, "epsilon": 1e-06},
+            "flags": [True, None, "it's", -0.5],
+        },
+    }
+    _fresh(tmp_path, monkeypatch, [sleep])
+    rows = _show(capsys)
+    expected = (
+        "alt_m=120, big=12345678901234567890123, "
+        "calibration={'epsilon': 0.000001, 'gain': 1e+21, 'offset': 100000000000000000000}, "
+        'flags=[True, None, "it\'s", -0.5], hours=8.25, metric=sleep, zero=0'
+    )
+    assert rows[1] == f"  23:30  sleep      sim-watch      {expected}", rows
+
+
+def test_show_reads_a_string_chat_as_a_direct_chats_name_and_never_fails(tmp_path: Path, monkeypatch, capsys):
+    """The conformance sample's 2026-03-06 has `chat: "Ines"`, the shape before RFC 0008; SPEC §3.2
+    reads it as a direct chat's name and SPEC §5 forbids failing on it. With nothing naming the
+    sender, the chat's name stands in; `from_me` says `me → Ines`; `--raw` prints the ref only."""
+    message = {
+        "at": f"{DAY}T19:30:00Z",
+        "source": "sim-messages",
+        "kind": "message",
+        "tier": 2,
+        "payload": {
+            "schema": "message/v1",
+            "chat": "Ines",
+            "direction": "in",
+            "text": "Landed? Dinner Sunday?",
+        },
+    }
+    mine = {
+        **message,
+        "at": f"{DAY}T19:40:00Z",
+        "payload": {**message["payload"], "from_me": True, "text": "Yes, Sunday."},
+    }
+    odd = {**message, "at": f"{DAY}T19:50:00Z", "payload": {**message["payload"], "chat": 7, "text": "?"}}
+    _fresh(tmp_path, monkeypatch, [message, mine, odd])
+    rows = _show(capsys)
+    assert rows[1] == "  20:30  message    sim-messages   Ines: Landed? Dinner Sunday?", rows
+    assert rows[2] == "  20:40  message    sim-messages   me → Ines: Yes, Sunday.", rows
+    assert rows[3] == "  20:50  message    sim-messages    in : ?", rows
+    cli.main(["show", DAY, "--raw"])
+    raw = capsys.readouterr().out.splitlines()
+    assert raw[1] == "  20:30  message    sim-messages   : Landed? Dinner Sunday?", raw
+    assert raw[2] == "  20:40  message    sim-messages   me → Ines: Yes, Sunday.", raw
+
+
+def test_show_reads_the_conformance_samples_first_day_as_spec_3_2_says(tmp_path: Path, monkeypatch, capsys):
+    """2026-03-01 of `conformance/sample-logbook`, the day logbook-ts could not diff against this
+    reader (SPEC-QUESTIONS 40): the run ends at the second point's `end`, and the sleep line's
+    calibration prints its numbers as RFC 8785 spells them. Pinned whole, as the cross-implementation
+    fixture is."""
+    _sample(tmp_path, monkeypatch)
+    assert _show(capsys, "2026-03-01") == [
+        "2026-03-01",
+        "  hero  IMG_0001.jpg",
+        f"  08:30{DASH}09:40  location   sim-phone      2 points",
+        "  10:00  event      sim-calendar   Coffee with Ines · with ines@example.org",
+        "  10:12  photo      sim-camera     camera=SimPhone 3, file=IMG_0001.jpg, lat=59.913, lon=10.742",
+        "  10:12  keeper     keeper-inference hero photo (memory): IMG_0001.jpg",
+        "  22:00  note       manual         Ines is moving to Tromsø in May. "
+        "Ask her about the northern lights trip.",
+        "  23:30  sleep      sim-watch      calibration={'epsilon': 0.000001, 'gain': 1e+21, "
+        "'offset': 100000000000000000000}, hours=8.25, metric=sleep",
+    ]
+
+
+def test_show_reads_the_conformance_samples_string_chat_day(tmp_path: Path, monkeypatch, capsys):
+    """2026-03-06 of `conformance/sample-logbook`: one message whose `chat` is the string `Ines`."""
+    _sample(tmp_path, monkeypatch)
+    assert _show(capsys, "2026-03-06") == [
+        "2026-03-06",
+        "  20:30  message    sim-messages   Ines: Landed? Dinner Sunday?",
+    ]
+    cli.main(["show", "2026-03-06", "--raw"])
+    assert capsys.readouterr().out.splitlines() == [
+        "2026-03-06",
+        "  20:30  message    sim-messages   : Landed? Dinner Sunday?",
+    ]
