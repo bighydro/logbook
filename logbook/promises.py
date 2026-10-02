@@ -50,6 +50,7 @@ DIARIZER = re.compile(
 )  # `Speaker A`, `Speaker 2`
 QUOTE_WIDTH = 100
 ID_WIDTH = 16
+CONTEXT = 2  # sentences either side of a candidate that a judge sees
 
 
 # -- the matches ---------------------------------------------------------------------------------------
@@ -360,8 +361,19 @@ class Speaker:
 
 
 @dataclass(frozen=True)
+class Said:
+    """One sentence of the text around a candidate, with who said it as the report names them
+    (`you`, a resolved label, a diarizer's label, `?`)."""
+
+    speaker: str
+    text: str
+
+
+@dataclass(frozen=True)
 class Proposal:
-    """One promise as proposed: where it was read, who said it, what, and when it may be due."""
+    """One promise as proposed: where it was read, who said it, what, and when it may be due; the
+    `CONTEXT` sentences before and after it in the same transcript or note, across turns, and the
+    names the record resolves in that line (its speakers and participants, the owner among them)."""
 
     id: str
     day: str
@@ -376,6 +388,9 @@ class Proposal:
     match: Match
     due: str | None
     closed_by: str | None = None
+    before: tuple[Said, ...] = ()
+    after: tuple[Said, ...] = ()
+    names: tuple[str, ...] = ()
 
     @property
     def status(self) -> str:
@@ -486,13 +501,24 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
             )
         title = payload.get("title")
         day = local_date(str(line["at"]), tz)
+        names = _names(participants, spoken_by, identities, owner, owner_label)
+        said = [
+            Said(spoken_by[turn.speaker].display(), sentence)
+            for turn in turns
+            for sentence in sentences(turn.text)
+        ]
+        at_sentence = 0
         for turn in turns:
             speaker = spoken_by[turn.speaker]
+            own = sentences(turn.text)
             for match in extractor(turn.text):
                 pid = proposal_id(str(line["id"]), match.quote)
                 if pid in seen:
                     continue
                 seen.add(pid)
+                where = at_sentence + own.index(match.quote) if match.quote in own else None
+                before = () if where is None else tuple(said[max(0, where - CONTEXT) : where])
+                after = () if where is None else tuple(said[where + 1 : where + 1 + CONTEXT])
                 due = match.due
                 if due is None and match.due_phrase:
                     resolved = due_of(match.due_phrase, date.fromisoformat(day))
@@ -512,8 +538,12 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
                         match,
                         due,
                         closed.get(pid),
+                        before,
+                        after,
+                        names,
                     )
                 )
+            at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
     return Report(proposals, skipped, describe(extractor), since)
 
@@ -524,6 +554,25 @@ def _direction(speaker: Speaker) -> str | None:
     if speaker.person is not None:
         return OWED_TO_OWNER
     return None
+
+
+def _names(
+    participants: Sequence[Any],
+    spoken_by: Mapping[str | None, Speaker],
+    identities: Mapping[Ref, Identity],
+    owner: present.Owner,
+    owner_label: str | None,
+) -> tuple[str, ...]:
+    """The names the record resolves in one line: every speaker's and participant's label when a
+    person is behind it, the owner's included; sorted, each once."""
+    found = {who.label for who in spoken_by.values() if who.label and (who.person or who.owner)}
+    for participant in participants:
+        name = participant.get("name") if isinstance(participant, dict) else None
+        if isinstance(name, str) and name.strip():
+            who = speaker_of(name, participants, identities, owner, owner_label)
+            if who.label and (who.person or who.owner):
+                found.add(who.label)
+    return tuple(sorted(found))
 
 
 def _known(

@@ -552,3 +552,36 @@ def test_a_turn_the_source_gave_the_owner_whose_text_names_another_speaker_is_th
     assert tide is not None and tide.owner and tide.person == OWNER_ID
     pay = found["I'll pay the yard."].speaker  # the owner only when the label resolves to the owner
     assert pay is not None and pay.owner and pay.spoken == "me"
+
+
+# -- the context -------------------------------------------------------------------------------------
+
+
+def test_a_proposal_carries_the_two_sentences_either_side_with_their_speakers_and_the_names(
+    lb: Logbook,
+) -> None:
+    found = _by_quote(promises.extract(lb))
+    crane = found["I will book the crane for next week."]
+    assert [(s.speaker, s.text) for s in crane.before] == [
+        ("Ola Nordmann", "I'll send you the mooring photos by Friday."),
+        ("you", "Good."),
+    ]
+    assert [(s.speaker, s.text) for s in crane.after] == [
+        ("Ola Nordmann", "Will you be at the marina on Saturday?"),
+        ("you", "Let me check the forecast first."),
+    ]
+    assert crane.names == ("Ines Nordmann", "Ola Nordmann")
+    first = found["I'll send you the mooring photos by Friday."]
+    assert [s.text for s in first.before] == ["The mooring lines are fine."]
+    assert len(first.after) == 2
+    last = found["Let me check the forecast first."]
+    assert last.after == () and len(last.before) == 2
+    tromso = found["We will see."]  # across turns of a JSON transcript, with the diarizer's label
+    assert [(s.speaker, s.text) for s in tromso.before] == [
+        ("Kari Nordmann", "Ich melde mich bis Montag wegen Tromsø."),
+        ("you", "Ich schicke dir die Liste morgen."),
+    ]
+    assert tromso.names == ("Ines Nordmann", "Kari Nordmann")
+    pump = found["I need to order the new bilge pump next week."]  # a note: its own sentences, the owner
+    assert [(s.speaker, s.text) for s in pump.before] == [("you", "Anchored in the bay.")]
+    assert pump.after == () and pump.names == ("Ines Nordmann",)
