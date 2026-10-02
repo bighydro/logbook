@@ -40,8 +40,10 @@ The rules:
 - The owner is aboard an asset when the asset's own positions lie within the radius of the
   owner's points for `aboard_min_s` (20 minutes by default) or longer: during a stay, the asset's
   points in that span within the stay's radius, measured from the first such point to the last;
-  during a move, at least half the owner's points with an asset position within the radius at
-  nearly the same instant (`aboard_window_s`), measured across the matched points. A run of
+  during a move, at least half the owner's points within the radius of the asset's position at
+  that instant — read between the asset's two fixes around it when they are no more than twice
+  `aboard_window_s` apart (an AIS fix every ten minutes places a boat under way well enough), else
+  the nearest fix within `aboard_window_s` — measured across the matched points. A run of
   consecutive segments matched to one asset is aboard it when the matched time adds up to the
   minimum; a boat that passes the quay once is not boarded. Aboard is the owner's relation to the
   asset (ADR 0018 rule 3); an asset's own segments never carry it.
@@ -104,7 +106,7 @@ class Settings:
     walk_max_kmh: float = 7.0
     car_max_kmh: float = 130.0
     flight_min_kmh: float = 150.0
-    aboard_window_s: int = 300  # an asset position this close in time can match an owner point
+    aboard_window_s: int = 300  # how far from an asset fix, in time, its position is still trusted
     aboard_min_s: int = 1200  # the asset within the owner's radius this long, and the owner is aboard
 
     def to_json(self) -> dict[str, Any]:
@@ -671,24 +673,29 @@ def _mode(
     return "train"
 
 
-def _nearest_in_time(track: Sequence[Point], at: datetime, window_s: int) -> Point | None:
-    """The asset point closest in time to `at`, when one is within the window (binary search)."""
-    lo, hi = 0, len(track)
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if track[mid].at < at:
-            lo = mid + 1
-        else:
-            hi = mid
-    best: Point | None = None
-    for j in (lo - 1, lo):
-        if 0 <= j < len(track):
-            p = track[j]
-            if abs((p.at - at).total_seconds()) <= window_s and (
-                best is None or abs((p.at - at).total_seconds()) < abs((best.at - at).total_seconds())
-            ):
-                best = p
-    return best
+def _position_at(
+    track: Sequence[Point], instants: Sequence[datetime], at: datetime, window_s: int
+) -> tuple[float, float] | None:
+    """Where the asset was at `at`: on the line between its last fix at or before `at` and its first
+    fix after, when those are no more than `2 * window_s` apart (so the instant is within the window
+    of at least one of them); else at the nearer of the two when that is within the window; else
+    unknown. Binary search on `instants`, the track's instants in order."""
+    i = bisect_right(instants, at)
+    before = track[i - 1] if i > 0 else None
+    after = track[i] if i < len(track) else None
+    if before is not None and after is not None:
+        gap = (after.at - before.at).total_seconds()
+        if gap <= 2 * window_s:
+            f = (at - before.at).total_seconds() / gap if gap > 0 else 0.0
+            return before.lat + (after.lat - before.lat) * f, before.lon + (after.lon - before.lon) * f
+    nearest = min(
+        (p for p in (before, after) if p is not None),
+        key=lambda p: abs((p.at - at).total_seconds()),
+        default=None,
+    )
+    if nearest is None or abs((nearest.at - at).total_seconds()) > window_s:
+        return None
+    return nearest.lat, nearest.lon
 
 
 def _aboard(
@@ -754,9 +761,9 @@ def _matched_s(
     """How long the asset was within the radius of the owner during the segment, in seconds; None
     when it was not there at all. For a stay or stop: the asset's points in the span within the
     radius of the stay's centre, from the first such point to the last (one point is 0 s: a boat
-    passing the quay). For a move: when at least half the owner's points have an asset point
-    within the radius at nearly the same instant (`aboard_window_s`), the span of the matched
-    points; else None. Both tracks are in time order and `*_instants` are their instants, so the
+    passing the quay). For a move: when at least half the owner's points lie within the radius of
+    the asset's position at their instant (`_position_at`), the span of the matched points; else
+    None. Both tracks are in time order and `*_instants` are their instants, so the
     points of a span are found by binary search (two years of a track is a million points; a span
     is minutes)."""
     if segment.kind != MOVE:
@@ -773,8 +780,8 @@ def _matched_s(
         return None
     hits: list[datetime] = []
     for p in mine:
-        q = _nearest_in_time(asset, p.at, settings.aboard_window_s)
-        if q is not None and distance_m(p.lat, p.lon, q.lat, q.lon) <= settings.radius_m:
+        q = _position_at(asset, asset_instants, p.at, settings.aboard_window_s)
+        if q is not None and distance_m(p.lat, p.lon, q[0], q[1]) <= settings.radius_m:
             hits.append(p.at)
     if len(hits) * 2 < len(mine):
         return None
