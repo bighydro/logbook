@@ -392,6 +392,8 @@ SKIP_PHRASES = {
     "skipped_already_resolved": "already resolved in the record",
     "skipped_no_lid": "without a linked-device id",
     "skipped_no_phone": "without a usable phone number",
+    "skipped_audiobook": "of an audiobook (RFC 0019 has tracks and episodes)",
+    "skipped_not_a_play": "not a play (a start, a lyric view)",
     "skipped_duplicate_lid": "with a linked-device id already seen",
     "skipped_status": "in a status chat",
     "skipped_bad_date": "with an unusable date",

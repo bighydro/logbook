@@ -124,6 +124,8 @@ BUILT_IN = (
     "myfitnesspal",
     "sbb",
     "passages",
+    "spotify",
+    "apple_music",
 )
 
 
@@ -217,6 +219,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "photos": "apple-photos",
     # `add takeout-<product> <folder>`: the Google Takeout sub-adapters by their short names
     **{f"takeout-{short}": f"google-takeout-{short}" for short in TAKEOUT},
+    "music": "apple-music",
 }
 
 

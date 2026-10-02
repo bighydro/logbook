@@ -63,6 +63,8 @@ apple-photos = "logbook.adapters.apple_photos"
 withings = "logbook.adapters.withings"
 myfitnesspal = "logbook.adapters.myfitnesspal"
 sbb = "logbook.adapters.sbb"
+spotify = "logbook.adapters.spotify"
+apple-music = "logbook.adapters.apple_music"
 
 [dependency-groups]
 dev = [
