@@ -557,10 +557,14 @@ def _together(
         night = stays.night(track.stays, day, tz, track.settings, track.places)
         if night.stay is None:
             continue
+        # a night aboard is at the stay aboard, one run of the owner's stays folded (`stays.fold`):
+        # the person was confirmed at one of the stays inside it, and that is the night under one roof
+        slept = (night.stay, *night.stay.inside)
         for person in people.values():
-            at_night = person.shared.get((day, night.stay.id))
-            if at_night is not None:
-                at_night.night = day
+            for stay in slept:
+                at_night = person.shared.get((day, stay.id))
+                if at_night is not None:
+                    at_night.night = day
 
 
 def _where(stay: stays.Segment, places: list[named_places.Place], airports: Airports) -> str:
