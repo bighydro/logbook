@@ -24,7 +24,9 @@ from logbook.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "rfcs" / "0014-health-sample-v1.md"
-EXPORT = ROOT / "tests" / "fixtures" / "withings" / "export"
+EXPORT = (
+    ROOT / "tests" / "fixtures" / "withings" / "download"
+)  # not `export/`, which .gitignore keeps for day packages
 TZ = "Europe/Oslo"
 LINES = 40  # 14 body composition, 2 pulse, 2 nights, 10 stages, 4 heart rates, 4+2+1 buckets, 1 workout
 

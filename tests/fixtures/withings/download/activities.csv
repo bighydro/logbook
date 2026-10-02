@@ -1,0 +1,2 @@
+from,to,Timezone,Type,Data
+2026-06-09T18:00:00+02:00,2026-06-09T18:45:00+02:00,Europe/Oslo,Running,"{""steps"":5400,""calories"":410,""distance"":6200}"
