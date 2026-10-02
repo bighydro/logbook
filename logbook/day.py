@@ -37,7 +37,8 @@ What a Day shows, in order:
    silent.
 4. The health line (`health.summary`): the night's sleep in hours, the day's steps, the resting
    heart rate, from the `health-sample/v1` lines standing, a correction superseding what it
-   corrects.
+   corrects. Then, when the day has a `transaction/v1` line, the spend line (`ledger.spend`): the
+   totals per currency in the lines' own currencies, how many transactions, the merchants.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent at 14:02 is seen to have.
 
@@ -52,7 +53,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
-from . import events, health, keepers, present, reading, stays, trips
+from . import events, health, keepers, ledger, present, reading, stays, trips
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -139,6 +140,7 @@ def of_reading(
         "flights": flights,
         "unplaced": _unplaced(folded, stands_for, entries, tz),
         "health": health_row,
+        "spend": ledger.spend(lines, day),
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
 
@@ -641,6 +643,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{sources_text(item)}")
     yield ""
     yield _row("health", health_text(data["health"]))
+    if data.get("spend"):
+        yield _row("spend", ledger.spend_text(data["spend"]))
     if data["sources"]:
         yield _row("sources", DOT.join(_source_text(s, tz) for s in data["sources"]))
     else:

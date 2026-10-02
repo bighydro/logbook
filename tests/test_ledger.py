@@ -18,8 +18,8 @@ from logbook.store import Logbook
 
 OWNER_ID = "019cadd3-6bc0-7dcd-9133-00000000000a"
 OWNER_EMAIL = "owner@example.org"
-EN_DASH = "–"
-CAFE_PLACE = {"Cafe": {"lat": CAFE[0], "lon": CAFE[1], "radius_m": 120, "kind": "cafe"}}
+EN_DASH = "\u2013"
+CAFE_PLACE = {"Cafe": {"lat": CAFE[0], "lon": CAFE[1], "radius_m": 120, "kind": "other"}}
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
@@ -80,7 +80,13 @@ def shared(
         shares.append(entry)
         if ref == {"kind": "email", "value": OWNER_EMAIL}:
             owed, paid = owed_share, paid_share
-    extra: dict[str, Any] = {"cost": cost, "paid_share": paid, "owed_share": owed, "payment": False, "members": shares}
+    extra: dict[str, Any] = {
+        "cost": cost,
+        "paid_share": paid,
+        "owed_share": owed,
+        "payment": False,
+        "members": shares,
+    }
     if deleted:
         extra["deleted"] = True
     payload: dict[str, Any] = {
@@ -95,7 +101,14 @@ def shared(
     }
     if category:
         payload["category"] = category
-    return {"at": at, "end": None, "source": "splitwise", "kind": "transaction", "tier": 3, "payload": payload}
+    return {
+        "at": at,
+        "end": None,
+        "source": "splitwise",
+        "kind": "transaction",
+        "tier": 3,
+        "payload": payload,
+    }
 
 
 ME = {"kind": "email", "value": OWNER_EMAIL}
@@ -171,7 +184,9 @@ def test_the_month_places_each_transaction_at_the_stay_and_in_its_trip(
     [ice_cream] = days["2026-06-14"]["transactions"]
     assert ice_cream["deleted"] is True and days["2026-06-14"]["totals"] == {}
     hotel, zunfthaus = days["2026-06-16"]["transactions"]
-    assert hotel["where"]["by"] == "day", "a transaction filed by the day only is placed by the day's longest stay"
+    assert hotel["where"]["by"] == "day", (
+        "a transaction filed by the day only is placed by the day's longest stay"
+    )
     assert hotel["where"]["place"] is None and hotel["where"]["label"].startswith("47.37")
     assert hotel["where"]["country"] == "CH" and zunfthaus["where"]["country"] == "CH"
     assert hotel["trip"] == zunfthaus["trip"] == "trip:2026-06-15:2026-06-17"
@@ -184,14 +199,19 @@ def test_the_month_places_each_transaction_at_the_stay_and_in_its_trip(
     }
     assert trips["trip:2026-06-15:2026-06-17"]["count"] == 2
     assert trips["trip:2026-06-13:2026-06-13"]["count"] == 1
-    assert set(trips["trip:2026-06-13:2026-06-13"]["lines"]) == set(dinner["lines"])
+    assert set(trips["trip:2026-06-13:2026-06-13"]["lines"]) == set(dinner["lines"] + ice_cream["lines"]), (
+        "the return day is the trip's; a deleted line is listed under it, never counted"
+    )
     assert lb.meta["head"] == head, "the ledger is read, never written"
     text = _run(capsys, "--month", "2026-06")
     assert text.splitlines()[0].startswith(f"ledger 2026-06-10 {EN_DASH} 2026-06-19")
     assert "5 transactions" in text and "1 deleted" in text
     assert "NOK 44,785.00" in text and "EUR -307.50" in text
     assert "12:40  NOK -185.00  Fjordkaffe · at Cafe · restaurants · copilot" in text
-    assert "aboard Solvind" in text and "split 3 ways: you 30.00 (paid 90.00), Ola Nordmann 30.00, Per 30.00" in text
+    assert (
+        "aboard Solvind" in text
+        and "split 3 ways: you 30.00 (paid 90.00), Ola Nordmann 30.00, Per 30.00" in text
+    )
     assert "Ice cream" in text and "deleted" in text
     assert "Hotel Musterhof" in text and "(by day)" in text
     assert f"trip 2026-06-15 {EN_DASH} 2026-06-17" in text
@@ -202,9 +222,11 @@ def test_a_trip_is_its_spend(
 ) -> None:
     ledger_record(tmp_path, monkeypatch)
     data = _json(capsys, "--trip", "trip:2026-06-15:2026-06-17")
-    assert data["window"] == {"since": "2026-06-15", "until": "2026-06-18", "days": [
-        "2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18"
-    ]}
+    assert data["window"] == {
+        "since": "2026-06-15",
+        "until": "2026-06-18",
+        "days": ["2026-06-15", "2026-06-16", "2026-06-17", "2026-06-18"],
+    }
     assert data["count"] == 2 and [d["day"] for d in data["days"]] == ["2026-06-16"]
     [trip] = data["trips"]
     assert trip["id"] == "trip:2026-06-15:2026-06-17" and trip["route"][0].startswith("47.37")
@@ -226,8 +248,12 @@ def test_a_retracted_or_corrected_transaction_is_out_and_an_empty_month_says_so(
 ) -> None:
     lb = ledger_record(tmp_path, monkeypatch)
     with lb.index() as idx:
-        [coffee] = [line for line in idx.by_kind("transaction") if line["payload"]["merchant"] == "Fjordkaffe"]
-        [salary] = [line for line in idx.by_kind("transaction") if line["payload"]["merchant"] == "Eksempel AS"]
+        [coffee] = [
+            line for line in idx.by_kind("transaction") if line["payload"]["merchant"] == "Fjordkaffe"
+        ]
+        [salary] = [
+            line for line in idx.by_kind("transaction") if line["payload"]["merchant"] == "Eksempel AS"
+        ]
     lb.retract(int(coffee["seq"]), "a test")
     corrected = card(utc("2026-06-19", "09:00"), 45500.0, "NOK", "Eksempel AS", "income")
     corrected["payload"]["raw_id"] = "tx-corrected"
@@ -236,7 +262,9 @@ def test_a_retracted_or_corrected_transaction_is_out_and_an_empty_month_says_so(
     data = _json(capsys, "--month", "2026-06")
     merchants = [t["merchant"] for d in data["days"] for t in d["transactions"]]
     assert "Fjordkaffe" not in merchants and merchants.count("Eksempel AS") == 1
-    assert data["totals"]["NOK"]["received"] == 45500.0, "the correction stands in the superseded line's place"
+    assert data["totals"]["NOK"]["received"] == 45500.0, (
+        "the correction stands in the superseded line's place"
+    )
     data = _json(capsys, "--month", "2026-05")
     assert data["window"] is None and data["count"] == 0 and data["days"] == []
     assert "no transactions" in _run(capsys, "--month", "2026-05")
@@ -252,7 +280,15 @@ def test_an_empty_record_has_no_ledger(
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     assert "no transactions" in _run(capsys)
     data = _json(capsys)
-    assert data == {"window": None, "count": 0, "deleted": 0, "totals": {}, "days": [], "trips": []}
+    assert data == {
+        "window": None,
+        "tz": None,
+        "count": 0,
+        "deleted": 0,
+        "totals": {},
+        "days": [],
+        "trips": [],
+    }
 
 
 # -- the shares ---------------------------------------------------------------------------------------------
@@ -284,7 +320,7 @@ def test_shares_resolve_through_resolutions_never_through_faces() -> None:
     assert ledger.shares({"members": "none"}, identities, owner) == []
 
 
-# -- rollup money ---------------------------------------------------------------------------------------------
+# -- rollup money --------------------------------------------------------------------------------------------
 
 
 def test_rollup_money_by_month_country_and_category(
@@ -313,14 +349,16 @@ def test_rollup_money_by_month_country_and_category(
     ]
     assert year["by_category"][0]["totals"]["NOK"]["spent"] == -185.0
     assert year["by_category"][0]["totals"]["EUR"]["spent"] == -97.5
-    assert len(year["lines"]) == 5 and all(len(id_) == 36 for id_ in year["lines"])
+    assert len(year["lines"]) == 6 and all(len(id_) == 36 for id_ in year["lines"])
     assert lb.meta["head"] == head
     cli.main(["rollup", "money", "--year", "2026"])
     text = capsys.readouterr().out
     assert text.startswith(f"money 2026-06-10 {EN_DASH} 2026-06-19")
-    assert "2026  5 transactions · 1 deleted · NOK 44,785.00 (in 45,000.00, out -215.00) · EUR -307.50" in text
-    assert "2026-06  5 transactions" in text
-    assert "NO  3 transactions" in text and "CH  2 transactions" in text
+    assert (
+        "2026  5 transactions · 1 deleted · EUR -307.50 · NOK 44,785.00 (in 45,000.00, out -215.00)" in text
+    )
+    assert "2026-06        5 transactions · 1 deleted" in text
+    assert "NO             3 transactions" in text and "CH             2 transactions" in text
     assert "restaurants" in text and "Dining out" in text
 
 
@@ -333,15 +371,18 @@ def test_rollup_money_without_categories_and_with_an_unplaced_transaction(
     cli.main(["rollup", "money", "--json"])
     data = json.loads(capsys.readouterr().out)
     [year] = data["years"]
-    assert year["by_category"] == [] and year["by_country"] == [{
-        "country": None,
-        "count": 1,
-        "totals": {"NOK": {"spent": -42.5, "received": 0.0, "net": -42.5}},
-        "lines": year["lines"],
-    }], "no track that day: the transaction is nowhere, and says so"
+    assert year["by_category"] == [] and year["by_country"] == [
+        {
+            "country": None,
+            "count": 1,
+            "deleted": 0,
+            "totals": {"NOK": {"spent": -42.5, "received": 0.0, "net": -42.5}},
+            "lines": year["lines"],
+        }
+    ], "no track that day: the transaction is nowhere, and says so"
     cli.main(["rollup", "money"])
     text = capsys.readouterr().out
-    assert "unplaced  1 transaction" in text and "by category" not in text
+    assert "unplaced       1 transaction · NOK -42.50" in text and "by category" not in text
     cli.main(["ledger", "--json"])
     data = json.loads(capsys.readouterr().out)
     [bread] = data["days"][0]["transactions"]
