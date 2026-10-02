@@ -24,17 +24,18 @@ night with no such stay is in transit.
 Aboard an asset (a boat, an aircraft, a car registered in `assets.json`) the grammar nests: when
 your position matches the asset's own track, the run of stays and moves aboard it is one stay
 `aboard <asset>`, and inside it the same grammar runs on the asset's position — a berth, a
-passage, an anchorage. The asset's movement never fragments the stay.
+passage, an anchorage. The asset's movement never fragments the stay. The rule is below, under
+*Aboard an asset*.
 
 ## What it shows, in order
 
 1. **Header** — the date and weekday; the night before and the night after (a named place,
-   `aboard <asset>` or the coordinates; `home` when the stay lies in a place of kind `home` or
-   within 400 m of one — the night then names that place — else `away`; `in transit` when no stay
-   reaches the minimum); the country, from the night's stay by
-   the same rule `rollup countries` uses (a place's own country, else the nearest large airport's
-   zone), from the longest stay of the day when the night is in transit; the day's all-day
-   calendar entries.
+   `aboard <asset>` with the asset's position that night, or the coordinates; `home` when the stay
+   lies in a place of kind `home` or within 400 m of one — the night then names that place — else
+   `away`; `in transit` when no stay reaches the minimum); the country, from the night's position
+   by the same rule `rollup countries` uses (a place's own country, else the nearest large
+   airport's zone), from the longest stay of the day when the night is in transit; the day's
+   all-day calendar entries.
 2. **Timeline** — one row per stay, stop, move and flight that touches the day, in time order.
    A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`;
    the duration printed is the part on the day, and `--json` keeps the real span beside it. An
@@ -77,7 +78,7 @@ declares who was there, and the night aboard:
 ```
 2026-06-13  Saturday
   night before  Home · home
-  night after   aboard Solvind · away
+  night after   aboard Solvind · 59.8500,10.6000 · away
   country       NO (nearest airport OSL)
 
   00:00–09:00  stay   Home · 9 h
@@ -124,10 +125,48 @@ The gap is a row, said so; the lunch is unplaced rather than attached to it, bec
 says nothing about where the owner was; the all-day entry proposes its attendee at every stay and
 confirms Kari at none.
 
+## Aboard an asset
+
+A stay aboard an asset is a **container**. `derive stays` finds it and `day` shows it; the rule is
+the stays engine's (`logbook/stays.py`), and `trips`, `days` and the rollups read what it finds.
+
+- **Boarding is twenty minutes.** You are aboard an asset when its own location lines (`subject` =
+  the asset's id, from `sync ais`, `sync adsb` or a saved stream) lie within the stay radius
+  (`radius_m`, 150 m) of your points for `aboard_min_s` — 20 minutes by default, a setting in
+  `policy/stays.json` — or longer. At anchor that is the asset's fixes inside the radius of your
+  stay's centre, first to last; under way it is your points within the radius of the asset's
+  position at that instant, read between the asset's two fixes around it when they are at most
+  twice `aboard_window_s` apart (an AIS fix every ten minutes places a boat under way well enough),
+  else from the nearest fix within the window. A boat that passes the quay once while you sit at
+  the cafe does not board you; your own boat alongside for the afternoon does.
+- **The run is one stay.** Consecutive stays and moves aboard one asset fold into one stay
+  `aboard <asset>`, from the first's start to the last's end; the run is inside it, and the
+  asset's movement never fragments it. Its centre is the inner stay you spent longest at (the
+  anchorage of the night, not the berth of the morning), and that is the coordinate in its id.
+  A single move aboard with no stay either side (a ferry walked on and off) stays a move.
+- **The night names the asset.** The overnight rule counts the stay aboard whole, so a passage
+  through the night is a night aboard, never a night in transit, and the night carries the asset's
+  position: the inner stay that held the longest part of the night window. The header reads
+  `night after   aboard REDUCE · 59.3400,10.5500 · away`; the country is that position's.
+- **Downstream.** `days` prints the night as `aboard <asset>`; `trips` makes a night aboard a route
+  element `aboard <asset>` and counts the trip's nights aboard per asset; `rollup places` has an
+  `aboard` section, one stay per run aboard with the run's whole hours, while the berths and
+  anchorages inside it are still unnamed places of their own, each marked `aboard`, and a night
+  aboard counts at the anchorage the asset lay at; `rollup nights` counts nights aboard per asset.
+
+The test fixture is the yacht REDUCE (MMSI 970123456, which does not exist), which weighs anchor
+at 22:30 and motors 40 km south through the night with the persona aboard, at anchor again by
+03:00: the Friday is one stay aboard with the first anchorage, the passage and the second
+anchorage inside it, and the night is `aboard REDUCE` at the second anchorage. In the control
+case the persona spends the same night at a cabin 3 km from the first anchorage while the boat
+moves without them: the night is at the cabin's coordinates, the boat's passage is the boat's
+own, and nothing says aboard.
+
 ## The JSON
 
 `--json` prints one object: `day`, `weekday`, `tz`; `nights.before` and `nights.after` (`where`,
-`home`, `aboard`, `in_transit`, the stay's id and its first and last location line); `country`
+`home`, `aboard`, `in_transit`, `position` — the night's `lat` and `lon`, the asset's for a night
+aboard — the stay's id and its first and last location line); `country`
 (`code`, `method`, `by`, `from`); `all_day`; `timeline`, one entry per row — a stay, stop or move
 as `derive stays --json` gives it plus `within_day` (the part on the day), `gap`, `attached`
 (`events`, `transcripts`, `notes`, `mail`, `calls`, `keepers` with their line ids; `messages` and
