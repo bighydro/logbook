@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
 derive · places · rollup · trips · keepers · promises · serve · verify · doctor · export · index · migrate ·
-assets · sources · mcp. Three verbs, nineteen rare."""
+assets · sources · mcp · backup. Three verbs, twenty rare."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ from . import (
     asset_status,
     assets,
     attachments,
+    backup,
     crossing,
     demo,
     events,
@@ -3056,6 +3057,75 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         sys.exit(status)
 
 
+def cmd_backup(a: argparse.Namespace) -> None:
+    """`backup DEST [--keep N] [--verify]`: one snapshot of the record under `DEST/<owner_id>/`, hard
+    links to the previous one for what did not change, verified there, its head the live head.
+    `backup list DEST`: every snapshot with its lines, head and size. `backup restore SNAPSHOT
+    TARGET`: a copy back, verified (`logbook/backup.py`, docs/backup.md). A refusal exits 2; a copy
+    that does not verify is removed and exits 1."""
+    verb, paths = (a.paths[0], a.paths[1:]) if a.paths[0] in ("list", "restore") else (None, a.paths)
+    usage = {None: "backup DEST", "list": "backup list DEST", "restore": "backup restore SNAPSHOT TARGET"}
+    if len(paths) != (2 if verb == "restore" else 1):
+        print(f"backup: usage: logbook {usage[verb]}", file=sys.stderr)
+        sys.exit(2)
+    if verb is not None and (a.keep is not None or a.verify):
+        print(f"backup {verb}: --keep and --verify belong to `logbook backup DEST`", file=sys.stderr)
+        sys.exit(2)
+    if a.keep is not None and a.keep < 1:
+        print("backup: --keep takes a number of snapshots to keep, 1 or more", file=sys.stderr)
+        sys.exit(2)
+    try:
+        if verb == "list":
+            _backup_list(Path(paths[0]).expanduser())
+        elif verb == "restore":
+            _backup_restore(Path(paths[0]).expanduser(), Path(paths[1]).expanduser())
+        else:
+            _backup_snapshot(Logbook.find(), Path(paths[0]).expanduser(), a)
+    except backup.Invalid as e:
+        print(f"backup: {e}; nothing kept", file=sys.stderr)
+        sys.exit(1)
+    except backup.Refused as e:
+        print(f"backup: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _backup_snapshot(lb: Logbook, dest: Path, a: argparse.Namespace) -> None:
+    result = backup.snapshot(lb, dest, verify_attachments=a.verify)
+    print(f"backup: {result.path.name} → {result.path}")
+    for text in backup.describe(result):
+        print(text)
+    if result.attachments_checked is not None:
+        print(f"  {_plural(result.attachments_checked, 'attachment')} checked, every one matches its name")
+    if a.keep is not None:
+        removed = backup.prune(result.path.parent, a.keep, result.path)
+        kept = len(backup.snapshots(result.path.parent))
+        pruned = ", ".join(p.name for p in removed) if removed else "nothing"
+        print(f"  kept {_plural(kept, 'snapshot')}; pruned {pruned}")
+
+
+def _backup_list(dest: Path) -> None:
+    shown = 0
+    for owner, entries in backup.listing(dest):
+        print(owner)
+        for e in entries:
+            size = f"{backup.human(e.bytes)} ({backup.human(e.new_bytes)} new)"
+            if e.error is not None:
+                print(f"  {e.path.name}  not a readable snapshot: {e.error}  {size}")
+            else:
+                print(f"  {e.path.name}  {_plural(e.seq or 0, 'line')}  head {(e.head or '')[:12]}…  {size}")
+            shown += 1
+    if not shown:
+        print(f"no snapshots under {dest}")
+
+
+def _backup_restore(source: Path, target: Path) -> None:
+    result = backup.restore(source, target)
+    print(f"restored {source.name} → {result.path}")
+    for text in backup.describe(result):
+        print(text)
+    print(f"  point LOGBOOK_HOME at {result.path}; the next reader builds its index")
+
+
 def cmd_migrate(a: argparse.Namespace) -> None:
     """A logbook/0.1 record becomes logbook/0.2: same lines, hashes recomputed, lineage kept (SPEC §3.1)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
@@ -3714,6 +3784,27 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
+    s = sub.add_parser(
+        "backup",
+        help="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
+        " previous one where nothing changed; `backup list DEST`; `backup restore SNAPSHOT TARGET`",
+    )
+    s.add_argument(
+        "paths",
+        nargs="+",
+        metavar="DEST",
+        help="where the snapshots go (another disk; never inside the record, never a sync client's"
+        " folder); or `list DEST`; or `restore SNAPSHOT TARGET`",
+    )
+    s.add_argument(
+        "--keep", type=int, metavar="N", help="after the new snapshot verifies, prune the oldest so N remain"
+    )
+    s.add_argument(
+        "--verify",
+        action="store_true",
+        help="also hash every attachment in the copy against its name (the chain is always verified)",
+    )
+    s.set_defaults(fn=cmd_backup)
     a = ap.parse_args(argv)
     try:
         a.fn(a)

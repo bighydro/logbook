@@ -93,7 +93,22 @@ logbook init ~/Records/Logbook           # once
 export LOGBOOK_HOME=~/Records/Logbook    # in your shell profile, so every command finds it
 ```
 
-Back it up with Time Machine or an equivalent that copies the folder as it is.
+Back it up with `logbook backup DEST`: one verified snapshot of the record under `DEST/<owner_id>/<timestamp>/`
+on another disk — the month files, `logbook.json`, `policy/`, `places.json`, `assets.json`, `attachments/` and
+`notes/`; never `index.sqlite`, `inbox/` or `state/` — with every file the previous snapshot already holds
+unchanged hard-linked to it, so a daily snapshot of a record with gigabytes of attachments costs the bytes that
+changed. The copy is verified where it lands and its head must be the live head, or nothing is kept; `--keep N`
+prunes to the newest N; `--verify` also hashes every attachment against its name. `backup list DEST` shows
+each snapshot with its lines, head and size; `backup restore SNAPSHOT TARGET` copies one back into an empty
+folder and verifies it. A destination inside the record or under a sync client's folder is refused. Time
+Machine or an equivalent that copies the folder as it is works too. [docs/backup.md](docs/backup.md) has the
+launchd and systemd examples for a nightly run.
+
+```bash
+logbook backup /Volumes/Backup/Logbook --keep 14     # a verified snapshot, the newest fourteen kept
+logbook backup list /Volumes/Backup/Logbook
+logbook backup restore /Volumes/Backup/Logbook/<owner_id>/2026-06-02T071500Z ~/Records/Logbook
+```
 
 `logbook doctor` checks that this machine is set up to keep the record, one line per check, `pass`, `warn` or
 `fail`, and exits 1 when anything fails: the record is found and `verify` is green with `logbook.json` at
@@ -224,6 +239,9 @@ logbook sync --all --dry-run                      # count per source, write noth
 logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
 logbook sync --uninstall-schedule
 ```
+
+A nightly `logbook backup` goes on the same scheduler, by hand: [docs/backup.md](docs/backup.md) has the
+launchd agent and the systemd timer for a 03:00 snapshot that keeps two weeks.
 
 Contacts become resolution lines (RFC 0006): each contact mints a person or company id in the record, and
 every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (for example `44`) so numbers
