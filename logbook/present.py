@@ -12,9 +12,17 @@ them per person. The sources, in the order a Day lists them:
 | `transcript` | a participant of a `transcript/v1` recorded inside the stay *** | confirmed | 0.9        |
 | `note`       | a `note/v1` written inside the stay that says "with <name>" *** | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
+| `photo`      | a face the library named, `extra.faces`, in such a photo ****   | proposed  | 0.5        |
 
 * 0.8 for an attendee who accepted, 0.6 for one who has not answered or is tentative; one who
 declined is not listed.
+
+**** The names a photo library's People album gives its faces, as the `apple-photos` adapter writes
+them under `extra.faces`: a proposal of presence and nothing more. A name is resolved to a person
+only when it is exactly the label a resolution line carries (case and spacing aside, `_by_label`);
+`Kari` alone is not `Kari Nordmann` — the loose first-name rule of a note or a transcript does not
+apply, because nobody wrote the name at the stay. A name the record does not know is proposed as
+written, with no person. A face a line names both by id (`people`) and by name is one entry.
 
 ** An all-day event places nobody, unless it is located at the stay (below): then its attendees
 are proposed only, at `ALL_DAY`, since the entry still names no hour. A timed event is held at
@@ -33,8 +41,9 @@ Ola Nordmann when a resolution line gives a person that label (`_by_name`); "wit
 XYZ", a country, an acronym or a name the record does not know names nobody.
 
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
-guess and stays proposed until the owner says otherwise, and so are the attendees of an all-day
-entry located at the stay: it names no hour. Names resolve through the record's resolution lines
+guess, by id or by name, and stays proposed until the owner says otherwise, and so are the
+attendees of an all-day entry located at the stay: it names no hour. Names resolve through the
+record's resolution lines
 (RFC 0006, `resolve.identities_from`): an email, a phone number or a library's person id
 (`provider_id`, `<library>:<id>`) to the person it names; a bare name in a transcript or a note to
 the person whose label it is; a name that resolves to no person is dropped, in a note as in a
@@ -304,11 +313,14 @@ def from_photos(
         library = str(payload.get("library") or line.get("source") or "")
         file_name = str(payload.get("file_name") or payload.get("asset_id") or "a photo")
         people = payload.get("people")
+        by_id: set[str] = set()  # the persons the line's ids resolve to, so a name adds no second entry
         for person_id in people if isinstance(people, list) else []:
             if not isinstance(person_id, str) or not person_id:
                 continue
             ref: Ref = ("provider_id", f"{library}:{person_id}")
             person, label = _resolve(ref, identities)
+            if person is not None:
+                by_id.add(person)
             found.append(
                 Presence(
                     person,
@@ -318,6 +330,27 @@ def from_photos(
                     PROPOSED,
                     "photo",
                     f"face in {file_name}",
+                    str(line["id"]),
+                )
+            )
+        extra = payload.get("extra")
+        faces = extra.get("faces") if isinstance(extra, dict) else None
+        for name in faces if isinstance(faces, list) else []:
+            if not isinstance(name, str) or not name.strip():
+                continue
+            name = " ".join(name.split())
+            person, label = _by_label(name, identities)
+            if person is not None and person in by_id:
+                continue
+            found.append(
+                Presence(
+                    person,
+                    label or name,
+                    None,
+                    PHOTO,
+                    PROPOSED,
+                    "photo",
+                    f"face {name} in {file_name}",
                     str(line["id"]),
                 )
             )
@@ -493,15 +526,10 @@ def _by_name(name: str, identities: Mapping[Ref, Identity]) -> tuple[str | None,
     """The person whose label is `name` (case aside), else the one person whose label's first
     word is `name`'s first word; None when none or several."""
     wanted = " ".join(name.split()).casefold()
-    labels: dict[str, str] = {}  # entity → label
-    for who in identities.values():
-        if who.entity and who.label and who.type in PERSON_TYPES:
-            labels.setdefault(who.entity, who.label)
-    exact = {
-        entity: label for entity, label in labels.items() if " ".join(label.split()).casefold() == wanted
-    }
-    if len(exact) == 1:
-        return next(iter(exact.items()))
+    labels = _labels(identities)
+    person, label = _by_label(name, identities)
+    if person is not None:
+        return person, label
     first = wanted.split(" ")[0]
     loose = {entity: label for entity, label in labels.items() if label.split()[0].casefold() == first}
     if len(loose) == 1:
@@ -509,7 +537,32 @@ def _by_name(name: str, identities: Mapping[Ref, Identity]) -> tuple[str | None,
     return None, None
 
 
-# The two lookups other readers of people share (`people`): a ref to the person it resolves to, and a
-# spoken or written name to the person whose label it is.
+def _by_label(name: str, identities: Mapping[Ref, Identity]) -> tuple[str | None, str | None]:
+    """The one person whose label is exactly `name`, case and spacing aside; None when none or
+    several. Never a first name alone: the rule for a name nobody wrote at the stay (a face)."""
+    wanted = " ".join(name.split()).casefold()
+    exact = {
+        entity: label
+        for entity, label in _labels(identities).items()
+        if " ".join(label.split()).casefold() == wanted
+    }
+    if len(exact) == 1:
+        return next(iter(exact.items()))
+    return None, None
+
+
+def _labels(identities: Mapping[Ref, Identity]) -> dict[str, str]:
+    """entity → the first label a resolution gives it, for every person the record resolves."""
+    labels: dict[str, str] = {}
+    for who in identities.values():
+        if who.entity and who.label and who.type in PERSON_TYPES:
+            labels.setdefault(who.entity, who.label)
+    return labels
+
+
+# The lookups other readers of people share (`people`, `keepers`): a ref to the person it resolves to,
+# a spoken or written name to the person whose label it is, and a name to the person whose label it
+# is exactly (a face's name).
 resolve_ref = _resolve
 by_name = _by_name
+by_label = _by_label

@@ -296,6 +296,69 @@ def test_a_face_in_a_photo_is_only_proposed() -> None:
     assert unknown.person is None and unknown.name == "immich:p_99"
 
 
+def _faces(at: str, names: list[str], people: list[str] | None = None) -> dict[str, Any]:
+    """A photo line as `apple-photos` writes it: the ids under `people`, the names under `extra.faces`."""
+    line = photo(at, people=people or [], library="apple-photos")
+    line["payload"]["extra"] = {"faces": names}
+    return line
+
+
+def test_a_face_name_proposes_and_never_confirms() -> None:
+    """`extra.faces` is the library's guess at who is in the picture, in the owner's spelling: a
+    proposal of presence, resolved to a person only when the name is exactly a label a resolution
+    line carries. `Kari` alone is not `Kari Nordmann` (the note rule's loose first name does not
+    apply), `Trude` is nobody the record knows; both stay as written, proposed, with no person."""
+    lines = _lines(
+        [
+            _faces("2026-06-10T11:00:00Z", ["Ola Nordmann", "Kari", "Trude"]),
+            _faces("2026-06-10T13:00:00Z", ["Ola Nordmann"]),  # after the stay
+        ]
+    )
+    ola, kari, trude = present.present(STAY, lines, IDENTITIES)
+    assert (ola.person, ola.name, ola.status, ola.source, ola.confidence) == (
+        OLA_ID,
+        "Ola Nordmann",
+        present.PROPOSED,
+        "photo",
+        0.5,
+    )
+    assert ola.ref is None and ola.reason == "face Ola Nordmann in IMG_101100.HEIC" and ola.line == "line-0"
+    assert (kari.person, kari.name, kari.status) == (None, "Kari", present.PROPOSED)
+    assert (trude.person, trude.name, trude.status) == (None, "Trude", present.PROPOSED)
+    [ola_c, kari_c, trude_c] = present.company(STAY, lines, IDENTITIES)
+    assert ola_c.person == OLA_ID and ola_c.status == present.PROPOSED, "a face alone never confirms"
+    assert (kari_c.person, trude_c.person) == (None, None)
+    # the owner's own words confirm; the face then rides along as a second reason
+    with_note = _lines([*lines[:1], note("2026-06-10T11:30:00Z", "Lunch with Ola")])
+    [ola_c, _kari, _trude] = present.company(STAY, with_note, IDENTITIES)
+    assert ola_c.status == present.CONFIRMED and ola_c.sources == ("note", "photo")
+
+
+def test_a_face_named_both_by_id_and_by_name_is_one_presence() -> None:
+    """Kari's face resolves through the library's person id; the same name under `extra.faces`
+    adds nothing. A second name on the same photo is still its own proposal."""
+    identities = resolve.identities_from(
+        _lines(
+            [
+                resolution(("provider_id", f"apple-photos:{KARI['face']}"), KARI_ID, "Kari Nordmann"),
+                resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+            ]
+        )
+    )
+    lines = _lines([_faces("2026-06-10T11:00:00Z", ["Kari Nordmann", "ola nordmann"], people=[KARI["face"]])])
+    kari, ola = present.present(STAY, lines, identities)
+    assert kari.person == KARI_ID and kari.ref == ("provider_id", f"apple-photos:{KARI['face']}")
+    assert ola.person == OLA_ID and ola.name == "Ola Nordmann", "the label, case aside, is exact enough"
+    assert [c.person for c in present.company(STAY, lines, identities)] == [KARI_ID, OLA_ID]
+
+
+def test_the_owners_own_face_is_never_their_own_company() -> None:
+    owner = present.owner_of(INES_ID, [], {}, WITH_INES)
+    lines = _lines([_faces("2026-06-10T11:00:00Z", ["Ines Nordmann", "Ola Nordmann"])])
+    [ola] = present.present(STAY, lines, WITH_INES, owner=owner)
+    assert ola.person == OLA_ID
+
+
 def test_the_circle_page_is_a_stub_that_names_nobody_yet() -> None:
     assert present.from_circle(STAY, [], IDENTITIES) == []
     assert "circle" in present.SOURCES
