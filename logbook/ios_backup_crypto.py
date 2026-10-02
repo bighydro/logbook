@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -236,11 +236,13 @@ class Decrypted:
     padding: int
 
 
-def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chunk: int = CHUNK) -> Decrypted:
-    """Decrypt `src` (AES-256-CBC, zero IV) into `dest` a chunk at a time. Valid PKCS#7 padding
-    in the last block is stripped; without it, `size`, the manifest's plaintext size, decides what
-    the last block keeps when it lies within it; else every byte is kept. `dest`'s parent must
-    exist; on an error nothing is left at `dest`."""
+def decrypt_chunks(
+    src: Path, key: bytes, size: int | None = None, chunk: int = CHUNK
+) -> Generator[bytes, None, Decrypted]:
+    """The plaintext of `src` (AES-256-CBC, zero IV), yielded a chunk at a time, never whole; the
+    generator's return value is what was written and the padding stripped. Valid PKCS#7 padding in
+    the last block is stripped; without it, `size`, the manifest's plaintext size, decides what the
+    last block keeps when it lies within it; else every byte is kept."""
     Cipher, algorithms, modes, _, _, _ = _primitives()
     total = src.stat().st_size
     if total % BLOCK:
@@ -250,25 +252,40 @@ def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chu
     decryptor = Cipher(algorithms.AES(key), modes.CBC(ZERO_IV)).decryptor()
     written = 0
     tail = b""
+    with src.open("rb") as fin:
+        while True:
+            block = fin.read(chunk)
+            if not block:
+                break
+            out = tail + decryptor.update(block)
+            tail = out[-BLOCK:]
+            head = out[:-BLOCK]
+            if head:
+                yield head
+            written += len(head)
+        decryptor.finalize()
+    last, padding = _last_block(tail, written, size)
+    if last:
+        yield last
+    written += len(last)
+    return Decrypted(written, padding)
+
+
+def decrypt_file(src: Path, dest: Path, key: bytes, size: int | None = None, chunk: int = CHUNK) -> Decrypted:
+    """Decrypt `src` into `dest` through `decrypt_chunks`. `dest`'s parent must exist; on an error
+    nothing is left at `dest`."""
+    chunks = decrypt_chunks(src, key, size, chunk)
     try:
-        with src.open("rb") as fin, dest.open("wb") as fout:
+        with dest.open("wb") as fout:
             while True:
-                block = fin.read(chunk)
-                if not block:
-                    break
-                out = tail + decryptor.update(block)
-                tail = out[-BLOCK:]
-                head = out[:-BLOCK]
-                fout.write(head)
-                written += len(head)
-            decryptor.finalize()
-            last, padding = _last_block(tail, written, size)
-            fout.write(last)
-            written += len(last)
+                try:
+                    fout.write(next(chunks))
+                except StopIteration as stop:
+                    done: Decrypted = stop.value
+                    return done
     except BaseException:
         dest.unlink(missing_ok=True)
         raise
-    return Decrypted(written, padding)
 
 
 def _last_block(tail: bytes, written: int, size: int | None) -> tuple[bytes, int]:

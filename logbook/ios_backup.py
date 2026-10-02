@@ -104,6 +104,7 @@ which protection class, and that warning when there was one — never a key.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import plistlib
 import shutil
@@ -660,6 +661,29 @@ def copy(p: Plan, dest: Path) -> Path:
             if f.size is not None:
                 p.copied.append(_copy_file(f, folder.joinpath(*f.parts[head:])))
     return store_copy.target
+
+
+def plain_chunks(f: BackupFile, chunk: int = ios_backup_crypto.CHUNK) -> Iterator[bytes]:
+    """The bytes of a file row as the phone held them, a chunk at a time and never whole: read
+    straight from the stored blob for a plain file, decrypted on the way for an encrypted one
+    (`decrypt_chunks`, the manifest's `Size` deciding a last block that is not padding). The
+    backup is only read. For a reader that hashes or streams a file somewhere without a copy."""
+    if f.key is not None:
+        yield from ios_backup_crypto.decrypt_chunks(f.path, f.key, f.size, chunk)
+        return
+    with f.path.open("rb") as fh:
+        while piece := fh.read(chunk):
+            yield piece
+
+
+def digest(f: BackupFile) -> tuple[str, int]:
+    """(the SHA-256 of the file's plaintext, its length), streamed through `plain_chunks`."""
+    h = hashlib.sha256()
+    size = 0
+    for piece in plain_chunks(f):
+        h.update(piece)
+        size += len(piece)
+    return h.hexdigest(), size
 
 
 def _copy_file(f: BackupFile, target: Path) -> Copy:
