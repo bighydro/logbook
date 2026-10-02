@@ -184,3 +184,45 @@ def test_all_over_the_real_adapters_with_no_variable_set_skips_them_all(
     for adapter in live:
         assert f"{adapter.NAME}" in out and "skipped" in out
     assert f"{len(live)} sources: 0 ok, 0 failed, {len(live)} skipped" in out
+
+
+class Listener(Fake):
+    """A source that listens to a stream (ais): `pull` takes the window and reports Ctrl-C through
+    `status`, and a single run then exits 130."""
+
+    def pull(  # type: ignore[override]
+        self,
+        config: Any,
+        since: str | None = None,
+        progress: Any = None,
+        counts: Any = None,
+        listen_s: float = 0.0,
+        status: dict[str, Any] | None = None,
+        notice: Any = None,
+    ) -> Iterator[dict[str, Any]]:
+        self.pulls += 1
+        if status is not None:
+            status["interrupted"] = True
+        yield from ()
+
+
+def test_all_stops_at_a_ctrl_c_and_exits_130(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The owner interrupting a source that listens wants out, not the next source: what the run
+    did so far is summed up, the sources not reached are named, and the status is 130."""
+    alpha = Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1)
+    ais = Listener("ais", ("LOGBOOK_AIS_KEY",))
+    beta = Fake("beta", ("LOGBOOK_BETA_KEY",), drafts=1)
+    _fakes(monkeypatch, alpha, ais, beta)
+    for name in ("LOGBOOK_ALPHA_KEY", "LOGBOOK_AIS_KEY", "LOGBOOK_BETA_KEY"):
+        monkeypatch.setenv(name, "k")
+    status, out, _err = _all(capsys)
+    assert status == 130 and (alpha.pulls, ais.pulls, beta.pulls) == (1, 1, 0)
+    summary = out[out.index("sync --all:") :].splitlines()
+    assert summary[0] == "sync --all: 3 sources: 1 ok, 0 failed, 0 skipped, interrupted"
+    assert [line.split() for line in summary[1:]] == [
+        ["alpha", "ok"],
+        ["ais", "interrupted"],
+        ["beta", "not", "run"],
+    ]

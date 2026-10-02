@@ -579,8 +579,10 @@ def _sync_all(a: argparse.Namespace) -> None:
     owner disabled or one with no variable set is skipped and said so. A failure in one (its exit
     status, or an error its adapter let through) never stops the next: it is said on stderr as a
     single run says it, and the run goes on. At the end one summary line per source — `ok`,
-    `failed (status N)`, `skipped (why)` — and exit 1 when any failed. `--dry-run` passes through;
-    `--since`, `--listen` and `--until` are a single source's and refused."""
+    `failed (status N)`, `skipped (why)` — and exit 1 when any failed. A Ctrl-C while a source
+    listens to a stream (ais, status 130) ends the run there: the sources not reached are listed as
+    `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen` and `--until`
+    are a single source's and refused."""
     if a.name is not None:
         print(
             f"sync: --all takes no source name; run `logbook sync {a.name}` for that one alone",
@@ -595,8 +597,12 @@ def _sync_all(a: argparse.Namespace) -> None:
     disabled = _disabled(lb)
     live = adapters.live_adapters()
     results: list[tuple[str, str]] = []
+    interrupted = False
     for adapter in live:
         name = adapter.NAME
+        if interrupted:
+            results.append((name, "not run"))
+            continue
         if name in disabled:
             _say_disabled(lb, name)
             results.append((name, "skipped (disabled)"))
@@ -614,14 +620,23 @@ def _sync_all(a: argparse.Namespace) -> None:
         except Exception as e:
             print(f"sync: {name}: {type(e).__name__}: {e}", file=sys.stderr)
             status = 1
+        if status == 130:  # Ctrl-C while the source listened: the owner wants out, not the next source
+            interrupted = True
+            results.append((name, "interrupted"))
+            continue
         results.append((name, "ok" if status == 0 else f"failed (status {status})"))
     ok = sum(1 for _, r in results if r == "ok")
     failed = sum(1 for _, r in results if r.startswith("failed"))
-    skipped = len(results) - ok - failed
-    print(f"sync --all: {_plural(len(results), 'source')}: {ok} ok, {failed} failed, {skipped} skipped")
+    skipped = sum(1 for _, r in results if r.startswith("skipped"))
+    print(
+        f"sync --all: {_plural(len(results), 'source')}: {ok} ok, {failed} failed, {skipped} skipped"
+        + (", interrupted" if interrupted else "")
+    )
     width = max((len(name) for name, _ in results), default=0)
     for name, result in results:
         print(f"  {name:<{width}}  {result}")
+    if interrupted:
+        sys.exit(130)
     if failed:
         sys.exit(1)
 
