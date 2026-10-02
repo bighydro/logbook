@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · promises · verify · doctor · export · index · migrate · assets · sources.
-Three verbs, eighteen rare."""
+places · rollup · trips · keepers · promises · serve · verify · doctor · export · index · migrate · assets ·
+sources. Three verbs, eighteen rare."""
 
 from __future__ import annotations
 
@@ -44,6 +44,7 @@ from . import (
     repair,
     rollup,
     schedule,
+    serve,
     stays,
     transcribe,
     trips,
@@ -2644,6 +2645,29 @@ def cmd_trips(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_serve(a: argparse.Namespace) -> None:
+    """`serve [--port N]`: the record read in a browser, from this machine only (`logbook/serve.py`).
+    Server-rendered pages from the index and the readers — the Day as a timeline, a window one row
+    per day, the trips of a year, the places, the assets and their last fix, where each source went
+    quiet — at http://127.0.0.1:8765/. Any other host is refused before a socket is opened; no page
+    references a URL outside itself; nothing is written."""
+    if a.host != serve.HOST:
+        print(
+            f"serve: binds {serve.HOST} only, never {a.host!r}: the record is read from this machine",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    lb = Logbook.find()
+    try:
+        serve.serve(lb, host=a.host, port=a.port, airports=_airports(a.airports))
+    except serve.HostError as e:
+        print(f"serve: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"serve: cannot listen on {a.host}:{a.port}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
 def cmd_demo(a: argparse.Namespace) -> None:
     """`demo [--days N] [--seed S] --out DIR`: a complete synthetic record of the Oslo persona,
     invented in `logbook/demo.py`, written to a new folder; the same days and seed give the same
@@ -3197,6 +3221,17 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("id", help="the proposal's id, as `promises` prints it")
     v.add_argument("--note", metavar="TEXT", help="your words on how it was kept, kept in the task's notes")
     v.set_defaults(fn=cmd_promises)
+    s = sub.add_parser(
+        "serve", help="read the record in a browser, from this machine only (http://127.0.0.1:8765/)"
+    )
+    s.add_argument(
+        "--port", type=int, default=serve.PORT, metavar="N", help=f"the port (default {serve.PORT})"
+    )
+    s.add_argument(
+        "--host", default=serve.HOST, help=f"must be {serve.HOST}; the server refuses any other host"
+    )
+    s.add_argument("--airports", metavar="FILE", help="an airports table that overrides the built-in one")
+    s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
     s.add_argument(
         "--days", type=int, default=30, metavar="N", help="local days from 2026-06-01 (default 30)"

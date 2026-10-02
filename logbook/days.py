@@ -155,9 +155,9 @@ def row(r: Mapping[str, Any]) -> str:
     the people, the health triple and the gap marker, the empty parts out."""
     parts: list[str] = []
     if r["flights"]:
-        parts.append(", ".join(_flight_text(f) for f in r["flights"]))
+        parts.append(", ".join(flight_text(f) for f in r["flights"]))
     if r["sources"]:
-        parts.append(_stays_text(r["stays"]))
+        parts.append(stays_text(r["stays"]))
     else:
         parts.append("nothing logged")
     if r["people"]["confirmed"]:
@@ -166,11 +166,11 @@ def row(r: Mapping[str, Any]) -> str:
         parts.append(day_reader.health_text(r["health"]))
     if r["gaps"]:
         parts.append("gap " + ", ".join(r["gaps"]))
-    head = f"{r['day']}  {r['weekday'][:3]}  {_night_text(r):<{NIGHT_WIDTH}}  {_km_text(r['moved_m']):>9}"
+    head = f"{r['day']}  {r['weekday'][:3]}  {night_text(r):<{NIGHT_WIDTH}}  {km_text(r['moved_m']):>9}"
     return f"{head}  {DOT.join(parts)}".rstrip()
 
 
-def _night_text(r: Mapping[str, Any]) -> str:
+def night_text(r: Mapping[str, Any]) -> str:
     night = r["night"]
     if night["in_transit"]:
         return "in transit" if night.get("located", True) else "no location"
@@ -180,16 +180,16 @@ def _night_text(r: Mapping[str, Any]) -> str:
     return f"{where} {r['country']}"
 
 
-def _flight_text(f: Mapping[str, Any]) -> str:
+def flight_text(f: Mapping[str, Any]) -> str:
     route = f"{f['from'] or '?'}{ARROW}{f['to'] or '?'}"
     return f"{f['carrier']} {f['number']} {route}" if f["carrier"] and f["number"] else route
 
 
-def _stays_text(s: Mapping[str, Any]) -> str:
+def stays_text(s: Mapping[str, Any]) -> str:
     text = f"{s['count']} {'stay' if s['count'] == 1 else 'stays'}"
     return f"{text} ({s['attached']} attached)" if s["attached"] else text
 
 
-def _km_text(metres: float) -> str:
+def km_text(metres: float) -> str:
     km = metres / 1000
     return f"{km:.1f} km" if km < 100 else f"{km:,.0f} km"

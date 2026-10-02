@@ -627,11 +627,11 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     """The Day as text: the header, the timeline, what is unplaced, the health line, the sources."""
     tz = ZoneInfo(data["tz"])
     yield f"{data['day']}  {data['weekday']}"
-    yield _row("night before", _night_text(data["nights"]["before"]))
-    yield _row("night after", _night_text(data["nights"]["after"]))
-    yield _row("country", _country_text(data["country"]))
+    yield _row("night before", night_text(data["nights"]["before"]))
+    yield _row("night after", night_text(data["nights"]["after"]))
+    yield _row("country", country_text(data["country"]))
     if data["all_day"]:
-        yield _row("all day", ", ".join(a["title"] + _sources_text(a) for a in data["all_day"]))
+        yield _row("all day", ", ".join(a["title"] + sources_text(a) for a in data["all_day"]))
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
@@ -640,8 +640,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     if data["unplaced"]:
         yield ""
         for item in data["unplaced"]:
-            span = _span_text(item["at"], item["end"], tz)
-            yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{_sources_text(item)}")
+            span = span_text(item["at"], item["end"], tz)
+            yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{sources_text(item)}")
     yield ""
     yield _row("health", health_text(data["health"]))
     if data["sources"]:
@@ -654,13 +654,13 @@ def _row(label: str, text: str) -> str:
     return f"  {label:<13} {text}"
 
 
-def _night_text(night: dict[str, Any]) -> str:
+def night_text(night: dict[str, Any]) -> str:
     if night["in_transit"]:
         return "in transit"
     return f"{night['where']}{DOT}{'home' if night['home'] else 'away'}"
 
 
-def _country_text(country: dict[str, Any]) -> str:
+def country_text(country: dict[str, Any]) -> str:
     if country["code"] is None:
         return "unknown"
     by = {"place": f"place {country['by']}", "airport": f"nearest airport {country['by']}"}.get(
@@ -676,18 +676,18 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
     the asset's name."""
     if entry["kind"] == FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
-        clock = _span_text(entry["start"], entry["end"], tz)
+        clock = span_text(entry["start"], entry["end"], tz)
         yield f"{indent}{clock:<12} {FLIGHT:<6} {route}{DOT}{entry['evidence']}"
         return
-    clock = _span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
+    clock = span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
     kind = GAP if entry["gap"] else entry["kind"]
     parts: list[str] = []
     if entry["kind"] == ABOARD:
         asset = entry["asset"]
         head = asset["name"] + (f" ({asset['kind']})" if asset["kind"] else "")
-        parts = [head, _duration_text(entry["within_day"]["duration_s"])]
+        parts = [head, duration_text(entry["within_day"]["duration_s"])]
     elif entry["kind"] == stays.MOVE:
-        parts = [_duration_text(entry["within_day"]["duration_s"])]
+        parts = [duration_text(entry["within_day"]["duration_s"])]
         if entry["gap"]:
             parts.append("no points")
             parts.append(distance_text(entry["distance_m"] or 0))
@@ -699,7 +699,7 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
             if entry.get("aboard") and not inside:
                 parts.append(f"aboard {entry['aboard']}")
     else:
-        parts = [str(entry["where"]), _duration_text(entry["within_day"]["duration_s"])]
+        parts = [str(entry["where"]), duration_text(entry["within_day"]["duration_s"])]
         if entry.get("aboard") and not inside:
             parts.append(f"aboard {entry['aboard']}")
     counts = _counts_text(entry.get("attached"))
@@ -714,8 +714,8 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
     attached = entry.get("attached")
     if attached:
         for e in attached["events"]:
-            span = _span_text(e["start"], e["end"], tz)
-            yield f"{inner}{'event':<12} {e['title']} {span}{_sources_text(e)}"
+            span = span_text(e["start"], e["end"], tz)
+            yield f"{inner}{'event':<12} {e['title']} {span}{sources_text(e)}"
         for t in attached["transcripts"]:
             yield f"{inner}{'transcript':<12} {t['title']}"
         for n in attached["notes"]:
@@ -723,20 +723,20 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
         for m in attached["mail"]:
             yield f"{inner}{'mail':<12} {m['subject']} ({_plural(m['messages'], 'message')})"
         for c in attached["calls"]:
-            yield f"{inner}{'call':<12} {_call_text(c)}"
+            yield f"{inner}{'call':<12} {call_text(c)}"
         for k in attached["keepers"]:
             yield f"{inner}{'keeper':<12} {k['name']} ({k['lane']})"
     company = entry.get("with")
     if company and (company["confirmed"] or company["proposed"]):
-        confirmed = ", ".join(_companion_text(c) for c in company["confirmed"])
-        proposed = ", ".join(_companion_text(c) for c in company["proposed"])
+        confirmed = ", ".join(companion_text(c) for c in company["confirmed"])
+        proposed = ", ".join(companion_text(c) for c in company["proposed"])
         text = confirmed
         if proposed:
             text = f"{text}{DOT}proposed {proposed}" if text else f"proposed {proposed}"
         yield f"{inner}{'with':<12} {text}"
 
 
-def _sources_text(item: Mapping[str, Any]) -> str:
+def sources_text(item: Mapping[str, Any]) -> str:
     """` · ×N sources` for a calendar entry several sources carry; nothing for one source."""
     sources = item.get("sources") or []
     return f"{DOT}×{len(sources)} sources" if len(sources) > 1 else ""
@@ -764,11 +764,11 @@ def _counts_text(attached: dict[str, Any] | None) -> str:
     return ", ".join(_plural(n, noun) for n, noun in counts(attached))
 
 
-def _companion_text(c: dict[str, Any]) -> str:
+def companion_text(c: dict[str, Any]) -> str:
     return f"{c['name']} ({', '.join(c['sources'])})"
 
 
-def _call_text(c: dict[str, Any]) -> str:
+def call_text(c: dict[str, Any]) -> str:
     arrow = ARROW if c["direction"] == "outgoing" else "←"
     parts = [f"{arrow} {c['who']}"]
     if not c["answered"]:
@@ -799,7 +799,7 @@ def _clock(stamp: str, tz: ZoneInfo) -> str:
     return _instant(stamp).astimezone(tz).strftime("%H:%M")
 
 
-def _span_text(start: str, end: str | None, tz: ZoneInfo, clip: bool = False) -> str:
+def span_text(start: str, end: str | None, tz: ZoneInfo, clip: bool = False) -> str:
     a = _instant(start).astimezone(tz)
     if end is None:
         return a.strftime("%H:%M")
@@ -810,7 +810,7 @@ def _span_text(start: str, end: str | None, tz: ZoneInfo, clip: bool = False) ->
     return f"{a:%H:%M}{EN_DASH}{b:%H:%M}" + (f"+{days}" if days else "")
 
 
-def _duration_text(seconds: int) -> str:
+def duration_text(seconds: int) -> str:
     minutes = round(seconds / 60)
     if minutes < 1:
         return "< 1 min"
