@@ -75,6 +75,7 @@ BUILT_IN = (
     "takeout.chrome",
     "takeout.youtube",
     "takeout.chat",
+    "takeout.meet",
     "takeout.contacts",
     "ios_contacts",
     "whatsapp",
@@ -185,6 +186,7 @@ TAKEOUT = (
     "chrome",
     "youtube",
     "chat",
+    "meet",
     "contacts",
 )
 ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as `import-backup --only`
