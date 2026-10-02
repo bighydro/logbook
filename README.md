@@ -201,6 +201,7 @@ logbook add health ~/inbox/ios-backup-<udid>/health/healthdb_secure.sqlite   # A
 logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
 logbook inbox list                                # every file under inbox/: size, the import that read it, whether every line is in
 logbook inbox clean --to /Volumes/Archive        # move what is imported in full to an external disk (or --delete it); the rest stays
+logbook attach import-backup ~/backup --only whatsapp,imessage,photos   # then the media the lines name, into attachments/
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message
@@ -255,8 +256,10 @@ variable is unset, is kept as entered and flagged `unnormalised`.
 
 WhatsApp messages become `message/v1` lines (RFC 0008), one per message, with the sender as the same kind of
 phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
-into the record yet: a file found under `Message/` beside the database is hashed and its digest kept under
-`extra.media` for a later attach pass; set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
+with the lines: a file found under `Message/` beside the database is hashed and its digest kept under
+`extra.media`, and `logbook attach import-backup <backup> --only whatsapp,imessage,photos` later streams every
+file the lines name out of the backup into the content-addressed store, checked against the line
+([docs/attachments.md](docs/attachments.md)); set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
 A group message sent from a linked device carries a `@lid` id instead of a phone number, which no contact list
 knows; add WhatsApp's own ContactsV2.sqlite (it sits beside ChatStorage.sqlite) and each lid becomes an alias
 of the phone number WhatsApp pairs it with (RFC 0006 `alias_of`), so the sender takes the name your contacts

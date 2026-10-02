@@ -54,7 +54,8 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
     voice-memos         AppDomainGroup-group.com.apple.VoiceMemos.shared  Recordings/CloudRecordings.db,
                                                                   the .m4a/.qta files under Recordings/
     apple-photos        CameraRollDomain                              Media/PhotoData/Photos.sqlite (the
-                                                                  library's metadata; no image is copied)
+                                                                  library's metadata; the pixels are hashed in
+                                                                  place, never copied)
     withings            AppDomain-com.withings.wiScaleNG              Library/Application Support/coredata/
                                                                   *_WTHealth.sqlite and *_Measure.sqlite
                                                                   (every profile; the adapter runs on the

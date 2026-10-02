@@ -494,18 +494,24 @@ class Index:
         ).fetchall()
         return {str(superseded): int(seq) for superseded, seq in found}
 
-    def of_kind(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
+    def of_kind(
+        self,
+        kind: str,
+        first_day: str | None = None,
+        last_day: str | None = None,
+        source: str | None = None,
+    ) -> Iterator[Line]:
         """Every line of one kind, streamed in file order (one sequential sweep of the files, each
         opened once), so a kind with a million lines never sits in memory at once; with
         `first_day` or `last_day`, only the lines whose local day is inside the bounds (the
         (kind, day_local) index serves the cut), so a reader of one year never opens the others'
-        files."""
+        files; with `source`, only that source's."""
         from .store import read_line_at
 
         found = self.db.execute(
             "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
-            " ORDER BY file, offset",
-            (kind, first_day or "", last_day or "9999-12-31"),
+            " AND (? IS NULL OR source = ?) ORDER BY file, offset",
+            (kind, first_day or "", last_day or "9999-12-31", source, source),
         ).fetchall()
         handle: Any = None
         current: str | None = None
@@ -633,6 +639,16 @@ class Index:
             if present(str(sha256)):
                 found += 1
         return {"referenced": referenced, "lines": lines, "present": found}
+
+    def media_by_source(self) -> Iterator[tuple[str, str, int]]:
+        """(source, digest, lines) for every attachment a standing line points at (the `media`
+        column: `payload.media`, else `content`, else `extra.media`; a retracted line is out), one
+        row per source and digest, streamed from the index alone (`attach status`)."""
+        for source, sha256, n in self.db.execute(
+            f"SELECT source, media, count(*) FROM lines WHERE media IS NOT NULL AND id NOT IN ({RETRACTED})"
+            " GROUP BY source, media ORDER BY source, media"
+        ):
+            yield str(source), str(sha256), int(n)
 
     def activity(self, first_day: str, last_day: str) -> list[dict[str, Any]]:
         """Per source, most lines first, over the lines whose local day is in [first_day, last_day]
