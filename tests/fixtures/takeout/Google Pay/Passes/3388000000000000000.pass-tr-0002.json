@@ -1,0 +1,11 @@
+{
+  "id": "3388000000000000000.pass-tr-0002",
+  "classType": "TRANSIT",
+  "transitType": "FERRY",
+  "state": "EXPIRED",
+  "issuerName": "Ruter",
+  "origin": {"name": "Aker brygge"},
+  "destination": {"name": "Nesoddtangen"},
+  "validTimeInterval": {"start": "2026-06-13T07:30:00Z", "end": "2026-06-13T08:30:00Z"},
+  "passengerName": "Per Persona"
+}

@@ -330,6 +330,8 @@ SKIP_PHRASES = {
     "skipped_not_involved": "the owner is not part of",
     "skipped_no_owner": "with nobody to be the owner",
     "skipped_no_amount": "without an amount",
+    "skipped_no_currency": "without a currency",
+    "skipped_gift_cards": "gift cards",
     "skipped_encrypted": "encrypted with no decrypted copy in the store",
     "skipped_redacted": "redacted, or redactions",
     "skipped_call": "calls, not messages",

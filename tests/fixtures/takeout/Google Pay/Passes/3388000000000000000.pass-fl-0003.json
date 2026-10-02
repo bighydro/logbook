@@ -1,0 +1,13 @@
+{
+  "id": "3388000000000000000.pass-fl-0003",
+  "classType": "FLIGHT",
+  "state": "EXPIRED",
+  "issuerName": "XY Air",
+  "flightHeader": {"carrier": {"carrierIataCode": "XY"}, "flightNumber": "561"},
+  "origin": {"airportIataCode": "OSL", "terminal": "1", "gate": "E14"},
+  "destination": {"airportIataCode": "ZRH"},
+  "localScheduledDepartureDateTime": "2026-06-15T09:05:00",
+  "localEstimatedOrActualArrivalDateTime": "2026-06-15T11:15:00",
+  "passengerName": "PERSONA/PER MR",
+  "boardingAndSeatingInfo": {"seatNumber": "14A", "boardingGroup": "2"}
+}
