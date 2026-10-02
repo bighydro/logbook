@@ -19,6 +19,7 @@ from .chain import Line
 from .store import RETRACTION, retractions
 
 KIND = "keeper"
+PHOTO = "photo"  # the kind of the lines the marks are read from
 SCHEMA = "keeper/v1"
 TIER = 1
 LANES = ("memory", "art")

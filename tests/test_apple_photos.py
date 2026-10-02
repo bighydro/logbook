@@ -106,16 +106,18 @@ ALBUMS = [  # (pk, kind, trashed, title, uuid): a user album, another, a trashed
     (14, 4000, 0, None, "B0000000-0000-4000-8000-000000000014"),
 ]
 MEMBERS = [(10, 1), (11, 1), (12, 1), (13, 1), (10, 4), (13, 2), (14, 2)]  # (album pk, asset pk)
-PEOPLE = [  # (pk, face count, merge target, display name, full name, uuid): named, unnamed, merged into named
+PEOPLE = [  # (pk, face count, merge target, display name, full name, uuid): named, unnamed, merged into
+    # named, named by a display name only (the People album shows "Ola")
     (20, 12, None, "K", "Kari Nordmann", "C0000000-0000-4000-8000-000000000020"),
     (21, 3, None, None, None, "C0000000-0000-4000-8000-000000000021"),
     (22, 1, 20, None, None, "C0000000-0000-4000-8000-000000000022"),
-    (23, 2, None, "O", None, "C0000000-0000-4000-8000-000000000023"),
+    (23, 2, None, "Ola", None, "C0000000-0000-4000-8000-000000000023"),
 ]
 FACES = [  # (pk, asset pk, person pk)
     (30, 1, 20), (31, 1, 21), (32, 4, 22), (33, 4, 23), (34, 4, None), (35, 6, 20),
 ]  # fmt: skip
 LINES = 6  # eight assets less the trashed one and the undated one
+KEEPERS = 1  # the one favourite (IMG_0001.HEIC) is a `memory` keeper on import (RFC 0024); no Art album
 
 
 def _store(folder: Path, *, name: str = "Photos.sqlite") -> Path:
@@ -229,7 +231,12 @@ def test_a_live_photo_from_the_camera_with_its_albums_favourite_and_named_people
         "people": ["C0000000-0000-4000-8000-000000000020"],
         "favorite": True,
         "albums": ["Boats", "Oslo weekend"],
-        "extra": {"uti": "public.heic", "imported_by": 1, "imported_by_bundle": "com.apple.camera"},
+        "extra": {
+            "uti": "public.heic",
+            "imported_by": 1,
+            "imported_by_bundle": "com.apple.camera",
+            "faces": ["Kari Nordmann"],
+        },
     }
 
 
@@ -252,6 +259,19 @@ def test_a_video_has_its_duration_and_a_merged_person_counts_under_its_target(tm
     assert p["faces"] == 3  # one unnamed face is still a face
     assert p["people"] == ["C0000000-0000-4000-8000-000000000020", "C0000000-0000-4000-8000-000000000023"]
     assert p["albums"] == ["Oslo weekend"]
+
+
+def test_the_people_albums_names_are_under_extra_faces_and_people_stays_ids(tmp_path):
+    """The names the owner gave in the People album ride along under `extra.faces`, sorted: the full
+    name, else the display name; a merged person under its target's name; an unnamed face no name.
+    `people` is still the ids (RFC 0002). A line with no named face has no `extra.faces`."""
+    by = _by_name(_lines(tmp_path))
+    assert by["IMG_0001.HEIC"]["payload"]["extra"]["faces"] == ["Kari Nordmann"]
+    assert by["IMG_0004.MOV"]["payload"]["extra"]["faces"] == ["Kari Nordmann", "Ola"]
+    assert "faces" not in by["IMG_0002.PNG"]["payload"].get("extra", {})
+    for line in by.values():
+        assert all(len(pid) == 36 for pid in line["payload"].get("people", []))
+        assert "Kari Nordmann" not in line["payload"].get("people", [])
 
 
 def test_hidden_airdropped_and_front_camera_assets(tmp_path):
@@ -314,4 +334,61 @@ def test_add_photos_appends_once(lb, tmp_path, capsys):
     cli.main(["add", "photos", str(store)])
     assert "added 0 lines" in capsys.readouterr().out
     seq, _head, errors = lb.verify()
-    assert (seq, errors) == (LINES, [])
+    assert (seq, errors) == (LINES + KEEPERS, [])
+
+
+def test_add_photos_writes_a_keeper_per_favourite_once(lb, tmp_path, capsys):
+    """RFC 0024: a favourite in the library is a `memory` keeper, written by the import itself,
+    keyed `<photo line id>:memory` and never twice; the Art album would be `art`."""
+    store = _store(tmp_path / "photos")
+    cli.main(["add", "photos", str(store)])
+    out = capsys.readouterr().out
+    assert f"keepers: {KEEPERS} new from 1 marked photo of {LINES}" in out
+    lines = list(lb.lines())
+    found = [line for line in lines if line["kind"] == "keeper"]
+    photo = next(line for line in lines if line["payload"].get("file_name") == "IMG_0001.HEIC")
+    assert len(found) == KEEPERS
+    keeper = found[0]
+    assert (keeper["source"], keeper["tier"], keeper["at"], keeper["end"]) == (
+        "keeper-inference",
+        1,
+        photo["at"],
+        None,
+    )
+    assert keeper["payload"] == {
+        "schema": "keeper/v1",
+        "raw_id": f"{photo['id']}:memory",
+        "photo": {
+            "line": photo["id"],
+            "asset_id": photo["payload"]["asset_id"],
+            "library": "apple-photos",
+            "file_name": "IMG_0001.HEIC",
+        },
+        "at": photo["at"],
+        "lane": "memory",
+        "source": "ios-photos",
+    }
+    cli.main(["add", "photos", str(store)])
+    out = capsys.readouterr().out
+    assert "added 0 lines from apple-photos" in out
+    assert f"keepers: 0 new from 1 marked photo of {LINES} ({KEEPERS} already in the record)" in out
+    assert lb.verify()[0] == LINES + KEEPERS
+    cli.main(["infer", "keepers"])  # the later pass finds nothing left to write
+    assert "0 new keepers" in capsys.readouterr().out
+    assert lb.verify()[0] == LINES + KEEPERS
+
+
+def test_add_photos_dry_run_counts_the_keepers_too_and_writes_nothing(lb, tmp_path, capsys):
+    store = _store(tmp_path / "photos")
+    cli.main(["add", "photos", str(store), "--dry-run"])
+    out = capsys.readouterr().out
+    assert f"apple-photos: {LINES} lines would be added, 0 already in the record (dry run" in out
+    assert f"keepers: {KEEPERS} would be written, 0 already in the record (dry run, nothing written)" in out
+    assert lb.verify()[0] == 0
+    cli.main(["add", "photos", str(store)])
+    capsys.readouterr()
+    cli.main(["add", "photos", str(store), "--dry-run"])
+    out = capsys.readouterr().out
+    assert f"apple-photos: 0 lines would be added, {LINES} already in the record" in out
+    assert f"keepers: 0 would be written, {KEEPERS} already in the record" in out
+    assert lb.verify()[0] == LINES + KEEPERS

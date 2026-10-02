@@ -262,11 +262,17 @@ def _append_with(
         options["airports"] = _airports(None)
     seq_before, produced = int(lb.meta["seq"]), [0]
     drafts = flights.reconcile(lb, run(p, **options), counts, options.get("airports"))
+    marked: list[tuple[dict[str, Any], list[str]]] | None = None
+    if getattr(adapter, "KEEPERS", False):  # a photo library whose marks are keepers (RFC 0024)
+        marked = []
+        drafts = _noting_marks(drafts, marked, counts)
     if dry_run:
         _say_dry_run(lb, adapter.NAME, drafts)
         _report_skipped(counts)
         for text in report:
             print(f"  {text}")
+        if marked is not None:
+            _keepers_of_import(lb, adapter.NAME, marked, counts, dry_run=True)
         return 0
     n = lb.append_many(
         _counted(drafts, produced),
@@ -277,8 +283,64 @@ def _append_with(
     _report_skipped(counts)
     for text in report:
         print(f"  {text}")
+    if marked is not None:
+        _keepers_of_import(lb, adapter.NAME, marked, counts)
     inbox.record(lb.root, inbox.finished(lb, recorded_as or p, adapter.NAME, produced[0], n, seq_before))
     return n
+
+
+def _noting_marks(
+    drafts: Iterator[dict[str, Any]], marked: list[tuple[dict[str, Any], list[str]]], counts: dict[str, int]
+) -> Iterator[dict[str, Any]]:
+    """The drafts as they stream, noting each photo draft with a keeper mark (a favourite, the Art
+    album; `keepers.marks`) and its lanes, and counting the photos, for `_keepers_of_import`."""
+    for draft in drafts:
+        if draft.get("kind") == keepers.PHOTO:
+            counts["photos"] = counts.get("photos", 0) + 1
+            lanes = keepers.marks(draft)
+            if lanes:
+                marked.append((draft, lanes))
+        yield draft
+
+
+def _keepers_of_import(
+    lb: Logbook,
+    source: str,
+    marked: list[tuple[dict[str, Any], list[str]]],
+    counts: dict[str, int],
+    dry_run: bool = False,
+) -> None:
+    """The keeper/v1 lines (RFC 0024) for the marks an import carried, written once the photo lines
+    are in the record: each draft's line id is looked up by `(source, raw_id)` through the index, the
+    keeper is `keepers.draft` of that line and lane, and `append_many` skips a `(keeper-inference,
+    <line id>:<lane>)` already there, retracted or not. A dry run counts the same way: a photo not
+    yet in the record would be a new keeper; one already there is looked up. Says what it did."""
+    drafts: list[dict[str, Any]] = []
+    new_photos = 0
+    with lb.index() as idx:
+        for draft, lanes in marked:
+            raw_id = (draft.get("payload") or {}).get("raw_id")
+            line_id = None if raw_id is None else idx.line_id(source, str(raw_id))
+            if line_id is None:
+                new_photos += len(lanes)  # a dry run: the photo itself is not in the record yet
+                continue
+            drafts.extend(keepers.draft({**draft, "id": line_id}, lane) for lane in lanes)
+        if dry_run:
+            already = len(idx.existing({key for d in drafts if (key := _dedupe_key(d)) is not None}))
+    photos = f"{_plural(len(marked), 'marked photo')} of {counts.get('photos', 0)}"
+    if dry_run:
+        n = len(drafts) - already + new_photos
+        print(f"  keepers: {n} would be written, {already} already in the record (dry run, nothing written)")
+        return
+    already = 0
+
+    def skipped(_draft: dict[str, Any]) -> None:
+        nonlocal already
+        already += 1
+
+    n = lb.append_many(drafts, skipped=skipped)
+    already_text = f" ({already} already in the record)" if already else ""
+    print(f"  keepers: {n} new from {photos}{already_text}")
 
 
 def _say_dry_run(lb: Logbook, name: str, drafts: Iterable[dict[str, Any]]) -> None:

@@ -25,7 +25,15 @@ library found, `people` the UUIDs of the people among them **that the owner has 
 person counts under its merge target; ids, never names — RFC 0002), `favorite` and `hidden` when set,
 `albums` the titles of the owner's own albums (kind 2, not trashed) it is in, sorted; the automatic
 groupings (smart albums, memories, shared streams, folders) are not albums. `extra` keeps the UTI,
-`imported_by` and the importing app's bundle id.
+`imported_by`, the importing app's bundle id and `faces`, the names the owner gave those people in
+the People album (the full name, else the display name; a merged person under its target's), sorted.
+A name there is the library's guess at who is in the picture and the owner's spelling of it: a
+reader proposes it as company and never confirms it (`present.from_photos`), and resolves it to a
+person only when it is exactly a label a resolution line carries.
+
+Favourites and the Art album are keepers (RFC 0024): `KEEPERS` tells `logbook add` to write one
+`keeper/v1` line per mark through `keepers.draft` once the photo lines are in the record, keyed by
+the photo line's id and lane so a re-import, and `infer keepers` after it, write nothing twice.
 
 Provenance follows the store's own record of how the asset arrived (RFC 0002): `screenshot` when the
 subtype says so; `camera` for a live photo, a camera video kind, or an import by the back or front
@@ -57,6 +65,7 @@ NAME = "apple-photos"
 KIND = "photo"
 TIER = 1  # RFC 0002: metadata; `logbook add --tier` overrides
 SCHEMA = "photo/v1"
+KEEPERS = True  # `logbook add` writes the keeper/v1 lines for the marks on these photos (RFC 0024)
 
 SQLITE_HEADER = b"SQLite format 3\x00"
 APPLE_EPOCH_UTC = datetime(2001, 1, 1, tzinfo=UTC)
@@ -144,7 +153,7 @@ def run(
     try:
         tables = _tables(con)
         albums = _albums(con, tables)
-        faces, people = _faces(con, tables)
+        faces, people, names = _faces(con, tables)
         asset_columns = _columns(con, "ZASSET")
         attribute_columns = _columns(con, "ZADDITIONALASSETATTRIBUTES")
         select = [f"a.{c}" if c in asset_columns else f"NULL AS {c}" for c in ASSET_COLUMNS]
@@ -155,10 +164,10 @@ def run(
             if "ZASSET" in attribute_columns
             else ""
         )
-        names = ASSET_COLUMNS + ATTRIBUTE_COLUMNS
+        columns = ASSET_COLUMNS + ATTRIBUTE_COLUMNS
         for row in con.execute(f"SELECT {', '.join(select)} FROM ZASSET a {join} ORDER BY {order}"):
-            values = dict(zip(names, row, strict=True))
-            line = _line(values, albums, faces, people, counts, timezone, tier or TIER)
+            values = dict(zip(columns, row, strict=True))
+            line = _line(values, albums, faces, people, names, counts, timezone, tier or TIER)
             if line is None or (since and line["at"] < since):
                 continue
             yield line
@@ -205,15 +214,20 @@ def _join_table(con: sqlite3.Connection, tables: set[str]) -> tuple[str, str, st
     return None
 
 
-def _faces(con: sqlite3.Connection, tables: set[str]) -> tuple[dict[int, int], dict[int, list[str]]]:
-    """(`asset Z_PK → number of faces`, `asset Z_PK → sorted UUIDs of the named people among them`).
-    A person merged into another counts under the merge target's name and UUID."""
+Faces = tuple[dict[int, int], dict[int, list[str]], dict[int, list[str]]]
+
+
+def _faces(con: sqlite3.Connection, tables: set[str]) -> Faces:
+    """(`asset Z_PK → number of faces`, `asset Z_PK → sorted UUIDs of the named people among them`,
+    `asset Z_PK → their names, sorted`). A name is the person's full name, else the display name,
+    as the People album shows it. A person merged into another counts under the merge target's
+    name and UUID."""
     if "ZDETECTEDFACE" not in tables:
-        return {}, {}
+        return {}, {}, {}
     face_columns = set(_columns(con, "ZDETECTEDFACE"))
     if "ZASSETFORFACE" not in face_columns:
-        return {}, {}
-    named: dict[int, str] = {}
+        return {}, {}, {}
+    named: dict[int, tuple[str, str]] = {}  # person Z_PK → (UUID, name) of the person it stands for
     if "ZPERSON" in tables:
         person_columns = set(_columns(con, "ZPERSON"))
         if "ZPERSONUUID" in person_columns:
@@ -222,27 +236,33 @@ def _faces(con: sqlite3.Connection, tables: set[str]) -> tuple[dict[int, int], d
             select.append("ZDISPLAYNAME" if "ZDISPLAYNAME" in person_columns else "NULL")
             select.append("ZMERGETARGETPERSON" if "ZMERGETARGETPERSON" in person_columns else "NULL")
             persons = {
-                int(pk): (_text(uuid), bool(_text(full) or _text(display)), target)
+                int(pk): (_text(uuid), _text(full) or _text(display), target)
                 for pk, uuid, full, display, target in con.execute(f"SELECT {', '.join(select)} FROM ZPERSON")
                 if isinstance(pk, int)
             }
-            for pk, (uuid, is_named, target) in persons.items():
+            for pk, (uuid, name, target) in persons.items():
                 resolved = persons.get(target) if isinstance(target, int) and target != pk else None
                 if resolved is not None and resolved[1] and resolved[0]:
-                    named[pk] = resolved[0]
-                elif is_named and uuid:
-                    named[pk] = uuid
+                    named[pk] = (resolved[0], resolved[1])
+                elif name and uuid:
+                    named[pk] = (uuid, name)
     counts: dict[int, int] = {}
     people: dict[int, set[str]] = {}
+    names: dict[int, set[str]] = {}
     person_column = "ZPERSONFORFACE" if "ZPERSONFORFACE" in face_columns else "NULL"
     for asset_pk, person_pk in con.execute(f"SELECT ZASSETFORFACE, {person_column} FROM ZDETECTEDFACE"):
         if not isinstance(asset_pk, int):
             continue
         counts[asset_pk] = counts.get(asset_pk, 0) + 1
-        person_uuid = named.get(person_pk) if isinstance(person_pk, int) else None
-        if person_uuid is not None:
-            people.setdefault(asset_pk, set()).add(person_uuid)
-    return counts, {pk: sorted(ids) for pk, ids in people.items()}
+        person = named.get(person_pk) if isinstance(person_pk, int) else None
+        if person is not None:
+            people.setdefault(asset_pk, set()).add(person[0])
+            names.setdefault(asset_pk, set()).add(person[1])
+    return (
+        counts,
+        {pk: sorted(ids) for pk, ids in people.items()},
+        {pk: sorted(found) for pk, found in names.items()},
+    )
 
 
 def _line(
@@ -250,6 +270,7 @@ def _line(
     albums: dict[int, list[str]],
     faces: dict[int, int],
     people: dict[int, list[str]],
+    names: dict[int, list[str]],
     counts: dict[str, int],
     timezone: str | None,
     tier: int,
@@ -309,6 +330,8 @@ def _line(
         extra["imported_by"] = imported_by
     if bundle:
         extra["imported_by_bundle"] = bundle
+    if pk in names:
+        extra["faces"] = names[pk]
     if extra:
         payload["extra"] = extra
     return {
