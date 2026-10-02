@@ -567,58 +567,61 @@ def html(data: Mapping[str, Any]) -> str:
         "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        f"<title>{_e(year)} · Logbook</title>",
+        f"<title>{escape(year)} · Logbook</title>",
         f"<style>{CSS}</style>",
         "</head>",
         "<body>",
         "<header>",
-        f"<h1>{_e(year)}</h1>",
+        f"<h1>{escape(year)}</h1>",
     ]
     w = data["window"]
     if w is None:
         out += [
             '<p class="muted">The record has no days in this year.</p>',
             "</header>",
-            *_footer(data),
+            *footer(data),
             "</body>",
             "</html>",
         ]
         return "\n".join(out) + "\n"
     out.append(
-        f"<p>{_e(w['since'])} {EN_DASH} {_e(w['until'])}{DOT}{_plural(w['days'], 'day')} the track covers</p>"
+        f"<p>{escape(w['since'])} {EN_DASH} {escape(w['until'])}{DOT}{_plural(w['days'], 'day')}"
+        " the track covers</p>"
     )
     for warning in data["warnings"]:
-        out.append(f'<p class="muted">{_e(warning)}</p>')
+        out.append(f'<p class="muted">{escape(warning)}</p>')
     out.append("</header>")
-    out += _section("countries", "Days per country", _countries_html(data["countries"], data["nights"]))
-    out += _section("trips", "Trips", _trips_html(data["trips"]))
-    out += _section("flights", "Flights", _flights_html(data["flights"]))
-    out += _section("places", "Places, by nights", _places_html(data["places"]))
-    out += _section("people", "People", _people_html(data["people"]))
-    out += _section("health", "Health, by month", _health_html(data["health"]))
-    out += _section("keepers", "Keepers", _keepers_html(data["keepers"]))
-    out += _section("picks", "One day each", _picks_html(data["picks"]))
-    out += _footer(data)
+    out += section("countries", "Days per country", _countries_html(data["countries"], data["nights"]))
+    out += section("trips", "Trips", _trips_html(data["trips"]))
+    out += section("flights", "Flights", _flights_html(data["flights"]))
+    out += section("places", "Places, by nights", _places_html(data["places"]))
+    out += section("people", "People", _people_html(data["people"]))
+    out += section("health", "Health, by month", _health_html(data["health"]))
+    out += section("keepers", "Keepers", _keepers_html(data["keepers"]))
+    out += section("picks", "One day each", _picks_html(data["picks"]))
+    out += footer(data)
     out += ["</body>", "</html>"]
     return "\n".join(out) + "\n"
 
 
-def _e(text: object) -> str:
+def escape(text: object) -> str:
     return html_text.escape(str(text), quote=True)
 
 
-def _section(id_: str, heading: str, body: Sequence[str]) -> list[str]:
-    return [f'<section id="{id_}">', f"<h2>{_e(heading)}</h2>", *body, "</section>"]
+def section(id_: str, heading: str, body: Sequence[str]) -> list[str]:
+    return [f'<section id="{id_}">', f"<h2>{escape(heading)}</h2>", *body, "</section>"]
 
 
 Cell = tuple[str | Sequence[str], str]  # the text (or the lines of a cell) and its class
 
 
-def _table(heads: Sequence[tuple[str, str]], body: Sequence[Sequence[Cell]]) -> list[str]:
+def table(heads: Sequence[tuple[str, str]], body: Sequence[Sequence[Cell]]) -> list[str]:
     """A table from (text, class) cells; the text is escaped here, a cell of several lines broken
     between them."""
     out = ["<table>", "<thead><tr>"]
-    out += [f'<th class="{cls}">{_e(text)}</th>' if cls else f"<th>{_e(text)}</th>" for text, cls in heads]
+    out += [
+        f'<th class="{cls}">{escape(text)}</th>' if cls else f"<th>{escape(text)}</th>" for text, cls in heads
+    ]
     out += ["</tr></thead>", "<tbody>"]
     for row in body:
         cells = [
@@ -630,7 +633,7 @@ def _table(heads: Sequence[tuple[str, str]], body: Sequence[Sequence[Cell]]) -> 
 
 
 def _cell(text: str | Sequence[str]) -> str:
-    return _e(text) if isinstance(text, str) else "<br>".join(_e(t) for t in text)
+    return escape(text) if isinstance(text, str) else "<br>".join(escape(t) for t in text)
 
 
 def _countries_html(c: Mapping[str, Any], n: Mapping[str, Any]) -> list[str]:
@@ -638,8 +641,8 @@ def _countries_html(c: Mapping[str, Any], n: Mapping[str, Any]) -> list[str]:
     rows_.append([("in transit", "d"), (f"{c['in_transit']:,}", "n")])
     if c["unknown"]:
         rows_.append([("unknown", "d"), (f"{c['unknown']:,}", "n")])
-    out = _table([("country", ""), ("days", "n")], rows_)
-    out.append(f"<p>Nights: {_e(nights_text(n))}</p>")
+    out = table([("country", ""), ("days", "n")], rows_)
+    out.append(f"<p>Nights: {escape(nights_text(n))}</p>")
     return out
 
 
@@ -663,8 +666,8 @@ def _trips_html(found: Sequence[Mapping[str, Any]]) -> list[str]:
                 (", ".join(t["people"]), ""),
             ]
         )
-    out = [f"<p>{_e(trips_head(found))}</p>"]
-    out += _table([("dates", ""), ("nights", ""), ("route", ""), ("flights", ""), ("with", "")], rows_)
+    out = [f"<p>{escape(trips_head(found))}</p>"]
+    out += table([("dates", ""), ("nights", ""), ("route", ""), ("flights", ""), ("with", "")], rows_)
     return out
 
 
@@ -681,8 +684,8 @@ def _flights_html(f: Mapping[str, Any]) -> list[str]:
         ]
         for x in f["flights"]
     ]
-    out = [f"<p>{_e(flights_head(f))}</p>"]
-    out += _table([("date", ""), ("flight", ""), ("route", ""), ("km", "n"), ("evidence", "")], rows_)
+    out = [f"<p>{escape(flights_head(f))}</p>"]
+    out += table([("date", ""), ("flight", ""), ("route", ""), ("km", "n"), ("evidence", "")], rows_)
     return out
 
 
@@ -696,7 +699,7 @@ def _places_html(p: Mapping[str, Any]) -> list[str]:
         rows_.append(_visit_row(str(e["label"]), e))
     if not rows_:
         return ['<p class="muted">Nowhere.</p>']
-    out = _table([("place", ""), ("nights", "n"), ("stays", "n"), ("hours", "n"), ("with", "")], rows_)
+    out = table([("place", ""), ("nights", "n"), ("stays", "n"), ("hours", "n"), ("with", "")], rows_)
     if p["unnamed"]:
         out.append(
             '<p class="muted">An unnamed place is one `places name` takes; its stay id is under --json.</p>'
@@ -727,7 +730,7 @@ def _people_html(people: Sequence[Mapping[str, Any]]) -> list[str]:
         ]
         for p in people
     ]
-    return _table([("person", ""), ("days", "n"), ("nights", "n"), ("last", ""), ("places", "")], rows_)
+    return table([("person", ""), ("days", "n"), ("nights", "n"), ("last", ""), ("places", "")], rows_)
 
 
 def _health_html(months: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -757,7 +760,7 @@ def _health_html(months: Sequence[Mapping[str, Any]]) -> list[str]:
                 cell(hrv, "" if hrv is None else f"{hrv['mean_ms']} ms ({hrv['days']})"),
             ]
         )
-    out = _table(
+    out = table(
         [("month", ""), ("sleep", "n"), ("steps", "n"), ("resting heart rate", "n"), ("hrv", "n")], rows_
     )
     out.append('<p class="muted">Means over the nights and days with a line, their count in parentheses.</p>')
@@ -771,7 +774,7 @@ def _keepers_html(months: Sequence[Mapping[str, Any]]) -> list[str]:
         [(m["month"], "d"), (f"{m['count']:,}", "n"), (f"{m['memory']:,}", "n"), (f"{m['art']:,}", "n")]
         for m in months
     ]
-    return _table([("month", ""), ("keepers", "n"), ("memory", "n"), ("art", "n")], rows_)
+    return table([("month", ""), ("keepers", "n"), ("memory", "n"), ("art", "n")], rows_)
 
 
 def _picks_html(picks: Sequence[Mapping[str, Any]]) -> list[str]:
@@ -783,19 +786,19 @@ def _picks_html(picks: Sequence[Mapping[str, Any]]) -> list[str]:
         name = MONTHS[int(p["month"][5:7]) - 1]
         out.append('<article class="pick">')
         if p["day"] is None:
-            out.append(f"<h3>{_e(name)} <span>no days</span></h3>")
+            out.append(f"<h3>{escape(name)} <span>no days</span></h3>")
         else:
             page = p["page"]
             why = f"{p['day']}, {page['weekday']}{DOT}{evidence_text(p['evidence'])}"
-            out.append(f"<h3>{_e(name)} <span>{_e(why)}</span></h3>")
-            out.append("<pre>" + "\n".join(_e(text) for text in day_reader.rows(page)) + "</pre>")
+            out.append(f"<h3>{escape(name)} <span>{escape(why)}</span></h3>")
+            out.append("<pre>" + "\n".join(escape(text) for text in day_reader.rows(page)) + "</pre>")
         out.append("</article>")
     return out
 
 
-def _footer(data: Mapping[str, Any]) -> list[str]:
+def footer(data: Mapping[str, Any]) -> list[str]:
     head = str(data.get("head") or "")
-    at = f" at head {_e(head[:12])}…" if head else ""
+    at = f" at head {escape(head[:12])}…" if head else ""
     return [
         "<footer>",
         f"<p>Read from the record{at}: derived, never written; the same record gives the same page.</p>",

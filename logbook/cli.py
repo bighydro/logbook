@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
-derive · places · rollup · trips · ledger · keepers · promises · serve · verify · doctor · export · index ·
-migrate · assets · sources · mcp · backup. Three verbs, twenty-one rare."""
+derive · places · rollup · trips · trip · ledger · keepers · promises · serve · verify · doctor · export ·
+index · migrate · assets · sources · mcp · backup. Three verbs, twenty-two rare."""
 
 from __future__ import annotations
 
@@ -57,6 +57,7 @@ from . import (
     serve,
     stays,
     transcribe,
+    trip_page,
     trips,
 )
 from . import (
@@ -2128,6 +2129,33 @@ def cmd_year(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_trip(a: argparse.Namespace) -> None:
+    """`trip <id-or-date> [--html PATH] [--json]`: one trip read back — the route as the stays
+    slept at with their nights and the legs between them, the days from the leaving day to the
+    return day one line each, the flights in and out, the people confirmed and proposed, the
+    nights aboard, the keepers per day, the health of the span and the spend — from one reading
+    of the days around it (`logbook.trip_page`). The trip is named by the id `trips` prints or by
+    any day inside it. `--html` writes one self-contained page with an inline SVG map of the
+    route. Nothing is written to the record."""
+    lb = Logbook.find()
+    try:
+        data = trip_page.read(lb, a.ref, _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"trip: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.html:
+        out = Path(a.html)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(trip_page.html(data).encode("utf-8"))
+        print(f"trip {data['id']}: wrote {out}")
+        return
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    for text in trip_page.rows(data):
+        print(text)
+
+
 def _days_window(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str] | None:
     """`--from` and `--to`, each defaulting to the record's first or last day with a location line
     (else any line); None when a bound is missing and the record has no lines."""
@@ -4050,6 +4078,26 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--json", action="store_true", help="the Year as one JSON object, the picks' Days inside")
     s.set_defaults(fn=cmd_year)
+    s = sub.add_parser(
+        "trip", help="one trip read back: the route with a map, days, flights, people, keepers, health, spend"
+    )
+    s.add_argument(
+        "ref",
+        metavar="ID-OR-DAY",
+        help="a trip id as `trips` prints it (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside the trip",
+    )
+    s.add_argument(
+        "--html",
+        metavar="PATH",
+        help="write one self-contained page (inline CSS and SVG map, no script) instead",
+    )
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="the Trip as one JSON object, the days' rows inside")
+    s.set_defaults(fn=cmd_trip)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
     s.add_argument(
