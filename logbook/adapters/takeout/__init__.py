@@ -11,8 +11,17 @@ sharing `SOURCE` for the lines it writes:
     tasks.py      Tasks/ — Tasks.json, every list and task → task/v1
     chrome.py     Chrome/ — History.json and Bookmarks.html → browse/v1
     youtube.py    YouTube and YouTube Music/history/ — watch and search history → watch/v1
+    pay.py        Google Pay/ — the transactions CSV → transaction/v1; the passes that are tickets → event/v1
+    chat.py       Google Chat/ — Groups/<conversation>/messages.json → message/v1
+    meet.py       Google Meet/ — the call history CSV → call/v1
+    access_log.py Access Log Activity/ — every access to a Google service → event/v1, tier 3 (off by default)
+    activity.py   My Activity/ — searches, visited results and apps opened → browse/v1; YouTube → watch/v1
+                  through youtube.py's own mapping (off by default)
+    contacts.py   Contacts/ — the vCards → resolution/v1, merged with the people the record resolves
+    times.py      the three clocks Takeout writes, read to one UTC instant (shared)
 
-Planned siblings, one file each: activity.
+Every sub-adapter answers to `takeout-<name>` as well as `google-takeout-<name>` (`adapters.TAKEOUT`,
+`ALIASES`). `docs/adapters/takeout.md` is the owner's page.
 
 Folder dispatch (roadmap): a whole unzipped Takeout folder handed to `logbook add` is walked file
 by file today, because `add` already processes a folder's files and each sub-adapter sniffs its
@@ -26,4 +35,18 @@ unpacked. Neither exists yet.
 from __future__ import annotations
 
 SOURCE = "google-takeout"
-SUB_ADAPTERS = ("location", "calendar", "photos", "keep", "tasks", "chrome", "youtube")
+SUB_ADAPTERS = (
+    "location",
+    "calendar",
+    "photos",
+    "keep",
+    "tasks",
+    "chrome",
+    "youtube",
+    "pay",
+    "chat",
+    "meet",
+    "access_log",
+    "activity",
+    "contacts",
+)

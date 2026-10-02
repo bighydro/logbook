@@ -175,6 +175,8 @@ Two ways in. `add` reads a file you already hold; `sync` asks a service you run 
 logbook add ~/Downloads/dawarich-export.json      # any export the adapters recognise, or a folder
 logbook add ~/Takeout/"Location History (Timeline)"/Records.json   # Google Takeout; Timeline.json works too
 logbook add ~/Takeout/"Google Photos"                 # Google Takeout photos: one line per file, the pixels stay put
+logbook add takeout-chat ~/Takeout/"Google Chat"      # Takeout by name: pay, chat, meet, contacts, keep, tasks, chrome, youtube, … (docs/adapters/takeout.md)
+logbook add takeout-pay ~/Takeout/"Google Pay" --dry-run   # any import: count against the record, write nothing
 logbook add ~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442   # iOS Contacts from an unencrypted Finder/iTunes backup
 logbook add ~/backup/7c7fba66680ef796b916b067077cc246adacf01d   # WhatsApp (iOS) ChatStorage.sqlite from the same backup
 logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes NoteStore.sqlite from the same backup
