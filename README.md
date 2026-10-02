@@ -561,6 +561,7 @@ logbook show asset solvind                    # trips aboard, nights, people, th
 logbook show place Office                     # visits, people, photos
 logbook people --year 2026                    # everyone the record names: channels, days and nights together, last real contact
 logbook person ola@example.org                # one page: the numbers, then the shared days, most recent first
+logbook people merge                          # the same person named twice: proposals with the evidence; --apply ID merges
 
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art

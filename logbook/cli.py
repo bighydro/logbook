@@ -42,6 +42,7 @@ from . import (
     mcp_server,
     pages,
     people,
+    people_merge,
     places,
     policy,
     promises,
@@ -2862,6 +2863,9 @@ def cmd_people(a: argparse.Namespace) -> None:
     the index (`logbook.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written."""
     lb = Logbook.find()
+    if a.verb == "merge":
+        _people_merge(lb, a)
+        return
     try:
         window = _people_window(lb, a.year)
         if window is None:
@@ -2875,6 +2879,49 @@ def cmd_people(a: argparse.Namespace) -> None:
         print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
         return
     for text in people.rows(report):
+        print(text)
+
+
+def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people merge [--propose | --apply ID... | --export-review FILE | --apply-review FILE] [--json]`:
+    the same person named twice or more by the resolution lines (`logbook.people_merge`), proposed
+    with the evidence and never merged on its own. `--apply` and `--apply-review` append the alias
+    lines (RFC 0006) through `Logbook.append`; every id or row is checked before the first one."""
+    try:
+        report = people_merge.read(lb)
+        if a.apply:
+            _say_merged(people_merge.apply(lb, report, a.apply), a.json)
+            return
+        if a.apply_review:
+            rows = people_merge.read_review(Path(a.apply_review))
+            applied, done = people_merge.apply_review(lb, report, rows)
+            for row in done:
+                print(f"row {row.line}: already merged, skipped")
+            if not applied and not done:
+                print(f"nothing marked in {a.apply_review}: write `yes` in `apply` on the rows to merge")
+            _say_merged(applied, a.json)
+            return
+        if a.export_review:
+            n = people_merge.export_review(report, Path(a.export_review))
+            proposals = _plural(len(report.proposals), "proposal")
+            count = _plural(n, "row")
+            print(f"wrote {count} for {proposals} to {a.export_review}; mark `apply` and run --apply-review")
+            return
+    except (people_merge.MergeError, ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people merge: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in people_merge.rows(report):
+        print(text)
+
+
+def _say_merged(applied: list[people_merge.Applied], as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({"applied": [a.to_json() for a in applied]}, indent=2, ensure_ascii=False))
+        return
+    for text in people_merge.applied_rows(applied):
         print(text)
 
 
@@ -3454,7 +3501,30 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--year", metavar="YYYY", help="one year (default the whole record)")
     s.add_argument("--json", action="store_true", help="the report as one JSON object")
-    s.set_defaults(fn=cmd_people)
+    s.set_defaults(fn=cmd_people, verb=None)
+    verbs = s.add_subparsers(dest="verb", required=False)
+    v = verbs.add_parser(
+        "merge",
+        help="the same person named twice or more: proposals with the evidence; merged only when told",
+    )
+    g = v.add_mutually_exclusive_group()
+    g.add_argument(
+        "--propose", action="store_true", help="list the proposals with their evidence (the default)"
+    )
+    g.add_argument(
+        "--apply",
+        nargs="+",
+        metavar="ID",
+        help="merge these proposals: one alias line per ref of a secondary",
+    )
+    g.add_argument(
+        "--export-review", metavar="FILE", help="write the proposals as a CSV to mark, one row per secondary"
+    )
+    g.add_argument("--apply-review", metavar="FILE", help="merge the rows marked `yes` in a review file")
+    v.add_argument(
+        "--json", action="store_true", help="the proposals, or the lines written, as one JSON object"
+    )
+    v.set_defaults(fn=cmd_people)
     s = sub.add_parser(
         "person", help="one person's page: the numbers, then the shared days, most recent first"
     )

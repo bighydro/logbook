@@ -104,6 +104,77 @@ entity id, then as a label (case aside), then as a word of a label: `Ola` finds 
 no one else is an Ola; `Nordmann` with three Nordmanns names several and is refused, as is a name
 nobody has, and the owner's own. Exit status 2 with the reason on stderr.
 
+## The same person twice
+
+A record gets its people by several roads: the phone's address book mints an entity per card
+(`ios-contacts`), a Takeout export mints one per card it cannot match (`google-takeout-contacts`),
+and you name a calendar attendee, a mail sender or a transcript speaker by hand. The same person
+can end up as two or three entities, each with its own refs, each a row of `people`.
+`logbook people merge` finds them, shows why, and merges only when you say so.
+
+```bash
+logbook people merge                          # the proposals, with the evidence; nothing written
+logbook people merge --json
+logbook people merge --apply 5891928aa5523867 2f79068fab4863c9   # merge these, by the ids printed
+logbook people merge --export-review review.csv                  # one row per secondary, to mark
+logbook people merge --apply-review review.csv                   # merge the rows marked yes
+```
+
+```
+4 proposals · 9 people named twice or more · tier 2
+  5891928aa5523867  Kari Nordmann ← Kari
+    phone +447700900101: +447700900101 (ios-contacts, seq 3) · 447700900101@s.whatsapp.net (manual, seq 6)
+  2f79068fab4863c9  Per Hansen ← Per Hansen, Per Hansen
+    email per.hansen@example.org: per.hansen@example.org (google-takeout-contacts, seq 7) · Per.Hansen@example.org (manual, seq 9)
+    phone +447700900102: +447700900102 (google-takeout-contacts, seq 8) · 07700900102 (ios-contacts, seq 10)
+  298bc7a7705e8fbc  Liv Berg ← Berg, Liv
+    name Liv Berg ~ Berg, Liv · both on mail
+nothing merged: `people merge --apply ID...`, or `--export-review FILE`, mark, `--apply-review`
+```
+
+Every person entity the resolution lines name, never you, is a candidate, with every ref that
+resolves to it through the alias walk. Two candidates are one person when:
+
+- **a phone meets**: a ref of each spells the same E.164 number — a `phone` ref as written, a
+  number entered without a country code read with `LOGBOOK_DIAL_PREFIX` (as the adapters read
+  it), or a WhatsApp JID handle (`447700900001@s.whatsapp.net`);
+- **an email meets**: an `email` ref of each, or a `handle` that is an address, is the same
+  address, case aside;
+- **the names are one name and they share a channel**: the labels have the same words in any
+  order, case, accents and punctuation aside (`Nordmann, Kari` is `Kari Nordmann`), or one spells
+  a first name by its initial (`K. Nordmann`); both with two words at least — a first name alone
+  names anyone — and never a word one letter off (`Anna` and `Anne` are two people); and both are
+  heard on one of the channels above (both through mail, both in transcripts). A name alone is
+  never enough.
+
+A ref resolves to one entity only, so a number never meets itself: what meets is two spellings of
+one identifier, which is what a second import leaves behind. Matches join (a number between A and
+B and an address between B and C is one proposal of three). The **primary** is the candidate with
+the most refs, then the most lines heard, then the one minted first; the others are secondary. A
+proposal's id is a digest of its entity ids, the same on every run until something changes.
+
+**Applying** writes alias lines and nothing else (RFC 0006, `alias_of`): for each ref of a
+secondary whose own line names it, one `resolution/v1` line, `source` `manual`, `method` `owner`,
+saying the ref is an alias of the primary's ref (a phone before an address). The ref, and every
+ref already aliased to it (a WhatsApp linked-device id that `whatsapp-contacts` pointed at the
+number), then resolve to the primary through the ordinary walk, which `people`, `person`, the with
+module and every other reader take; a chain that would run past the walk's four hops gets a line
+of its own. The line `supersedes` the line it replaces and carries both as `evidence`, the
+primary's label, the head the proposal was read against (`logbook_head`), and under `extra` the
+proposal id, the two entities and what matched. Nothing is retracted and no raw line is touched:
+retract the alias line and the two are two again. `--apply` checks every id before writing the
+first line; an id that is no proposal exits 2 and writes nothing. Under `--json`, `--apply`
+prints the lines it wrote.
+
+**Reviewing** in a spreadsheet: `--export-review FILE` writes one CSV row per (proposal,
+secondary) — `proposal`, `apply`, `primary_id`, `primary`, `primary_refs`, `secondary_id`,
+`secondary`, `secondary_refs`, `matched` — with `apply` empty. Write `yes` (or `y`, `x`, `true`,
+`1`) in `apply` on the rows to merge and run `--apply-review FILE`: each marked row is the merge
+of its secondary into its primary. A row whose secondary already resolves to its primary is said
+and skipped, so the same file applies twice without harm; a row naming an entity the record does
+not know, or the same entity on both sides, is refused before anything is written. A file without
+the three columns is not a review file.
+
 ## The window
 
 The whole record by default: the first to the last local day with a line of any kind, so a message
