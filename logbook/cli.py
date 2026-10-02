@@ -74,9 +74,13 @@ from . import (
     doctor as doctor_checks,
 )
 from . import (
+    weather as weather_reader,
+)
+from . import (
     year as year_reader,
 )
 from .adapters import ais, ios_contacts, screentime
+from .adapters import weather as weather_adapter
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
@@ -522,6 +526,7 @@ SKIP_PHRASES = {
     "skipped_trashed": "in the trash",
     "skipped_relayed": "relayed from another app",
     "skipped_daily_total": "daily totals",
+    "skipped_no_data": "days the provider had no values for (asked again next run)",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "merged_into_known_people": "contacts merged into people the record knows",
@@ -1036,6 +1041,9 @@ def _sync_source(a: argparse.Namespace) -> None:
         known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
         print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
         sys.exit(2)
+    if adapter.NAME == weather_adapter.NAME:  # a window of local days from the record, not a watermark pull
+        _sync_weather(a)
+        return
     listens = _takes(adapter, "listen_s", live=True)  # a source that listens to a stream for a window (ais)
     listen_s = _listen_flag(a, listens)
     lb = Logbook.find()
@@ -1177,6 +1185,140 @@ def _sync_source(a: argparse.Namespace) -> None:
         sys.exit(1)
     if status.get("interrupted"):  # what was heard is written and summed up above; the shell still learns
         sys.exit(130)
+
+
+WEATHER_LOOKBACK_DAYS = 7  # a run without --since starts this far before the last day it covered
+
+
+def _sync_weather(a: argparse.Namespace) -> None:
+    """`sync weather [--since DAY] [--until DAY] [--dry-run]`: for every local day of the window, the
+    owner's overnight stay and every stay of three hours or more, each place rounded to a tenth of a
+    degree (`weather.clusters`), the daily values fetched from Open-Meteo once per cluster and run of
+    days and cached under `inbox/weather/` (`adapters.weather.pull`), one `weather/v1` line per
+    cluster-day appended; a re-run refetches nothing and appends nothing already there. The window
+    defaults to the day after the last day covered (`state/weather.json`, less a week's lookback for
+    points that arrive late) — or the record's first located day — up to yesterday. A dry run plans
+    and counts and neither fetches nor writes. The variable `LOGBOOK_WEATHER` is `sync --all`'s to
+    read: by name the command needs none."""
+    if a.listen is not None:
+        print("sync: --listen is for a source that listens to a stream (ais), not weather", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    if _say_disabled(lb, weather_adapter.NAME):
+        return
+    state_path = lb.root / "state" / f"{weather_adapter.NAME}.json"
+    stored = _read_state(state_path).get("since")
+    try:
+        window = _weather_window(lb, a.since, a.until, stored if isinstance(stored, str) else None)
+    except ValueError as e:
+        print(f"sync: weather: {e}", file=sys.stderr)
+        sys.exit(2)
+    if window is None:
+        print("weather: no days to cover (the record has no location lines, or none before today)")
+        return
+    first, last = window
+    try:
+        clusters = weather_reader.clusters(lb, first, last)
+    except stays.SettingsError as e:
+        print(f"sync: weather: {e}", file=sys.stderr)
+        sys.exit(2)
+    days = len(day_range(first, last))
+    cache = lb.root.joinpath(*weather_adapter.CACHE_DIR.parts)
+    tz = str(lb.meta["timezone"])
+    today = date.fromisoformat(_today())
+    span = f"{first} {EN_DASH} {last}"
+    if a.dry_run:
+        to_fetch = weather_adapter.outstanding(clusters, cache)
+        requests = weather_adapter.plan(to_fetch, today)
+        print(
+            f"weather: {len(clusters)} cluster-days over {_plural(days, 'day')} {span}, "
+            f"{len(clusters) - len(to_fetch)} cached, {len(to_fetch)} to fetch in "
+            f"{_plural(len(requests), 'request')} (dry run, nothing written)"
+        )
+        return
+    from_cache = len(clusters) - len(weather_adapter.outstanding(clusters, cache))
+    counts: dict[str, int] = {}
+    failed: list[str] = []
+    seen = 0
+
+    def counted(draft: dict[str, Any]) -> dict[str, Any]:
+        nonlocal seen
+        seen += 1
+        return draft
+
+    fetched: list[int] = [0]
+
+    def progress(n: int, elapsed: float) -> None:
+        fetched[0] = n
+        _page_progress(weather_adapter.UNIT)(n, elapsed)
+
+    drafts = (
+        counted(d)
+        for d in weather_adapter.pull(
+            weather_adapter.Config(),
+            progress=progress,
+            counts=counts,
+            clusters=clusters,
+            cache=cache,
+            timezone=tz,
+            failed=failed,
+            today=today,
+        )
+    )
+    try:
+        n = lb.append_many(drafts)
+    except (OSError, ValueError) as e:
+        print(f"sync: weather: {e}", file=sys.stderr)
+        sys.exit(1)
+    for problem in failed:
+        print(f"sync: weather: {problem}", file=sys.stderr)
+    already = seen - n
+    print(
+        f"weather: {n} new lines of {seen} seen for {_plural(days, 'day')} {span}"
+        + (f" ({already} already in the record)" if already else "")
+        + f"; {_plural(fetched[0], 'request')}, {from_cache} cluster-days from the cache"
+    )
+    _report_skipped(counts)
+    if failed:
+        sys.exit(1)
+    if stored is None or last > str(stored):
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
+            json.dumps({"source": weather_adapter.NAME, "since": last, "updated_at": now_utc()}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
+
+
+def _weather_window(
+    lb: Logbook, since: str | None, until: str | None, stored: str | None
+) -> tuple[str, str] | None:
+    """The local days `sync weather` covers: `--since` to `--until`, each a day; without `--until`,
+    yesterday; without `--since`, a week before the last day covered, or the record's first located
+    day. None when nothing is left to cover. ValueError for a day that is not one or a window that
+    runs backwards."""
+    for text in (since, until):
+        if text is not None:
+            try:
+                parse_day(text)
+            except ValueError:
+                raise ValueError(f"days are YYYY-MM-DD, not {text!r}") from None
+    yesterday = (date.fromisoformat(_today()) - timedelta(days=1)).isoformat()
+    last = until if until is not None else yesterday
+    if since is not None:
+        first = since
+    elif stored is not None:
+        first = (date.fromisoformat(stored) - timedelta(days=WEATHER_LOOKBACK_DAYS)).isoformat()
+    else:
+        whole = reading.record_days(lb, "location")
+        if whole is None:
+            return None
+        first = whole[0]
+    if last < first:
+        if since is not None and until is not None:
+            raise ValueError(f"range runs backwards: {since} > {until}")
+        return None
+    return first, last
 
 
 def _listen_flag(a: argparse.Namespace, listens: bool) -> float | None:

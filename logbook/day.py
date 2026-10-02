@@ -39,6 +39,9 @@ What a Day shows, in order:
    heart rate, from the `health-sample/v1` lines standing, a correction superseding what it
    corrects. Then, when the day has a `transaction/v1` line, the spend line (`ledger.spend`): the
    totals per currency in the lines' own currencies, how many transactions, the merchants.
+   And when the day has `weather/v1` lines (RFC 0026, `logbook sync weather`), one
+   weather line (`weather.day_row`): the cluster of the night after when the day has one, else
+   the first, every cluster of the day under `places`; a day without them has no row.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent at 14:02 is seen to have.
 
@@ -53,7 +56,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
-from . import events, health, keepers, ledger, present, reading, stays, trips
+from . import events, health, keepers, ledger, present, reading, stays, trips, weather
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -141,6 +144,9 @@ def of_reading(
         "unplaced": _unplaced(folded, stands_for, entries, tz),
         "health": health_row,
         "spend": ledger.spend(lines, day),
+        "weather": weather.day_row(
+            weather.by_day(lines).get(day, []), None if night_after is None else night_after.position
+        ),
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
 
@@ -645,6 +651,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     yield _row("health", health_text(data["health"]))
     if data.get("spend"):
         yield _row("spend", ledger.spend_text(data["spend"]))
+    if data.get("weather"):
+        yield _row("weather", weather.text(data["weather"], data["tz"]))
     if data["sources"]:
         yield _row("sources", DOT.join(_source_text(s, tz) for s in data["sources"]))
     else:

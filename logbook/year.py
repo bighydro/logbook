@@ -34,7 +34,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from . import day as day_reader
-from . import health, keepers, reading, rollup, stays, trips
+from . import health, keepers, reading, rollup, stays, trips, weather
 from . import places as named_places
 from .chain import Line
 from .flights import Airports
@@ -127,6 +127,7 @@ def read(lb: Logbook, year: str, airports: Airports | None = None) -> dict[str, 
         {"month": p["period"], **{k: p[k] for k in ("sleep", "steps", "resting_hr", "hrv")}}
         for p in rollup.health([*found, *marks], tz, first, last, "month")["periods"]
     ]
+    out["weather"] = weather.span(weather.by_day(rd.of_kind(weather.KIND)), rd.days)
     out["keepers"] = _keepers(rd)
     out["picks"] = picks
     out["scored"] = scored
@@ -146,6 +147,7 @@ def _empty(year: str, head: str) -> dict[str, Any]:
         "places": {"places": [], "assets": [], "unnamed": []},
         "people": [],
         "health": [],
+        "weather": None,
         "keepers": [],
         "picks": [
             {"month": f"{year}-{m:02d}", "day": None, "evidence": None, "page": None} for m in range(1, 13)
@@ -376,6 +378,8 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
     yield _row("health", "by month")
     for m in data["health"]:
         yield f"    {m['month']}  {health_text(m)}"
+    if data.get("weather"):
+        yield _row("weather", weather.span_text(data["weather"]))
     yield _row("keepers", "by month")
     for m in data["keepers"]:
         yield f"    {m['month']}  {keepers_text(m)}"
@@ -433,6 +437,8 @@ def trip_text(trip: Mapping[str, Any]) -> str:
         parts.append("places " + ", ".join(trip["places"]))
     if trip["people"]:
         parts.append("with " + ", ".join(trip["people"]))
+    if trip.get("weather"):
+        parts.append("weather " + weather.span_text(trip["weather"]))
     return f"{trip['start']} {EN_DASH} {trip['end']}  {DOT.join(parts)}"
 
 
@@ -597,6 +603,8 @@ def html(data: Mapping[str, Any]) -> str:
     out += section("places", "Places, by nights", _places_html(data["places"]))
     out += section("people", "People", _people_html(data["people"]))
     out += section("health", "Health, by month", _health_html(data["health"]))
+    if data.get("weather"):
+        out += section("weather", "Weather", [f"<p>{_e(weather.span_text(data['weather']))}</p>"])
     out += section("keepers", "Keepers", _keepers_html(data["keepers"]))
     out += section("picks", "One day each", _picks_html(data["picks"]))
     out += footer(data)
