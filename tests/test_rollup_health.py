@@ -199,3 +199,39 @@ def test_an_empty_record_has_no_periods(
         "periods": [],
     }
     assert "nothing" in _run(capsys)
+
+
+def test_hrv_is_reported_in_ms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A single SDNN sample of 45 ms is `hrv 45 ms (1 day)`, in the JSON `mean_ms` 45. A line
+    stored in seconds (`unit` `s`, as a store might keep it) reads in ms too, as a resting rate
+    in count/s reads in bpm; a line in `ms` is taken as it is, never rescaled."""
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many(
+        [
+            _health(utc("2026-06-02", "07:00"), "hrv", 45, "Watch7,1"),
+            _health(utc("2026-06-09", "07:00"), "hrv", 0.045, "Watch7,1", unit="s"),
+        ]
+    )
+    data = _json(capsys, "--since", "2026-06-01", "--until", "2026-06-14", "--by", "week")
+    first, second = data["periods"]
+    assert first["hrv"] == {"mean_ms": 45, "days": 1, "lines": first["hrv"]["lines"]}
+    assert second["hrv"] == {"mean_ms": 45, "days": 1, "lines": second["hrv"]["lines"]}
+    text = _run(capsys, "--since", "2026-06-01", "--until", "2026-06-14", "--by", "week")
+    assert text.count("hrv 45 ms (1 day)") == 2
+    cli.main(["stats", "--health", "--json"])
+    rows = json.loads(capsys.readouterr().out)["days"]
+    assert [row["hrv"] for row in rows] == [45, 45]
+
+
+def test_the_adapter_and_the_repair_keep_hrv_in_ms() -> None:
+    """The Apple Health adapter writes HRV (type 183) as the store keeps it, in ms, and never
+    rescales it; `repair health-units` stamps the corrected line `ms`."""
+    from logbook import repair
+    from logbook.adapters import apple_health
+
+    assert apple_health.TYPES[183] == "hrv" and apple_health.UNITS["hrv"] == "ms"
+    assert "hrv" not in apple_health.SCALE
+    assert repair.HEALTH_UNITS == {"resting_hr": "bpm", "hrv": "ms"}

@@ -9,7 +9,8 @@ day — per device the union of their spans, so a source that writes a night twi
 decimal; `steps`, the sum over the day's quarter hours of the larger device's count (rule 5);
 `resting_hr`, the mean of the day's resting readings, whole bpm; `hrv`, the mean of the day's
 readings, whole ms. Units are as stored: a resting reading in `count/s` is multiplied by 60 to
-read in bpm, one in `bpm` or `count/min` is taken as it is. A line another health line
+read in bpm, one in `bpm` or `count/min` is taken as it is; an HRV reading in `s` is multiplied
+by 1,000 to read in ms, one in `ms` is taken as it is. A line another health line
 `supersedes` (a correction, `logbook repair health-units`) is out and the correction stands —
 the latest one, when a line was corrected more than once; a retracted line is out. A field the
 day has no line for is None. Under `lines` are the ids of the lines each number came from, and
@@ -56,6 +57,12 @@ def bpm(value: float, unit: object) -> float:
     return value * 60 if unit == "count/s" else value
 
 
+def ms(value: float, unit: object) -> float:
+    """A heart-rate variability (SDNN) in ms from the value as stored: s is multiplied by 1,000;
+    ms is what it says. RFC 0014: HRV is reported in ms, always."""
+    return value * 1000 if unit == "s" else value
+
+
 def summary(lines: Iterable[Line], tz: str) -> list[dict[str, Any]]:
     """The rows, oldest day first; see the module docstring."""
     steps: dict[str, dict[str, tuple[float, str]]] = {}  # day → bucket `at` → (the larger count, its line)
@@ -85,7 +92,8 @@ def summary(lines: Iterable[Line], tz: str) -> list[dict[str, Any]]:
                 reading = (bpm(float(value), payload.get("unit")), id_)
                 resting.setdefault(local_date(str(line["at"]), tz), []).append(reading)
             elif kind == "hrv":
-                hrv.setdefault(local_date(str(line["at"]), tz), []).append((float(value), id_))
+                reading = (ms(float(value), payload.get("unit")), id_)
+                hrv.setdefault(local_date(str(line["at"]), tz), []).append(reading)
         except (KeyError, ValueError, TypeError):  # a stamp that does not parse is on no day
             continue
     rows: list[dict[str, Any]] = []
