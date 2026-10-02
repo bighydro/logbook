@@ -201,6 +201,26 @@ capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tom
 lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
 and the command exits 2.
 
+`logbook sync --all` runs every configured live source in turn — configured: at least one of its
+`LOGBOOK_*` variables set, and all it needs present — each from its own watermark; a disabled source
+or one with no variable set is skipped and said so, and a failure in one never stops the next. Each
+source prints its own summary as it runs, then one line per source closes the run (`ok`, `failed
+(status 1)`, `skipped (LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed.
+`logbook sync --install-schedule` makes the machine run `sync --all` at 07:00 and 19:00 local: a
+launchd agent on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer on
+Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printed before it is
+written, nothing is written outside that directory, and `--uninstall-schedule` removes it again. The
+agent runs the Python that installed it and points at the record found at install time; the keys your
+sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
+and the command never does.
+
+```bash
+logbook sync --all                                # every configured source, one after the other
+logbook sync --all --dry-run                      # count per source, write nothing
+logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
+logbook sync --uninstall-schedule
+```
+
 Contacts become resolution lines (RFC 0006): each contact mints a person or company id in the record, and
 every phone number and email address points at it. Set `LOGBOOK_DIAL_PREFIX` (for example `44`) so numbers
 saved without a country code get one, with the national trunk `0` dropped (`07700 900123` becomes
