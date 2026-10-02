@@ -53,10 +53,13 @@ def test_the_synthetic_mbox_agrees_with_the_standard_library(tmp_path: Path) -> 
     on a file read in small chunks so separators fall across chunk boundaries."""
     path = tmp_path / "takeout.mbox"
     n = write_mbox(path, 3_000_000, seed=1)
-    oracle = [
-        (str(m["Subject"] or ""), str(m["From"] or ""), str(m.get("Message-ID") or ""))
-        for m in mailbox.mbox(path)
-    ]
+    box = mailbox.mbox(path)
+    try:
+        oracle = [
+            (str(m["Subject"] or ""), str(m["From"] or ""), str(m.get("Message-ID") or "")) for m in box
+        ]
+    finally:
+        box.close()  # Windows: the handle must be gone before the file is read again
     assert len(oracle) == n
     counts: dict[str, int] = {}
     lines = list(mail.run(path, timezone=TZ, counts=counts, chunk_size=4096))
@@ -110,6 +113,9 @@ def _tiny(i: int) -> bytes:
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="peak RSS is read through `resource`, which Windows has not"
+)
 def test_a_500_mb_mbox_streams_at_40_mb_per_second_in_flat_memory(tmp_path: Path) -> None:
     path = tmp_path / "All mail Including Spam and Trash.mbox"
     started = time.perf_counter()

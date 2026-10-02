@@ -577,7 +577,7 @@ class Cursor:
         for entry in entries:
             if (
                 entry.get("adapter") == self.adapter
-                and entry.get("path") == str(file)
+                and Path(str(entry.get("path") or "")) == file
                 and (entry.get("options") or {}) == self.options
             ):
                 return entry
