@@ -83,7 +83,9 @@ SKIPPED_CLASS = {
     "OFFER": "skipped_coupons",
     "GIFT_CARD": "skipped_gift_cards",
 }
-CLASS_KEYS = ("classType", "class_type", "type", "passType")
+CLASS_KEYS = ("classType", "class_type", "passType")
+KNOWN_CLASSES = frozenset(("EVENT_TICKET", "TRANSIT", "FLIGHT", "LOYALTY", "OFFER", "GIFT_CARD", "GENERIC"))
+PASS_MARKS = ("id", "state", "issuerName")  # a pass has at least one of these beside its class
 START_KEYS = (
     "dateTime.start",
     "validTimeInterval.start",
@@ -138,16 +140,21 @@ def _pass(path: Path) -> dict[str, Any] | None:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(data, dict) or not _class(data):
+    if not isinstance(data, dict) or not _class(data) or not any(k in data for k in PASS_MARKS):
         return None
     return data
 
 
 def _class(data: dict[str, Any]) -> str:
+    """The pass's class from a class key; a bare `type` counts only when it names a known class, so a
+    GeoJSON `type` never makes a file a pass."""
     for key in CLASS_KEYS:
         value = data.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip().upper()
+    value = data.get("type")
+    if isinstance(value, str) and value.strip().upper() in KNOWN_CLASSES:
+        return value.strip().upper()
     return ""
 
 
