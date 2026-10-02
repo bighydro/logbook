@@ -63,6 +63,9 @@ from . import (
 from . import (
     doctor as doctor_checks,
 )
+from . import (
+    year as year_reader,
+)
 from .adapters import ais, ios_contacts
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
@@ -1650,6 +1653,31 @@ def cmd_days(a: argparse.Namespace) -> None:
         sys.exit(2)
 
 
+def cmd_year(a: argparse.Namespace) -> None:
+    """`year YYYY [--html PATH] [--json]`: the Year — days per country, nights, the trips, the
+    flights, the places by nights, the people by days together, health and keepers by month, and
+    twelve picks, one day a month, rendered with the day reader — composed from one reading of
+    the year's days (`logbook.year`). `--html` writes one self-contained page. Nothing is written
+    to the record."""
+    lb = Logbook.find()
+    try:
+        data = year_reader.read(lb, a.year, _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"year: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.html:
+        out = Path(a.html)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(year_reader.html(data).encode("utf-8"))
+        print(f"year {data['year']}: wrote {out}")
+        return
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    for text in year_reader.rows(data):
+        print(text)
+
+
 def _days_window(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str] | None:
     """`--from` and `--to`, each defaulting to the record's first or last day with a location line
     (else any line); None when a bound is missing and the record has no lines."""
@@ -3174,6 +3202,21 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--json", action="store_true", help="one JSON object per line (JSON Lines)")
     s.set_defaults(fn=cmd_days)
+    s = sub.add_parser(
+        "year",
+        help="one year read back: countries, trips, flights, places, people, health, keepers, a day a month",
+    )
+    s.add_argument("year", metavar="YYYY", help="the calendar year")
+    s.add_argument(
+        "--html", metavar="PATH", help="write one self-contained page (inline CSS, no script) instead"
+    )
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="the Year as one JSON object, the picks' Days inside")
+    s.set_defaults(fn=cmd_year)
     s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
     s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
     s.add_argument(
