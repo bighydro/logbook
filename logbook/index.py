@@ -426,13 +426,18 @@ class Index:
         ).fetchall()
         return {str(superseded): int(seq) for superseded, seq in found}
 
-    def of_kind(self, kind: str) -> Iterator[Line]:
+    def of_kind(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
         """Every line of one kind, streamed in file order (one sequential sweep of the files, each
-        opened once), so a kind with a million lines never sits in memory at once."""
+        opened once), so a kind with a million lines never sits in memory at once; with
+        `first_day` or `last_day`, only the lines whose local day is inside the bounds (the
+        (kind, day_local) index serves the cut), so a reader of one year never opens the others'
+        files."""
         from .store import read_line_at
 
         found = self.db.execute(
-            "SELECT file, offset FROM lines WHERE kind = ? ORDER BY file, offset", (kind,)
+            "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
+            " ORDER BY file, offset",
+            (kind, first_day or "", last_day or "9999-12-31"),
         ).fetchall()
         handle: Any = None
         current: str | None = None

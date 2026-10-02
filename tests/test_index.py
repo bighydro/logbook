@@ -423,6 +423,20 @@ def test_by_kind_lists_every_line_of_one_kind_in_chain_order(lb: Logbook):
         assert idx.by_kind("flight") == []
 
 
+def test_of_kind_streams_one_kind_optionally_cut_to_a_window_of_local_days(lb: Logbook):
+    """`of_kind` streams every line of one kind in file order; with day bounds, only those whose
+    local day is inside them (either bound may be None), so a reader of one kind over one year
+    never reads the other years' lines from the files."""
+    with lb.index() as idx:
+        assert [p["payload"]["raw_id"] for p in idx.of_kind("location")] == ["trk:1", "trk:2"]
+        assert [p["payload"]["raw_id"] for p in idx.of_kind("location", "2026-03-02", "2026-03-02")] == [
+            "trk:2"
+        ]
+        assert [p["payload"]["raw_id"] for p in idx.of_kind("location", None, "2026-03-01")] == ["trk:1"]
+        assert [p["payload"]["raw_id"] for p in idx.of_kind("location", "2026-03-02", None)] == ["trk:2"]
+        assert list(idx.of_kind("location", "2026-04-01", "2026-04-30")) == []
+
+
 def test_superseded_maps_each_superseded_id_to_the_seq_that_superseded_it(lb: Logbook):
     first = lb.append(
         at="2026-03-01T10:00:00Z", source="manual", kind="flight", tier=1, payload={"schema": "flight/v1"}
