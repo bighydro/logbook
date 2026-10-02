@@ -8,14 +8,20 @@ photo is in an album named Art (`albums` or `album`, at the top or under `extra`
 draft's `raw_id` is `<photo line id>:<lane>`, so `append_many` writes each mark once, and a
 retracted keeper (an unmarked favourite) is never written again because its `(source, raw_id)` is
 still in the record. `standing(lines)` is the reader: the keeper lines not retracted, for
-`logbook keepers` and for a day's hero photos. Nothing here opens a file or a socket."""
+`logbook keepers` and for a day's hero photos. `people_by_month` is `logbook keepers --people`:
+who appears on the keepers, per month, from the faces the library named on each keeper's photo
+line (`extra.faces`) and the people it tagged by id (`people`), every one a proposal — a face
+never confirms (the with module's rule, `present.from_photos`). Nothing here opens a file or a
+socket."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from typing import Any
 
 from .chain import Line
+from .index import local_date
+from .resolve import Identity, Ref
 from .store import RETRACTION, retractions
 
 KIND = "keeper"
@@ -118,6 +124,79 @@ def name_of(line: Line) -> str:
     if not isinstance(photo, dict):
         return "?"
     return str(photo.get("file_name") or photo.get("asset_id") or photo.get("line") or "?")
+
+
+def people_by_month(
+    kept: Iterable[Line], photos: Mapping[str, Line], identities: Mapping[Ref, Identity], tz: str
+) -> list[dict[str, Any]]:
+    """Who appears on the keepers, per local month: one row per month and person — a person the
+    record resolves (by the library's id through `provider_id`, or by a face's name that is exactly
+    a label, `present.by_label`), else the name as the library wrote it — with how many keepers
+    they are on, by lane, and the keeper lines. `photos` is the keepers' photo lines by id; a
+    keeper whose photo is not there names nobody. Months in order; within a month the most keepers
+    first, then the name. Every row is `proposed`: a face is the library's guess."""
+
+    rows: dict[tuple[str, str | None, str], dict[str, Any]] = {}
+    for keeper in kept:
+        payload = keeper.get("payload") or {}
+        ref = payload.get("photo")
+        photo = photos.get(str(ref.get("line"))) if isinstance(ref, dict) else None
+        if photo is None:
+            continue
+        month = local_date(str(keeper["at"]), tz)[:7]
+        lane = str(payload.get("lane") or "")
+        for person, name in _on_photo(photo, identities):
+            key = (month, person, "" if person else name.casefold())
+            row = rows.setdefault(
+                key,
+                {
+                    "month": month,
+                    "name": name,
+                    "person": person,
+                    "status": "proposed",
+                    "keepers": 0,
+                    "lanes": dict.fromkeys(LANES, 0),
+                    "lines": [],
+                },
+            )
+            if str(keeper["id"]) in row["lines"]:
+                continue
+            row["keepers"] += 1
+            if lane in LANES:
+                row["lanes"][lane] += 1
+            row["lines"].append(str(keeper["id"]))
+    return sorted(rows.values(), key=lambda r: (r["month"], -r["keepers"], r["name"].casefold()))
+
+
+def _on_photo(photo: Line, identities: Mapping[Ref, Identity]) -> list[tuple[str | None, str]]:
+    """(person, name) for everyone a photo line names, each once: the ids under `people`, through
+    the library's `provider_id`, then the names under `extra.faces`; a name that resolves to a
+    person an id already named adds nothing, one that resolves to nobody is itself."""
+    from .present import by_label, resolve_ref
+
+    payload = photo.get("payload") or {}
+    library = str(payload.get("library") or photo.get("source") or "")
+    found: list[tuple[str | None, str]] = []
+    people = payload.get("people")
+    for person_id in people if isinstance(people, list) else []:
+        if isinstance(person_id, str) and person_id:
+            person, label = resolve_ref(("provider_id", f"{library}:{person_id}"), identities)
+            found.append((person, label or f"{library}:{person_id}"))
+    extra = payload.get("extra")
+    faces = extra.get("faces") if isinstance(extra, dict) else None
+    for name in faces if isinstance(faces, list) else []:
+        if isinstance(name, str) and name.strip():
+            name = " ".join(name.split())
+            person, label = by_label(name, identities)
+            found.append((person, label or name))
+    seen: set[tuple[str | None, str]] = set()
+    unique = []
+    for person, name in found:
+        key = (person, "" if person else name.casefold())
+        if key not in seen:
+            seen.add(key)
+            unique.append((person, name))
+    return unique
 
 
 def _lane_order(line: Line) -> int:

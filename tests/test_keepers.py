@@ -145,6 +145,60 @@ def test_a_days_hero_photos_are_its_keepers(
     assert "art" in lines[1] and "hero" in lines[1]
 
 
+def test_keepers_people_lists_who_appears_on_the_keepers_per_month(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`keepers --people`: per month, the names on the keepers — the faces the library named
+    (`extra.faces`) and the people it tagged by id — with how many keepers each is on, by lane.
+    A name is a person only on an exact label (the face rule of the with module); the rest are
+    listed as written. Every row is a proposal: a face never confirms (RFC 0024 rule 1 writes no
+    line for it, and this view writes nothing either)."""
+    from persona import KARI, KARI_ID, photo, resolution
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+
+    def shot(at: str, faces: list[str], people: list[str] | None = None, **marks: Any) -> dict[str, Any]:
+        line = photo(at, people=people or [], library="apple-photos")
+        line["payload"].update(marks)
+        line["payload"]["extra"] = {"faces": faces}
+        return line
+
+    lb.append_many(
+        [
+            resolution(("email", KARI["email"]), KARI_ID, "Kari Nordmann"),
+            resolution(("provider_id", f"apple-photos:{KARI['face']}"), KARI_ID, "Kari Nordmann"),
+            shot("2026-06-10T10:00:00Z", ["Kari Nordmann", "Trude"], favorite=True),
+            shot("2026-06-11T10:00:00Z", ["Kari"], people=[KARI["face"]], favorite=True, albums=["Art"]),
+            shot("2026-06-12T10:00:00Z", ["Ola Nordmann"]),  # no mark: not a keeper, so not listed
+            shot("2026-07-01T10:00:00Z", ["Trude"], albums=["Art"]),
+        ]
+    )
+    seq = lb.meta["seq"]
+    assert "no keepers" in _run(capsys, "keepers", "--people")
+    _run(capsys, "infer", "keepers")
+    seq += 4
+    text = _run(capsys, "keepers", "--people")
+    assert lb.meta["seq"] == seq, "a reader; nothing written"
+    assert text.index("2026-06") < text.index("2026-07")
+    june = text[text.index("2026-06") : text.index("2026-07")]
+    assert june.index("Kari Nordmann") < june.index("Kari (no person)") < june.index("Trude (no person)")
+    assert "proposed" in text and "confirmed" not in text
+    data = json.loads(_run(capsys, "keepers", "--people", "--json"))
+    rows = data["people"]
+    assert [(r["month"], r["name"], r["person"], r["keepers"]) for r in rows] == [
+        ("2026-06", "Kari Nordmann", KARI_ID, 3),  # by name on the 10th; by id, in both lanes, on the 11th
+        ("2026-06", "Kari", None, 2),  # `Kari` alone is not the label, so not Kari Nordmann
+        ("2026-06", "Trude", None, 1),
+        ("2026-07", "Trude", None, 1),
+    ]
+    assert rows[0]["lanes"] == {"memory": 2, "art": 1} and rows[1]["lanes"] == {"memory": 1, "art": 1}
+    assert all(r["status"] == "proposed" for r in rows)
+    assert len(rows[0]["lines"]) == 3 and all(len(line_id) == 36 for line_id in rows[0]["lines"])
+    data = json.loads(_run(capsys, "keepers", "--people", "--lane", "art", "--since", "2026-07-01", "--json"))
+    assert [(r["month"], r["name"]) for r in data["people"]] == [("2026-07", "Trude")]
+
+
 def test_the_immich_adapter_keeps_the_favourite_flag_under_extra() -> None:
     asset = {
         "id": "a1",
