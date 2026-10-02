@@ -69,6 +69,7 @@ nav:
   - The Day: day.md
   - The rollups: rollups.md
   - Promises: promises.md
+  - The digest: digest.md
   - Adapters:
       - Overview: adapters/README.md
       - "Voice memos and transcription": adapters/voice-memos.md
