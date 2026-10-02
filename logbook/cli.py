@@ -205,7 +205,7 @@ def _append_with(
     restart = bool(given.pop("restart", False))
     cursor: inbox.Cursor | None = None
     if _takes(adapter, "cursor"):
-        keyed = {k: v for k, v in given.items() if k != "at"}
+        keyed = {k: v for k, v in given.items() if k != "at" and isinstance(v, str | int | bool | list)}
         cursor = inbox.Cursor(
             lb.root, adapter.NAME, keyed, restart=restart, notice=lambda text: print(text, file=sys.stderr)
         )

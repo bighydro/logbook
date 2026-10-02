@@ -164,7 +164,7 @@ def run(
         owners.add(account.strip().lower())
     only = {label.strip().lower() for label in (only_labels or []) if label.strip()}
     skip = {label.strip().lower() for label in (skip_labels or []) if label.strip()}
-    read = ordinal = 0
+    read = ordinal = done = 0  # messages read, drafts yielded, bytes of the files already finished
     started = time.monotonic()
     for file in files:
         start = cursor.start(file) if cursor is not None else 0
@@ -174,7 +174,7 @@ def run(
             for separator, raw, end in messages(fh, chunk_size, start):
                 read += 1
                 if progress is not None and read % PROGRESS_EVERY == 0:
-                    progress(read, end, time.monotonic() - started)
+                    progress(read, done + end - start, time.monotonic() - started)
                 line, blobs = _line(
                     separator, raw, counts, timezone or "UTC", tier, owners, account, bool(attachments)
                 )
@@ -194,6 +194,7 @@ def run(
                     cursor.reached(file, ordinal, end)
                 yield line
             size = fh.seek(0, 2)
+        done += size - start
         if cursor is not None:
             cursor.reached(file, ordinal, size)
 
@@ -246,6 +247,12 @@ def messages(fh: IO[bytes], chunk_size: int = CHUNK, base: int = 0) -> Iterator[
             base += cut
             pending = (0, pending[1] - cut)
             scan -= cut
+        elif pending is None and len(buf) > 8:  # no message yet: nothing before here starts one
+            cut = len(buf) - 8
+            del buf[:cut]
+            base += cut
+            scan = max(scan - cut, 0)
+            first = False
     if pending is not None:
         yield bytes(buf[pending[0] : pending[1]]), _message(buf, pending[1], len(buf)), base + len(buf)
 
@@ -428,9 +435,13 @@ def leaves(raw: bytes, headers: Headers, lo: int, hi: int, depth: int = 0) -> It
         if i > lo and raw[i - 1] != 0x0A:
             pos = i + len(delimiter)
             continue
+        after = raw[i + len(delimiter) : i + len(delimiter) + 2]
+        closing = after == b"--"
+        if not closing and after[:1] not in (b"", b"\r", b"\n", b" ", b"\t"):
+            pos = i + len(delimiter)  # another boundary that starts with this one
+            continue
         line_end = raw.find(b"\n", i, hi)
         line_end = hi if line_end < 0 else line_end + 1
-        closing = raw[i + len(delimiter) : i + len(delimiter) + 2] == b"--"
         if body_lo >= 0:
             part_hi = i - 1
             if part_hi > body_lo and raw[part_hi - 1] == 0x0D:

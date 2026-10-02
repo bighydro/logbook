@@ -123,3 +123,35 @@ def test_a_500_mb_mbox_streams_at_40_mb_per_second_in_flat_memory(tmp_path: Path
     assert reports == n // PROGRESS_EVERY
     assert rate >= MIN_MB_PER_S
     assert peak_mb <= PEAK_RSS_CEILING_MB
+
+
+def test_a_boundary_that_starts_like_another_is_not_taken_for_it(tmp_path: Path) -> None:
+    path = tmp_path / "nested.mbox"
+    path.write_bytes(
+        b"From 1@xxx Mon Mar 02 10:15:00 +0000 2026\n"
+        b"Message-ID: <n1@mail.example.org>\nDate: Mon, 2 Mar 2026 11:15:00 +0100\n"
+        b"From: Ola Nordmann <ola@example.org>\nSubject: nested\n"
+        b'Content-Type: multipart/mixed; boundary="part"\n\n'
+        b"--part\n"
+        b'Content-Type: multipart/alternative; boundary="part-inner"\n\n'
+        b"--part-inner\nContent-Type: text/plain\n\nthe words\n"
+        b"--part-inner\nContent-Type: text/html\n\n<p>the words</p>\n"
+        b"--part-inner--\n"
+        b'--part\nContent-Type: application/pdf; name="plan.pdf"\n'
+        b"Content-Transfer-Encoding: base64\n\nJVBERi0xLjQK\n"
+        b"--part--\n\n"
+    )
+    [line] = mail.run(path, timezone=TZ)
+    p = line["payload"]
+    assert p["body"] == "the words" and "body_from" not in p.get("extra", {})  # the newline is the boundary's
+    assert p["attachments"] == [{"filename": "plan.pdf", "media_type": "application/pdf", "bytes": 9}]
+
+
+def test_text_before_the_first_separator_is_no_message_and_is_let_go(tmp_path: Path) -> None:
+    path = tmp_path / "preamble.mbox"
+    path.write_bytes(b"x" * 300_000 + b"\n\n" + _tiny(1) + _tiny(2))
+    lines = list(mail.run(path, timezone=TZ, chunk_size=4096))
+    assert [line["payload"]["subject"] for line in lines] == ["tiny 1", "tiny 2"]
+    with path.open("rb") as fh:  # the first separator stands at the start of a chunk, not of the file
+        found = list(mail.messages(fh, 4096))
+    assert len(found) == 2 and found[0][0].startswith(b"From 1@xxx")

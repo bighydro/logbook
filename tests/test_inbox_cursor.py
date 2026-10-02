@@ -159,7 +159,8 @@ def test_an_interrupted_import_resumes_at_the_last_message_the_record_holds(lb, 
         lb.append_many(three_then_crash(mail.run(mbox, timezone=TZ, cursor=cursor)), committed=cursor.commit)
     assert len(list(lb.lines())) == 3  # the batch of two, then the one before the crash
     [entry] = _manifest(lb.root)
-    offsets = [end for _sep, _raw, end in mail.messages(mbox.open("rb"))]
+    with mbox.open("rb") as fh:
+        offsets = [end for _sep, _raw, end in mail.messages(fh)]
     assert entry["offset"] == offsets[2] and entry["drafts"] == 3
 
     cursor = inbox.Cursor(lb.root, "mail", {})
