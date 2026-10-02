@@ -10,18 +10,19 @@ number and name points at the lines it came from.
 What a Day shows, in order:
 
 1. The header: the date; where the night before and the night after were spent (the overnight
-   stay, `stays.night`: a named place, `aboard <asset>`, the home place a night within 400 m of
-   it lies by, or the coordinates with `near <place>, x km`, home or away, or in transit when no
-   stay reaches the minimum); the country of the day (`countries.country_of` on
-   the night's stay, else the longest stay of the day, with the method); the day's all-day
-   calendar entries.
+   stay, `stays.night`: a named place, `aboard <asset>` with the asset's position that night, the
+   home place a night within 400 m of it lies by, or the coordinates with `near <place>, x km`,
+   home or away, or in transit when no stay reaches the minimum); the country of the day
+   (`countries.country_of` on the night's position, else the longest stay of the day, with the
+   method); the day's all-day calendar entries.
 2. The timeline: the owner's segments from `stays.derive` that touch the day — stays, stops and
    moves, each clipped to the day for display and keeping its real span — and the flights of the
    day from the `flight/v1` lines standing (`flights.standing`, the merged set: one line per
    flight, its `evidence` tracked, inferred or declared), as rows of their own; a move the flight
-   covers names it. A run of consecutive segments aboard one asset — the owner's position matching
-   the asset's own track (`stays._aboard`, ADR 0018) — is one stay `aboard <asset>`, with the
-   asset's anchorages and passages inside it: the asset's movement never fragments the stay. A
+   covers names it. A stay aboard an asset — the owner's position matching the asset's own track
+   for twenty minutes or longer (`stays._aboard`, ADR 0018), the run of stays and moves aboard it
+   folded into one stay by `stays.fold` — is one `aboard <asset>` row, with the asset's berths,
+   passages and anchorages inside it: the asset's movement never fragments the stay. A
    move with no points that lasts a silence or more (`merge_gap_s`), and is not a flight, is a
    gap in the track, said so, and it places nothing. To each row attach the day's lines that
    fall inside its span:
@@ -107,7 +108,7 @@ def of_reading(
     lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
     folded, stands_for = events.fold(lines, flight_lines.Airlines.load())  # one row per calendar entry
     owner = rd.owner
-    segments = [s for s in rd.segments if s.subject is None and s.start < day_end and s.end > day_start]
+    segments = [s for s in rd.derived.folded if s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
     entries = [
         _finish(entry, folded, stands_for, rd, owner, flights)
@@ -146,15 +147,15 @@ def of_reading(
 
 
 def _where(s: stays.Segment, rd: Reading, home: bool = False) -> str | None:
-    """A stay's place: its name, else `aboard <asset>`, else — a night at home by the 400 m rule
-    (`stays.HOME_NEAR_M`, `home`) — the home place it lies by, else its coordinates; None for a
-    move."""
+    """A stay's place: `aboard <asset>` for a stay aboard one, else its name, else — a night at
+    home by the 400 m rule (`stays.HOME_NEAR_M`, `home`) — the home place it lies by, else its
+    coordinates; None for a move."""
     if s.kind == stays.MOVE:
         return None
+    if s.inside or (s.aboard and not s.place):
+        return f"aboard {_asset_name(s.aboard or '', rd)}"
     if s.place:
         return s.place
-    if s.aboard:
-        return f"aboard {_asset_name(s.aboard, rd)}"
     if home and s.lat is not None and s.lon is not None:
         near = named_places.nearest(s.lat, s.lon, named_places.home_places(rd.places))
         if near is not None:
@@ -179,6 +180,9 @@ def _asset_name(asset_id: str, rd: Reading) -> str:
 
 
 def _night_json(night: stays.Night | None, day: str, rd: Reading) -> dict[str, Any]:
+    """The night: where, home or away, the asset when aboard and the night's position — the
+    asset's for a night aboard (where it lay for the longest part of the night), else the stay's
+    centre — the stay's id and its first and last location line."""
     if night is None or night.stay is None:
         return {
             "day": day,
@@ -187,9 +191,11 @@ def _night_json(night: stays.Night | None, day: str, rd: Reading) -> dict[str, A
             "aboard": None,
             "in_transit": True,
             "stay": None,
+            "position": None,
             "lines": [],
         }
     s = night.stay
+    position = night.position
     return {
         "day": night.day,
         "where": _where(s, rd, night.home),
@@ -197,6 +203,9 @@ def _night_json(night: stays.Night | None, day: str, rd: Reading) -> dict[str, A
         "aboard": s.aboard,
         "in_transit": False,
         "stay": s.id,
+        "position": None
+        if position is None
+        else {"lat": round(position[0], 6), "lon": round(position[1], 6)},
         "lines": _stay_lines(s),
     }
 
@@ -212,11 +221,12 @@ def _country(
     day_end: datetime,
     rd: Reading,
 ) -> dict[str, Any]:
-    """The country of the night's stay (the rule `rollup countries` counts by); when the night is
-    in transit, of the longest stay of the day; else unknown."""
+    """The country of the night's position (the rule `rollup countries` counts by: aboard an
+    asset, where it lay); when the night is in transit, of the longest stay of the day; else
+    unknown."""
     source, stay = None, None
     if night is not None and night.stay is not None:
-        source, stay = "night", night.stay
+        source, stay = "night", night.innermost
     else:
         on_day = [s for s in segments if s.kind == stays.STAY]
         if on_day:
@@ -238,27 +248,12 @@ def _country(
 def _entries(
     segments: Sequence[stays.Segment], rd: Reading, day_start: datetime, day_end: datetime
 ) -> list[dict[str, Any]]:
-    """The owner's segments as entries, a run of two or more consecutive segments aboard one asset
-    folded into one `aboard` entry with the run inside it."""
-    out: list[dict[str, Any]] = []
-    run: list[stays.Segment] = []
-
-    def flush() -> None:
-        if len(run) == 1:
-            out.append(_entry(run[0], rd, day_start, day_end))
-        elif run:
-            out.append(_aboard_entry(run, rd, day_start, day_end))
-        run.clear()
-
-    for s in segments:
-        if run and s.aboard != run[-1].aboard:
-            flush()
-        if s.aboard is None:
-            out.append(_entry(s, rd, day_start, day_end))
-        else:
-            run.append(s)
-    flush()
-    return out
+    """The owner's folded segments (`stays.fold`) as entries: a stay aboard an asset is one
+    `aboard` entry with the part of its run that touches the day inside it."""
+    return [
+        _aboard_entry(s, rd, day_start, day_end) if s.inside else _entry(s, rd, day_start, day_end)
+        for s in segments
+    ]
 
 
 def _entry(s: stays.Segment, rd: Reading, day_start: datetime, day_end: datetime) -> dict[str, Any]:
@@ -289,25 +284,27 @@ def _entry(s: stays.Segment, rd: Reading, day_start: datetime, day_end: datetime
 
 
 def _aboard_entry(
-    run: Sequence[stays.Segment], rd: Reading, day_start: datetime, day_end: datetime
+    container: stays.Segment, rd: Reading, day_start: datetime, day_end: datetime
 ) -> dict[str, Any]:
-    first, last = run[0], run[-1]
-    asset_id = str(first.aboard)
+    """A stay aboard an asset as an `aboard` entry: the whole stay's span and centre (the
+    anchorage the owner spent longest at), the asset, and inside it the segments of the run that
+    touch the day, each an entry of its own; its distance is the passages' on the day."""
+    asset_id = str(container.aboard)
     asset = rd.assets.get(asset_id)
-    anchor = next((s for s in run if s.kind != stays.MOVE), first)
+    run = [s for s in container.inside if s.start < day_end and s.end > day_start]
     return {
-        "id": f"{ABOARD}:{asset_id}:{first.start.astimezone(UTC).strftime('%Y%m%dT%H%MZ')}",
+        "id": f"{ABOARD}:{asset_id}:{container.start.astimezone(UTC).strftime('%Y%m%dT%H%MZ')}",
         "kind": ABOARD,
-        "start": _stamp(first.start),
-        "end": _stamp(last.end),
-        "start_local": first.start.astimezone(rd.tz).isoformat(timespec="seconds"),
-        "end_local": last.end.astimezone(rd.tz).isoformat(timespec="seconds"),
-        "within_day": _within(first.start, last.end, day_start, day_end),
-        "duration_s": int((last.end - first.start).total_seconds()),
+        "start": _stamp(container.start),
+        "end": _stamp(container.end),
+        "start_local": container.start.astimezone(rd.tz).isoformat(timespec="seconds"),
+        "end_local": container.end.astimezone(rd.tz).isoformat(timespec="seconds"),
+        "within_day": _within(container.start, container.end, day_start, day_end),
+        "duration_s": container.duration_s,
         "where": f"aboard {_asset_name(asset_id, rd)}",
         "place": None,
-        "lat": None if anchor.lat is None else round(anchor.lat, 6),
-        "lon": None if anchor.lon is None else round(anchor.lon, 6),
+        "lat": None if container.lat is None else round(container.lat, 6),
+        "lon": None if container.lon is None else round(container.lon, 6),
         "aboard": asset_id,
         "asset": {
             "id": asset_id,
@@ -317,11 +314,11 @@ def _aboard_entry(
         "mode": None,
         "distance_m": round(sum(s.distance_m or 0 for s in run if s.kind == stays.MOVE)),
         "airports": [],
-        "points": sum(s.points for s in run),
-        "promoted": any(s.promoted for s in run),
+        "points": container.points,
+        "promoted": container.promoted,
         "gap": False,
         "inside": [_entry(s, rd, day_start, day_end) for s in run],
-        "lines": {"first": first.first_line, "last": last.last_line},
+        "lines": {"first": container.first_line, "last": container.last_line},
     }
 
 
@@ -655,9 +652,15 @@ def _row(label: str, text: str) -> str:
 
 
 def night_text(night: dict[str, Any]) -> str:
+    """`Home · home`; aboard an asset, the asset's position that night between: `aboard Solvind ·
+    59.8500,10.6000 · away`."""
     if night["in_transit"]:
         return "in transit"
-    return f"{night['where']}{DOT}{'home' if night['home'] else 'away'}"
+    parts = [str(night["where"])]
+    if night["aboard"] and night.get("position"):
+        parts.append(f"{night['position']['lat']:.4f},{night['position']['lon']:.4f}")
+    parts.append("home" if night["home"] else "away")
+    return DOT.join(parts)
 
 
 def country_text(country: dict[str, Any]) -> str:

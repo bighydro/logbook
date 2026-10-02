@@ -199,8 +199,9 @@ def test_a_day_aboard_the_boat_is_one_stay_with_the_anchorages_inside(
     assert aboard["with"]["proposed"] == []
     after = data["nights"]["after"]
     assert after["aboard"] == BOAT and after["home"] is False and after["where"] == "aboard Solvind"
+    assert abs(after["position"]["lat"] - 59.85) < 0.001, "the boat's position that night: the anchorage"
     text = _run(capsys, "2026-06-13")
-    assert "aboard Solvind" in text and "night after   aboard Solvind · away" in text
+    assert "aboard Solvind" in text and "night after   aboard Solvind · 59.8500,10.6000 · away" in text
     assert "with         Ola Nordmann (note)" in text
     assert "keeper       IMG_131730.HEIC (memory)" in text
 
