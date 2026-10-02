@@ -55,11 +55,12 @@ as its `--json`:
 | `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2 |
 | `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line |
 
-`search` is the one tool with no command of its own. It cuts the window (`since` and `until` are local days,
-inclusive) and the kinds in the index, reads the standing lines in chain order, and keeps those whose payload
-contains `text` anywhere, case aside — a note's words, an event's title, a mail's subject, a URL. Each hit is
-the line's envelope and payload without `prev` and `hash`; at most `limit` (50 by default, 500 at most), and
-`more` says when there were more. A retracted line is never a hit, and neither is a retraction.
+`search` is a scan, not the ranked search `logbook search` is ([search](search.md)). It cuts the window
+(`since` and `until` are local days, inclusive) and the kinds in the index, reads the standing lines in chain
+order, and keeps those whose payload contains `text` anywhere, case aside — a note's words, an event's title, a
+mail's subject, a URL. Each hit is the line's envelope and payload without `prev` and `hash`; at most `limit`
+(50 by default, 500 at most), and `more` says when there were more. A retracted line is never a hit, and
+neither is a retraction.
 
 Every answer is one JSON text:
 
