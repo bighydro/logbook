@@ -11,7 +11,11 @@ reports what the adapter skipped (`skipped_no_timestamp`, `skipped_bad_coordinat
 the phrases live in `cli.SKIP_PHRASES`). It may also take an optional `timezone: str`, the record's IANA
 zone, for a source whose times are floating (an all-day calendar entry has a day, not an instant), or
 `assets: list[Asset]`, the record's asset registry (`assets.json`, ADR 0018), for a source that reports
-the positions of the owner's boats and aircraft rather than the owner's own.
+the positions of the owner's boats and aircraft rather than the owner's own. A source read front to back
+from one big file (`mail`) may take `progress(items, bytes_read, elapsed)`, which `add` prints with the
+rate, and `cursor`, the inbox manifest's (`logbook.inbox.Cursor`): `cursor.start(file)` is the byte
+offset to begin at and `cursor.reached(file, ordinal, offset)` is told, before every draft, how far the
+file is read, so an interrupted import resumes at the last draft the record holds.
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 

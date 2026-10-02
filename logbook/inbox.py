@@ -21,14 +21,32 @@ its modification time), and the last line the run appended is still at its `seq`
 the record is append-only, so that line standing means every line before it stands too, and a
 line the run skipped was already in the record then. Nothing here is a match on path strings:
 paths are compared part by part.
+
+The inbox manifest, `<root>/inbox/manifest.json`, is where a long import got to.
+
+A file adapter that reads one big export front to back — `mail` on a 20 GB Takeout mbox — takes
+a `cursor`. Before every draft it tells the cursor how far the file is read (`reached`), and
+`logbook add` tells the cursor, after every checkpoint of `append_many`, how many drafts the record
+holds (`commit`). The cursor then writes the byte offset of the last message in the record, so an
+import that stopped — Ctrl-C, a crash, a full disk — picks up there the next time `add` runs on
+the same file with the same options, and a finished one reads nothing and appends nothing.
+
+An entry is keyed by the adapter, the file's absolute path and the options the import ran with
+(`--account`, `--since`, `--only-labels`, `--skip-labels`, …): an import with other options is
+another import. It is honoured only while the file is the same one: the digest of its first
+`HEAD_BYTES` bytes and its size are kept and checked, and a file that changed is read from the
+start again, as is one the owner asks to with `--restart`. The record never depends on this file:
+re-adding the same export appends nothing either way (ADR 0017); the manifest only saves the
+hours of reading. Bookkeeping beside the record, like `state/` and `index.sqlite`, never in it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePath, PurePosixPath
@@ -225,7 +243,10 @@ def files(lb: Logbook) -> list[File]:
 
 
 def _hidden(path: Path, folder: Path) -> bool:
-    return any(part.startswith(".") for part in path.relative_to(folder).parts)
+    """A hidden file is no export; nor is the import manifest directly under inbox/ (the cursor's
+    own bookkeeping, `MANIFEST`), which no run consumes and `inbox clean` never touches."""
+    parts = path.relative_to(folder).parts
+    return any(part.startswith(".") for part in parts) or parts == (MANIFEST.name,)
 
 
 def _size(path: Path) -> int:
@@ -425,3 +446,147 @@ def _under_inbox(root: Path, path: Path) -> bool:
         return path.resolve().relative_to((Path(root) / INBOX).resolve()).parts != ()
     except ValueError:
         return False
+
+
+# -- the manifest: where a long import got to ------------------------------------------------
+
+MANIFEST = Path("inbox") / "manifest.json"
+HEAD_BYTES = 4096
+
+
+class Cursor:
+    """One import's cursor over the files it reads; `logbook.adapters.mail.Cursor` is the half the
+    adapter sees (`start`, `reached`), `commit` the half the consumer drives."""
+
+    def __init__(
+        self,
+        root: Path,
+        adapter: str,
+        options: Mapping[str, Any] | None = None,
+        restart: bool = False,
+        notice: Callable[[str], None] | None = None,
+    ) -> None:
+        self.root = Path(root)
+        self.adapter = adapter
+        self.options = {k: v for k, v in sorted((options or {}).items()) if v is not None}
+        self.restart = restart
+        self.notice = notice
+        self.files: dict[Path, tuple[str, int]] = {}  # file → (head digest, size) when `start` ran
+        # file → the last two (ordinal, offset) marks not yet committed: the latest, and the one
+        # before it for when the import stops while the latest draft is still on its way
+        self.pending: dict[Path, list[tuple[int, int]]] = {}
+        self.resumed: list[tuple[Path, int]] = []
+        self.written = 0
+
+    # -- the adapter's half ----------------------------------------------------
+
+    def start(self, file: Path) -> int:
+        file = Path(file).resolve()
+        head, size = _identity(file)
+        self.files[file] = (head, size)
+        if self.restart:
+            return 0
+        entry = self._entry(file)
+        if entry is None or entry.get("head") != head or entry.get("size") != size:
+            return 0
+        offset = int(entry.get("offset") or 0)
+        if offset <= 0 or offset > size:
+            return 0
+        self.resumed.append((file, offset))
+        if self.notice is not None:
+            if offset == size:
+                self.notice(
+                    f"  {file.name}: read to the end already ({size:,} bytes, {MANIFEST.as_posix()});"
+                    " --restart reads it again"
+                )
+            else:
+                self.notice(
+                    f"  {file.name}: resuming at {offset:,} of {size:,} bytes ({MANIFEST.as_posix()})"
+                )
+        return offset
+
+    def reached(self, file: Path, ordinal: int, offset: int) -> None:
+        marks = self.pending.setdefault(Path(file).resolve(), [])
+        if marks and marks[-1][0] == ordinal:  # the end of the file: the same draft, further on
+            marks[-1] = (ordinal, offset)
+        else:
+            marks.append((ordinal, offset))
+        del marks[:-2]
+
+    # -- the consumer's half ---------------------------------------------------
+
+    def commit(self, taken: int) -> None:
+        """Every draft up to `taken` is in the record: write the offset of every file whose last
+        reported draft is among them."""
+        done: dict[Path, tuple[int, int]] = {}
+        for file, marks in list(self.pending.items()):
+            reached = [mark for mark in marks if mark[0] <= taken]
+            if reached:
+                done[file] = reached[-1]
+                marks[:] = [mark for mark in marks if mark[0] > taken]
+            if not marks:
+                del self.pending[file]
+        if not done:
+            return
+        manifest = self.load()
+        entries: list[dict[str, Any]] = [e for e in manifest.get("cursors", []) if isinstance(e, dict)]
+        for file, (ordinal, offset) in done.items():
+            head, size = self.files.get(file) or _identity(file)
+            entry = self._find(entries, file)
+            if entry is None:
+                entry = {"adapter": self.adapter, "path": str(file), "options": self.options}
+                entries.append(entry)
+            entry.update(
+                head=head,
+                size=size,
+                offset=offset,
+                drafts=ordinal,
+                done=offset >= size,
+                updated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            self.written += 1
+        manifest["cursors"] = entries
+        self.save(manifest)
+
+    # -- the file ----------------------------------------------------------------
+
+    @property
+    def path(self) -> Path:
+        return self.root / MANIFEST
+
+    def load(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def save(self, manifest: dict[str, Any]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        tmp.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, self.path)  # never a half-written manifest
+
+    def _entry(self, file: Path) -> dict[str, Any] | None:
+        entries = [e for e in self.load().get("cursors", []) if isinstance(e, dict)]
+        return self._find(entries, file)
+
+    def _find(self, entries: list[dict[str, Any]], file: Path) -> dict[str, Any] | None:
+        for entry in entries:
+            if (
+                entry.get("adapter") == self.adapter
+                and entry.get("path") == str(file)
+                and (entry.get("options") or {}) == self.options
+            ):
+                return entry
+        return None
+
+
+def _identity(file: Path) -> tuple[str, int]:
+    """(the digest of the file's first HEAD_BYTES bytes, its size): the same file, or not."""
+    with file.open("rb") as fh:
+        head = fh.read(HEAD_BYTES)
+        size = fh.seek(0, os.SEEK_END)
+    return hashlib.sha256(head).hexdigest(), size
