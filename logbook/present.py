@@ -47,7 +47,9 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .chain import Line
 from .places import Place, distance_m
@@ -56,6 +58,7 @@ from .stays import Segment, instant
 
 CONFIRMED, PROPOSED = "confirmed", "proposed"
 SOURCES = ("circle", "calendar", "transcript", "note", "photo")
+EVIDENCE_KINDS = ("event", "transcript", "note", "photo")  # the kinds the sources above read
 ACCEPTED, TENTATIVE, TRANSCRIPT, NOTE, PHOTO, ALL_DAY = 0.8, 0.6, 0.9, 1.0, 0.5, 0.3
 EVENT_INSIDE_M = 1000.0  # a located event this close to the stay's centre is held at the stay
 EVENT_OVERLAP_S = 3600  # an event with no location must overlap the stay by more than this
@@ -371,6 +374,43 @@ def company(
     order = {CONFIRMED: 0, PROPOSED: 1}
     companions.sort(key=lambda c: (order[c.status], -c.confidence))
     return companions
+
+
+# -- the evidence of a window, by day ---------------------------------------------------------------------
+
+
+class Evidence:
+    """The evidence lines of a window (`EVIDENCE_KINDS`) bucketed by every local day their span
+    touches, so the company of a stay is read from the lines of the stay's days — one lookup per
+    stay — and never by a pass over the whole window per stay or per place. The sources above still
+    apply their exact rules to what `near` returns; a line on the stay's day that does not overlap
+    it places nobody, as before."""
+
+    def __init__(self, lines: Iterable[Line], tz: ZoneInfo):
+        self.tz = tz
+        self._by_day: dict[date, list[Line]] = {}
+        for line in lines:
+            if line.get("kind") not in EVIDENCE_KINDS:
+                continue
+            at = instant(line.get("at"))
+            if at is None:
+                continue
+            end = instant(line.get("end")) or at
+            first, last = at.astimezone(tz).date(), max(at, end).astimezone(tz).date()
+            day = first
+            while day <= last:
+                self._by_day.setdefault(day, []).append(line)
+                day += timedelta(days=1)
+
+    def near(self, stay: Segment) -> list[Line]:
+        """The evidence lines of the days the stay touches, in chain order, each once."""
+        found: dict[str, Line] = {}
+        day, last = stay.start.astimezone(self.tz).date(), stay.end.astimezone(self.tz).date()
+        while day <= last:
+            for line in self._by_day.get(day, ()):
+                found.setdefault(str(line.get("id")), line)
+            day += timedelta(days=1)
+        return sorted(found.values(), key=lambda line: int(line.get("seq", 0)))
 
 
 # -- helpers ----------------------------------------------------------------------------------------------

@@ -217,7 +217,7 @@ def test_an_empty_record_rolls_up_to_nothing(
 # -- places and people (through the with module) ----------------------------------------------------------
 
 
-def test_places_rollup_counts_stays_hours_visits_and_company(
+def test_places_rollup_counts_stays_hours_nights_visits_and_company(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
@@ -227,22 +227,55 @@ def test_places_rollup_counts_stays_hours_visits_and_company(
     assert set(by_name) == set(PLACES)
     home = by_name["Home"]
     assert home["kind"] == "home" and home["stays"] >= 10 and home["hours"] > 120
+    assert home["nights"] == 10, "every night not aboard or in Zürich"
     assert home["first"] == "2026-06-08" and home["last"] == "2026-06-21"
     office = by_name["Office"]
-    assert office["stays"] == 8  # seven office days, one of them split by lunch
-    assert any(p["id"] == OLA_ID for p in office["people"]), "the transcript at the office"
+    assert office["stays"] == 8 and office["nights"] == 0  # seven office days, one of them split by lunch
+    [ola] = [p for p in office["people"] if p["id"] == OLA_ID]
+    assert ola["days"] == 1 and ola["stays"] == 1 and ola["nights"] == 0, "the transcript at the office"
     assert len(office["lines"]) == 16
     marina = by_name["Marina"]
-    assert marina["kind"] == "asset-berth" and marina["stays"] == 2
+    assert marina["kind"] == "asset-berth" and marina["stays"] == 2 and marina["nights"] == 0
     [solvind] = year["assets"]
     assert solvind["asset"] == BOAT and solvind["name"] == "Solvind"
     assert solvind["stays"] == 3 and solvind["hours"] > 26 and solvind["nights"] == 1
-    assert [p["id"] for p in solvind["people"]] == [OLA_ID]
+    [aboard_ola] = solvind["people"]
+    assert aboard_ola["id"] == OLA_ID and aboard_ola["nights"] == 1, "the note at anchor, the night at anchor"
     text = _run(capsys, "places")
-    assert "Home" in text and "Solvind" in text and "Ola Nordmann" in text
+    assert "Home" in text and "10 nights" in text and "Solvind" in text and "Ola Nordmann" in text
 
 
-def test_people_rollup_counts_days_together_and_the_last_real_contact(
+def test_places_rollup_lists_the_top_unnamed_clusters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The stays at no named place, grouped as `places propose` groups them and ranked by hours:
+    the Zürich hotel, the anchorage aboard Solvind, the two airports, the cafe."""
+    from persona import FJORD, ZURICH
+
+    from logbook import rollup
+
+    persona_record(tmp_path, monkeypatch)
+    data = _json(capsys, "places", "--year", "2026")
+    [year] = data["years"]
+    unnamed = year["unnamed"]
+    assert 2 <= len(unnamed) <= rollup.UNNAMED_TOP
+    hotel, anchorage = unnamed[0], unnamed[1]
+    assert abs(hotel["lat"] - ZURICH[0]) < 0.001 and abs(hotel["lon"] - ZURICH[1]) < 0.001
+    assert hotel["stays"] == 1 and hotel["nights"] == 3 and hotel["hours"] > 70
+    assert hotel["first"] == "2026-06-15" and hotel["last"] == "2026-06-18"
+    assert hotel["id"].startswith("stay:owner:"), "the id `places name` takes"
+    assert hotel["aboard"] is None and hotel["city"] == "Zurich"
+    [dinner] = hotel["people"]
+    assert dinner["id"] == OLA_ID and dinner["days"] == 1 and dinner["nights"] == 1, "dinner on the 16th"
+    assert abs(anchorage["lat"] - FJORD[0]) < 0.001 and anchorage["aboard"] == BOAT
+    assert anchorage["nights"] == 1 and anchorage["stays"] == 1
+    assert anchorage["nearest"]["name"] == "Marina" and anchorage["nearest"]["metres"] > 5000
+    assert len(hotel["lines"]) == 2 and all(len(id_) == 36 for id_ in hotel["lines"])
+    text = _run(capsys, "places")
+    assert "unnamed" in text and "(Zurich)" in text and "3 nights" in text and f"aboard {BOAT}" in text
+
+
+def test_people_rollup_counts_days_and_nights_together_and_the_last_real_contact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
@@ -252,11 +285,71 @@ def test_people_rollup_counts_days_together_and_the_last_real_contact(
     kari, ola = by_id[KARI_ID], by_id[OLA_ID]
     assert kari["name"] == "Kari Nordmann" and kari["days"] == 1 and kari["last_contact"] == "2026-06-10"
     assert ola["days"] == 3 and ola["last_contact"] == "2026-06-16"
+    assert ola["nights"] == 2, "the night at anchor and the night of the dinner in Zürich"
+    assert kari["nights"] == 0 and kari["stays"] == 1 and ola["stays"] == 3
     assert set(ola["places"]) >= {"Office", "aboard solvind"}
-    assert all(len(id_) == 36 for id_ in ola["lines"]) and len(ola["lines"]) >= 3
-    assert ola["confirmed"] == 3 and kari["confirmed"] == 1 and kari["proposed"] == 1
+    assert all(len(id_) == 36 for id_ in ola["lines"]) and len(ola["lines"]) == 3
+    assert ola["confirmed"] == 3 and kari["confirmed"] == 1
+    assert "proposed" not in kari and len(kari["lines"]) == 1, "the face at the cafe is a proposal, left out"
     text = _run(capsys, "people")
-    assert "Ola Nordmann" in text and "3 days" in text and "Kari Nordmann" in text
+    assert "Ola Nordmann" in text and "3 days" in text and "2 nights" in text and "Kari Nordmann" in text
+    assert "proposed" not in text
+
+
+def test_people_rollup_is_the_confirmed_set_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A person the record knows only by a tagged face is a proposal and is not listed; a timed
+    entry's attendee with a display name the record has no resolution for is confirmed, so they
+    are listed, apart, under `unresolved`."""
+    from persona import OFFICE, attendee, event, photo, resolution, utc
+
+    lb = persona_record(tmp_path, monkeypatch)
+    per_id = "019cadd3-6bc0-7dcd-9133-000000000003"
+    day = "2026-06-09"
+    lb.append_many(
+        [
+            resolution(("provider_id", "immich:p_42"), per_id, "Per Hansen"),
+            photo(utc(day, "10:00"), OFFICE, people=["p_42"]),
+            event(utc(day, "14:00"), utc(day, "16:00"), "Review", [attendee("liv@example.org", "Liv Berg")]),
+        ]
+    )
+    data = _json(capsys, "people", "--year", "2026")
+    [year] = data["years"]
+    assert per_id not in {p["id"] for p in year["people"]}, "a face only is proposed, never a day together"
+    [liv] = year["unresolved"]
+    assert liv["name"] == "Liv Berg" and liv["id"] is None and liv["days"] == 1
+    assert liv["places"] == ["Office"] and liv["nights"] == 0
+    text = _run(capsys, "people")
+    assert "Per Hansen" not in text and "Liv Berg" in text
+
+
+def test_places_with_is_the_place_by_person_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    persona_record(tmp_path, monkeypatch)
+    data = _json(capsys, "places", "--year", "2026", "--with")
+    [year] = data["years"]
+    rows = {(r["place"], r["id"]): r for r in year["with"]}
+    office = rows[("Office", OLA_ID)]
+    assert office["kind"] == "place" and office["name"] == "Ola Nordmann"
+    assert (office["stays"], office["days"], office["nights"]) == (1, 1, 0)
+    aboard = rows[(BOAT, OLA_ID)]
+    assert aboard["kind"] == "asset" and (aboard["stays"], aboard["days"], aboard["nights"]) == (1, 1, 1)
+    unnamed = [r for r in year["with"] if r["kind"] == "unnamed"]
+    assert len(unnamed) == 3, "the hotel and the anchorage with Ola, the cafe with Kari"
+    [hotel] = [r for r in unnamed if "Zurich" in r["label"]]
+    assert hotel["id"] == OLA_ID and hotel["nights"] == 1 and hotel["place"].startswith("stay:owner:")
+    [cafe] = [r for r in unnamed if r["id"] == KARI_ID]
+    assert (cafe["stays"], cafe["days"], cafe["nights"]) == (1, 1, 0) and "near Home" in cafe["label"]
+    assert ("Home", KARI_ID) not in rows, "the lunch was at the cafe, not at home"
+    assert all(len(id_) == 36 for r in year["with"] for id_ in r["lines"])
+    text = _run(capsys, "places", "--with")
+    assert "place" in text and "person" in text and "nights" in text
+    assert "Office" in text and "Ola Nordmann" in text and "Solvind" in text
+    with pytest.raises(SystemExit) as e:
+        cli.main(["rollup", "nights", "--with"])
+    assert e.value.code == 2
 
 
 def test_a_codeshare_twin_is_not_a_second_flight(

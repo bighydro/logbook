@@ -493,8 +493,9 @@ logbook places name 59.92,10.74 Cafe          # or a stay id from `propose`; the
 logbook rollup countries --year 2026          # days per country from the overnight stay; in transit apart
 logbook rollup flights                        # count, km, long-haul, by evidence, from the flight lines standing
 logbook rollup nights                         # home, away, in transit, nights aboard, the longest trip
-logbook rollup places                         # stays, hours, first and last, people, per named place and per asset
-logbook rollup people                         # days together, last real contact, places shared, per resolved person
+logbook rollup places                         # nights, stays, hours, people per named place and asset; the top unnamed clusters
+logbook rollup places --with                  # the place × person table: stays, days and nights at each place per person
+logbook rollup people                         # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week               # sleep, steps, resting heart rate, HRV per month or ISO week; — when missing
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
@@ -508,7 +509,7 @@ logbook keepers --since 2026-06-01 --lane art
 
 Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
 by its first and last location line (one unbroken run of points), a flight by the flight line standing, a person
-by the lines that put them there. A home region is a place of kind `home` in `places.json`; a night whose stay
+by the lines that put them there. The rollups are described in [docs/rollups.md](docs/rollups.md). A home region is a place of kind `home` in `places.json`; a night whose stay
 is within 400 m of one is a night at home whatever that place's radius, so a trip never starts or ends with the
 guest room across the street. Without a home place no night is home, there are no trips, and the commands say so.
 

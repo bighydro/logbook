@@ -8,33 +8,137 @@ it, and it is clipped to the days the rollup's own lines cover, so a day the rec
 about is nothing, not a night in transit and not a zero.
 
 ```bash
-logbook rollup countries --year 2026    # days per country from the overnight stay; in transit apart
-logbook rollup flights                  # count, km, long-haul, by evidence, from the flight lines standing
-logbook rollup nights                   # home, away, in transit, nights aboard, the longest trip
-logbook rollup places                   # stays, hours, first and last, people, per named place and per asset
-logbook rollup people                   # days together, last real contact, places shared, per resolved person
+logbook rollup countries --year 2026   # days per country from the overnight stay; in transit apart
+logbook rollup flights                 # count, km, long-haul, by evidence, from the flight lines standing
+logbook rollup nights                  # home, away, in transit, nights aboard, the longest trip
+logbook rollup places                  # nights, stays, hours, people per named place and asset; the top unnamed clusters
+logbook rollup places --with           # the place × person table: stays, days and nights at each place per person
+logbook rollup people                  # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
 ```
 
-## Per year: countries, flights, nights, places, people
+The window is `--year`, or `--since` and `--until`, clipped to the days the owner's track covers
+(the first to the last day with a location line; for flights, with any line), so a day outside
+them is nothing, not a night in transit. Without either, the whole record.
 
-These five read the owner's track through one reading of the window (`reading.read`): the stays
-`derive stays` finds, the night of each day, the flight lines standing, and the people the with
-module places at each stay. They answer per calendar year.
+## Places
 
-- **countries** — days per country from the overnight stay; nights in transit and nights whose
-  country is unknown listed apart; the method printed with the numbers (a place's own `country`,
-  else the nearest large airport's zone within 300 km, coarse near borders).
-- **flights** — count, kilometres between the airports table's coordinates, long-haul flights
-  (over 3,500 km), flights whose airport the table does not know (`unmeasured`), and counts by
-  evidence (`tracked`, `inferred`, `declared`), each flight listed with its route.
-- **nights** — home, away and in-transit nights, nights aboard each asset, and the longest trip
-  (the longest run of consecutive nights not at home). Without a place of kind `home` every night
-  is away, and the rollup says so.
-- **places** — per named place and per asset: stays, hours, first and last visit, an asset's
-  nights aboard, and the people confirmed present.
-- **people** — per resolved person: days together, the last real contact, the places shared,
-  confirmed and proposed evidence; names that resolve to no person apart, under `unresolved`.
+`rollup places` is the year per place. For every named place in `places.json` and every asset in
+`assets.json` (an asset's stays are your stays aboard it): the **nights** whose overnight stay is
+there, the **stays**, the **hours**, the **first and last** visit (the first stay's start day, the
+last stay's end day), and **with**, the people confirmed present through the with module, most
+days first. Then the **unnamed** places: your stays at no named place, grouped as `places propose`
+groups them (within 300 m of a group's first stay) and ranked by hours, the top five of the year,
+each under the stay id `places name` takes, so a hotel you keep returning to is one line and one
+command away from a name.
+
+```
+places 2026-06-01 – 2026-06-30
+  2026
+        Home (home)                                 18 nights · 19 stays · 273.5 h · 2026-06-01 – 2026-06-30
+        Office (other)                              14 stays · 107 h · 2026-06-01 – 2026-06-30 · with Per Hansen, Liv Berg
+        Marina (asset-berth)                        1 night · 3 stays · 26.8 h · 2026-06-13 – 2026-06-21 · with Anders Vik, Ola Nordmann, Sigrid Moen
+        Cabin (other)                               1 night · 1 stay · 25.9 h · 2026-06-06 – 2026-06-07 · with Ola Nordmann
+        Nordlys (nordlys) (yacht)                   6 nights · 8 stays · 125.4 h · 2026-06-13 – 2026-06-21 · with Anders Vik, Ola Nordmann, Sigrid Moen
+        unnamed, by hours (the ids `places name` takes):
+        47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58.5 h · 2026-06-08 – 2026-06-11 · with Marta Keller   stay:owner:20260608T0830Z@47.3769,8.5417
+        59.0500,10.0300 aboard nordlys (Sandefjord) 2 nights · 2 stays · 40.7 h · 2026-06-17 – 2026-06-19   stay:owner:20260617T1200Z@59.0500,10.0300
+        59.8500,10.6000 aboard nordlys              2 nights · 2 stays · 40 h · 2026-06-15 – 2026-06-20   stay:owner:20260615T1100Z@59.8500,10.6000
+        55.6850,12.5500 (Copenhagen)                2 nights · 2 stays · 33.1 h · 2026-06-25 – 2026-06-27 · with Freja Lund   stay:owner:20260625T1630Z@55.6850,12.5500
+        59.4300,10.4800 aboard nordlys (Sandefjord) 1 night · 1 stay · 17.9 h · 2026-06-16 – 2026-06-17   stay:owner:20260616T1300Z@59.4300,10.4800
+```
+
+An unnamed place reads as its coordinates; `aboard <asset>` when the stays were aboard one;
+`near <place>, x km` for a named place within 5 km; else the city of the nearest large airport
+within 30 km in parentheses, the rule `trips` and `day` label an unnamed stay by. A place's nights
+are printed when there are any; an asset's always, since zero nights aboard a car is the point.
+
+Under `--json`, each place, asset and unnamed cluster carries `stays`, `hours`, `nights`, `first`,
+`last`, `people` and `lines`; an unnamed cluster also `id`, `lat`, `lon`, `label`, `aboard`,
+`nearest` (`{name, kind, metres}`, the closest named place whatever the distance) and `city`. Each
+person under `people` carries their `stays`, `days` and `nights` at that place and the `lines`
+that put them there. `unnamed_top` says how many clusters a year lists.
+
+### Who, where: `--with`
+
+`rollup places --with` turns the same reading into the place × person table: one row per person
+per place, the places in the order the rollup lists them, the people by days there.
+
+```
+places 2026-06-01 – 2026-06-30 · with
+  2026
+        place                        person                   stays  days nights
+        Office                       Per Hansen                  10    10      0
+        Office                       Liv Berg                     9     9      0
+        Marina                       Anders Vik                   2     2      0
+        Marina                       Ola Nordmann                 2     2      0
+        Marina                       Sigrid Moen                  1     1      0
+        Cabin                        Ola Nordmann                 1     2      1
+        Nordlys (nordlys)            Anders Vik                   2     2      0
+        Nordlys (nordlys)            Ola Nordmann                 2     2      0
+        Nordlys (nordlys)            Sigrid Moen                  1     1      0
+        47.3769,8.5417 (Zurich)      Marta Keller                 1     1      1
+        55.6850,12.5500 (Copenhagen) Freja Lund                   1     1      1
+```
+
+- **stays**: the stays at the place the person was confirmed at.
+- **days**: the distinct local days of the evidence that put them there.
+- **nights**: the nights at the place on a day they were there. A night counts for a person when
+  the evidence that put them at the stay is dated the night's day: dinner on the 16th is the night
+  of the 16th together, not every night of a four-night stay.
+
+Under `--json` each year carries the rows under `with`: `place` (the place's name, the asset's id
+or the unnamed cluster's stay id), `label`, `kind` (`place`, `asset`, `unnamed`), `id` and `name`
+of the person, `stays`, `days`, `nights`, `lines`. `--with` goes with `places` only.
+
+## People
+
+`rollup people` is the year per person, from the **confirmed** set of the with module only: an
+attendee of a timed calendar entry held at the stay, a participant of a transcript recorded inside
+it whom the record resolves to a person, a note written inside it that says `with <name>`. A
+tagged face and an all-day entry's attendee are proposals, and a proposal is not a day together:
+it is not counted, not listed and not among the lines, so a person the record knows only by a face
+does not appear here (the Day and the pages still show them as proposed). You are never your own
+company (`present.owner_of`).
+
+```
+people 2026-06-01 – 2026-06-30
+  2026
+        Per Hansen               10 days · 0 nights · last 2026-06-30 · Office · 11 confirmed
+        Liv Berg                 9 days · 0 nights · last 2026-06-29 · Office · 10 confirmed
+        Ola Nordmann             3 days · 1 night · last 2026-06-15 · Cabin, Marina · 4 confirmed
+        Anders Vik               2 days · 0 nights · last 2026-06-15 · Marina · 2 confirmed
+        Jonas Weber              1 day · 0 nights · last 2026-06-09 · 47.3700,8.5300 (Zurich) · 1 confirmed
+        Marta Keller             1 day · 1 night · last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich) · 2 confirmed
+```
+
+Per person: **days** together (the distinct local days of the confirmed evidence, by the
+evidence's own day), **nights** together (the nights whose overnight stay they were confirmed at
+on that day, the `--with` rule), the **last** real contact (the last such day), the **places**
+shared (a named place, `aboard <asset>`, else the unnamed place's label) and the **confirmed**
+evidence count. Under `--json` each carries `stays` (the stays shared) and `lines` too. A
+confirmed name the record resolves to no person — an attendee with a display name and no
+resolution line (RFC 0006) — is listed apart, under `unresolved`, so that a resolution can be
+written for them.
+
+## How it reads
+
+Both rollups come from one `reading.read` of the window: the lines through the index
+(`Index.between`, one sweep of the files), one `stays.derive`, the night of each day. The company
+of a stay is read from `present.Evidence`, the window's evidence lines bucketed by every local day
+their span touches, so each stay looks at the lines of its own days and nothing is read per place.
+Nothing is written, not even `policy/stays.json`.
+
+## Countries, flights, nights
+
+`countries`: days per country per year from the overnight stay, by a place's own `country` else
+the nearest large airport's zone; in-transit nights and nights whose country is unknown apart; the
+method printed with the numbers. `flights`: count, kilometres between the airports table's
+coordinates, long-haul (over 3,500 km), unmeasured, by evidence (`tracked`, `inferred`,
+`declared`), from the flight lines standing (RFC 0013 rule 4). `nights`: home, away and in-transit
+nights, nights aboard each asset, the longest run of nights not at home. A home region is a place
+of kind `home`; a night whose stay centre is within 400 m of one is home whatever that place's
+radius. Without a home place every night is away, and the rollup says so.
 
 ## Per month or week: health
 

@@ -2275,6 +2275,8 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     try:
         if a.by and a.what != "health":
             raise ValueError("--by is for rollup health")
+        if a.with_ and a.what != "places":
+            raise ValueError("--with goes with `rollup places`: the place × person table")
         window = _rollup_days(lb, a)
         if window is None:
             data = rollup.empty(a.what, a.by or "month")
@@ -2283,7 +2285,7 @@ def cmd_rollup(a: argparse.Namespace) -> None:
             data = rollup.health(_health_window(lb, *window), tz, *window, a.by or "month")
         else:
             read = reading.read(lb, window[0], window[1], _airports(a.airports))
-            data = ROLLUPS[a.what](read)
+            data = rollup.places(read, with_table=a.with_) if a.what == "places" else ROLLUPS[a.what](read)
     except (ValueError, stays.SettingsError) as e:
         print(f"rollup: {e}", file=sys.stderr)
         sys.exit(2)
@@ -2824,6 +2826,12 @@ def main(argv: list[str] | None = None) -> None:
         "--airports",
         metavar="FILE",
         help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--with",
+        dest="with_",
+        action="store_true",
+        help="places only: the place × person table — stays, days and nights at each place per person",
     )
     s.add_argument(
         "--json", action="store_true", help="the rollup as one JSON object, every number with its line ids"
