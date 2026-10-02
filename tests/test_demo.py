@@ -186,6 +186,20 @@ def test_places_propose_ranks_the_unnamed_stays(lb: Logbook, capsys: pytest.Capt
     assert "unnamed place" in text
 
 
+def test_places_propose_reads_the_same_from_the_index_as_it_did_from_the_files(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The before/after pin: `places propose` is served from the index's own columns (the owner's
+    points, the evidence, the retractions) and clusters from there; its output on the demo record is
+    byte for byte what the reading of every line of the window gave. The fixtures were written by
+    the earlier code on this same record (thirty days, seed 7)."""
+    fixtures = Path(__file__).parent / "fixtures" / "demo"
+    expected = json.loads((fixtures / "places_propose.json").read_text(encoding="utf-8"))
+    assert _json(capsys, "places", "propose") == expected
+    text = (fixtures / "places_propose.txt").read_text(encoding="utf-8")
+    assert _run(capsys, "places", "propose").splitlines() == text.splitlines()
+
+
 def test_show_prints_a_day_and_the_keepers(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     text = _run(capsys, "show", "2026-06-08")
     assert "XY 561" in text or "561" in text

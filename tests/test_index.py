@@ -120,9 +120,18 @@ def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, c
         "entity",
         "media",
         "subject",
+        "lat",
+        "lon",
+        "end",
     ]
     indexes = {r[0] for r in _rows(lb, "SELECT name FROM sqlite_master WHERE type = 'index'")}
-    assert {"lines_day_local", "lines_source_raw_id", "lines_kind_at", "lines_subject_at"} <= indexes
+    assert {
+        "lines_day_local",
+        "lines_source_raw_id",
+        "lines_kind_at",
+        "lines_subject_at",
+        "lines_kind_day_local",
+    } <= indexes
 
 
 def test_index_rows_carry_the_local_day_and_where_the_line_is_in_the_files(lb: Logbook):
@@ -428,3 +437,121 @@ def test_superseded_maps_each_superseded_id_to_the_seq_that_superseded_it(lb: Lo
     with lb.index() as idx:
         assert idx.superseded("flight") == {first["id"]: int(second["seq"])}
         assert idx.superseded("note") == {}
+
+
+# -- the columns a reader clusters from: location points and evidence, nothing read from the files -------
+
+
+def test_locations_serves_the_points_of_a_window_from_the_index_alone(lb: Logbook, monkeypatch):
+    """`places propose` clusters the owner's points, and the points of the assets it asks for, from
+    the index's own `subject`, `lat` and `lon` columns: one subject per call; a location line whose
+    coordinates are not numbers has none and is left out, as `stays.derive` leaves it out; a point
+    outside the days is left out; a retracted point is left out, by the retraction's `supersedes`
+    column. No month file is opened."""
+    boat = lb.append(
+        at="2026-03-01T08:00:00Z",
+        source="ais",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": 59.9, "lon": 10.7, "subject": "boat", "raw_id": "ais:1"},
+    )
+    lb.append(
+        at="2026-03-01T08:10:00Z",
+        source="ais",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": 59.9, "lon": 10.7, "subject": "other", "raw_id": "ais:2"},
+    )
+    lb.append(
+        at="2026-03-01T09:00:00Z",
+        source="sim-phone",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": "59.9", "lon": 10.7, "raw_id": "trk:bad"},
+    )
+    retracted = lb.append(
+        at="2026-03-01T09:30:00Z",
+        source="sim-phone",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": 59.95, "lon": 10.75, "raw_id": "trk:gone"},
+    )
+    lb.retract(int(retracted["seq"]), "a test")
+    lb.append(
+        at="2026-03-03T09:00:00Z",
+        source="sim-phone",
+        kind="location",
+        tier=1,
+        payload={"schema": "location/v1", "lat": 59.93, "lon": 10.73, "raw_id": "trk:3"},
+    )
+    with lb.index():
+        pass
+    opened: list[Path] = []
+    original = Path.open
+
+    def counting(self: Path, *args: Any, **kwargs: Any) -> Any:
+        if self.suffix == ".jsonl":
+            opened.append(self)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting)
+    with lb.index() as idx:
+        assert idx.locations("2026-03-01", "2026-03-02") == [
+            (1, "2026-03-01T07:30:00Z", 59.911, 10.75),
+            (3, "2026-03-01T23:30:00Z", 59.92, 10.74),
+        ]
+        assert idx.locations("2026-03-01", "2026-03-02", "boat") == [
+            (int(boat["seq"]), boat["at"], 59.9, 10.7)
+        ]
+        assert idx.locations("2026-03-01", "2026-03-02", "nobody") == []
+        three_days = idx.locations("2026-03-01", "2026-03-03")
+        assert [at[:10] for _seq, at, _lat, _lon in three_days] == ["2026-03-01", "2026-03-01", "2026-03-03"]
+        assert idx.ids([1, 3, 999]) == {1: owner_id(lb, 1), 3: owner_id(lb, 3)}
+    assert opened == []
+
+
+def owner_id(lb: Logbook, seq: int) -> str:
+    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+        return str(db.execute("SELECT id FROM lines WHERE seq = ?", (seq,)).fetchone()[0])
+
+
+def test_evidence_serves_the_kinds_that_promote_a_stay_with_their_spans(lb: Logbook, monkeypatch):
+    """The `end` column is what `stays.derive` needs of a note, an event or a message to attach it to
+    a stay: a line with an `end` counts when its span overlaps. Served from the index alone."""
+    lb.append(
+        at="2026-03-01T09:00:00Z",
+        end="2026-03-01T10:00:00Z",
+        source="sim-calendar",
+        kind="event",
+        tier=1,
+        payload={"schema": "event/v1", "title": "Planning"},
+    )
+    lb.append(
+        at="2026-03-01T09:30:00Z",
+        source="flighty",
+        kind="flight",
+        tier=1,
+        payload={"schema": "flight/v1"},
+    )
+    with lb.index():
+        pass
+    standup = [e for e in lb.lines() if e["kind"] == "event" and e["at"].startswith("2026-03-02")]
+    opened: list[Path] = []
+    original = Path.open
+
+    def counting(self: Path, *args: Any, **kwargs: Any) -> Any:
+        if self.suffix == ".jsonl":
+            opened.append(self)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting)
+    with lb.index() as idx:
+        assert idx.evidence(("event", "note"), "2026-03-01", "2026-03-01") == [
+            ("event", "2026-03-01T09:00:00Z", "2026-03-01T10:00:00Z"),
+            ("note", "2026-03-01T22:00:00Z", None),
+        ]
+        assert idx.evidence(("event", "note"), "2026-03-02", "2026-03-02") == [
+            ("event", "2026-03-02T08:00:00Z", None) for _ in standup
+        ]
+        assert idx.evidence(("event",), "2026-03-03", "2026-03-03") == []
+    assert opened == []

@@ -50,11 +50,13 @@ from __future__ import annotations
 
 import json
 import math
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from itertools import pairwise
+from operator import attrgetter
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
@@ -261,6 +263,8 @@ class Segment:
     airports: tuple[str, ...] = ()
     first_line: str | None = None  # the ids of the first and last location line of the segment
     last_line: str | None = None
+    first_seq: int | None = None  # and their seqs, for a reader whose points carry no id (the index's)
+    last_seq: int | None = None
 
     @property
     def duration_s(self) -> int:
@@ -376,8 +380,6 @@ def _split(lines: Iterable[Line]) -> tuple[dict[str | None, list[Point]], list[E
             )
         elif line.get("kind") in EVIDENCE:
             evidence.append(Evidence(at, instant(line.get("end")), str(line["kind"])))
-    for track in tracks.values():
-        track.sort(key=lambda p: (p.at, p.seq))
     return tracks, evidence
 
 
@@ -401,16 +403,15 @@ def _place_of(lat: float, lon: float, places: Sequence[Place]) -> Place | None:
     return best
 
 
-def _inside(cluster: _Cluster, p: Point, settings: Settings) -> bool:
-    if cluster.place is not None:
-        return distance_m(p.lat, p.lon, cluster.place.lat, cluster.place.lon) <= cluster.place.radius_m
-    return distance_m(p.lat, p.lon, cluster.anchor_lat, cluster.anchor_lon) <= settings.radius_m
-
-
 def _joins(cluster: _Cluster, p: Point, settings: Settings) -> bool:
     """Inside the cluster's radius, whatever the gap since its last point: a tracker that is silent
-    while the owner is still has been silent at this place."""
-    return _inside(cluster, p, settings)
+    while the owner is still has been silent at this place. Called once per point of a track of
+    millions, so the distance is taken in kilometres here and not through `distance_m`."""
+    if cluster.place is not None:
+        return (
+            distance_km(p.lat, p.lon, cluster.place.lat, cluster.place.lon) * 1000 <= cluster.place.radius_m
+        )
+    return distance_km(p.lat, p.lon, cluster.anchor_lat, cluster.anchor_lon) * 1000 <= settings.radius_m
 
 
 def _start(i: int, p: Point, places: Sequence[Place]) -> _Cluster:
@@ -492,13 +493,31 @@ def _merge(clusters: list[_Cluster], track: Sequence[Point], settings: Settings)
 # -- classification, moves, aboard ---------------------------------------------------------------------
 
 
+class _EvidenceLookup:
+    """The evidence sorted by instant, so what is attached to a span is found by binary search and
+    not by a pass over every line of the window for every cluster. A line with an `end` can start
+    before the span and still overlap it, by at most the longest span any evidence line has, so
+    the search starts that far before the cluster's start; the test on each candidate is exact."""
+
+    def __init__(self, evidence: Sequence[Evidence]):
+        self.items = sorted(evidence, key=lambda e: e.at)
+        self.instants = [e.at for e in self.items]
+        self.reach = timedelta(
+            seconds=max(((e.end - e.at).total_seconds() for e in self.items if e.end is not None), default=0)
+        )
+
+    def attached(self, start: datetime, end: datetime) -> dict[str, int]:
+        counts: Counter[str] = Counter()
+        lo, hi = bisect_left(self.instants, start - self.reach), bisect_right(self.instants, end)
+        for e in self.items[lo:hi]:
+            inside = start <= e.at <= end if e.end is None else e.at <= end and e.end >= start
+            if inside:
+                counts[e.kind] += 1
+        return dict(sorted(counts.items(), key=lambda kv: EVIDENCE.index(kv[0])))
+
+
 def _attached(start: datetime, end: datetime, evidence: Sequence[Evidence]) -> dict[str, int]:
-    counts: Counter[str] = Counter()
-    for e in evidence:
-        inside = start <= e.at <= end if e.end is None else e.at <= end and e.end >= start
-        if inside:
-            counts[e.kind] += 1
-    return dict(sorted(counts.items(), key=lambda kv: EVIDENCE.index(kv[0])))
+    return _EvidenceLookup(evidence).attached(start, end)
 
 
 def _segments_of(
@@ -512,6 +531,7 @@ def _segments_of(
 ) -> tuple[list[Segment], int]:
     clusters, noise = _cluster(track, settings, places)
     clusters = _merge(clusters, track, settings)
+    lookup = _EvidenceLookup(evidence if subject is None else ())
     segments: list[Segment] = []
     for n, cluster in enumerate(clusters):
         first, last = track[cluster.members[0]], track[cluster.members[-1]]
@@ -519,7 +539,7 @@ def _segments_of(
         if n:
             prev = clusters[n - 1]
             segments.append(_move(subject, prev, cluster, track, noise, settings, asset_kind, airports))
-        attached = _attached(first.at, until, evidence) if subject is None else {}
+        attached = lookup.attached(first.at, until) if subject is None else {}
         by_duration = (until - first.at).total_seconds() >= settings.stay_min_s
         lat, lon = _centroid(cluster, track)
         segments.append(
@@ -536,6 +556,8 @@ def _segments_of(
                 promoted=bool(attached) and not by_duration,
                 first_line=first.id or None,
                 last_line=last.id or None,
+                first_seq=first.seq,
+                last_seq=last.seq,
             )
         )
     return segments, len(noise)
@@ -582,6 +604,8 @@ def _move(
         airports=codes if len(codes) == 2 else (),
         first_line=start.id or None,
         last_line=end.id or None,
+        first_seq=start.seq,
+        last_seq=end.seq,
     )
 
 
@@ -634,11 +658,13 @@ def _aboard(
     asset_ids = sorted(s for s in tracks if s is not None)
     if not asset_ids:
         return segments
+    owner_instants = [p.at for p in owner]
+    instants = {asset: [p.at for p in tracks[asset]] for asset in asset_ids}
     out: list[Segment] = []
     for segment in segments:
         aboard = None
         for asset in asset_ids:
-            if _matches(segment, owner, tracks[asset], settings):
+            if _matches(segment, owner, owner_instants, tracks[asset], instants[asset], settings):
                 aboard = asset
                 break
         out.append(replace(segment, aboard=aboard))
@@ -656,16 +682,23 @@ def _aboard(
     ]
 
 
-def _matches(segment: Segment, owner: Sequence[Point], asset: Sequence[Point], settings: Settings) -> bool:
+def _matches(
+    segment: Segment,
+    owner: Sequence[Point],
+    owner_instants: Sequence[datetime],
+    asset: Sequence[Point],
+    asset_instants: Sequence[datetime],
+    settings: Settings,
+) -> bool:
+    """Both tracks are in time order and `*_instants` are their instants, so the points of a span
+    are found by binary search (two years of a track is a million points; a span is minutes)."""
     if segment.kind != MOVE:
         assert segment.lat is not None and segment.lon is not None
         radius = settings.radius_m
-        return any(
-            segment.start <= p.at <= segment.end
-            and distance_m(p.lat, p.lon, segment.lat, segment.lon) <= radius
-            for p in asset
-        )
-    mine = [p for p in owner if segment.start < p.at < segment.end]
+        lo, hi = bisect_left(asset_instants, segment.start), bisect_right(asset_instants, segment.end)
+        return any(distance_m(p.lat, p.lon, segment.lat, segment.lon) <= radius for p in asset[lo:hi])
+    lo, hi = bisect_right(owner_instants, segment.start), bisect_left(owner_instants, segment.end)
+    mine = owner[lo:hi]
     if not mine:
         return False
     matched = 0
@@ -692,11 +725,32 @@ def derive(
     its mode from speed. `airports` is the flights table (RFC 0013), the built-in one when not
     given. `tz` is the owner's zone; it is not used to derive (instants are compared as instants)
     but is kept on the result's contract for readers that print."""
+    tracks, evidence = _split(lines)
+    return derive_tracks(tracks, evidence, settings, places, assets, tz, airports)
+
+
+def derive_tracks(
+    tracks: Mapping[str | None, list[Point]],
+    evidence: Sequence[Evidence],
+    settings: Settings,
+    places: Sequence[Place],
+    assets: Mapping[str, str],
+    tz: str,
+    airports: Airports | None = None,
+    subjects: Sequence[str | None] | None = None,
+) -> Derived:
+    """`derive` from points already split by subject (None is the owner) and the owner's evidence:
+    what `places propose` calls with the points the index serves. Each track is put in time order
+    here. `subjects` names whose segments to derive — the owner only, `[None]`, for a reader of the
+    owner's stays — default every subject with a track; every track still says what the owner was
+    aboard."""
     ZoneInfo(tz)  # an unknown zone is an error here, not at print time
     airports = airports or Airports.load()
-    tracks, evidence = _split(lines)
+    for track in tracks.values():
+        track.sort(key=attrgetter("at", "seq"))
     owner = tracks.get(None, [])
-    subjects: list[str | None] = [None, *sorted(s for s in tracks if s is not None)]
+    present: list[str | None] = [None, *sorted(s for s in tracks if s is not None)]
+    subjects = present if subjects is None else [s for s in present if s in subjects]
     segments: list[Segment] = []
     noise = 0
     for subject in subjects:

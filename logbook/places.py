@@ -12,8 +12,11 @@ this module does not know are kept when the file is rewritten (SPEC §1 for `log
 
 `propose` is a reader (ADR 0013): the owner's unnamed stays of a window, grouped by place and ranked
 by hours, each with the nearest known place, the Google Timeline visits that overlap it when the
-record holds Takeout timeline lines, and a suggested name. It appends nothing; `--write` appends
-the namings the captain accepts, through `Logbook.append`."""
+record holds Takeout timeline lines, and a suggested name. The stays come from the index alone
+(`reading.owner_track`): the owner's points, the evidence and the retractions are columns of it, so
+a window of years over a record of millions of lines is read in seconds and no month file is opened;
+only the Timeline visit lines are read whole, found through the index by their `raw_id`. It appends
+nothing; `--write` appends the namings the captain accepts, through `Logbook.append`."""
 
 from __future__ import annotations
 
@@ -37,6 +40,7 @@ STAY_ID = re.compile(r"^(?:stay|stop):[^@]+@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$
 COORDINATES = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
 COUNTRY = re.compile(r"^[A-Z]{2}$")
 TIMELINE_SOURCE = "google-takeout"
+TIMELINE_VISIT_RAW_ID = "visit:"  # the takeout adapter's raw_id of a visit edge: `visit:<time>:start|end`
 
 
 class PlaceError(ValueError):

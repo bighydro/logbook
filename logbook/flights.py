@@ -28,6 +28,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
 from functools import cache
 from importlib import resources
+from math import asin, cos, sin, sqrt
 from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
@@ -221,12 +222,17 @@ def _read_airports(text: str, name: str) -> list[Airport]:
     return found
 
 
+RADIAN = math.pi / 180.0  # the constant `math.radians` multiplies by; a multiply here, no call
+
+
 def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance (haversine), in kilometres."""
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * 6371.0 * math.asin(math.sqrt(a))
+    """Great-circle distance (haversine), in kilometres. Called once per point when a track is
+    clustered, so the degrees are turned to radians by a multiply, the same one `math.radians`
+    does, and the functions are looked up once (the module names below)."""
+    p1, p2 = lat1 * RADIAN, lat2 * RADIAN
+    dp, dl = (lat2 - lat1) * RADIAN, (lon2 - lon1) * RADIAN
+    a = sin(dp / 2) ** 2 + cos(p1) * cos(p2) * sin(dl / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(a))
 
 
 # -- airlines ---------------------------------------------------------------------------------------------

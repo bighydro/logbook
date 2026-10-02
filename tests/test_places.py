@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from persona import CAFE, FJORD, HOME, PLACES, ZURICH, persona_record
+from persona import BOAT, CAFE, FJORD, HOME, PLACES, ZURICH, persona_drafts, persona_record
 
 from logbook import cli, places
 from logbook.store import Logbook
@@ -224,6 +224,89 @@ def test_propose_without_a_window_reads_the_whole_record(
     data = _json(capsys, "propose", "--top", "2")
     assert len(data["proposals"]) == 2
     assert data["window"]["days"][0] <= "2026-06-08" and data["window"]["days"][-1] >= "2026-06-21"
+
+
+def _jsonl_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Every month file opened from here on: the record's lines are only ever read through `Path.open`."""
+    opened: list[Path] = []
+    original = Path.open
+
+    def counting(self: Path, *args: Any, **kwargs: Any) -> Any:
+        if self.suffix == ".jsonl":
+            opened.append(self)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting)
+    return opened
+
+
+def test_propose_reads_the_index_and_not_the_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The owner's points, the boat's, the evidence that promotes a stay and the retractions all
+    come from the index's own columns; with the index current, no month file is opened."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.append_many(d for d in persona_drafts() if d["source"] != "google-takeout")
+    (lb.root / "assets.json").write_text(
+        json.dumps({"assets": [{"id": BOAT, "kind": "yacht", "name": "Solvind", "mmsi": "999000001"}]}),
+        encoding="utf-8",
+    )
+    (lb.root / "places.json").write_text(json.dumps(PLACES, indent=2), encoding="utf-8")
+    with lb.index():
+        pass
+    opened = _jsonl_opens(monkeypatch)
+    data = _json(capsys, "propose", "--since", "2026-06-08", "--until", "2026-06-21")
+    assert opened == []
+    proposals = data["proposals"]
+    fjord = next(p for p in proposals if abs(p["lat"] - FJORD[0]) < 0.002)
+    assert fjord["aboard"] == BOAT, "the boat's track is read too, so a stay aboard still says so"
+    assert any(abs(p["lat"] - ZURICH[0]) < 0.002 for p in proposals)
+
+
+def test_propose_opens_a_file_only_for_the_timeline_visits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A Google Timeline visit's semantic type lives in its payload, which the index does not hold:
+    those lines, found through the index, are the only ones read from the files."""
+    lb = persona_record(tmp_path, monkeypatch)
+    with lb.index():
+        pass
+    opened = _jsonl_opens(monkeypatch)
+    data = _json(capsys, "propose", "--since", "2026-06-08", "--until", "2026-06-21")
+    assert len(opened) == 1 and opened[0].parts[-3:] == ("logbook", "2026", "06.jsonl")
+    cafe = next(p for p in data["proposals"] if abs(p["lat"] - CAFE[0]) < 0.001)
+    assert cafe["timeline"][0]["semantic_type"] == "RESTAURANT"
+
+
+def test_propose_leaves_out_a_retracted_point_without_reading_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A retraction is a line; the id it supersedes is a column of the index, so a retracted point is
+    left out of the clustering with no file read."""
+    lb = _empty(tmp_path, monkeypatch)
+    far = (59.5, 10.0)
+    seqs = []
+    for minute in range(0, 120, 5):
+        line = lb.append(
+            at=f"2026-06-10T{10 + minute // 60:02d}:{minute % 60:02d}:00Z",
+            source="dawarich",
+            kind="location",
+            tier=1,
+            payload={"schema": "location/v1", "lat": far[0], "lon": far[1], "raw_id": f"p:{minute}"},
+        )
+        seqs.append(int(line["seq"]))
+    before = _json(capsys, "propose", "--since", "2026-06-10", "--until", "2026-06-10")
+    assert len(before["proposals"]) == 1 and before["proposals"][0]["lines"]["points"] == 24
+    for seq in seqs[:12]:
+        lb.retract(seq, "a test")
+    with lb.index():
+        pass
+    opened = _jsonl_opens(monkeypatch)
+    after = _json(capsys, "propose", "--since", "2026-06-10", "--until", "2026-06-10")
+    assert opened == []
+    assert after["proposals"][0]["lines"]["points"] == 12
+    assert after["proposals"][0]["stays"][0].startswith("stay:owner:20260610T1100Z")
 
 
 # -- home regions in derive stays ------------------------------------------------------------------------
