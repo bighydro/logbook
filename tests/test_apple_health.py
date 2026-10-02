@@ -529,8 +529,8 @@ def _stats(capsys: pytest.CaptureFixture[str], *args: str) -> str:
 def test_stats_health_json_one_row_per_day(lb: Logbook, capsys):
     data = json.loads(_stats(capsys, "--health", "--json"))
     assert data["days"] == [
-        {"day": "2026-03-02", "sleep_h": 7.3, "steps": 550, "resting_hr": 56},
-        {"day": "2026-03-03", "sleep_h": None, "steps": 450, "resting_hr": 60},
+        {"day": "2026-03-02", "sleep_h": 7.3, "steps": 550, "resting_hr": 56, "hrv": 45},
+        {"day": "2026-03-03", "sleep_h": None, "steps": 450, "resting_hr": 60, "hrv": None},
     ]
 
 
