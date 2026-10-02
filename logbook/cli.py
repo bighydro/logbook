@@ -3090,16 +3090,31 @@ def main(argv: list[str] | None = None) -> None:
     a = ap.parse_args(argv)
     try:
         a.fn(a)
+        sys.stdout.flush()  # a short listing sits in the buffer until exit: meet the closed pipe here
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
     except BrokenPipeError:  # the reader went away (`| head`): stop quietly, status 0
         _stdout_to_devnull()
+    except SystemExit:  # a command's own status (`sources --gaps` exits 1) stands; the pipe is still quiet
+        _flush_quietly()
+        raise
+
+
+def _flush_quietly() -> None:
+    """Flush stdout now, so a pipe whose reader is gone is seen here and not reported by the
+    interpreter's final flush."""
+    try:
+        sys.stdout.flush()
+    except BrokenPipeError:
+        _stdout_to_devnull()
 
 
 def _stdout_to_devnull() -> None:
     """Point stdout at the null device so the interpreter's final flush does not report the
-    broken pipe on stderr and turn the exit status into 120."""
+    broken pipe on stderr and turn the exit status into 120. Python ignores SIGPIPE at start-up,
+    so a write to a closed pipe is a BrokenPipeError, never a signal; this is where every reader
+    meets it."""
     with contextlib.suppress(OSError, ValueError):  # no real file behind stdout (a test capture)
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
