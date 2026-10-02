@@ -18,6 +18,7 @@ from jsonschema import Draft202012Validator
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters
 from logbook.adapters.takeout import location, photos
+from logbook.chain import canonical_json
 from logbook.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -372,6 +373,39 @@ def test_supplemental_metadata_sidecar_zero_geo_and_caption(google_photos):
     assert "altitude" not in p["extra"] and "url" not in p["extra"]
 
 
+def test_non_finite_numbers_in_a_sidecar_never_reach_the_line(tmp_path):
+    """A sidecar's number can be `Infinity`, `-Infinity` or `NaN` (Python's json reads and writes
+    them): each is left out of the line as a value the field never had, never written, so the line
+    canonicalises and appends. `geoData` with an infinite latitude is no place, and `geoDataExif`
+    with a finite pair is taken instead; an infinite taken time falls back to the creation time."""
+    album = tmp_path / "Google Photos" / "Album"
+    album.mkdir(parents=True)
+    (album / "IMG_0001.JPG").write_bytes(b"bytes")
+    inf, nan = float("inf"), float("nan")
+    doc = {
+        "title": "IMG_0001.JPG",
+        "imageViews": inf,
+        "photoTakenTime": {"timestamp": inf},
+        "creationTime": {"timestamp": "1772356320"},
+        "geoData": {"latitude": inf, "longitude": 10.75, "altitude": -inf},
+        "geoDataExif": {"latitude": 59.91, "longitude": 10.75, "altitude": nan},
+    }
+    text = json.dumps(doc)  # the default allow_nan spells them Infinity, -Infinity and NaN
+    assert "Infinity" in text and "NaN" in text
+    (album / "IMG_0001.JPG.json").write_text(text, encoding="utf-8")
+    counts: dict[str, int] = {}
+    [line] = list(photos.run(album.parent, counts=counts))
+    p = line["payload"]
+    assert line["at"] == "2026-03-01T09:12:00Z" and p["extra"]["taken_from"] == "creationTime"
+    assert (p["lat"], p["lon"]) == (59.91, 10.75)
+    assert "altitude" not in p["extra"] and "image_views" not in p["extra"]
+    assert "Infinity" not in canonical_json(line) and "NaN" not in canonical_json(line)
+    _rfc_rules(line)
+    lb = Logbook.init(tmp_path / "lb", "UTC")
+    assert lb.append_many([line]) == 1
+    assert counts["at_from_creation_time"] == 1
+
+
 def test_truncated_sidecar_name_still_matches_its_file(google_photos):
     line = _by_name(list(photos.run(google_photos)))[LONG_NAME]
     assert line["at"] == "2026-03-02T10:00:00Z"
@@ -576,9 +610,10 @@ def _rfc_rules(line: dict) -> None:
 
 
 _unix = st.integers(946_684_800, 2_208_988_800)  # 2000 .. 2040
-_stamp = st.one_of(_unix.map(str), _unix, st.text(max_size=6), st.none(), st.floats(allow_nan=False))
+_non_finite = st.sampled_from([float("inf"), float("-inf"), float("nan")])
+_stamp = st.one_of(_unix.map(str), _unix, st.text(max_size=6), st.none(), st.floats(), _non_finite)
 _time = st.one_of(st.none(), st.fixed_dictionaries({}, optional={"timestamp": _stamp}), st.text(max_size=3))
-_coord = st.one_of(st.floats(-200, 200, allow_nan=False), st.text(max_size=4), st.none())
+_coord = st.one_of(st.floats(-200, 200, allow_nan=False), _non_finite, st.text(max_size=4), st.none())
 _geo = st.one_of(
     st.none(),
     st.fixed_dictionaries({}, optional={"latitude": _coord, "longitude": _coord, "altitude": _coord}),
@@ -642,7 +677,9 @@ def _write_item(album: Path, i: int, item: dict) -> tuple[bool, bool]:
     if item["junk"]:
         (album / sidecar_name).write_text("{not json", encoding="utf-8")
         return item["file_present"], False
-    (album / sidecar_name).write_text(json.dumps(doc, allow_nan=False), encoding="utf-8")
+    # the default allow_nan: a non-finite number is written as Python's json spells it (`Infinity`,
+    # `NaN`), which the adapter's reader accepts, so the adapter sees it; allow_nan=False raised here
+    (album / sidecar_name).write_text(json.dumps(doc), encoding="utf-8")
     is_sidecar = isinstance(doc.get("photoTakenTime"), dict) or isinstance(doc.get("creationTime"), dict)
     return item["file_present"], is_sidecar and (variant == "numbered" or not item["file_present"])
 
