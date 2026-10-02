@@ -455,7 +455,7 @@ def test_search_answers_in_under_a_second_on_two_million_lines(tmp_path: Path, m
     timings = []
     for args in (
         ["unicorn"],
-        ["fjord", "cabin"],
+        ["fjord cabin"],
         ['"the kari"', "--since", "2020-01-01", "--until", "2020-12-31"],
     ):
         started = time.perf_counter()
