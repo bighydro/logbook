@@ -506,7 +506,8 @@ logbook show place Office                     # visits, people, photos
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art
 
-logbook promises --since 2026-06-01           # "I'll send…", "ich melde mich…" in transcripts and notes, as proposals
+logbook promises --judge                      # a local model reads every "I'll…" the rules found; the commitments, as proposals
+logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
 logbook promises done 3b9e5d0f2a71c846        # it was kept: one task/v1 line, so --open hides it
 ```
 
@@ -550,10 +551,12 @@ keepers first, as its hero photos.
 **Promises** (`docs/promises.md`) are proposals, never facts: every sentence of a transcript or a note that reads
 as a first-person future or obligation, in English or German (`I'll send`, `we'll get back`, `let me`, `I need to`,
 `ich schicke`, `ich melde mich`, `ich muss`), with the day, the line, the speaker when the record resolves one and a
-due hint when a date phrase is in it (`by Friday`, `next week`, `bis Montag`), found by rules alone; no model runs,
-nothing leaves the machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done. The
-extractor is a value with a name and a version, so a local model can replace the rules without changing the
-command, the report or the ids.
+due hint when a date phrase is in it (`by Friday`, `next week`, `bis Montag`), found by rules. The rules find far
+too many, so `--judge` has a local instruct model (`openlogbook[judge]`, mlx-lm on Apple silicon, a 4-bit
+Qwen2.5 by default) read each candidate in its context and say whether it is a commitment, by whom, to whom,
+what and by when; the verdicts are kept in the record and never redone, and the command shows the commitments
+it is sure of (`--all` for everything). No model runs unless you ask, never a cloud one, and nothing leaves the
+machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done.
 
 ## Handing a window to someone
 
