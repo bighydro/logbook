@@ -10,8 +10,9 @@ number and name points at the lines it came from.
 What a Day shows, in order:
 
 1. The header: the date; where the night before and the night after were spent (the overnight
-   stay, `stays.night`: a named place, `aboard <asset>` or the coordinates, home or away, or in
-   transit when no stay reaches the minimum); the country of the day (`countries.country_of` on
+   stay, `stays.night`: a named place, `aboard <asset>`, the home place a night within 400 m of
+   it lies by, or the coordinates with `near <place>, x km`, home or away, or in transit when no
+   stay reaches the minimum); the country of the day (`countries.country_of` on
    the night's stay, else the longest stay of the day, with the method); the day's all-day
    calendar entries.
 2. The timeline: the owner's segments from `stays.derive` that touch the day — stays, stops and
@@ -144,34 +145,32 @@ def of_reading(
 # -- the header ---------------------------------------------------------------------------------------------
 
 
-def _where(s: stays.Segment, rd: Reading) -> str | None:
-    """A stay's place: its name, else `aboard <asset>`, else its coordinates; None for a move."""
+def _where(s: stays.Segment, rd: Reading, home: bool = False) -> str | None:
+    """A stay's place: its name, else `aboard <asset>`, else — a night at home by the 400 m rule
+    (`stays.HOME_NEAR_M`, `home`) — the home place it lies by, else its coordinates; None for a
+    move."""
     if s.kind == stays.MOVE:
         return None
     if s.place:
         return s.place
     if s.aboard:
         return f"aboard {_asset_name(s.aboard, rd)}"
+    if home and s.lat is not None and s.lon is not None:
+        near = named_places.nearest(s.lat, s.lon, named_places.home_places(rd.places))
+        if near is not None:
+            return near[0].name
     return _coordinates(s, rd)
 
 
 def _coordinates(s: stays.Segment, rd: Reading) -> str | None:
-    """The airport's code and city, `ZRH, Zurich`, when the stay is at one (`trips.airport_at`, the
-    route's rule: 3.5 km from the reference point of an airport with scheduled traffic, 2 km from
-    any other); else `lat,lon`, with the city of the nearest large airport within 30 km in
-    parentheses when the stay is near no named place (`trips.city_near`), so a reader sees
-    `53.5998,10.0130 (Hamburg)`."""
+    """The route's rule (`trips.coordinates_label`): the airport's code and city, `ZRH, Zurich`,
+    when the stay is at one (3.5 km from the reference point of an airport with scheduled traffic,
+    2 km from any other); else `lat,lon`, with `near <place>, x km` for the nearest named place
+    within 5 km, else the city of the nearest large airport within 30 km in parentheses, so a
+    reader sees `53.5998,10.0130 (Hamburg)`."""
     if s.lat is None or s.lon is None:
         return None
-    airport = trips.airport_at(s.lat, s.lon, rd.airports)
-    if airport is not None:
-        return trips.airport_label(airport)
-    label = f"{s.lat:.4f},{s.lon:.4f}"
-    near = named_places.nearest(s.lat, s.lon, rd.places)
-    if near is not None and near[1] <= trips.NEAR_KM * 1000:
-        return label
-    city = trips.city_near(s.lat, s.lon, rd.airports)
-    return f"{label} ({city})" if city else label
+    return trips.coordinates_label(s.lat, s.lon, rd.places, rd.airports)
 
 
 def _asset_name(asset_id: str, rd: Reading) -> str:
@@ -193,7 +192,7 @@ def _night_json(night: stays.Night | None, day: str, rd: Reading) -> dict[str, A
     s = night.stay
     return {
         "day": night.day,
-        "where": _where(s, rd),
+        "where": _where(s, rd, night.home),
         "home": night.home,
         "aboard": s.aboard,
         "in_transit": False,

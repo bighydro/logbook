@@ -11,7 +11,22 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from persona import HOME, KARI, KARI_ID, PLACES, TZ, attendee, dwell, event, persona_record, resolution, utc
+from persona import (
+    HOME,
+    KARI,
+    KARI_ID,
+    OSL,
+    PLACES,
+    TZ,
+    attendee,
+    dwell,
+    event,
+    note,
+    persona_record,
+    resolution,
+    travel,
+    utc,
+)
 from test_day import _gap_record, _health
 
 from logbook import cli, reading
@@ -53,6 +68,7 @@ def test_the_fortnight_is_one_line_per_day(
         "aboard": None,
         "in_transit": False,
         "stay": office["night"]["stay"],
+        "located": True,
     }
     assert office["night"]["stay"], "the night points at its stay"
     assert office["country"] == "NO"
@@ -136,6 +152,68 @@ def test_the_chunk_size_changes_nothing(tmp_path: Path, monkeypatch: pytest.Monk
         next(days_reader.read(lb, "2026-06-08", "2026-06-21", chunk_days=0))
 
 
+# -- the night: the home rule, the nearest place, no location ---------------------------------------------
+
+
+NEAR_HOME = (HOME[0] + 0.0027, HOME[1])  # ~300 m north of Home: outside its 120 m radius, inside 400 m
+TWO_KM = (HOME[0] + 0.0180, HOME[1])  # ~2.0 km north of Home
+
+
+def _night_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    """Monday 6 July 2026 at a flat 300 m from Home; Tuesday at one 2 km off; Wednesday on the
+    road to the airport all day, never still; Thursday a note and no location line at all; Friday
+    nothing. `places.json` names Home (kind home, 120 m) alone."""
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    mon, tue, wed, thu = "2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09"
+    drafts: list[dict[str, Any]] = [
+        *dwell(mon, "00:00", "24:00", NEAR_HOME, every_min=10, noise_m=10),
+        *dwell(tue, "00:00", "08:00", NEAR_HOME, every_min=10, noise_m=10),
+        *travel(tue, "08:00", "09:00", NEAR_HOME, TWO_KM),
+        *dwell(tue, "09:00", "24:00", TWO_KM, every_min=10, noise_m=10),
+        *dwell(wed, "00:00", "07:00", TWO_KM, every_min=10, noise_m=10),
+        *travel(wed, "07:00", "24:00", TWO_KM, OSL, steps=100),
+        note(utc(thu, "10:00"), "a day off the grid"),
+    ]
+    lb.append_many(drafts)
+    (lb.root / "places.json").write_text(json.dumps({"Home": PLACES["Home"]}), encoding="utf-8")
+    return lb
+
+
+def test_the_night_follows_the_home_rule_names_the_nearest_place_and_says_no_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A night whose stay centre is within 400 m of Home is a night at home (`stays.HOME_NEAR_M`)
+    whatever Home's radius, and the row names Home, never the coordinates. A night 2 km off is
+    away: its coordinates with `near Home, 2.0 km`, the route's rule (`trips.NEAR_KM`). A day with
+    location lines but no stay reaching the minimum is `in transit`; a day with no location line
+    at all — a note only, or nothing — is `no location`, since nothing says the owner moved."""
+    _night_record(tmp_path, monkeypatch)
+    rows = _rows(capsys, "--from", "2026-07-06", "--to", "2026-07-10")
+    by_day = {r["day"]: r for r in rows}
+    home = by_day["2026-07-06"]["night"]
+    assert home["where"] == "Home" and home["home"] is True and home["in_transit"] is False
+    away = by_day["2026-07-07"]["night"]
+    assert away["home"] is False and away["in_transit"] is False
+    assert away["where"] is not None and away["where"].endswith(" near Home, 2.0 km")
+    assert away["where"].startswith(f"{TWO_KM[0]:.2f}"), "the coordinates lead"
+    assert by_day["2026-07-07"]["country"] == "NO"
+    road = by_day["2026-07-08"]["night"]
+    assert road["in_transit"] is True and road["located"] is True
+    off_grid = by_day["2026-07-09"]["night"]
+    assert off_grid["in_transit"] is True and off_grid["located"] is False
+    assert by_day["2026-07-10"]["night"]["located"] is False
+    assert home["located"] is True and away["located"] is True
+
+    text = _run(capsys, "--from", "2026-07-06", "--to", "2026-07-10")
+    lines = {line[:10]: line for line in text.splitlines()}
+    assert "  Home  " in lines["2026-07-06"] and "59.9" not in lines["2026-07-06"].split("km")[0]
+    assert "near Home, 2.0 km NO" in lines["2026-07-07"]
+    assert "in transit" in lines["2026-07-08"]
+    assert "no location" in lines["2026-07-09"] and "in transit" not in lines["2026-07-09"]
+    assert "no location" in lines["2026-07-10"] and "nothing logged" in lines["2026-07-10"]
+
+
 # -- the gap marker and the health triple -------------------------------------------------------------------
 
 
@@ -183,7 +261,8 @@ def test_a_usual_source_with_no_lines_on_a_day_is_a_gap(
     assert lines["2026-07-09"].endswith("gap apple-health")
     assert "4,000 steps · resting 55 bpm" in lines["2026-07-10"]
     assert "sleep" not in lines["2026-07-10"], "a triple shows the numbers it has"
-    assert "in transit" in lines["2026-07-12"] and "nothing logged" in lines["2026-07-12"]
+    assert "no location" in lines["2026-07-12"] and "nothing logged" in lines["2026-07-12"]
+    assert "in transit" not in lines["2026-07-12"], "a day with no location line is not a day on the road"
     assert lines["2026-07-12"].endswith("gap apple-health, dawarich")
 
 

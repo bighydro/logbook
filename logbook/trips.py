@@ -181,14 +181,24 @@ def _label(stay: stays.Segment, places: Sequence[named_places.Place], airports: 
     if stay.place:
         return stay.place
     assert stay.lat is not None and stay.lon is not None
-    airport = airport_at(stay.lat, stay.lon, airports)
+    return coordinates_label(stay.lat, stay.lon, places, airports)
+
+
+def coordinates_label(
+    lat: float, lon: float, places: Sequence[named_places.Place], airports: Airports
+) -> str:
+    """How an unnamed stay reads, the route's rule the Day shares: the airport's code and city
+    (`ZRH, Zurich`) when the point is at one (`airport_at`); else `lat,lon`, with `near <place>,
+    x km` for the nearest named place within `NEAR_KM`, else the city of the nearest large airport
+    within `CITY_KM` in parentheses, else the coordinates alone."""
+    airport = airport_at(lat, lon, airports)
     if airport is not None:
         return airport_label(airport)
-    label = f"{stay.lat:.4f},{stay.lon:.4f}"
-    near = named_places.nearest(stay.lat, stay.lon, places)
+    label = f"{lat:.4f},{lon:.4f}"
+    near = named_places.nearest(lat, lon, places)
     if near is not None and near[1] <= NEAR_KM * 1000:
         return f"{label} near {near[0].name}, {near[1] / 1000:.1f} km"
-    city = city_near(stay.lat, stay.lon, airports)
+    city = city_near(lat, lon, airports)
     return f"{label} ({city})" if city else label
 
 

@@ -29,8 +29,9 @@ passage, an anchorage. The asset's movement never fragments the stay.
 ## What it shows, in order
 
 1. **Header** — the date and weekday; the night before and the night after (a named place,
-   `aboard <asset>` or the coordinates; `home` when the stay lies in a place of kind `home`, else
-   `away`; `in transit` when no stay reaches the minimum); the country, from the night's stay by
+   `aboard <asset>` or the coordinates; `home` when the stay lies in a place of kind `home` or
+   within 400 m of one — the night then names that place — else `away`; `in transit` when no stay
+   reaches the minimum); the country, from the night's stay by
    the same rule `rollup countries` uses (a place's own country, else the nearest large airport's
    zone), from the longest stay of the day when the night is in transit; the day's all-day
    calendar entries.
@@ -39,8 +40,9 @@ passage, an anchorage. The asset's movement never fragments the stay.
    the duration printed is the part on the day, and `--json` keeps the real span beside it. An
    unnamed stay at an airport is the airport's code and city (`ZRH, Zurich`: within 3.5 km of the
    reference point of an airport with scheduled traffic, 2 km of any other); else its coordinates,
-   with the city of the nearest large airport within 30 km in parentheses when it is near no named
-   place (`53.5998,10.0130 (Hamburg)`, the `trips` route's rule). A stop with nothing attached says so.
+   with `near <place>, x km` for the nearest named place within 5 km (`59.9200,10.7400 near Home,
+   1.0 km`), else the city of the nearest large airport within 30 km in parentheses
+   (`53.5998,10.0130 (Hamburg)`), the `trips` route's rule. A stop with nothing attached says so.
    A move prints its distance, duration and mode (walk, car, train, boat, flight), with the
    airports when it is a flight between two. A move with no points that lasts a silence or more
    (`merge_gap_s`) and is not a flight is a **gap**: the tracker did not see it, so it places
@@ -138,9 +140,12 @@ the flight line's fields and `line`; a move lists the `flights` that cover it �
 
 `logbook days --from YYYY-MM-DD --to YYYY-MM-DD [--json]` reads a window back one line per day,
 composed from the Day of each: the date and weekday; where the night was spent (the night after,
-as the Day's header has it: a named place, `aboard <asset>` or the coordinates with the city of
-the nearest large airport, and the country when the night is away; `in transit` when no stay
-reaches the minimum); the kilometres moved (every move that started on the day, the flights'
+as the Day's header has it: a named place, `aboard <asset>`, the home place a night within 400 m
+of it lies by — the night rule, whatever the place's radius — or the coordinates with `near
+<place>, x km` for a named place within 5 km or the city of the nearest large airport, and the
+country when the night is away; `in transit` when no stay reaches the minimum; `no location` when
+the day has no location line at all, since nothing then says the owner moved); the kilometres
+moved (every move that started on the day, the flights'
 included, and aboard an asset its passages); the flights (`XY 561 OSL→ZRH`); the stays — a stay
 or a run aboard an asset; a stop is not one — with how many lines are attached across the day's
 rows; the people confirmed present (`with 2`; a proposed face is not counted); the health triple
@@ -173,7 +178,7 @@ The fortnight of the test persona, who does not exist:
 
 The **gap marker** names every usual source with no standing line on the day — `gap dawarich`
 when the tracker said nothing all day, `gap apple-health, dawarich` on a day with nothing logged
-(the line then reads `in transit` and `nothing logged`). A source is usual when it has a line on
+(the line then reads `no location` and `nothing logged`). A source is usual when it has a line on
 at least four in five of the window's days that have any line: the tracker, the watch, the boat's
 AIS, the messages; not the photos or the notes, which come every other day, and not a calendar
 that spoke once. The share is counted on the index in one aggregate (`Index.source_days`),
