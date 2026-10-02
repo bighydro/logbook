@@ -74,6 +74,12 @@ BUILT_IN = (
     "takeout.tasks",
     "takeout.chrome",
     "takeout.youtube",
+    "takeout.pay",
+    "takeout.chat",
+    "takeout.meet",
+    "takeout.access_log",
+    "takeout.activity",
+    "takeout.contacts",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
@@ -175,6 +181,20 @@ def find(path: Path) -> Adapter | None:
     return next((a for a in file_adapters() if a.sniff(Path(path))), None)
 
 
+TAKEOUT = (
+    "location",
+    "photos",
+    "keep",
+    "tasks",
+    "chrome",
+    "youtube",
+    "pay",
+    "chat",
+    "meet",
+    "access-log",
+    "activity",
+    "contacts",
+)
 ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as `import-backup --only`
     "flights": "flighty",
     "health": "apple-health",
@@ -187,6 +207,8 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "reminders": "apple-reminders",
     "books": "apple-books",
     "photos": "apple-photos",
+    # `add takeout-<product> <folder>`: the Google Takeout sub-adapters by their short names
+    **{f"takeout-{short}": f"google-takeout-{short}" for short in TAKEOUT},
 }
 
 

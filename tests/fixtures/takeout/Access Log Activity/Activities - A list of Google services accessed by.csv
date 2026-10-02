@@ -1,0 +1,6 @@
+Activity Timestamp,Product Name,Activity Type,IP Address,User Agent String,Device Type,Device Model,Country Code,City
+2026-06-10T06:58:03.412Z,Gmail,Sign in,203.0.113.7,"Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15",Mobile,iPhone,NO,Oslo
+"Jun 15, 2026, 7:40:10 AM UTC",Google Account,Password change,198.51.100.20,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",Desktop,,CH,Zurich
+2026-06-16T20:15:00Z,Google Drive,Access,198.51.100.20,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",,,,
+2026-06-16T20:15:00Z,Google Drive,Access,198.51.100.21,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",,,,
+,Gmail,Sign in,203.0.113.7,"Mozilla/5.0 (iPhone)",Mobile,iPhone,NO,Oslo

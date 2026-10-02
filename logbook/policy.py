@@ -7,8 +7,9 @@ default; nothing else writes it. Read-only from here on.
 `import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
 adapter with its state. An adapter existing is not a decision to run it: demo, sample and placeholder
-data never enters the record. `logbook init` writes the empty list, and so does the first command that
-reads the file in a record made before it existed.
+data never enters the record. `logbook init` writes the default list (`DEFAULT_IMPORT`: the noisy
+Takeout products off, everything else on), and so does the first command that reads the file in a
+record made before it existed.
 
 `owner.json` lists the owner's own aliases beyond what the record resolves: `{"names": [...], "emails":
 [...], "phones": [...]}`. The with module (`present.owner_of`) joins them with `owner_id` and `owner_emails`
@@ -32,7 +33,16 @@ DEFAULT_POLICY: dict[str, Any] = {
 }
 TIERS = (1, 2, 3)
 IMPORT_FILE = PurePosixPath("policy/import.json")
-DEFAULT_IMPORT: dict[str, Any] = {"disabled": []}
+# Switched off until the owner says otherwise: the two Takeout products that record every sign-in
+# and every search or app opened, which few owners want in the record unasked. `logbook init`
+# writes them, and so does the first read of a record without the file; the owner removes an entry
+# to opt in.
+DEFAULT_IMPORT: dict[str, Any] = {
+    "disabled": [
+        {"source": "google-takeout-access-log", "reason": "every sign-in to every Google service; opt in"},
+        {"source": "google-takeout-activity", "reason": "every search and app opened; opt in"},
+    ]
+}
 OWNER_FILE = PurePosixPath("policy/owner.json")
 OWNER_KEYS = ("names", "emails", "phones")
 DEFAULT_OWNER: dict[str, list[str]] = {key: [] for key in OWNER_KEYS}

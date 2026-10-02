@@ -1,0 +1,36 @@
+[{
+  "header": "Search",
+  "title": "Searched for impeller volvo penta md2030",
+  "titleUrl": "https://www.google.com/search?q=impeller+volvo+penta+md2030",
+  "time": "2026-06-10T07:00:00.123Z",
+  "products": ["Search"],
+  "locationInfos": [{
+    "name": "At this general area",
+    "url": "https://www.google.com/maps/@?api=1&map_action=map&center=59.91,10.75&zoom=12",
+    "source": "From your places (Home)",
+    "sourceUrl": "https://myactivity.google.com/"
+  }]
+}, {
+  "header": "Search",
+  "title": "Visited Volvo Penta spare parts",
+  "titleUrl": "https://www.google.com/url?q=https://parts.example.org/md2030",
+  "time": "2026-06-10T07:02:30.000Z",
+  "products": ["Search"]
+}, {
+  "header": "Search",
+  "title": "Searched for something without a url",
+  "time": "2026-06-10T07:05:00.000Z",
+  "products": ["Search"]
+}, {
+  "header": "Search",
+  "title": "Searched for antifouling",
+  "titleUrl": "https://www.google.com/search?q=antifouling",
+  "products": ["Search"]
+}, {
+  "header": "Search",
+  "title": "Visited Marina ad",
+  "titleUrl": "https://ads.example.org/marina",
+  "time": "2026-06-10T07:06:00.000Z",
+  "products": ["Search"],
+  "details": [{"name": "From Google Ads"}]
+}]

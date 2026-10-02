@@ -118,3 +118,33 @@ def test_add_unknown_file_still_exits_2_after_processing_the_rest(lb: Logbook, t
     r = _run(lb, str(mystery), str(a))
     assert r.returncode == 2
     assert "no adapter" in r.stdout and "added 40 lines from dawarich" in r.stdout
+
+
+# -- --dry-run: the adapter runs, the drafts are counted against the record, nothing is written -----------
+
+
+def test_add_dry_run_counts_and_writes_nothing(lb: Logbook, capsys, monkeypatch):
+    from logbook import cli
+
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    before = lb.meta["seq"]
+    cli.main(["add", str(FIXTURE), "--dry-run"])
+    out = capsys.readouterr().out
+    n = len(json.loads(FIXTURE.read_text(encoding="utf-8"))["features"])
+    assert f"dawarich: {n} lines would be added, 0 already in the record (dry run, nothing written)" in out
+    assert lb.meta["seq"] == before and not list(lb.files())
+    cli.main(["add", str(FIXTURE)])
+    capsys.readouterr()
+    cli.main(["add", "dawarich", str(FIXTURE), "--dry-run"])  # by name, too
+    out = capsys.readouterr().out
+    assert f"dawarich: 0 lines would be added, {n} already in the record (dry run, nothing written)" in out
+    assert lb.meta["seq"] == n
+
+
+def test_add_dry_run_of_a_sentence_writes_no_note(lb: Logbook, capsys, monkeypatch):
+    from logbook import cli
+
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    cli.main(["add", "had", "coffee", "with", "Kari", "--dry-run"])
+    assert "manual: 1 line would be added (dry run, nothing written)" in capsys.readouterr().out
+    assert lb.meta["seq"] == 0

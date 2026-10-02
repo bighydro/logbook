@@ -39,6 +39,7 @@ SCHEMA = "watch/v1"
 FOLDER = "history"
 
 SUFFIX = ".json"
+MY_ACTIVITY = "MyActivity.json"  # `My Activity/YouTube/` is this history too; `My Activity/Search/` is not
 SNIFF_BYTES = 4096
 MARKS = (b'"YouTube watch history"', b'"YouTube search history"', b'"Watched ', b'"Searched for ')
 ACTIONS = (("Watched ", "watched"), ("Searched for ", "searched"))
@@ -62,6 +63,8 @@ def _is_history(path: Path) -> bool:
         return False
     with path.open("rb") as fh:
         head = fh.read(SNIFF_BYTES)
+    if path.name == MY_ACTIVITY and b"YouTube" not in head:  # another product's My Activity file
+        return False
     return head.lstrip().startswith(b"[") and b'"header"' in head and any(mark in head for mark in MARKS)
 
 

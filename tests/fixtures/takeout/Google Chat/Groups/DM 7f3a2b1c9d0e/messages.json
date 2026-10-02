@@ -1,0 +1,38 @@
+{
+  "messages": [
+    {
+      "creator": {"name": "Kari Nordmann", "email": "kari.nordmann@example.org", "user_type": "Human"},
+      "created_date": "Wednesday, June 10, 2026 at 11:30:05 AM UTC",
+      "text": "Lunch at the cafe at 12?",
+      "topic_id": "kQ1xYz",
+      "message_id": "kQ1xYz/kQ1xYz"
+    },
+    {
+      "creator": {"name": "Per Persona", "email": "per.persona@example.org", "user_type": "Human"},
+      "created_date": "Wednesday, June 10, 2026 at 11:31:40 AM UTC",
+      "text": "Yes. Bring the impeller catalogue",
+      "topic_id": "kQ1xYz",
+      "message_id": "kQ1xYz/Lm2Nop",
+      "reactions": [{"emoji": {"unicode": "👍"}, "reactor_emails": ["kari.nordmann@example.org"]}]
+    },
+    {
+      "creator": {"name": "Kari Nordmann", "email": "kari.nordmann@example.org", "user_type": "Human"},
+      "created_date": "Wednesday, June 10, 2026 at 12:45:12 PM UTC",
+      "attached_files": [{"original_name": "impeller.jpg", "export_name": "impeller.jpg"}],
+      "topic_id": "kQ1xYz",
+      "message_id": "kQ1xYz/Qr3Stu"
+    },
+    {
+      "creator": {"name": "Kari Nordmann", "email": "kari.nordmann@example.org", "user_type": "Human"},
+      "created_date": "Wednesday, June 10, 2026 at 12:46:00 PM UTC",
+      "topic_id": "kQ1xYz",
+      "message_id": "kQ1xYz/Vw4Xyz"
+    },
+    {
+      "creator": {"name": "Kari Nordmann", "email": "kari.nordmann@example.org", "user_type": "Human"},
+      "text": "no date on this one",
+      "topic_id": "kQ1xYz",
+      "message_id": "kQ1xYz/NoDate"
+    }
+  ]
+}
