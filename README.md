@@ -9,13 +9,17 @@ It is the opposite of social media: no feed, no followers, no likes, no counts. 
 ![How Logbook works](https://raw.githubusercontent.com/bighydro/logbook/main/docs/how-it-works.svg)
 
 ```bash
-pipx install openlogbook                # the PyPI package; the command is `logbook`
-logbook demo --out ~/Demo/Logbook       # a month of a person who does not exist
+brew install bighydro/logbook/logbook   # Mac, with Homebrew
+pipx install openlogbook                # Linux; or anywhere Python is: uv tool install openlogbook
+pipx install openlogbook                # Windows, in Terminal, once pipx is there; the steps: docs/install.md
+logbook demo --out ~/Demo/Logbook       # a month of a person who does not exist, every profile
 export LOGBOOK_HOME=~/Demo/Logbook
 logbook trips                           # a cabin weekend, Zürich, a week aboard, Copenhagen
 logbook day 2026-06-17                  # one day read back: nights, stays, who was there, health
 logbook verify                          # the chain is intact
 ```
+
+Never opened a terminal? [docs/install.md](docs/install.md) walks through the install on each platform and says what the screen will show.
 
 Then your own: `logbook setup` asks one question at a time ([the first hour](docs/first-hour.md)), or `logbook init` makes the folder and your key, `logbook add ~/Downloads/takeout.zip` reads any export without flags, and `logbook show today` reads it back. Docker and Nix are in [the tour](docs/tour.md).
 

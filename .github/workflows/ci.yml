@@ -42,6 +42,23 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v23
       - run: nix build --print-build-logs
       - run: result/bin/logbook --version
+  homebrew:
+    # The formula in homebrew/ builds on a Mac the way a user's `brew install bighydro/logbook/logbook`
+    # does: Homebrew installs only from a tap, so the file goes into a throwaway local one, is
+    # built from source, then its test block runs, then the audit. The file published to the tap
+    # bighydro/homebrew-logbook is this one (homebrew/README.md). Separate from the test matrix.
+    runs-on: macos-latest
+    env: { HOMEBREW_NO_AUTO_UPDATE: "1", HOMEBREW_NO_INSTALL_CLEANUP: "1", HOMEBREW_NO_ENV_HINTS: "1" }
+    steps:
+      - uses: actions/checkout@v7
+      - name: the formula, in a local tap
+        run: |
+          brew tap-new --no-git local/logbook
+          cp homebrew/logbook.rb "$(brew --repository local/logbook)/Formula/logbook.rb"
+      - run: brew install --build-from-source --verbose local/logbook/logbook
+      - run: logbook --version
+      - run: brew test --verbose local/logbook/logbook
+      - run: brew audit --strict --online local/logbook/logbook
   docker:
     runs-on: ubuntu-latest
     steps:
