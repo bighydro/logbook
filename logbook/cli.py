@@ -1,6 +1,6 @@
-"""logbook — init · add · sync · import-backup · infer · transcribe · retract · show · stats · derive ·
-places · rollup · trips · keepers · promises · serve · verify · doctor · export · index · migrate · assets ·
-sources · mcp. Three verbs, nineteen rare."""
+"""logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
+derive · places · rollup · trips · keepers · promises · serve · verify · doctor · export · index · migrate ·
+assets · sources · mcp. Three verbs, nineteen rare."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ from . import (
     flights,
     gaps,
     health,
+    inbox,
     ios_backup,
     ios_backup_crypto,
     judge,
@@ -157,8 +158,10 @@ def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None, dr
         if dry_run:
             _say_dry_run(lb, p.name, _jsonl(p))
             return True
-        n = lb.append_many(_jsonl(p), progress=_progress)
+        seq_before, produced = int(lb.meta["seq"]), [0]
+        n = lb.append_many(_counted(_jsonl(p), produced), progress=_progress)
         print(f"added {n} lines from {p.name}")
+        inbox.record(lb.root, inbox.finished(lb, p, inbox.JSONL, produced[0], n, seq_before))
         return True
     print(
         f"{p.name}: no adapter for this file yet (roadmap phase 1). "
@@ -173,8 +176,12 @@ def _append_with(
     p: Path,
     given: Mapping[str, Any] | None = None,
     dry_run: bool = False,
+    recorded_as: Path | None = None,
 ) -> int:
     """Run one file adapter on `p`, append, print what was added and what it skipped; the count.
+    A run that reaches its end is recorded in `state/imports.jsonl` (`inbox.finished`) under
+    `recorded_as` — the input as the owner knows it (`import-backup` passes the source's folder
+    under inbox/, whose every file the run read) — so `inbox list` can say the input is consumed.
     `given` are the command's own options (`source`, `tier`, `at`, `since`, `account`, `attachments`,
     `only_labels`, `skip_labels`), passed when the adapter's `run` takes them; one it does not take
     exits 2, so a flag is never silently ignored. An adapter whose `run` takes `owner_emails` gets
@@ -220,14 +227,16 @@ def _append_with(
             sys.exit(2)
     if _takes(adapter, "airports") and "airports" not in options:
         options["airports"] = _airports(None)
+    seq_before, produced = int(lb.meta["seq"]), [0]
     drafts = flights.reconcile(lb, run(p, **options), counts, options.get("airports"))
     if dry_run:
         _say_dry_run(lb, adapter.NAME, drafts)
         _report_skipped(counts)
         return 0
-    n = lb.append_many(drafts, progress=_progress)
+    n = lb.append_many(_counted(drafts, produced), progress=_progress)
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
+    inbox.record(lb.root, inbox.finished(lb, recorded_as or p, adapter.NAME, produced[0], n, seq_before))
     return n
 
 
@@ -254,6 +263,13 @@ def _resolved(lb: Logbook) -> dict[Ref, str]:
     with lb.index() as idx:
         found = identities_from([*idx.retractions(), *idx.resolutions()])
     return {ref: identity.entity for ref, identity in found.items() if identity.entity}
+
+
+def _counted(drafts: Iterable[dict[str, Any]], tally: list[int]) -> Iterator[dict[str, Any]]:
+    """`drafts` as they pass, counting them in `tally[0]`: the lines offered to the record."""
+    for draft in drafts:
+        tally[0] += 1
+        yield draft
 
 
 def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
@@ -521,6 +537,8 @@ def cmd_add(a: argparse.Namespace) -> None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
             _add_named(lb, by_name, paths, given, dry_run=a.dry_run)
+            if not a.dry_run:
+                _say_cleanable(lb, paths)
             return
     paths = [Path(w).expanduser() for w in a.what]
     # When nothing exists, the arguments are a sentence unless every one of them looks like a
@@ -539,17 +557,30 @@ def cmd_add(a: argparse.Namespace) -> None:
             print(f"add: no such file or directory: {w}", file=sys.stderr)
             sys.exit(2)
     ok = True
+    imported: list[Path] = []
     for p in paths:
         if p.is_dir() and adapters.find(p) is not None:  # a folder one adapter reads as a whole
-            _add_file(lb, p, given, dry_run=a.dry_run)
+            if _add_file(lb, p, given, dry_run=a.dry_run):
+                imported.append(p)
         elif p.is_dir():  # every file in it, in name order; hidden files are not exports
             for f in sorted(p.iterdir()):
-                if f.is_file() and not f.name.startswith("."):
-                    _add_file(lb, f, given, dry_run=a.dry_run)
-        elif not _add_file(lb, p, given, dry_run=a.dry_run):
+                if f.is_file() and not f.name.startswith(".") and _add_file(lb, f, given, dry_run=a.dry_run):
+                    imported.append(f)
+        elif _add_file(lb, p, given, dry_run=a.dry_run):
+            imported.append(p)
+        else:
             ok = False
+    if not a.dry_run:
+        _say_cleanable(lb, imported)
     if not ok:
         sys.exit(2)
+
+
+def _say_cleanable(lb: Logbook, imported: list[Path]) -> None:
+    """The one line an import ends with: these inputs are in the record and may go (`inbox.hint`)."""
+    line = inbox.hint(lb.root, imported)
+    if line is not None:
+        print(line)
 
 
 def _since(value: str, timezone: str) -> str:
@@ -1464,24 +1495,25 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         print(f"import-backup: {e}", file=sys.stderr)
         sys.exit(2)
     sources = tuple(src for src in _only(a.only, manifest.encrypted) if not _say_disabled(lb, src.name))
-    inbox = lb.root / "inbox" / f"ios-backup-{manifest.udid}"
+    inbox_folder = lb.root / inbox.INBOX / f"ios-backup-{manifest.udid}"
     if manifest.encrypted:
-        _unlock(manifest, inbox)
+        _unlock(manifest, inbox_folder)
     plans = ios_backup.plan(manifest, sources)
     if a.dry_run:
         for p in plans:
-            print(_plan_row(p, inbox))
+            print(_plan_row(p, inbox_folder))
         found = [p for p in plans if p.found]
         print(
             f"dry run: {len(found)} of {len(plans)} sources found, {sum(p.bytes for p in found):,} bytes"
-            f" would be copied to {inbox}; nothing written"
+            f" would be copied to {inbox_folder}; nothing written"
         )
         return
     wants_prefix = any(p.found and p.source.name in ("ios-contacts", "whatsapp-contacts") for p in plans)
     if wants_prefix and not os.environ.get(ios_contacts.DIAL_PREFIX_ENV, "").strip():
         print(DIAL_PREFIX_HINT)
+    imported = 0
     for p in plans:
-        print(_plan_row(p, inbox))
+        print(_plan_row(p, inbox_folder))
         if not p.found:
             continue
         adapter = adapters.named(p.source.name) if p.source.adapter else None
@@ -1489,7 +1521,7 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
             print(f"  no adapter named {p.source.name} in this build; skipped")
             continue
         try:
-            store_copy = ios_backup.copy(p, inbox / p.source.name)
+            store_copy = ios_backup.copy(p, inbox_folder / p.source.name)
         except (ios_backup.CopyError, ios_backup.DecryptError, OSError) as e:
             print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
             sys.exit(1)
@@ -1500,9 +1532,16 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
             print(f"  copied, {p.source.note}")
             continue
         given = {"attachments": True} if a.attachments and _takes(adapter, "attachments") else None
-        _append_with(lb, adapter, store_copy.parent if p.source.pattern else store_copy, given)
+        _append_with(
+            lb,
+            adapter,
+            store_copy.parent if p.source.pattern else store_copy,
+            given,
+            recorded_as=inbox_folder / p.source.name,
+        )
+        imported += 1
     if any(p.copied for p in plans):
-        ios_backup.write_copies(inbox, manifest, plans)
+        ios_backup.write_copies(inbox_folder, manifest, plans)
     seq, head, errors = lb.verify()
     if errors:
         print(f"INVALID — {len(errors)} problem(s):")
@@ -1510,9 +1549,12 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
             print("  " + problem)
         sys.exit(1)
     print(f"valid — {seq} lines, head {head}")
+    said = inbox.backup_hint(lb.root, inbox_folder, imported)
+    if said is not None:
+        print(said)
 
 
-def _unlock(manifest: ios_backup.Manifest, inbox: Path) -> None:
+def _unlock(manifest: ios_backup.Manifest, inbox_folder: Path) -> None:
     """Unlock an encrypted backup with LOGBOOK_BACKUP_PASSWORD and decrypt its Manifest.db into
     the inbox. The extra, the variable, then the keybag are checked in that order; each failure is
     one line on stderr and exit 2, and none of them names the password."""
@@ -1524,7 +1566,7 @@ def _unlock(manifest: ios_backup.Manifest, inbox: Path) -> None:
         print(ENCRYPTED_NO_PASSWORD, file=sys.stderr)
         sys.exit(2)
     try:
-        manifest.unlock(password, inbox / ios_backup.MANIFEST_DB)
+        manifest.unlock(password, inbox_folder / ios_backup.MANIFEST_DB)
     except ios_backup.WrongPassword:
         print(WRONG_PASSWORD, file=sys.stderr)
         sys.exit(2)
@@ -1536,7 +1578,7 @@ def _unlock(manifest: ios_backup.Manifest, inbox: Path) -> None:
     assert manifest.keybag is not None
     print(
         f"encrypted backup: keybag unlocked, keys for {len(manifest.keybag.classes)} protection classes;"
-        f" {ios_backup.MANIFEST_DB} decrypted to {inbox / ios_backup.MANIFEST_DB}"
+        f" {ios_backup.MANIFEST_DB} decrypted to {inbox_folder / ios_backup.MANIFEST_DB}"
     )
 
 
@@ -1564,7 +1606,7 @@ def _only(spec: str | None, encrypted: bool = False) -> tuple[ios_backup.Source,
     return tuple(s for s in known_sources if s.name in wanted)
 
 
-def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
+def _plan_row(p: ios_backup.Plan, inbox_folder: Path) -> str:
     """`<source>: <store> (<size>) [+ siblings] [+ N media files (<size>) under <folder>/] → <dest>`,
     or `<source>: <store> not found`; a folder source: `<source>: N <files> files (<size>) under
     <folder>/ → <dest>`, or `<source>: no <files> under <folder>`."""
@@ -1575,7 +1617,7 @@ def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
         n = len(p.files)
         return (
             f"{p.source.name}: {n:,} {name} file{'s' if n != 1 else ''} ({p.bytes:,} bytes)"
-            f" under {p.source.relative_path}/ → {inbox / p.source.name}"
+            f" under {p.source.relative_path}/ → {inbox_folder / p.source.name}"
         )
     if not p.found:
         why = " (listed in Manifest.db, file missing)" if p.listed else ""
@@ -1589,7 +1631,98 @@ def _plan_row(p: ios_backup.Plan, inbox: Path) -> str:
         parts.append(
             f"{n:,} media file{'s' if n != 1 else ''} ({total:,} bytes) under {p.source.media_folder}/"
         )
-    return f"{p.source.name}: {' + '.join(parts)} → {inbox / p.source.name}"
+    return f"{p.source.name}: {' + '.join(parts)} → {inbox_folder / p.source.name}"
+
+
+def cmd_inbox(a: argparse.Namespace) -> None:
+    """`inbox list [--json]`: every file under inbox/ with its size, the import that consumed it and
+    whether every line it produced is in the record (`inbox.files`, the rules are there), then what
+    may go. `inbox clean --to DIR | --delete [--dry-run]`: move every ready file to DIR (an external
+    disk), keeping its path under inbox/, or delete it; a file not imported in full, changed since,
+    or already at DIR is kept and said so; the freed size last. Nothing is ever read into the
+    record here, and nothing is written to it."""
+    lb = Logbook.find()
+    if a.verb == "list":
+        _inbox_list(lb, a.json)
+        return
+    if a.to is None and not a.delete:
+        print("inbox clean: say where the files go: --to DIR or --delete", file=sys.stderr)
+        sys.exit(2)
+    if a.to is not None and a.delete:
+        print("inbox clean: either --to DIR or --delete, not both", file=sys.stderr)
+        sys.exit(2)
+    to = Path(a.to).expanduser() if a.to is not None else None
+    if to is not None and _inside(to, lb.root / inbox.INBOX):
+        print(f"inbox clean: {to} is inside inbox/; name a folder outside it", file=sys.stderr)
+        sys.exit(2)
+    done = inbox.clean(lb, to, a.delete, a.dry_run)
+    verb = (
+        ("would delete" if a.dry_run else "deleted") if a.delete else ("would move" if a.dry_run else "moved")
+    )
+    for f in done.gone:
+        print(f"{verb} {f.name}")
+    for f in done.kept:
+        print(f"kept {f.name}: {f.status}")
+    n = len(done.gone)
+    count = f"{n:,} file{'s' if n != 1 else ''}"
+    where = "deleted" if a.delete else f"moved to {to}"
+    if a.dry_run:
+        print(f"would free {inbox.size_text(done.freed)}: {count}; nothing touched")
+    else:
+        print(f"freed {inbox.size_text(done.freed)}: {count} {where}")
+    if done.kept:
+        k = len(done.kept)
+        print(f"kept {k:,} file{'s' if k != 1 else ''} not imported in full; logbook inbox list says which")
+
+
+def _inbox_list(lb: Logbook, as_json: bool) -> None:
+    folder = lb.root / inbox.INBOX
+    found = inbox.files(lb) if folder.is_dir() else None
+    ready = [f for f in found or [] if f.ready]
+    ready_bytes = sum(f.bytes for f in ready)
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "inbox": _under_home(folder),
+                    "files": [f.to_json() for f in found or []],
+                    "ready_files": len(ready),
+                    "ready_bytes": ready_bytes,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return
+    if found is None:
+        print(f"no inbox/ folder at {_under_home(lb.root)}; `logbook init` makes one, or mkdir it")
+        return
+    if not found:
+        print(f"inbox/ is empty ({_under_home(folder)})")
+        return
+    total = sum(f.bytes for f in found)
+    n = len(found)
+    print(f"inbox/ ({n:,} file{'s' if n != 1 else ''}, {inbox.size_text(total)})")
+    width = min(max(len(f.name) for f in found), 60)
+    for f in found:
+        print(f"  {f.name:<{width}}  {inbox.size_text(f.bytes):>9}  {f.status}")
+    if ready:
+        r = len(ready)
+        print(
+            f"{inbox.size_text(ready_bytes)} in {r:,} file{'s' if r != 1 else ''} can be cleaned:"
+            " logbook inbox clean --to DIR (or --delete)"
+        )
+    else:
+        print("nothing can be cleaned yet: no file here is imported in full")
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    """Whether `path` is `folder` or lies under it, resolved, part by part."""
+    try:
+        path.resolve().relative_to(folder.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def cmd_retract(a: argparse.Namespace) -> None:
@@ -3185,6 +3318,22 @@ def main(argv: list[str] | None = None) -> None:
         + "; calls, health and safari only from an encrypted backup)",
     )
     s.set_defaults(fn=cmd_import_backup)
+    s = sub.add_parser(
+        "inbox", help="what is in inbox/, which import consumed it, and moving or deleting what is done"
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser(
+        "list", help="every file under inbox/: size, the import that read it, whether its lines are all in"
+    )
+    v.add_argument("--json", action="store_true", help="the same as one JSON object")
+    v = verbs.add_parser(
+        "clean",
+        help="move every fully imported file to DIR (an external disk), or --delete it; the rest stays",
+    )
+    v.add_argument("--to", metavar="DIR", help="where the files go, keeping their path under inbox/")
+    v.add_argument("--delete", action="store_true", help="remove the files instead of moving them")
+    v.add_argument("--dry-run", action="store_true", help="say what would go and how much; touch nothing")
+    s.set_defaults(fn=cmd_inbox)
     s = sub.add_parser(
         "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
     )
