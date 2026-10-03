@@ -1,0 +1,2 @@
+### Housekeeping
+- Changelog fragments: a pull request adds `changelog.d/<short-slug>.md` instead of a line in CHANGELOG.md, so parallel pull requests no longer conflict on it. At release time `scripts/changelog_assemble.py X.Y.Z` (stdlib only) folds the fragments, and the `Unreleased` block while one exists, into the new version section and deletes them. The `changelog` check fails a pull request that edits CHANGELOG.md or adds no fragment; the `no-changelog` label opts out. The release checklist is `docs/releasing.md`.

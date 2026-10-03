@@ -107,5 +107,6 @@ nav:
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md
+  - Releasing: releasing.md
   - Security: SECURITY.md
   - Changelog: CHANGELOG.md
