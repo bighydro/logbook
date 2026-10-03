@@ -1,11 +1,15 @@
-"""Apple Podcasts' MTLibrary.sqlite → listen/v1 (RFC 0019), from a copy or live from the Mac.
+"""Apple Podcasts' MTLibrary.sqlite → listen/v1 (RFC 0019), from a copy, an iPhone backup or live from
+the Mac.
 
 The Mac keeps the library at `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/
-Documents/MTLibrary.sqlite`, a Core Data store. Two tables matter:
+Documents/MTLibrary.sqlite`, the phone under its app group (`group.com.apple.podcasts`,
+`Documents/MTLibrary.sqlite`, which `import-backup --only podcasts` copies out), a Core Data store
+either way. Two tables matter:
 
     ZMTEPISODE   one row per episode: ZTITLE, ZUUID, ZLASTDATEPLAYED (seconds since 2001-01-01
                  UTC; null until played), ZPLAYHEAD, ZDURATION, ZPLAYCOUNT, ZPUBDATE,
-                 ZWEBPAGEURL / ZENCLOSUREURL, ZAUTHOR, ZPODCAST → ZMTPODCAST.Z_PK, ZPODCASTUUID
+                 ZWEBPAGEURL / ZENCLOSUREURL, ZAUTHOR, ZPODCAST → ZMTPODCAST.Z_PK, ZPODCASTUUID,
+                 and the feed's transcript URL when the store keeps one (`TRANSCRIPT`)
     ZMTPODCAST   one row per show: Z_PK, ZUUID, ZTITLE, ZAUTHOR, ZFEEDURL
 
 The store has over a hundred columns and Apple changes them: the columns are discovered with
@@ -17,8 +21,17 @@ One line per episode that has been played (rule 5): kind `listen`, tier 2, sourc
 `apple-podcasts`, `media` `episode`, `at` the last-played time, `raw_id`
 `apple-podcasts:<ZUUID>@<at>` — the store overwrites the time when the episode is played again,
 and that is a new line (rule 1). `title`, `show`, `publisher` (the show's author), `url` (the web
-page, else the enclosure), `duration_s`, `played_s`, `published`, `service` `apple-podcasts`,
-`extra.play_count`. An episode never played, or without a title, is skipped and counted.
+page, else the enclosure), `duration_s`, `played_s`, `completed`, `published`, `service`
+`apple-podcasts`, `extra.play_count`, `extra.transcript_url`. An episode never played, or without
+a title, is skipped and counted.
+
+`completed` is the store's playhead read against its duration (rule 3, with `COMPLETE_SLACK_S` of
+slack), or a playhead rewound to zero with a play counted — the app rewinds an episode it played
+to the end; it is left out when the store has no playhead column, and false, never a guess, when
+the columns it needs are not all there. `extra.transcript_url` is the feed's own transcript
+(`<podcast:transcript>`) when the store keeps its URL in one of the `TRANSCRIPT` columns, and
+only when the value is an http(s) URL: Apple's own transcript identifiers are not public and are
+never recorded. The URL is recorded, never fetched: a reader never touches the network.
 
 File mode (`logbook add apple-podcasts <copy>`, or sniffed): opened `mode=ro`, `immutable=1`.
 Live mode (`logbook sync apple-podcasts`, ADR 0017): the Mac's own store (`LOGBOOK_PODCASTS_DB`
@@ -58,6 +71,8 @@ SQLITE_HEADER = b"SQLite format 3\x00"
 APPLE_EPOCH = 978_307_200
 EPISODES, SHOWS = "ZMTEPISODE", "ZMTPODCAST"
 REQUIRED = ("ZTITLE", "ZUUID", "ZLASTDATEPLAYED")
+#: the columns a transcript URL may sit in, first one with an http(s) value wins; none is required
+TRANSCRIPT = ("ZTRANSCRIPTURL", "ZTRANSCRIPTIDENTIFIER")
 OPTIONAL = (
     "ZPLAYHEAD",
     "ZDURATION",
@@ -68,8 +83,12 @@ OPTIONAL = (
     "ZAUTHOR",
     "ZPODCAST",
     "ZPODCASTUUID",
+    *TRANSCRIPT,
 )
 SHOW_COLUMNS = ("Z_PK", "ZUUID", "ZTITLE", "ZAUTHOR")
+#: a playhead this close to the end (seconds) counts as played to the end (RFC 0019 rule 3)
+COMPLETE_SLACK_S = 30.0
+URL_SCHEMES = ("http://", "https://")
 PROGRESS_EVERY = 500
 NOT_A_STORE = "not an Apple Podcasts library (no ZMTEPISODE table with ZTITLE, ZUUID, ZLASTDATEPLAYED)"
 
@@ -233,6 +252,7 @@ def _draft(
         author,
         show_pk,
         show_uuid,
+        *transcripts,
     ) = row
     name = " ".join(str(title or "").split())
     if not name:
@@ -261,13 +281,29 @@ def _draft(
         payload["duration_s"] = round(float(duration), 3)
     if isinstance(playhead, int | float) and playhead > 0:
         payload["played_s"] = round(float(playhead), 3)
+    if isinstance(playhead, int | float):
+        payload["completed"] = _completed(float(playhead), duration, play_count)
     published = _rfc3339(pub)
     if published is not None:
         payload["published"] = published
     payload["service"] = SERVICE
+    extra: dict[str, Any] = {}
     if isinstance(play_count, int) and play_count > 0:
-        payload["extra"] = {"play_count": play_count}
+        extra["play_count"] = play_count
+    transcript = next((str(t) for t in transcripts if isinstance(t, str) and t.startswith(URL_SCHEMES)), None)
+    if transcript is not None:
+        extra["transcript_url"] = transcript
+    if extra:
+        payload["extra"] = extra
     return {"at": at, "end": None, "tz": tz, "source": NAME, "kind": KIND, "tier": TIER, "payload": payload}
+
+
+def _completed(playhead: float, duration: object, play_count: object) -> bool:
+    """Played to the end: the playhead within `COMPLETE_SLACK_S` of a known duration, or rewound
+    to zero after a play the store counted. False when the store cannot show either."""
+    if isinstance(duration, int | float) and duration > 0 and playhead >= float(duration) - COMPLETE_SLACK_S:
+        return True
+    return playhead == 0 and isinstance(play_count, int) and play_count > 0
 
 
 def _rfc3339(seconds_since_2001: object) -> str | None:

@@ -17,6 +17,8 @@ from test_apple_books import _store as _books_store
 from test_apple_photos import KEEPERS as PHOTO_KEEPERS
 from test_apple_photos import LINES as PHOTO_LINES
 from test_apple_photos import _store as _photos_store
+from test_apple_podcasts import LINES as PODCAST_LINES
+from test_apple_podcasts import _store as _podcasts_store
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
 from test_beeper import _store as _beeper_store
@@ -73,6 +75,7 @@ BOOKS = "AppDomain-com.apple.iBooks"
 MEMOS = "AppDomainGroup-group.com.apple.VoiceMemos.shared"
 WITHINGS = "AppDomain-com.withings.wiScaleNG"
 MFP = "AppDomain-com.myfitnesspal.mfp"
+PODCASTS = "AppDomainGroup-group.com.apple.podcasts"
 COREDATA = "Library/Application Support/coredata"
 SBB = "AppDomainGroup-group.ch.sbb.SBBMobile"
 SBB_APP = "AppDomain-5Q4J53EFRC.com.sbb.ch"
@@ -100,6 +103,7 @@ ALL = (
     "myfitnesspal",
     "sbb",
     "screentime",
+    "apple-podcasts",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -125,6 +129,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "myfitnesspal": MFP_LINES,
     "sbb": SBB_LINES,
     "screentime": SCREENTIME_LINES,
+    "apple-podcasts": PODCAST_LINES,
 }
 TOTAL = sum(LINES.values()) + PHOTO_KEEPERS  # the import writes the keepers for the photos' marks (RFC 0024)
 STORES = {
@@ -150,6 +155,7 @@ STORES["withings"] = "10000001_WTHealth.sqlite"  # the first match of the glob; 
 STORES["myfitnesspal"] = "maindb.sqlite"
 STORES["sbb"] = "SbbMobile.db"
 STORES["screentime"] = "RMAdminStore-Local.sqlite"
+STORES["apple-podcasts"] = "MTLibrary.sqlite"
 REMINDERS_OTHER = "Data-AAAAAAAA-0000-4000-8000-000000000002.sqlite"  # the bigger store, with a -wal
 
 
@@ -350,6 +356,9 @@ def _backup(
     if "screentime" in sources:  # Screen Time's own store, in HomeDomain like Safari's history
         _put(backup, rows, "HomeDomain", "Library/Application Support/com.apple.remotemanagementd", None)
         _put(backup, rows, "HomeDomain", ios_backup.SCREEN_TIME, _screentime_store(_dir(stage, "screentime")))
+    if "apple-podcasts" in sources:  # the Podcasts library under the app group, as on the Mac
+        _put(backup, rows, PODCASTS, "Documents", None)
+        _put(backup, rows, PODCASTS, "Documents/MTLibrary.sqlite", _podcasts_store(_dir(stage, "podcasts")))
     con = sqlite3.connect(backup / "Manifest.db")
     try:
         con.execute(
@@ -662,6 +671,28 @@ def test_import_backup_only_takes_the_named_sources_in_the_fixed_order(lb, tmp_p
         "whatsapp-contacts",
         "ios-notes",
     }
+
+
+def test_import_backup_only_podcasts_reads_the_library_out_of_the_app_group(lb, tmp_path, capsys):
+    """`--only podcasts` names `apple-podcasts`: the library is copied out of the Podcasts app group
+    and every played episode is a listen/v1 line with its show, completion and transcript URL."""
+    backup = _backup(tmp_path, sources=("ios-contacts", "apple-podcasts"))
+    _run(str(backup), "--only", "podcasts")
+    out = capsys.readouterr().out
+    assert "apple-podcasts: MTLibrary.sqlite" in out and "ios-contacts" not in out
+    assert f"added {PODCAST_LINES} lines from apple-podcasts" in out
+    inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
+    assert sorted(p.name for p in inbox.iterdir()) == ["apple-podcasts", "copies.json"]
+    assert (inbox / "apple-podcasts" / "MTLibrary.sqlite").is_file()
+    lines = [line for line in lb.lines() if line["source"] == "apple-podcasts"]
+    assert len(lines) == PODCAST_LINES and all(line["kind"] == "listen" for line in lines)
+    by = {line["payload"]["title"]: line["payload"] for line in lines}
+    assert by["Reef knot"]["show"] == "Knots Weekly" and by["Reef knot"]["completed"] is True
+    assert by["Reef knot"]["extra"]["transcript_url"] == "https://knots.example.org/reef.vtt"
+    assert by["Episode 12: the east berth"]["completed"] is False
+    _run(str(backup), "--only", "podcasts")  # again: the same store, nothing new
+    assert "added 0 lines from apple-podcasts" in capsys.readouterr().out
+    assert len([line for line in lb.lines() if line["source"] == "apple-podcasts"]) == PODCAST_LINES
 
 
 def test_import_backup_skips_a_disabled_source_and_says_so(lb, tmp_path, capsys):

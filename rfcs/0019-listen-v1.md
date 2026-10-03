@@ -23,17 +23,18 @@ Something the owner heard: a song Shazam identified, a podcast episode Apple Pod
 | `url` | string | MAY | the service's page for the track or episode |
 | `duration_s` | number | MAY | the whole track's or episode's length in seconds, when known |
 | `played_s` | number | MAY | how far playback got, in seconds, when the source keeps a playhead |
+| `completed` | boolean | MAY | playback reached the end, as the source shows it: Podcasts' playhead within 30 s of the duration, or rewound to zero with a play counted; absent when the source keeps no playhead, false when it cannot show either, never a guess |
 | `published` | RFC3339 UTC | MAY | an episode's publication time |
 | `service` | string | MUST | `shazam`, `apple-podcasts`, `spotify`, … |
 | `supersedes` | string | MAY | id of the earlier line this one replaces |
 
-Anything else the source reports MAY be kept under `extra`: Shazam's track key, Podcasts' play count.
+Anything else the source reports MAY be kept under `extra`: Shazam's track key, Podcasts' play count and, as `transcript_url`, the URL of the transcript the episode's feed publishes (`<podcast:transcript>`) — the URL alone, never its text: an adapter never fetches.
 
 ## Rules
 
 1. One line per listen. A Shazam tag is one listen whether or not the song was played after; a Podcasts episode is one listen per last-played time (the store moves the time when the episode is played again, which makes a new line with a new `raw_id`).
 2. `artist` and `show` are the service's words, kept as spelled; a `resolution/v1` line may name them later, never the adapter.
-3. `duration_s` is the whole work; `played_s` is how much was heard. A reader that wants "listened to the end" compares the two, with the slack it chooses.
+3. `duration_s` is the whole work; `played_s` is how much was heard. A reader that wants "listened to the end" takes `completed` when the line has it, else compares the two, with the slack it chooses.
 4. A time the source gives without a zone (Shazam's `TagTime`) is read in the record's zone and `tz` says so; one with a `Z` or an offset is read as given.
 5. An episode a store holds but never played is not a listen and not a line; it is counted.
 
