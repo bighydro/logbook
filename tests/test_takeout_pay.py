@@ -146,3 +146,48 @@ def test_cli_add_sniffs_the_folder_and_dry_run_writes_nothing(tmp_path, capsys, 
     assert "added 0 lines from google-takeout-pay" in capsys.readouterr().out
     cli.main(["show", "2026-06-10"])
     assert "Kaffebrenneriet" in capsys.readouterr().out
+
+
+FIX_2026 = ROOT / "tests" / "fixtures" / "takeout-2026-10" / "Google Pay"
+
+
+def test_the_2026_clock_reads_every_transaction():
+    counts: dict[str, int] = {}
+    lines = list(pay.run(FIX_2026, timezone=TZ, counts=counts))
+    assert [line["at"] for line in lines] == [
+        "2026-10-01T10:35:12Z",
+        "2026-10-02T18:02:00Z",
+        "2026-10-02T23:30:00Z",
+    ]
+    assert counts == {"skipped_no_timestamp": 1}
+    coffee = lines[0]["payload"]
+    assert (
+        coffee["raw_id"] == "pay:TXN-0000000101"
+        and coffee["amount"] == -129.0
+        and coffee["currency"] == "NOK"
+    )
+    assert lines[2]["payload"]["date"] == "2026-10-03"  # 23:30 UTC is the next day in Oslo
+
+
+def test_a_date_column_a_currency_column_and_a_row_without_an_id_still_read(tmp_path):
+    import hashlib
+
+    csv = tmp_path / "transactions_1.csv"
+    csv.write_text(
+        "Date,Transaction ID,Description,Product,Payment method,Status,Amount,Currency,Fee,Net amount\n"
+        "2026-10-01 10:35:12 UTC,TXN-1,Kaffebrenneriet Oslo,Google Pay,Visa •••• 1234,Completed,"
+        "-129.00,NOK,,-129.00\n"
+        "2026-10-02 18:02:00 UTC,,Oslo Marina AS,Google Pay,Visa •••• 1234,Completed,2450.00,NOK,,2450.00\n",
+        encoding="utf-8",
+    )
+    assert pay.sniff(csv) and adapters.find(csv) is pay
+    counts: dict[str, int] = {}
+    lines = list(pay.run(csv, timezone=TZ, counts=counts))
+    assert len(lines) == 2 and counts == {"no_transaction_id": 1}
+    coffee = lines[0]["payload"]
+    assert coffee["raw_id"] == "pay:TXN-1" and coffee["amount"] == -129.0 and coffee["currency"] == "NOK"
+    assert coffee["extra"]["amount_text"] == "-129.00"
+    marina = lines[1]["payload"]
+    digest = hashlib.sha256(b"Oslo Marina AS|2450.00|NOK").hexdigest()[:16]
+    assert marina["raw_id"] == f"pay:2026-10-02T18:02:00Z:{digest}"
+    assert marina["amount"] == -2450.0 and marina["currency"] == "NOK"

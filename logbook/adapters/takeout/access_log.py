@@ -1,11 +1,15 @@
 """Google Takeout Access Log Activity/ → event/v1 at tier 3 (RFC 0009).
 
 Takeout writes `Takeout/Access Log Activity/Activities - A list of Google services accessed by.csv`,
-one row per access to a Google service from the account: `Activity Timestamp`, `Product Name`,
-`Activity Type`, `IP Address`, `User Agent String`, and, when Google had them, the device (`Device
-Type`, `Device Model`) and the location it placed the address at (`Country Code`, `City`, or a
-`Region`). The columns are found by what their header says, not by position, since the set differs
-between exports; a column that is not there leaves its field out. The input is the CSV or its folder.
+one row per access to a Google service from the account. The export of 2026 carries `Gaia ID`,
+`Activity Timestamp` (`2026-10-01 06:59:59 UTC`), `IP Address`, `Proxiedhost IP Address`, `Is
+Non-routable IP Address`, `Activity Country`, `Activity Region`, `Activity City`, `User Agent String`,
+`Product Name`, `Sub-Product Name`, `Activity Type` and `Gmail Access Channel`; earlier exports had
+the timestamp as `Jun 15, 2026, 7:40:10 AM UTC` or RFC3339, the place as `Country Code` and `City`,
+and the device as `Device Type` and `Device Model`. The columns are found by what their header says,
+not by position, so both read; a column that is not there leaves its field out. The folder's other
+file, `Devices - A list of devices (…) used to access.csv`, is not the log and is never read. The
+input is the CSV or its folder.
 
 This is the noisiest thing in a Takeout — every open of Gmail is a row — and it says where the owner's
 devices were, so the source is **off by default** in `policy/import.json` (the owner removes the entry
@@ -13,11 +17,13 @@ to opt in) and every line is **tier 3**: a sign-in from a city on a date is a lo
 sensitive as a transaction. One line per row: kind `event`, source `google-takeout`, `at` the
 timestamp in UTC, `end` null, `all_day` false, `tz` the record's zone. `title` is `<product>:
 <activity>` (`Gmail: Sign in`), `calendar` `{id: google-access-log, name: Google Account access}`,
-`location` the city and country as text when the row has either. The product, the activity, the IP
-address, the user agent, the device (`{type, model}`) and the country and city go under `extra`.
-`raw_id` is `access-log:<timestamp as spelled>:<sha256(product|activity|ip|agent)[:16]>`: the export
-has no row id, and two accesses in one second from two addresses are two rows. A row with no
-timestamp is skipped and counted. Pure: no network, never writes the source.
+`location` the city, region and country as text when the row has any — coarse, never a coordinate.
+The product, the sub-product, the activity, the Gmail channel, the device (`{type, model}`) and the
+country, region and city go under `extra`. **The IP addresses, the user agent and the account id are
+never written**: the address and the agent are hashed into the id only, so two accesses in one second
+from two addresses are two rows. `raw_id` is `access-log:<timestamp as spelled>:<sha256(product|
+activity|ip|agent)[:16]>`, since the export has no row id. A row with no timestamp is skipped and
+counted. Pure: no network, never writes the source.
 """
 
 from __future__ import annotations
@@ -40,17 +46,20 @@ CALENDAR = {"id": "google-access-log", "name": "Google Account access"}
 
 SUFFIX = ".csv"
 SNIFF_BYTES = 4096
-COLUMNS = {
-    "time": ("activity", "timestamp"),
-    "product": ("product",),
-    "activity": ("activity", "type"),
-    "ip": ("ip",),
-    "agent": ("user", "agent"),
-    "device_type": ("device", "type"),
-    "device_model": ("device", "model"),
-    "country": ("country",),
-    "city": ("city",),
-    "region": ("region",),
+DEVICES = "devices"  # the sibling CSV's name starts with it; its rows are devices, not accesses
+COLUMNS = {  # `sub_product` before `product`, so `Sub-Product Name` is taken before `Product Name` can be
+    "time": (("activity", "timestamp"), ("timestamp",)),
+    "sub_product": (("sub", "product"),),
+    "product": (("product",),),
+    "activity": (("activity", "type"),),
+    "channel": (("channel",),),
+    "ip": (("ip", "address"),),  # hashed into the id, never written
+    "agent": (("user", "agent"),),  # the same
+    "device_type": (("device", "type"),),
+    "device_model": (("device", "model"),),
+    "country": (("country",),),
+    "region": (("region",),),
+    "city": (("city",),),
 }
 REQUIRED = ("time", "product")
 
@@ -67,7 +76,7 @@ def sniff(path: Path) -> bool:
 
 
 def _is_log(path: Path) -> bool:
-    if not path.is_file() or path.suffix.lower() != SUFFIX:
+    if not path.is_file() or path.suffix.lower() != SUFFIX or path.name.lower().startswith(DEVICES):
         return False
     with path.open("rb") as fh:
         header = fh.read(SNIFF_BYTES).split(b"\n", 1)[0].lower()
@@ -129,15 +138,15 @@ def _rows(file: Path, tz: str, counts: dict[str, int]) -> Iterator[dict[str, Any
             payload["calendar"] = dict(CALENDAR)
             payload["all_day"] = False
             city, region, country = cell(row, "city"), cell(row, "region"), cell(row, "country")
-            where = ", ".join(part for part in (city or region, country) if part)
+            where = _place(city, region, country)
             if where:
                 payload["location"] = where
             extra: dict[str, Any] = {}
             for key, value in (
                 ("product", product),
+                ("sub_product", cell(row, "sub_product")),
                 ("activity", activity),
-                ("ip", ip),
-                ("user_agent", agent),
+                ("channel", cell(row, "channel")),
             ):
                 if value:
                     extra[key] = value
@@ -148,7 +157,7 @@ def _rows(file: Path, tz: str, counts: dict[str, int]) -> Iterator[dict[str, Any
             }
             if device:
                 extra["device"] = device
-            for key, value in (("country", country), ("city", city), ("region", region)):
+            for key, value in (("country", country), ("region", region), ("city", city)):
                 if value:
                     extra[key] = value
             payload["extra"] = extra
@@ -161,3 +170,12 @@ def _rows(file: Path, tz: str, counts: dict[str, int]) -> Iterator[dict[str, Any
                 "tier": TIER,
                 "payload": payload,
             }
+
+
+def _place(city: str, region: str, country: str) -> str:
+    """`Nesodden, Akershus, NO`: the parts the row has, a region that repeats the city once."""
+    parts: list[str] = []
+    for part in (city, region, country):
+        if part and part.lower() not in (p.lower() for p in parts):
+            parts.append(part)
+    return ", ".join(parts)

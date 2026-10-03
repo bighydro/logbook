@@ -15,6 +15,9 @@ from logbook.store import Logbook
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "takeout" / "Access Log Activity"
 CSV = FIX / "Activities - A list of Google services accessed by.csv"
+FIX_2026 = ROOT / "tests" / "fixtures" / "takeout-2026-10" / "Access Log Activity"
+CSV_2026 = FIX_2026 / "Activities - A list of Google services accessed by.csv"
+DEVICES = FIX_2026 / "Devices - A list of devices (i.e. Nest, Pixel, iPhone, etc.) used to access.csv"
 ENVELOPE = {"at", "end", "tz", "source", "kind", "tier", "payload"}
 TZ = "Europe/Oslo"
 AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -54,7 +57,7 @@ def test_every_access_is_a_line_at_tier_3_and_the_envelope_is_complete():
     assert len({line["payload"]["raw_id"] for line in lines}) == 4
 
 
-def test_device_and_location_are_kept_when_present_and_left_out_when_not():
+def test_device_and_location_are_kept_when_present_and_the_address_and_agent_never_are():
     by = {line["payload"]["title"] + line["payload"].get("location", ""): line for line in _lines()}
     signin = by["Gmail: Sign inOslo, NO"]
     digest = hashlib.sha256(f"Gmail|Sign in|203.0.113.7|{AGENT}".encode()).hexdigest()[:16]
@@ -69,8 +72,6 @@ def test_device_and_location_are_kept_when_present_and_left_out_when_not():
         "extra": {
             "product": "Gmail",
             "activity": "Sign in",
-            "ip": "203.0.113.7",
-            "user_agent": AGENT,
             "device": {"type": "Mobile", "model": "iPhone"},
             "country": "NO",
             "city": "Oslo",
@@ -80,6 +81,56 @@ def test_device_and_location_are_kept_when_present_and_left_out_when_not():
     assert password["extra"]["device"] == {"type": "Desktop"}
     drive = next(line["payload"] for line in _lines() if line["payload"]["title"] == "Google Drive: Access")
     assert "location" not in drive and "device" not in drive["extra"] and "country" not in drive["extra"]
+    for line in _lines():  # the address and the browser are hashed into the id, never written
+        text = repr(line)
+        assert "203.0.113" not in text and "198.51.100" not in text and "Mozilla" not in text
+
+
+def test_the_2026_export_reads_every_row_with_its_coarse_place_and_never_the_address_or_account():
+    counts: dict[str, int] = {}
+    lines = list(access_log.run(FIX_2026, timezone=TZ, counts=counts))
+    assert len(lines) == 5 and counts == {"skipped_no_timestamp": 1}
+    assert [line["at"] for line in lines] == [
+        "2026-10-01T06:59:59Z",
+        "2026-10-01T07:00:00Z",
+        "2026-10-02T18:30:15Z",
+        "2026-10-03T09:15:00Z",
+        "2026-10-03T09:15:00Z",
+    ]
+    assert len({line["payload"]["raw_id"] for line in lines}) == 5  # two addresses in one second: two lines
+    signin = lines[0]["payload"]
+    assert signin["raw_id"].startswith("access-log:2026-10-01 06:59:59 UTC:")
+    assert signin["title"] == "Gmail: Sign in" and signin["location"] == "Oslo, NO"
+    assert signin["extra"] == {
+        "product": "Gmail",
+        "sub_product": "Gmail Mobile",
+        "activity": "Sign in",
+        "channel": "WEB",
+        "country": "NO",
+        "region": "Oslo",
+        "city": "Oslo",
+    }
+    imap = lines[1]["payload"]
+    assert imap["location"] == "Nesodden, Akershus, NO" and imap["extra"]["channel"] == "IMAP"
+    assert "sub_product" not in imap["extra"]
+    password = lines[2]["payload"]
+    assert password["title"] == "Google Account: Password change" and password["location"] == "Zurich, CH"
+    assert "device" not in password["extra"] and "channel" not in password["extra"]
+    drive = lines[3]["payload"]
+    assert "location" not in drive and "country" not in drive["extra"]
+    for line in lines:
+        text = repr(line)
+        assert "203.0.113" not in text and "198.51.100" not in text and "10.0.0.5" not in text
+        assert "Mozilla" not in text and "000000000000000000001" not in text and "Gaia" not in text
+        assert "ip" not in line["payload"]["extra"] and "user_agent" not in line["payload"]["extra"]
+
+
+def test_the_devices_csv_is_not_the_log_and_is_ignored_beside_it():
+    assert access_log.sniff(CSV_2026) and access_log.sniff(FIX_2026)
+    assert not access_log.sniff(DEVICES)
+    assert adapters.find(DEVICES) is None
+    assert len(list(access_log.run(FIX_2026, timezone=TZ))) == 5
+    assert len(list(access_log.run(CSV_2026, timezone=TZ))) == 5
 
 
 def test_since_cuts_on_at():

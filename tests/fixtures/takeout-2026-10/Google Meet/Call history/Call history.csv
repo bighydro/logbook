@@ -1,0 +1,5 @@
+Conference ID,Meeting Code,Start Time,Duration (seconds),Participant Count,Organizer Email,Product Type,Device Type,Call Type
+c-1a2b3c4d5e6f,abc-defg-hij,2026-10-01 14:00:00 UTC,1812,2,per.persona@example.org,Google Meet,Desktop,Video
+c-2b3c4d5e6f70,klm-nopq-rst,2026-10-02 08:30:00 UTC,2700,4,kari.nordmann@example.org,Google Meet,Mobile,Video
+c-3c4d5e6f7081,uvw-xyza-bcd,2026-10-02 16:00:00 UTC,0,1,per.persona@example.org,Google Meet,Desktop,Audio
+c-no-start,efg-hijk-lmn,,300,2,per.persona@example.org,Google Meet,Desktop,Video

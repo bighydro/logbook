@@ -3,9 +3,13 @@
 Takeout writes `Takeout/Google Meet/Call history/Call history.csv`, one row per call the account was
 in: `Conference ID`, `Meeting Code`, `Start Time`, `Duration (seconds)`, `Participant Count`,
 `Organizer Email`, `Product Type`, `Device Type`, `Call Type`. Google renames and reorders these
-between exports, so the columns are found by what their header says (a header with `conference`, one
-with `start`, one with `duration`, …), not by position; a column that is not there leaves its field
-out. The input is the CSV, its folder, or the `Google Meet/` folder above.
+between exports — `Start time (UTC)`, `End time (UTC)` in place of a duration, `Organiser` — so the
+columns are found by what their header says (a header with `conference`, one with `start`, one with
+`duration` or an end time, …), not by position; a column that is not there leaves its field out. The
+start is read in every clock Takeout has written (`times`): RFC3339, `Jun 11, 2026, 2:00:00 PM UTC`
+and, in the export of 2026, `2026-10-01 14:00:00 UTC`. A duration is seconds, a clock (`0:30:12`) or
+words (`1h 2m 3s`, `45 min`); with none, the end time less the start. The input is the CSV, its
+folder, or the `Google Meet/` folder above.
 
 One line per row: kind `call`, tier 1 (RFC 0012: the owner's own time, no words), source
 `google-takeout`, `at` the start in UTC, `end` the start plus the duration when it lasted, else null;
@@ -24,7 +28,8 @@ from __future__ import annotations
 
 import csv
 import hashlib
-from collections.abc import Iterator
+import re
+from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -40,19 +45,22 @@ FOLDER = "Google Meet"
 
 SUFFIX = ".csv"
 SNIFF_BYTES = 4096
-COLUMNS = {  # field → the words a header must carry (lower-cased, in order)
-    "conference": ("conference",),
-    "code": ("meeting", "code"),
-    "start": ("start",),
-    "duration": ("duration",),
-    "participants": ("participant",),
-    "organizer": ("organizer",),
-    "product": ("product",),
-    "device": ("device",),
-    "call_type": ("call", "type"),
+COLUMNS = {  # field → the words a header must carry (lower-cased), or the alternatives tried in order
+    "conference": (("conference",), ("call", "id")),
+    "code": (("meeting", "code"), ("code",)),
+    "call_type": (("call", "type"),),
+    "end": (("end", "time"), ("end", "date")),  # before `start`, whose last resort is any `time`
+    "start": (("start",), ("call", "time"), ("timestamp",), ("date",), ("time",)),
+    "duration": (("duration",),),
+    "participants": (("participant",),),
+    "organizer": (("organi",),),  # organizer, organiser
+    "product": (("product",),),
+    "device": (("device",),),
 }
-REQUIRED = ("start", "duration")
-MARKS = (b"conference", b"meeting code", b"organizer")
+REQUIRED = ("start",)
+MARKS = (b"conference", b"meeting code", b"organizer", b"organiser")
+DURATION_UNITS = {"h": 3600, "m": 60, "s": 1}
+DURATION_WORDS = re.compile(r"(\d+(?:\.\d+)?)\s*(h|m|s)[a-z]*")
 
 
 def sniff(path: Path) -> bool:
@@ -70,7 +78,8 @@ def _is_history(path: Path) -> bool:
     with path.open("rb") as fh:
         head = fh.read(SNIFF_BYTES).lower()
     header = head.split(b"\n", 1)[0]
-    return b"start" in header and b"duration" in header and any(mark in header for mark in MARKS)
+    lasted = b"duration" in header or b"end time" in header or b"end date" in header
+    return b"start" in header and lasted and any(mark in header for mark in MARKS)
 
 
 def _files(folder: Path) -> list[Path]:
@@ -108,16 +117,36 @@ def _count(counts: dict[str, int], key: str) -> None:
     counts[key] = counts.get(key, 0) + 1
 
 
-def columns(header: list[str], wanted: dict[str, tuple[str, ...]]) -> dict[str, int]:
-    """field → column index, by the words the header carries; shared with the other CSV readers."""
+Words = tuple[str, ...]
+
+
+def columns(header: list[str], wanted: Mapping[str, Words | tuple[Words, ...]]) -> dict[str, int]:
+    """field → column index, by the words the header carries: a field names the words (lower-cased)
+    a header must all carry, or several such tuples tried in order, so a column Google renamed is
+    still found. A column one field took is never another's, so the order of `wanted` settles a
+    header two fields could claim. Shared with the other CSV readers."""
     found: dict[str, int] = {}
-    for field, words in wanted.items():
-        for i, name in enumerate(header):
-            lowered = name.strip().lower()
-            if all(word in lowered for word in words) and i not in found.values():
+    lowered = [name.strip().lower() for name in header]
+    for field, spec in wanted.items():
+        for words in _choices(spec):
+            i = next(
+                (
+                    i
+                    for i, name in enumerate(lowered)
+                    if all(w in name for w in words) and i not in found.values()
+                ),
+                None,
+            )
+            if i is not None:
                 found[field] = i
                 break
     return found
+
+
+def _choices(spec: Words | tuple[Words, ...]) -> tuple[Words, ...]:
+    if spec and isinstance(spec[0], tuple):
+        return tuple(s for s in spec if isinstance(s, tuple))
+    return (tuple(s for s in spec if isinstance(s, str)),)
 
 
 def _rows(file: Path, owner: set[str], tz: str, counts: dict[str, int]) -> Iterator[dict[str, Any]]:
@@ -150,6 +179,8 @@ def _rows(file: Path, owner: set[str], tz: str, counts: dict[str, int]) -> Itera
                 raw_id = f"{SERVICE}:{at}:{digest}"
                 _count(counts, "no_conference_id")
             duration = _seconds(cell(row, "duration"))
+            if duration == 0 and (ended := times.parse(cell(row, "end"))[0]) is not None:
+                duration = max(0, round((_instant(ended) - _instant(at)).total_seconds()))
             mine = bool(organizer) and organizer in owner
             payload: dict[str, Any] = {
                 "schema": SCHEMA,
@@ -173,8 +204,11 @@ def _rows(file: Path, owner: set[str], tz: str, counts: dict[str, int]) -> Itera
             payload["extra"] = extra
             end = None
             if duration > 0:
-                started = datetime.fromisoformat(at.replace("Z", "+00:00"))
-                end = (started + timedelta(seconds=duration)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                end = (
+                    (_instant(at) + timedelta(seconds=duration))
+                    .astimezone(UTC)
+                    .strftime("%Y-%m-%dT%H:%M:%SZ")
+                )
             yield {
                 "at": at,
                 "end": end,
@@ -186,8 +220,23 @@ def _rows(file: Path, owner: set[str], tz: str, counts: dict[str, int]) -> Itera
             }
 
 
+def _instant(at: str) -> datetime:
+    return datetime.fromisoformat(at.replace("Z", "+00:00"))
+
+
 def _seconds(text: str) -> int:
+    """A duration as Takeout spells it: seconds (`1812`), a clock (`0:30:12`, `30:12`) or words
+    (`1h 2m 3s`, `45 min`); 0 for anything else."""
+    text = text.strip().lower()
+    if not text:
+        return 0
     try:
         return max(0, round(float(text)))
     except ValueError:
-        return 0
+        pass
+    parts = text.split(":")
+    if len(parts) in (2, 3) and all(p.strip().isdecimal() for p in parts):
+        hours, minutes, seconds = ([0, 0, 0] + [int(p) for p in parts])[-3:]
+        return hours * 3600 + minutes * 60 + seconds
+    found = DURATION_WORDS.findall(text)
+    return max(0, round(sum(float(n) * DURATION_UNITS[unit] for n, unit in found))) if found else 0
