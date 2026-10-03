@@ -1,5 +1,6 @@
 """The mail adapter at Takeout scale: a synthetic mbox streamed in constant memory, every message a
-line, the attachments never decoded. The 500 MB benchmark is `slow` (LOGBOOK_SLOW=1)."""
+line, the attachments never decoded. The 500 MB benchmark asserts a rate and a memory ceiling, so it
+is `stress` (LOGBOOK_STRESS=1, never in CI): a shared runner meets neither."""
 
 from __future__ import annotations
 
@@ -112,7 +113,7 @@ def _tiny(i: int) -> bytes:
     ).encode()
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 @pytest.mark.skipif(
     sys.platform == "win32", reason="peak RSS is read through `resource`, which Windows has not"
 )
