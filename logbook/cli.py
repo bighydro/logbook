@@ -52,6 +52,7 @@ from . import (
     people_merge,
     places,
     policy,
+    print_page,
     promises,
     questions,
     reading,
@@ -2581,6 +2582,12 @@ def cmd_year(a: argparse.Namespace) -> None:
     to the record."""
     lb = Logbook.find()
     try:
+        if a.print:  # the paper edition (`logbook.print_page`), written where --html says
+            out = _print_target(a, "year")
+            data = print_page.read_year(lb, a.year, _airports(a.airports))
+            out.write_bytes(print_page.html(data).encode("utf-8"))
+            print(f"year {data['year']}: wrote {out}")
+            return
         data = year_reader.read(lb, a.year, _airports(a.airports))
     except (ValueError, stays.SettingsError) as e:
         print(f"year: {e}", file=sys.stderr)
@@ -2608,6 +2615,12 @@ def cmd_trip(a: argparse.Namespace) -> None:
     route. Nothing is written to the record."""
     lb = Logbook.find()
     try:
+        if a.print:  # the paper edition (`logbook.print_page`), written where --html says
+            out = _print_target(a, "trip")
+            data = print_page.read_trip(lb, a.ref, _airports(a.airports))
+            out.write_bytes(print_page.html(data).encode("utf-8"))
+            print(f"trip {data['id']}: wrote {out}")
+            return
         data = trip_page.read(lb, a.ref, _airports(a.airports))
     except (ValueError, stays.SettingsError) as e:
         print(f"trip: {e}", file=sys.stderr)
@@ -2623,6 +2636,20 @@ def cmd_trip(a: argparse.Namespace) -> None:
         return
     for text in trip_page.rows(data):
         print(text)
+
+
+def _print_target(a: argparse.Namespace, command: str) -> Path:
+    """`--print` writes the paper edition of a Year or a Trip (one HTML document for A4 and US
+    Letter) to `--html PATH`: the path, its folder made; exit 2 without `--html`, before anything
+    is read."""
+    if not a.html:
+        print(
+            f"{command}: --print writes the paper edition where --html PATH says; give both", file=sys.stderr
+        )
+        sys.exit(2)
+    out = Path(a.html)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 def _days_window(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str] | None:
@@ -4796,6 +4823,11 @@ def main(argv: list[str] | None = None) -> None:
         "--html", metavar="PATH", help="write one self-contained page (inline CSS, no script) instead"
     )
     s.add_argument(
+        "--print",
+        action="store_true",
+        help="with --html: the paper edition — a cover, contents, one spread per month, for A4 and US Letter",
+    )
+    s.add_argument(
         "--airports",
         metavar="FILE",
         help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
@@ -4814,6 +4846,11 @@ def main(argv: list[str] | None = None) -> None:
         "--html",
         metavar="PATH",
         help="write one self-contained page (inline CSS and SVG map, no script) instead",
+    )
+    s.add_argument(
+        "--print",
+        action="store_true",
+        help="with --html: the paper edition — a cover, contents, one spread per day, for A4 and US Letter",
     )
     s.add_argument(
         "--airports",

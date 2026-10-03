@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2026 · Logbook</title>
+<style>
+@page {
+  size: auto;
+  margin: 16.00mm 14.00mm 20.00mm 20.00mm;
+  @bottom-center { content: counter(page); font: 8.00pt -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b; }
+}
+@page :left { margin-left: 14.00mm; margin-right: 20.00mm; }
+@page :right { margin-left: 20.00mm; margin-right: 14.00mm; }
+@page cover { @bottom-center { content: none; } }
+:root { color-scheme: light; }
+html { background: #ffffff; }
+body { margin: 0; padding: 0; color: #1b1b1b; background: #ffffff;
+  font: 10.00pt/1.4 Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman", serif; }
+h1, h2, h3 { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+h1 { font-size: 59.60pt; line-height: 1; }
+h2 { font-size: 24.41pt; line-height: 1.1; }
+h3 { font-size: 15.62pt; line-height: 1.2; margin: 0 0 2.50mm; }
+p { margin: 0 0 2.50mm; }
+.kicker { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: uppercase;
+  letter-spacing: .12em; color: #6b6b6b; margin: 0 0 2.50mm; }
+.lead { font-size: 12.50pt; color: #6b6b6b; }
+.muted { color: #6b6b6b; }
+.n { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+
+section.cover { page: cover; break-after: page; min-height: 219.06mm;
+  display: flex; flex-direction: column; justify-content: flex-end; }
+section.cover h1 { margin: 0 0 5.00mm; }
+section.cover .name { font-size: 15.62pt; margin: 0; }
+section.cover .dates { font-size: 12.50pt; color: #6b6b6b; }
+section.cover .rule { border: 0; border-top: 1px solid #1b1b1b; margin: 5.00mm 0; }
+
+section.contents { break-after: page; }
+section.contents h2 { margin-bottom: 5.00mm; }
+ol.contents { list-style: none; margin: 0; padding: 0; }
+ol.contents li { display: grid; grid-template-columns: 55.33mm 1fr;
+  gap: 0 5.00mm; padding: 2.50mm 0; border-bottom: 1px solid #ebebe7;
+  break-inside: avoid; }
+ol.contents li .what { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; }
+ol.contents li .about { color: #6b6b6b; }
+section.route { break-before: page; break-after: page; }
+section.route h2 { margin-bottom: 5.00mm; }
+section.route figure.map { margin: 0 0 5.00mm; }
+section.route figure.map svg { max-width: 140.00mm; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 5.00mm; }
+th, td { text-align: left; vertical-align: top; padding: 1.00mm 2.50mm 1.00mm 0;
+  border-bottom: 1px solid #ebebe7; }
+th { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b; text-transform: uppercase;
+  letter-spacing: .06em; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+td.d { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+section.spread > article { break-before: page; }
+article.facts { display: grid; grid-template-columns: 55.33mm 1fr;
+  gap: 0 5.00mm; }
+article.facts header { grid-column: 1 / -1; margin-bottom: 5.00mm;
+  padding-bottom: 2.50mm; border-bottom: 1px solid #1b1b1b; }
+article.facts header h2 { margin: 0; }
+article.facts header .lead { margin: 1.00mm 0 0; }
+dl.facts { margin: 0; }
+dl.facts dt { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: uppercase;
+  letter-spacing: .08em; color: #6b6b6b; margin-top: 2.50mm; }
+dl.facts dd { margin: 0; }
+dl.facts dd.empty { color: #6b6b6b; }
+ol.places { margin: 0; padding-left: 1.4em; }
+ol.places li { padding-left: .2em; }
+ol.places .count { color: #6b6b6b; }
+figure.map { margin: 0; align-self: start; }
+figure.map svg { display: block; width: 100%; height: auto; border: 1px solid #c9c9c4; }
+figure.map figcaption { font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b;
+  margin-top: 1.50mm; }
+figure.map.empty .none { display: flex; align-items: center; justify-content: center;
+  height: 75.91mm; border: 1px solid #c9c9c4; color: #6b6b6b; }
+.track { fill: none; stroke: #1b1b1b; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.leg { fill: none; stroke: #1b1b1b; stroke-width: 2; stroke-linecap: round; }
+.leg.transit { stroke-dasharray: 6 5; }
+.stay { fill: #ffffff; stroke: #1b1b1b; stroke-width: 1.5; }
+.mark { font: 600 11px -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #1b1b1b; }
+.scale { stroke: #1b1b1b; stroke-width: 1.5; }
+.scale-text { font: 10px -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #6b6b6b; }
+
+article.photos { display: grid; gap: 5.00mm; align-content: start; }
+article.photos.n1 { grid-template-columns: 1fr; }
+article.photos.n2 { grid-template-columns: 1fr; }
+article.photos.n4 { grid-template-columns: 1fr 1fr; }
+article.photos.n6 { grid-template-columns: 1fr 1fr; }
+figure.photo { margin: 0; break-inside: avoid; }
+figure.photo img, figure.photo .frame { display: block; width: 100%; object-fit: contain;
+  object-position: left top; }
+figure.photo .frame { display: flex; align-items: center; justify-content: center; text-align: center;
+  background: #ebebe7; color: #6b6b6b; font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.n1 figure.photo img, .n1 figure.photo .frame { height: 236.40mm; }
+.n2 figure.photo img, .n2 figure.photo .frame { height: 109.70mm; }
+.n4 figure.photo img, .n4 figure.photo .frame { height: 109.70mm; }
+.n6 figure.photo img, .n6 figure.photo .frame { height: 69.13mm; }
+figure.photo figcaption { font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b;
+  height: 7.00mm; overflow: hidden; margin-top: 1.00mm; }
+
+footer.colophon { break-before: page; color: #6b6b6b; font-size: 8.00pt;
+  border-top: 1px solid #c9c9c4; padding-top: 2.50mm; }
+
+@media screen {
+  body { max-width: 176.00mm; margin: 16.00mm auto;
+    padding: 0 14.00mm; }
+  section.cover, section.contents, section.route, section.spread > article, footer.colophon {
+    padding-bottom: 10.00mm; margin-bottom: 10.00mm;
+    border-bottom: 1px dashed #c9c9c4; }
+}
+</style>
+</head>
+<body>
+<section class="cover">
+<p class="kicker">Logbook</p>
+<h1>2026</h1>
+<hr class="rule">
+<p class="name">ines.nordmann@example.org</p>
+<p class="dates">1–30 June 2026 · 30 days</p>
+</section>
+<section class="contents">
+<h2>Contents</h2>
+<ol class="contents">
+<li><span class="what">June</span><span class="about">1–30 June 2026 · 30 days · 12 away · 4 flights · 9 keepers</span></li>
+</ol>
+<h3>Trips</h3>
+<table>
+<thead><tr>
+<th>dates</th>
+<th>nights</th>
+<th>route</th>
+<th>with</th>
+</tr></thead>
+<tbody>
+<tr><td class="d">2026-06-06 – 2026-06-06</td><td>1 night</td><td>Cabin</td><td>Ola Nordmann</td></tr>
+<tr><td class="d">2026-06-08 – 2026-06-10</td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>Marta Keller, Jonas Weber</td></tr>
+<tr><td class="d">2026-06-15 – 2026-06-20</td><td>6 nights aboard Nordlys</td><td>aboard Nordlys</td><td>Anders Vik, Ola Nordmann</td></tr>
+<tr><td class="d">2026-06-25 – 2026-06-26</td><td>2 nights</td><td>55.6850,12.5500 (Copenhagen)</td><td>Freja Lund, Liv Berg, Per Hansen</td></tr>
+</tbody>
+</table>
+</section>
+<section class="spread month" id="m-2026-06">
+<article class="facts">
+<header>
+<p class="kicker">2026</p>
+<h2>June</h2>
+<p class="lead">1–30 June 2026 · 30 days</p>
+</header>
+<dl class="facts">
+<dt>Nights</dt>
+<dd>18 home · 12 away · 6 nights aboard Nordlys</dd>
+<dt>Places, by nights</dt>
+<dd><ol class="places"><li>Home <span class="count">18 nights</span></li><li>47.3769,8.5417 (Zurich) <span class="count">3 nights</span></li><li>59.8500,10.6000 · aboard Nordlys <span class="count">2 nights</span></li><li>59.0500,10.0300 (Sandefjord) · aboard Nordlys <span class="count">2 nights</span></li><li>55.6850,12.5500 (Copenhagen) <span class="count">2 nights</span></li><li>Cabin <span class="count">1 night</span></li><li>59.4300,10.4800 (Sandefjord) · aboard Nordlys <span class="count">1 night</span></li><li>Marina · aboard Nordlys <span class="count">1 night</span></li></ol></dd>
+<dt>With</dt>
+<dd>Per Hansen, Liv Berg, Ola Nordmann, Anders Vik, Freja Lund, Marta Keller, Jonas Weber, Sigrid Moen</dd>
+<dt>Flights</dt>
+<dd>8 June  XY 561 OSL → ZRH<br>11 June  XY 562 ZRH → OSL<br>25 June  XY 571 OSL → CPH<br>27 June  XY 572 CPH → OSL</dd>
+<dt>Sleep</dt>
+<dd>6.8 h a night (29 nights)</dd>
+<dt>Steps</dt>
+<dd>8,425 a day (30 days)</dd>
+<dt>Keepers</dt>
+<dd>9 (8 memory, 1 art)</dd>
+</dl>
+<figure class="map">
+<svg viewBox="0 0 640 420" role="img" aria-label="1–30 June 2026: the track, the places by nights">
+<path class="track" d="M 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.3 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.1 53.0 L 322.1 53.0 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.2 53.1 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.1 L 315.6 47.9 L 308.9 42.6 L 302.2 37.3 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 299.3 35.0 L 300.3 35.8 L 307.0 41.1 L 313.6 46.3 L 320.3 51.6 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 323.9 50.7 L 327.1 45.7 L 327.1 45.7 L 291.7 382.6 L 291.6 383.6 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.5 384.8 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.4 384.9 L 291.7 385.0 L 291.7 385.0 L 291.6 384.9 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 384.7 L 291.6 383.1 L 291.7 382.6 L 291.7 382.6 L 327.1 45.7 L 323.9 50.7 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.4 53.3 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 321.5 52.8 L 321.5 52.8 L 321.9 53.0 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.3 53.2 L 322.3 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 321.8 53.5 L 321.6 53.7 L 321.4 53.8 L 321.2 54.0 L 321.1 54.1 L 320.9 54.3 L 320.7 54.4 L 320.5 54.6 L 320.3 54.7 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 55.0 L 320.0 55.8 L 319.9 56.7 L 319.7 57.4 L 319.6 58.2 L 319.5 59.1 L 319.4 59.8 L 319.3 60.7 L 319.1 61.5 L 319.0 62.2 L 318.9 63.2 L 318.8 63.9 L 318.7 64.7 L 318.5 65.6 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 66.0 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 66.0 L 318.5 66.0 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 66.0 L 318.5 66.0 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 66.0 L 318.5 65.9 L 318.5 65.9 L 318.5 66.0 L 318.5 65.9 L 318.5 66.0 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.5 65.9 L 318.3 66.3 L 317.8 67.1 L 317.3 67.8 L 316.9 68.5 L 316.4 69.3 L 316.0 70.0 L 315.5 70.7 L 315.0 71.5 L 314.6 72.1 L 314.1 72.9 L 313.7 73.7 L 313.3 74.3 L 312.7 75.2 L 312.3 75.8 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.4 76.1 L 312.4 76.1 L 312.4 76.1 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.2 76.0 L 312.7 74.8 L 313.1 73.6 L 313.5 72.5 L 314.0 71.2 L 314.5 70.0 L 315.0 68.7 L 315.4 67.4 L 315.9 66.2 L 316.4 64.9 L 316.8 63.7 L 317.3 62.5 L 317.7 61.3 L 318.2 60.1 L 318.6 58.9 L 319.1 57.6 L 319.6 56.4 L 320.0 55.1 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.1 54.8 L 320.2 54.8 L 320.3 54.7 L 320.6 54.5 L 320.7 54.4 L 320.9 54.2 L 321.1 54.1 L 321.3 54.0 L 321.4 53.8 L 321.6 53.7 L 321.8 53.5 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.0 53.4 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.4 53.2 L 322.4 53.3 L 322.3 53.3 L 322.4 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.1 53.0 L 322.1 53.0 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.2 L 322.4 53.3 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 323.9 50.8 L 327.1 45.8 L 327.1 45.7 L 327.1 45.7 L 348.6 166.8 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.5 164.7 L 347.3 164.9 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 347.2 165.0 L 348.6 166.8 L 348.6 166.8 L 327.1 45.7 L 326.3 47.0 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 321.5 52.8 L 321.5 52.8 L 322.0 53.0 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.3 53.2 L 322.3 53.2 L 322.2 53.2 L 322.3 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.3 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.3 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.3 53.1 L 322.3 53.2 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.4 53.3 L 322.3 53.3 L 322.4 53.3 L 322.3 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.2 L 322.2 53.2 L 322.2 53.1 L 322.2 53.1 L 322.2 53.2 L 322.2 53.1 L 322.2 53.2"/>
+<circle class="stay" cx="322.2" cy="53.2" r="5"/>
+<text class="mark" x="330.2" y="57.2">1, 3, 8</text>
+<circle class="stay" cx="291.6" cy="384.7" r="5"/>
+<text class="mark" x="299.6" y="388.7">2</text>
+<circle class="stay" cx="312.2" cy="76.0" r="5"/>
+<text class="mark" x="320.2" y="80.0">4</text>
+<circle class="stay" cx="347.2" cy="165.0" r="5"/>
+<text class="mark" x="355.2" y="169.0">5</text>
+<circle class="stay" cx="299.3" cy="35.0" r="5"/>
+<text class="mark" x="307.3" y="39.0">6</text>
+<circle class="stay" cx="318.5" cy="65.9" r="5"/>
+<text class="mark" x="326.5" y="69.9">7</text>
+<path class="scale" d="M 16.0 404.0 L 134.9 404.0"/>
+<text class="scale-text" x="16.0" y="399.0">500 km</text>
+</svg>
+<figcaption>1–30 June 2026: the track, the places by nights</figcaption>
+</figure>
+</article>
+<article class="photos n6" aria-label="June: the keepers">
+<figure class="photo">
+<div class="frame">IMG_06031030.HEIC<br>not in the record</div>
+<figcaption>3 June 2026 · memory · IMG_06031030.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06061630.HEIC<br>not in the record</div>
+<figcaption>6 June 2026 · memory · IMG_06061630.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06101520.HEIC<br>not in the record</div>
+<figcaption>10 June 2026 · memory · IMG_06101520.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06101500.HEIC<br>not in the record</div>
+<figcaption>10 June 2026 · art · IMG_06101500.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06161730.HEIC<br>not in the record</div>
+<figcaption>16 June 2026 · memory · IMG_06161730.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06191730.HEIC<br>not in the record</div>
+<figcaption>19 June 2026 · memory · IMG_06191730.HEIC</figcaption>
+</figure>
+</article>
+<article class="photos n4" aria-label="June: the keepers">
+<figure class="photo">
+<div class="frame">IMG_06210730.HEIC<br>not in the record</div>
+<figcaption>21 June 2026 · memory · IMG_06210730.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06231030.HEIC<br>not in the record</div>
+<figcaption>23 June 2026 · memory · IMG_06231030.HEIC</figcaption>
+</figure>
+<figure class="photo">
+<div class="frame">IMG_06261100.HEIC<br>not in the record</div>
+<figcaption>26 June 2026 · memory · IMG_06261100.HEIC</figcaption>
+</figure>
+</article>
+</section>
+<footer class="colophon">
+<p>Read from the record at head f68cabe0349a…: derived, never written; the same record gives the same pages. The photos are the record's own files, referenced where they are; the maps are drawn from the location lines, with no tiles.</p>
+</footer>
+</body>
+</html>

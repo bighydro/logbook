@@ -138,6 +138,10 @@ split across two. Everything the record says is escaped; a note that reads `<b>`
 picks are the day reader's rows, in a monospace block, so the page shows exactly what the terminal
 does.
 
+`--html PATH --print` writes the paper edition instead — a cover, a contents page and one spread
+per month with the facts, a map drawn from the location lines and the keepers as hero photos, for
+A4 and US Letter — and [On paper](print.md) says how to make the PDF.
+
 ## The JSON
 
 `--json` prints one object: `year`; `window` (`since`, `until`, `days`; `null` for a year the
