@@ -864,3 +864,6 @@ def _span_text(first: str, last: str) -> str:
 
 def _plural(n: int, noun: str) -> str:
     return f"{n:,} {noun}" if n == 1 else f"{n:,} {noun}s"
+
+
+long_date, span_text = _long_date, _span_text  # the date texts, shared with the week's paper
