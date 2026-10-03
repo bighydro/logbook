@@ -1,8 +1,9 @@
 name: docs
+# The docs site, and under it the demo persona's forty years as a static site at /ines/
+# (docs/site.md): every push to main, since the demo and its readers are code, not only docs.
 on:
   push:
     branches: [main]
-    paths: ["**.md", "mkdocs.yml", "docs/**", ".github/workflows/docs.yml"]
   workflow_dispatch:
 permissions: { contents: write }
 jobs:
@@ -12,7 +13,22 @@ jobs:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - run: uv python install 3.12
+      - run: uv sync
+      - name: Ines Nordmann's forty years, who does not exist, exported as a site
+        # The demo is a function of --years and --seed; the record lives in the runner's temp dir and
+        # is thrown away with it. The site is the readers at tier 1, written into docs/ines/, which
+        # mkdocs copies to /ines/ as it is (the folder is git-ignored; nothing is committed here).
+        env:
+          LOGBOOK_HOME: ${{ runner.temp }}/ines
+        run: |
+          uv run logbook demo --years 40 --seed 1 --out "$LOGBOOK_HOME"
+          uv run logbook export site docs/ines
+      - name: Nothing outside the synthetic allowlist leaves (CONTRIBUTING.md, the scrub rule)
+        run: uv run python scripts/check_synthetic.py docs/ines
       - name: Commit to gh-pages as github-actions[bot], never the runner identity
         run: |
           git config user.name "github-actions[bot]"

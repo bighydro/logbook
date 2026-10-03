@@ -42,7 +42,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import crossing, policy, reading, serve, stays, trip_page
+from . import crossing, policy, serve, stays, trip_page
 from . import year as year_reader
 from .chain import Line
 from .flights import Airports
@@ -65,6 +65,7 @@ PAGE_NOUNS = {  # a kind of page, singular and plural, for the console
 }
 UNNAMED = "unnamed"
 RETRACTION = "retraction"
+BOOKKEEPING = frozenset({crossing.KIND, RETRACTION, "resolution", "migration"})  # lines about the record
 EN_DASH, ARROW, DOT = year_reader.EN_DASH, year_reader.ARROW, year_reader.DOT
 
 
@@ -102,10 +103,11 @@ def parse_tiers(text: str) -> tuple[int, ...]:
 
 
 def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
-    """The whole record — the days the owner's track covers, else the days with any line — held
-    against the policy: a tier above the ceiling for `site` is refused naming the file. None when
-    the record has no day at all."""
-    whole = reading.record_days(lb, "location") or reading.record_days(lb)
+    """The whole record, from the first day with a line to the last (a year before the track began
+    has its Days index, and its Year page says what the Year reader says of it), held against the
+    policy: a tier above the ceiling for `site` is refused naming the file. None when the record has
+    no day at all."""
+    whole = record_span(lb)
     if whole is None:
         return None
     try:
@@ -121,17 +123,32 @@ def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
     return Request(whole[0], whole[1], tiers, max_tier)
 
 
+def record_span(lb: Logbook) -> tuple[str, str] | None:
+    """The first and last local day with a line that observes a day — every kind but the record's
+    own bookkeeping: a crossing (the line each export appends, dated the day it ran), a retraction, a
+    resolution (the name overlay) and a migration — so that a run does not move the window of the
+    next. None when the record has no such line."""
+    with lb.index() as idx:
+        spans = [idx.span(str(row["kind"])) for row in idx.kinds() if row["kind"] not in BOOKKEEPING]
+    found = [span for span in spans if span is not None]
+    if not found:
+        return None
+    return min(a for a, _b in found), max(b for _a, b in found)
+
+
 # -- names: file stems and relative paths -------------------------------------------------------------------
 
 NOT_SLUG = re.compile(r"[^a-z0-9]+")
+# letters NFKD does not decompose, mapped by hand before the accents are dropped
+LETTERS = str.maketrans({"ø": "o", "æ": "ae", "ß": "ss", "đ": "d", "ð": "d", "þ": "th", "ł": "l"})
 
 
 def slug(name: str) -> str:
     """A page's file stem from a name: lower-case ASCII letters and digits, runs of anything else one
-    dash (accents dropped, `Zürich café` → `zurich-cafe`), `unnamed` for nothing. A URL on any server
-    and a file name on any platform, with no percent-encoding to get wrong."""
-    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").casefold()
-    text = NOT_SLUG.sub("-", folded).strip("-")
+    dash (accents dropped, `Zürich café` → `zurich-cafe`, `Bjørn` → `bjorn`), `unnamed` for nothing.
+    A URL on any server and a file name on any platform, with no percent-encoding to get wrong."""
+    folded = unicodedata.normalize("NFKD", name.casefold().translate(LETTERS))
+    text = NOT_SLUG.sub("-", folded.encode("ascii", "ignore").decode("ascii")).strip("-")
     return text or UNNAMED
 
 
@@ -193,6 +210,13 @@ class PersonPage:
     @property
     def last_contact(self) -> str:
         return max((str(y["last_contact"] or "") for y in self.years.values()), default="")
+
+    @property
+    def span(self) -> str:
+        """The first year to the last, one year, or nothing for someone confirmed on a trip and on no Year."""
+        if not self.years:
+            return ""
+        return f"{min(self.years)} {EN_DASH} {max(self.years)}" if len(self.years) > 1 else min(self.years)
 
 
 @dataclass(frozen=True)
@@ -455,7 +479,7 @@ class _Builder:
                 self._people_links(here, [p.name]),
                 serve._num(p.days),
                 serve._num(p.nights),
-                escape(f"{min(p.years)} {EN_DASH} {max(p.years)}" if len(p.years) > 1 else min(p.years)),
+                escape(p.span),
                 escape(p.last_contact),
                 serve._num(len(p.trips)),
             ]
@@ -468,13 +492,14 @@ class _Builder:
 
     def _person_page(self, page: PersonPage) -> str:
         here = self.person_path(page)
-        span = f"{min(page.years)} {EN_DASH} {max(page.years)}" if len(page.years) > 1 else min(page.years)
-        body = (
-            f"<h1>{escape(page.name)}</h1>\n"
-            f"<p>{_plural(page.days, 'day')} together{DOT}{_plural(page.nights, 'night')}{DOT}{escape(span)}"
-            + (f"{DOT}last {escape(page.last_contact)}" if page.last_contact else "")
-            + "</p>\n<h2>Years</h2>\n"
-        )
+        head = [_plural(page.days, "day") + " together", _plural(page.nights, "night")]
+        if page.span:
+            head.append(page.span)
+        if page.last_contact:
+            head.append(f"last {page.last_contact}")
+        body = f"<h1>{escape(page.name)}</h1>\n<p>{escape(DOT.join(head))}</p>\n<h2>Years</h2>\n"
+        if not page.years:
+            body += '<p class="mute">on no Year: confirmed present on a trip alone</p>\n'
         rows: list[list[serve.Cell]] = []
         for year, entry in sorted(page.years.items()):
             rows.append(
@@ -487,9 +512,10 @@ class _Builder:
                     escape(", ".join(str(p) for p in entry["places"])),
                 ]
             )
-        body += serve._table(
-            ["year", ("days", "num"), ("nights", "num"), ("stays", "num"), "last", "places"], rows
-        )
+        if rows:
+            body += serve._table(
+                ["year", ("days", "num"), ("nights", "num"), ("stays", "num"), "last", "places"], rows
+            )
         body += "<h2>Trips</h2>\n"
         if page.trips:
             body += '<ul class="plain">\n'

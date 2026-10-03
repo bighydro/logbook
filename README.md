@@ -743,6 +743,12 @@ shape ([docs/vault.md](vault.md)). It is tier-gated exactly like a crossing: tie
 every day and no text of any note or message; `--tier 1,2` when `policy/crossing.json` names `vault` with a
 ceiling of 2. Every run appends one `crossing/v1` line, and re-running rewrites only the files that changed.
 
+`logbook export site ~/Site` renders the readers as a folder of static HTML instead — a Year page per year,
+every Trip page, a Days index per year, the places, the people — with relative links, no script and nothing
+fetched: `serve` written down, tier-gated the same way ([docs/site.md](site.md)). The demo persona's forty
+years are published this way at [bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/),
+so you can browse a life that never happened before installing anything.
+
 ## Asking an agent
 
 `logbook mcp` serves the record to an agent on this machine over the Model Context Protocol, on this

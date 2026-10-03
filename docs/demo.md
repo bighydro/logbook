@@ -19,6 +19,11 @@ wrote 114,786 lines to ~/Demo/Life, head 1d0a9bb43049…
 She is born the day after the record ends, `N` years earlier, so the record closes on the eve of a
 birthday and every year of her life is whole. `--days` and `--years` are one or the other.
 
+You can browse these forty years without installing anything:
+[bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/) is this record, seed 1,
+rendered by `logbook export site` at tier 1 ([site.md](site.md)) — a Year page per year, every trip, a Days
+index per year, the places and the people — and published with the docs on every push to `main`.
+
 ## The phases
 
 The phases are by age, so a short life is a child's and a long one reaches the boat. Each changes
