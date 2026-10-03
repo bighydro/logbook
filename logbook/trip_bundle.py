@@ -1,4 +1,4 @@
-"""The shared trip (RFC 0025): `logbook export trip-bundle`, `logbook import trip-bundle`, and the
+"""The shared trip (RFC 0029): `logbook export trip-bundle`, `logbook import trip-bundle`, and the
 merged page `logbook trip` shows once a bundle has come in.
 
 **Out.** A trip bundle is a crossing package (RFC 0005, `crossing-package/v1`) with a profile,

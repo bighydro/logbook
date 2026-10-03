@@ -4542,7 +4542,7 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
     """trip-bundle <trip-id-or-day> --to DEST [--tier 1|1,2|1,2,3] [--attachments] [--out DIR]
-    [--dry-run]: one crossing package cut to the trip (RFC 0025, profile trip-bundle/v1) under the
+    [--dry-run]: one crossing package cut to the trip (RFC 0029, profile trip-bundle/v1) under the
     destination's ceiling in policy/crossing.json, recorded as a crossing/v1 line naming the trip."""
     generated_at = now_utc()
     try:
@@ -4610,7 +4610,7 @@ def _trip_bundle_rows(prepared: trip_bundle.Prepared) -> Iterator[str]:
 
 
 def cmd_import(a: argparse.Namespace) -> None:
-    """`import trip-bundle <folder> [--dry-run]`: a bundle another record exported (RFC 0025), its
+    """`import trip-bundle <folder> [--dry-run]`: a bundle another record exported (RFC 0029), its
     lines appended as received — never over this record's own, never twice."""
     lb = Logbook.find()
     received_at = now_utc()
@@ -5507,7 +5507,7 @@ def main(argv: list[str] | None = None) -> None:
         "path",
         nargs="?",
         help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md)"
-        " or `trip-bundle` (RFC 0025)",
+        " or `trip-bundle` (RFC 0029)",
     )
     s.add_argument(
         "target",
@@ -5553,7 +5553,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.set_defaults(fn=cmd_export)
     s = sub.add_parser(
-        "import", help="a trip bundle another record exported (RFC 0025): its lines appended as received"
+        "import", help="a trip bundle another record exported (RFC 0029): its lines appended as received"
     )
     s.add_argument("what", choices=[trip_bundle.COMMAND], help="what the folder holds")
     s.add_argument("path", metavar="FOLDER", help="the bundle: manifest.json, entries.jsonl, trip.json, …")
