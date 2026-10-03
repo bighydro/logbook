@@ -313,26 +313,41 @@ def export(lb: Logbook, req: Request, sel: Selection, out: Path, generated_at: s
     bundle_id = uuid7()
     manifest = build_manifest(lb, req, sel, generated_at, bundle_id, head)
     package_sha256 = write_bundle(lb, sel, manifest, out)
-    line = lb.append(
-        at=generated_at,
-        source=SOURCE,
-        kind=KIND,
-        tier=1,
-        payload={
-            "schema": LINE_SCHEMA,
-            "destination": req.destination,
-            "bundle_id": bundle_id,
-            "window": {"from": req.since, "to": req.until},
-            "tiers": list(req.tiers),
-            "counts": sel.counts(),
-            "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": req.max_tier},
-            "logbook_head": head,
-            "package_sha256": package_sha256,
-        },
-        recorded_at=generated_at,
-    )
+    line = record(lb, req, sel, generated_at, bundle_id, head, package_sha256)
     write_watermark(lb, req.destination, req.until, generated_at, bundle_id)
     return Result(out, manifest, package_sha256, line)
+
+
+def record(
+    lb: Logbook,
+    req: Request,
+    sel: Selection,
+    generated_at: str,
+    bundle_id: str,
+    head: str,
+    package_sha256: str,
+    extra: dict[str, Any] | None = None,
+) -> Line:
+    """Append the one crossing/v1 line a real export leaves in the chain (RFC 0011, ADR 0016 rule
+    4): the destination, the window, the tiers, the counts, the ceiling and the package digest;
+    `extra` is what a particular package adds (a trip bundle names its trip). The only write to
+    the log an export makes."""
+    payload: dict[str, Any] = {
+        "schema": LINE_SCHEMA,
+        "destination": req.destination,
+        "bundle_id": bundle_id,
+        "window": {"from": req.since, "to": req.until},
+        "tiers": list(req.tiers),
+        "counts": sel.counts(),
+        "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": req.max_tier},
+        "logbook_head": head,
+        "package_sha256": package_sha256,
+    }
+    if extra:
+        payload["extra"] = extra
+    return lb.append(
+        at=generated_at, source=SOURCE, kind=KIND, tier=1, payload=payload, recorded_at=generated_at
+    )
 
 
 def build_manifest(
