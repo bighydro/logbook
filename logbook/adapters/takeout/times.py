@@ -9,12 +9,17 @@ no-break space before `AM`. `parse` reads all four and returns the instant to th
 as the export spelled it, so a `raw_id` can carry the spelling (RFC 0017, 0018) and `at` the instant.
 A zone name other than UTC or GMT is not interpreted: the export is UTC, and a reader that is not
 sure says so (SPEC §2) rather than guess.
+The HTML flavour of an export spells the owner's own zone by its abbreviation (`Mar 4, 2026,
+10:00:00 AM CET`); `parse_in_zone` reads such a time in the record's zone when, and only when, that
+zone uses that abbreviation at that wall-clock time, and `english_zone` names the abbreviation so a
+reader can count what it could not place.
 """
 
 from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ENGLISH = (
     "%A, %B %d, %Y at %I:%M:%S %p",
@@ -59,9 +64,47 @@ def _without_zone(text: str) -> str | None:
 
 
 def _english(body: str) -> datetime | None:
+    """A UTC instant from one of the English forms, None when the body is none of them."""
+    naive = _strptime(body)
+    return naive.replace(tzinfo=UTC) if naive is not None else None
+
+
+def _strptime(body: str) -> datetime | None:
     for form in ENGLISH:
         try:
-            return datetime.strptime(body, form).replace(tzinfo=UTC)
+            return datetime.strptime(body, form)
         except ValueError:
             continue
     return None
+
+
+def english_zone(value: object) -> str | None:
+    """The zone name an English time ends with (`CET`, `UTC`, `PST`), or None when the value is not
+    an English time with one."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    words = " ".join(value.translate(SPACES).split()).split(" ")
+    if len(words) < 2 or not words[-1].isalpha() or _strptime(" ".join(words[:-1])) is None:
+        return None
+    return words[-1]
+
+
+def parse_in_zone(value: object, zone: str) -> tuple[str | None, str]:
+    """An English time whose zone name is the abbreviation `zone` uses at that wall-clock time
+    (`CET` in `Europe/Oslo` in March, `CEST` in June) read in that zone: (`at` in UTC, the text as
+    spelled). (None, "") when the name is UTC (that is `parse`), another zone's, or the text is not
+    a time: the reader says so rather than guess (SPEC §2)."""
+    name = english_zone(value)
+    if name is None or name.upper() in UTC_NAMES or not isinstance(value, str):
+        return None, ""
+    words = " ".join(value.translate(SPACES).split()).split(" ")
+    naive = _strptime(" ".join(words[:-1]))
+    try:
+        tz = ZoneInfo(zone)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None, ""
+    assert naive is not None  # english_zone said the body is a time
+    when = naive.replace(tzinfo=tz)
+    if when.tzname() != name:
+        return None, ""
+    return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), value
