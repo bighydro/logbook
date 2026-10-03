@@ -1,0 +1,5 @@
+Country,Track Identifier,Media type,Date Played,Hours,Play Duration Milliseconds,End Reason Type,Source Type,Play Count,Skip Count,Ignore For Recommendations,Track Reference,Track Description
+NO,1000000001,AUDIO,20260304,"20, 21",426000,NATURAL_END_OF_TRACK,ORIGINAL_ARTIST_MIX,2,0,false,1000000001,Kari Nordmann - Fjordsang
+NO,1000000002,AUDIO,20260304,,30000,TRACK_SKIPPED_FORWARDS,ORIGINAL_ARTIST_MIX,1,1,false,1000000002,Ola Nordmann - Bowline
+NO,1000000003,AUDIO,20260101,1,180000,NATURAL_END_OF_TRACK,LIBRARY,1,0,false,1000000003,Midnight
+NO,1000000001,AUDIO,2026-03,20,213000,NATURAL_END_OF_TRACK,ORIGINAL_ARTIST_MIX,1,0,false,1000000001,Kari Nordmann - Fjordsang

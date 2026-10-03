@@ -1,0 +1,27 @@
+[
+  {
+    "ts": "2026-03-06T18:04:00Z",
+    "platform": "android",
+    "ms_played": 240000,
+    "conn_country": "NO",
+    "ip_addr": "192.0.2.1",
+    "master_metadata_track_name": "Fjordsang (Live)",
+    "master_metadata_album_artist_name": "Kari Nordmann",
+    "master_metadata_album_album_name": "Nordlys Live",
+    "spotify_track_uri": "spotify:track:7g8h9i0j1k2l3m4n5o6p7q",
+    "episode_name": null,
+    "episode_show_name": null,
+    "spotify_episode_uri": null,
+    "audiobook_title": null,
+    "audiobook_uri": null,
+    "audiobook_chapter_uri": null,
+    "audiobook_chapter_title": null,
+    "reason_start": "clickrow",
+    "reason_end": "trackdone",
+    "shuffle": true,
+    "skipped": false,
+    "offline": false,
+    "offline_timestamp": null,
+    "incognito_mode": false
+  }
+]
