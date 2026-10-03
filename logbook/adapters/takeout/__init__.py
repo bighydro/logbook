@@ -21,6 +21,8 @@ sharing `SOURCE` for the lines it writes:
     maps.py       Maps (your places)/ — Reviews.json → highlight/v1; Saved Places.json never lines, but
                   candidates for `places propose --takeout` (with places.py, the `Saved/` CSV lists)
     home.py       Home App/ — HomeHistory.json: arrivals, departures and the alarm → event/v1
+    fit.py        Fit/ — All Data/ streams, All Sessions/ workouts, Daily activity metrics/ CSVs →
+                  health-sample/v1, tier 3
     times.py      the three clocks Takeout writes, read to one UTC instant (shared)
 
 Every sub-adapter answers to `takeout-<name>` as well as `google-takeout-<name>` (`adapters.TAKEOUT`,
@@ -54,4 +56,5 @@ SUB_ADAPTERS = (
     "contacts",
     "maps",
     "home",
+    "fit",
 )

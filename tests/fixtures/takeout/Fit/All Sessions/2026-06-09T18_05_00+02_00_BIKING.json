@@ -1,0 +1,20 @@
+{
+  "id": "sess-0002",
+  "name": "Evening ride",
+  "fitnessActivity": "biking",
+  "startTime": "2026-06-09T18:05:00.000+02:00",
+  "endTime": "2026-06-09T18:50:30.000+02:00",
+  "application": {
+    "packageName": "com.google.android.apps.fitness"
+  },
+  "aggregate": [
+    {
+      "metricName": "com.google.distance.delta",
+      "floatValue": 12840.0
+    },
+    {
+      "metricName": "com.google.calories.expended",
+      "floatValue": 410.5
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "Data Source": "derived:com.google.weight:com.google.android.gms:merge_weight",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 81.4
+          }
+        }
+      ],
+      "dataTypeName": "com.google.weight",
+      "endTimeNanos": 1780894920000000000,
+      "startTimeNanos": 1780894920000000000,
+      "modifiedTimeMillis": 1780894921234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.weight:com.google.android.apps.fitness:Withings:Body+:9e8d7c6b:"
+    },
+    {
+      "fitValue": [],
+      "dataTypeName": "com.google.weight",
+      "endTimeNanos": 1780981260000000000,
+      "startTimeNanos": 1780981260000000000,
+      "modifiedTimeMillis": 1780981261234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.weight:com.google.android.apps.fitness:Withings:Body+:9e8d7c6b:"
+    }
+  ]
+}

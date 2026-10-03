@@ -1,0 +1,115 @@
+{
+  "Data Source": "derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 120
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780893660000000000,
+      "startTimeNanos": 1780893600000000000,
+      "modifiedTimeMillis": 1780893661234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 130
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780893780000000000,
+      "startTimeNanos": 1780893720000000000,
+      "modifiedTimeMillis": 1780893781234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 90
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780893900000000000,
+      "startTimeNanos": 1780893840000000000,
+      "modifiedTimeMillis": 1780893901234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 200
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780894020000000000,
+      "startTimeNanos": 1780893960000000000,
+      "modifiedTimeMillis": 1780894021234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 110
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780894080000000000,
+      "startTimeNanos": 1780894020000000000,
+      "modifiedTimeMillis": 1780894081234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 7
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780894140000000000
+    },
+    {
+      "fitValue": [],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780894260000000000,
+      "startTimeNanos": 1780894200000000000,
+      "modifiedTimeMillis": 1780894261234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 300
+          }
+        }
+      ],
+      "dataTypeName": "com.google.step_count.delta",
+      "endTimeNanos": 1780999320000000000,
+      "startTimeNanos": 1780999260000000000,
+      "modifiedTimeMillis": 1780999321234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.step_count.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    }
+  ]
+}

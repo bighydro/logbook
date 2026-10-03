@@ -636,6 +636,8 @@ SKIP_PHRASES = {
     "skipped_no_data": "days the provider had no values for (asked again next run)",
     "skipped_unreadable_csv": "CSV files without the columns this reader needs",
     "skipped_unreadable_row": "rows that would not parse",
+    "skipped_covered_by_merge": "raw stream files whose points the merged stream carries",
+    "skipped_covered_by_stream": "daily rows for days the quarter-hour streams already cover",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "merged_into_known_people": "contacts merged into people the record knows",

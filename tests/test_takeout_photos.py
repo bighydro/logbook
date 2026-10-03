@@ -218,6 +218,7 @@ def test_takeout_package_registers_photos_beside_location():
         "contacts",
         "maps",
         "home",
+        "fit",
     )
     assert photos.SOURCE == location.SOURCE == "google-takeout"
 
