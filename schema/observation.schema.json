@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://logbook.dev/schema/observation-0.1.json",
-  "title": "Logbook observation (envelope) v0.1",
+  "title": "Logbook observation (envelope)",
   "type": "object",
   "required": ["id", "seq", "at", "end", "tz", "source", "kind", "tier", "payload", "recorded_at", "prev", "hash"],
   "properties": {
