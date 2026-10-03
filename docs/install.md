@@ -271,15 +271,15 @@ it again.
 
 ## Optional extras
 
-Some features need an extra library: reading an encrypted iPhone backup (`encrypted`), sharing a
-signed page (`share`), serving the record to an AI assistant (`mcp`), listening to ships (`ais`),
+Some features need an extra library: reading an encrypted iPhone backup and sharing a signed page
+(both `crypto`), serving the record to an AI assistant (`mcp`), listening to ships (`ais`),
 transcribing voice memos (`transcribe`), and the two local models on Apple silicon (`judge`,
 `describe`). Logbook tells you when a command needs one; `logbook doctor` lists them with a
 `pass` or `warn` each. You add one by installing the package with the extra's name in brackets:
 
 ```bash
-pipx install --force "openlogbook[encrypted]"
-uv tool install "openlogbook[encrypted]"
+pipx install --force "openlogbook[crypto]"
+uv tool install "openlogbook[crypto]"
 ```
 
 Several at once are a comma-separated list: `"openlogbook[encrypted,share]"`. The quotes matter;
