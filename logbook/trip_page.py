@@ -41,7 +41,20 @@ from .export import day_range, parse_day
 from .flights import Airports
 from .reading import Reading
 from .store import Logbook
-from .year import ARROW, CSS, DOT, EN_DASH, Cell, escape, footer, health_text, keepers_text, section, table
+from .year import (
+    ARROW,
+    CSS,
+    DOT,
+    EN_DASH,
+    Cell,
+    Links,
+    escape,
+    footer,
+    health_text,
+    keepers_text,
+    section,
+    table,
+)
 
 MARGIN_DAYS = 7  # the reading starts this many days before the trip and ends this many after …
 WIDEN = 4  # … and widens by this factor while the run of nights away touches the window's edge
@@ -88,10 +101,13 @@ def parse_ref(text: str) -> Ref:
     raise ValueError(f"not a trip id (trip:YYYY-MM-DD:YYYY-MM-DD) or a day (YYYY-MM-DD): {text!r}")
 
 
-def locate(lb: Logbook, ref: Ref, airports: Airports | None = None) -> tuple[Reading, trips.Trip]:
+def locate(
+    lb: Logbook, ref: Ref, airports: Airports | None = None, tiers: Sequence[int] | None = None
+) -> tuple[Reading, trips.Trip]:
     """The trip `ref` names and the reading it was found in: the days from `MARGIN_DAYS` before
     the trip to as many after, clipped to the days the owner's track covers, widened by `WIDEN`
-    while the run touches an edge of the window that is not the record's. `ValueError` when the
+    while the run touches an edge of the window that is not the record's; through the gate `tiers`
+    when given (`reading.read`). `ValueError` when the
     record has no days, the day is at home or outside the record, no stay places the owner
     anywhere around it, the id names no trip (the trip on its first day is named instead), or
     `places.json` names no home (the `trips` warning)."""
@@ -105,7 +121,7 @@ def locate(lb: Logbook, ref: Ref, airports: Airports | None = None) -> tuple[Rea
         until = min(whole[1], (date.fromisoformat(last) + timedelta(days=margin)).isoformat())
         if not since <= ref.day <= until:
             raise ValueError(f"no trip on {ref.day}: the record runs {whole[0]} {EN_DASH} {whole[1]}")
-        rd = reading.read(lb, since, until, airports)
+        rd = reading.read(lb, since, until, airports, tiers)
         found, warning = trips.trips(rd)
         if warning:
             raise ValueError(warning)
@@ -124,17 +140,20 @@ def locate(lb: Logbook, ref: Ref, airports: Airports | None = None) -> tuple[Rea
         margin *= WIDEN
 
 
-def read(lb: Logbook, text: str, airports: Airports | None = None) -> dict[str, Any]:
-    """The Trip as one JSON-ready object. `ValueError` as `parse_ref` and `locate` raise it;
+def read(
+    lb: Logbook, text: str, airports: Airports | None = None, tiers: Sequence[int] | None = None
+) -> dict[str, Any]:
+    """The Trip as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
+    health lines and the usual sources included. `ValueError` as `parse_ref` and `locate` raise it;
     `stays.SettingsError` when the record's settings, places or assets file is not what it should
     be. Nothing is written."""
     ref = parse_ref(text)
     airports = airports or Airports.load()
-    rd, trip = locate(lb, ref, airports)
+    rd, trip = locate(lb, ref, airports, tiers)
     span = day_range(trip.start, trip.until)
     before = (date.fromisoformat(trip.start) - timedelta(days=1)).isoformat()
     with lb.index() as idx:
-        found = idx.by_kind(health.KIND, before, trip.until)
+        found = reading.crossing(idx.by_kind(health.KIND, before, trip.until), tiers)
     health_rows = [
         row
         for row in health.summary([*found, *rd.retracted.values()], str(rd.tz))
@@ -143,7 +162,7 @@ def read(lb: Logbook, text: str, airports: Airports | None = None) -> dict[str, 
     health_of = {
         str(row["day"]): {k: v for k, v in row.items() if k not in ("day", "by")} for row in health_rows
     }
-    usual = days_reader.usual_sources(lb, trip.start, trip.until)
+    usual = days_reader.usual_sources(lb, trip.start, trip.until, tiers)
     by_day = _lines_by_day(rd)
     days = []
     for day in span:
@@ -506,9 +525,11 @@ ul.people { margin: .25rem 0; padding-left: 1.2rem; }
 """
 
 
-def html(data: Mapping[str, Any]) -> str:
+def html(data: Mapping[str, Any], nav: str = "", links: Links | None = None) -> str:
     """The Trip as one self-contained HTML page: inline CSS, no script, no asset, nothing fetched,
-    the map an inline SVG; everything the record says is escaped. Suitable for printing."""
+    the map an inline SVG; everything the record says is escaped. Suitable for printing. `nav` is
+    markup a caller puts above the page (a static site's navigation, already escaped; printed
+    pages hide it); `links` turns a person's name into a link where the page names them."""
     title = f"{data['start']} {EN_DASH} {data['end']}"
     out = [
         "<!doctype html>",
@@ -520,6 +541,7 @@ def html(data: Mapping[str, Any]) -> str:
         f"<style>{CSS}{MAP_CSS}</style>",
         "</head>",
         "<body>",
+        *([f'<nav class="site">{nav}</nav>'] if nav else []),
         "<header>",
         f"<h1>{escape(title)}</h1>",
         f"<p>{escape(data['id'])}{DOT}{escape(head_text(data))}</p>",
@@ -529,7 +551,7 @@ def html(data: Mapping[str, Any]) -> str:
     out.append("</header>")
     out += section("route", "Route", _route_html(data["route"], data["legs"]))
     out += section("flights", "Flights", _flights_html(data))
-    out += section("people", "People", _people_html(data["people"]))
+    out += section("people", "People", _people_html(data["people"], links or {}))
     if data["nights_aboard"]:
         out += section("aboard", "Nights aboard", [f"<p>{escape(aboard_text(data['nights_aboard']))}</p>"])
     if data.get("shared"):
@@ -650,8 +672,9 @@ def _flights_html(data: Mapping[str, Any]) -> list[str]:
     return table([("", ""), ("date", ""), ("flight", ""), ("route", ""), ("evidence", "")], rows_)
 
 
-def _people_html(people: Mapping[str, Any]) -> list[str]:
+def _people_html(people: Mapping[str, Any], links: Links | None = None) -> list[str]:
     out = []
+    links = links or {}
     for status, label in ((present.CONFIRMED, "Confirmed"), (present.PROPOSED, "Proposed")):
         found = people[status]
         if not found:
@@ -662,7 +685,9 @@ def _people_html(people: Mapping[str, Any]) -> list[str]:
         out.append('<ul class="people">')
         for p in found:
             sources = escape(", ".join(p["sources"]))
-            out.append(f'<li>{escape(p["name"])} <span class="muted">({sources})</span></li>')
+            href = links.get(f"person:{p['name']}")
+            name = escape(p["name"]) if href is None else f'<a href="{escape(href)}">{escape(p["name"])}</a>'
+            out.append(f'<li>{name} <span class="muted">({sources})</span></li>')
         out.append("</ul>")
     return out
 

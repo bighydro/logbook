@@ -18,6 +18,9 @@ data/
 /inbox/
 site/
 
+# the demo persona's forty years, exported by the docs workflow and published at /ines/; never committed
+docs/ines/
+
 # day packages written by `logbook export --day` are views, not the record
 export/
 
