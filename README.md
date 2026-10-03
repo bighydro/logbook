@@ -765,6 +765,7 @@ your circle too; tier 3 only when the file allows it *and* you start the server 
 - Docs site: https://bighydro.github.io/logbook/
 - [docs/try-it.md](docs/try-it.md) — five minutes with a demo record: every reader on a month that never happened
 - [docs/first-hour.md](docs/first-hour.md) — the first hour: `logbook setup` screen by screen, for someone who has never used a terminal
+- [docs/demo.md](docs/demo.md) — `logbook demo --years 40`: a life that never happened, from a childhood of scanned photos to the boat
 - [VISION.md](VISION.md) — why, and the rules the product refuses to break
 - [LORE.md](LORE.md) — where the logbook comes from: ships, pilots, diaries, and the log in computing
 - [SPEC.md](SPEC.md) — the format, one page; this is the part meant to become a standard

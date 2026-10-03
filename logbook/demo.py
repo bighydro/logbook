@@ -591,6 +591,7 @@ class _Story:
         tz: str = TZ,
         all_day: bool = False,
         location: str | None = None,
+        source: str = "ios-calendar",
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "schema": "event/v1",
@@ -605,10 +606,17 @@ class _Story:
             ]
         if location:
             payload["location"] = location
-        return self.line(at, "ios-calendar", "event", 1, payload, end=end, tz=tz)
+        return self.line(at, source, "event", 1, payload, end=end, tz=tz)
 
     def message(
-        self, at: str, text: str, from_me: bool, sender: Person, chat: tuple[str, str, str], tz: str = TZ
+        self,
+        at: str,
+        text: str,
+        from_me: bool,
+        sender: Person,
+        chat: tuple[str, str, str],
+        tz: str = TZ,
+        source: str = "whatsapp",
     ) -> None:
         chat_id, chat_type, chat_name = chat
         payload: dict[str, Any] = {
@@ -620,7 +628,7 @@ class _Story:
         }
         if not from_me:
             payload["sender"] = {"kind": "phone", "value": sender.phone, "name": sender.first}
-        self.line(at, "whatsapp", "message", 2, payload, tz=tz)
+        self.line(at, source, "message", 2, payload, tz=tz)
 
     def transcript(
         self, at: str, end: str, title: str, people: tuple[Person, ...], lines: list[str], tz: str = TZ
@@ -657,15 +665,17 @@ class _Story:
         people: tuple[Person, ...] = (),
         favorite: bool = False,
         album: str | None = None,
+        provenance: str = "camera",
     ) -> None:
         where = self.jitter(spot, 20)
+        stamp = f"{at[5:7]}{at[8:10]}{at[11:13]}{at[14:16]}"
         payload: dict[str, Any] = {
             "schema": "photo/v1",
             "asset_id": f"p-{at}",
             "library": "immich",
-            "file_name": f"IMG_{at[5:7]}{at[8:10]}{at[11:13]}{at[14:16]}.HEIC",
+            "file_name": f"IMG_{stamp}.HEIC" if provenance == "camera" else f"scan_{at[:4]}_{stamp}.jpg",
             "media": "image",
-            "provenance": "camera",
+            "provenance": provenance,
             "lat": where[0],
             "lon": where[1],
             "faces": len(people),
@@ -1402,9 +1412,10 @@ def _daytime_health(story: _Story, day: date, tz: str, kind: str) -> None:
         )
 
 
-def _resolutions(story: _Story) -> None:
-    at = _utc(START - timedelta(days=1), "08:00")
-    for person in PEOPLE:
+def _resolutions(story: _Story, people: tuple[Person, ...] = PEOPLE, first: date = START) -> None:
+    """The circle, named the day before the record's first day, as a contacts import would."""
+    at = _utc(first - timedelta(days=1), "08:00")
+    for person in people:
         story.resolution(("email", person.email), person, at)
         story.resolution(("phone", person.phone), person, at)
         if person.face:
@@ -1431,22 +1442,51 @@ def story_of(days: int, seed: int, recorded_at: str) -> _Story:
     return story
 
 
-def generate(root: Path, days: int = 30, seed: int = 1) -> Logbook:
+def generate(root: Path, days: int | None = None, seed: int = 1, years: int | None = None) -> Logbook:
     """Write the demo record under `root` (a folder that is not yet a logbook) and return it:
     `logbook.json` with an owner id from the seed, every line, the transcripts' text in the
     attachment store, two notes files, `assets.json` with the boat and `places.json` with home,
-    the office, the marina and the cabin."""
+    the office, the marina and the cabin. `days` (30 by default) is the month from `START`;
+    `years` instead is the persona's whole life to the month's last day (`logbook.demo_life`),
+    with its own places and the homes she moved between."""
+    if days is not None and years is not None:
+        raise ValueError("give days or years, not both")
+    if years is not None:
+        from . import demo_life
+
+        if years < 1:
+            raise ValueError("years must be at least 1")
+        return demo_life.generate(root, years, seed)
+    days = 30 if days is None else days
     if days < 1:
         raise ValueError("days must be at least 1")
     last = START + timedelta(days=days - 1)
     recorded_at = _utc(last + timedelta(days=1), "08:00")
+    story = story_of(days, seed, recorded_at)
+    notes = {}
+    for d in range(days):
+        text = NOTE_FILES.get(DAY_TYPES[d % CYCLE])
+        if text:
+            notes[START + timedelta(days=d)] = text
+    return write(root, seed, story, START, PLACES, notes)
+
+
+def write(
+    root: Path,
+    seed: int,
+    story: _Story,
+    first: date,
+    places: dict[Spot, dict[str, Any]],
+    notes: dict[date, str],
+) -> Logbook:
+    """The record on disk: the meta with an owner id from the seed, the blobs, the lines, the
+    boat in `assets.json`, `places` in `places.json` and a notes file per day of `notes`."""
     lb = Logbook.init(root, TZ)
     meta = lb.meta
     meta["owner_id"] = str(uuid.uuid5(NAMESPACE, f"owner:{seed}"))
-    meta["created_at"] = _utc(START - timedelta(days=1), "06:00")
+    meta["created_at"] = _utc(first - timedelta(days=1), "06:00")
     meta["owner_emails"] = [OWNER.email]
     lb._save_meta(meta)
-    story = story_of(days, seed, recorded_at)
     for blob in story.blobs:
         lb.attach(blob)
     lb.append_many(story.drafts)
@@ -1462,7 +1502,7 @@ def generate(root: Path, days: int = 30, seed: int = 1) -> Logbook:
         + "\n",
         encoding="utf-8",
     )
-    for spot, entry in PLACES.items():
+    for spot, entry in places.items():
         named_places.add(
             lb.root,
             named_places.Place(
@@ -1475,14 +1515,10 @@ def generate(root: Path, days: int = 30, seed: int = 1) -> Logbook:
                 entry.get("country"),
             ),
         )
-    for d in range(days):
-        kind = DAY_TYPES[d % CYCLE]
-        text = NOTE_FILES.get(kind)
-        if text:
-            day = START + timedelta(days=d)
-            folder = lb.root / "notes" / str(day.year)
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / f"{day.isoformat()}.md").write_bytes(text.encode("utf-8"))
+    for day, text in notes.items():
+        folder = lb.root / "notes" / str(day.year)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{day.isoformat()}.md").write_bytes(text.encode("utf-8"))
     return lb
 
 

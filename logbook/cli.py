@@ -34,6 +34,7 @@ from . import (
     backup,
     crossing,
     demo,
+    demo_life,
     describe,
     drifting,
     events,
@@ -4204,26 +4205,41 @@ def cmd_mcp(a: argparse.Namespace) -> None:
 
 
 def cmd_demo(a: argparse.Namespace) -> None:
-    """`demo [--days N] [--seed S] --out DIR`: a complete synthetic record of the Oslo persona,
-    invented in `logbook/demo.py`, written to a new folder; the same days and seed give the same
-    head. Nothing in it is real and nothing outside the folder is read."""
+    """`demo [--days N | --years N] [--seed S] --out DIR`: a complete synthetic record of the Oslo
+    persona, invented in `logbook/demo.py` (a month) or `logbook/demo_life.py` (a life), written
+    to a new folder; the same days or years and seed give the same head. Nothing in it is real
+    and nothing outside the folder is read."""
     root = Path(a.out).expanduser()
-    if a.days < 1:
+    if a.years is not None and a.days is not None:
+        print("demo: give --days or --years, not both", file=sys.stderr)
+        sys.exit(2)
+    if a.years is not None and a.years < 1:
+        print("demo: --years must be at least 1", file=sys.stderr)
+        sys.exit(2)
+    if a.days is not None and a.days < 1:
         print("demo: --days must be at least 1", file=sys.stderr)
         sys.exit(2)
     try:
-        lb = demo.generate(root, days=a.days, seed=a.seed)
+        lb = demo.generate(root, days=a.days, seed=a.seed, years=a.years)
     except (FileExistsError, CodeCheckoutError, OSError) as e:
         print(f"demo: {e}", file=sys.stderr)
         sys.exit(2)
     meta = lb.meta
-    first, last = demo.START, demo.START + timedelta(days=a.days - 1)
+    if a.years is not None:
+        first, last = demo_life.birthday(a.years), demo_life.TODAY
+        span = _plural(a.years, "year")
+        show = last if a.years < demo_life.FULL_MONTH_FROM else first.replace(year=last.year, month=6, day=17)
+    else:
+        days = 30 if a.days is None else a.days
+        first, last = demo.START, demo.START + timedelta(days=days - 1)
+        span = _plural(days, "day")
+        show = min(last, first + timedelta(days=7))
     where = _under_home(lb.root)
     print(
-        f"demo record: {_plural(a.days, 'day')}, {first} to {last}, seed {a.seed}; nothing in it is real\n"
+        f"demo record: {span}, {first} to {last}, seed {a.seed}; nothing in it is real\n"
         f"wrote {meta['seq']:,} lines to {where}, head {str(meta['head'])[:12]}…\n"
         f"  export LOGBOOK_HOME={where}\n"
-        f"  logbook show {min(last, first + timedelta(days=7))}"
+        f"  logbook show {show}"
     )
 
 
@@ -5305,8 +5321,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.set_defaults(fn=cmd_mcp)
     s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
+    s.add_argument("--days", type=int, metavar="N", help="local days from 2026-06-01 (default 30)")
     s.add_argument(
-        "--days", type=int, default=30, metavar="N", help="local days from 2026-06-01 (default 30)"
+        "--years",
+        type=int,
+        metavar="N",
+        help="instead: the persona's whole life, N years from her birth to 2026-06-30, in phases",
     )
     s.add_argument("--seed", type=int, default=1, metavar="S", help="the same seed gives the same record")
     s.add_argument("--out", required=True, metavar="DIR", help="a folder that is not yet a logbook")
