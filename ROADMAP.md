@@ -1,15 +1,17 @@
 # Roadmap
 
-Phases, not dates. Each phase ends with something a stranger can use.
+Six passages, each with a gate. Gates are conditions, not dates. A passage begins only when the gate before it is clear.
 
-**0 — the format (now).** SPEC v0.1, JSON Schema, conformance fixture, this CLI. Verify passes on the sample logbook.
+**0 · Harbour — make it true.** Encryption at rest merged; one-click install; the readiness gate: three strangers install from the README alone and read back a day of their own life without asking anything.
 
-**1 — three drops.** Adapters for Google Takeout (location, photos, calendar, mail headers, YouTube, Chrome), Apple Health (sleep, steps, workouts) and WhatsApp exports (messages, tier 2); an email adapter follows as its own task. `logbook add <zip>` sniffs which is which. Encryption at rest for tiers 2–3 (spec v0.2). Follow-up: *takeout folder dispatch* — `logbook/adapters/takeout/` walks a whole unzipped Takeout folder (and the zip itself) and hands each file to the matching sub-adapter by its place in the archive, instead of sniffing every file; Location History is the first sub-adapter, photos, calendar and activity are its siblings.
+**1 · First strangers — make it theirs.** The format meets people who owe its author nothing. Gate: a hundred strangers with a Day page; three adapters merged from people we have never met; the first bug report about their data, not ours.
 
-**2 — days.** The reference engine: stays, moves, flights, places, meetings, people, trips. `logbook show <day>` becomes a page. The MCP server ships, so any agent can add, ask and confirm.
+**2 · The circle — make it shared.** Pages handed between records by file. Gate: ten households with two or more records exchanging pages; an agent other than the reference's reads a logbook through the gate.
 
-**3 — the circle.** The shared-page bundle format; exchange between two logbooks by file; then a transport. Per-person pages: last real contact, shared moments, birthdays.
+**3 · v1.0 — make it final.** Eighteen profiles frozen; both implementations agree on every reader; the specification tagged 1.0 with the conformance badge.
 
-**4 — the community.** Adapter template and bounty list (Strava, Garmin, Immich, Dawarich, Telegram, iMessage, bank CSV, Spotify, Letterboxd). Payload-profile RFCs. A second implementation in another language by someone who only read the spec.
+**4 · Everyone — make it easy.** From the terminal to the kitchen table: a hosted viewer you can leave, the record on a phone, the TypeScript implementation as a web application. Gate: ten thousand records; a product nobody involved built says "reads a logbook".
 
-**5 — v1.0.** The envelope frozen; conformance badge; books and published pages as community layers; data-portability law gives every service a reason to emit the format.
+**5 · The standard — make it last.** Certification, custody in use, a foundation holding the specification. Gate: the format is used by people who have never heard of its author and would not notice if the author stopped.
+
+What is deliberately not on this list: a feed, an account, a server, a company.
