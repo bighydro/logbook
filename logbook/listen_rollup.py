@@ -1,8 +1,8 @@
 """`logbook rollup listen`: listening summed up per year from the `listen/v1` lines standing (RFC
-0019) — listens, hours, skips, the top artists by hours, hours by month — in `rollup.py`'s manner
-but beside it, so the listening rollup grows without touching the others. A reader (ADR 0013):
-derived from the record at its head, never written; every number carries the ids of its lines
-under `--json`; the same record gives the same rollup."""
+0019) — listens, hours, skips, the top artists by hours, the podcasts' hours by show and by month,
+hours by month — in `rollup.py`'s manner but beside it, so the listening rollup grows without
+touching the others. A reader (ADR 0013): derived from the record at its head, never written; every
+number carries the ids of its lines under `--json`; the same record gives the same rollup."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from .store import RETRACTION, retractions
 
 KIND = "listen"
 TOP_ARTISTS = 10
+NO_SHOW = "(no show named)"
 EN_DASH = "\u2013"
 EM_DASH = "\u2014"
 
@@ -53,7 +54,9 @@ def listen(lines: Iterable[Line], tz: str, first: str, last: str) -> dict[str, A
     """Per calendar year of the window `[first, last]` (local days in `tz`): `listens`, the hours
     played (`played_s` summed; a line with no playhead is a listen with no hours, counted under
     `untimed`), `skipped` (lines whose `extra.skipped` is true), `by_service`, `episodes` (the
-    podcast lines, their hours and ids), `top_artists` (the tracks' performers, as spelled, by hours
+    podcast lines, their hours and ids), `podcasts` (the same episodes broken down: `by_show`, the
+    shows as the services spell them, by hours then listens, and `months`, every month the window
+    touches with the episodes' hours), `top_artists` (the tracks' performers, as spelled, by hours
     then listens, the first `TOP_ARTISTS`) and `months`: every month the window touches, with its
     listens, hours, skips and line ids — a month with no listen has zero listens and is printed as
     a dash, never a zero. `lines` are the listen lines of the window with the retraction lines
@@ -65,6 +68,9 @@ def listen(lines: Iterable[Line], tz: str, first: str, last: str) -> dict[str, A
         year = years.setdefault(day[:4], _year(day[:4]))
         month = year["months"].setdefault(day[:7], _month(day[:7], day))
         month["last"] = day
+        year["podcasts"]["months"].setdefault(
+            day[:7], {"month": day[:7], "listens": 0, "played_s": 0.0, "lines": []}
+        )
     for line in standing(lines):
         day = _local_day(str(line.get("at", "")), zone) or ""
         if not first <= day <= last or day[:4] not in years:
@@ -85,6 +91,16 @@ def listen(lines: Iterable[Line], tz: str, first: str, last: str) -> dict[str, A
         year["by_service"][str(payload.get("service") or line.get("source"))] += 1
         if payload.get("media") == "episode":
             _tally(year["episodes"], seconds, id_)
+            podcasts = year["podcasts"]
+            show = " ".join(str(payload.get("show") or "").split()) or NO_SHOW
+            for bucket in (
+                podcasts,
+                podcasts["by_show"].setdefault(
+                    show, {"show": show, "listens": 0, "played_s": 0.0, "lines": []}
+                ),
+                podcasts["months"][day[:7]],
+            ):
+                _tally(bucket, seconds, id_)
         elif artist := " ".join(str(payload.get("artist") or "").split()):
             _tally(
                 year["artists"].setdefault(
@@ -109,6 +125,7 @@ def _year(year: str) -> dict[str, Any]:
         "lines": [],
         "by_service": Counter(),
         "episodes": {"listens": 0, "played_s": 0.0, "lines": []},
+        "podcasts": {"listens": 0, "played_s": 0.0, "lines": [], "by_show": {}, "months": {}},
         "artists": {},
         "months": {},
     }
@@ -137,10 +154,22 @@ def _finish_year(year: dict[str, Any]) -> dict[str, Any]:
     months = [_finish(m) for m in year.pop("months").values()]
     by_service = dict(sorted(year.pop("by_service").items(), key=lambda kv: (-kv[1], kv[0])))
     year["episodes"] = _finish(year["episodes"])
+    year["podcasts"] = _finish_podcasts(year["podcasts"])
     out = _finish(year)
     out["by_service"] = by_service
     out["top_artists"] = [_finish(a) for a in artists[:TOP_ARTISTS]]
     out["months"] = months
+    return out
+
+
+def _finish_podcasts(podcasts: dict[str, Any]) -> dict[str, Any]:
+    """The shows by hours then listens then name, the months in order, the totals first."""
+    shows = sorted(podcasts.pop("by_show").values(), key=lambda s: (-s["played_s"], -s["listens"], s["show"]))
+    months = [_finish(m) for m in podcasts.pop("months").values()]
+    out = _finish(podcasts)
+    out["by_show"] = [_finish(s) for s in shows]
+    out["months"] = months
+    out["lines"] = out.pop("lines")  # the keys in a fixed order: totals, by_show, months, lines
     return out
 
 
@@ -200,6 +229,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             for a in year["top_artists"]:
                 hours = f"{a['hours']:.1f} h"
                 yield f"          {a['artist']:<{width}} {hours} · {_plural(a['listens'], 'listen')}"
+        yield from _podcast_rows(year["podcasts"])
         yield "        by month"
         for m in year["months"]:
             if not m["listens"]:
@@ -209,6 +239,24 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             if m["skipped"]:
                 parts.append(f"{m['skipped']} skipped")
             yield f"          {m['month']}  {' · '.join(parts)}"
+
+
+def _podcast_rows(podcasts: dict[str, Any]) -> Iterator[str]:
+    """The podcasts section of a year: its hours by show, then by month; nothing when the year has
+    no episode."""
+    if not podcasts["listens"]:
+        return
+    yield f"        podcasts  {_plural(podcasts['listens'], 'episode')} · {podcasts['hours']:.1f} h"
+    yield "          by show"
+    width = max(28, *(len(s["show"]) for s in podcasts["by_show"]))
+    for s in podcasts["by_show"]:
+        yield f"            {s['show']:<{width}} {s['hours']:.1f} h · {_plural(s['listens'], 'episode')}"
+    yield "          by month"
+    for m in podcasts["months"]:
+        if not m["listens"]:
+            yield f"            {m['month']}  {EM_DASH}"
+            continue
+        yield f"            {m['month']}  {m['hours']:.1f} h · {_plural(m['listens'], 'episode')}"
 
 
 def _plural(n: int, noun: str) -> str:
