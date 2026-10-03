@@ -218,6 +218,7 @@ logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Tra
 logbook sync granola                              # every Granola recording, and its summary as a derived note
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
+logbook add story ~/Stories/lake.md --teller ola@example.org --listener kari.nordmann@example.org --refers-to 1961   # a told story (RFC 0028): on the day it was told, about the time it names
 logbook infer flights                             # calendar entries + your location points leaving one airport for another: evidence inferred
 logbook transcribe voice-memos                    # a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine
 logbook add screentime --mac                      # this Mac's Screen Time sessions (knowledgeC.db, behind Full Disk Access): app, span, device; never a title or URL
@@ -545,6 +546,11 @@ then what the calendar planned where the track has nothing, the night's sleep, t
 and which sources spoke and when they last did. A run of stays and moves aboard a boat or an aircraft is one stay
 `aboard <asset>` with the anchorages inside it; a silence of the tracker is a `gap` row that places nothing. `--json`
 gives the Day as one object, every row with the ids of its lines. Nothing is written.
+
+A **story** someone told — "in 1961 we moved to the house by the lake" — is a line on the day it was told, never on the
+day it is about (`add story <file> --teller <ref> --listener <ref> --refers-to 1961`, RFC 0028, a draft). `show` prints
+it on its told day as `📖 refers to 1961 — told by Ola Nordmann to Kari Nordmann`; `day 1961-05-04` lists it under
+*Stories about this day*, apart from the timeline, because a told year is a claim and the timeline is what was observed.
 
 ## In a browser
 
