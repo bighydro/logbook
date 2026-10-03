@@ -1,4 +1,8 @@
-"""Every test runs against a temporary record; `slow` tests run only with LOGBOOK_SLOW=1 (never in CI)."""
+"""Every test runs against a temporary record. Two tiers of test are opt-in, by marker and variable:
+`slow` (over about five seconds) runs with LOGBOOK_SLOW=1, which CI sets on push to main and nightly and
+never on a pull request; `stress` (generated millions of lines, timing and memory assertions) runs with
+LOGBOOK_STRESS=1 and never in CI. The suite runs in parallel (`pytest -n auto`, as CI does): a test owns
+nothing but its tmp_path, and a module-scoped fixture is built once per worker (`--dist loadfile`)."""
 
 from __future__ import annotations
 
@@ -21,10 +25,15 @@ def _logbook_home_is_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD", raising=False)
 
 
+# marker -> the variable that, set to 1, runs the tests it marks (pyproject.toml lists both markers)
+OPT_IN = {"slow": "LOGBOOK_SLOW", "stress": "LOGBOOK_STRESS"}
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if os.environ.get("LOGBOOK_SLOW") == "1":
-        return
-    skip = pytest.mark.skip(reason="slow; set LOGBOOK_SLOW=1 to run")
-    for item in items:
-        if "slow" in item.keywords:
-            item.add_marker(skip)
+    for marker, variable in OPT_IN.items():
+        if os.environ.get(variable) == "1":
+            continue
+        skip = pytest.mark.skip(reason=f"{marker}; set {variable}=1 to run")
+        for item in items:
+            if marker in item.keywords:
+                item.add_marker(skip)

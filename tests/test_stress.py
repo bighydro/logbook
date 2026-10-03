@@ -1,4 +1,6 @@
-"""Generated stress tests: 200,000 synthetic points. `slow` — run with LOGBOOK_SLOW=1."""
+"""Generated stress tests: 200,000 synthetic points up to three million lines. `stress` (timing and
+memory assertions; run with LOGBOOK_STRESS=1, never in CI), except the one plain correctness test on a
+large export, which is `slow` (LOGBOOK_SLOW=1; CI runs it on push to main and nightly)."""
 
 from __future__ import annotations
 
@@ -67,7 +69,7 @@ def _write_export(path: Path, n: int) -> None:
         fh.write("]}\n")
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 def test_append_many_throughput_is_at_least_20k_lines_per_second(tmp_path):
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     drafts = list(_drafts(POINTS))  # generation is not what is being measured
@@ -97,7 +99,7 @@ def test_dawarich_streams_a_large_export_into_a_valid_logbook(tmp_path):
     assert errors == [] and seq == POINTS
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 def test_show_on_200k_lines_takes_under_a_second_after_indexing(tmp_path, monkeypatch, capsys):
     from logbook import cli
 
@@ -178,7 +180,7 @@ def big_record(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
     return lb
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 def test_verify_peak_memory_is_flat_as_the_record_grows(big_record: Logbook, tmp_path: Path):
     small = Logbook.init(tmp_path / "small", "Europe/Oslo")
     assert small.append_many(_synthetic_drafts(SMALL)) == SMALL
@@ -190,7 +192,7 @@ def test_verify_peak_memory_is_flat_as_the_record_grows(big_record: Logbook, tmp
     assert rss_big - rss_small < FLAT_MB
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 def test_dedupe_of_a_batch_against_three_million_lines_stays_in_the_index(big_record: Logbook):
     appended, seconds, rss = _measure("dedupe", big_record.root)
     print(f"\ndedupe: 100,000 drafts already in the log, {seconds}s, peak {rss} MB")
@@ -339,7 +341,7 @@ def _jsonl_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     return opened
 
 
-@pytest.mark.slow
+@pytest.mark.stress
 def test_places_propose_over_two_years_reads_the_index_and_not_the_files(tmp_path, monkeypatch, capsys):
     """`places propose` on half a million lines over two years: the owner's points, the boat's, the
     evidence and the retractions come from the index's own columns and the clustering runs from

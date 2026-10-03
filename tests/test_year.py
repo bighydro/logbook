@@ -57,6 +57,7 @@ def found(record: Logbook) -> dict[str, Any]:
 # -- the year is the rollups, the trips and twelve picks ---------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_year_composes_the_readers_and_writes_nothing(lb: Logbook, found: dict[str, Any]) -> None:
     """Every section says what the reader it names says for 2026, from one reading of the window."""
     head = lb.meta["head"]
@@ -129,6 +130,7 @@ def test_the_year_composes_the_readers_and_writes_nothing(lb: Logbook, found: di
     assert lb.meta["head"] == head, "the year writes nothing"
 
 
+@pytest.mark.slow
 def test_twelve_picks_one_day_each_rendered_with_the_day_reader(
     lb: Logbook, found: dict[str, Any], capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -259,6 +261,7 @@ def test_the_persona_fortnight_picks_the_saturday_aboard(
 # -- the page ----------------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_html_is_one_self_contained_page(found: dict[str, Any]) -> None:
     page = year.html(found)
     assert page.startswith("<!doctype html>")
