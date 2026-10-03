@@ -26,10 +26,12 @@ class Logbook < Formula
 
   test do
     assert_match version.to_s, shell_output("#{bin}/logbook --version")
-    # A record of a person who does not exist, written and read back: nothing of the tester's.
-    demo = testpath/"Demo"
-    system bin/"logbook", "demo", "--out", demo, "--days", "3"
-    ENV["LOGBOOK_HOME"] = demo.to_s
-    assert_match "valid", shell_output("#{bin}/logbook verify")
+    # A record of one invented sentence, written and read back; nothing of the tester's. Only
+    # commands every release has had (init, add, verify), so the block outlives the pinned version.
+    record = testpath/"Logbook"
+    system bin/"logbook", "init", record, "--timezone", "Europe/Oslo"
+    ENV["LOGBOOK_HOME"] = record.to_s
+    system bin/"logbook", "add", "had lunch with a friend by the lake"
+    assert_match "valid", shell_output("#{bin}/logbook verify --root #{record}")
   end
 end

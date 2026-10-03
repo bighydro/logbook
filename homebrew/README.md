@@ -85,9 +85,11 @@ done (step 6 of `docs/releasing.md`).
 - `resource "ijson"`: the one runtime dependency (`tzdata` is Windows-only and not installed on a
   Mac). `virtualenv_install_with_resources` makes a virtualenv under the Cellar, installs each
   resource into it from source, then the package itself, and links `bin/logbook`.
-- `test do`: `logbook --version` prints the formula's version; `logbook demo` writes a three-day
-  record of the Oslo persona into the test folder and `logbook verify` on it prints `valid`. Nothing
-  of the tester's is read.
+- `test do`: `logbook --version` prints the formula's version; `logbook init` makes a record in the
+  test folder, `logbook add` appends one invented sentence and `logbook verify` on it prints `valid`.
+  Only commands every release has had, so the block does not change with the pinned version (the
+  release on PyPI can lag `main` by a command: `logbook demo` is not in 0.5.0). Nothing of the
+  tester's is read.
 
 The formula installs the base package only. An optional extra (`openlogbook[encrypted]`,
 `openlogbook[share]`, `openlogbook[mcp]`, `[ais]`, `[transcribe]`, `[judge]`, `[describe]`) is a
