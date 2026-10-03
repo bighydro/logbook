@@ -113,6 +113,9 @@ def assemble(changelog: Path, fragments: Path, version: str, date: str, *, dry_r
 
 
 def main(argv: list[str]) -> int:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; the section has an em dash
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("version", help="the version being released, X.Y.Z")
     ap.add_argument("--date", default=dt.date.today().isoformat(), help="YYYY-MM-DD; default today")
