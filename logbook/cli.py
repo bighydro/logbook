@@ -69,6 +69,7 @@ from . import (
     story,
     taskdone,
     transcribe,
+    trip_bundle,
     trip_page,
     trips,
     vault,
@@ -2920,6 +2921,8 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
+    elif line["kind"] == trip_bundle.RECEIVED:
+        text = trip_bundle.text(line, lambda inner: _line_text(inner, tz, names))
     elif line["kind"] == screentime.KIND and p.get("schema") == screentime.SCHEMA:
         text = _app_use_text(p)
     else:
@@ -4388,6 +4391,9 @@ def cmd_export(a: argparse.Namespace) -> None:
     if a.path == vault.DESTINATION:
         _export_vault(lb, a)
         return
+    if a.path == trip_bundle.COMMAND:
+        _export_trip_bundle(lb, a)
+        return
     if a.day or a.days:
         _export_days(lb, a)
         return
@@ -4506,13 +4512,13 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
     line (RFC 0011). Only the files whose content changed are rewritten."""
     generated_at = now_utc()
     try:
-        if not a.folder:
+        if not a.target:
             raise vault.VaultError("export vault needs a folder: logbook export vault <folder>")
         req = vault.request(lb, a.since, a.until, vault.parse_tiers("1" if a.tier is None else a.tier))
     except vault.VaultError as e:
         print(f"export vault: {e}", file=sys.stderr)
         sys.exit(2)
-    folder = Path(a.folder).expanduser()
+    folder = Path(a.target).expanduser()
     if req is None:
         print("vault: the record has no day; nothing written, nothing appended")
         return
@@ -4532,6 +4538,103 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
         print(f"  held back: {_plural(built.held_back, 'line')} above tier {max(req.tiers)} ({by_kind})")
     seq, sha = result.line["seq"], result.sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, vault sha256 {sha}…")
+
+
+def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
+    """trip-bundle <trip-id-or-day> --to DEST [--tier 1|1,2|1,2,3] [--attachments] [--out DIR]
+    [--dry-run]: one crossing package cut to the trip (RFC 0025, profile trip-bundle/v1) under the
+    destination's ceiling in policy/crossing.json, recorded as a crossing/v1 line naming the trip."""
+    generated_at = now_utc()
+    try:
+        if not a.target or not a.to:
+            raise crossing.CrossingError(
+                "export trip-bundle needs the trip (an id or a day) and --to <member>"
+            )
+        prepared = trip_bundle.prepare(
+            lb,
+            a.target,
+            a.to,
+            crossing.parse_tiers("1" if a.tier is None else a.tier),
+            _airports(a.airports),
+            attachments=bool(a.attachments),
+        )
+    except (crossing.CrossingError, ValueError, stays.SettingsError) as e:
+        print(f"export trip-bundle: {e}", file=sys.stderr)
+        sys.exit(2)
+    req, sel, trip = prepared.request, prepared.selection, prepared.trip
+    out = Path(a.out).expanduser() if a.out else trip_bundle.default_out(lb, req.destination, generated_at)
+    tiers = ",".join(map(str, req.tiers))
+    span = f"{trip.start} {EN_DASH} {trip.end}"
+    if a.dry_run:
+        print(f"dry run: {req.destination}, {trip.id} {span}, tiers {tiers}; nothing written")
+        for text in _trip_bundle_rows(prepared):
+            print(text)
+        return
+    try:
+        result = trip_bundle.export(lb, prepared, out, generated_at)
+    except (crossing.CrossingError, OSError) as e:
+        print(f"export trip-bundle: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"{req.destination}: {trip.id} {span}, tiers {tiers} {ARROW} {out}")
+    for text in _trip_bundle_rows(prepared):
+        print(text)
+    if req.tier3:
+        _tier3_warning(req, sel)
+    seq, digest = result.line["seq"], result.package_sha256[:12]
+    print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…")
+
+
+def _trip_bundle_rows(prepared: trip_bundle.Prepared) -> Iterator[str]:
+    sel, share = prepared.selection, prepared.share
+    c = sel.counts()
+    yield (
+        f"  {c['logged']} photo and flight lines on the trip's days, {c['crossed']} lines cross,"
+        f" {c['held_back']} held back"
+    )
+    yield (
+        f"  stays: {len(share['stays'])}   moves: {len(share['moves'])}   flights: {len(share['flights'])}"
+        f"   photos: {share['photos']['count']}"
+    )
+    held = share["held_back"]["people"]
+    people = f"  people: {len(share['people'])}"
+    if held:
+        people += f" ({held} held back: names are tier 2, cross with --tier 1,2)"
+    yield people
+    yield f"  resolutions: {c['resolutions']} cross, {c['resolutions_held_back']} held back by tier"
+    m = c["attachments"]
+    if prepared.attachments:
+        files = _plural(m["included"], "file")
+        yield f"  attachments: {files}, {m['bytes']:,} bytes; {m['missing']} missing from the store"
+    else:
+        yield "  attachments: hashes only (--attachments copies the photos' files)"
+
+
+def cmd_import(a: argparse.Namespace) -> None:
+    """`import trip-bundle <folder> [--dry-run]`: a bundle another record exported (RFC 0025), its
+    lines appended as received — never over this record's own, never twice."""
+    lb = Logbook.find()
+    received_at = now_utc()
+    try:
+        report = trip_bundle.import_bundle(lb, Path(a.path).expanduser(), received_at, dry_run=a.dry_run)
+    except trip_bundle.BundleError as e:
+        print(f"import trip-bundle: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"import trip-bundle: {e}", file=sys.stderr)
+        sys.exit(1)
+    trip = report.trip
+    head = f"{report.sender['name']}: {trip.get('id')} {trip.get('start')} {EN_DASH} {trip.get('end')}"
+    print(f"{'dry run: ' if a.dry_run else ''}{head}{trip_bundle.DOT}bundle {report.bundle_id[:8]}…")
+    page = "page received" if report.page else "page received before"
+    print(f"  {_plural(report.received, 'line')} received, {report.resolutions} resolutions, {page}")
+    print(f"  skipped: {report.kept_own} kept as yours, {report.received_before} received before")
+    if report.attachments or report.attachments_missing:
+        missing = (
+            f"; {report.attachments_missing} missing or not matching" if report.attachments_missing else ""
+        )
+        print(f"  {_plural(report.attachments, 'attachment')} in the store{missing}")
+    if a.dry_run:
+        print("  nothing written")
 
 
 def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
@@ -5397,14 +5500,22 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser(
         "export",
         help="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a crossing-package/v1,"
-        " or `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq",
+        " or `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, or `trip-bundle TRIP`:"
+        " one trip for a member of the circle",
     )
     s.add_argument(
         "path",
         nargs="?",
-        help=".jsonl file for the whole log, `crossing` (RFC 0005) or `vault` (docs/vault.md)",
+        help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md)"
+        " or `trip-bundle` (RFC 0025)",
     )
-    s.add_argument("folder", nargs="?", help="vault: the folder to write the pages into (an Obsidian vault)")
+    s.add_argument(
+        "target",
+        nargs="?",
+        metavar="FOLDER|TRIP",
+        help="vault: the folder to write the pages into (an Obsidian vault);"
+        " trip-bundle: the trip id as `trips` prints it, or a day inside it",
+    )
     s.add_argument("--day", metavar="YYYY-MM-DD", help="one day-package/v1 directory")
     s.add_argument("--days", nargs=2, metavar=("FROM", "TO"), help="one directory per day, inclusive")
     s.add_argument("--out", metavar="DIR", help="where to write (default <root>/export/<date>/)")
@@ -5426,9 +5537,28 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
-        "--dry-run", action="store_true", help="crossing: count and show the policy; write nothing"
+        "--dry-run",
+        action="store_true",
+        help="crossing, trip-bundle: count and show the policy; write nothing",
+    )
+    s.add_argument(
+        "--attachments",
+        action="store_true",
+        help="trip-bundle: copy the photos' files into the bundle (default: their hashes only)",
+    )
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"trip-bundle: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser(
+        "import", help="a trip bundle another record exported (RFC 0025): its lines appended as received"
+    )
+    s.add_argument("what", choices=[trip_bundle.COMMAND], help="what the folder holds")
+    s.add_argument("path", metavar="FOLDER", help="the bundle: manifest.json, entries.jsonl, trip.json, …")
+    s.add_argument("--dry-run", action="store_true", help="count what would be received; write nothing")
+    s.set_defaults(fn=cmd_import)
     s = sub.add_parser(
         "sources",
         help="every adapter, file and live, and whether policy/import.json has disabled it;"

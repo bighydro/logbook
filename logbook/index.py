@@ -771,6 +771,22 @@ class Index:
         lines = self._read(list(places.values()))
         return dict(zip(places, lines, strict=True))
 
+    def holders(self, raw_ids: Iterable[str]) -> dict[str, set[str]]:
+        """raw_id → the sources of the lines that carry it, for these raw_ids, whatever their
+        source: what `import trip-bundle` asks before it writes a received line, so a line the
+        record already holds as its own (the same calendar invite, the same shared photo) or
+        received before is skipped, never written twice (SPEC §3: nothing is rewritten)."""
+        wanted = sorted(set(raw_ids))
+        found: dict[str, set[str]] = {}
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            rows = self.db.execute(
+                f"SELECT raw_id, source FROM lines WHERE raw_id IN ({', '.join('?' * len(chunk))})", chunk
+            ).fetchall()
+            for raw_id, source in rows:
+                found.setdefault(str(raw_id), set()).add(str(source))
+        return found
+
     def _read(self, where: list[tuple[str, int]]) -> list[Line]:
         """The lines at these (file, offset) places, in the order given. Each file opened once."""
         from .store import read_line_at

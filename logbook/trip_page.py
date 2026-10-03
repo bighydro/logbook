@@ -34,7 +34,7 @@ from typing import Any, NamedTuple
 
 from . import day as day_reader
 from . import days as days_reader
-from . import health, keepers, present, reading, rollup, stays, trips
+from . import health, keepers, present, reading, rollup, stays, trip_bundle, trips
 from . import places as named_places
 from .chain import Line
 from .export import day_range, parse_day
@@ -153,6 +153,7 @@ def read(lb: Logbook, text: str, airports: Airports | None = None) -> dict[str, 
         days.append(days_reader.summarise(page, usual, located))
     route = _route(trip, rd)
     visited = trips.visited_stays(rd, trip.start, trip.until)
+    confirmed = trips.companions(visited, rd)
     return {
         "id": trip.id,
         "start": trip.start,
@@ -176,9 +177,10 @@ def read(lb: Logbook, text: str, airports: Airports | None = None) -> dict[str, 
         "flights_out": trip.flights_out,
         "flights": list(trip.flights),
         "people": {
-            "confirmed": [_person(c) for c in trips.companions(visited, rd)],
+            "confirmed": [_person(c) for c in confirmed],
             "proposed": [_person(c) for c in trips.companions(visited, rd, present.PROPOSED)],
         },
+        "shared": trip_bundle.shares(lb, rd, trip, route, confirmed),
         "keepers": _keepers(rd, span),
         "health": rollup.health_summary(health_rows),
         "spend": _spend(rd, trip.start, trip.until),
@@ -382,6 +384,8 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
     yield _row("with", people_text(data["people"]))
     if data["nights_aboard"]:
         yield _row("aboard", aboard_text(data["nights_aboard"]))
+    for share in data.get("shared") or []:
+        yield from trip_bundle.rows(share)
     yield "  days"
     for r in data["days"]:
         yield f"    {days_reader.row(r)}"
@@ -528,6 +532,8 @@ def html(data: Mapping[str, Any]) -> str:
     out += section("people", "People", _people_html(data["people"]))
     if data["nights_aboard"]:
         out += section("aboard", "Nights aboard", [f"<p>{escape(aboard_text(data['nights_aboard']))}</p>"])
+    if data.get("shared"):
+        out += section("shared", "Shared", _shared_html(data["shared"]))
     out += section("days", "Days", _days_html(data["days"]))
     out += section("keepers", "Keepers", _keepers_html(data["keepers"]))
     out += section("health", "Health", _health_html(data["health"]))
@@ -658,6 +664,45 @@ def _people_html(people: Mapping[str, Any]) -> list[str]:
             sources = escape(", ".join(p["sources"]))
             out.append(f'<li>{escape(p["name"])} <span class="muted">({sources})</span></li>')
         out.append("</ul>")
+    return out
+
+
+def _shared_html(shared: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Per sender: who was there according to each record and the places the records agree on,
+    each with a `seen only by` column (RFC 0025)."""
+    out = []
+    for share in shared:
+        their = share["trip"]
+        out.append(f"<h3>with {escape(share['from']['name'])}</h3>")
+        head = DOT.join(
+            [
+                f"their {their.get('id')}",
+                _plural(int(their.get("nights") or 0), "night"),
+                f"received {str(share.get('received_at') or '')[:10]}".rstrip(),
+                _plural(int(share["photos"]), "photo"),
+            ]
+        )
+        out.append(f'<p class="muted">{escape(head)}</p>')
+        people: list[list[Cell]] = [
+            [
+                (p["name"], ""),
+                (p["yours"] or EN_DASH, ""),
+                (p["theirs"] or EN_DASH, ""),
+                (p["seen_only_by"] or "", ""),
+            ]
+            for p in share["people"]
+        ]
+        out += table([("who", ""), ("yours", ""), ("theirs", ""), ("seen only by", "")], people)
+        if share["places"]:
+            places: list[list[Cell]] = [
+                [
+                    (trip_bundle._place_text(p["label"], p["nights"]), ""),
+                    (trip_bundle._place_text(p["theirs"], p["their_nights"]), ""),
+                    (p["seen_only_by"] or "", ""),
+                ]
+                for p in share["places"]
+            ]
+            out += table([("where", ""), ("theirs", ""), ("seen only by", "")], places)
     return out
 
 
