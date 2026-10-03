@@ -18,6 +18,8 @@ sharing `SOURCE` for the lines it writes:
     activity.py   My Activity/ — searches, visited results and apps opened → browse/v1; YouTube → watch/v1
                   through youtube.py's own mapping (off by default)
     contacts.py   Contacts/ — the vCards → resolution/v1, merged with the people the record resolves
+    maps.py       Maps (your places)/ — Reviews.json → highlight/v1; Saved Places.json never lines, but
+                  candidates for `places propose --takeout` (with places.py, the `Saved/` CSV lists)
     times.py      the three clocks Takeout writes, read to one UTC instant (shared)
 
 Every sub-adapter answers to `takeout-<name>` as well as `google-takeout-<name>` (`adapters.TAKEOUT`,
@@ -49,4 +51,5 @@ SUB_ADAPTERS = (
     "access_log",
     "activity",
     "contacts",
+    "maps",
 )

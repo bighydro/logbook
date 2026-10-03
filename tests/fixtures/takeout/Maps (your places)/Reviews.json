@@ -1,0 +1,49 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "geometry": {"coordinates": [10.7389, 59.9075], "type": "Point"},
+      "properties": {
+        "date": "2026-02-12T16:20:00Z",
+        "five_star_rating_published": 4,
+        "review_text_published": "Good coffee and a view of the harbour.\nThe chart table is tiny.",
+        "location": {
+          "address": "Storgata 1, 0155 Oslo, Norway",
+          "country_code": "NO",
+          "name": "Havnekontoret"
+        },
+        "google_maps_url": "http://maps.google.com/?cid=1234567890123456789"
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {"coordinates": [10.6792, 59.9052], "type": "Point"},
+      "properties": {
+        "Google Maps URL": "http://maps.google.com/?cid=9876543210987654321",
+        "Location": {
+          "Address": "Bygdøy, 0287 Oslo, Norway",
+          "Business Name": "Bygdøy sjøbad",
+          "Country Code": "NO",
+          "Geo Coordinates": {"Latitude": "59.9052", "Longitude": "10.6792"}
+        },
+        "Published": "2026-06-14T18:05:00Z",
+        "Star Rating": 5
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {"coordinates": [8.5417, 47.3769], "type": "Point"},
+      "properties": {
+        "five_star_rating_published": 3,
+        "review_text_published": "No date on this one.",
+        "location": {"name": "Zürich Hauptbahnhof", "country_code": "CH"}
+      },
+      "type": "Feature"
+    },
+    {
+      "geometry": {"coordinates": [0, 0], "type": "Point"},
+      "properties": {"date": "2026-01-01T00:00:00Z", "five_star_rating_published": 1},
+      "type": "Feature"
+    }
+  ]
+}

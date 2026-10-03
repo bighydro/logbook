@@ -87,6 +87,7 @@ BUILT_IN = (
     "takeout.access_log",
     "takeout.activity",
     "takeout.contacts",
+    "takeout.maps",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
@@ -206,6 +207,7 @@ TAKEOUT = (
     "access-log",
     "activity",
     "contacts",
+    "maps",
 )
 ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as `import-backup --only`
     "flights": "flighty",
