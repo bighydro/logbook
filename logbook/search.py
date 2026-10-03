@@ -58,6 +58,7 @@ KINDS = (
     "watch",
     "listen",
     "trip",
+    "story",
 )
 # Payload keys whose string is an id, a digest, a stamp, a type or a path, never words a person
 # searches for: left out of the body so a snippet never shows one and a digest never matches.
