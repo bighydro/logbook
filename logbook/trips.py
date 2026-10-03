@@ -14,7 +14,9 @@ named places visited and the people confirmed present (the with module: never th
 day, and the flights in (dated the first day) and out (dated the return day, the day after the last
 night). A night aboard an asset is a route element `aboard <asset>` (the asset's name, as the
 Day has it), and the trip counts its nights aboard per asset; an asset trip is one whose every
-night was aboard one asset.
+night was aboard one asset. When the record has `weather/v1` lines (RFC 0026) for the trip's days,
+first to return day, the trip carries their summary (`weather.span`): the coldest and warmest day,
+the rain, the wind, how many of its days have a line.
 
 A trip is never a line: it is a reader's output, recomputed from the record every time, until the
 captain names it, and then the name is a note (ADR 0019). It is not RFC 0020's `trip/v1`, which
@@ -32,7 +34,7 @@ from typing import Any
 
 from . import flights as flight_lines
 from . import places as named_places
-from . import present, stays
+from . import present, stays, weather
 from .assets import Asset
 from .flights import Airport, Airports
 from .reading import Reading, window_json
@@ -62,6 +64,7 @@ class Trip:
     lines: list[str] = field(default_factory=list)
     nights_aboard: dict[str, int] = field(default_factory=dict)  # nights aboard, per asset id
     names: dict[str, str] = field(default_factory=dict)  # asset id → its name, for the assets aboard
+    weather: dict[str, Any] | None = None  # `weather.span` over the trip's days, first to return day
 
     @property
     def id(self) -> str:
@@ -95,6 +98,7 @@ class Trip:
             "flights_out": self.flights_out,
             "flights": self.flights,
             "lines": list(self.lines),
+            "weather": None if self.weather is None else dict(self.weather),
         }
 
 
@@ -139,6 +143,11 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
     lines = [id_ for n in nights for id_ in _stay_lines(n.stay)]
     lines += [id_ for f in flights for id_ in f["lines"]]
     lines += [id_ for c in people for id_ in c.lines]
+    days = [
+        (date.fromisoformat(start) + timedelta(days=i)).isoformat()
+        for i in range((date.fromisoformat(until) - date.fromisoformat(start)).days + 1)
+    ]
+    forecast = weather.span(weather.by_day(reading.of_kind(weather.KIND)), days)
     return Trip(
         start,
         end,
@@ -153,6 +162,7 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
         list(dict.fromkeys(lines)),
         dict(sorted(nights_aboard.items())),
         {a: asset_name(a, reading.assets) for a in sorted(nights_aboard)},
+        forecast,
     )
 
 
@@ -373,6 +383,8 @@ def trip_rows(trip: Trip) -> Iterator[str]:
         parts.append("places " + ", ".join(trip.places))
     if trip.people:
         parts.append("with " + ", ".join(c.name for c in trip.people))
+    if trip.weather:
+        parts.append("weather " + weather.span_text(trip.weather))
     parts.append(trip.id)  # last, so `logbook trip <id>` can be run on the row
     yield f"  {trip.start} {EN_DASH} {trip.end}  {' · '.join(parts)}"
 

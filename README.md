@@ -233,11 +233,13 @@ Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printe
 written, nothing is written outside that directory, and `--uninstall-schedule` removes it again. The
 agent runs the Python that installed it and points at the record found at install time; the keys your
 sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
-and the command never does.
+and the command never does. `sync weather` is the one source that asks a third party about your days:
+it is left out of `--all` unless that file (or the environment) says `LOGBOOK_WEATHER=1`.
 
 ```bash
 logbook sync --all                                # every configured source, one after the other
 logbook sync --all --dry-run                      # count per source, write nothing
+logbook sync weather --since 2026-06-01           # the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)
 logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
 logbook sync --uninstall-schedule
 ```

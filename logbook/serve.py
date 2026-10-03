@@ -37,7 +37,7 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
-from . import asset_status, assets, gaps, places, reading, stays, trips
+from . import asset_status, assets, gaps, places, reading, stays, trips, weather
 from . import day as day_reader
 from . import days as days_reader
 from .export import parse_day
@@ -280,6 +280,8 @@ class Site:
                 )
             parts.append("</ul>\n")
         parts.append(f"<h2>Health</h2>\n<p>{escape(day_reader.health_text(data['health']))}</p>\n")
+        if data.get("weather"):
+            parts.append(f"<h2>Weather</h2>\n<p>{escape(weather.text(data['weather'], data['tz']))}</p>\n")
         parts.append("<h2>Sources</h2>\n")
         if data["sources"]:
             rows: list[list[Cell]] = [

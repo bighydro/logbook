@@ -302,7 +302,7 @@ Each payload profile (§5) names the tier its producers write by default. The ta
 
 | Default tier | Profiles (RFC) |
 |---|---|
-| 1 | `location/v1` (0001), `photo/v1` (0002), `event/v1` (0009; a source MAY set 2 on entries with attendees), `crossing/v1` (0011, MUST), `call/v1` (0012), `flight/v1` (0013), `trip/v1` (0020; 3 when it carries a `price`), `keeper/v1` (0024), `migration/v1` (§3.1) |
+| 1 | `location/v1` (0001), `photo/v1` (0002), `event/v1` (0009; a source MAY set 2 on entries with attendees), `crossing/v1` (0011, MUST), `call/v1` (0012), `flight/v1` (0013), `trip/v1` (0020; 3 when it carries a `price`), `keeper/v1` (0024), `weather/v1` (0026), `migration/v1` (§3.1) |
 | 2 | `retraction/v1` (0003), `transcript/v1` (0004), `resolution/v1` (0006; the highest tier of its evidence, 2 in practice), `commitment/v1` and `commitment-close/v1` (0007; the highest tier of their evidence, 2 when written by hand), `message/v1` (0008, MUST), `note/v1` (0010, MUST), `mail/v1` (0015), `task/v1` (0016, MUST), `browse/v1` (0017, MUST), `watch/v1` (0018, MUST), `listen/v1` (0019, MUST), `highlight/v1` (0022), `voice-memo/v1` (0023) |
 | 3 | `health-sample/v1` (0014), `transaction/v1` (0021, MUST; an import option MUST NOT lower it) |
 

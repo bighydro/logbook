@@ -67,7 +67,12 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    per device the union of their spans, the longest device), the day's steps (the larger device per
    quarter hour, summed), the resting heart rate (the day's mean), from the `health-sample/v1`
    lines standing. A correction that `supersedes` a line wins over it.
-5. **Sources** — every source with a line on the day, how many, and its newest line's time, so a
+5. **Weather** — when the day has `weather/v1` lines (RFC 0026, `logbook sync weather`,
+   `adapters/weather.md`), one row: the lowest and highest temperature, the precipitation, the
+   strongest wind, the weather in a word, sunrise and sunset, for the place of the night when the day
+   has one, else the first, and `· 2 places` when the day was spent in more than one. A day without
+   them has no row.
+6. **Sources** — every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent in the afternoon is seen to have.
 
 ## A synthetic example

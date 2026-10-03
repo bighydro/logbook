@@ -127,6 +127,7 @@ BUILT_IN = (
     "spotify",
     "apple_music",
     "screentime",
+    "weather",
 )
 
 
