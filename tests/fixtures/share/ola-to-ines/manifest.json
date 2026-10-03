@@ -1,0 +1,18 @@
+{
+  "attachments": [],
+  "bundle_id": "019cadd3-6bc0-7dcd-9133-00000000a002",
+  "created": "2026-06-14T18:00:00Z",
+  "date": "2026-06-13",
+  "from": "8dcbff29-a6c0-5eaf-b320-19e23443ba8a",
+  "held_back": 2,
+  "key": "5df798a38513062672180f48ca6532401cbc9e7041c7c353244b9ff9be0c47b8",
+  "lines": 2,
+  "lines_sha256": "07782bb6fbf8290293c4b98e84f124433bef1fbc083c00267421c78747a51ed5",
+  "logbook_head": "6381a2e9a71bcfb82c129288bafb85406dde4d66ed534b5b4b1bf55539ac30a8",
+  "max_tier": 1,
+  "package_sha256": "edcde4333e35dddaf2dc6c9ebfb10546e7d12c7b565b5e5c5fde8429cd4d71c0",
+  "schema": "shared-page/v1",
+  "signature": "b7b6b4420c476a4bc23940637b50e24583114cdd1d738474ced5c3ca8dbed0af493545ded915c2fdf4fd277c2597bf15a532d6f90003a7551be3f134c033c201",
+  "to": "ines",
+  "tz": "Europe/Oslo"
+}

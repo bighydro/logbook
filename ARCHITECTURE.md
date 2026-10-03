@@ -22,9 +22,9 @@ The dependency arrow points down only. An adapter never knows an engine exists. 
 
 Days, trips, people and places are computed from the log and can be thrown away. Their IDs are derived from (owner, kind, rounded start, place) so a recompute yields the same ID and human notes stay attached. Human input — notes, confirmations, visibility choices — is written to the log as tier-2 lines, so it survives any recompute and any export.
 
-## The circle (layer 4/5, protocol to be defined)
+## The circle (layer 4/5, transport to be defined)
 
-A shared page is a signed bundle: the day's derived rows the owner chose to share, their notes marked shareable, photo references, and the owner's signature. Transport is undecided (peer-to-peer over a relay vs. a small server); the bundle format will be defined before any transport is built, so that the first two implementations can exchange pages by any means, including a USB stick.
+A shared page is a signed bundle: one day's lines the owner's policy lets cross, the attachments they point at, the day-package summary, and the owner's Ed25519 signature over the manifest — `shared-page/v1`, RFC 0025 (`docs/rfcs/rfc-0025-shared-page-bundle.md`), written by `logbook share day` and verified by `logbook receive`, which keeps the page beside the record and never in its chain. Transport is undecided (peer-to-peer over a relay vs. a small server); the bundle format came first, so that two implementations can exchange pages by any means, including a USB stick.
 
 ## Reference stack
 

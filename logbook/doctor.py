@@ -53,6 +53,7 @@ PIP = 'pip install "openlogbook[{extra}]"'
 EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ais", ("websockets",)),
     ("encrypted", ("cryptography",)),
+    ("share", ("cryptography",)),
     ("transcribe", ("mlx_whisper", "faster_whisper")),
 )
 #: a path part that begins with one of these, case-folded, names the service: `Dropbox (Personal)`,

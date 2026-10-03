@@ -1,0 +1,12 @@
+# gitleaks (the pre-commit hook) extends its default rules with this file.
+title = "logbook"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "The shared-page fixture and its RFC carry Ed25519 public keys and signatures in `key` fields (RFC 0025). They are public halves of two synthetic keys that sign nothing but the fixture; the private seeds are derived in tests/shared_day.py from fixed strings and are not secrets either. The generic-api-key rule reads the field name and the hex as a leak."
+paths = [
+  '''tests/fixtures/share/[^/]+/manifest\.json''',
+  '''docs/rfcs/rfc-0025-shared-page-bundle\.md''',
+]

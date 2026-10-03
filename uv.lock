@@ -1340,6 +1340,9 @@ judge = [
 mcp = [
     { name = "mcp" },
 ]
+share = [
+    { name = "cryptography" },
+]
 transcribe = [
     { name = "faster-whisper", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
@@ -1363,6 +1366,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", marker = "extra == 'encrypted'", specifier = ">=42" },
+    { name = "cryptography", marker = "extra == 'share'", specifier = ">=42" },
     { name = "faster-whisper", marker = "(platform_machine != 'arm64' and extra == 'transcribe') or (sys_platform != 'darwin' and extra == 'transcribe')", specifier = ">=1.0" },
     { name = "ijson", specifier = ">=3.3" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2" },
@@ -1371,7 +1375,7 @@ requires-dist = [
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "websockets", marker = "extra == 'ais'", specifier = ">=13" },
 ]
-provides-extras = ["encrypted", "ais", "transcribe", "judge", "mcp"]
+provides-extras = ["encrypted", "share", "ais", "transcribe", "judge", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [

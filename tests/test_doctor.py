@@ -91,6 +91,7 @@ def test_no_record_is_one_failure_and_the_extras(tmp_path: Path) -> None:
     assert {n for n in checks if n.startswith("extra:")} == {
         "extra:ais",
         "extra:encrypted",
+        "extra:share",
         "extra:transcribe",
     }
 

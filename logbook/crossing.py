@@ -223,8 +223,8 @@ def select(lb: Logbook, req: Request) -> Selection:
         lines = idx.read((p.file, p.offset) for p in wanted)
         last = standing([*retraction_lines, *idx.resolutions()])
     overlay, held = _overlay(lines, last, req.tiers)
-    blobs, missing = _blobs(lb, lines)
-    return Selection(lines, len(inside), overlay, held, blobs, missing)
+    found, missing = blobs(lb, lines)
+    return Selection(lines, len(inside), overlay, held, found, missing)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
@@ -252,9 +252,10 @@ def refs(obj: object) -> Iterator[Ref]:
             yield from refs(child)
 
 
-def _blobs(lb: Logbook, lines: list[Line]) -> tuple[list[dict[str, Any]], int]:
+def blobs(lb: Logbook, lines: list[Line]) -> tuple[list[dict[str, Any]], int]:
     """The SPEC §1.1 references the lines carry whose file is in the store, once per digest in
-    the manifest's shape, and how many digests the store does not hold (those stay references)."""
+    the manifest's shape, and how many digests the store does not hold (those stay references).
+    The shared page (`share`) selects its attachments with this too."""
     store = lb.root / ATTACHMENTS_DIR
     present: dict[str, dict[str, Any]] = {}
     absent: set[str] = set()

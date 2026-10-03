@@ -74,6 +74,12 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    them has no row.
 6. **Sources** — every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent in the afternoon is seen to have.
+6. **From the circle** — one `from <name>` section per page someone shared for this day and
+   `logbook receive` verified (RFC 0025, `<root>/circle/<name>/<date>/`): how many lines by kind,
+   the tier it was shared at and the day it was shared, then the titles of its events, transcripts,
+   notes, mail and calls, one per row. The page is read from the folder it was kept in, never from
+   the chain; under `--json` it is `received`, each named line with its id. A day nobody shared
+   has no such section.
 
 ## A synthetic example
 
@@ -180,7 +186,9 @@ as `derive stays --json` gives it plus `within_day` (the part on the day), `gap`
 `photos` as counts with their line ids) and `with` (`confirmed`, `proposed`, each person with their
 sources, reasons and lines); an `aboard` entry adds `asset` and `inside`; a `flight` entry carries
 the flight line's fields and `line`; a move lists the `flights` that cover it — then `flights`,
-`unplaced`, `health` (with the ids of the lines each number came from) and `sources`.
+`unplaced`, `health` (with the ids of the lines each number came from), `sources`, and `received`,
+one object per page the circle shared for the day (`from`, `owner_id`, `created`, `max_tier`,
+`lines`, `held_back`, `by_kind`, `named` with each line's id, `attachments`).
 
 ## A window of days
 

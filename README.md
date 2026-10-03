@@ -689,6 +689,29 @@ above the ceiling is refused with the file's name. Every real export appends one
 to the chain — destination, window, counts per tier, the ceiling in force, the package's digest — so the
 record itself shows every time anything left it. `--dry-run` writes nothing and appends nothing.
 
+## Handing a day to a friend
+
+A shared page (RFC 0025, `docs/rfcs/rfc-0025-shared-page-bundle.md`) is one day of your record for one person
+in your circle, as one signed zip: the day's lines verbatim, the attachments they point at, the day-package
+summary, and a manifest signed with your record's sharing key — made the first time you share, kept at
+`~/.config/logbook/share/<owner_id>.key`, its public half in `logbook.json` as `share_key`. The other side
+verifies the signature under the key they hold for you, recomputes every line's hash, and keeps the page beside
+their record, never in it.
+
+```bash
+logbook circle key                                   # your public key; give it to Ola
+logbook circle add ola 5df798a3…                     # Ola's, once; policy/circle.json
+logbook share day 2026-06-13 --to ola                # tier 1, under the ceiling policy/crossing.json gives ola
+logbook share day 2026-06-13 --to ola --tier 2 --out ~/Desktop/saturday.zip
+logbook receive ~/Downloads/saturday.zip             # Ola's side: verified, then circle/ines/2026-06-13/
+logbook day 2026-06-13                               # … and the Day ends with a `from ines` section
+```
+
+The same ceiling as a crossing applies, per destination, and a page is a crossing: every share appends one
+`crossing/v1` line, so the record shows each day that left it. A page that fails any check — the signature, a
+line's hash, a file the manifest does not name — is refused with the check named and nothing of it is kept.
+The two pages under `tests/fixtures/share/` are the fixture a second implementation reads.
+
 ## Asking an agent
 
 `logbook mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
