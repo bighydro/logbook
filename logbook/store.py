@@ -372,6 +372,7 @@ class Logbook:
         drafts: Iterable[dict[str, Any]],
         progress: Callable[[int, float], None] | None = None,
         skipped: Callable[[dict[str, Any]], None] | None = None,
+        committed: Callable[[int], None] | None = None,
     ) -> int:
         """Append drafts in order; returns how many were written.
 
@@ -389,7 +390,10 @@ class Logbook:
         a valid chain — and re-adding the same export finishes the job. On a Python-level
         interruption (Ctrl-C, an exception in an adapter) the drafts already taken are still
         written, so nothing already drafted is lost. `progress(count, elapsed_seconds)` is called
-        every PROGRESS_EVERY lines.
+        every PROGRESS_EVERY lines. `committed(taken)` is called after every checkpoint, the
+        interrupted one included, with how many drafts have been taken from `drafts` so far, the
+        deduped ones counted: everything up to that draft is on disk, so a caller that knows where
+        each draft came from can note how far the source is read (`logbook.inbox.Cursor`).
 
         Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
         and `at` is the event time. A batch is never sorted."""
@@ -399,7 +403,7 @@ class Logbook:
         tz = str(meta["timezone"])
         seq, head = meta["seq"], meta["head"]
         handles: dict[Path, BinaryIO] = {}
-        n, started = 0, time.monotonic()
+        n, taken, started = 0, 0, time.monotonic()
         it = iter(drafts)
 
         def checkpoint(lines: list[tuple[Path, Line]]) -> None:
@@ -429,6 +433,7 @@ class Logbook:
         try:
             while True:
                 batch, error = _take(it, META_EVERY)
+                taken += len(batch)
                 keys = {key for d in batch if (key := _dedupe_key(d)) is not None}
                 found = idx.existing(keys) if keys else set()
                 lines: list[tuple[Path, Line]] = []
@@ -447,6 +452,8 @@ class Logbook:
                     if progress is not None and n % PROGRESS_EVERY == 0:
                         progress(n, time.monotonic() - started)
                 checkpoint(lines)
+                if committed is not None:
+                    committed(taken)
                 if error is not None:
                     raise error
                 if len(batch) < META_EVERY:

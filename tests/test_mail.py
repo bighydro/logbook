@@ -146,21 +146,28 @@ def test_a_nested_multipart_message_takes_the_plain_part_and_lists_its_attachmen
     assert p["body"] == "Berth plan attached.\n"
     txt = b"East berth: free from Friday.\nWest berth: taken.\n"
     pdf = b"%PDF-1.4 synthetic berth plan\n"
+    assert p["attachments"] == [  # named and sized from the base64 text; the bytes are never decoded
+        {"filename": "berth-plan.txt", "media_type": "text/plain", "bytes": len(txt)},
+        {"filename": "plan.pdf", "media_type": "application/pdf", "bytes": len(pdf)},
+    ]
+    assert "attachments" not in _by_subject(_lines())["Rope for Saturday"]["payload"]
+    p = _by_id(_lines(attachments=True), "b2c3d4@mail.example.org")  # decoded only to store them
     assert p["attachments"] == [
         {
             "filename": "berth-plan.txt",
             "media_type": "text/plain",
-            "sha256": hashlib.sha256(txt).hexdigest(),
             "bytes": len(txt),
+            "sha256": hashlib.sha256(txt).hexdigest(),
+            "path": f"attachments/{hashlib.sha256(txt).hexdigest()}",
         },
         {
             "filename": "plan.pdf",
             "media_type": "application/pdf",
-            "sha256": hashlib.sha256(pdf).hexdigest(),
             "bytes": len(pdf),
+            "sha256": hashlib.sha256(pdf).hexdigest(),
+            "path": f"attachments/{hashlib.sha256(pdf).hexdigest()}",
         },
     ]
-    assert "attachments" not in _by_subject(_lines())["Rope for Saturday"]["payload"]
 
 
 def test_attachments_are_stored_only_when_asked(tmp_path):
@@ -168,7 +175,7 @@ def test_attachments_are_stored_only_when_asked(tmp_path):
     counts: dict[str, int] = {}
     lines = list(mail.run(MBOX, timezone=TZ, counts=counts, store=stored.append))
     p = _by_id(lines, "b2c3d4@mail.example.org")
-    assert "path" not in p["attachments"][0] and stored == []
+    assert "path" not in p["attachments"][0] and "sha256" not in p["attachments"][0] and stored == []
     assert counts["attachments_referenced"] == 2 and "attachments_stored" not in counts
 
     stored.clear()

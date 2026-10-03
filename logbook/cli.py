@@ -190,15 +190,33 @@ def _append_with(
     the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none; one
     whose `run` takes `resolved` gets the refs the record already resolves, as `{(kind, value):
     entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows.
-    With `dry_run` the adapter runs, the drafts are counted against the record and nothing is
-    written: not a line, not an attachment."""
+    One whose `run` takes `progress` gets a reporter that prints every report it makes with the
+    bytes read and the rate; one whose `run` takes `cursor` gets the inbox manifest's cursor
+    (`logbook.inbox`), so an import that stopped resumes where the record holds the source up to,
+    and `--restart` reads from the first byte again. With `dry_run` the adapter runs, the drafts
+    are counted against the record and nothing is written: not a line, not an attachment, not the
+    manifest."""
     if _say_disabled(lb, adapter.NAME):
         return 0
     counts: dict[str, int] = {}
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
     options: dict[str, Any] = {}
+    given = {k: v for k, v in (given or {}).items() if v is not None}
+    restart = bool(given.pop("restart", False))
+    cursor: inbox.Cursor | None = None
+    if _takes(adapter, "cursor"):
+        keyed = {k: v for k, v in given.items() if k != "at" and isinstance(v, str | int | bool | list)}
+        cursor = inbox.Cursor(
+            lb.root, adapter.NAME, keyed, restart=restart, notice=lambda text: print(text, file=sys.stderr)
+        )
+        options["cursor"] = cursor
+    elif restart:
+        print(f"add: --restart is not an option of the {adapter.NAME} adapter", file=sys.stderr)
+        sys.exit(2)
     if _takes(adapter, "counts"):
         options["counts"] = counts
+    if _takes(adapter, "progress"):
+        options["progress"] = _read_progress(str(getattr(adapter, "UNIT", "items")))
     if _takes(adapter, "timezone"):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
@@ -219,9 +237,7 @@ def _append_with(
                 ' expenses is taken for you); add "owner_emails": ["you@example.org"] to logbook.json',
                 file=sys.stderr,
             )
-    for name, value in (given or {}).items():
-        if value is None:
-            continue
+    for name, value in given.items():
         if _takes(adapter, name):
             options[name] = value
         elif name != "at":  # `--at` has always been the sentence's time; a file adapter ignores it
@@ -235,7 +251,11 @@ def _append_with(
         _say_dry_run(lb, adapter.NAME, drafts)
         _report_skipped(counts)
         return 0
-    n = lb.append_many(_counted(drafts, produced), progress=_progress)
+    n = lb.append_many(
+        _counted(drafts, produced),
+        progress=_progress,
+        committed=cursor.commit if cursor is not None else None,
+    )
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
     inbox.record(lb.root, inbox.finished(lb, recorded_as or p, adapter.NAME, produced[0], n, seq_before))
@@ -309,7 +329,9 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     times are floating), `store` (puts bytes in the attachment store), `store_file` (puts a file
     there, streamed), `lookup` (the id of a line by
     source and raw_id), `resolved` (the refs the record resolves, `{(kind, value): entity id}`), `failed`
-    (a live adapter's list for the feeds it could not read), or one of
+    (a live adapter's list for the feeds it could not read), `progress` (a file adapter's own
+    reporter, every 10,000 items with the bytes read), `cursor` (the inbox manifest's, so a long
+    import resumes), or one of
     `assets` (the asset registry, ADR 0018), `listen_s`, `notice` and `status` (a source that listens
     to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
@@ -460,6 +482,17 @@ def _progress(n: int, elapsed: float) -> None:
     print(f"  {n:,} lines in {elapsed:,.0f}s", file=sys.stderr)
 
 
+def _read_progress(unit: str) -> Callable[[int, int, float], None]:
+    """A file adapter's own progress (`mail`, every 10,000 messages): the items read, the bytes
+    read and the rate, on stderr."""
+
+    def report(n: int, read: int, elapsed: float) -> None:
+        rate = read / 1e6 / elapsed if elapsed > 0 else 0.0
+        print(f"  {n:,} {unit} · {read / 1e6:,.0f} MB read · {rate:,.1f} MB/s", file=sys.stderr)
+
+    return report
+
+
 def _file_progress(n_files: int) -> Callable[[str, int, int, float], None]:
     """`verify --progress`: one line per month file in path order, on stderr, so
     stdout stays the one line it always was. `file i of N` is that path rank."""
@@ -530,6 +563,7 @@ def cmd_add(a: argparse.Namespace) -> None:
         "attachments": a.attachments,
         "only_labels": _csv(a.only_labels),
         "skip_labels": _csv(a.skip_labels),
+        "restart": True if a.restart else None,
     }
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
@@ -3368,6 +3402,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--only-labels", metavar="A,B", help="mail: keep only messages with any of these labels")
     s.add_argument("--skip-labels", metavar="A,B", help="mail: drop messages with any of these labels")
+    s.add_argument(
+        "--restart",
+        action="store_true",
+        help="mail: read the file from its first byte again, not from where inbox/manifest.json says"
+        " the last import of it got to",
+    )
     s.add_argument(
         "--dry-run",
         action="store_true",
