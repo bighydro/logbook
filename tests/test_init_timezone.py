@@ -14,6 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import cli
+from logbook.commands import record  # where `init` and the detection live; the patches go there
 
 FALLBACK_HINT = "(could not detect; pass --timezone Europe/Zurich to change)"
 
@@ -29,7 +30,7 @@ class _Now:
 
 
 def _patch_clock(monkeypatch: pytest.MonkeyPatch, tz: object) -> None:
-    monkeypatch.setattr(cli, "datetime", SimpleNamespace(now=lambda: _Now(tz)))
+    monkeypatch.setattr(record, "datetime", SimpleNamespace(now=lambda: _Now(tz)))
 
 
 def _fake_localtime(tmp_path: Path, zone: str) -> Path:
@@ -46,31 +47,31 @@ def _fake_localtime(tmp_path: Path, zone: str) -> Path:
 @pytest.fixture
 def nothing_detectable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Every detection path disabled; tests re-enable one at a time."""
-    monkeypatch.setattr(cli, "_LOCALTIME", str(tmp_path / "etc" / "localtime"))  # does not exist
+    monkeypatch.setattr(record, "_LOCALTIME", str(tmp_path / "etc" / "localtime"))  # does not exist
     _patch_clock(monkeypatch, timezone(timedelta(hours=1)))  # fixed offset, no .key (macOS)
     monkeypatch.delenv("TZ", raising=False)
 
 
 def test_tz_from_etc_localtime_symlink(nothing_detectable, monkeypatch, tmp_path):
-    monkeypatch.setattr(cli, "_LOCALTIME", str(_fake_localtime(tmp_path, "Europe/Zurich")))
+    monkeypatch.setattr(record, "_LOCALTIME", str(_fake_localtime(tmp_path, "Europe/Zurich")))
     assert cli._tz_default() == "Europe/Zurich"
 
 
 def test_tz_from_localtime_with_backslash_path(nothing_detectable, monkeypatch):
     """Windows CI: realpath yields backslashes and PurePath is the Windows flavour."""
     monkeypatch.setattr(cli.os.path, "realpath", lambda _p: r"C:\tz\zoneinfo\Europe\Zurich")
-    monkeypatch.setattr(cli, "PurePath", PureWindowsPath, raising=False)
+    monkeypatch.setattr(record, "PurePath", PureWindowsPath, raising=False)
     assert cli._tz_default() == "Europe/Zurich"
 
 
 def test_tz_uses_last_zoneinfo_part(nothing_detectable, monkeypatch, tmp_path):
     link = _fake_localtime(tmp_path / "zoneinfo", "Europe/Zurich")
-    monkeypatch.setattr(cli, "_LOCALTIME", str(link))
+    monkeypatch.setattr(record, "_LOCALTIME", str(link))
     assert cli._tz_default() == "Europe/Zurich"
 
 
 def test_tz_ignores_localtime_that_names_no_real_zone(nothing_detectable, monkeypatch, tmp_path):
-    monkeypatch.setattr(cli, "_LOCALTIME", str(_fake_localtime(tmp_path, "Not/AZone")))
+    monkeypatch.setattr(record, "_LOCALTIME", str(_fake_localtime(tmp_path, "Not/AZone")))
     monkeypatch.setenv("TZ", "Europe/Oslo")
     assert cli._tz_default() == "Europe/Oslo"
 
@@ -96,7 +97,7 @@ def test_tz_falls_back_to_utc(nothing_detectable):
 
 
 def test_init_prints_detected_timezone(nothing_detectable, monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(cli, "_LOCALTIME", str(_fake_localtime(tmp_path, "Europe/Zurich")))
+    monkeypatch.setattr(record, "_LOCALTIME", str(_fake_localtime(tmp_path, "Europe/Zurich")))
     cli.main(["init", str(tmp_path / "lb")])
     out = capsys.readouterr().out
     assert "timezone: Europe/Zurich" in out

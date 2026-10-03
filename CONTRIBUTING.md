@@ -61,6 +61,15 @@ The easiest and most useful thing to build is an adapter for the export you alre
 
 A source that has both an export and a live API is one adapter with one mapping: backfill and live share it, so the same observation arrives once, with one shape and one `raw_id`, whichever way it came ([ADR 0017](docs/adr/0017-backfill-and-live-share-one-mapping.md)).
 
+## Where a command goes
+
+`logbook/cli.py` is the entry point only: it parses the line, runs the command and turns the errors every command shares into an exit status. The commands live in `logbook/commands/`, one family per module — `record.py` (`init`, `stats`, `verify`, `backup`, `demo`, …), `add.py` (`add`, `import-backup`, `inbox`), `sync.py` (`sync`, `sources`, `assets`), `derive.py`, `day.py` (`show`, `day`, `digest`, `days`, `year`), `people.py`, `places.py`, `rollup.py`, `trips.py`, `keepers.py`, `promises.py`, `export.py`, `serve.py`; the package's docstring has the whole table. A command is two functions beside each other in its family's module: `<command>_arguments(sub)` declares its arguments and sets `fn=cmd_<command>`, and `cmd_<command>(a)` runs it. `parser.py` lists the `_arguments` functions in the order `logbook --help` shows them.
+
+- A new command goes in the module of the family it belongs to, or starts a new module when it is a family of its own, plus one line in `parser.py` where its help should appear. Nothing is added to `cli.py` unless code outside the package needs to import it; `from logbook.cli import …` keeps working for what it re-exports.
+- What the families share goes in `commands/common.py`; the phrase for a new adapter count goes in `commands/skips.py`; the row `show` prints for a new kind of line goes in `commands/rows.py`.
+- The with module (`logbook/present/`) is laid out the same way: one module per source of evidence (`calendar`, `transcript`, `notes`, `photos`, `circle`), `company` for `present` and `company`, `model`, `owner`, `evidence` and `names` for what they share, and its `__init__` re-exports everything. A new source is a new module and a line in `company.FROM`.
+- A test that monkeypatches a helper patches it where it lives (`logbook.commands.record._LOCALTIME`, `logbook.commands.day._today`), not the re-export in `cli`: the command looks the name up in its own module.
+
 ## What CI checks
 
 Every pull request, and every push to `main`, runs: ruff and mypy; the test suite on Linux, macOS and Windows with Python 3.12 and 3.13; the conformance rule (`logbook verify` on `conformance/sample-logbook` prints the head in `conformance/expected.json`); the Nix and Docker builds; and `cross-impl`, which builds the independent TypeScript implementation ([bighydro/logbook-ts](https://github.com/bighydro/logbook-ts)) at its `main`, checks that its `verify` prints the same head on the sample, then appends one note to a copy of the sample with the Python CLI and verifies the copy with the TypeScript CLI. The two implementations must agree on a record the other wrote; a change to the spec or the hashing that only one of them follows fails here.
