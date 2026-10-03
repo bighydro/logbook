@@ -1,4 +1,5 @@
-"""Apple Podcasts' MTLibrary.sqlite → listen/v1 (RFC 0019): a line per played episode, from a copy or live."""
+"""Apple Podcasts' MTLibrary.sqlite → listen/v1 (RFC 0019): a line per played episode, from a copy, an
+iPhone backup or live; `completed` from the playhead, the feed's transcript URL kept and never fetched."""
 
 from __future__ import annotations
 
@@ -18,14 +19,14 @@ from logbook.store import Logbook
 ENVELOPE = {"at", "end", "tz", "source", "kind", "tier", "payload"}
 TZ = "Europe/Oslo"
 APPLE_EPOCH = 978_307_200
-LINES = 3
+LINES = 4
 
 SHOWS = [  # (Z_PK, ZUUID, ZTITLE, ZAUTHOR)
     (1, "SHOW-1", "Havnepodden", "Havnekontoret"),
     (2, "SHOW-2", "Knots Weekly", None),
 ]
 # (Z_PK, ZUUID, ZTITLE, ZLASTDATEPLAYED, ZPLAYHEAD, ZDURATION, ZPLAYCOUNT, ZPUBDATE, ZWEBPAGEURL,
-#  ZENCLOSUREURL, ZAUTHOR, ZPODCAST, ZPODCASTUUID)
+#  ZENCLOSUREURL, ZAUTHOR, ZPODCAST, ZPODCASTUUID, ZTRANSCRIPTURL, ZTRANSCRIPTIDENTIFIER)
 EPISODES = [
     (
         10,
@@ -41,8 +42,26 @@ EPISODES = [
         "Havnekontoret",
         1,
         "SHOW-1",
+        None,
+        "transcript-ep-10",  # Apple's own transcript asset, not a public URL: never recorded
     ),
-    (11, "EP-11", "Bowline", 1770796800.0 - APPLE_EPOCH, 0.0, 600.0, 0, None, None, None, None, 2, "SHOW-2"),
+    (
+        11,
+        "EP-11",
+        "Bowline",
+        1770796800.0 - APPLE_EPOCH,
+        0.0,
+        600.0,
+        0,
+        None,
+        None,
+        None,
+        None,
+        2,
+        "SHOW-2",
+        None,
+        None,
+    ),
     (
         12,
         "EP-12",
@@ -57,9 +76,44 @@ EPISODES = [
         "Ola",
         None,
         "NOPE",
+        None,
+        None,
     ),
-    (13, "EP-13", "Never played", None, 0.0, 100.0, 0, None, None, None, None, 1, "SHOW-1"),
-    (14, "EP-14", "", 1767225600.0 - APPLE_EPOCH, 0.0, 100.0, 0, None, None, None, None, 1, "SHOW-1"),
+    (13, "EP-13", "Never played", None, 0.0, 100.0, 0, None, None, None, None, 1, "SHOW-1", None, None),
+    (
+        14,
+        "EP-14",
+        "",
+        1767225600.0 - APPLE_EPOCH,
+        0.0,
+        100.0,
+        0,
+        None,
+        None,
+        None,
+        None,
+        1,
+        "SHOW-1",
+        None,
+        None,
+    ),
+    (  # played to the end: the store rewound the playhead and counted the play; a transcript in its feed
+        15,
+        "EP-15",
+        "Reef knot",
+        1772691000.0 - APPLE_EPOCH,  # 2026-03-05T06:10:00Z
+        0.0,
+        900.0,
+        1,
+        None,
+        None,
+        "https://knots.example.org/reef.mp3",
+        None,
+        2,
+        "SHOW-2",
+        "https://knots.example.org/reef.vtt",
+        None,
+    ),
 ]
 
 
@@ -155,6 +209,25 @@ def test_every_played_episode_is_a_line_and_the_envelope_is_complete(tmp_path):
     assert [line["at"] for line in lines] == sorted(line["at"] for line in lines)
 
 
+def test_completed_reads_the_playhead_against_the_duration_or_a_rewound_full_play(tmp_path):
+    by = {line["payload"]["title"]: line["payload"] for line in _lines(_store(tmp_path))}
+    assert by["Episode 12: the east berth"]["completed"] is False  # 1801.5 s of 2400
+    assert by["Bowline"]["completed"] is False  # never started: playhead 0, no play counted
+    assert by["Orphan"]["completed"] is False  # 30 s in, on its third play
+    assert by["Reef knot"]["completed"] is True  # rewound to 0 with a play counted
+    assert all("completed" in payload for payload in by.values())
+
+
+def test_the_feeds_transcript_url_is_kept_under_extra_and_an_apple_identifier_is_not(tmp_path):
+    by = {line["payload"]["title"]: line["payload"] for line in _lines(_store(tmp_path))}
+    assert by["Reef knot"]["extra"] == {
+        "play_count": 1,
+        "transcript_url": "https://knots.example.org/reef.vtt",
+    }
+    assert "transcript_url" not in by["Episode 12: the east berth"]["extra"]
+    assert "transcript" not in json.dumps(by["Episode 12: the east berth"]).lower()
+
+
 def test_an_episode_maps_show_publisher_url_durations_published_and_play_count(tmp_path):
     by = {line["payload"]["title"]: line for line in _lines(_store(tmp_path))}
     line = by["Episode 12: the east berth"]
@@ -169,6 +242,7 @@ def test_an_episode_maps_show_publisher_url_durations_published_and_play_count(t
         "url": "https://havn.example.org/podden/12",
         "duration_s": 2400.0,
         "played_s": 1801.5,
+        "completed": False,
         "published": "2026-03-03T09:00:00Z",
         "service": "apple-podcasts",
         "extra": {"play_count": 1},
@@ -188,19 +262,28 @@ def test_an_episode_maps_show_publisher_url_durations_published_and_play_count(t
 @pytest.mark.parametrize("columns", ["older", "bare"])
 def test_a_store_with_other_columns_still_reads_what_it_has(tmp_path, columns):
     lines = _lines(_store(tmp_path, columns=columns))
-    assert [line["payload"]["title"] for line in lines] == ["Orphan", "Bowline", "Episode 12: the east berth"]
-    first = lines[-1]["payload"]
+    assert [line["payload"]["title"] for line in lines] == [
+        "Orphan",
+        "Bowline",
+        "Episode 12: the east berth",
+        "Reef knot",
+    ]
+    first, reef = lines[2]["payload"], lines[3]["payload"]
     if columns == "older":
         assert "show" not in first and first["publisher"] == "Havnekontoret" and "extra" not in first
         assert first["url"] == "https://havn.example.org/podden/12.mp3" and first["played_s"] == 1801.5
+        assert first["completed"] is False
+        assert reef["completed"] is False, "no play count to tell a rewound full play from an unplayed one"
+        assert "extra" not in reef, "no transcript column: nothing under extra"
     else:
-        assert set(first) == {"schema", "raw_id", "media", "title", "service"}
+        assert set(first) == {"schema", "raw_id", "media", "title", "service"}, "no playhead: no completed"
 
 
 def test_since_cuts_on_at_and_a_replay_is_a_new_line(tmp_path):
     store = _store(tmp_path)
     assert [line["payload"]["title"] for line in _lines(store, since="2026-03-01T00:00:00Z")] == [
-        "Episode 12: the east berth"
+        "Episode 12: the east berth",
+        "Reef knot",
     ]
     lb = Logbook.init(tmp_path / "lb", TZ)
     assert lb.append_many(podcasts.run(store, timezone=TZ)) == LINES
@@ -214,6 +297,8 @@ def test_since_cuts_on_at_and_a_replay_is_a_new_line(tmp_path):
     con.close()
     assert lb.append_many(podcasts.run(store, timezone=TZ)) == 1  # played again: a new listen (rule 1)
     assert lb.verify()[2] == []
+    replay = [line for line in lb.lines() if line["payload"]["raw_id"].startswith("apple-podcasts:EP-10@")]
+    assert [line["payload"]["completed"] for line in replay] == [False, True], "to the end this time"
 
 
 def test_the_store_is_never_written(tmp_path):
@@ -239,10 +324,10 @@ def test_the_file_import_and_the_live_pull_are_the_same_lines(tmp_path):
     store = _store(tmp_path, wal=True)
     config = podcasts.Config(db=store)
     assert list(podcasts.pull(config, timezone=TZ)) == _lines(store)
-    assert podcasts.watermark(_lines(store)[-1]) == "2026-03-04T09:00:00Z"
+    assert podcasts.watermark(_lines(store)[-1]) == "2026-03-05T06:10:00Z"
     assert [
         line["payload"]["title"] for line in podcasts.pull(config, since="2026-03-01T00:00:00Z", timezone=TZ)
-    ] == ["Episode 12: the east berth"]
+    ] == ["Episode 12: the east berth", "Reef knot"]
 
 
 def test_pull_reports_progress_and_an_unreadable_store_raises_oserror(tmp_path):
@@ -270,5 +355,5 @@ def test_sync_appends_the_listens_dedupes_a_prior_import_and_keeps_the_watermark
     out = capsys.readouterr().out
     assert f"apple-podcasts: 0 new lines of {LINES} seen" in out
     state = json.loads((lb.root / "state" / "apple-podcasts.json").read_text(encoding="utf-8"))
-    assert state["since"] == "2026-03-04T09:00:00Z"
+    assert state["since"] == "2026-03-05T06:10:00Z"
     assert lb.verify()[0] == LINES
