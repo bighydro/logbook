@@ -90,6 +90,7 @@ nav:
   - The Year: year.md
   - On paper: print.md
   - The vault (Obsidian, Logseq): vault.md
+  - The site (static HTML): site.md
   - Promises: promises.md
   - Tasks: tasks.md
   - Describing keepers: describe.md

@@ -7,15 +7,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+from logbook.store import Logbook
 from persona import persona_record
 
 from logbook import cli
 from logbook.contrib import site
-from logbook.store import Logbook
 
 SATURDAY_TRIP = "trip-2026-06-13-2026-06-13"  # the night aboard Solvind: Ola is there by a tier-2 note only
 ZURICH_TRIP = "trip-2026-06-15-2026-06-17"  # Ola at the dinner, a tier-1 calendar entry
@@ -278,6 +281,7 @@ def test_slugs_and_relative_paths() -> None:
     assert site.slug("Kari Nordmann") == "kari-nordmann"
     assert site.slug("  Ola   Nordmann ") == "ola-nordmann"
     assert site.slug("Zürich café / bar") == "zurich-cafe-bar"
+    assert site.slug("Bjørn Aas") == "bjorn-aas" and site.slug("Ærø") == "aero"
     assert site.slug("") == "unnamed"
     assert site.slug("...") == "unnamed"
     assert site.relative("index.html", "years/2026.html") == "years/2026.html"
@@ -285,3 +289,41 @@ def test_slugs_and_relative_paths() -> None:
     assert site.relative("years/2026.html", "trips/x.html") == "../trips/x.html"
     assert site.relative("years/2026.html", "years/2025.html") == "2025.html"
     assert site.relative("a/b/c.html", "d.html") == "../../d.html"
+
+
+# -- forty years ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_synthetic_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What the docs workflow publishes: `logbook demo --years 40 --seed 1` exported at tier 1 — a Year
+    page and a Days index for each calendar year of the forty (41, July to June), the childhood ones
+    included (lines, no track), every trip, the people; every link a file in the folder; and
+    `scripts/check_synthetic.py` passes."""
+    root = tmp_path / "Life"
+    cli.main(["demo", "--years", "40", "--seed", "1", "--out", str(root)])
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    folder = tmp_path / "ines"
+    _run(str(folder))
+    out = capsys.readouterr().out
+    assert "41 years 1986-07-01 \u2013 2026-06-30, tier 1" in out
+    pages = {p.as_posix() for p in _tree(folder)}
+    assert {f"years/{y}.html" for y in range(1986, 2027)} <= pages
+    assert {f"days/{y}.html" for y in range(1986, 2027)} <= pages
+    assert len([p for p in pages if p.startswith("trips/")]) > 100
+    assert "people/kari-nordmann.html" in pages and "people/ola-nordmann.html" in pages
+    for rel, raw in _tree(folder).items():
+        text = raw.decode("utf-8")
+        assert "<script" not in text.lower(), rel
+        for ref in REFERENCE.findall(text):
+            assert not ref.startswith(("/", "http:", "https:", "//")), (rel, ref)
+            target = (folder / rel).parent.joinpath(*ref.split("#")[0].split("/")).resolve()
+            assert target.is_file(), f"{rel} links {ref}, which is not a file in the site"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "check_synthetic.py"
+    env = {**os.environ, "LOGBOOK_PII_PATTERNS": str(tmp_path / "no-patterns")}
+    r = subprocess.run(
+        [sys.executable, str(script), str(folder)], capture_output=True, encoding="utf-8", env=env
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
