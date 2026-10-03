@@ -156,6 +156,10 @@ with a line on the day; `question` (`id` and `kind` of the question in the bank,
 placeholders filled, and `facts`, the names of the day's facts that held, so a `when` can be written
 against what the chooser saw; `id` is null when nothing in the bank could be asked); and `lines`.
 
+The week, rather than the day, is `logbook digest --paper [--week YYYY-Www]`: four pages of A4
+with the days one line each, who was there and the keepers, the promises due and what was read,
+in [On paper](print.md).
+
 ## What it does not do
 
 It does not send anything or schedule anything: a delivery layer that takes the text, picks the

@@ -3,7 +3,10 @@
 `logbook year YYYY --html PATH --print` and `logbook trip ID --html PATH --print` write a document
 designed for paper (`logbook.contrib.print_page`); every length, size, face and colour it is set in comes
 from here and nowhere else, so a designer retheming the printed Logbook changes this file and
-touches no logic. The renderer names classes; `stylesheet()` says what they look like.
+touches no logic. The renderer names classes; `stylesheet()` says what they look like. The poster
+(`logbook year YYYY --poster`, `logbook.year_poster`) and the week's paper (`logbook digest --paper`,
+`logbook.week_paper`) are set from the same constants: `poster_stylesheet()` and
+`paper_stylesheet()` below, and the four night tokens every one of them colours a night by.
 
 The page fits both A4 (210 × 297 mm) and US Letter (215.9 × 279.4 mm): the text block is laid out
 for the narrower width and the shorter height, so one document prints on either paper without a
@@ -64,6 +67,23 @@ MUTED = "#6b6b6b"
 RULE = "#c9c9c4"
 PAPER = "#ffffff"
 FRAME = "#ebebe7"  # the slot of a photo the record does not hold
+
+# -- the nights ---------------------------------------------------------------------------------------------
+
+# The four words a night can be, in the order a legend lists them, and the ink each prints in: the
+# poster's squares, and any other place a night is coloured rather than named. A night aboard an asset
+# is `aboard` before it is `away`; a night with no stay reaching the minimum is `transit`. `NIGHT_NONE`
+# is a day the record has no night for: the paper shows through.
+NIGHT_HOME, NIGHT_AWAY, NIGHT_ABOARD, NIGHT_TRANSIT = "home", "away", "aboard", "transit"
+NIGHTS = (NIGHT_HOME, NIGHT_AWAY, NIGHT_ABOARD, NIGHT_TRANSIT)
+NIGHT_INK = {
+    NIGHT_HOME: "#d9d4c7",  # the quiet one: most nights
+    NIGHT_AWAY: "#2f5d8a",
+    NIGHT_ABOARD: "#2a8c7e",
+    NIGHT_TRANSIT: "#e0a040",
+}
+NIGHT_LABEL = {NIGHT_HOME: "home", NIGHT_AWAY: "away", NIGHT_ABOARD: "aboard", NIGHT_TRANSIT: "in transit"}
+NIGHT_NONE = "none"  # the class of a day without a night; it prints in `FRAME`
 
 # -- the map ------------------------------------------------------------------------------------------------
 
@@ -203,3 +223,108 @@ footer.colophon {{ break-before: page; color: {MUTED}; font-size: {pt(SIZES_PT["
     border-bottom: 1px dashed {RULE}; }}
 }}
 """
+
+
+# -- the poster ---------------------------------------------------------------------------------------------
+
+# `logbook year YYYY --poster`: one sheet, A2 or A3, the year as twelve columns of thirty-one squares,
+# one a day, each in the ink of its night. The A series keeps its proportions from one size to the
+# next (A3 is A2 at 1/√2), so the sheet is drawn once, in millimetres of A2 (`POSTER_VIEW_MM`, the
+# SVG's viewBox), and scaled to the sheet chosen; every length below is on A2.
+POSTER_SHEETS = {"A2": (420.0, 594.0), "A3": (297.0, 420.0)}
+POSTER_VIEW_MM = POSTER_SHEETS["A2"]
+POSTER_MARGIN_MM = 30.0
+POSTER_COLUMNS = 12  # a month a column
+POSTER_ROWS = 31  # a day a row
+POSTER_GAP_MM = 2.0  # between two squares
+POSTER_HEAD_MM = 70.0  # above the grid: the year and the legend
+POSTER_FOOT_MM = 30.0  # under it: the countries
+POSTER_SQUARE_MM = (
+    POSTER_VIEW_MM[1]
+    - 2 * POSTER_MARGIN_MM
+    - POSTER_HEAD_MM
+    - POSTER_FOOT_MM
+    - (POSTER_ROWS - 1) * POSTER_GAP_MM
+) / POSTER_ROWS
+POSTER_GRID_MM = (
+    POSTER_COLUMNS * POSTER_SQUARE_MM + (POSTER_COLUMNS - 1) * POSTER_GAP_MM,
+    POSTER_ROWS * POSTER_SQUARE_MM + (POSTER_ROWS - 1) * POSTER_GAP_MM,
+)
+POSTER_LABEL_MM = 12.0  # left of the grid: the day numbers; above it: the months
+POSTER_RADIUS_MM = 0.8  # the corner of a square
+POSTER_TYPE_MM = {"year": 36.0, "label": 4.2, "small": 3.4}  # the year; the months and days; the rest
+
+
+def vu(value: float) -> str:
+    """A length inside the poster's drawing: a user unit of its viewBox, which is one millimetre
+    of A2 and scales with the sheet. CSS writes a user unit as `px`; it is not a pixel."""
+    return f"{value:.2f}px"
+
+
+def poster_stylesheet(sheet: str) -> str:
+    """The poster's stylesheet for one sheet (`A2` or `A3`): the page is the sheet with no margin,
+    the drawing fills it, the type in the drawing's own units (`vu`), the four night tokens and
+    the empty day its fills; a screen rule so the file reads in a browser before it is printed.
+    `KeyError` for a sheet that is not one."""
+    width, height = POSTER_SHEETS[sheet]
+    fills = "\n".join(f".night.{name} {{ fill: {ink}; }}" for name, ink in NIGHT_INK.items())
+    return f"""
+@page {{ size: {sheet}; margin: 0; }}
+:root {{ color-scheme: light; }}
+html {{ background: {PAPER}; }}
+body {{ margin: 0; padding: 0; color: {INK}; background: {PAPER}; font-family: {FONT_LABEL}; }}
+svg.poster {{ display: block; width: {mm(width)}; height: {mm(height)}; }}
+.year {{ font: 600 {vu(POSTER_TYPE_MM["year"])} {FONT_LABEL}; fill: {INK}; letter-spacing: -.02em; }}
+.label {{ font: {vu(POSTER_TYPE_MM["label"])} {FONT_LABEL}; fill: {MUTED}; }}
+.countries {{ font: 600 {vu(POSTER_TYPE_MM["label"])} {FONT_LABEL}; fill: {INK}; }}
+.small {{ font: {vu(POSTER_TYPE_MM["small"])} {FONT_LABEL}; fill: {MUTED}; }}
+.kicker {{ font: 600 {vu(POSTER_TYPE_MM["small"])} {FONT_LABEL}; fill: {MUTED}; letter-spacing: .12em;
+  text-transform: uppercase; }}
+.night {{ stroke: none; }}
+{fills}
+.night.{NIGHT_NONE} {{ fill: {FRAME}; }}
+.rule {{ stroke: {INK}; stroke-width: 0.3; }}
+@media screen {{
+  body {{ padding: {mm(GUTTER_MM * 2)}; }}
+  svg.poster {{ max-width: 100%; height: auto; box-shadow: 0 0 0 {mm(0.25)} {RULE}; }}
+}}
+"""
+
+
+# -- the week's paper ---------------------------------------------------------------------------------------
+
+# `logbook digest --paper --week YYYY-Www`: the week as four pages of A4, set with the same text block,
+# grid, type and ink as the Year (`stylesheet()`); only the sheet is pinned, so one paper is one paper.
+PAPER_SHEET = "A4"
+PAPER_PAGES = 4
+PAPER_DAY_MM = COLUMN_MM * 1 + GUTTER_MM  # the day column of the week's list: one column of the grid
+
+
+def paper_stylesheet() -> str:
+    """The week's stylesheet: the Year's (`stylesheet()`), then the sheet pinned to A4 and the
+    rules of the paper's own classes — a page a section, the week's days as a two-column list,
+    the people, the keepers, the promises and the titles read."""
+    return (
+        stylesheet()
+        + f"""
+@page {{ size: {PAPER_SHEET}; }}
+section.page {{ break-after: page; }}
+section.page:last-of-type {{ break-after: auto; }}
+section.page > header {{ margin-bottom: {mm(GUTTER_MM)}; padding-bottom: {mm(GUTTER_MM / 2)};
+  border-bottom: 1px solid {INK}; }}
+section.page > header h2 {{ margin: 0; }}
+section.page > header .lead {{ margin: {mm(1)} 0 0; }}
+ol.contents.days li {{ grid-template-columns: {mm(PAPER_DAY_MM)} 1fr; }}
+ol.contents.days li .about {{ color: {INK}; }}
+ol.contents.days li .night {{ color: {MUTED}; }}
+ul.titles {{ margin: 0 0 {mm(GUTTER_MM / 2)}; padding-left: 1.2em; }}
+ul.titles li {{ padding-left: .2em; break-inside: avoid; }}
+blockquote {{ margin: 0; font-style: italic; }}
+footer.note {{ color: {MUTED}; font-size: {pt(SIZES_PT["small"])}; margin-top: {mm(GUTTER_MM * 2)};
+  border-top: 1px solid {RULE}; padding-top: {mm(GUTTER_MM / 2)}; }}
+@media screen {{
+  section.page {{ padding-bottom: {mm(GUTTER_MM * 2)}; margin-bottom: {mm(GUTTER_MM * 2)};
+    border-bottom: 1px dashed {RULE}; }}
+}}
+"""
+    )
