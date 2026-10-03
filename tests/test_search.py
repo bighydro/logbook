@@ -445,7 +445,7 @@ def _big_drafts(n: int):
         }
 
 
-@pytest.mark.slow
+@pytest.mark.stress  # asserts wall time: a benchmark of the machine, never of CI (LOGBOOK_STRESS=1)
 def test_search_answers_in_under_a_second_on_two_million_lines(tmp_path: Path, monkeypatch, capsys):
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
