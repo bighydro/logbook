@@ -52,6 +52,7 @@ from . import (
     repair,
     rollup,
     schedule,
+    search,
     serve,
     stays,
     transcribe,
@@ -2203,10 +2204,17 @@ def _line_row(
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
-    p = line["payload"]
     by = (superseded or {}).get(str(line["id"]))
     if by is not None:
         return f"  {clock}  {line['kind']:<10} {line['source']:<14} superseded by #{by}"
+    text = _line_text(line, tz, names)
+    return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+
+
+def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
+    """The text part of a line's row: the profile's own summary where the kind has one, else the
+    payload's text, title, name or url, else every field as `key=value`."""
+    p = line["payload"]
     if line["kind"] == "flight":
         text = _flight_text(p, tz)
     elif line["kind"] == "message":
@@ -2241,7 +2249,43 @@ def _line_row(
             or p.get("url")
             or ", ".join(f"{k}={_value_text(v)}" for k, v in p.items() if k != "schema")
         )
-    return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+    return str(text)
+
+
+def cmd_search(a: argparse.Namespace) -> None:
+    """`search TEXT [--since DAY] [--until DAY] [--kinds a,b] [--tier 1|2|3] [--limit N] [--json]`:
+    full-text search through the index's FTS5 table (`logbook/search.py`): words and quoted
+    phrases, literal (no stemming), case and accents aside; the hits ranked by bm25, grouped by
+    local day, each as the row `show` prints with a snippet of the matching words under it. Tiers
+    1 and 2 unless `--tier 3`. Nothing is written."""
+    lb = Logbook.find()
+    try:
+        q = search.query(
+            a.text,
+            since=parse_day(a.since).isoformat() if a.since else None,
+            until=parse_day(a.until).isoformat() if a.until else None,
+            kinds=_csv(a.kinds),
+            max_tier=a.tier,
+            limit=a.limit,
+        )
+    except (search.QueryError, ValueError) as e:
+        print(f"search: {e}", file=sys.stderr)
+        sys.exit(2)
+    tz = ZoneInfo(lb.meta["timezone"])
+    try:
+        with lb.index() as idx:
+            result = search.search(idx, q)
+            names = labels(lb, idx)
+    except RuntimeError as e:  # no FTS5 in this SQLite
+        print(f"search: {e}", file=sys.stderr)
+        sys.exit(1)
+    if a.json:
+        print(
+            json.dumps(result.to_json(lambda line: _line_text(line, tz, names)), indent=2, ensure_ascii=False)
+        )
+        return
+    for text in search.rows(result, lambda line: _line_row(line, None, tz, names)):
+        print(text)
 
 
 def _value_text(value: object) -> str:
@@ -3825,6 +3869,30 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("seq", type=int)
     s.add_argument("reason")
     s.set_defaults(fn=cmd_retract)
+    s = sub.add_parser(
+        "search",
+        help='full-text search: words, "a phrase", kar* — literal, ranked, grouped by day, through the index',
+    )
+    s.add_argument("text", help='the words; "in quotes" a phrase; a word ending in * matches by prefix')
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="the first local day searched")
+    s.add_argument("--until", metavar="YYYY-MM-DD", help="the last local day searched")
+    s.add_argument(
+        "--kinds",
+        metavar="note,transcript,message,mail,event",
+        help=f"only these kinds (default every kind with words: {', '.join(search.KINDS)})",
+    )
+    s.add_argument(
+        "--tier",
+        type=int,
+        choices=(1, 2, 3),
+        default=search.MAX_TIER,
+        help="search up to this tier (default 2); tier 3 — money, health, the transcripts at 3 — only with 3",
+    )
+    s.add_argument("--limit", type=int, default=search.LIMIT, help=f"the hits shown (default {search.LIMIT})")
+    s.add_argument(
+        "--json", action="store_true", help="the query, the hits by day with rank, snippet, summary"
+    )
+    s.set_defaults(fn=cmd_search)
     s = sub.add_parser("show", help="one day (default today), or a page: person, asset or place")
     s.add_argument("day", nargs="?", help="YYYY-MM-DD, or person|asset|place")
     s.add_argument("name", nargs="?", help="with person|asset|place: the name, entity id or asset id")

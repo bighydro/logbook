@@ -75,6 +75,7 @@ nav:
   - Promises: promises.md
   - The digest: digest.md
   - People: people.md
+  - Search: search.md
   - The MCP server: mcp.md
   - Backup: backup.md
   - Adapters:

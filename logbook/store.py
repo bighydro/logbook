@@ -19,7 +19,7 @@ from typing import Any, BinaryIO, TextIO
 from . import FORMAT, attachments, policy
 from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
-from .index import Index, Located, Row, row
+from .index import Index, Located, Row, TextRow, row, text_row
 
 
 def now_utc() -> str:
@@ -339,7 +339,9 @@ class Logbook:
         self._save_meta(meta)
         if idx is not None:
             with idx:
-                idx.add([row(line, meta["timezone"], self._relative(path), offset)], meta)
+                line_row = row(line, meta["timezone"], self._relative(path), offset)
+                words = text_row(line, self.root, line_row)
+                idx.add([line_row], meta, [] if words is None else [words])
         return line
 
     def retract(self, seq: int, reason: str, at: str | None = None) -> Line:
@@ -411,6 +413,7 @@ class Logbook:
             for path, line in lines:
                 pending.setdefault(path, []).append(line)
             rows: list[Row] = []
+            texts: list[TextRow] = []
             for path, batch in pending.items():
                 fh = handles.get(path)
                 if fh is None:
@@ -420,7 +423,11 @@ class Logbook:
                 rel, offset = self._relative(path), fh.tell()
                 encoded = [_dumps(line).encode("utf-8") for line in batch]
                 for line, raw in zip(batch, encoded, strict=True):
-                    rows.append(row(line, tz, rel, offset))
+                    line_row = row(line, tz, rel, offset)
+                    rows.append(line_row)
+                    words = text_row(line, self.root, line_row)
+                    if words is not None:
+                        texts.append(words)
                     offset += len(raw)
                 fh.write(b"".join(encoded))
                 fh.flush()
@@ -428,7 +435,7 @@ class Logbook:
             if (meta["seq"], meta["head"]) != (seq, head):
                 meta["seq"], meta["head"] = seq, head
                 self._save_meta(meta)
-                idx.add(rows, meta)
+                idx.add(rows, meta, texts)
 
         try:
             while True:
