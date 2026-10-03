@@ -4,7 +4,7 @@ This software stores a person's whole life. Treat every bug as if it were seriou
 
 ## Reporting
 
-Report a vulnerability privately through [GitHub's private vulnerability reporting](https://github.com/bighydro/logbook/security/advisories/new), or to the address in the repository profile. You will get a reply within 48 hours. The fix ships before the report is disclosed, and the advisory names you unless you ask it not to.
+Report a vulnerability privately: through [GitHub's private vulnerability reporting](https://github.com/bighydro/logbook/security/advisories/new) on this repository, or to the address in the repository profile. Never in a public issue. You will get a reply within 48 hours. The fix ships before the report is disclosed, and the advisory names you unless you ask it not to.
 
 ## Threat model
 

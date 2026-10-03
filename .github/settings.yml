@@ -1,0 +1,36 @@
+# The repository's GitHub metadata, as it should read on the repository page. This file is the source;
+# the captain applies it under Settings (or with the two commands below). Labels are in labels.yml.
+#
+#   gh repo edit bighydro/logbook --description "$(yq .repository.description .github/settings.yml)" \
+#       --homepage https://bighydro.github.io/logbook/
+#   gh repo edit bighydro/logbook $(yq -r '.repository.topics[] | "--add-topic " + .' .github/settings.yml)
+#
+# Under Settings → Code security, private vulnerability reporting is on: SECURITY.md and the issue
+# chooser point people at it.
+repository:
+  name: logbook
+  description: >-
+    A diary that writes itself: your life, in a folder you hold, append-only and hash-chained,
+    read back as days and handed to one person at a time.
+  homepage: https://bighydro.github.io/logbook/
+  topics:
+    - lifelog
+    - diary
+    - personal-data
+    - local-first
+    - append-only
+    - hash-chain
+    - jsonl
+    - self-hosted
+    - privacy
+    - data-portability
+    - quantified-self
+    - google-takeout
+    - apple-health
+    - obsidian
+    - mcp
+    - python
+    - cli
+  has_issues: true
+  has_discussions: true
+  private_vulnerability_reporting: true
