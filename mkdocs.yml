@@ -85,6 +85,7 @@ nav:
       - Bounties: adapter-bounties.md
       - "Passages: a deck log as sea legs": adapters/passages.md
       - "Listening: Spotify and Apple Music": adapters/listen.md
+      - "Screen Time": adapters/screentime.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md

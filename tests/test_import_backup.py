@@ -38,6 +38,8 @@ from test_safari import _store as _safari_store
 from test_sbb import LINES as SBB_LINES
 from test_sbb import _mobile_store as _sbb_mobile
 from test_sbb import _trips_store as _sbb_trips
+from test_screentime import PHONE_LINES as SCREENTIME_LINES
+from test_screentime import _phone_store as _screentime_store
 from test_splitwise import _store as _splitwise_store
 from test_twitter import _store as _twitter_store
 from test_voice_memos import LINES as MEMO_LINES
@@ -96,6 +98,7 @@ ALL = (
     "withings",
     "myfitnesspal",
     "sbb",
+    "screentime",
 )
 LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without a country code normalise
     "ios-contacts": 7,
@@ -120,6 +123,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "withings": 2 * WITHINGS_LINES,  # two profiles
     "myfitnesspal": MFP_LINES,
     "sbb": SBB_LINES,
+    "screentime": SCREENTIME_LINES,
 }
 TOTAL = sum(LINES.values())
 STORES = {
@@ -144,6 +148,7 @@ STORES["apple-photos"] = "Photos.sqlite"
 STORES["withings"] = "10000001_WTHealth.sqlite"  # the first match of the glob; the adapter reads the folder
 STORES["myfitnesspal"] = "maindb.sqlite"
 STORES["sbb"] = "SbbMobile.db"
+STORES["screentime"] = "RMAdminStore-Local.sqlite"
 REMINDERS_OTHER = "Data-AAAAAAAA-0000-4000-8000-000000000002.sqlite"  # the bigger store, with a -wal
 
 
@@ -341,6 +346,9 @@ def _backup(
         )
     if "safari" in sources:  # HomeDomain, as the phone backs it up; not a real store, nobody reads it yet
         _put(backup, rows, "HomeDomain", "Library/Safari/History.db", _blob(stage, SAFARI_BYTES))
+    if "screentime" in sources:  # Screen Time's own store, in HomeDomain like Safari's history
+        _put(backup, rows, "HomeDomain", "Library/Application Support/com.apple.remotemanagementd", None)
+        _put(backup, rows, "HomeDomain", ios_backup.SCREEN_TIME, _screentime_store(_dir(stage, "screentime")))
     con = sqlite3.connect(backup / "Manifest.db")
     try:
         con.execute(
