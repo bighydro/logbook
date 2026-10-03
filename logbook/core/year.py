@@ -31,7 +31,7 @@ import html as html_text
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import day as day_reader
 from . import health, keepers, reading, rollup, stays, trips, weather
@@ -81,8 +81,11 @@ def window(lb: Logbook, year: str) -> tuple[str, str] | None:
     return (first, last) if first <= last else None
 
 
-def read(lb: Logbook, year: str, airports: Airports | None = None) -> dict[str, Any]:
-    """The Year as one JSON-ready object. `ValueError` for a year that is not one;
+def read(
+    lb: Logbook, year: str, airports: Airports | None = None, tiers: Sequence[int] | None = None
+) -> dict[str, Any]:
+    """The Year as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
+    health lines and each pick's Day included. `ValueError` for a year that is not one;
     `stays.SettingsError` when the record's settings, places or assets file is not what it should
     be. Nothing is written."""
     year = parse_year(year)
@@ -92,10 +95,10 @@ def read(lb: Logbook, year: str, airports: Airports | None = None) -> dict[str, 
         return _empty(year, head)
     first, last = span
     airports = airports or Airports.load()
-    rd = reading.read(lb, first, last, airports)
+    rd = reading.read(lb, first, last, airports, tiers)
     before = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
     with lb.index() as idx:
-        found = idx.by_kind(health.KIND, before, last)
+        found = reading.crossing(idx.by_kind(health.KIND, before, last), tiers)
         marks = idx.retractions()
     scored = _scored(rd, found)
     picks = []
@@ -107,7 +110,7 @@ def read(lb: Logbook, year: str, airports: Airports | None = None) -> dict[str, 
                 "month": key,
                 "day": day,
                 "evidence": scored[day] if day else None,
-                "page": day_reader.read(lb, day, airports) if day else None,
+                "page": day_reader.read(lb, day, airports, tiers) if day else None,
             }
         )
     tz = str(rd.tz)
@@ -553,9 +556,14 @@ pre { font: 9pt/1.45 ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono"
 .pick h3 span { font-weight: 400; color: #666; }
 footer { margin: 3rem 0 1rem; padding-top: .6rem; border-top: 1px solid #c9c9c4; color: #666;
   font-size: .85em; }
+nav.site { margin: 0 0 1.5rem; padding-bottom: .5rem; border-bottom: 1px solid #c9c9c4; font-size: .95em; }
+nav.site a { margin-right: 1rem; text-decoration: none; color: #2f5d7c; }
+nav.site a:first-child { font-weight: 600; }
+a { color: #2f5d7c; }
 @page { margin: 18mm; }
 @media print {
   body { max-width: none; margin: 0; padding: 0; font-size: 10pt; }
+  nav.site { display: none; }
   h1 { font-size: 2.4rem; }
   pre { background: none; padding: 0; border: 1px solid #ddd; padding: .5rem; }
   #picks { break-before: page; }
@@ -563,10 +571,16 @@ footer { margin: 3rem 0 1rem; padding-top: .6rem; border-top: 1px solid #c9c9c4;
 """
 
 
-def html(data: Mapping[str, Any]) -> str:
+Links = Mapping[str, str]  # a page's links out: a trip id or `person:<name>` → an href (`export site`)
+
+
+def html(data: Mapping[str, Any], nav: str = "", links: Links | None = None) -> str:
     """The Year as one self-contained HTML page: inline CSS, no script, no asset, nothing fetched;
-    everything the record says is escaped. Suitable for printing."""
+    everything the record says is escaped. Suitable for printing. `nav` is markup a caller puts
+    above the page (a static site's navigation, already escaped; printed pages hide it); `links`
+    turns a trip's dates and a person's name into links where it names them."""
     year = data["year"]
+    links = links or {}
     out = [
         "<!doctype html>",
         '<html lang="en">',
@@ -577,6 +591,7 @@ def html(data: Mapping[str, Any]) -> str:
         f"<style>{CSS}</style>",
         "</head>",
         "<body>",
+        *([f'<nav class="site">{nav}</nav>'] if nav else []),
         "<header>",
         f"<h1>{escape(year)}</h1>",
     ]
@@ -598,10 +613,10 @@ def html(data: Mapping[str, Any]) -> str:
         out.append(f'<p class="muted">{escape(warning)}</p>')
     out.append("</header>")
     out += section("countries", "Days per country", _countries_html(data["countries"], data["nights"]))
-    out += section("trips", "Trips", _trips_html(data["trips"]))
+    out += section("trips", "Trips", _trips_html(data["trips"], links))
     out += section("flights", "Flights", _flights_html(data["flights"]))
     out += section("places", "Places, by nights", _places_html(data["places"]))
-    out += section("people", "People", _people_html(data["people"]))
+    out += section("people", "People", _people_html(data["people"], links))
     out += section("health", "Health, by month", _health_html(data["health"]))
     if data.get("weather"):
         out += section("weather", "Weather", [f"<p>{escape(weather.span_text(data['weather']))}</p>"])
@@ -620,7 +635,14 @@ def section(id_: str, heading: str, body: Sequence[str]) -> list[str]:
     return [f'<section id="{id_}">', f"<h2>{escape(heading)}</h2>", *body, "</section>"]
 
 
-Cell = tuple[str | Sequence[str], str]  # the text (or the lines of a cell) and its class
+class Link(NamedTuple):
+    """A cell that is a link: the text (escaped when rendered) and the href (a relative path)."""
+
+    text: str
+    href: str
+
+
+Cell = tuple[str | Link | Sequence[str], str]  # the text (or a link, or the lines of a cell) and its class
 
 
 def table(heads: Sequence[tuple[str, str]], body: Sequence[Sequence[Cell]]) -> list[str]:
@@ -640,8 +662,16 @@ def table(heads: Sequence[tuple[str, str]], body: Sequence[Sequence[Cell]]) -> l
     return out
 
 
-def _cell(text: str | Sequence[str]) -> str:
+def _cell(text: str | Link | Sequence[str]) -> str:
+    if isinstance(text, Link):
+        return f'<a href="{escape(text.href)}">{escape(text.text)}</a>'
     return escape(text) if isinstance(text, str) else "<br>".join(escape(t) for t in text)
+
+
+def linked(text: str, key: str, links: Links) -> str | Link:
+    """`text` as a link when `links` has `key`, else as it is."""
+    href = links.get(key)
+    return text if href is None else Link(text, href)
 
 
 def _countries_html(c: Mapping[str, Any], n: Mapping[str, Any]) -> list[str]:
@@ -654,10 +684,11 @@ def _countries_html(c: Mapping[str, Any], n: Mapping[str, Any]) -> list[str]:
     return out
 
 
-def _trips_html(found: Sequence[Mapping[str, Any]]) -> list[str]:
+def _trips_html(found: Sequence[Mapping[str, Any]], links: Links | None = None) -> list[str]:
     if not found:
         return ['<p class="muted">No trips.</p>']
-    rows_ = []
+    links = links or {}
+    rows_: list[list[Cell]] = []
     for t in found:
         nights = _plural(int(t["nights"]), "night") + (f" aboard {t['asset']}" if t["asset"] else "")
         flights = []
@@ -667,7 +698,7 @@ def _trips_html(found: Sequence[Mapping[str, Any]]) -> list[str]:
                 flights.append(f"{label} {name}{f['from']} {ARROW} {f['to']}")
         rows_.append(
             [
-                (f"{t['start']} {EN_DASH} {t['end']}", "d"),
+                (linked(f"{t['start']} {EN_DASH} {t['end']}", str(t["id"]), links), "d"),
                 (nights, ""),
                 (f" {ARROW} ".join(t["route"]) if t["route"] else "unknown", ""),
                 (flights, ""),
@@ -725,12 +756,13 @@ def _visit_row(head: str, v: Mapping[str, Any]) -> list[Cell]:
     ]
 
 
-def _people_html(people: Sequence[Mapping[str, Any]]) -> list[str]:
+def _people_html(people: Sequence[Mapping[str, Any]], links: Links | None = None) -> list[str]:
     if not people:
         return ['<p class="muted">Nobody confirmed.</p>']
-    rows_ = [
+    links = links or {}
+    rows_: list[list[Cell]] = [
         [
-            (p["name"], ""),
+            (linked(str(p["name"]), f"person:{p['name']}", links), ""),
             (f"{p['days']:,}", "n"),
             (f"{p['nights']:,}", "n"),
             (p["last_contact"] or "", "d"),

@@ -47,35 +47,42 @@ ARROW = day_reader.ARROW
 DOT = day_reader.DOT
 
 
-def usual_sources(lb: Logbook, first: str, last: str) -> list[str]:
+def usual_sources(lb: Logbook, first: str, last: str, tiers: Sequence[int] | None = None) -> list[str]:
     """The sources with a line on at least `USUAL_SHARE` of the local days in [first, last] that
-    have any line, sorted; none when no day has one."""
+    have any line, sorted; none when no day has one. With `tiers`, counted over the lines of those
+    tiers only, so a gated reading's days are not all gaps in a source the gate holds back."""
     with lb.index() as idx:
-        logged, per_source = idx.source_days(first, last)
+        logged, per_source = idx.source_days(first, last, tiers)
     if not logged:
         return []
     return sorted(source for source, n in per_source.items() if n >= logged * USUAL_SHARE)
 
 
 def read(
-    lb: Logbook, first: str, last: str, airports: Airports | None = None, chunk_days: int = CHUNK_DAYS
+    lb: Logbook,
+    first: str,
+    last: str,
+    airports: Airports | None = None,
+    chunk_days: int = CHUNK_DAYS,
+    tiers: Sequence[int] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One JSON-ready object per day of [first, last], oldest first, as each chunk's reading is
-    done. `ValueError` for a day that is not one or a range that runs backwards;
+    done; through the gate `tiers` when given (`reading.read`), the health and story lines and the
+    usual sources included. `ValueError` for a day that is not one or a range that runs backwards;
     `stays.SettingsError` when the record's settings, places or assets file is not what it should
     be. Nothing is written."""
     window = day_range(first, last)
     if chunk_days < 1:
         raise ValueError(f"chunk_days must be at least 1, not {chunk_days}")
-    usual = usual_sources(lb, first, last)
+    usual = usual_sources(lb, first, last, tiers)
     airports = airports or Airports.load()
     for start in range(0, len(window), chunk_days):
         chunk = window[start : start + chunk_days]
         before = (date.fromisoformat(chunk[0]) - timedelta(days=1)).isoformat()
-        rd = reading.read(lb, before, chunk[-1], airports)
+        rd = reading.read(lb, before, chunk[-1], airports, tiers)
         with lb.index() as idx:
-            found = idx.by_kind(health.KIND, before, chunk[-1])
-            told = story.standing(idx.by_kind(story.KIND), rd.retracted)
+            found = reading.crossing(idx.by_kind(health.KIND, before, chunk[-1]), tiers)
+            told = story.standing(reading.crossing(idx.by_kind(story.KIND), tiers), rd.retracted)
         health_of = day_reader.health_rows(found, rd)
         by_day = _by_day(rd)
         for day in chunk:

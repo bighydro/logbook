@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from ..contrib import trip_bundle, vault
+from ..contrib import site, trip_bundle, vault
 from ..core import crossing, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
@@ -21,21 +21,21 @@ def export_arguments(sub: Subparsers) -> None:
     s = sub.add_parser(
         "export",
         help="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a crossing-package/v1,"
-        " or `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, or `trip-bundle TRIP`:"
-        " one trip for a member of the circle",
+        " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
+        " readers as static HTML, or `trip-bundle TRIP`: one trip for a member of the circle",
     )
     s.add_argument(
         "path",
         nargs="?",
-        help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md)"
-        " or `trip-bundle` (RFC 0030)",
+        help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md),"
+        " `site` (docs/site.md) or `trip-bundle` (RFC 0030)",
     )
     s.add_argument(
         "target",
         nargs="?",
         metavar="FOLDER|TRIP",
-        help="vault: the folder to write the pages into (an Obsidian vault);"
-        " trip-bundle: the trip id as `trips` prints it, or a day inside it",
+        help="vault: the folder to write the pages into (an Obsidian vault); site: the folder to write"
+        " the HTML into; trip-bundle: the trip id as `trips` prints it, or a day inside it",
     )
     s.add_argument("--day", metavar="YYYY-MM-DD", help="one day-package/v1 directory")
     s.add_argument("--days", nargs=2, metavar=("FROM", "TO"), help="one directory per day, inclusive")
@@ -54,7 +54,9 @@ def export_arguments(sub: Subparsers) -> None:
         " record's)",
     )
     s.add_argument(
-        "--tier", metavar="1|1,2|1,2,3", help="crossing: tiers to cross (default 1); vault: 1 or 1,2, never 3"
+        "--tier",
+        metavar="1|1,2|1,2,3",
+        help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3",
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
@@ -70,7 +72,7 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--airports",
         metavar="FILE",
-        help=f"trip-bundle: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+        help=f"trip-bundle, site: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
     s.add_argument(
         "--open",
@@ -92,6 +94,9 @@ def cmd_export(a: argparse.Namespace) -> None:
         return
     if a.path == vault.DESTINATION:
         _export_vault(lb, a)
+        return
+    if a.path == site.DESTINATION:
+        _export_site(lb, a)
         return
     if a.path == trip_bundle.COMMAND:
         _export_trip_bundle(lb, a)
@@ -274,6 +279,44 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
         print(f"  held back: {_plural(built.held_back, 'line')} above tier {max(req.tiers)} ({by_kind})")
     seq, sha = result.line["seq"], result.sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, vault sha256 {sha}…")
+
+
+def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
+    """site FOLDER [--tier 1|1,2]: the readers as a folder of static HTML (`logbook/contrib/site.py`): a
+    Year page per year, every Trip page, a Days index per year, the places and the people, with relative
+    links, no script and nothing fetched; tier-gated under the `site` ceiling in policy/crossing.json
+    (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1 line (RFC 0011).
+    Only the files whose content changed are rewritten."""
+    generated_at = now_utc()
+    try:
+        if not a.target:
+            raise site.SiteError("export site needs a folder: logbook export site <folder>")
+        req = site.request(lb, site.parse_tiers("1" if a.tier is None else a.tier))
+    except site.SiteError as e:
+        print(f"export site: {e}", file=sys.stderr)
+        sys.exit(2)
+    folder = Path(a.target).expanduser()
+    if req is None:
+        print("site: the record has no day; nothing written, nothing appended")
+        return
+    try:
+        built = site.build(lb, req, _airports(a.airports))
+        result = site.export(lb, req, built, folder, generated_at)
+    except (site.SiteError, stays.SettingsError, OSError) as e:
+        print(f"export site: {e}", file=sys.stderr)
+        sys.exit(2)
+    tiers = ",".join(map(str, req.tiers))
+    window = f"{req.since} {EN_DASH} {req.until}"
+    print(f"site: {_plural(built.years, 'year')} {window}, tier {tiers} {ARROW} {folder}")
+    pages = ", ".join(_plural(n, *site.PAGE_NOUNS[kind]) for kind, n in built.pages.items())
+    print(f"  pages: {pages}; {result.written} written, {result.unchanged} unchanged")
+    if built.held_back:
+        by_kind = ", ".join(f"{kind} {n}" for kind, n in built.held_by_kind.items())
+        print(f"  held back: {_plural(built.held_back, 'line')} above tier {max(req.tiers)} ({by_kind})")
+    for warning in built.warnings:
+        print(f"  {warning}")
+    seq, sha = result.line["seq"], result.sha256[:12]
+    print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, site sha256 {sha}…")
 
 
 def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
