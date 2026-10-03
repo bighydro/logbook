@@ -14,6 +14,7 @@ Hard rules — a change that needs to break one is wrong; stop and say so:
 - Every adapter that reads an app's own store (SQLite from a phone backup or this Mac) confirms the schema it needs with `PRAGMA table_info` before reading and tolerates drift: a column it does not need may be missing or renamed and the rows still read; a table it needs that is not there is a counted skip or one clear error naming the store, never a traceback.
 - `import-backup` is never run bare against a real backup: always `--only <sources>`, so a run reads only the stores it was asked for. A disabled source in `policy/import.json` stays skipped either way.
 - A long session commits after each step, signed, so a crash or a context reset loses one step at most.
+- A change never edits `CHANGELOG.md`; it adds `changelog.d/<short-slug>.md` (one or a few `- ` lines in the changelog's wording, optionally under a `### Heading`), which the release folds in. A change with nothing to tell the user gets the `no-changelog` label on its pull request instead.
 
 Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv run ruff check --fix .`, `uv run mypy logbook`). Conventional commits (`feat:`, `fix:`, `spec:`, `docs:`, `adapter:`). Plain English names inside the code: Logbook, Line, Day, Note — no metaphors.
 - Paths: never match or split them as strings; use `pathlib` parts. Windows runs the tests too.
@@ -39,7 +40,7 @@ Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv ru
 
 ## Release routine
 
-- Bump `version` in `pyproject.toml` and `__version__` in `logbook/__init__.py` together; move the `Unreleased` block of `CHANGELOG.md` under the new version and date.
+- Bump `version` in `pyproject.toml` and `__version__` in `logbook/__init__.py` together, `uv lock`, then `uv run python scripts/changelog_assemble.py X.Y.Z`: the fragments in `changelog.d/` (and the `Unreleased` block of `CHANGELOG.md`, while one exists) become the new version section with today's date and the fragments are deleted. The release pull request carries the `no-changelog` label. The checklist is `docs/releasing.md`.
 - Commit, then grep `__version__` on the tagged commit before `git tag -s`: `git grep __version__ HEAD -- logbook/__init__.py` must print the version you are about to tag. Only then `git tag -s vX.Y.Z -m vX.Y.Z` and push the tag.
 
 ## Cross-platform (the tests run on Windows too, and it has caught a bug in every PR that ignored this)
