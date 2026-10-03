@@ -452,6 +452,23 @@ class Index:
             if handle is not None:
                 handle.close()
 
+    def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
+        """id → line for these line ids, read from the files; an id the record has no line for is
+        absent. A few hundred ids per statement; `id` has no index of its own, so each statement
+        is one pass over the table — for the few lines a reader joins by id (a keeper's photo),
+        never for a window."""
+        wanted: list[str] = sorted(set(ids))
+        found: dict[str, Line] = {}
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            places = self.db.execute(
+                f"SELECT file, offset FROM lines WHERE id IN ({', '.join('?' * len(chunk))}) ORDER BY seq",
+                chunk,
+            ).fetchall()
+            for line in self._read(places):
+                found.setdefault(str(line["id"]), line)
+        return found
+
     def line_id(self, source: str, raw_id: str) -> str | None:
         """The id of the line with this (source, raw_id), or None; the first written when the log
         has more than one (an adapter that keys on raw_id never writes two)."""

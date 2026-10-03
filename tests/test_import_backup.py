@@ -14,6 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_apple_books import LINES as BOOK_LINES
 from test_apple_books import _store as _books_store
+from test_apple_photos import KEEPERS as PHOTO_KEEPERS
 from test_apple_photos import LINES as PHOTO_LINES
 from test_apple_photos import _store as _photos_store
 from test_apple_reminders import _second_store as _reminders_second_store
@@ -125,7 +126,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "sbb": SBB_LINES,
     "screentime": SCREENTIME_LINES,
 }
-TOTAL = sum(LINES.values())
+TOTAL = sum(LINES.values()) + PHOTO_KEEPERS  # the import writes the keepers for the photos' marks (RFC 0024)
 STORES = {
     "ios-contacts": "AddressBook.sqlitedb",
     "whatsapp-contacts": "ContactsV2.sqlite",

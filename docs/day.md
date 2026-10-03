@@ -56,8 +56,10 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    count), calls and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
    (`with <name>`, only a name the record's resolution lines make a person: `with US` names
    nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
-   stay — and **proposed** — a face the photo library tagged, an attendee of an all-day entry. The
-   owner is never their own company. A move carries attachments but no company.
+   stay — and **proposed** — a face the photo library tagged, by id or by the name it gave it
+   (`extra.faces`; a person only when the name is exactly a resolution line's label, else as
+   written), an attendee of an all-day entry. The owner is never their own company. A move
+   carries attachments but no company.
 3. **Unplaced** — the day's events, transcripts, notes, mail and calls that fall inside no stay or
    move: what the calendar planned where the track has nothing, or what happened while the tracker
    was silent.

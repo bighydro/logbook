@@ -500,7 +500,8 @@ def _names_someone(line: Line) -> bool:
     if kind == "transcript":
         return bool(payload.get("participants"))
     if kind == "photo":
-        return bool(payload.get("people"))
+        extra = payload.get("extra")
+        return bool(payload.get("people")) or bool(isinstance(extra, dict) and extra.get("faces"))
     if kind == "note":
         return present.WITH.search(str(payload.get("text") or "")) is not None
     return False

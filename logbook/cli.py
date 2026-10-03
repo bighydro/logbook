@@ -76,7 +76,7 @@ from .adapters import ais, ios_contacts, screentime
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
-from .index import local_date
+from .index import Index, local_date
 from .resolve import Ref, identities_from, labels
 from .store import (
     RETRACTION,
@@ -262,11 +262,17 @@ def _append_with(
         options["airports"] = _airports(None)
     seq_before, produced = int(lb.meta["seq"]), [0]
     drafts = flights.reconcile(lb, run(p, **options), counts, options.get("airports"))
+    marked: list[tuple[dict[str, Any], list[str]]] | None = None
+    if getattr(adapter, "KEEPERS", False):  # a photo library whose marks are keepers (RFC 0024)
+        marked = []
+        drafts = _noting_marks(drafts, marked, counts)
     if dry_run:
         _say_dry_run(lb, adapter.NAME, drafts)
         _report_skipped(counts)
         for text in report:
             print(f"  {text}")
+        if marked is not None:
+            _keepers_of_import(lb, adapter.NAME, marked, counts, dry_run=True)
         return 0
     n = lb.append_many(
         _counted(drafts, produced),
@@ -277,8 +283,64 @@ def _append_with(
     _report_skipped(counts)
     for text in report:
         print(f"  {text}")
+    if marked is not None:
+        _keepers_of_import(lb, adapter.NAME, marked, counts)
     inbox.record(lb.root, inbox.finished(lb, recorded_as or p, adapter.NAME, produced[0], n, seq_before))
     return n
+
+
+def _noting_marks(
+    drafts: Iterator[dict[str, Any]], marked: list[tuple[dict[str, Any], list[str]]], counts: dict[str, int]
+) -> Iterator[dict[str, Any]]:
+    """The drafts as they stream, noting each photo draft with a keeper mark (a favourite, the Art
+    album; `keepers.marks`) and its lanes, and counting the photos, for `_keepers_of_import`."""
+    for draft in drafts:
+        if draft.get("kind") == keepers.PHOTO:
+            counts["photos"] = counts.get("photos", 0) + 1
+            lanes = keepers.marks(draft)
+            if lanes:
+                marked.append((draft, lanes))
+        yield draft
+
+
+def _keepers_of_import(
+    lb: Logbook,
+    source: str,
+    marked: list[tuple[dict[str, Any], list[str]]],
+    counts: dict[str, int],
+    dry_run: bool = False,
+) -> None:
+    """The keeper/v1 lines (RFC 0024) for the marks an import carried, written once the photo lines
+    are in the record: each draft's line id is looked up by `(source, raw_id)` through the index, the
+    keeper is `keepers.draft` of that line and lane, and `append_many` skips a `(keeper-inference,
+    <line id>:<lane>)` already there, retracted or not. A dry run counts the same way: a photo not
+    yet in the record would be a new keeper; one already there is looked up. Says what it did."""
+    drafts: list[dict[str, Any]] = []
+    new_photos = 0
+    with lb.index() as idx:
+        for draft, lanes in marked:
+            raw_id = (draft.get("payload") or {}).get("raw_id")
+            line_id = None if raw_id is None else idx.line_id(source, str(raw_id))
+            if line_id is None:
+                new_photos += len(lanes)  # a dry run: the photo itself is not in the record yet
+                continue
+            drafts.extend(keepers.draft({**draft, "id": line_id}, lane) for lane in lanes)
+        if dry_run:
+            already = len(idx.existing({key for d in drafts if (key := dedupe_key(d)) is not None}))
+    photos = f"{_plural(len(marked), 'marked photo')} of {counts.get('photos', 0)}"
+    if dry_run:
+        n = len(drafts) - already + new_photos
+        print(f"  keepers: {n} would be written, {already} already in the record (dry run, nothing written)")
+        return
+    already = 0
+
+    def skipped(_draft: dict[str, Any]) -> None:
+        nonlocal already
+        already += 1
+
+    n = lb.append_many(drafts, skipped=skipped)
+    already_text = f" ({already} already in the record)" if already else ""
+    print(f"  keepers: {n} new from {photos}{already_text}")
 
 
 def _say_dry_run(lb: Logbook, name: str, drafts: Iterable[dict[str, Any]]) -> None:
@@ -1297,8 +1359,11 @@ def _infer_keepers(a: argparse.Namespace) -> None:
 
 
 def cmd_keepers(a: argparse.Namespace) -> None:
-    """`keepers [--since DAY] [--until DAY] [--lane memory|art] [--json]`: the keeper lines
-    standing (RFC 0024), by day. Nothing is written."""
+    """`keepers [--since DAY] [--until DAY] [--lane memory|art] [--people] [--json]`: the keeper
+    lines standing (RFC 0024), by day; with `--people`, who appears on them per month — the faces
+    the library named and the people it tagged on each keeper's photo, resolved through the
+    resolution lines where a name is exactly a label, every one proposed (`keepers.people_by_month`).
+    Nothing is written."""
     lb = Logbook.find()
     for day in (a.since, a.until):
         if day is not None:
@@ -1310,27 +1375,59 @@ def cmd_keepers(a: argparse.Namespace) -> None:
     tz = str(lb.meta["timezone"])
     with lb.index() as idx:
         found = keepers.standing([*idx.by_kind(keepers.KIND, a.since, a.until), *idx.retractions()])
-    rows = [
-        keepers.summary(line, local_date(str(line["at"]), tz))
-        for line in found
-        if a.lane is None or (line.get("payload") or {}).get("lane") == a.lane
-    ]
+        if a.lane is not None:
+            found = [line for line in found if (line.get("payload") or {}).get("lane") == a.lane]
+        if a.people:
+            _keepers_people(lb, idx, found, tz, a)
+            return
+    rows = [keepers.summary(line, local_date(str(line["at"]), tz)) for line in found]
     rows.sort(key=lambda r: (r["day"], r["at"], r["lane"]))
     if a.json:
         print(json.dumps({"keepers": rows}, indent=2, ensure_ascii=False))
         return
     if not rows:
-        print(
-            "no keepers"
-            + (f" in lane {a.lane}" if a.lane else "")
-            + "; `logbook infer keepers` reads the marks"
-        )
+        print(_no_keepers(a))
         return
     zone = ZoneInfo(tz)
     for r in rows:
         photo = r["photo"] if isinstance(r["photo"], dict) else {}
         name = photo.get("file_name") or photo.get("asset_id") or "?"
         print(f"  {r['day']}  {_clock(r['at'], zone)}  {r['lane']:<6} {r['source']:<10} {name}")
+
+
+def _no_keepers(a: argparse.Namespace) -> str:
+    lane = f" in lane {a.lane}" if a.lane else ""
+    return f"no keepers{lane}; `logbook infer keepers` reads the marks"
+
+
+def _keepers_people(lb: Logbook, idx: Index, found: list[Line], tz: str, a: argparse.Namespace) -> None:
+    """`keepers --people`: the keepers' photo lines by id and the identities through the index, then
+    `keepers.people_by_month`; a table by month, or `{"people": [...]}`."""
+    photo_ids = {
+        str(ref.get("line"))
+        for line in found
+        if isinstance(ref := (line.get("payload") or {}).get("photo"), dict) and ref.get("line")
+    }
+    photos = idx.by_ids(photo_ids)
+    identities = identities_from([*idx.retractions(), *idx.resolutions()])
+    rows = keepers.people_by_month(found, photos, identities, tz)
+    if a.json:
+        print(json.dumps({"people": rows}, indent=2, ensure_ascii=False))
+        return
+    if not found:
+        print(_no_keepers(a))
+        return
+    if not rows:
+        print(f"{_plural(len(found), 'keeper')}, nobody named on them")
+        return
+    month = None
+    for r in rows:
+        if r["month"] != month:
+            month = r["month"]
+            print(month)
+        lanes = " · ".join(f"{lane} {n}" for lane, n in r["lanes"].items() if n)
+        who = r["name"] if r["person"] else f"{r['name']} (no person)"
+        print(f"  {who:<28} {_plural(r['keepers'], 'keeper'):>11}  {lanes:<22} {r['status']}")
 
 
 def cmd_promises(a: argparse.Namespace) -> None:
@@ -3937,6 +4034,11 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--since", metavar="YYYY-MM-DD", help="from this local day")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="up to this local day, inclusive")
     s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
+    s.add_argument(
+        "--people",
+        action="store_true",
+        help="who appears on the keepers, per month: the faces the library named, proposed only",
+    )
     s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
     s.set_defaults(fn=cmd_keepers)
     s = sub.add_parser(
