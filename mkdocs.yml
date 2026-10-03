@@ -78,6 +78,7 @@ nav:
   - In a browser: serve.md
   - The rollups: rollups.md
   - The ledger: ledger.md
+  - Shared trips: trips-shared.md
   - The Year: year.md
   - On paper: print.md
   - The vault (Obsidian, Logseq): vault.md
