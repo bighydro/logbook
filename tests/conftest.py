@@ -6,8 +6,14 @@ nothing but its tmp_path, and a module-scoped fixture is built once per worker (
 
 from __future__ import annotations
 
+import http.client
+import importlib
 import os
+import socket
+import urllib.request
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -37,3 +43,65 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         for item in items:
             if marker in item.keywords:
                 item.add_marker(skip)
+
+
+class NetworkAttempt(RuntimeError):
+    """Raised by `no_network` where a test's code tried to open a connection."""
+
+
+@pytest.fixture
+def no_network(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every way out of the process refuses and is recorded: `socket.socket` (any socket, before it
+    could connect, bind or send), `socket.create_connection`, `socket.getaddrinfo` (a name lookup is
+    a packet), `urllib.request.urlopen`, `http.client.HTTPConnection.connect` and, when the package
+    is installed, the request path of `httpx`, `requests` and `websockets`. Each call appends its
+    name to the returned list and raises `NetworkAttempt`, which is not an OSError, so a reader that
+    swallows connection errors still fails the test: assert the list is empty once the command has
+    run, whatever the command printed. The guard holds for the test's duration only."""
+    attempts: list[str] = []
+
+    def refuse(where: str) -> Callable[..., Any]:
+        def _refuse(*args: Any, **kwargs: Any) -> Any:
+            attempts.append(where)
+            raise NetworkAttempt(f"{where}: this command may not open a connection")
+
+        return _refuse
+
+    class Socket(socket.socket):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            attempts.append("socket.socket")
+            raise NetworkAttempt("socket.socket: this command may not open a socket")
+
+    monkeypatch.setattr(socket, "socket", Socket)
+    monkeypatch.setattr(socket, "create_connection", refuse("socket.create_connection"))
+    monkeypatch.setattr(socket, "getaddrinfo", refuse("socket.getaddrinfo"))
+    monkeypatch.setattr(urllib.request, "urlopen", refuse("urllib.request.urlopen"))
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", refuse("urllib.request.OpenerDirector.open"))
+    monkeypatch.setattr(http.client.HTTPConnection, "connect", refuse("http.client.HTTPConnection.connect"))
+    for path in (  # the request path of the clients the adapters use, patched where the package imports
+        "httpx.HTTPTransport.handle_request",
+        "httpx.AsyncHTTPTransport.handle_async_request",
+        "requests.Session.request",
+        "requests.adapters.HTTPAdapter.send",
+        "websockets.sync.client.connect",
+        "websockets.asyncio.client.connect",
+    ):
+        _patch_if_present(monkeypatch, path, refuse(path))
+    return attempts
+
+
+def _patch_if_present(monkeypatch: pytest.MonkeyPatch, path: str, replacement: Any) -> None:
+    """`package.module.Class.attribute` replaced when the package is installed; nothing otherwise."""
+    parts = path.split(".")
+    for n in range(len(parts) - 1, 0, -1):
+        try:
+            holder: Any = importlib.import_module(".".join(parts[:n]))
+        except ImportError:
+            continue
+        for part in parts[n:-1]:
+            holder = getattr(holder, part, None)
+            if holder is None:
+                return
+        if hasattr(holder, parts[-1]):
+            monkeypatch.setattr(holder, parts[-1], replacement)
+        return
