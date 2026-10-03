@@ -148,3 +148,69 @@ def test_add_dry_run_of_a_sentence_writes_no_note(lb: Logbook, capsys, monkeypat
     cli.main(["add", "had", "coffee", "with", "Kari", "--dry-run"])
     assert "manual: 1 line would be added (dry run, nothing written)" in capsys.readouterr().out
     assert lb.meta["seq"] == 0
+
+
+# -- a folder: walked into its subfolders, bounded, the ones read listed; no adapter is quiet ------------
+
+TAKEOUT = ROOT / "tests" / "fixtures" / "takeout"
+
+
+def _takeout_root(tmp_path: Path) -> Path:
+    """A Takeout root as Google lays it out: products in folders, their files one or two levels down,
+    and things no adapter reads (the archive browser, a Drive document)."""
+    root = tmp_path / "Takeout"
+    shutil.copytree(TAKEOUT / "Google Meet", root / "Google Meet")
+    shutil.copytree(TAKEOUT / "YouTube and YouTube Music", root / "YouTube and YouTube Music")
+    (root / "Drive").mkdir()
+    (root / "Drive" / "Boat notes.txt").write_text("spring: antifouling\n", encoding="utf-8")
+    (root / "archive_browser.html").write_text("<html></html>\n", encoding="utf-8")
+    return root
+
+
+def test_add_folder_descends_into_subfolders_and_lists_each_it_read(lb: Logbook, tmp_path: Path):
+    root = _takeout_root(tmp_path)
+    r = _run(lb, str(root))
+    assert r.returncode == 0, r.stderr
+    assert "added 4 lines from google-takeout-meet" in r.stdout
+    assert "added 4 lines from google-takeout-youtube" in r.stdout
+    assert "no adapter for this file yet" not in r.stdout
+    assert (
+        "Takeout: read 2 folders — Google Meet, YouTube and YouTube Music/history;"
+        " 2 files with no adapter (--verbose names them)" in r.stdout
+    )
+    assert lb.meta["seq"] == 8
+
+
+def test_add_folder_verbose_names_every_file_with_no_adapter(lb: Logbook, tmp_path: Path):
+    root = _takeout_root(tmp_path)
+    r = _run(lb, str(root), "--verbose")
+    assert r.returncode == 0, r.stderr
+    assert "Drive/Boat notes.txt: no adapter for this file yet" in r.stdout
+    assert "archive_browser.html: no adapter for this file yet" in r.stdout
+    assert (
+        "Takeout: read 2 folders — Google Meet, YouTube and YouTube Music/history; 2 files with no adapter"
+        in r.stdout
+    )
+    assert "(--verbose names them)" not in r.stdout
+
+
+def test_add_folder_walks_four_levels_down_and_no_further(lb: Logbook, tmp_path: Path):
+    root = tmp_path / "deep"
+    near = root / "l1" / "l2" / "l3" / "l4"
+    near.mkdir(parents=True)
+    shutil.copy(FIXTURE, near / "a.json")
+    far = near / "l5"
+    far.mkdir()
+    _second_export(far / "b.json", 5)
+    r = _run(lb, str(root))
+    assert r.returncode == 0, r.stderr
+    assert "added 40 lines from dawarich" in r.stdout and "added 5 lines" not in r.stdout
+    assert "deep: read 1 folder — l1/l2/l3/l4" in r.stdout
+    assert lb.meta["seq"] == 40
+
+
+def test_add_file_with_no_adapter_given_by_name_still_says_so_without_verbose(lb: Logbook, tmp_path: Path):
+    mystery = tmp_path / "mystery.csv"
+    mystery.write_text("a,b\n1,2\n", encoding="utf-8")
+    r = _run(lb, str(mystery))
+    assert r.returncode == 2 and "mystery.csv: no adapter for this file yet" in r.stdout

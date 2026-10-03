@@ -163,8 +163,17 @@ def _under_home(path: Path) -> str:
         return str(path)
 
 
-def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None, dry_run: bool = False) -> bool:
-    """Append one file through the adapter that recognises it. False when nothing does."""
+def _add_file(
+    lb: Logbook,
+    p: Path,
+    options: Mapping[str, Any] | None = None,
+    dry_run: bool = False,
+    quiet: bool = False,
+    shown: str | None = None,
+) -> bool:
+    """Append one file through the adapter that recognises it. False when nothing does, said unless
+    `quiet` (a file met while walking a folder is counted, not named) and under `shown` (the path
+    as the walk prints it) when given."""
     adapter = adapters.find(p)
     if adapter is not None:
         _append_with(lb, adapter, p, options, dry_run=dry_run)
@@ -178,11 +187,79 @@ def _add_file(lb: Logbook, p: Path, options: Mapping[str, Any] | None = None, dr
         print(f"added {n} lines from {p.name}")
         inbox.record(lb.root, inbox.finished(lb, p, inbox.JSONL, produced[0], n, seq_before))
         return True
-    print(
-        f"{p.name}: no adapter for this file yet (roadmap phase 1). "
-        "Put it in inbox/ and it will be read when one exists."
-    )
+    if not quiet:
+        print(
+            f"{shown or p.name}: no adapter for this file yet (roadmap phase 1). "
+            "Put it in inbox/ and it will be read when one exists."
+        )
     return False
+
+
+FOLDER_DEPTH = 4  # folders walked below the one given: `Takeout/<Product>/<sub>/<sub>/<file>` and no deeper
+
+
+def _add_folder(
+    lb: Logbook, top: Path, given: Mapping[str, Any], dry_run: bool = False, verbose: bool = False
+) -> list[Path]:
+    """`add <folder>`: the folder, walked. A folder an adapter claims as a whole (`Google Pay/`,
+    `Keep/`) is handed to it, and the subfolders that adapter also claims are left to it; every
+    other subfolder is walked the same way, `FOLDER_DEPTH` levels down and no further, so a whole
+    Takeout root reaches `My Activity/<product>/MyActivity.json` and `YouTube and YouTube
+    Music/history/`. A file in a folder nobody claims goes through the adapter that recognises it;
+    one no adapter reads is counted and, with `verbose`, named. Hidden files and folders are not
+    exports. Ends with one line naming each folder something was read from, relative to `top`,
+    and how many files no adapter read. Returns the inputs read, for the cleanable hint."""
+    imported: list[Path] = []
+    read: list[Path] = []
+    unread: list[Path] = []
+    _walk(lb, top, top, 0, given, dry_run, verbose, imported, read, unread)
+    folders = [top.name if f == top else f.relative_to(top).as_posix() for f in read]
+    n = len(folders)
+    text = (
+        f"{top.name}: read {n} folder{'s' if n != 1 else ''} — {', '.join(folders)}"
+        if n
+        else f"{top.name}: nothing read"
+    )
+    if unread:
+        m = len(unread)
+        text += f"; {m:,} file{'s' if m != 1 else ''} with no adapter"
+        if not verbose:
+            text += " (--verbose names them)"
+    print(text)
+    return imported
+
+
+def _walk(
+    lb: Logbook,
+    top: Path,
+    folder: Path,
+    depth: int,
+    given: Mapping[str, Any],
+    dry_run: bool,
+    verbose: bool,
+    imported: list[Path],
+    read: list[Path],
+    unread: list[Path],
+) -> None:
+    adapter = adapters.find(folder)
+    if adapter is not None and _add_file(lb, folder, given, dry_run=dry_run):
+        imported.append(folder)
+        read.append(folder)
+    for entry in sorted(folder.iterdir()):
+        if entry.name.startswith("."):
+            continue
+        if entry.is_dir():
+            if depth >= FOLDER_DEPTH or (adapter is not None and adapter.sniff(entry)):
+                continue
+            _walk(lb, top, entry, depth + 1, given, dry_run, verbose, imported, read, unread)
+        elif entry.is_file() and adapter is None:
+            shown = entry.relative_to(top).as_posix()
+            if _add_file(lb, entry, given, dry_run=dry_run, quiet=not verbose, shown=shown):
+                imported.append(entry)
+                if folder not in read:
+                    read.append(folder)
+            else:
+                unread.append(entry)
 
 
 def _append_with(
@@ -554,6 +631,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_chat_message_id": "without a message id, keyed by time and text",
     "no_owner": "with nobody named as the owner (owner_emails in logbook.json), so nothing is mine",
     "no_conference_id": "without a conference id, keyed by start and organizer",
+    "no_transaction_id": "without a transaction id, keyed by time, merchant and amount",
     "media_stored": "with media stored",
     "no_stanza_id": "without a stanza id, keyed by row id",
     "no_guid": "without a guid, keyed by row id",
@@ -744,13 +822,8 @@ def cmd_add(a: argparse.Namespace) -> None:
     ok = True
     imported: list[Path] = []
     for p in paths:
-        if p.is_dir() and adapters.find(p) is not None:  # a folder one adapter reads as a whole
-            if _add_file(lb, p, given, dry_run=a.dry_run):
-                imported.append(p)
-        elif p.is_dir():  # every file in it, in name order; hidden files are not exports
-            for f in sorted(p.iterdir()):
-                if f.is_file() and not f.name.startswith(".") and _add_file(lb, f, given, dry_run=a.dry_run):
-                    imported.append(f)
+        if p.is_dir():
+            imported.extend(_add_folder(lb, p, given, dry_run=a.dry_run, verbose=a.verbose))
         elif _add_file(lb, p, given, dry_run=a.dry_run):
             imported.append(p)
         else:
@@ -4286,6 +4359,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="run the adapter, say how many lines would be added and how many are already in the record;"
         " write nothing",
+    )
+    s.add_argument(
+        "--verbose",
+        action="store_true",
+        help="a folder: name every file no adapter reads (default: count them in the folder's last line)",
     )
     s.set_defaults(fn=cmd_add)
     s = sub.add_parser(

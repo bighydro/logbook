@@ -5,11 +5,20 @@ and this project reads each with a sub-adapter of its own, all writing `source` 
 (ADR 0008). Hand `logbook add` the product's folder, or name the adapter and hand it anything:
 
 ```bash
+logbook add ~/Takeout                                   # the whole archive: every product folder in turn
 logbook add ~/Takeout/"Google Chat"                     # sniffed: the folder is recognised
 logbook add takeout-chat ~/Takeout/"Google Chat"        # or by name, short or long (google-takeout-chat)
 logbook add takeout-pay ~/Takeout/"Google Pay" --dry-run   # count against the record, write nothing
 logbook add takeout-contacts ~/Takeout/Contacts         # merges with the people the record already knows
 ```
+
+A folder is walked into its subfolders, four levels down and no further, so the root reaches `My
+Activity/<product>/MyActivity.json` and `YouTube and YouTube Music/history/`. A folder an adapter reads
+as a whole (`Google Pay/`, `Keep/`) is handed to it; every other file goes through the adapter that
+recognises it, and a file none does (`archive_browser.html`, a Drive document) is counted, not named,
+unless you pass `--verbose`. The last line names each folder something was read from:
+`Takeout: read 3 folders — Google Meet, Google Pay, YouTube and YouTube Music/history; 12 files with
+no adapter (--verbose names them)`.
 
 `--dry-run` runs the adapter, counts how many lines would be added and how many the record already
 holds by `(source, raw_id)`, prints what the adapter skipped and why, and writes nothing: not a line,
@@ -50,13 +59,18 @@ The first seven are described in the [adapters overview](README.md). The rest:
 
 `Google Pay/Google transactions/transactions_<account>.csv` is one row per payment: `Time`,
 `Transaction ID`, `Description`, `Product`, `Payment Method`, `Status`, `Amount`, `Fee`, `Net Amount`,
-the amount as text with its currency (`-129.00 NOK`, `NOK 2450.00`, `€4,99`). One `transaction/v1`
-line per row (RFC 0021), tier 3 always; `--tier` is not an option of this adapter. The amount is signed
-from your side: the sign in the text when it has one, else negative, since money left, unless the
-status, product or description says refund, received, reversal or credit. The currency is the ISO code
-or symbol in the text; `kr` names three currencies, so a row with only that is skipped and counted
-(`without a currency`). The description is the merchant, the masked card the account, Completed is
-`posted` and Pending `pending`, and the day in your zone is `date` when it differs from the UTC day.
+the amount as text with its currency (`-129.00 NOK`, `NOK 2450.00`, `€4,99`). The time is read in
+every clock Takeout has written — `Jun 10, 2026, 10:35:12 AM UTC` in the older exports, `2026-10-01
+10:35:12 UTC` in the export of 2026, RFC3339 — under `Time` or `Date`; an export that puts a bare
+number under `Amount` and the code under `Currency` reads the same. One `transaction/v1` line per row
+(RFC 0021), tier 3 always; `--tier` is not an option of this adapter. The amount is signed from your
+side: the sign in the text when it has one, else negative, since money left, unless the status,
+product or description says refund, received, reversal or credit. The currency is the ISO code or
+symbol in the text, else the `Currency` column; `kr` names three currencies, so a row with only that
+is skipped and counted (`without a currency`). The description is the merchant, the masked card the
+account, Completed is `posted` and Pending `pending`, and the day in your zone is `date` when it
+differs from the UTC day. `raw_id` is `pay:<transaction id>`; a row without one is keyed by its time,
+merchant and amount, and counted.
 
 `Google Pay/Passes/<id>.json` is one file per pass in Wallet. An event ticket, a transit pass or a
 flight pass is one `event/v1` line (RFC 0009), tier 1: the event's name (or `Aker brygge →
@@ -85,7 +99,11 @@ and its text, and counted.
 nobody named every call is incoming and the run says so; `answered` true (you joined, even a call
 nobody else came to); the duration and the end when it lasted; the organizer as an email ref when not
 you; `service` `meet`; the meeting code, the participant count, the product, the device and the call
-type under `extra`, with your `role`. `raw_id` is `meet:<conference id>`.
+type under `extra`, with your `role`. `raw_id` is `meet:<conference id>`. The columns are found by what
+their header says, in the older export (`Start Time`, `Duration (seconds)`, `Organizer Email`) and in
+the one of 2026 (`Start time (UTC)`, an `End time (UTC)` in place of the duration, `Organiser`); the
+start is read in every clock Takeout has written, `2026-10-01 14:00:00 UTC` included, and a duration as
+seconds, a clock (`0:30:12`) or words (`1h 2m 3s`).
 
 ### Contacts → `resolution/v1`
 
@@ -102,13 +120,18 @@ from either source, appends nothing. A card with no email and no phone is skippe
 ### Access Log Activity → `event/v1` at tier 3 (off by default)
 
 `Access Log Activity/Activities - A list of Google services accessed by.csv`, one row per access to a
-Google service from your account: when, which product, what (a sign-in, a password change), from which
-address, with which browser, and, when Google had them, the device and the city it placed the address
-at. One `event/v1` line per row, **tier 3**: a sign-in from a city on a date says where your devices were,
-which is a location fact as sensitive as a transaction. The title is `Gmail: Sign in`, the calendar
-`Google Account access`, the location the city and country when the row has either; the address, the
-user agent, the device and the place go under `extra`. Every open of Gmail is a row, so the source is
-off until you say otherwise.
+Google service from your account: when (`2026-10-01 06:59:59 UTC` in the export of 2026; the older
+clocks read too), which product and sub-product, what (a sign-in, a password change), the Gmail
+channel, and the country, region and city Google placed the address at — in the 2026 export under
+`Activity Country`, `Activity Region` and `Activity City`, in older ones `Country Code` and `City`,
+with the device. One `event/v1` line per row, **tier 3**: a sign-in from a city on a date says where
+your devices were, which is a location fact as sensitive as a transaction. The title is `Gmail: Sign
+in`, the calendar `Google Account access`, the location the city, region and country as text, never a
+coordinate; the product, the activity, the channel, the device and the place go under `extra`. **The
+IP addresses, the user agent and the account id are never written**: the address and the browser are
+hashed into the line's id only, so two accesses in one second from two addresses stay two lines. The
+folder's other file, `Devices - A list of devices (…) used to access.csv`, is not read. Every open of
+Gmail is a row, so the source is off until you say otherwise.
 
 ### My Activity → `browse/v1`, `watch/v1` (off by default)
 
@@ -127,5 +150,6 @@ searched is kept as text under `extra.location_hint`, never as a location line.
 Gmail is its own adapter (`mail`, `logbook add mail ~/Takeout/Mail`). Drive, Maps (saved places go
 through `logbook places import-takeout`), Fit, Play, Assistant, Home, News, Shopping, Voice and the rest
 of the archive are not read yet; drop a folder in `inbox/` and it stays there until an adapter exists.
-A whole `Takeout/` folder handed to `add` is walked file by file today (the package's own `walk` is on
-the roadmap), so hand it a product's folder, or the archive one product at a time.
+A whole `Takeout/` folder handed to `add` is walked into every product folder, four levels down; what
+no adapter reads is counted in the last line (`--verbose` names each file). The package's own `walk`,
+which would dispatch by the Takeout layout without sniffing, and a `zip` reader are on the roadmap.
