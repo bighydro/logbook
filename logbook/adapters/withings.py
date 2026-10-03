@@ -36,6 +36,12 @@ profiles never collide. `device` is the store's device model number as text; `ex
 profile's number. `tz` is the row's zone name when it is an IANA name, else the record's. Every line is
 tier 3 (SPEC §4; `logbook add --tier` overrides). Pure: stores opened `mode=ro`, `immutable=1`, each
 read once; lines of one run are yielded in `at` order; no network.
+
+The same adapter reads the account's data export (`logbook add withings <folder>`, the CSVs of
+*Download my data*: weight and body composition, blood pressure, sleep, heart rate, steps, workouts)
+through `withings_export`, whose docstring has the files and the mapping; a later export that corrects
+a sample supersedes the line already in the record (`health_export.corrected`, through `existing` when
+`logbook add` passes it).
 """
 
 from __future__ import annotations
@@ -46,6 +52,8 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from . import health_export, withings_export
 
 NAME = "withings"
 KIND = "health"
@@ -76,8 +84,11 @@ TYPES = {  # ZTYPEIDENTIFIER → (profile type, unit)
 
 
 def sniff(path: Path) -> bool:
-    """A Withings `_WTHealth` or `_Measure` SQLite store. Never raises."""
+    """A Withings `_WTHealth` or `_Measure` SQLite store, or the data export's folder or one of its
+    CSVs. Never raises."""
     path = Path(path)
+    if withings_export.is_export(path):
+        return True
     try:
         if not path.is_file():
             return False
@@ -116,29 +127,36 @@ def run(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     tier: int | None = None,
+    existing: health_export.Existing | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """One health-sample/v1 line per reading, in `at` order across the stores read.
+    """One health-sample/v1 line per reading, in `at` order across the stores (or the export's files)
+    read.
 
     `since` is RFC3339 UTC; lines with `at` before it are not yielded. `counts` tallies
     `skipped_relayed`, `skipped_deleted`, `skipped_no_value`, `skipped_no_date`,
-    `skipped_placeholder_date` and `skipped_other_type`. `timezone` is the record's zone, used when a
-    row has none; `tier` overrides 3."""
+    `skipped_placeholder_date` and `skipped_other_type` (the export's own are in `withings_export`).
+    `timezone` is the record's zone, used when a row has none; `tier` overrides 3. `existing` is the
+    record's standing lines by `(source, raw_id)`, for the corrections (`health_export.corrected`)."""
     path = Path(path)
     counts = counts if counts is not None else {}
     streams = [
         _store_lines(store, counts, timezone, tier or TIER) for store in _stores(path) if store.is_file()
     ]
-    for line in heapq.merge(*streams, key=lambda line: (line["at"], line["payload"]["raw_id"])):
-        if since and line["at"] < since:
-            continue
-        yield line
+    if withings_export.is_export(path):
+        streams.append(withings_export.lines(path, counts, timezone, tier or TIER))
+    merged = heapq.merge(*streams, key=lambda line: (line["at"], line["payload"]["raw_id"]))
+    yield from health_export.corrected(
+        (line for line in merged if not since or line["at"] >= since), existing, counts
+    )
 
 
 def _stores(path: Path) -> list[Path]:
     """The stores one call reads: every profile's two stores in a folder; a store and its partner
-    of the same profile otherwise."""
+    of the same profile otherwise; none for a file of the export."""
     if path.is_dir():
         return sorted(p for p in path.iterdir() if p.name.endswith((HEALTH_SUFFIX, MEASURE_SUFFIX)))
+    if path.suffix.lower() == ".csv":
+        return []
     name = path.name
     for suffix, partner in ((HEALTH_SUFFIX, MEASURE_SUFFIX), (MEASURE_SUFFIX, HEALTH_SUFFIX)):
         if name.endswith(suffix):

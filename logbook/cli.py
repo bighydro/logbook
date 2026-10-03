@@ -201,7 +201,9 @@ def _append_with(
     there are none; one
     whose `run` takes `resolved` gets the refs the record already resolves, as `{(kind, value):
     entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows; one
-    that takes `asset` must be given a registered one.
+    that takes `asset` must be given a registered one; one whose `run` takes `existing` gets the
+    record's standing lines by (source, raw_id), batched through the index, so a later export can
+    correct a sample (`health_export.corrected`).
     One whose `run` takes `progress` gets a reporter that prints every report it makes with the
     bytes read and the rate; one whose `run` takes `cursor` gets the inbox manifest's cursor
     (`logbook.inbox`), so an import that stopped resumes where the record holds the source up to,
@@ -234,6 +236,8 @@ def _append_with(
         options["report"] = report
     if _takes(adapter, "timezone"):
         options["timezone"] = lb.meta["timezone"]
+    if _takes(adapter, "existing"):
+        options["existing"] = _existing(lb)
     if _takes(adapter, "store"):
         options["store"] = (lambda data: Path(attachments.DIR)) if dry_run else lb.attach
     if _takes(adapter, "store_file"):
@@ -402,6 +406,18 @@ def _check_asset(lb: Logbook, adapter: adapters.Adapter, asset: object) -> None:
         sys.exit(2)
 
 
+def _existing(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], dict[tuple[str, str], dict[str, Any]]]:
+    """For a file adapter whose `run` takes `existing`: the record's line for each (source, raw_id)
+    it asks about, read through the index in one batch, so an export can be checked against what
+    stands and a changed sample written as a correction."""
+
+    def existing(keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
+        with lb.index() as idx:
+            return dict(idx.lines_of(keys))
+
+    return existing
+
+
 def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
     """The record's asset registry for an adapter that takes `assets`; a broken file exits 2."""
     try:
@@ -527,6 +543,8 @@ SKIP_PHRASES = {
     "skipped_relayed": "relayed from another app",
     "skipped_daily_total": "daily totals",
     "skipped_no_data": "days the provider had no values for (asked again next run)",
+    "skipped_unreadable_csv": "CSV files without the columns this reader needs",
+    "skipped_unreadable_row": "rows that would not parse",
 }
 NOTE_PHRASES = {  # counts that are not skips: the line was written, with something worth knowing
     "merged_into_known_people": "contacts merged into people the record knows",
@@ -556,6 +574,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_summary": "without a summary",
     "no_recording": "without a recording (summary only)",
     "merged": "merged into a flight already in the record",
+    "corrected": "corrected: a later export changed a sample, the line in the record is superseded",
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",
     "no_gap": "calendar flights the location points do not confirm",
@@ -687,6 +706,9 @@ def cmd_add(a: argparse.Namespace) -> None:
         "routes": Path(a.routes).expanduser() if a.routes else None,
     }
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
+        if a.dry_run:
+            print("add: --dry-run goes with a file or folder, not a declared flight", file=sys.stderr)
+            sys.exit(2)
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
         return
     if a.mac is not None or a.backup is not None or a.what == [screentime.NAME]:

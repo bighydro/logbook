@@ -31,6 +31,12 @@ exercise entry (the app keeps their day only) are spans over that local day — 
 next — with `extra.all_day` true; nothing is invented about the hour. `raw_id` is `<type>:<uid>`;
 `source_name` is `MyFitnessPal`. Every line is tier 3 (SPEC §4; `logbook add --tier` overrides). Pure:
 opened `mode=ro`, `immutable=1`; no network.
+
+The same adapter reads the account's CSV export (`logbook add myfitnesspal <Nutrition-Summary.csv>`:
+one `energy_intake` line per meal per day, the macros, water and note under `extra`) through
+`myfitnesspal_export`, whose docstring has the mapping; a later export that corrects a meal supersedes
+the line already in the record (`health_export.corrected`, through `existing` when `logbook add`
+passes it).
 """
 
 from __future__ import annotations
@@ -42,6 +48,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from . import health_export, myfitnesspal_export
 
 NAME = "myfitnesspal"
 KIND = "health"
@@ -58,8 +66,10 @@ POUNDS = ("lb", "lbs", "pound", "pounds")
 
 
 def sniff(path: Path) -> bool:
-    """A SQLite file with the food diary tables. Never raises."""
+    """A SQLite file with the food diary tables, or the nutrition CSV export. Never raises."""
     path = Path(path)
+    if myfitnesspal_export.is_export(path):
+        return True
     try:
         if not path.is_file():
             return False
@@ -97,15 +107,37 @@ def run(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     tier: int | None = None,
+    existing: health_export.Existing | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """One health-sample/v1 line per food entry with energy, weight and exercise entry, in `at` order.
+    """One health-sample/v1 line per food entry with energy, weight and exercise entry, in `at` order;
+    from the CSV export, one per meal per day.
 
     `since` is RFC3339 UTC; lines with `at` before it are not yielded. `counts` tallies
     `skipped_no_value`, `skipped_other_type`, `skipped_bad_span`, `skipped_daily_total` and
-    `skipped_no_date`. `timezone` is the record's zone, the clock's zone when the store names none;
-    `tier` overrides 3."""
+    `skipped_no_date` (the export's own are in `myfitnesspal_export`). `timezone` is the record's
+    zone, the clock's zone when the store names none; `tier` overrides 3. `existing` is the record's
+    standing lines by `(source, raw_id)`, for the corrections (`health_export.corrected`)."""
     path = Path(path)
     counts = counts if counts is not None else {}
+    if _is_sqlite(path):
+        lines = _store_lines(path, counts, timezone, tier or TIER)
+    else:
+        lines = myfitnesspal_export.lines(path, counts, timezone, tier or TIER)
+    yield from health_export.corrected(
+        (line for line in lines if not since or line["at"] >= since), existing, counts
+    )
+
+
+def _is_sqlite(path: Path) -> bool:
+    try:
+        with path.open("rb") as fh:
+            return fh.read(len(SQLITE_HEADER)) == SQLITE_HEADER
+    except OSError:
+        return False
+
+
+def _store_lines(path: Path, counts: dict[str, int], timezone: str | None, tier: int) -> list[dict[str, Any]]:
+    """Every line of the app's store, sorted by `at`."""
     con = _open(path)
     try:
         tables = _tables(con)
@@ -115,9 +147,9 @@ def run(
         meals = _meal_names(properties.get("meal_names"))
         weight_unit = (properties.get("body_weight_unit_preference") or "").strip().lower()
         lines: list[dict[str, Any]] = []
-        lines.extend(_foods(con, tables, meals, zone, zone_name, counts, tier or TIER))
-        lines.extend(_weights(con, tables, weight_unit, zone, zone_name, counts, tier or TIER))
-        lines.extend(_workouts(con, tables, zone, zone_name, counts, tier or TIER))
+        lines.extend(_foods(con, tables, meals, zone, zone_name, counts, tier))
+        lines.extend(_weights(con, tables, weight_unit, zone, zone_name, counts, tier))
+        lines.extend(_workouts(con, tables, zone, zone_name, counts, tier))
         if "steps_entries" in tables:
             (daily,) = con.execute("SELECT count(*) FROM steps_entries").fetchone()
             if daily:
@@ -125,10 +157,7 @@ def run(
     finally:
         con.close()
     lines.sort(key=lambda line: (line["at"], line["payload"]["raw_id"]))
-    for line in lines:
-        if since and line["at"] < since:
-            continue
-        yield line
+    return lines
 
 
 def _properties(con: sqlite3.Connection, tables: set[str]) -> dict[str, str]:
