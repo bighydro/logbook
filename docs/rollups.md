@@ -15,7 +15,7 @@ logbook rollup places                  # nights, stays, hours, people per named 
 logbook rollup places --with           # the place × person table: stays, days and nights at each place per person
 logbook rollup people                  # days and nights together, last real contact, places shared, per person
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
-logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, hours by month
+logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, podcasts by show, hours by month
 logbook rollup attention --year 2026    # hours by app and by category from the app-use lines; --by month|week
 logbook rollup money --year 2026        # the transactions by month, by country of the stay, by category: see ledger.md
 ```
@@ -213,7 +213,8 @@ agree on every day.
 (`played_s` summed; a line with no playhead is a listen with no hours, counted under `untimed`), the
 **skipped** lines, the lines per **service**, the podcast **episodes** with their hours, the **top
 artists** by hours played then listens (ten, the performers as the services spell them, never
-resolved), and **by month** every month the window touches with its hours, listens and skips — a
+resolved), the **podcasts** section — the episodes' hours by show and by month, for a year that has
+one — and **by month** every month the window touches with its hours, listens and skips — a
 month with no listen is an em dash, never a zero. The window is clipped to the days the listen
 lines cover; a correction that `supersedes` a line wins and a retracted line is out. It lives in
 `logbook/listen_rollup.py`, beside `rollup.py` and in its manner. The adapters and the rollup are
