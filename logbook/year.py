@@ -604,7 +604,7 @@ def html(data: Mapping[str, Any]) -> str:
     out += section("people", "People", _people_html(data["people"]))
     out += section("health", "Health, by month", _health_html(data["health"]))
     if data.get("weather"):
-        out += section("weather", "Weather", [f"<p>{_e(weather.span_text(data['weather']))}</p>"])
+        out += section("weather", "Weather", [f"<p>{escape(weather.span_text(data['weather']))}</p>"])
     out += section("keepers", "Keepers", _keepers_html(data["keepers"]))
     out += section("picks", "One day each", _picks_html(data["picks"]))
     out += footer(data)
