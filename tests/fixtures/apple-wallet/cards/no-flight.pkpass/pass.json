@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.xy.boarding",
+  "serialNumber": "XY-2026-000000",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Nordic Example Air",
+  "description": "Boarding pass",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-03-21T07:05:00+01:00",
+  "boardingPass": {
+    "transitType": "PKTransitTypeAir",
+    "primaryFields": [
+      {
+        "key": "a",
+        "label": "Somewhere",
+        "value": "Somewhere else"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "passenger",
+        "label": "Passenger",
+        "value": "Ines Nordmann"
+      }
+    ]
+  }
+}

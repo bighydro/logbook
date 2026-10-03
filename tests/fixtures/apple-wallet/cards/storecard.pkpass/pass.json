@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.shop.card",
+  "serialNumber": "M-000777",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Shop",
+  "description": "Member card",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "storeCard": {
+    "primaryFields": [
+      {
+        "key": "member",
+        "label": "Member",
+        "value": "Ines Nordmann"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "number",
+        "label": "Member no.",
+        "value": "000777"
+      }
+    ]
+  }
+}

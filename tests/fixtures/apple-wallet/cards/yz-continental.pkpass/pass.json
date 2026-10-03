@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.yz.bordkarte",
+  "serialNumber": "YZ-8831-0562",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Continental Example Airways",
+  "description": "Bordkarte",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "logoText": "Continental Example Airways",
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatQR",
+      "message": "M1NORDMANN/INES       EQX7PLM OSLZRHYZ 0561 073Y012A0001 100",
+      "messageEncoding": "iso-8859-1"
+    }
+  ],
+  "boardingPass": {
+    "transitType": "PKTransitTypeAir",
+    "headerFields": [
+      {
+        "key": "flightNumber",
+        "label": "Flug",
+        "value": "YZ0562"
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "from",
+        "label": "Von",
+        "value": "Oslo (OSL)"
+      },
+      {
+        "key": "to",
+        "label": "Nach",
+        "value": "Zürich (ZRH)"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "name",
+        "label": "Name",
+        "value": "NORDMANN/INES MRS"
+      },
+      {
+        "key": "seatNumber",
+        "label": "Sitz",
+        "value": "4C"
+      },
+      {
+        "key": "cabin",
+        "label": "Klasse",
+        "value": "Business"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "departureDate",
+        "label": "Datum",
+        "value": "14.03.2026"
+      },
+      {
+        "key": "departureTime",
+        "label": "Abflug",
+        "value": "2026-03-14T09:40:00+01:00",
+        "dateStyle": "PKDateStyleNone",
+        "timeStyle": "PKDateStyleShort"
+      },
+      {
+        "key": "arrivalTime",
+        "label": "Ankunft",
+        "value": "2026-03-14T11:55:00+01:00",
+        "dateStyle": "PKDateStyleNone",
+        "timeStyle": "PKDateStyleShort"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "bookingCode",
+        "label": "Buchungscode",
+        "value": "QX7PLM"
+      },
+      {
+        "key": "frequentFlyer",
+        "label": "Vielflieger",
+        "value": "YZ 0000 1234 5678"
+      }
+    ]
+  }
+}

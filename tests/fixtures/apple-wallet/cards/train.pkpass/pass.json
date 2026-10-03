@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.rail.ticket",
+  "serialNumber": "R-77120034",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Rail",
+  "description": "Train ticket",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-04-03T08:25:00+02:00",
+  "boardingPass": {
+    "transitType": "PKTransitTypeTrain",
+    "primaryFields": [
+      {
+        "key": "origin",
+        "label": "From",
+        "value": "Oslo S"
+      },
+      {
+        "key": "destination",
+        "label": "To",
+        "value": "Bergen"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "passenger",
+        "label": "Traveller",
+        "value": "Ines Nordmann"
+      },
+      {
+        "key": "seat",
+        "label": "Seat",
+        "value": "Coach 3, seat 41"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "departure",
+        "label": "Departs",
+        "value": "2026-04-03T08:25:00+02:00",
+        "dateStyle": "PKDateStyleShort",
+        "timeStyle": "PKDateStyleShort"
+      },
+      {
+        "key": "arrival",
+        "label": "Arrives",
+        "value": "2026-04-03T15:05:00+02:00",
+        "dateStyle": "PKDateStyleShort",
+        "timeStyle": "PKDateStyleShort"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "order",
+        "label": "Order",
+        "value": "ORD-20260320-7"
+      }
+    ]
+  }
+}

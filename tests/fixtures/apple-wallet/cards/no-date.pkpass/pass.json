@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.xy.boarding",
+  "serialNumber": "XY-2026-000777",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Nordic Example Air",
+  "description": "Boarding pass XY 777",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "boardingPass": {
+    "transitType": "PKTransitTypeAir",
+    "primaryFields": [
+      {
+        "key": "origin",
+        "label": "Oslo",
+        "value": "OSL"
+      },
+      {
+        "key": "destination",
+        "label": "Trondheim",
+        "value": "TRD"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "flight",
+        "label": "Flight",
+        "value": "XY 777"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "date",
+        "label": "Date",
+        "value": "14MAR"
+      }
+    ]
+  }
+}

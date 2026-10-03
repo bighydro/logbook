@@ -1,0 +1,99 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.xy.boarding",
+  "serialNumber": "XY-2026-000561",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Nordic Example Air",
+  "description": "Boarding pass XY 561",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "logoText": "Nordic Example Air",
+  "relevantDate": "2026-03-14T07:05:00+01:00",
+  "expirationDate": "2026-03-15T00:00:00+01:00",
+  "locations": [
+    {
+      "latitude": 60.1939,
+      "longitude": 11.1004
+    }
+  ],
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatAztec",
+      "message": "M1NORDMANN/INES       EQX7PLM OSLZRHXY 0561 073Y012A0001 100",
+      "messageEncoding": "iso-8859-1"
+    }
+  ],
+  "boardingPass": {
+    "transitType": "PKTransitTypeAir",
+    "headerFields": [
+      {
+        "key": "gate",
+        "label": "Gate",
+        "value": "A12"
+      },
+      {
+        "key": "seat",
+        "label": "Seat",
+        "value": "12A"
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "origin",
+        "label": "Oslo",
+        "value": "OSL"
+      },
+      {
+        "key": "destination",
+        "label": "Zürich",
+        "value": "ZRH"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "passenger",
+        "label": "Passenger",
+        "value": "Ines Nordmann"
+      },
+      {
+        "key": "flight",
+        "label": "Flight",
+        "value": "XY 561"
+      },
+      {
+        "key": "class",
+        "label": "Class",
+        "value": "Economy"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "date",
+        "label": "Date",
+        "value": "2026-03-14"
+      },
+      {
+        "key": "boarding",
+        "label": "Boarding",
+        "value": "06:35"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "pnr",
+        "label": "Booking reference",
+        "value": "QX7PLM"
+      },
+      {
+        "key": "email",
+        "label": "Contact",
+        "value": "ines.nordmann@example.org"
+      },
+      {
+        "key": "terms",
+        "label": "Conditions",
+        "value": "Synthetic. Carriage subject to nothing."
+      }
+    ]
+  }
+}

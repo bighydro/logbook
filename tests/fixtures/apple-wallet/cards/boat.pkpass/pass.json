@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.ferries.boarding",
+  "serialNumber": "F-0391",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Ferries",
+  "description": "Ferry boarding card",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-05-09T14:00:00+02:00",
+  "boardingPass": {
+    "transitType": "PKTransitTypeBoat",
+    "primaryFields": [
+      {
+        "key": "dep",
+        "label": "Departure port",
+        "value": "Oslo"
+      },
+      {
+        "key": "arr",
+        "label": "Arrival port",
+        "value": "Kiel"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "cabin",
+        "label": "Cabin",
+        "value": "Outside, 2 berths"
+      },
+      {
+        "key": "guest",
+        "label": "Guest",
+        "value": "Ines Nordmann"
+      }
+    ]
+  }
+}

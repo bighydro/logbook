@@ -101,6 +101,7 @@ nav:
       - "Apple Photos: albums, favourites, faces": adapters/photos.md
       - "Weather": adapters/weather.md
       - "Health: Apple Health, Withings, MyFitnessPal": adapters/health.md
+      - "Apple Wallet: boarding passes and tickets": adapters/wallet.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md

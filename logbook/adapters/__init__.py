@@ -97,7 +97,7 @@ BUILT_IN = (
     "ios_notes",
     "ios_calendar",
     "ios_calls",
-    "ios_wallet",
+    "apple_wallet",
     "easypark",
     "wispr_flow",
     "flighty",
@@ -218,7 +218,8 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "contacts": "ios-contacts",
     "calendar": "ios-calendar",
     "notes": "ios-notes",
-    "wallet": "ios-wallet",
+    "wallet": "apple-wallet",
+    "ios-wallet": "apple-wallet",  # the adapter's name in 0.5.0, for `--only` and `add`
     "wispr": "wispr-flow",
     "reminders": "apple-reminders",
     "books": "apple-books",

@@ -42,9 +42,10 @@ TIER = 1
 AIRPORTS_ENV = "LOGBOOK_AIRPORTS"
 
 EVIDENCE = ("declared", "inferred", "tracked")  # weakest first; the index is the rank
-EVIDENCE_OF = {  # a boarding pass in Wallet is the airline's own record of the seat: tracked
+EVIDENCE_OF = {
     "flighty": "tracked",
-    "ios-wallet": "tracked",
+    "apple-wallet": "declared",  # a boarding pass is a seat the airline sold: a plan, not a flight flown
+    "ios-wallet": "tracked",  # the Wallet adapter of 0.5.0, whose lines a record may still hold
     "flight-inference": "inferred",
     "manual": "declared",
 }
