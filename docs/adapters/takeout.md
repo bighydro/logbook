@@ -38,9 +38,11 @@ find what they need by what a header or key says, and a column that is not there
 | `Calendar/` | `calendar` (the `ics` adapter) | `event/v1` | 1 | on |
 | `Google Photos/` | `photos` | `photo/v1` | 1 | on |
 | `Keep/` | `keep` | `note/v1` | 2 | on |
-| `Tasks/` | `tasks` | `task/v1` | 2 | on |
+| `Tasks/` | `tasks` ([page](takeout-tasks.md)) | `task/v1` | 2 | on |
 | `Chrome/` | `chrome` | `browse/v1` | 2 | on |
-| `YouTube and YouTube Music/history/` | `youtube` | `watch/v1` | 2 | on |
+| `YouTube and YouTube Music/history/`, JSON or HTML | `youtube` ([page](takeout-youtube.md)) | `watch/v1` | 2 | on |
+| `Maps (your places)/` | `maps` ([page](takeout-maps.md)) | `highlight/v1` for the reviews; the saved places feed `places propose --takeout` | 2 | on |
+| `Home App/` | `home` ([page](takeout-home.md)) | `event/v1` | 1 | on |
 | `Google Pay/` | `pay` | `transaction/v1`, `event/v1` for tickets | 3, 1 | on |
 | `Google Chat/` | `chat` | `message/v1` | 2 | on |
 | `Google Meet/` | `meet` | `call/v1` | 1 | on |
@@ -53,7 +55,8 @@ reason (`every sign-in to every Google service; opt in`, `every search and app o
 record made before this file existed gets the same list on its first read. Remove the entry to opt in;
 `logbook sources` shows the state. An adapter existing is not a decision to run it.
 
-The first seven are described in the [adapters overview](README.md). The rest:
+The first seven are described in the [adapters overview](README.md); Tasks, YouTube, Maps and the
+Home App have pages of their own, linked in the table. The rest:
 
 ### Google Pay → `transaction/v1`, `event/v1`
 
@@ -147,9 +150,10 @@ searched is kept as text under `extra.location_hint`, never as a location line.
 
 ## What is not read
 
-Gmail is its own adapter (`mail`, `logbook add mail ~/Takeout/Mail`). Drive, Maps (saved places go
-through `logbook places import-takeout`), Fit, Play, Assistant, Home, News, Shopping, Voice and the rest
-of the archive are not read yet; drop a folder in `inbox/` and it stays there until an adapter exists.
+Gmail is its own adapter (`mail`, `logbook add mail ~/Takeout/Mail`). Drive, Fit, Play, Assistant,
+News, Shopping, Voice and the rest of the archive are not read yet; drop a folder in `inbox/` and it
+stays there until an adapter exists. Of the Home App, the sound events and the alarm clips are left
+alone on purpose; of Maps, a saved place is never a line, only a candidate for a name.
 A whole `Takeout/` folder handed to `add` is walked into every product folder, four levels down; what
 no adapter reads is counted in the last line (`--verbose` names each file). The package's own `walk`,
 which would dispatch by the Takeout layout without sniffing, and a `zip` reader are on the roadmap.
