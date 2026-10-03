@@ -33,6 +33,7 @@ from . import (
     backup,
     crossing,
     demo,
+    drifting,
     events,
     flights,
     gaps,
@@ -3562,16 +3563,24 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     for flights, with any line), so a day outside them is nothing, not a night in transit; or, for
     health, per month or ISO week from the health lines of the window, clipped to the days they
     cover, with no reading of the track; or, for listen, per year with the months inside it from
-    the listen lines of the window (`listen_rollup`), the same way. Every number carries the ids
-    of its lines under --json. Nothing is written."""
+    the listen lines of the window (`listen_rollup`), the same way; or, for `people --drifting
+    [--until DAY] [--window N] [--min-contacts N]`, the people whose contact frequency fell most
+    between the last N days and the N before them (`drifting`). Every number carries the ids of
+    its lines under --json. Nothing is written."""
     lb = Logbook.find()
     try:
         if a.by and a.what not in ("health", "attention"):
             raise ValueError("--by is for rollup health and rollup attention")
         if a.with_ and a.what != "places":
             raise ValueError("--with goes with `rollup places`: the place × person table")
-        window = _rollup_days(lb, a)
-        if window is None:
+        if a.drifting and a.what != "people":
+            raise ValueError("--drifting goes with `rollup people`: whose contact frequency fell")
+        if (a.window is not None or a.min_contacts is not None) and not a.drifting:
+            raise ValueError("--window and --min-contacts go with --drifting")
+        window = None if a.drifting else _rollup_days(lb, a)
+        if a.drifting:
+            data = _drifting(lb, a)
+        elif window is None:
             data = listen_rollup.empty() if a.what == "listen" else rollup.empty(a.what, a.by)
         elif a.what == "health":
             tz = str(lb.meta["timezone"])
@@ -3592,8 +3601,29 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     if a.json:
         print(json.dumps(data, indent=2))
         return
-    for text in (listen_rollup.rows if a.what == "listen" else rollup.rows)(data):
+    text_rows = drifting.rows if a.drifting else listen_rollup.rows if a.what == "listen" else rollup.rows
+    for text in text_rows(data):
         print(text)
+
+
+def _drifting(lb: Logbook, a: argparse.Namespace) -> dict[str, Any]:
+    """`rollup people --drifting`: the recent window is `--window` days (365) ending on `--until`,
+    the record's last day with a line of any kind by default; the earlier window the same number of
+    days before it. `--year` and `--since` do not apply: the window is a length, not a range."""
+    if a.year or a.since:
+        raise ValueError("--drifting takes --until and --window, not --year or --since")
+    whole = reading.record_days(lb)
+    if whole is None:
+        return drifting.empty()
+    until = parse_day(a.until).isoformat() if a.until else whole[1]
+    return drifting.read(
+        lb,
+        until,
+        drifting.DEFAULT_WINDOW if a.window is None else a.window,
+        drifting.DEFAULT_MIN_CONTACTS if a.min_contacts is None else a.min_contacts,
+        _airports(a.airports),
+        record_first=whole[0],
+    )
 
 
 def _listen_window(lb: Logbook, first: str, last: str) -> list[Line]:
@@ -4750,6 +4780,27 @@ def main(argv: list[str] | None = None) -> None:
         dest="with_",
         action="store_true",
         help="places only: the place × person table — stays, days and nights at each place per person",
+    )
+    s.add_argument(
+        "--drifting",
+        action="store_true",
+        help="people only: whose contact frequency fell most, the last --window days against the same"
+        " number of days before them, with days since the last real contact, the channels that went"
+        " quiet and the last shared place",
+    )
+    s.add_argument(
+        "--window",
+        type=int,
+        metavar="DAYS",
+        help=f"--drifting: the length of each window in days (default {drifting.DEFAULT_WINDOW}); the"
+        " recent one ends on --until, else on the record's last day",
+    )
+    s.add_argument(
+        "--min-contacts",
+        type=int,
+        metavar="N",
+        help="--drifting: list only people with at least this many contacts in the earlier window"
+        f" (default {drifting.DEFAULT_MIN_CONTACTS})",
     )
     s.add_argument(
         "--json", action="store_true", help="the rollup as one JSON object, every number with its line ids"

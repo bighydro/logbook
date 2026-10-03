@@ -28,8 +28,8 @@ Everything is read through the index and nothing is written: the resolution and 
 (`Index.resolutions`, `Index.retractions`), the owner's stays and nights from the index's own
 columns (`reading.owner_track`), and the lines of the six kinds above streamed one kind at a time
 over the window (`Index.of_kind`), each read once and kept only when it names a person — a year of
-messages is counted as it streams and never held. A retracted line, and one another line of its
-kind `supersedes` (an edited calendar entry), counts for nothing."""
+messages is counted as it streams and never held; its ids are kept. A retracted line, and one
+another line of its kind `supersedes` (an edited calendar entry), counts for nothing."""
 
 from __future__ import annotations
 
@@ -77,17 +77,20 @@ class PersonError(ValueError):
 @dataclass
 class Channel:
     """One channel's lines for one person: how many, the first and last local day, the highest
-    tier among them and the last line (by its instant)."""
+    tier among them, the last line (by its instant) and the ids of them all (`ids`, for a reader
+    that compares windows, `rollup people --drifting`; the lines themselves are never held)."""
 
     lines: int = 0
     first: str | None = None
     last: str | None = None
     tier: int = 0
     last_line: str | None = None
+    ids: list[str] = field(default_factory=list)
     _last_at: str = ""
 
     def add(self, day: str, at: str, line_id: str, tier: int) -> None:
         self.lines += 1
+        self.ids.append(line_id)
         self.first = day if self.first is None else min(self.first, day)
         self.last = day if self.last is None else max(self.last, day)
         self.tier = max(self.tier, tier)

@@ -14,6 +14,7 @@ logbook rollup nights                  # home, away, in transit, nights aboard, 
 logbook rollup places                  # nights, stays, hours, people per named place and asset; the top unnamed clusters
 logbook rollup places --with           # the place × person table: stays, days and nights at each place per person
 logbook rollup people                  # days and nights together, last real contact, places shared, per person
+logbook rollup people --drifting       # whose contact frequency fell most, this year against the year before: see below
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
 logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, podcasts by show, hours by month
 logbook rollup attention --year 2026    # hours by app and by category from the app-use lines; --by month|week
@@ -128,6 +129,69 @@ evidence count. Under `--json` each carries `stays` (the stays shared) and `line
 confirmed name the record resolves to no person — an attendee with a display name and no
 resolution line (RFC 0006) — is listed apart, under `unresolved`, so that a resolution can be
 written for them.
+
+### Who fell quiet: `--drifting`
+
+`logbook rollup people --drifting [--until YYYY-MM-DD] [--window 365] [--min-contacts 3] [--json]`
+lists the people whose contact frequency fell most. It is a reader like the rest: it says what the
+record holds and suggests nothing.
+
+The method, plainly. Two windows of the same length: the **recent** one is `--window` days (365 by
+default) ending on `--until`, which is the record's last day with a line of any kind unless given;
+the **earlier** one is the same number of days before it. `--year` and `--since` do not apply: the
+window is a length, not a range. For every person the record's resolution lines name (RFC 0006;
+never the owner), the **contacts** in each window are counted: a `message/v1` either way in a direct
+chat with them, a `call/v1` whose counterparty they are, answered or not, an `event/v1` they attend
+and did not decline, and a stay of the owner's the with module confirms them at (`together`, one per
+day and stay, [People](#people) above) — the channels of `logbook people`, read twice through
+[`people.md`](people.md)'s reader, once per window. A mail is not a contact, because the record
+cannot tell a letter from a newsletter; a tagged face is not one, because a face is a proposal. A
+retracted line is out, and so is a calendar entry a later line supersedes.
+
+A person is listed when their earlier window has at least `--min-contacts` contacts (3 by default;
+one never heard that often is not drifting, they were never close in the record's terms) and their
+recent window has fewer than the earlier. The **fall** is the share of the earlier count lost, and
+the table is ordered by it, the larger share first, then the larger count, then the name. Per
+person: the two counts, the fall, the **last real contact** as days before the recent window's last
+day (a message, an answered call or a day together, the people reader's rule: a missed call and an
+all-day entry are not one; `never` when the two windows hold none), the channels that went
+**quiet** (heard in the earlier window and silent in the recent; `together` is the stays), and the
+**last shared place**, the latest day the record confirms them at one of the owner's stays, named as
+the people reader names it (an em dash when the record never put you in one place).
+
+```
+people · drifting · recent 2026-06-15 – 2026-06-28 · earlier 2026-06-01 – 2026-06-14 · at least 2 contacts earlier
+        person                   earlier recent   fall  last real contact  quiet                      last shared place
+        Eva Nordmann                   4      0  -100%  16 days ago        messages, calls            —
+        Liv Berg                       2      0  -100%  25 days ago        calls                      —
+        Ola Nordmann                   7      1   -86%  12 days ago        calls, calendar, together  Office
+```
+
+Under `--json` one object: `kind` (`drifting`), `window` (`recent` and `earlier`, each `since`,
+`until`, `days`), `min_contacts`, a `warning` when the record began inside one of the windows, and
+`people`, one entry per person in the table's order: `id`, `name`, `earlier` and `recent` (each
+`contacts`, then `messages`, `calls`, `calendar` and `together` as `{count, lines}`, and `lines`,
+every id behind the total once), `fall` (the count lost), `fell_by` (the share, to three places),
+`quiet`, `last_real_contact` (`{day, via, line}` or null), `days_since_real_contact` (null with
+it) and `last_place` (`{where, day, lines}` or null). As in every rollup, the ids are the lines the
+numbers came from, so each one can be read back with `show`.
+
+**Blind spots**, because the record only holds what was logged:
+
+- A person you now see in person every day looks "drifting" when nothing is logged about it: no
+  calendar entry at the stay, no transcript, no note that says `with <name>`, no message. The
+  rollup counts contacts the record holds, not contact.
+- A channel the record stopped importing goes quiet for everyone on it. A source that was not
+  brought up to date reads as silence; `sources --gaps` says which.
+- A record that began inside the earlier window undercounts it, and one that began inside the
+  recent window has nothing to compare; the rollup prints a warning in both cases. A `--window`
+  longer than half the record cannot say anything.
+- A group chat names nobody as its counterpart: messages in a group are not a contact with anyone
+  in it, the people reader's rule, so a friendship that moved into a group looks like a fall.
+- A person the record names twice, once per address, is two people here, each with half the
+  contacts; `people merge` finds them.
+- Frequency is a count. A weekly call and a daily one-line message weigh one and seven; the table
+  does not say which mattered.
 
 ## How it reads
 
