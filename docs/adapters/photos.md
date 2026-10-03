@@ -14,6 +14,7 @@ logbook add photos ~/backup/apple-photos/Photos.sqlite --dry-run    # count both
 logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only apple-photos
 logbook keepers                                                      # the marked photos, by day and lane
 logbook keepers --people                                             # who appears on them, per month, proposed
+logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper, from the originals (docs/describe.md)
 logbook day 2026-03-01                                               # a face's name under `with … (proposed)`
 ```
 

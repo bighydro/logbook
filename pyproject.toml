@@ -31,6 +31,12 @@ transcribe = [
 ]
 # `openlogbook[judge]`: `promises --judge` reads each candidate with a local instruct model, mlx-lm on Apple silicon
 judge = ["mlx-lm>=0.20; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+# `openlogbook[describe]`: `describe keepers` looks at each keeper's photo with a local vision model, mlx-vlm on Apple silicon;
+# pillow-heif opens the HEIC originals a phone takes
+describe = [
+  "mlx-vlm>=0.1.20; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "pillow-heif>=0.18; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 mcp = ["mcp>=2"]  # `openlogbook[mcp]`: `logbook mcp` serves the record to an MCP host over stdio
 
 [project.urls]
@@ -107,8 +113,8 @@ module = "ijson"
 ignore_missing_imports = true  # no py.typed, no stubs
 
 [[tool.mypy.overrides]]
-module = ["mlx_whisper.*", "faster_whisper.*", "huggingface_hub.*", "mlx_lm.*"]
-ignore_missing_imports = true  # the `transcribe` and `judge` extras, imported only when the command runs
+module = ["mlx_whisper.*", "faster_whisper.*", "huggingface_hub.*", "mlx_lm.*", "mlx_vlm.*", "pillow_heif.*"]
+ignore_missing_imports = true  # the `transcribe`, `judge` and `describe` extras, imported only when the command runs
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
