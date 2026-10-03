@@ -658,16 +658,20 @@ def health(lines: Iterable[Line], tz: str, first: str, last: str, by: str = "mon
     }
     for entry in periods.values():
         found: list[dict[str, Any]] = entry.pop("rows")
-        out["periods"].append(
-            {
-                **entry,
-                "sleep": _mean_of(found, "sleep_h", "mean_h", "nights", 1),
-                "steps": _mean_of(found, "steps", "mean", "days"),
-                "resting_hr": _spread_of(found, "resting_hr"),
-                "hrv": _mean_of(found, "hrv", "mean_ms", "days"),
-            }
-        )
+        out["periods"].append({**entry, **health_summary(found)})
     return out
+
+
+def health_summary(found: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """One period's `sleep`, `steps`, `resting_hr` and `hrv` over the day rows of `health.summary`
+    it holds (the rule above); a field no row has a value for is None. The trip page sums a trip's
+    span with it."""
+    return {
+        "sleep": _mean_of(found, "sleep_h", "mean_h", "nights", 1),
+        "steps": _mean_of(found, "steps", "mean", "days"),
+        "resting_hr": _spread_of(found, "resting_hr"),
+        "hrv": _mean_of(found, "hrv", "mean_ms", "days"),
+    }
 
 
 def _period(day: str, by: str) -> str:

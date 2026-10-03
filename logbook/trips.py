@@ -126,14 +126,12 @@ def _trips_of(run: Sequence[stays.Night], reading: Reading) -> list[Trip]:
 def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
     start, end = nights[0].day, nights[-1].day
     until = (date.fromisoformat(end) + timedelta(days=1)).isoformat()
-    first = datetime.combine(date.fromisoformat(start), datetime.min.time(), tzinfo=reading.tz)
-    last = datetime.combine(date.fromisoformat(until), datetime.max.time(), tzinfo=reading.tz)
-    visited = [s for s in reading.owner_stays if s.start < last and s.end > first]
+    visited = visited_stays(reading, start, until)
     route = route_of(
         [n.stay for n in nights if n.stay is not None], reading.places, reading.airports, reading.assets
     )
     places = list(dict.fromkeys(s.place for s in visited if s.place and not stays.is_home(s, reading.places)))
-    people = _people(visited, reading)
+    people = companions(visited, reading)[:WITH_MAX]
     flights = [f for f in _flights(reading) if start <= f["date"] <= until]
     aboard = {n.stay.aboard for n in nights if n.stay is not None}
     asset = next(iter(aboard)) if len(aboard) == 1 and None not in aboard else None
@@ -156,6 +154,15 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
         dict(sorted(nights_aboard.items())),
         {a: asset_name(a, reading.assets) for a in sorted(nights_aboard)},
     )
+
+
+def visited_stays(reading: Reading, start: str, until: str) -> list[stays.Segment]:
+    """The owner's stays a trip visits: every one between the first day's midnight and the end of
+    the return day, the home stays either side of it included (they hold nothing of the trip's;
+    `places` and the people leave them out by `stays.is_home`)."""
+    first = datetime.combine(date.fromisoformat(start), datetime.min.time(), tzinfo=reading.tz)
+    last = datetime.combine(date.fromisoformat(until), datetime.max.time(), tzinfo=reading.tz)
+    return [s for s in reading.owner_stays if s.start < last and s.end > first]
 
 
 def asset_name(asset_id: str, assets: Mapping[str, Asset]) -> str:
@@ -182,7 +189,7 @@ def route_of(
     route: list[str] = []
     last: stays.Segment | None = None
     for stay in night_stays:
-        if last is not None and _same_point(last, stay):
+        if last is not None and same_point(last, stay):
             continue
         label = _label(stay, places, airports, assets or {})
         if not route or route[-1] != label:
@@ -191,7 +198,9 @@ def route_of(
     return route
 
 
-def _same_point(a: stays.Segment, b: stays.Segment) -> bool:
+def same_point(a: stays.Segment, b: stays.Segment) -> bool:
+    """Whether two stays are one route point: aboard the same asset, at the same named place, or
+    within `MERGE_M` of each other."""
     if a.aboard is not None or b.aboard is not None:
         return a.aboard == b.aboard
     if a.place is not None or b.place is not None:
@@ -259,27 +268,42 @@ def city_near(lat: float, lon: float, airports: Airports) -> str | None:
     return airport.city or None if airport is not None else None
 
 
-def _people(visited: Sequence[stays.Segment], reading: Reading) -> list[present.Companion]:
+def companions(
+    visited: Sequence[stays.Segment], reading: Reading, status: str = present.CONFIRMED
+) -> list[present.Companion]:
+    """The people of `status` at the stays visited (the with module: never the owner), one entry
+    per person (by entity id, else by name) with the evidence of every stay merged, most evidence
+    first. A person confirmed at one stay and proposed at another is confirmed, never a proposal
+    too, so the confirmed and the proposed lists of a trip share nobody."""
+    found = [
+        c
+        for stay in visited
+        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner)
+    ]
+    confirmed = {_key(c) for c in found if c.status == present.CONFIRMED}
     merged: dict[tuple[str | None, str], present.Companion] = {}
-    for stay in visited:
-        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner):
-            if c.status != present.CONFIRMED:
-                continue
-            key = (c.person, "" if c.person else c.name.casefold())
-            seen = merged.get(key)
-            if seen is None:
-                merged[key] = c
-            else:
-                merged[key] = present.Companion(
-                    seen.person,
-                    seen.name,
-                    seen.status,
-                    max(seen.confidence, c.confidence),
-                    tuple(dict.fromkeys([*seen.sources, *c.sources])),
-                    (*seen.reasons, *c.reasons),
-                    tuple(dict.fromkeys([*seen.lines, *c.lines])),
-                )
-    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))[:WITH_MAX]
+    for c in found:
+        key = _key(c)
+        if c.status != status or (status != present.CONFIRMED and key in confirmed):
+            continue
+        seen = merged.get(key)
+        if seen is None:
+            merged[key] = c
+        else:
+            merged[key] = present.Companion(
+                seen.person,
+                seen.name,
+                seen.status,
+                max(seen.confidence, c.confidence),
+                tuple(dict.fromkeys([*seen.sources, *c.sources])),
+                (*seen.reasons, *c.reasons),
+                tuple(dict.fromkeys([*seen.lines, *c.lines])),
+            )
+    return sorted(merged.values(), key=lambda c: (-len(c.lines), c.name))
+
+
+def _key(c: present.Companion) -> tuple[str | None, str]:
+    return (c.person, "" if c.person else c.name.casefold())
 
 
 def _flights(reading: Reading) -> list[dict[str, Any]]:
@@ -349,6 +373,7 @@ def trip_rows(trip: Trip) -> Iterator[str]:
         parts.append("places " + ", ".join(trip.places))
     if trip.people:
         parts.append("with " + ", ".join(c.name for c in trip.people))
+    parts.append(trip.id)  # last, so `logbook trip <id>` can be run on the row
     yield f"  {trip.start} {EN_DASH} {trip.end}  {' · '.join(parts)}"
 
 
