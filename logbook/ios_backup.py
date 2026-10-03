@@ -25,9 +25,10 @@ SOURCES lists, in import order, the store each adapter reads and where the phone
                         MediaDomain                                   media under Library/SMS/Attachments/
     ios-calendar        HomeDomain                                    Library/Calendar/Calendar.sqlitedb
     ios-notes           AppDomainGroup-group.com.apple.notes          NoteStore.sqlite
-    ios-wallet          HomeDomain                                    Library/Passes/Cards/…/pass.json (a
+    apple-wallet        HomeDomain                                    Library/Passes/Cards/…/pass.json (a
                                                                   folder source: every pass.json under
-                                                                  Cards/, copied below ios-wallet/)
+                                                                  Cards/, copied below apple-wallet/;
+                                                                  never the images, never nav.db)
     easypark            AppDomain-net.easypark.app                    Documents/recentparkings_<user>.json
                                                                   (a folder source: the glob names the file)
     wispr-flow          AppDomain-com.wispr.flowapp                   Documents/database.sqlite
@@ -208,8 +209,8 @@ SOURCES: tuple[Source, ...] = (
     Source("ios-calendar", HOME, "Library/Calendar/Calendar.sqlitedb"),
     Source("ios-notes", NOTES, "NoteStore.sqlite"),
     Source(
-        "ios-wallet", HOME, "Library/Passes/Cards", files="pass.json"
-    ),  # an unpacked .pkpass folder per pass
+        "apple-wallet", HOME, "Library/Passes/Cards", files="pass.json"
+    ),  # an unpacked .pkpass folder per pass; pass.json is the one file the adapter reads
     Source("easypark", EASYPARK, "Documents", files="recentparkings_*.json"),  # named after the user
     Source("wispr-flow", WISPR, "Documents/database.sqlite"),  # the recordings beside it are not copied
     Source("flighty", FLIGHTY, "Documents/MainFlightyDatabase.db"),  # the same lines as the CSV export

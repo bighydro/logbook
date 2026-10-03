@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.tickets",
+  "serialNumber": "T-2026-11204",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Tickets",
+  "description": "Concert ticket",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-05-02T19:00:00+02:00",
+  "locations": [
+    {
+      "latitude": 59.914,
+      "longitude": 10.734
+    }
+  ],
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatQR",
+      "message": "TKT-SECRET-11204",
+      "messageEncoding": "iso-8859-1"
+    }
+  ],
+  "eventTicket": {
+    "headerFields": [
+      {
+        "key": "doors",
+        "label": "Doors",
+        "value": "18:00"
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "event",
+        "label": "Event",
+        "value": "Spring Concert"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "venue",
+        "label": "Venue",
+        "value": "Oslo Konserthus"
+      },
+      {
+        "key": "section",
+        "label": "Section",
+        "value": "Standing"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "name",
+        "label": "Name",
+        "value": "Ines Nordmann"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "order",
+        "label": "Order",
+        "value": "ORD-11204"
+      },
+      {
+        "key": "buyer",
+        "label": "Buyer",
+        "value": "ines.nordmann@example.org"
+      }
+    ]
+  }
+}

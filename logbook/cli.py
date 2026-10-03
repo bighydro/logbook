@@ -604,7 +604,6 @@ SKIP_PHRASES = {
     "skipped_sidecar_without_file": "sidecars without a media file",
     "skipped_unreadable_json": "JSON files that would not parse",
     "skipped_unreadable": "passes that would not parse",
-    "skipped_no_year": "boarding passes whose year nothing on the pass gives",
     "skipped_no_flight": "boarding passes without a readable flight",
     "skipped_store_cards": "store and loyalty cards",
     "skipped_coupons": "coupons",

@@ -1,0 +1,92 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.zx.pass",
+  "serialNumber": "zx-4f2a9c",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Low Cost",
+  "description": "Your boarding pass",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-03-20T15:10:00+01:00",
+  "authenticationToken": "never-read-0000",
+  "webServiceURL": "https://passes.example.org/",
+  "nfc": {
+    "message": "never-read",
+    "encryptionPublicKey": "AAAA"
+  },
+  "userInfo": {
+    "customerId": "C-000001"
+  },
+  "barcodes": [
+    {
+      "format": "PKBarcodeFormatPDF417",
+      "message": "ZX|QX7PLM|NORDMANN/INES|1234",
+      "messageEncoding": "iso-8859-1"
+    }
+  ],
+  "semantics": {
+    "originalDepartureDate": "2026-03-20T15:30:00+01:00",
+    "originalArrivalDate": "2026-03-20T16:25:00+01:00",
+    "passengerName": {
+      "givenName": "Ines",
+      "familyName": "Nordmann"
+    },
+    "confirmationNumber": "QX7PLM"
+  },
+  "boardingPass": {
+    "transitType": "PKTransitTypeAir",
+    "headerFields": [
+      {
+        "key": "f0",
+        "label": "Seq",
+        "value": "0042"
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "f1",
+        "label": "DEP",
+        "value": "OSL"
+      },
+      {
+        "key": "f2",
+        "label": "ARR",
+        "value": "BGO"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "f3",
+        "label": "Flight",
+        "value": "1234"
+      },
+      {
+        "key": "f4",
+        "label": "Airline",
+        "value": "ZX"
+      },
+      {
+        "key": "f5",
+        "label": "Fare",
+        "value": "Basic"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "f6",
+        "label": "Passenger",
+        "value": "Ines Nordmann"
+      },
+      {
+        "key": "f7",
+        "label": "Seat",
+        "value": "21F"
+      },
+      {
+        "key": "f8",
+        "label": "Date",
+        "value": "Fri 20 Mar"
+      }
+    ]
+  }
+}

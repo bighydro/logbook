@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.festival",
+  "serialNumber": "FJ-2026-0007",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Festival",
+  "description": "Festival pass",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "semantics": {
+    "eventName": "Fjord Festival",
+    "venueName": "Bygdøy",
+    "eventStartDate": "2026-06-20T12:00:00+02:00",
+    "eventEndDate": "2026-06-20T23:00:00+02:00",
+    "attendeeName": "Ines Nordmann"
+  },
+  "eventTicket": {
+    "headerFields": [
+      {
+        "key": "pass-type",
+        "label": "Pass",
+        "value": "Weekend"
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "holder",
+        "label": "Holder",
+        "value": "Ines Nordmann"
+      }
+    ]
+  }
+}

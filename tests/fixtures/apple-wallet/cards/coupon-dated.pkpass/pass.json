@@ -1,0 +1,20 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.coffee.coupon",
+  "serialNumber": "CF-55",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Coffee",
+  "description": "Two for one",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "relevantDate": "2026-02-28T10:00:00+01:00",
+  "coupon": {
+    "primaryFields": [
+      {
+        "key": "offer",
+        "label": "Offer",
+        "value": "Two for one"
+      }
+    ]
+  }
+}

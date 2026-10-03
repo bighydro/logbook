@@ -1,0 +1,19 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.org.example.gym",
+  "serialNumber": "G-12",
+  "teamIdentifier": "EXAMPLE01",
+  "organizationName": "Example Gym",
+  "description": "Membership",
+  "backgroundColor": "rgb(20, 60, 120)",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "generic": {
+    "primaryFields": [
+      {
+        "key": "member",
+        "label": "Member",
+        "value": "Ines Nordmann"
+      }
+    ]
+  }
+}

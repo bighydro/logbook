@@ -21,6 +21,8 @@ from test_apple_podcasts import LINES as PODCAST_LINES
 from test_apple_podcasts import _store as _podcasts_store
 from test_apple_reminders import _second_store as _reminders_second_store
 from test_apple_reminders import _store as _reminders_store
+from test_apple_wallet import LINES as WALLET_LINES
+from test_apple_wallet import _passes
 from test_beeper import _store as _beeper_store
 from test_copilot import _store as _copilot_store
 from test_easypark import LINES as EASYPARK_LINES
@@ -32,8 +34,6 @@ from test_import_backup_encrypted import _file_plist
 from test_ios_calendar import _calendar
 from test_ios_contacts import _address_book
 from test_ios_notes import _store as _note_store
-from test_ios_wallet import LINES as WALLET_LINES
-from test_ios_wallet import _passes
 from test_line import _store as _line_store
 from test_myfitnesspal import LINES as MFP_LINES
 from test_myfitnesspal import _store as _mfp_store
@@ -86,7 +86,7 @@ ALL = (
     "imessage",
     "ios-calendar",
     "ios-notes",
-    "ios-wallet",
+    "apple-wallet",
     "easypark",
     "wispr-flow",
     "flighty",
@@ -112,7 +112,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "imessage": 13,
     "ios-calendar": 7,
     "ios-notes": 4,
-    "ios-wallet": WALLET_LINES,
+    "apple-wallet": WALLET_LINES,
     "easypark": EASYPARK_LINES,
     "wispr-flow": WISPR_LINES,
     "flighty": FLIGHTY_LINES,
@@ -227,7 +227,7 @@ def _backup(
         _put(backup, rows, "HomeDomain", "Library/Calendar/Calendar.sqlitedb", _calendar(_dir(stage, "cal")))
     if "ios-notes" in sources:
         _put(backup, rows, NOTES, "NoteStore.sqlite", _note_store(_dir(stage, "notes")))
-    if "ios-wallet" in sources:  # one unpacked .pkpass folder per pass, as the phone keeps them
+    if "apple-wallet" in sources:  # one unpacked .pkpass folder per pass, as the phone keeps them
         _put(backup, rows, "HomeDomain", "Library/Passes/Cards", None)
         _put_tree(backup, rows, "HomeDomain", "Library/Passes/Cards", _passes(_dir(stage, "wallet")))
     if "easypark" in sources:  # the recent-parkings file beside the find-my-car pin, which is not copied
@@ -437,12 +437,10 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
     for source in ALL:
         assert f"added {LINES[source]} lines from {source}" in out
     # a folder source: every pass.json below the folder, the folder's path kept, nothing else
-    assert (inbox / "ios-wallet" / "01-swiss-style.pkpass" / "pass.json").is_file()
-    assert "ios-wallet: 18 pass.json files (" in out and "under Library/Passes/Cards/" in out
-    assert (
-        "1 passes that would not parse" in out
-        and "1 boarding passes whose year nothing on the pass gives" in out
-    )
+    assert (inbox / "apple-wallet" / "xy-nordic.pkpass" / "pass.json").is_file()
+    assert not (inbox / "apple-wallet" / "xy-nordic.pkpass" / "icon.png").exists()  # pass.json alone
+    assert "apple-wallet: 13 pass.json files (" in out and "under Library/Passes/Cards/" in out
+    assert "1 passes that would not parse" in out and "1 boarding passes without a readable flight" in out
     assert (inbox / "easypark" / "recentparkings_12345.json").is_file()
     assert not (inbox / "easypark" / "findmycar-pin_12345.json").exists()
     assert "easypark: 1 recentparkings_*.json file (" in out
@@ -525,6 +523,13 @@ def test_import_backup_copies_every_store_and_runs_every_adapter_in_order(lb, tm
         (MEMOS, "Recordings/20260302 211407.composition/manifest.plist"),
         ("CameraRollDomain", "Media/DCIM/100APPLE/IMG_0001.HEIC"),  # the pixels stay on the phone
         (WITHINGS, f"{COREDATA}/10000002_Food2.sqlite"),  # not a store the adapter reads
+    }
+    never |= {  # a pass's images and manifest stay on the phone: pass.json is the one file read
+        (domain, path)
+        for domain, path in sizes
+        if domain == "HomeDomain"
+        and path.startswith("Library/Passes/Cards/")
+        and not path.endswith("/pass.json")
     }
     assert {(c["domain"], c["path"]) for c in copies["files"]} == set(sizes) - never
     assert by_copy["whatsapp/Message/Media/4790000001@s.whatsapp.net/a/b/photo.jpg"] == {
