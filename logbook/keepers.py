@@ -126,6 +126,13 @@ def name_of(line: Line) -> str:
     return str(photo.get("file_name") or photo.get("asset_id") or photo.get("line") or "?")
 
 
+def photo_id_of(line: Line) -> str | None:
+    """The id of the photo line a keeper points at (`payload.photo.line`), or None."""
+    photo = (line.get("payload") or {}).get("photo")
+    found = photo.get("line") if isinstance(photo, dict) else None
+    return str(found) if isinstance(found, str) and found else None
+
+
 def people_by_month(
     kept: Iterable[Line], photos: Mapping[str, Line], identities: Mapping[Ref, Identity], tz: str
 ) -> list[dict[str, Any]]:

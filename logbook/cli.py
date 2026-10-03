@@ -1,7 +1,7 @@
-"""logbook — init · setup · add · sync · import-backup · inbox · infer · transcribe · retract · show ·
-stats · derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve · verify ·
-doctor · export · share · receive · circle · index · migrate · assets · sources · mcp · backup. Three
-verbs, twenty-seven rare."""
+"""logbook — init · setup · add · sync · import-backup · inbox · infer · transcribe · describe · retract ·
+show · stats · derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve ·
+verify · doctor · export · share · receive · circle · index · migrate · assets · sources · mcp · backup.
+Three verbs, twenty-eight rare."""
 
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ from . import (
     backup,
     crossing,
     demo,
+    describe,
     drifting,
     events,
     flights,
@@ -1605,6 +1606,53 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
     print(transcribe.describe(report))
 
 
+def cmd_describe(a: argparse.Namespace) -> None:
+    """`describe keepers [--since DAY] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
+    [--dry-run] [--json]`: a derived note/v1 line per standing keeper (RFC 0024) whose photo file is
+    reachable — one factual sentence and the visible things, by a local vision model, never a
+    person's name, never a place (`logbook.describe`); a photo already described is skipped. No
+    model runs unless asked; a dry run needs no engine. Without the engine or the model the command
+    prints the install and fetch lines and exits 2."""
+    if a.what != "keepers":
+        print(f"describe: keepers can be described, not {a.what!r}", file=sys.stderr)
+        sys.exit(2)
+    if a.since is not None:
+        try:
+            parse_day(a.since)
+        except ValueError as e:
+            print(f"describe: {e}", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    roots = describe.Roots(Path(p) for p in (a.photos or []))
+    engine: describe.Engine | None = None
+    if not a.dry_run:
+        try:
+            engine = describe.detect(a.model)
+        except describe.EngineMissing as e:
+            print(f"describe: {e}", file=sys.stderr)
+            print(describe.how_to(a.model), file=sys.stderr)
+            sys.exit(2)
+    try:
+        report = describe.run(
+            lb,
+            engine,
+            since=a.since,
+            limit=a.limit,
+            fetch_model=bool(a.fetch_model),
+            roots=roots,
+            dry_run=bool(a.dry_run),
+            progress=lambda text: print(text, file=sys.stderr),
+        )
+    except describe.ModelMissing as e:
+        print(f"describe: {e}", file=sys.stderr)
+        print(describe.how_to(a.model), file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
+        return
+    print(describe.summary(report))
+
+
 def cmd_sources(a: argparse.Namespace) -> None:
     """`sources`: every adapter this build has, file and live, with its state under
     `policy/import.json` — `enabled`, or `disabled (<reason>)`; then any disabled name that is no
@@ -2532,7 +2580,8 @@ def cmd_show(a: argparse.Namespace) -> None:
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
         print(f"  {hero}")
-    for text in _day_rows(rows, retracted, tz, names, superseded):
+    descriptions = describe.by_photo(line for line in rows if line["id"] not in retracted)
+    for text in _day_rows(rows, retracted, tz, names, superseded, descriptions):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
@@ -2768,13 +2817,27 @@ def _day_rows(
     tz: ZoneInfo,
     names: Mapping[Ref, str] | None,
     superseded: Mapping[str, int] | None = None,
+    descriptions: Mapping[str, Line] | None = None,
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
-    by any other row, collapses into one summary, and one calendar entry that several sources
-    carry (`events.fold`) is one row, `×N sources`. `names` is the label map; None is the `--raw`
-    path: refs exactly as the sources gave them, no label, no fallback."""
+    by any other row, collapses into one summary, one calendar entry that several sources
+    carry (`events.fold`) is one row, `×N sources`, and a photo's description (`descriptions`,
+    photo line id → the derived note, `describe.by_photo`) prints under the first keeper row for
+    that photo instead of as a row of its own; with no keeper row standing it is a row. `names` is
+    the label map; None is the `--raw` path: refs exactly as the sources gave them, no label, no
+    fallback."""
     run: list[Line] = []
     rows, folded = events.fold(rows, flights.Airlines.load(), retracted)
+    described = descriptions or {}
+    under: dict[str, str] = {}  # description line id → the keeper line id it prints under
+    for line in rows:
+        pid = (
+            keepers.photo_id_of(line)
+            if line["kind"] == keepers.KIND and line["id"] not in retracted
+            else None
+        )
+        if pid is not None and pid in described and str(described[pid]["id"]) not in under:
+            under[str(described[pid]["id"])] = str(line["id"])
     for line in rows:
         retraction = retracted.get(line["id"])
         point = line["kind"] == "location" and retraction is None
@@ -2783,12 +2846,24 @@ def _day_rows(
             run = []
         if point:
             run.append(line)
+        elif str(line["id"]) in under:
+            continue  # shown under its keeper
         else:
             stands_for = folded.get(str(line["id"]))
             sources = f"×{len(stands_for.sources)} sources" if stands_for else None
             yield _line_row(line, retraction, tz, names, superseded, sources)
+            pid = keepers.photo_id_of(line) if line["kind"] == keepers.KIND else None
+            if (
+                pid is not None
+                and pid in described
+                and under.get(str(described[pid]["id"])) == str(line["id"])
+            ):
+                yield f"{' ' * DESCRIPTION_INDENT}{describe.under_keeper(described[pid])}"
     if run:
         yield _run_row(run, tz)
+
+
+DESCRIPTION_INDENT = 2 + 5 + 2 + 10 + 1 + 14 + 1  # the text column of a row: margin, clock, kind, source
 
 
 def _line_row(
@@ -2827,6 +2902,8 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = _call_text(p, names)
     elif line["kind"] == "mail":
         text = _mail_text(p, names)
+    elif line["kind"] == "note" and describe.is_description(line):
+        text = describe.row_text(line)  # a photo's description, when its keeper is not shown
     elif line["kind"] == "note":
         text = _note_text(p, raw=names is None)
     elif line["kind"] == keepers.KIND:
@@ -4769,6 +4846,35 @@ def main(argv: list[str] | None = None) -> None:
         help="download the model first when it is not on this machine (the only network use, ever)",
     )
     s.set_defaults(fn=cmd_transcribe)
+    s = sub.add_parser(
+        "describe",
+        help="keepers: a derived note per keeper whose photo file is reachable — one sentence and the"
+        " visible things, by a local vision model (RFC 0024, RFC 0010); nothing leaves the machine",
+    )
+    s.add_argument("what", help="what to describe: keepers")
+    s.add_argument("--since", metavar="YYYY-MM-DD", help="only keepers from this local day on")
+    s.add_argument("--limit", type=int, metavar="N", help="describe at most N photos this run")
+    s.add_argument(
+        "--photos",
+        action="append",
+        metavar="DIR",
+        help="a folder holding the photo files: an Apple Photos library (.photoslibrary, by asset UUID) or"
+        " any folder (by file name); may repeat. The record's own attachment store is always searched",
+    )
+    s.add_argument(
+        "--model",
+        default=describe.DEFAULT_MODEL,
+        metavar="NAME",
+        help=f"the MLX vision model's repository (default {describe.DEFAULT_MODEL})",
+    )
+    s.add_argument("--dry-run", action="store_true", help="list what would be described; write nothing")
+    s.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the model first when it is not on this machine (the only network use, ever)",
+    )
+    s.add_argument("--json", action="store_true", help="the run as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_describe)
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
