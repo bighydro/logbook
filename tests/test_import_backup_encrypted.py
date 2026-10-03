@@ -543,3 +543,41 @@ def test_manifest_reads_file_keys_and_classes_after_unlock(tmp_path, monkeypatch
     assert [m.protection_class for m in media] == [4]
     assert [s.name for s in ios_backup.EXTRAS] == ["ios-calls", "health", "health", "safari"]
     assert ios_backup.EXTRAS[0].adapter and not ios_backup.EXTRAS[1].adapter
+
+
+# -- streaming: the plaintext of a file as chunks, never whole --------------------------------------
+
+
+@pytest.mark.parametrize("size", [0, 1, 15, 16, 17, 64, 1000, 4096 + 5])
+def test_decrypt_chunks_yields_the_plaintext_and_returns_what_it_stripped(tmp_path, size):
+    key = _random(1)
+    plain = os.urandom(size)
+    src = tmp_path / "enc"
+    src.write_bytes(_encrypt(key, plain))
+    gen = ios_backup_crypto.decrypt_chunks(src, key, size=size, chunk=64)
+    out = bytearray()
+    while True:
+        try:
+            piece = next(gen)
+        except StopIteration as stop:
+            done = stop.value
+            break
+        assert len(piece) <= 64 + 16
+        out += piece
+    assert bytes(out) == plain
+    assert done.written == size and done.padding == 16 - size % 16
+
+
+def test_plain_chunks_streams_an_encrypted_file_and_a_plain_one_alike(tmp_path):
+    built = _encrypted_backup(tmp_path)
+    manifest = ios_backup.Manifest(built.folder)
+    manifest.unlock(PASSWORD, tmp_path / "out" / "Manifest.db")
+    key = ("MediaDomain", "Library/SMS/Attachments/ab/12/AT-100/stern.jpg")
+    found = manifest.file(*key)
+    assert found is not None and found.encrypted
+    assert b"".join(ios_backup.plain_chunks(found, chunk=16)) == built.plain[key]
+    plain = tmp_path / "plain.bin"
+    plain.write_bytes(bytes(range(256)) * 5)
+    row = ios_backup.BackupFile("HomeDomain", "x/plain.bin", plain, plain.stat().st_size)
+    assert b"".join(ios_backup.plain_chunks(row, chunk=100)) == plain.read_bytes()
+    assert ios_backup.digest(found) == (hashlib.sha256(built.plain[key]).hexdigest(), len(built.plain[key]))

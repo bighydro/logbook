@@ -152,8 +152,14 @@ class GatedIndex(Index):
     ) -> list[Line]:
         return self._kept(super().of_source(kind, source, first_day, last_day, raw_id_prefix))
 
-    def of_kind(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
-        return (line for line in super().of_kind(kind, first_day, last_day) if self.gate.keep(line))
+    def of_kind(
+        self,
+        kind: str,
+        first_day: str | None = None,
+        last_day: str | None = None,
+        source: str | None = None,
+    ) -> Iterator[Line]:
+        return (line for line in super().of_kind(kind, first_day, last_day, source) if self.gate.keep(line))
 
     def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:
         where = (

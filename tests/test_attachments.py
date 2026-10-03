@@ -139,3 +139,45 @@ def test_write_path_refuses_a_file_whose_bytes_do_not_match_its_name(lb: Logbook
     (store / SHA).write_bytes(b"tampered")
     with pytest.raises(ValueError, match=SHA[:12]):
         lb.attach_file(src)
+
+
+# -- a stream of chunks, checked against the digest the line carries ----------------------------------
+
+
+def test_write_chunks_stores_a_stream_under_the_digest_it_was_promised(lb: Logbook):
+    chunks = [TEXT[:7], TEXT[7:20], TEXT[20:]]
+    target, size = attachments.write_chunks(lb.root, iter(chunks), SHA)
+    assert target == lb.root / "attachments" / SHA and size == len(TEXT)
+    assert target.read_bytes() == TEXT
+    assert [p.name for p in target.parent.iterdir()] == [SHA]  # no temporary file left behind
+
+
+def test_write_chunks_refuses_bytes_that_do_not_match_the_promised_digest(lb: Logbook):
+    with pytest.raises(attachments.DigestMismatch) as e:
+        attachments.write_chunks(lb.root, iter([b"not ", b"the bytes"]), SHA)
+    assert e.value.expected == SHA and e.value.actual == hashlib.sha256(b"not the bytes").hexdigest()
+    assert e.value.size == len(b"not the bytes")
+    assert SHA[:12] in str(e.value) and e.value.actual[:12] in str(e.value)
+    store = lb.root / "attachments"
+    assert not (store / SHA).exists() and not any(store.iterdir())  # nothing under the name, no temp file
+
+
+def test_write_chunks_refuses_a_digest_that_is_not_lowercase_hex(lb: Logbook):
+    with pytest.raises(ValueError, match="not a sha256"):
+        attachments.write_chunks(lb.root, iter([TEXT]), SHA.upper())
+    with pytest.raises(ValueError, match="not a sha256"):
+        attachments.write_chunks(lb.root, iter([TEXT]), "../" + SHA[3:])
+
+
+def test_write_chunks_keeps_a_present_file_and_still_refuses_a_tampered_one(lb: Logbook):
+    first, _ = attachments.write_chunks(lb.root, iter([TEXT]), SHA)
+    again, size = attachments.write_chunks(lb.root, iter([b"never read"]), SHA)  # present: bytes not consumed
+    assert again == first and size == len(TEXT)
+    first.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="do not match its name"):
+        attachments.write_chunks(lb.root, iter([TEXT]), SHA)
+
+
+def test_is_digest_names_the_store_files_and_nothing_else():
+    assert attachments.is_digest(SHA) and not attachments.is_digest(SHA.upper())
+    assert not attachments.is_digest(SHA[:-1]) and not attachments.is_digest(f".{SHA}.1.tmp")

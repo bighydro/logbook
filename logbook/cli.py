@@ -16,7 +16,7 @@ import zoneinfo
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -27,6 +27,7 @@ from . import (
     apps,
     asset_status,
     assets,
+    attach,
     attachments,
     backup,
     crossing,
@@ -79,7 +80,7 @@ from . import (
 from . import (
     year as year_reader,
 )
-from .adapters import ais, ios_contacts, screentime
+from .adapters import ais, apple_photos, ios_contacts, screentime
 from .adapters import weather as weather_adapter
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
@@ -1950,15 +1951,12 @@ def _is_rfc3339(value: str) -> bool:
 
 
 PASSWORD_ENV = "LOGBOOK_BACKUP_PASSWORD"
-ENCRYPTED_NO_PASSWORD = (
-    f"import-backup: this backup is encrypted; put its password in {PASSWORD_ENV} (never a flag) and re-run,"
+ENCRYPTED_NO_PASSWORD = (  # each printed after `<command>: ` (`import-backup`, `attach import-backup`)
+    f"this backup is encrypted; put its password in {PASSWORD_ENV} (never a flag) and re-run,"
     " or in Finder untick “Encrypt local backup”, back up again, then re-run"
 )
-ENCRYPTED_NO_EXTRA = f"import-backup: this backup is encrypted; reading it needs {ios_backup_crypto.EXTRA}"
-WRONG_PASSWORD = (
-    f"import-backup: {PASSWORD_ENV} does not unlock this backup's keybag (wrong password?);"
-    " nothing was copied"
-)
+ENCRYPTED_NO_EXTRA = f"this backup is encrypted; reading it needs {ios_backup_crypto.EXTRA}"
+WRONG_PASSWORD = f"{PASSWORD_ENV} does not unlock this backup's keybag (wrong password?); nothing was copied"
 DIAL_PREFIX_HINT = (
     f"  {ios_contacts.DIAL_PREFIX_ENV} is not set: numbers saved without a country code stay as entered;"
     f" set it (for example {ios_contacts.DIAL_PREFIX_ENV}=41) to complete them"
@@ -2022,14 +2020,22 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         if adapter is None:
             print(f"  copied, {p.source.note}")
             continue
-        given = {"attachments": True} if a.attachments and _takes(adapter, "attachments") else None
-        _append_with(
-            lb,
-            adapter,
-            store_copy.parent if p.source.pattern else store_copy,
-            given,
-            recorded_as=inbox_folder / p.source.name,
-        )
+        given: dict[str, Any] = {}
+        if a.attachments and _takes(adapter, "attachments"):
+            given["attachments"] = True
+        if _takes(adapter, "media_digest") and os.environ.get(PHOTOS_HASH_MEDIA_ENV, "1").strip() != "0":
+            given["media_digest"] = _media_digest(manifest, p.source)  # hashed in place, never copied
+        try:
+            _append_with(
+                lb,
+                adapter,
+                store_copy.parent if p.source.pattern else store_copy,
+                given or None,
+                recorded_as=inbox_folder / p.source.name,
+            )
+        except (ios_backup.DecryptError, OSError) as e:  # a blob that will not decrypt or read while hashing
+            print(f"import-backup: {p.source.name}: {e}", file=sys.stderr)
+            sys.exit(1)
         imported += 1
     if any(p.copied for p in plans):
         ios_backup.write_copies(inbox_folder, manifest, plans)
@@ -2045,24 +2051,47 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
         print(said)
 
 
-def _unlock(manifest: ios_backup.Manifest, inbox_folder: Path) -> None:
+PHOTOS_HASH_MEDIA_ENV = "LOGBOOK_APPLE_PHOTOS_HASH_MEDIA"
+
+
+def _media_digest(manifest: ios_backup.Manifest, source: ios_backup.Source) -> apple_photos.MediaDigest:
+    """For an adapter whose `run` takes `media_digest` (`apple-photos`): the (sha256, bytes) of the
+    file at a path below the phone's `Media/` folder, hashed straight from the backup through
+    `ios_backup.digest` — decrypted on the way when the backup is, never copied — or None when the
+    backup has no such file (an iCloud-optimised library keeps a thumbnail on the phone). Set
+    LOGBOOK_APPLE_PHOTOS_HASH_MEDIA=0 to skip the hashing on a large library."""
+    media_root = PurePosixPath(source.relative_path).parts[0]  # `Media`, of `Media/PhotoData/Photos.sqlite`
+
+    def found(local_path: str) -> tuple[str, int] | None:
+        parts = PurePosixPath(local_path).parts
+        if not parts or any(part in ("..", "", "/") for part in parts):
+            return None
+        f = manifest.file(source.domain, PurePosixPath(media_root, *parts).as_posix())
+        if f is None or f.size is None:
+            return None
+        return ios_backup.digest(f)
+
+    return found
+
+
+def _unlock(manifest: ios_backup.Manifest, inbox_folder: Path, command: str = "import-backup") -> None:
     """Unlock an encrypted backup with LOGBOOK_BACKUP_PASSWORD and decrypt its Manifest.db into
     the inbox. The extra, the variable, then the keybag are checked in that order; each failure is
-    one line on stderr and exit 2, and none of them names the password."""
+    one line on stderr, prefixed by `command`, and exit 2, and none of them names the password."""
     if not ios_backup_crypto.available():
-        print(ENCRYPTED_NO_EXTRA, file=sys.stderr)
+        print(f"{command}: {ENCRYPTED_NO_EXTRA}", file=sys.stderr)
         sys.exit(2)
     password = os.environ.get(PASSWORD_ENV, "")
     if not password:
-        print(ENCRYPTED_NO_PASSWORD, file=sys.stderr)
+        print(f"{command}: {ENCRYPTED_NO_PASSWORD}", file=sys.stderr)
         sys.exit(2)
     try:
         manifest.unlock(password, inbox_folder / ios_backup.MANIFEST_DB)
     except ios_backup.WrongPassword:
-        print(WRONG_PASSWORD, file=sys.stderr)
+        print(f"{command}: {WRONG_PASSWORD}", file=sys.stderr)
         sys.exit(2)
     except (ios_backup.NotABackup, ios_backup.DecryptError, ios_backup.MissingExtra) as e:
-        print(f"import-backup: {e}", file=sys.stderr)
+        print(f"{command}: {e}", file=sys.stderr)
         sys.exit(2)
     finally:
         del password
@@ -2214,6 +2243,91 @@ def _inside(path: Path, folder: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def cmd_attach(a: argparse.Namespace) -> None:
+    """`attach import-backup <folder> --only a,b [--since DAY] [--dry-run]`, `attach status`, `attach
+    verify`: the SPEC §1.1 store filled from an iOS backup, counted, checked (`logbook/attach.py`).
+    The pass appends nothing and holds no file whole; a file whose bytes are not the digest its line
+    names is refused on one line and the command exits 1 at the end. `--only` is required: a run
+    reads only the stores it was asked for, and a source disabled in `policy/import.json` is skipped
+    and said so. An encrypted backup is unlocked as `import-backup` unlocks it, the password from
+    LOGBOOK_BACKUP_PASSWORD and never a flag."""
+    lb = Logbook.find()
+    if a.verb == "status":
+        counted = attach.status(lb)
+        if a.json:
+            print(json.dumps(counted, indent=2))
+            return
+        for text in attach.status_rows(counted):
+            print(text)
+        return
+    if a.verb == "verify":
+        checked = attach.verify(lb, attach.progress_line)
+        for text in attach.verify_rows(checked):
+            print(text)
+        if checked.bad:
+            sys.exit(1)
+        return
+    command = "attach import-backup"
+    since: str | None = None
+    if a.since is not None:
+        try:
+            since = date.fromisoformat(a.since).isoformat()
+        except ValueError:
+            print(f"{command}: --since takes a local day, YYYY-MM-DD, not {a.since!r}", file=sys.stderr)
+            sys.exit(2)
+    sources = _attach_only(a.only, command)
+    try:
+        manifest = ios_backup.Manifest(Path(a.backup).expanduser())
+    except ios_backup.NotABackup as e:
+        print(f"{command}: {e}", file=sys.stderr)
+        sys.exit(2)
+    sources = tuple(src for src in sources if not _say_disabled(lb, src.name))
+    if manifest.encrypted:
+        _unlock(manifest, lb.root / "inbox" / f"ios-backup-{manifest.udid}", command)
+    report = attach.import_backup(
+        lb,
+        manifest,
+        sources,
+        since,
+        a.dry_run,
+        progress=attach.progress_line,
+        say=lambda message: print(message, file=sys.stderr),
+    )
+    for tally in report.tallies:
+        print(tally.row(a.dry_run))
+    if a.dry_run:
+        n, size = report.would_store
+        print(f"dry run: {_plural(n, 'file')} ({size:,} bytes) would be stored; nothing written")
+        return
+    stored = sum(t.stored_bytes for t in report.tallies)
+    store = attach.store_line(attach.status(lb)["store"])
+    print(f"{_plural(report.stored, 'file')} stored ({stored:,} bytes); {store}")
+    if report.refused:
+        n = len(report.refused)
+        print(f"{_plural(n, 'file')} refused: the bytes in the backup are not the ones the line names")
+        sys.exit(1)
+
+
+def _attach_only(spec: str, command: str) -> tuple[attach.MediaSource, ...]:
+    """`--only a,b` as media sources in SOURCES order; an unknown name, or one whose lines name no
+    media (`contacts`), exits 2 naming the known ones."""
+    known = ", ".join(s.name for s in attach.SOURCES)
+    wanted: set[str] = set()
+    for word in spec.split(","):
+        name = word.strip()
+        if not name:
+            continue
+        found = attach.source(name)
+        if found is None:
+            print(f"{command}: no media source named {name!r} (known: {known})", file=sys.stderr)
+            sys.exit(2)
+        wanted.add(found.name)
+    if not wanted:
+        print(f"{command}: --only names no source (known: {known})", file=sys.stderr)
+        sys.exit(2)
+    return tuple(s for s in attach.SOURCES if s.name in wanted)
 
 
 def cmd_retract(a: argparse.Namespace) -> None:
@@ -4155,6 +4269,39 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--delete", action="store_true", help="remove the files instead of moving them")
     v.add_argument("--dry-run", action="store_true", help="say what would go and how much; touch nothing")
     s.set_defaults(fn=cmd_inbox)
+    s = sub.add_parser(
+        "attach",
+        help="the attachment store (SPEC §1.1): fill it from an iOS backup, count it, check every file",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser(
+        "import-backup",
+        help="stream every media file the record's message and photo lines name out of an iOS backup into"
+        " attachments/<sha256>, checked against the line; resumable, present files skipped",
+    )
+    v.add_argument("backup", help="the backup folder (Finder → Manage Backups → Show in Finder)")
+    v.add_argument(
+        "--only",
+        required=True,
+        metavar="NAMES",
+        help="comma-separated sources, e.g. whatsapp,imessage,photos (known: "
+        + ", ".join(src.name for src in attach.SOURCES)
+        + ")",
+    )
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only the lines from this local day on")
+    v.add_argument(
+        "--dry-run", action="store_true", help="count what would be stored and what is missing; write nothing"
+    )
+    v.set_defaults(fn=cmd_attach)
+    v = verbs.add_parser(
+        "status", help="per source: attachments referenced, present and missing; the store's size"
+    )
+    v.add_argument("--json", action="store_true", help="the report as JSON")
+    v.set_defaults(fn=cmd_attach)
+    v = verbs.add_parser(
+        "verify", help="stream every present file through SHA-256 against its name; exit 1 on a mismatch"
+    )
+    v.set_defaults(fn=cmd_attach)
     s = sub.add_parser(
         "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
     )

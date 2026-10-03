@@ -23,10 +23,11 @@ source's own display name, and `sender.name` is the name the source showed for t
 group member's ZCONTACTNAME when the message's ZGROUPMEMBER row exists, else the message's
 ZPUSHNAME (the name the sender chose) on a store whose ZWAMESSAGE has that column.
 
-Media, v1 rule: the file is never copied into the record — the §1.1 attachment store is not built
-yet. When ZMEDIALOCALPATH names a file that exists under `<db folder>/Message/`, its SHA-256 and
-size are recorded under `extra.media` so a later attach pass can find the bytes by digest; when it
-does not, `extra.media_missing` is true. `payload.media` is never set. `LOGBOOK_WHATSAPP_HASH_MEDIA=0`
+Media, v1 rule: the file is never copied here. When ZMEDIALOCALPATH names a file that exists under
+`<db folder>/Message/`, its SHA-256 and size are recorded under `extra.media` so the attach pass
+(`logbook attach import-backup --only whatsapp`, `logbook/attach.py`) finds the bytes in the backup
+by the path and puts them in the §1.1 store under the digest, checked against it; when it does
+not, `extra.media_missing` is true. `payload.media` is never set. `LOGBOOK_WHATSAPP_HASH_MEDIA=0`
 skips the hashing (a decade of media is many gigabytes) and records only the local path.
 
 Built for the real store, about a million rows: one SELECT streamed through the cursor, chats and
