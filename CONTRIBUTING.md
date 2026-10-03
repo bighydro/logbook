@@ -61,6 +61,16 @@ The easiest and most useful thing to build is an adapter for the export you alre
 
 A source that has both an export and a live API is one adapter with one mapping: backfill and live share it, so the same observation arrives once, with one shape and one `raw_id`, whichever way it came ([ADR 0017](docs/adr/0017-backfill-and-live-share-one-mapping.md)).
 
+## Slow tests
+
+The suite runs in parallel (`uv run pytest -n auto`, as CI runs it), and a pull request's CI should finish in minutes, so a test is marked by how long it takes:
+
+- No marker: under about five seconds. Every push and every pull request runs it.
+- `@pytest.mark.slow`: over about five seconds, and still a plain correctness test — a reader on a year-long demo record, a fuzz case of many examples, an adapter on a 200,000-point export. Skipped unless `LOGBOOK_SLOW=1`; CI sets it on a push to `main` and on the nightly run, never on a pull request. Before opening a PR, run them once: `LOGBOOK_SLOW=1 uv run pytest -n auto -m slow`.
+- `@pytest.mark.stress`: the generated millions-of-lines tests with timing and memory assertions (`tests/test_stress.py`). Skipped unless `LOGBOOK_STRESS=1`, and never run in CI: a shared runner's clock and memory are nobody's benchmark.
+
+`--durations=15` is on the CI call, so the slowest tests of every run are in its log; a test that lands there at five seconds or more gets the marker. A test must own nothing but its `tmp_path`: no fixed port, no file in the working tree, no order it relies on. A module-scoped fixture is fine (`--dist loadfile` keeps a file's tests on one worker, so it is built once).
+
 ## What CI checks
 
-Every pull request, and every push to `main`, runs: ruff and mypy; the test suite on Linux, macOS and Windows with Python 3.12 and 3.13; the conformance rule (`logbook verify` on `conformance/sample-logbook` prints the head in `conformance/expected.json`); the Nix and Docker builds; and `cross-impl`, which builds the independent TypeScript implementation ([bighydro/logbook-ts](https://github.com/bighydro/logbook-ts)) at its `main`, checks that its `verify` prints the same head on the sample, then appends one note to a copy of the sample with the Python CLI and verifies the copy with the TypeScript CLI. The two implementations must agree on a record the other wrote; a change to the spec or the hashing that only one of them follows fails here.
+Every pull request, and every push to `main`, runs: ruff and mypy; the test suite (`pytest -n auto`) on Linux and macOS with Python 3.12 and 3.13 — Windows, the slowest runner by far, runs on the push to `main` and nightly, and its two matrix entries report *skipped* on a pull request, which the branch ruleset accepts; the conformance rule (`logbook verify` on `conformance/sample-logbook` prints the head in `conformance/expected.json`); the Nix and Docker builds; and `cross-impl`, which builds the independent TypeScript implementation ([bighydro/logbook-ts](https://github.com/bighydro/logbook-ts)) at its `main`, checks that its `verify` prints the same head on the sample, then appends one note to a copy of the sample with the Python CLI and verifies the copy with the TypeScript CLI. The two implementations must agree on a record the other wrote; a change to the spec or the hashing that only one of them follows fails here.

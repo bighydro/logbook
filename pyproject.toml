@@ -72,6 +72,7 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pytest-cov>=5",
+  "pytest-xdist>=3.6",  # `pytest -n auto`, as CI runs the suite
   "jsonschema>=4",
   "cryptography>=42",  # the `encrypted` extra, so its tests and mypy see it
   "websockets>=13",  # the `ais` extra, so mypy sees it (the tests fake the socket)
@@ -107,5 +108,8 @@ ignore_missing_imports = true  # the `transcribe` and `judge` extras, imported o
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
-markers = ["slow: generated stress tests; run with LOGBOOK_SLOW=1"]
+addopts = "-q --dist loadfile"  # with -n: a file's tests stay on one worker, so a module fixture builds once
+markers = [
+  "slow: takes more than about five seconds; skipped unless LOGBOOK_SLOW=1 (CI sets it on push to main and nightly, not on a pull request)",
+  "stress: generated millions-of-lines tests with timing and memory assertions; skipped unless LOGBOOK_STRESS=1, never in CI",
+]

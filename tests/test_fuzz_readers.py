@@ -385,6 +385,7 @@ def every_reader_reads(
 # -- the properties ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @settings(max_examples=8, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(
     days=st.sampled_from([1, 2, 3, 5]),
