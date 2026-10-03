@@ -71,6 +71,7 @@ from . import (
     transcribe,
     trip_page,
     trips,
+    vault,
 )
 from . import (
     day as day_reader,
@@ -4384,6 +4385,9 @@ def cmd_export(a: argparse.Namespace) -> None:
     if a.path == crossing.KIND:
         _export_crossing(lb, a)
         return
+    if a.path == vault.DESTINATION:
+        _export_vault(lb, a)
+        return
     if a.day or a.days:
         _export_days(lb, a)
         return
@@ -4493,6 +4497,41 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         _tier3_warning(req, sel)
     seq, digest = result.line["seq"], result.package_sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…; watermark {req.until}")
+
+
+def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
+    """vault FOLDER [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--tier 1|1,2]: the record as a folder
+    of Markdown pages with wikilinks (`logbook/vault.py`), tier-gated under the `vault` ceiling in
+    policy/crossing.json (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1
+    line (RFC 0011). Only the files whose content changed are rewritten."""
+    generated_at = now_utc()
+    try:
+        if not a.folder:
+            raise vault.VaultError("export vault needs a folder: logbook export vault <folder>")
+        req = vault.request(lb, a.since, a.until, vault.parse_tiers("1" if a.tier is None else a.tier))
+    except vault.VaultError as e:
+        print(f"export vault: {e}", file=sys.stderr)
+        sys.exit(2)
+    folder = Path(a.folder).expanduser()
+    if req is None:
+        print("vault: the record has no day; nothing written, nothing appended")
+        return
+    try:
+        built = vault.build(lb, req)
+        result = vault.export(lb, req, built, folder, generated_at)
+    except (vault.VaultError, stays.SettingsError, OSError) as e:
+        print(f"export vault: {e}", file=sys.stderr)
+        sys.exit(2)
+    tiers = ",".join(map(str, req.tiers))
+    window = f"{req.since} {EN_DASH} {req.until}"
+    print(f"vault: {_plural(built.days, 'day')} {window}, tier {tiers} {ARROW} {folder}")
+    pages = ", ".join(_plural(n, *vault.PAGE_NOUNS[kind]) for kind, n in built.pages.items())
+    print(f"  pages: {pages}; {result.written} written, {result.unchanged} unchanged")
+    if built.held_back:
+        by_kind = ", ".join(f"{kind} {n}" for kind, n in built.held_by_kind.items())
+        print(f"  held back: {_plural(built.held_back, 'line')} above tier {max(req.tiers)} ({by_kind})")
+    seq, sha = result.line["seq"], result.sha256[:12]
+    print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, vault sha256 {sha}…")
 
 
 def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
@@ -5357,17 +5396,34 @@ def main(argv: list[str] | None = None) -> None:
     s.set_defaults(fn=cmd_doctor)
     s = sub.add_parser(
         "export",
-        help="the whole log as one .jsonl, one day-package/v1 per day, or `crossing`: a crossing-package/v1",
+        help="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a crossing-package/v1,"
+        " or `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq",
     )
-    s.add_argument("path", nargs="?", help=".jsonl file for the whole log, or `crossing` (RFC 0005)")
+    s.add_argument(
+        "path",
+        nargs="?",
+        help=".jsonl file for the whole log, `crossing` (RFC 0005) or `vault` (docs/vault.md)",
+    )
+    s.add_argument("folder", nargs="?", help="vault: the folder to write the pages into (an Obsidian vault)")
     s.add_argument("--day", metavar="YYYY-MM-DD", help="one day-package/v1 directory")
     s.add_argument("--days", nargs=2, metavar=("FROM", "TO"), help="one directory per day, inclusive")
     s.add_argument("--out", metavar="DIR", help="where to write (default <root>/export/<date>/)")
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.add_argument("--to", metavar="DESTINATION", help="crossing: the circle member, e.g. hermes")
-    s.add_argument("--since", metavar="RFC3339|last", help="crossing: window start, or the last window's end")
-    s.add_argument("--until", metavar="RFC3339", help="crossing: window end, exclusive (default now)")
-    s.add_argument("--tier", metavar="1|1,2|1,2,3", help="crossing: tiers to cross (default 1)")
+    s.add_argument(
+        "--since",
+        metavar="RFC3339|last|DAY",
+        help="crossing: window start, or the last window's end; vault: the first day (default: the record's)",
+    )
+    s.add_argument(
+        "--until",
+        metavar="RFC3339|DAY",
+        help="crossing: window end, exclusive (default now); vault: the last day, inclusive (default: the"
+        " record's)",
+    )
+    s.add_argument(
+        "--tier", metavar="1|1,2|1,2,3", help="crossing: tiers to cross (default 1); vault: 1 or 1,2, never 3"
+    )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
         "--dry-run", action="store_true", help="crossing: count and show the policy; write nothing"

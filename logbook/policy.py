@@ -33,6 +33,8 @@ POLICY_FILE = PurePosixPath("policy/crossing.json")  # record-relative, as the m
 DEFAULT_DESTINATION = "hermes"
 MCP_DESTINATION = "mcp"  # `logbook mcp`: an agent on this machine, reading through the ceiling
 MCP_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name the mcp destination
+VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on the owner's own disk
+VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 DEFAULT_POLICY: dict[str, Any] = {
     DEFAULT_DESTINATION: {"max_tier": 2},
     MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
@@ -103,16 +105,27 @@ def ceiling(root: Path, destination: str) -> int:
 
 def mcp_ceiling(root: Path) -> int:
     """The highest tier `logbook mcp` may hand to its client: the `mcp` entry of the policy, or
-    tier 1 when the file does not name it — the one destination with a default, since the client is
-    an agent on the owner's own machine and tier 1 is what crosses on its own (ADR 0016). An entry
+    tier 1 when the file does not name it — a destination with a default, since the client is an
+    agent on the owner's own machine and tier 1 is what crosses on its own (ADR 0016). An entry
     that is there but not a tier of 1, 2 or 3 is refused naming the file, never read as a default."""
+    return _ceiling_or_default(root, MCP_DESTINATION, MCP_DEFAULT_TIER)
+
+
+def vault_ceiling(root: Path) -> int:
+    """The highest tier `logbook export vault` may render: the `vault` entry of the policy, or tier 1
+    when the file does not name it — the vault is a folder on the owner's own disk, like the `mcp`
+    client, and tier 1 is what crosses on its own (ADR 0016). `--tier 1,2` needs the entry."""
+    return _ceiling_or_default(root, VAULT_DESTINATION, VAULT_DEFAULT_TIER)
+
+
+def _ceiling_or_default(root: Path, destination: str, default: int) -> int:
     path = policy_path(root)
-    entry = read(root).get(MCP_DESTINATION)
+    entry = read(root).get(destination)
     if entry is None:
-        return MCP_DEFAULT_TIER
+        return default
     if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
         raise PolicyError(
-            f'{path} names {MCP_DESTINATION!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": 1}}'
+            f'{path} names {destination!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": {default}}}'
         )
     return int(entry["max_tier"])
 
