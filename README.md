@@ -25,7 +25,8 @@ Five minutes more, every command on that record: [docs/try-it.md](docs/try-it.md
 
 ```bash
 unset LOGBOOK_HOME
-logbook init                    # creates ~/Logbook and your key
+logbook setup                   # the guided first run, one question at a time: docs/first-hour.md
+logbook init                    # or just the folder: creates ~/Logbook and your key
 logbook add "had lunch with a friend by the lake"
 logbook add ~/Downloads/takeout.zip     # any export, no flags
 logbook show today
@@ -92,6 +93,14 @@ on someone else's server. Keep it in a plain local folder and point `LOGBOOK_HOM
 logbook init ~/Records/Logbook           # once
 export LOGBOOK_HOME=~/Records/Logbook    # in your shell profile, so every command finds it
 ```
+
+`logbook setup` asks for the folder and refuses one a sync client owns, with the reason; then the timezone, your own
+names, emails and phones (`policy/owner.json`, so you are never your own company), your home as coordinates pasted
+from a maps app, and what is on this machine to import — a Takeout in `~/Downloads`, an iPhone backup, Messages on
+a Mac — each with a dry run first. One question at a time, each with its default and why it is asked; `q` stops
+and `logbook setup` again continues where it stopped (`state/setup.json`); `--yes` takes every default. It never
+asks for a secret: a live source is named by its variable and where the key comes from.
+[docs/first-hour.md](docs/first-hour.md) shows every screen.
 
 Back it up with `logbook backup DEST`: one verified snapshot of the record under `DEST/<owner_id>/<timestamp>/`
 on another disk — the month files, `logbook.json`, `policy/`, `places.json`, `assets.json`, `attachments/` and
@@ -743,6 +752,7 @@ your circle too; tier 3 only when the file allows it *and* you start the server 
 
 - Docs site: https://bighydro.github.io/logbook/
 - [docs/try-it.md](docs/try-it.md) — five minutes with a demo record: every reader on a month that never happened
+- [docs/first-hour.md](docs/first-hour.md) — the first hour: `logbook setup` screen by screen, for someone who has never used a terminal
 - [VISION.md](VISION.md) — why, and the rules the product refuses to break
 - [LORE.md](LORE.md) — where the logbook comes from: ships, pilots, diaries, and the log in computing
 - [SPEC.md](SPEC.md) — the format, one page; this is the part meant to become a standard

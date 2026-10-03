@@ -10,6 +10,7 @@ import secrets
 import shutil
 import time
 import uuid
+import zoneinfo
 from array import array
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
@@ -160,6 +161,26 @@ class Logbook:
         meta.update(fields)
         self._save_meta(meta)
         return meta
+
+    def set_timezone(self, zone: str) -> None:
+        """Change the record's zone (`timezone` in logbook.json, SPEC §3.2): a setting, not a line, so no
+        hash changes; the index notes the new meta and rebuilds. The zone must be one this machine knows."""
+        zoneinfo.ZoneInfo(zone)  # ZoneInfoNotFoundError for a name this machine's database lacks
+        meta = self.meta
+        meta["timezone"] = zone
+        self._save_meta(meta)
+
+    def set_owner_emails(self, emails: list[str]) -> list[str]:
+        """Add to `owner_emails` in logbook.json (SPEC §3.2: the owner's own addresses, which `mail`,
+        `splitwise` and the chat adapters take sides by); what the file lists afterwards, in order."""
+        meta = self.meta
+        listed = [str(e) for e in meta.get("owner_emails") or []]
+        for email in emails:
+            if email not in listed:
+                listed.append(email)
+        meta["owner_emails"] = listed
+        self._save_meta(meta)
+        return listed
 
     def _check_format(self, meta: dict[str, Any]) -> None:
         """verify and every writer refuse a record hashed by another rule (SPEC §3.1)."""

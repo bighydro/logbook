@@ -1,7 +1,7 @@
-"""logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
-derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve · verify · doctor ·
-export · share · receive · circle · index · migrate · assets · sources · mcp · backup. Three verbs,
-twenty-six rare."""
+"""logbook — init · setup · add · sync · import-backup · inbox · infer · transcribe · retract · show ·
+stats · derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve · verify ·
+doctor · export · share · receive · circle · index · migrate · assets · sources · mcp · backup. Three
+verbs, twenty-seven rare."""
 
 from __future__ import annotations
 
@@ -59,6 +59,7 @@ from . import (
     schedule,
     search,
     serve,
+    setup,
     share,
     stays,
     taskdone,
@@ -4029,6 +4030,14 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + w)
 
 
+def cmd_setup(a: argparse.Namespace) -> None:
+    """The guided first run (`logbook/setup.py`): one question at a time, each with its default and why
+    it is asked; resumable through `state/setup.json`; `--yes` takes every default and asks nothing."""
+    status = setup.run(a, os.environ)
+    if status:
+        sys.exit(status)
+
+
 def cmd_doctor(a: argparse.Namespace) -> None:
     """One line per check of the record and this machine (`logbook/doctor.py`); exit 1 when one fails.
     Reads only: a missing settings file is reported, never written."""
@@ -5022,6 +5031,15 @@ def main(argv: list[str] | None = None) -> None:
         help="one line per month file on stderr, in path order, as file n of N",
     )
     s.set_defaults(fn=cmd_verify)
+    s = sub.add_parser(
+        "setup",
+        help="the guided first run: where the record lives, your timezone, who you are, your home, what is"
+        " on this machine to import; one question at a time, resumable; --yes takes every default",
+    )
+    s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
+    s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(setup.STEPS))
+    s.add_argument("--again", action="store_true", help="run every step again (the record is kept)")
+    s.set_defaults(fn=cmd_setup)
     s = sub.add_parser(
         "doctor", help="is this machine set up to keep the record? one line per check; exit 1 on a fail"
     )

@@ -35,6 +35,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Try it: try-it.md
+  - The first hour: first-hour.md
   - Your life in a folder: launch-post.md
   - Vision: VISION.md
   - Lore: LORE.md
