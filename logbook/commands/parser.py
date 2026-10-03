@@ -11,7 +11,22 @@ import argparse
 from collections.abc import Callable
 
 from .. import __version__
-from . import add, day, derive, export, keepers, people, places, promises, record, rollup, serve, sync, trips
+from . import (
+    add,
+    day,
+    derive,
+    export,
+    keepers,
+    lab,
+    people,
+    places,
+    promises,
+    record,
+    rollup,
+    serve,
+    sync,
+    trips,
+)
 from .common import Subparsers
 
 ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
@@ -63,6 +78,7 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
     export.circle_arguments,
     record.migrate_arguments,
     record.backup_arguments,
+    lab.lab_arguments,
 )
 
 
