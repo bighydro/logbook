@@ -895,12 +895,14 @@ def test_import_backup_hashes_the_photos_pixels_from_the_backup_without_copying_
     _run(str(backup), "--only", "photos")
     out = capsys.readouterr().out
     assert f"added {PHOTO_LINES} lines from apple-photos" in out
-    assert f"also 1 with media hashed, {PHOTO_LINES - 1} with media missing" in out
+    # the counts line also carries the photos counted for the keepers (#173) between the two
+    assert "1 with media hashed" in out and f"{PHOTO_LINES - 1} with media missing" in out
     inbox = lb.root / "inbox" / f"ios-backup-{UDID}"
     copies = sorted(p.name for p in (inbox / "apple-photos").iterdir())
     assert copies == ["Photos.sqlite", "Photos.sqlite-wal"]
     assert not list(inbox.rglob("IMG_0001.HEIC")) and not list(lb.root.glob("attachments"))
-    photos = {line["payload"]["file_name"]: line["payload"] for line in lb.lines()}
+    # the favourite's keeper line rides with the photos since #173; only the photo lines name a file
+    photos = {line["payload"]["file_name"]: line["payload"] for line in lb.lines() if line["kind"] == "photo"}
     pixels = hashlib.sha256(b"pixels").hexdigest()
     assert photos["IMG_0001.HEIC"]["content_hash"] == pixels
     assert photos["IMG_0001.HEIC"]["extra"]["media"] == {
@@ -921,6 +923,8 @@ def test_import_backup_skips_hashing_the_photos_when_told_to(lb, tmp_path, monke
     out = capsys.readouterr().out
     assert f"added {PHOTO_LINES} lines from apple-photos" in out and "media" not in out
     for line in lb.lines():
+        if line["kind"] != "photo":  # the favourite's keeper line comes with the photos (#173)
+            continue
         p = line["payload"]
         assert "content_hash" not in p and "media_missing" not in p["extra"]
         assert set(p["extra"]["media"]) == {"local_path"}

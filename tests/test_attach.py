@@ -88,7 +88,9 @@ def test_attach_import_backup_streams_every_referenced_file_into_the_store_once(
     assert f"attachments/: 3 files, {len(IMAGE_BYTES) + len(VOICE_BYTES) + 6:,} bytes" in out
     assert "refused" not in captured.err
     seq, _head, errors = lb.verify()
-    assert errors == [] and seq == 14 + 13 + 6  # nothing was appended
+    # nothing was appended by attach; the one extra line is the favourite's keeper, written with the photos
+    assert errors == [] and seq == 14 + 13 + 6 + 1
+    assert sum(1 for line in lb.lines() if line["kind"] == "keeper") == 1
 
 
 def test_attach_import_backup_resumes_and_never_rewrites_a_present_file(lb, imported, capsys):
