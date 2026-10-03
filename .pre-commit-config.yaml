@@ -10,7 +10,8 @@ repos:
       # core.symlinks=false writes each as a plain file holding its target, "../SPEC.md" with no
       # newline, and these two hooks would then append one and break the link for every other
       # checkout (the docs site builds from the symlinks). The ADRs under docs/adr/ are real files.
-      - { id: end-of-file-fixer, exclude: &mirror '^docs/(?:[^/]+|adapters/README|conformance/README|rfcs/[^/]+)\.md$' }
+      # A shared-page fixture's attachment is a blob named by its digest: one appended byte breaks it.
+      - { id: end-of-file-fixer, exclude: &mirror '^(?:docs/(?:[^/]+|adapters/README|conformance/README|rfcs/[^/]+)\.md|tests/fixtures/share/.*/attachments/.*)$' }
       - { id: trailing-whitespace, exclude: *mirror }
       - { id: check-json }
       # mkdocs.yml carries a `!!python/name:` tag (the Mermaid fence); --unsafe parses the syntax
