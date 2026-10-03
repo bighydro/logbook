@@ -64,6 +64,7 @@ from . import (
     setup,
     share,
     stays,
+    story,
     taskdone,
     transcribe,
     trip_page,
@@ -797,6 +798,15 @@ def cmd_add(a: argparse.Namespace) -> None:
             sys.exit(2)
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
         return
+    if a.what[0] == story.KIND:
+        _add_story(lb, a)
+        return
+    if a.teller or a.listener or a.refers_to or a.confidence:
+        print(
+            "add: --teller, --listener, --refers-to and --confidence go with `add story <file>`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     if a.mac is not None or a.backup is not None or a.what == [screentime.NAME]:
         _add_screentime(lb, a, given)
         return
@@ -977,6 +987,71 @@ def _add_flight(lb: Logbook, sentence: str, airports: flights.Airports) -> None:
         f"#{line['seq']} {line['at']}  flight {_flight_text(line['payload'])}"
         + (" (merged into the flight already in the record)" if superseded else "")
     )
+
+
+def _add_story(lb: Logbook, a: argparse.Namespace) -> None:
+    """`add story <file>... --teller <ref> --listener <ref> [--refers-to …] [--confidence …] [--at …]
+    [--tier 2|3]`: one story/v1 line per file (RFC 0028), a text or Markdown file whose front
+    matter may carry the same fields, or a transcript/v1 JSON whose text becomes the story and whose
+    bytes go to the attachment store. Every file is read and every flag checked before anything is
+    written; a file already in the record (same bytes) is said so and skipped."""
+    paths = [Path(w).expanduser() for w in a.what[1:]]
+    if not paths:
+        print(
+            "add story: give one or more files: `add story <file> --teller <ref> --listener <ref>`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    for w, p in zip(a.what[1:], paths, strict=True):
+        if not p.is_file():
+            print(f"add story: no such file: {w}", file=sys.stderr)
+            sys.exit(2)
+    timezone = str(lb.meta["timezone"])
+    drafts: list[tuple[Path, dict[str, Any], bytes | None]] = []
+    with lb.index() as idx:
+        identities = identities_from([*idx.retractions(), *idx.resolutions()])
+        for p in paths:
+            try:
+                parsed = story.read_file(p, timezone)
+                transcript_line = idx.line_id(*parsed.transcript_key) if parsed.transcript_key else None
+                line = story.draft(
+                    parsed,
+                    identities,
+                    teller=a.teller,
+                    listener=a.listener,
+                    refers_to=a.refers_to,
+                    confidence=a.confidence,
+                    at=a.at,
+                    tier=a.tier,
+                    timezone=timezone,
+                    transcript_line=transcript_line,
+                )
+            except story.StoryError as e:
+                print(f"add story: {p.name}: {e}", file=sys.stderr)
+                sys.exit(2)
+            drafts.append((p, line, parsed.to_store))
+        names = labels(lb, idx)
+    if a.dry_run:
+        print(f"story: {len(drafts)} line(s) would be added (dry run, nothing written)")
+        return
+    for _p, _line, to_store in drafts:
+        if to_store is not None:
+            lb.attach(to_store)
+    skipped: list[str] = []
+    lb.append_many(
+        [line for _p, line, _bytes in drafts], skipped=lambda d: skipped.append(d["payload"]["raw_id"])
+    )
+    by_raw_id = {line["payload"]["raw_id"]: p for p, line, _bytes in drafts}
+    with lb.index() as idx:
+        written = {str(line["payload"].get("raw_id")): line for line in idx.by_kind(story.KIND)}
+    for _p, line, _bytes in drafts:
+        raw_id = line["payload"]["raw_id"]
+        if raw_id in skipped:
+            print(f"already in the record: {by_raw_id[raw_id].name}")
+            continue
+        found = written.get(raw_id)
+        if found is not None:
+            print(f"#{found['seq']} {found['at']}  {story.KIND} {story.text(found['payload'], names)}")
 
 
 def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:
@@ -2756,6 +2831,8 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = _note_text(p, raw=names is None)
     elif line["kind"] == keepers.KIND:
         text = keepers.text(line)
+    elif line["kind"] == story.KIND and p.get("schema") == story.SCHEMA:
+        text = story.text(p, names)
     elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
@@ -4513,6 +4590,23 @@ def main(argv: list[str] | None = None) -> None:
         "--backup",
         metavar="DIR",
         help=f"screentime: an iOS backup folder; its {screentime.PHONE_STORE} is copied into inbox/ and read",
+    )
+    s.add_argument(
+        "--teller",
+        metavar="REF",
+        help="story: who told it — an address, a +number, kind:value or a name the record knows",
+    )
+    s.add_argument("--listener", metavar="REF", help="story: who it was told to, the same way")
+    s.add_argument(
+        "--refers-to",
+        metavar="WHEN",
+        help="story: the time it is about — 1961, 1961-05, 1961-05-04, 1950s, or words such as"
+        " 'before the war'",
+    )
+    s.add_argument(
+        "--confidence",
+        choices=story.CONFIDENCES,
+        help="story: how sure the teller said they were (default unstated)",
     )
     s.add_argument(
         "--dry-run",

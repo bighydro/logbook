@@ -63,6 +63,13 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
 3. **Unplaced** — the day's events, transcripts, notes, mail and calls that fall inside no stay or
    move: what the calendar planned where the track has nothing, or what happened while the tracker
    was silent.
+   Then **Stories about this day** (RFC 0028, a draft): the `story/v1` lines standing whose
+   `refers_to` covers the date — a told year, month, day or decade — each as `show` prints it
+   (`📖 refers to 1961 — told by Ola Nordmann to Kari Nordmann`) with the teller's confidence and
+   the day it was told, and its first line under it. A story is a line on the day it was *told*;
+   it is never in the timeline of the day it is about, because the timeline is what was observed
+   and a story is what someone said. A story whose time is a phrase (`before the war`) is about no
+   day. The section is absent when no story is about the day.
 4. **Health** — the night's sleep in hours (the asleep stages of the night that ends on the day,
    per device the union of their spans, the longest device), the day's steps (the larger device per
    quarter hour, summed), the resting heart rate (the day's mean), from the `health-sample/v1`
@@ -186,9 +193,11 @@ as `derive stays --json` gives it plus `within_day` (the part on the day), `gap`
 `photos` as counts with their line ids) and `with` (`confirmed`, `proposed`, each person with their
 sources, reasons and lines); an `aboard` entry adds `asset` and `inside`; a `flight` entry carries
 the flight line's fields and `line`; a move lists the `flights` that cover it — then `flights`,
-`unplaced`, `health` (with the ids of the lines each number came from), `sources`, and `received`,
-one object per page the circle shared for the day (`from`, `owner_id`, `created`, `max_tier`,
-`lines`, `held_back`, `by_kind`, `named` with each line's id, `attachments`).
+`unplaced`, `stories` (the stories about the day: `line`, `told_at`, `title`, `text`, `refers_to`,
+`teller`, `listener`, `confidence`, `source`), `health` (with the ids of the lines each number came
+from), `sources`, and `received`, one object per page the circle shared for the day (`from`,
+`owner_id`, `created`, `max_tier`, `lines`, `held_back`, `by_kind`, `named` with each line's id,
+`attachments`).
 
 ## A window of days
 

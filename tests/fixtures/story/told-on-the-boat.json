@@ -1,0 +1,22 @@
+{
+ "at": "2026-06-13T17:30:00Z",
+ "end": "2026-06-13T17:40:00Z",
+ "tz": "Europe/Oslo",
+ "source": "plaud",
+ "kind": "transcript",
+ "tier": 3,
+ "payload": {
+  "schema": "transcript/v1",
+  "provider": "plaud",
+  "raw_id": "plaud:story-synthetic-0001",
+  "title": "Kari asks about the summer of fifty-five",
+  "participants": [
+   {"name": "Ola Nordmann", "email": "ola@example.org"},
+   {"name": "Kari Nordmann", "email": "kari.nordmann@example.org"}
+  ],
+  "content": {
+   "media_type": "text/markdown",
+   "text": "Kari Nordmann: When did the family first sail out here?\n\nOla Nordmann: The summer of fifty-five. We had a wooden boat with a brown sail; my uncle had built it the winter before.\n"
+  }
+ }
+}

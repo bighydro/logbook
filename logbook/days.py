@@ -31,7 +31,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from . import day as day_reader
-from . import health, reading, stays
+from . import health, reading, stays, story
 from .chain import Line
 from .export import day_range
 from .flights import Airports
@@ -75,11 +75,12 @@ def read(
         rd = reading.read(lb, before, chunk[-1], airports)
         with lb.index() as idx:
             found = idx.by_kind(health.KIND, before, chunk[-1])
+            told = story.standing(idx.by_kind(story.KIND), rd.retracted)
         health_of = day_reader.health_rows(found, rd)
         by_day = _by_day(rd)
         for day in chunk:
             lines = by_day.get(day, [])
-            data = day_reader.of_reading(rd, day, health_of.get(day), lines)
+            data = day_reader.of_reading(rd, day, health_of.get(day), lines, stories=told)
             yield summarise(data, usual, any(line.get("kind") == LOCATION for line in lines))
 
 

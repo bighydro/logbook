@@ -69,6 +69,7 @@ nav:
       - "0001 location/v1": rfcs/0001-location-v1.md
       - "0002 photo/v1": rfcs/0002-photo-v1.md
       - "0027 Reflection: the digest's question": rfcs/0027-reflection.md
+      - "0028 story/v1 (draft, unfinished)": rfcs/0028-story.md
       - "Benchmark: per-line sealing (2026-10)": rfcs/bench-encryption-2026-10.md
       - "0025 shared-page/v1": rfcs/rfc-0025-shared-page-bundle.md
       - "0026 weather/v1": rfcs/0026-weather-v1.md

@@ -61,7 +61,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
-from . import events, health, keepers, ledger, present, reading, share, stays, trips, weather
+from . import events, health, keepers, ledger, present, reading, share, stays, story, trips, weather
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -94,19 +94,26 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     rd = reading.read(lb, before, day, airports)
     with lb.index() as idx:
         found = idx.by_kind(health.KIND, before, day)
-    data = of_reading(rd, day, health_rows(found, rd).get(day))
+        told = idx.by_kind(story.KIND)  # every story: a story is about a day it was not told on
+    data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["received"] = received(lb, day)
     return data
 
 
 def of_reading(
-    rd: Reading, day: str, health_row: dict[str, Any] | None, lines: Sequence[Line] | None = None
+    rd: Reading,
+    day: str,
+    health_row: dict[str, Any] | None,
+    lines: Sequence[Line] | None = None,
+    stories: Sequence[Line] | None = None,
 ) -> dict[str, Any]:
     """The Day of `day` from a reading that holds the day before it and the day, its night after
     inside (as `reading.read` reads a window): what `read` builds, for a caller that read a window
     once and asks for each day in it (`days`). `lines` are the day's lines when the caller has
     bucketed the reading's by day already, else they are picked from the reading's; `health_row` is
-    the day's row of `health_rows`, None when the day has none."""
+    the day's row of `health_rows`, None when the day has none; `stories` are the record's story
+    lines standing (RFC 0028), of which the ones about the day are listed apart from the timeline,
+    none when the caller read none."""
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
     tz = rd.tz
@@ -149,6 +156,7 @@ def of_reading(
         "timeline": timeline,
         "flights": flights,
         "unplaced": _unplaced(folded, stands_for, entries, tz),
+        "stories": [story.summary(line, rd.names) for line in story.about(stories or (), day)],
         "health": health_row,
         "spend": ledger.spend(lines, day),
         "weather": weather.day_row(
@@ -688,6 +696,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         for item in data["unplaced"]:
             span = span_text(item["at"], item["end"], tz)
             yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{sources_text(item)}")
+    yield from story.rows(data.get("stories") or (), tz)
     yield ""
     yield _row("health", health_text(data["health"]))
     if data.get("spend"):
