@@ -18,8 +18,8 @@ from . import apps as app_table
 from . import countries as country_table
 from . import flights as flight_lines
 from . import health as health_lines
+from . import ledger, present, stays, trips
 from . import places as named_places
-from . import present, stays, trips
 from .adapters import screentime
 from .chain import Line
 from .export import day_range
@@ -27,7 +27,7 @@ from .index import local_date
 from .reading import Reading, window_json
 from .store import retractions
 
-KINDS = ("countries", "flights", "nights", "places", "people", "health", "attention")
+KINDS = ("countries", "flights", "nights", "places", "people", "money", "health", "attention")
 PERIODS = ("month", "week")
 YEAR = "year"  # attention's default period; health's is the month
 APPS_TOP = 20  # the apps a period lists in text; the JSON has them all
@@ -936,6 +936,8 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
                 f"longest trip {trip['start']} {EN_DASH} {trip['end']} ({_plural(trip['nights'], 'night')})"
             )
         yield f"  {year['year']}  {' · '.join(parts)}"
+    elif kind == "money":
+        yield from ledger.rollup_rows(year)
     elif kind == "places" and "with" in year:
         yield f"  {year['year']}"
         yield from _with_table(year["with"])

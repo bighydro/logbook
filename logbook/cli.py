@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
-derive · places · rollup · trips · keepers · promises · serve · verify · doctor · export · index · migrate ·
-assets · sources · mcp · backup. Three verbs, twenty rare."""
+derive · places · rollup · trips · ledger · keepers · promises · serve · verify · doctor · export · index ·
+migrate · assets · sources · mcp · backup. Three verbs, twenty-one rare."""
 
 from __future__ import annotations
 
@@ -40,6 +40,7 @@ from . import (
     ios_backup_crypto,
     judge,
     keepers,
+    ledger,
     listen_rollup,
     mcp_server,
     pages,
@@ -3175,6 +3176,7 @@ ROLLUPS: dict[str, Callable[[reading.Reading], dict[str, Any]]] = {
     "nights": rollup.nights,
     "places": rollup.places,
     "people": rollup.people,
+    "money": ledger.rollup,
 }
 
 
@@ -3189,6 +3191,7 @@ def _rollup_days(lb: Logbook, a: argparse.Namespace) -> tuple[str, str] | None:
         "health": health.KIND,
         "listen": listen_rollup.KIND,
         "attention": screentime.KIND,
+        "money": ledger.KIND,
     }
     whole = reading.record_days(lb, kinds.get(what, "location"))
     if whole is None:
@@ -3346,6 +3349,62 @@ def cmd_trips(a: argparse.Namespace) -> None:
         return
     for text in trips.rows(read, found, warning):
         print(text)
+
+
+def cmd_ledger(a: argparse.Namespace) -> None:
+    """`ledger [--month YYYY-MM | --trip ID] [--json]`: the transaction lines (tier 3) of the window
+    in context — each at the stay the owner was in, in its trip, per day, a shared expense's shares
+    per person — from one reading of the window through the index (`logbook.ledger`). The window
+    is the days the record has a transaction on, one month of them, or one trip's days (its first
+    day to the return day). Amounts in the line's currency, nothing converted; nothing is written."""
+    lb = Logbook.find()
+    try:
+        if a.month and a.trip:
+            raise ValueError("give --month, or --trip, not both")
+        window = _ledger_days(lb, a.month, a.trip)
+        if window is None:
+            data = ledger.empty()
+        else:
+            read = reading.read(lb, window[0], window[1], _airports(a.airports))
+            book = ledger.ledger(read)
+            if a.trip and a.trip not in {t.id for t in book.trips}:
+                raise ValueError(f"no trip {a.trip}: no run of nights away from home has that id")
+            data = book.to_json()
+    except (ValueError, stays.SettingsError) as e:
+        print(f"ledger: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    for text in ledger.rows(data):
+        print(text)
+
+
+def _ledger_days(lb: Logbook, month: str | None, trip: str | None) -> tuple[str, str] | None:
+    """The ledger's window: the days the record has a transaction on; `--month` clipped to them;
+    `--trip` the trip's days, its first to the return day (`trip:<start>:<end>`). None when the
+    record has no transaction in it."""
+    whole = reading.record_days(lb, ledger.KIND)
+    if trip:
+        found = re.fullmatch(r"trip:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})", trip)
+        if not found:
+            raise ValueError(
+                f"not a trip id (trip:YYYY-MM-DD:YYYY-MM-DD, as `trips --json` prints it): {trip!r}"
+            )
+        start, end = parse_day(found.group(1)), parse_day(found.group(2))
+        if end < start:
+            raise ValueError(f"range runs backwards: {start} > {end}")
+        return start.isoformat(), (end + timedelta(days=1)).isoformat()
+    if whole is None:
+        return None
+    if month:
+        if not re.fullmatch(r"\d{4}-\d{2}", month) or not 1 <= int(month[5:]) <= 12:
+            raise ValueError(f"not a month (YYYY-MM): {month!r}")
+        first_day = date.fromisoformat(f"{month}-01")
+        last_day = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        first, last = max(first_day.isoformat(), whole[0]), min(last_day.isoformat(), whole[1])
+        return None if last < first else (first, last)
+    return whole
 
 
 def cmd_serve(a: argparse.Namespace) -> None:
@@ -4058,7 +4117,7 @@ def main(argv: list[str] | None = None) -> None:
     s = sub.add_parser(
         "rollup",
         help="the record per year: countries, flights, nights, places, people, listen, attention (hours by"
-        " app and category); per month or week: health, attention",
+        " app and category), money; per month or week: health, attention",
     )
     s.add_argument("what", choices=(*rollup.KINDS, listen_rollup.KIND), help="what to sum up")
     s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
@@ -4098,6 +4157,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
     s.set_defaults(fn=cmd_trips)
+    s = sub.add_parser(
+        "ledger", help="the transactions in context: at the stay, in the trip, per day; shares per person"
+    )
+    s.add_argument(
+        "--month", metavar="YYYY-MM", help="one calendar month (default: every day with a transaction)"
+    )
+    s.add_argument("--trip", metavar="ID", help="one trip's days, by the id `trips --json` prints")
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument("--json", action="store_true", help="the ledger as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_ledger)
     s = sub.add_parser("keepers", help="the photos marked keepers (RFC 0024), by day")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="from this local day")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="up to this local day, inclusive")

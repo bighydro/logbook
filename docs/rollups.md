@@ -17,6 +17,7 @@ logbook rollup people                  # days and nights together, last real con
 logbook rollup health --by week         # sleep, steps, resting heart rate, HRV, per month or ISO week
 logbook rollup listen --year 2026       # listens, hours, skips, the top artists by hours, hours by month
 logbook rollup attention --year 2026    # hours by app and by category from the app-use lines; --by month|week
+logbook rollup money --year 2026        # the transactions by month, by country of the stay, by category: see ledger.md
 ```
 
 The window is `--year`, or `--since` and `--until`, clipped to the days the owner's track covers

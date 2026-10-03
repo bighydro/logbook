@@ -563,8 +563,10 @@ logbook rollup people                         # days and nights together, last r
 logbook rollup health --by week               # sleep, steps, resting heart rate, HRV per month or ISO week; — when missing
 logbook rollup listen --year 2026             # listens, hours, skips, the top artists by hours, hours by month, from every listen/v1 line
 logbook rollup attention --year 2026          # hours by app and by category (communication, browser, media, work, other) from Screen Time
+logbook rollup money --year 2026              # the transactions by month, by country of the stay, by the source's category
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
+logbook ledger --month 2026-06                # the transactions at the stay and in the trip, per day; shares per person
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
 logbook show asset solvind                    # trips aboard, nights, people, the track's summary
@@ -588,7 +590,7 @@ logbook digest 2026-06-10 --markdown          # the same lines as Markdown; --js
 
 Every command takes `--json`, and under `--json` every number carries the ids of the lines it came from: a stay
 by its first and last location line (one unbroken run of points), a flight by the flight line standing, a person
-by the lines that put them there. The rollups are described in [docs/rollups.md](docs/rollups.md). A home region is a place of kind `home` in `places.json`; a night whose stay
+by the lines that put them there. The rollups are described in [docs/rollups.md](docs/rollups.md). The ledger, the transactions in context, in [docs/ledger.md](docs/ledger.md). A home region is a place of kind `home` in `places.json`; a night whose stay
 is within 400 m of one is a night at home whatever that place's radius, so a trip never starts or ends with the
 guest room across the street. Without a home place no night is home, there are no trips, and the commands say so.
 
