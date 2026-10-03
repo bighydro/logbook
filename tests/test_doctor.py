@@ -90,8 +90,7 @@ def test_no_record_is_one_failure_and_the_extras(tmp_path: Path) -> None:
     assert "index" not in checks and "disk" not in checks
     assert {n for n in checks if n.startswith("extra:")} == {
         "extra:ais",
-        "extra:encrypted",
-        "extra:share",
+        "extra:crypto",
         "extra:transcribe",
     }
 
@@ -205,7 +204,7 @@ def test_a_missing_extra_names_its_install_line(lb: Logbook) -> None:
         c.name: c
         for c in doctor.run(lb, {}, installed=lambda m: m == "cryptography", usage=_usage(200 * GIB))
     }
-    assert checks["extra:encrypted"].status == "pass"
+    assert checks["extra:crypto"].status == "pass"
     assert checks["extra:ais"].status == "warn"
     assert 'pip install "openlogbook[ais]"' in checks["extra:ais"].detail
     assert checks["extra:transcribe"].status == "warn"

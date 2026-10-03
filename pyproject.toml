@@ -21,8 +21,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-encrypted = ["cryptography>=42"]  # `openlogbook[encrypted]`: import-backup on an encrypted iOS backup
-share = ["cryptography>=42"]  # `openlogbook[share]`: share and receive a signed page (Ed25519)
+# `openlogbook[crypto]`: import-backup on an encrypted iOS backup; share and receive a signed page (Ed25519)
+crypto = ["cryptography>=42"]
 ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
 # `openlogbook[transcribe]`: transcribe voice-memos, locally; mlx-whisper on Apple silicon, faster-whisper elsewhere
 transcribe = [
@@ -86,9 +86,9 @@ dev = [
   "pytest-cov>=5",
   "pytest-xdist>=3.6",  # `pytest -n auto`, as CI runs the suite
   "jsonschema>=4",
-  "cryptography>=42",  # the `encrypted` extra, so its tests and mypy see it
-  "websockets>=13",  # the `ais` extra, so mypy sees it (the tests fake the socket)
-  "mcp>=2",  # the `mcp` extra, so its tests run and mypy sees it (an in-process client, no socket)
+  # the extras whose tests run and whose modules mypy sees (an in-process MCP client, a faked socket):
+  # named once, under [project.optional-dependencies], never repeated here
+  "openlogbook[crypto,ais,mcp]",
 ]
 
 [build-system]

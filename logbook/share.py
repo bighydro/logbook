@@ -49,7 +49,7 @@ ATTACHMENTS_DIR = "attachments"
 RECEIVED_FILE = "received.json"  # the receiver's own note beside a page: who, which key, when
 CIRCLE_DIR = "circle"  # `<root>/circle/<from>/<date>/`: received pages, outside the chain
 KEY_DIR = Path(".config") / "logbook" / "share"  # under the home directory
-EXTRA = 'pip install "openlogbook[share]"'
+EXTRA = 'pip install "openlogbook[crypto]"'
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")  # a destination: one folder name, never a path
 DIGEST = re.compile(r"[0-9a-f]{64}")
 HEX_KEY = re.compile(r"[0-9a-f]{64}")
@@ -62,10 +62,10 @@ TIER3_WARNING = crossing.TIER3_WARNING
 
 
 class MissingExtra(ImportError):
-    """`cryptography` is not installed: the `share` extra is needed."""
+    """`cryptography` is not installed: the `crypto` extra is needed."""
 
     def __init__(self) -> None:
-        super().__init__(f"sharing and receiving a page needs the share extra: {EXTRA}")
+        super().__init__(f"sharing and receiving a page needs the crypto extra: {EXTRA}")
 
 
 class ShareError(ValueError):
