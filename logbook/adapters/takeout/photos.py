@@ -483,7 +483,7 @@ def _finite(value: object) -> float | None:
 def _int(value: object) -> int | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, str) and value.strip().isdigit():
+    if isinstance(value, str) and value.strip().isdecimal():
         value = int(value.strip())
     if isinstance(value, int) and -MAX_SAFE_INT <= value <= MAX_SAFE_INT:
         return value
