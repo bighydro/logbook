@@ -3,9 +3,10 @@
 `logbook digest [YYYY-MM-DD] [--json | --markdown]` is the day in at most 25 lines: what the owner
 reads of it in the evening, not the Day itself. Its shape in three lines, the flights, the open
 promises due within the week, the usual sources that had nothing to say, what the calendar holds
-for tomorrow, and one closing question the owner can answer in a word. It is composed from the
-readers that already exist — the Day, the promises, `sources --gaps` — and derives nothing of its
-own; it writes nothing, not even the settings file a reader would create, and it sends nothing.
+for tomorrow, and one closing question the owner can answer in a word, drawn from the record's
+own question bank. It is composed from the readers that already exist — the Day, the promises,
+`sources --gaps` — and derives nothing of its own; it writes nothing to the record (the question
+bank's defaults and a note of what it asked are files beside it, never lines) and it sends nothing.
 Who delivers it, and where, is a later decision; this command only says what the message would be.
 
 ```bash
@@ -45,19 +46,39 @@ logbook digest 2026-06-10 --json     # the whole sets behind the lines, every ro
    standing (retracted lines out; an entry several calendars carry is one, `×N sources`, as the Day
    folds them), with the attendees the record names: `12:00–13:00  Lunch · with Kari Nordmann`.
    An all-day entry is not timed and is not here. Three at most, then `+N more entries`.
-8. **The question**, last, after a blank line. One, chosen by the first rule that applies, so that
-   the owner can answer in a word and the day closes itself (ADR 0005: one nudge, one channel):
+8. **The question**, last, after a blank line. One, from the record's own bank —
+   `policy/questions.json`, written with its defaults the first time and yours to edit — so that
+   the owner can answer in a word and the day closes itself (ADR 0005: one nudge, one channel).
+   Each question in the bank says which facts of the day it asks on (`when`: `travelled`,
+   `aboard`, `night_away`, `reunion`, `!photos`, `long_sleep`, ... — the table is in
+   [RFC 0027](rfcs/0027-reflection.md)) and how much of the draw it takes (`weight`); the digest
+   draws one of the questions whose conditions hold, never the same one two days running, and
+   remembers what it asked in `state/questions.json`. The defaults are the nudges the digest used
+   to choose in code, each as a question with the condition that chose it:
 
    | when | the question |
    |---|---|
-   | no line at all, and a usual source is missing | `Was dawarich switched off?` |
-   | no line at all | `Where were you?` |
+   | nothing logged | `Where were you?` |
+   | a usual source is missing | `Was dawarich switched off?` |
    | the night after is in transit | `Where did you sleep?` |
    | a person is proposed and confirmed nowhere | `Was Kari Nordmann with you?` |
    | a calendar entry fell inside no row | `Did “Lunch” happen?` |
-   | a usual source is missing | `Was apple-health switched off?` |
    | a promise is due on the day or before | `Is “I'll send the photos by Friday.” done?` |
-   | otherwise | `Anything to add?` |
+   | someone seen again after ninety days | `How was it, seeing Per Hansen again?` |
+   | travelled | `What did you see today that you had not seen before?` |
+   | a long night's sleep | `Did the long sleep help?` |
+   | any logged day | `What were you glad of today?`, `Anything to add?` |
+
+   The content of the bank — which questions, with what research behind them (`source`) — is
+   left to a future author (RFC 0027, *The question bank — to be written*); these defaults cite
+   nothing. `logbook questions list|add|disable` manages the file:
+
+   ```bash
+   logbook questions list                                   # id, kind, weight, when, text
+   logbook questions add sea-air --text "What did the sea smell of?" --kind savouring \
+       --when aboard --when '!night_in_transit' --weight 2 --source "a placeholder citation"
+   logbook questions disable sea-air                        # kept in the file, never asked
+   ```
 
    The answer is the owner's to write — a note, a `promises done`, a confirmation — and the digest
    never writes it for them.
@@ -131,12 +152,17 @@ with `where`, `home`, `aboard`, `in_transit`; `with` with `confirmed` and `propo
 `promises` (`within_days`, `judged`, and `open`, every proposal as `promises --json` prints it);
 `gaps` (`usual` and `missing`); `tomorrow` (`day` and `entries`, each with `title`, `start`, `end`,
 their local forms, `with`, `sources` and `lines`); `unplaced`, the Day's list; `sources`, the names
-with a line on the day; `question` (`about`, the rule that chose it, and `text`); and `lines`.
+with a line on the day; `question` (`id` and `kind` of the question in the bank, `text` with its
+placeholders filled, and `facts`, the names of the day's facts that held, so a `when` can be written
+against what the chooser saw; `id` is null when nothing in the bank could be asked); and `lines`.
 
 ## What it does not do
 
-It does not send anything, schedule anything or remember what it said: a delivery layer that takes
-the text, picks the channel and keeps to one message a day is the next decision, not this command.
+It does not send anything or schedule anything: a delivery layer that takes the text, picks the
+channel and keeps to one message a day is the next decision, not this command. It remembers only
+which question it asked on which day (`state/questions.json`, the last seven), so as never to ask
+the same one two days running; it does not remember the text, nor any answer.
 It does not read a day that has not come: a day after today in the record's zone is refused. It does
 not derive anything the Day, the promises reader and `sources --gaps` do not already derive, so a
-change in their rules is a change here, and nothing here is a setting of its own.
+change in their rules is a change here; the one setting of its own is the question bank, which is
+the owner's file and not the code's.

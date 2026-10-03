@@ -52,6 +52,7 @@ from . import (
     places,
     policy,
     promises,
+    questions,
     reading,
     repair,
     rollup,
@@ -2504,6 +2505,51 @@ def cmd_digest(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_questions(a: argparse.Namespace) -> None:
+    """`questions list [--json]`: the question bank of the digest, `policy/questions.json`, one line
+    per question — id, kind, weight, the facts it asks on, the text, `(disabled)` when it is.
+    `questions add ID --text TEXT --kind KIND [--when FACT]... [--weight N] [--source TEXT] [--de TEXT]`:
+    one more, refused when the id is taken or the shape is not the documented one. `questions
+    disable ID`: kept in the file, never asked (RFC 0027). A record without the file gets the
+    defaults first."""
+    lb = Logbook.find()
+    try:
+        if a.verb == "add":
+            q = questions.add(
+                lb.root,
+                questions.Question(
+                    id=a.id,
+                    text=a.text,
+                    kind=a.kind,
+                    when=tuple(a.when or ()),
+                    weight=a.weight,
+                    source=a.source or "",
+                    text_de=a.de,
+                ),
+            )
+            print(_question_row(q))
+            return
+        if a.verb == "disable":
+            q = questions.disable(lb.root, a.id)
+            print(f"{q.id}: disabled; it stays in {_under_home(questions.questions_path(lb.root))}")
+            return
+        bank = questions.read(lb.root)
+    except policy.PolicyError as e:
+        print(f"questions: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps({"questions": [q.to_json() for q in bank]}, indent=2, ensure_ascii=False))
+        return
+    for q in bank:
+        print(_question_row(q))
+
+
+def _question_row(q: questions.Question) -> str:
+    weight = int(q.weight) if q.weight == int(q.weight) else q.weight
+    row = f"  {q.id:<16} {q.kind:<10} {weight!s:<4} {' '.join(q.when):<32} {q.text}"
+    return row if q.enabled else f"{row} (disabled)"
+
+
 def cmd_days(a: argparse.Namespace) -> None:
     """`days [--from DAY] [--to DAY] [--json]`: a window of the record one line per day — the
     night, the kilometres moved, the flights, the stays with what attached, the people confirmed,
@@ -4644,6 +4690,34 @@ def main(argv: list[str] | None = None) -> None:
     form.add_argument("--json", action="store_true", help="the digest as one JSON object, with line ids")
     form.add_argument("--markdown", action="store_true", help="the same lines as Markdown")
     s.set_defaults(fn=cmd_digest)
+    s = sub.add_parser(
+        "questions",
+        help="the digest's closing questions (policy/questions.json): list, add one, disable one",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser("list", help="one line per question: id, kind, weight, when, text")
+    v.add_argument("--json", action="store_true", help="the bank as JSON, as the file holds it")
+    v.set_defaults(fn=cmd_questions)
+    v = verbs.add_parser("add", help="one more question; the id must be new")
+    v.add_argument("id", help="the question's own name, free text")
+    v.add_argument(
+        "--text", required=True, help="the question, in English; {person}, {place}, ... are filled"
+    )
+    v.add_argument("--kind", required=True, choices=questions.KINDS)
+    v.add_argument(
+        "--when",
+        action="append",
+        metavar="FACT",
+        help=f"a fact of the day that must hold (prefix ! for one that must not); repeatable;"
+        f" one of {', '.join(questions.FACTS)}",
+    )
+    v.add_argument("--weight", type=float, default=1.0, help="its share of the draw (default 1)")
+    v.add_argument("--source", help="the research behind it, free text")
+    v.add_argument("--de", metavar="TEXT", help="the same question in German")
+    v.set_defaults(fn=cmd_questions)
+    v = verbs.add_parser("disable", help="never ask this one again; it stays in the file")
+    v.add_argument("id")
+    v.set_defaults(fn=cmd_questions)
     s = sub.add_parser(
         "days", help="a window of days one line each: night, km moved, flights, stays, people, health, gaps"
     )

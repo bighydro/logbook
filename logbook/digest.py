@@ -22,17 +22,19 @@ evening, in at most `LIMIT` lines, never a list of everything. In order:
 5. Tomorrow's timed calendar entries, from the `event/v1` lines standing on the next local day
    (retracted lines out, the sources folded as the Day folds them, `events.fold`; an all-day entry
    is not timed), with the attendees the record names: the first `TOMORROW_SHOWN` and `+N more`.
-6. One closing question the owner can answer in a word, chosen by the first rule that applies
-   (`question`): a day with no line at all asks whether the usual source that is missing was
-   switched off, else where you were; a night in transit asks where you slept; a person proposed
-   and confirmed nowhere asks whether they were with you; a calendar entry the track places
-   nowhere asks whether it happened; a usual source with no line asks whether it was switched off;
-   a promise due on the day or before asks whether it is done; else whether there is anything to
-   add. The day closes itself (ADR 0005): the question is the one
+6. One closing question the owner can answer in a word, from the record's own bank
+   (`logbook/questions.py`, RFC 0027): `policy/questions.json` lists the questions, each with the
+   day's facts it asks on (`when`: travelled, aboard, night away, a reunion, no photos, long sleep,
+   ...) and a weight; the digest reads the day's facts from the parts it already has (`questions.facts`),
+   draws one of the questions whose conditions hold by weight (`questions.pick`), never the same id
+   two days running, and remembers what it asked in `state/questions.json`. The first run writes the
+   default bank — the nudges this module used to choose in code, as questions — and nothing
+   overwrites an edit. The day closes itself (ADR 0005): the question is the one
    nudge, and the digest never sends it — delivery is a later decision.
 
-Everything here is composed from the readers; nothing is derived anew, nothing is written (not
-even the settings file a reader would create) and nothing leaves the machine. The text and the
+Everything here is composed from the readers; nothing is derived anew, nothing is written to the
+record (the question bank's default and the state of what was asked are files beside it, never
+lines; a reader's settings file is never written) and nothing leaves the machine. The text and the
 Markdown are the same lines; `fit` holds them to `LIMIT` whatever the day, cutting from the middle
 and never the question. ADR 0013: derived is disposable."""
 
@@ -44,7 +46,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import day as day_reader
-from . import days, events, gaps, promises
+from . import days, events, gaps, promises, questions
 from . import flights as flight_lines
 from .chain import Line
 from .export import parse_day
@@ -65,7 +67,6 @@ EN_DASH = day_reader.EN_DASH
 DOT = day_reader.DOT
 ELLIPSIS = "…"
 QUOTES = ("“", "”")
-DAY, NIGHT, COMPANY, EVENT, GAP, PROMISE = "day", "night", "company", "event", "gap", "promise"
 
 
 # -- the reading --------------------------------------------------------------------------------------------
@@ -102,7 +103,7 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
         "tomorrow": {"day": tomorrow, "entries": entries},
         "unplaced": data["unplaced"],
         "sources": [s["source"] for s in data["sources"]],
-        "question": question(data, shape, due, missing, day),
+        "question": questions.pick(lb.root, _facts(lb, data, shape, due, missing, entries, day), day),
     }
     out["lines"] = len(list(rows(out)))
     return out
@@ -239,32 +240,19 @@ def _local(stamp: str, tz: ZoneInfo) -> str:
 # -- the question -------------------------------------------------------------------------------------------
 
 
-def question(
+def _facts(
+    lb: Logbook,
     data: Mapping[str, Any],
     shape: Mapping[str, Any],
     due: Sequence[promises.Proposal],
     missing: Sequence[str],
+    entries: Sequence[Mapping[str, Any]],
     day: str,
-) -> dict[str, str]:
-    """One question the owner can answer in a word, by the first rule that applies: `about` names
-    the rule (`day`, `night`, `company`, `event`, `gap`, `promise`)."""
-    if not data["sources"]:
-        if missing:
-            return {"about": GAP, "text": f"Was {missing[0]} switched off?"}
-        return {"about": DAY, "text": "Where were you?"}
-    if shape["night"]["in_transit"]:
-        return {"about": NIGHT, "text": "Where did you sleep?"}
-    if shape["with"]["proposed"]:
-        return {"about": COMPANY, "text": f"Was {shape['with']['proposed'][0]} with you?"}
-    planned = [u for u in data["unplaced"] if u["kind"] == "event"]
-    if planned:
-        return {"about": EVENT, "text": f"Did {QUOTES[0]}{planned[0]['title']}{QUOTES[1]} happen?"}
-    if missing:
-        return {"about": GAP, "text": f"Was {missing[0]} switched off?"}
-    today = [p for p in due if p.due is not None and p.due <= day]
-    if today:
-        return {"about": PROMISE, "text": f"Is {_quote(today[0].match.quote)} done?"}
-    return {"about": DAY, "text": "Anything to add?"}
+) -> questions.Facts:
+    """The day's facts for the question bank, from the parts read above; a promise due on the day
+    or before is passed quoted, as the text prints it."""
+    today = [_quote(p.match.quote) for p in due if p.due is not None and p.due <= day]
+    return questions.facts(lb, data, shape, today, missing, len(entries), day)
 
 
 # -- text ----------------------------------------------------------------------------------------------------

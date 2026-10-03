@@ -172,9 +172,10 @@ logbook repair health-units             # per wrong line a corrected line and a 
                     stays.json: how long a stay is, how far a place reaches. yours to edit.
                     import.json: the sources you switched off, each with a reason. yours to edit.
                     owner.json: your own other names, emails and phones, so you are never your own company. yours to edit.
+                    questions.json: the digest's closing questions, each with the facts it asks on. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
   places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
-  state/            where each live source left off. bookkeeping, not the record.
+  state/            where each live source left off, and which question the digest asked. bookkeeping, not the record.
   exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
 

@@ -1,8 +1,10 @@
 """`logbook digest [YYYY-MM-DD] [--json|--markdown]`: one short text per day — the Day's shape in
 three lines, the flights, the open promises due within a week, the usual sources with no line, what
-the calendar holds for tomorrow, and one closing question the owner can answer in a word. It
-composes the readers (`day`, `promises`, `gaps`, `days.usual_sources`) and derives nothing of its
-own; it writes nothing and sends nothing. Synthetic Oslo persona, who does not exist; the clock is
+the calendar holds for tomorrow, and one closing question the owner can answer in a word, from
+the record's question bank (`tests/test_questions.py` has the bank and the choice). It composes the
+readers (`day`, `promises`, `gaps`, `days.usual_sources`) and derives nothing of its own; it writes
+nothing to the record — the bank's default and the state of what was asked are files beside it —
+and sends nothing. Synthetic Oslo persona, who does not exist; the clock is
 pinned where today matters."""
 
 from __future__ import annotations
@@ -10,13 +12,14 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import pytest
 from persona import HOME, KARI, OLA_ID, TZ, attendee, dwell, event, note, persona_record, resolution, utc
 
-from logbook import cli, digest, gaps, promises
+from logbook import cli, digest, gaps, promises, questions
 from logbook.store import Logbook
 
 NOW = datetime(2026, 6, 22, 18, 0, tzinfo=UTC)  # the Monday evening after the persona's fortnight
@@ -95,7 +98,11 @@ def test_an_office_day_in_three_lines_plus_the_question(
     ], "the all-day entry is not timed"
     assert data["tomorrow"]["entries"][1]["with"] == ["Kari Nordmann"]
     assert data["question"]["text"].endswith("?")
-    assert lb.meta["head"] == head and _files(lb.root) == before, "a digest writes nothing, not even settings"
+    assert lb.meta["head"] == head, "a digest writes nothing to the record"
+    assert _files(lb.root) - before == {
+        str(Path("policy") / "questions.json"),
+        str(Path("state") / "questions.json"),
+    }, "only the question bank's default and the state of what was asked; no reader's settings"
     text = _run(capsys, "2026-06-10")
     lines = text.splitlines()
     assert lines[0] == "2026-06-10  Wednesday"
@@ -214,7 +221,10 @@ def test_a_usual_source_with_no_line_is_a_gap(
     assert data["shape"]["where"] == [] and data["sources"] == []
     text = _run(capsys, "2026-06-21")
     assert "  gaps       dawarich: usual, no line" in text
-    assert text.splitlines()[-1] == "Was dawarich switched off?"
+    question = data["question"]
+    assert "gap" in question["facts"] and "logged" not in question["facts"]
+    assert question["id"] in ("gap-switched-off", "day-where"), "the two the bank asks on a silent day"
+    assert text.splitlines()[-1] == question["text"] in ("Was dawarich switched off?", "Where were you?")
     assert _json(capsys, "2026-06-20")["gaps"]["missing"] == []
 
 
@@ -224,14 +234,27 @@ def test_a_usual_source_with_no_line_is_a_gap(
 def test_the_question_is_one_the_owner_answers_in_a_word(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The question comes from the bank (`policy/questions.json`, written with its defaults on the
+    first digest): its conditions hold on the day's facts, it ends in a question mark, and two days
+    running never ask the same one."""
+    bank = {q.id: q for q in questions.read(lb.root)}
+    asked: list[str] = []
+    for day in range(8, 22):
+        data = _json(capsys, f"2026-06-{day:02d}")
+        q = data["question"]
+        assert set(q) == {"id", "kind", "text", "facts"} and q["text"].endswith("?")
+        assert q["id"] in bank and q["kind"] == bank[q["id"]].kind
+        facts = questions.Facts(flags={name: name in q["facts"] for name in questions.FACTS}, values={})
+        assert questions.matches(bank[q["id"]], facts), (day, q)
+        asked.append(q["id"])
+    assert all(a != b for a, b in pairwise(asked)), asked
     # Saturday aboard: Ola is named in the note (confirmed), nobody proposed; a promise is not due; no gap
     saturday = _json(capsys, "2026-06-13")
     assert saturday["shape"]["with"]["confirmed"] == ["Ola Nordmann"]
-    assert saturday["question"] == {"about": "day", "text": "Anything to add?"}
-    # Tuesday in Zürich: the dinner's attendee is an address the record resolves to Ola, at the hotel's stay
-    dinner = _json(capsys, "2026-06-16")
-    assert dinner["question"]["about"] in ("day", "company")
-    # a face in a photo with no confirmation anywhere that day asks about the person
+    assert {"logged", "aboard", "company", "weekend", "travelled"} <= set(saturday["question"]["facts"])
+    assert not {"proposed", "gap", "promise_due", "flew"} & set(saturday["question"]["facts"])
+    assert saturday["question"] == _json(capsys, "2026-06-13")["question"], "asked once, it stands"
+    # a face in a photo with no confirmation anywhere that day is a proposed person
     lb.append_many(
         [
             resolution(("email", "per@example.org"), OLA_ID[:-1] + "9", "Per Hansen"),
@@ -259,7 +282,7 @@ def test_the_question_is_one_the_owner_answers_in_a_word(
     )
     friday = _json(capsys, "2026-06-19")
     assert friday["shape"]["with"] == {"confirmed": [], "proposed": ["Per Hansen"]}
-    assert friday["question"] == {"about": "company", "text": "Was Per Hansen with you?"}
+    assert "proposed" in friday["question"]["facts"] and "photos" in friday["question"]["facts"]
 
 
 def test_an_empty_day_is_short_and_asks_where_you_were(
@@ -278,7 +301,7 @@ def test_an_empty_day_is_short_and_asks_where_you_were(
     }
     assert data["flights"] == [] and data["promises"]["open"] == [] and data["gaps"]["missing"] == []
     assert data["tomorrow"]["entries"] == [] and data["sources"] == []
-    assert data["question"] == {"about": "day", "text": "Where were you?"}
+    assert data["question"] == {"id": "day-where", "kind": "place", "text": "Where were you?", "facts": []}
     text = _run(capsys, "2026-06-10")
     assert text.splitlines() == [
         "2026-06-10  Wednesday",
@@ -401,5 +424,5 @@ def test_today_is_the_default_and_markdown_is_the_same_lines(
     assert lines[1].startswith("- **where** ") and "aboard Solvind" in lines[1]
     assert lines[2] == "- **with** Ola Nordmann"
     assert lines[3].startswith("- **attached** ") and "1 note" in lines[3]
-    assert lines[-1] == "**Anything to add?**" and lines[-2] == ""
+    assert lines[-1] == f"**{text.splitlines()[-1]}**" and lines[-2] == "", "the same question, in bold"
     assert len(lines) == len(text.splitlines()), "the Markdown is the text's lines, one for one"
