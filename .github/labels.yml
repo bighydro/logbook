@@ -1,0 +1,38 @@
+# The repository's labels, as applied on GitHub. A new label is added here first, then created on GitHub
+# with the same name, colour and description, so this file and the label list say the same thing.
+#
+#   gh label create NAME --color HEX --description "TEXT" --force
+#
+- name: bug
+  color: d73a4a
+  description: Something the CLI, a reader or an adapter does wrong
+- name: adapter
+  color: 1d76db
+  description: A source to read, or a change to an adapter
+- name: good first adapter
+  color: 7057ff
+  description: An adapter a newcomer can write in a few hours from an export they hold
+- name: rfc
+  color: 5319e7
+  description: A payload profile or a spec change, discussed before its pull request
+- name: format
+  color: b60205
+  description: Touches the envelope, the chain or conformance; needs a spec version bump and an ADR
+- name: labs
+  color: fbca04
+  description: Experimental; a local model, a draft RFC, a reader whose shape may still change
+- name: docs
+  color: 0075ca
+  description: The docs site, the README, a page under docs/
+- name: no-changelog
+  color: ededed
+  description: "No changelog fragment needed: nothing a user would notice (the release itself, a test, CI)"
+- name: good first issue
+  color: 7057ff
+  description: Good for newcomers
+- name: help wanted
+  color: 008672
+  description: Extra attention is needed
+- name: dependencies
+  color: 0366d6
+  description: Pull requests that update a dependency file

@@ -1,0 +1,56 @@
+name: RFC proposal
+description: A new payload profile, a change to an existing one, or a change to SPEC.md.
+labels: [rfc]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An RFC is a pull request adding `rfcs/NNNN-<name>.md` with a JSON Schema (draft 2020-12) and one synthetic example line; this issue is where it is discussed first (`GOVERNANCE.md`: two weeks of comment, then the captain merges or declines with reasons). The envelope, SPEC §2 and §3, changes only by major version and ships with a migration tool and a regenerated conformance fixture; a payload profile changes freely.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New payload profile
+        - Change to an existing profile
+        - Change to SPEC.md outside the envelope
+        - Change to the envelope (SPEC §2 or §3)
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What the line records, who writes it and who reads it, in a paragraph.
+    validations:
+      required: true
+  - type: textarea
+    id: schema
+    attributes:
+      label: Schema
+      description: The JSON Schema of the payload, or the diff to the existing one. Every field with its type, whether it is MUST, SHOULD or MAY, and one line on what it means.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: One synthetic example line
+      description: A complete line as it would sit in the record, for the sample person in Oslo. Nothing real.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: tier
+    attributes:
+      label: Default tier
+      description: The tier a line of this profile carries unless the adapter says otherwise, and why (SPEC §4).
+    validations:
+      required: true
+  - type: textarea
+    id: compat
+    attributes:
+      label: Backwards compatibility
+      description: What happens to lines already in records, to readers that do not know the change, and to logbook-ts. A change that makes an existing record fail `verify` is an envelope change and needs a migration.
+    validations:
+      required: true
