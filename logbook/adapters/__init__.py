@@ -15,7 +15,10 @@ the positions of the owner's boats and aircraft rather than the owner's own. A s
 from one big file (`mail`) may take `progress(items, bytes_read, elapsed)`, which `add` prints with the
 rate, and `cursor`, the inbox manifest's (`logbook.inbox.Cursor`): `cursor.start(file)` is the byte
 offset to begin at and `cursor.reached(file, ordinal, offset)` is told, before every draft, how far the
-file is read, so an interrupted import resumes at the last draft the record holds.
+file is read, so an interrupted import resumes at the last draft the record holds; `places: list[Place]`, the
+record's named places (`places.json`), for a source that positions a place by its name; or
+`report: list[str]`, lines `logbook add` prints after the counts, for what a count cannot say (the
+names of the places `passages` could not position).
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 
@@ -120,6 +123,7 @@ BUILT_IN = (
     "withings",
     "myfitnesspal",
     "sbb",
+    "passages",
 )
 
 

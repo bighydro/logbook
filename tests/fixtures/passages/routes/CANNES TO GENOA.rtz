@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<route xmlns="http://www.cirm.org/RTZ/1/0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0">
+  <routeInfo routeName="CANNES TO GENOA" routeAuthor="Nordlys" routeStatus="planned" vesselName="NORDLYS" vesselMMSI="970123456" validityPeriodStart="2026-06-14T06:00:00Z" validityPeriodStop="2026-06-14T18:00:00Z">
+    <extensions>
+      <extension manufacturer="MARIS" name="MDS" version="1.0"/>
+    </extensions>
+  </routeInfo>
+  <waypoints>
+    <defaultWaypoint radius="0.30">
+      <leg starboardXTD="0.10" portsideXTD="0.10" geometryType="Loxodrome"/>
+    </defaultWaypoint>
+    <waypoint id="1" name="CANNES VIEUX PORT" revision="0">
+      <position lat="43.5480" lon="7.0150"/>
+      <leg speedMin="6.0" speedMax="9.0" geometryType="Loxodrome"/>
+    </waypoint>
+    <waypoint id="2" name="CAP D'ANTIBES" revision="0">
+      <position lat="43.5300" lon="7.1300"/>
+      <leg speedMin="6.0" speedMax="9.0" geometryType="Loxodrome"/>
+    </waypoint>
+    <waypoint id="3" name="OFF IMPERIA" revision="0">
+      <position lat="43.8300" lon="8.0500"/>
+      <leg speedMin="6.0" speedMax="9.0" geometryType="Loxodrome"/>
+    </waypoint>
+    <waypoint id="4" name="GENOA MOLO VECCHIO" revision="0">
+      <position lat="44.4075" lon="8.9260"/>
+      <leg speedMin="6.0" speedMax="9.0" geometryType="Loxodrome"/>
+    </waypoint>
+  </waypoints>
+  <schedules>
+    <schedule id="1" name="plan">
+      <manual>
+        <scheduleElement waypointId="1" etd="2026-06-14T06:30:00Z"/>
+        <scheduleElement waypointId="4" eta="2026-06-14T15:10:00Z"/>
+      </manual>
+    </schedule>
+  </schedules>
+</route>

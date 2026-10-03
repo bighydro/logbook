@@ -1,0 +1,247 @@
+name,aliases,lat,lon,country
+Marseille,Marseille Vieux-Port,43.295,5.370,FR
+Cassis,,43.214,5.538,FR
+Bandol,,43.135,5.752,FR
+Toulon,,43.118,5.933,FR
+Hyères,Hyeres|Port Saint-Pierre,43.093,6.154,FR
+Porquerolles,,43.003,6.202,FR
+Port-Cros,,43.006,6.386,FR
+Le Lavandou,,43.136,6.370,FR
+Cavalaire-sur-Mer,Cavalaire,43.171,6.535,FR
+Saint-Tropez,St Tropez,43.272,6.638,FR
+Port Grimaud,,43.274,6.580,FR
+Sainte-Maxime,,43.308,6.638,FR
+Fréjus,Port-Fréjus|Frejus,43.421,6.751,FR
+Saint-Raphaël,St Raphael,43.424,6.770,FR
+Agay,,43.432,6.858,FR
+Théoule-sur-Mer,Theoule,43.507,6.941,FR
+Mandelieu-La Napoule,La Napoule|Mandelieu,43.521,6.939,FR
+Cannes,Cannes Vieux Port,43.549,7.014,FR
+Port Canto,Cannes Port Canto,43.544,7.030,FR
+Île Sainte-Marguerite,Sainte-Marguerite|Ile Sainte Marguerite,43.519,7.047,FR
+Golfe-Juan,Golfe Juan,43.564,7.075,FR
+Antibes,Port Vauban,43.587,7.128,FR
+Marina Baie des Anges,Villeneuve-Loubet,43.633,7.142,FR
+Nice,,43.694,7.284,FR
+Villefranche-sur-Mer,Villefranche,43.703,7.311,FR
+Saint-Jean-Cap-Ferrat,Cap Ferrat|St Jean Cap Ferrat,43.692,7.335,FR
+Beaulieu-sur-Mer,Beaulieu,43.707,7.335,FR
+Menton,,43.774,7.512,FR
+Monaco,Port Hercule|Monte Carlo,43.735,7.426,MC
+Fontvieille,,43.728,7.418,MC
+Calvi,,42.567,8.760,FR
+Girolata,,42.348,8.613,FR
+Ajaccio,,41.921,8.740,FR
+Propriano,,41.676,8.903,FR
+Bonifacio,,41.388,9.159,FR
+Lavezzi,Îles Lavezzi|Iles Lavezzi,41.335,9.257,FR
+Rondinara,,41.470,9.270,FR
+Porto-Vecchio,Porto Vecchio,41.590,9.283,FR
+Bastia,,42.698,9.452,FR
+Saint-Florent,St Florent,42.681,9.302,FR
+Ventimiglia,Cala del Forte,43.787,7.605,IT
+Sanremo,San Remo,43.814,7.782,IT
+Imperia,,43.879,8.025,IT
+Alassio,,44.004,8.173,IT
+Loano,,44.125,8.264,IT
+Savona,,44.306,8.487,IT
+Varazze,,44.358,8.580,IT
+Genoa,Genova|Porto Antico|Genoa Molo Vecchio,44.408,8.925,IT
+Portofino,,44.303,9.210,IT
+Santa Margherita Ligure,Santa Margherita,44.333,9.213,IT
+Rapallo,,44.348,9.233,IT
+Chiavari,,44.313,9.325,IT
+Sestri Levante,,44.272,9.398,IT
+Portovenere,Porto Venere,44.051,9.837,IT
+La Spezia,Spezia,44.102,9.830,IT
+Lerici,,44.075,9.912,IT
+Viareggio,,43.865,10.243,IT
+Marina di Pisa,,43.670,10.270,IT
+Livorno,Leghorn,43.550,10.303,IT
+Portoferraio,,42.812,10.330,IT
+Porto Azzurro,,42.767,10.397,IT
+Marciana Marina,,42.806,10.197,IT
+Punta Ala,,42.805,10.735,IT
+Castiglione della Pescaia,,42.762,10.880,IT
+Talamone,,42.556,11.135,IT
+Porto Santo Stefano,,42.436,11.118,IT
+Porto Ercole,,42.393,11.209,IT
+Giglio Porto,Giglio,42.362,10.921,IT
+Civitavecchia,,42.094,11.790,IT
+Riva di Traiano,,42.058,11.820,IT
+Fiumicino,,41.773,12.223,IT
+Anzio,,41.447,12.628,IT
+Ponza,,40.896,12.966,IT
+Ventotene,,40.797,13.429,IT
+Ischia,Porto d'Ischia|Ischia Porto,40.745,13.941,IT
+Procida,,40.766,14.028,IT
+Naples,Napoli|Mergellina,40.828,14.218,IT
+Capri,Marina Grande Capri,40.556,14.240,IT
+Sorrento,,40.628,14.375,IT
+Positano,,40.627,14.487,IT
+Amalfi,,40.633,14.603,IT
+Salerno,,40.675,14.753,IT
+Agropoli,,40.352,14.986,IT
+Palinuro,,40.032,15.277,IT
+Tropea,,38.683,15.897,IT
+Messina,,38.193,15.558,IT
+Giardini Naxos,Taormina,37.826,15.272,IT
+Catania,,37.500,15.095,IT
+Syracuse,Siracusa|Porto Grande,37.062,15.288,IT
+Marzamemi,,36.738,15.118,IT
+Licata,,37.098,13.942,IT
+Sciacca,,37.504,13.080,IT
+Marsala,,37.796,12.433,IT
+Trapani,,38.015,12.510,IT
+Favignana,,37.932,12.327,IT
+Palermo,La Cala,38.121,13.368,IT
+Cefalù,Cefalu,38.040,14.025,IT
+Lipari,,38.467,14.960,IT
+Panarea,,38.637,15.070,IT
+Stromboli,,38.800,15.237,IT
+Vulcano,Porto di Levante,38.417,14.965,IT
+Porto Cervo,,41.137,9.535,IT
+Cala di Volpe,,41.080,9.543,IT
+Porto Rotondo,,41.030,9.546,IT
+Olbia,,40.923,9.520,IT
+Golfo Aranci,,40.996,9.620,IT
+La Maddalena,Maddalena,41.213,9.405,IT
+Palau,,41.180,9.383,IT
+Santa Teresa Gallura,Santa Teresa di Gallura,41.243,9.190,IT
+Castelsardo,,40.914,8.713,IT
+Alghero,,40.560,8.312,IT
+Stintino,,40.939,8.228,IT
+Carloforte,,39.147,8.308,IT
+Cagliari,Marina di Sant'Elmo,39.207,9.120,IT
+Villasimius,,39.123,9.508,IT
+Arbatax,,39.939,9.705,IT
+Tavolara,,40.900,9.700,IT
+Valletta,Grand Harbour|Marsamxett,35.895,14.513,MT
+Mgarr,Gozo|Mġarr,36.025,14.299,MT
+Comino,Blue Lagoon,36.014,14.324,MT
+Barcelona,Port Vell,41.376,2.183,ES
+Sitges,,41.233,1.816,ES
+Tarragona,,41.108,1.250,ES
+Valencia,,39.460,-0.325,ES
+Dénia,Denia,38.845,0.113,ES
+Alicante,,38.340,-0.482,ES
+Cartagena,,37.597,-0.982,ES
+Almería,Almeria,36.832,-2.465,ES
+Málaga,Malaga,36.714,-4.414,ES
+Puerto Banús,Puerto Banus|Marbella,36.486,-4.952,ES
+Sotogrande,,36.286,-5.274,ES
+Gibraltar,,36.142,-5.357,GI
+Palma de Mallorca,Palma,39.564,2.636,ES
+Port d'Andratx,Andratx|Puerto de Andratx,39.544,2.386,ES
+Sóller,Soller|Port de Soller,39.797,2.691,ES
+Port de Pollença,Pollença|Pollensa|Puerto Pollensa,39.904,3.085,ES
+Alcúdia,Alcudia,39.835,3.138,ES
+Portocolom,,39.418,3.265,ES
+Mahón,Mahon|Maó,39.888,4.265,ES
+Ciutadella,Ciudadela,40.000,3.830,ES
+Ibiza,Eivissa|Marina Ibiza,38.912,1.443,ES
+La Savina,Formentera,38.733,1.416,ES
+Sant Antoni de Portmany,San Antonio Ibiza,38.980,1.300,ES
+Dubrovnik,,42.670,18.127,HR
+Split,,43.505,16.440,HR
+Hvar,,43.172,16.442,HR
+Korčula,Korcula,42.962,17.137,HR
+Trogir,,43.516,16.251,HR
+Šibenik,Sibenik,43.734,15.892,HR
+Zadar,,44.118,15.228,HR
+Pula,,44.870,13.845,HR
+Rovinj,,45.081,13.636,HR
+Kotor,,42.425,18.770,ME
+Tivat,Porto Montenegro,42.433,18.690,ME
+Corfu,Gouvia|Kerkyra,39.650,19.850,GR
+Lefkada,Lefkas,38.833,20.712,GR
+Alimos,Athens,37.912,23.709,GR
+Zea,Piraeus|Zea Marina,37.935,23.650,GR
+Hydra,,37.349,23.466,GR
+Mykonos,,37.449,25.325,GR
+Vlychada,Santorini,36.337,25.436,GR
+Rhodes,Mandraki|Rodos,36.450,28.228,GR
+Bodrum,,37.033,27.429,TR
+Marmaris,,36.850,28.274,TR
+Göcek,Gocek,36.753,28.937,TR
+Fethiye,,36.627,29.110,TR
+Kaş,Kas,36.199,29.638,TR
+Portland,Portland Maine,43.657,-70.247,US
+Camden,Camden Maine,44.209,-69.062,US
+Bar Harbor,,44.392,-68.202,US
+Portsmouth,Portsmouth NH,43.077,-70.757,US
+Gloucester,,42.610,-70.661,US
+Boston,,42.360,-71.050,US
+Provincetown,,42.050,-70.182,US
+Hyannis,,41.642,-70.280,US
+Nantucket,,41.285,-70.096,US
+Edgartown,,41.389,-70.510,US
+Vineyard Haven,,41.455,-70.600,US
+Woods Hole,,41.524,-70.672,US
+New Bedford,,41.633,-70.918,US
+Cuttyhunk,,41.425,-70.924,US
+Newport,Newport RI,41.487,-71.325,US
+Block Island,Great Salt Pond,41.189,-71.577,US
+Mystic,,41.354,-71.966,US
+New London,,41.355,-72.095,US
+Greenport,,41.103,-72.360,US
+Sag Harbor,,40.999,-72.293,US
+Montauk,,41.072,-71.937,US
+New York,North Cove|Manhattan,40.713,-74.016,US
+Atlantic City,,39.376,-74.429,US
+Cape May,,38.948,-74.905,US
+Annapolis,,38.978,-76.485,US
+Baltimore,Inner Harbor,39.285,-76.610,US
+St. Michaels,St Michaels,38.787,-76.221,US
+Solomons,Solomons Island,38.330,-76.460,US
+Norfolk,,36.845,-76.291,US
+Hampton,,37.025,-76.342,US
+Beaufort,Beaufort NC,34.718,-76.665,US
+Wrightsville Beach,,34.209,-77.797,US
+Southport,,33.917,-78.021,US
+Charleston,,32.780,-79.950,US
+Hilton Head,Harbour Town,32.139,-80.812,US
+Thunderbolt,Savannah,32.033,-81.049,US
+Brunswick,Brunswick GA,31.150,-81.497,US
+Fernandina Beach,,30.671,-81.467,US
+St. Augustine,St Augustine,29.893,-81.311,US
+Daytona Beach,Halifax Harbor,29.205,-81.014,US
+Cape Canaveral,Port Canaveral,28.410,-80.628,US
+Fort Pierce,,27.456,-80.321,US
+Stuart,,27.197,-80.258,US
+West Palm Beach,Palm Beach,26.713,-80.051,US
+Fort Lauderdale,Bahia Mar,26.113,-80.107,US
+Miami,Government Cut,25.766,-80.133,US
+Key Biscayne,No Name Harbor,25.677,-80.165,US
+Key Largo,,25.086,-80.447,US
+Marathon,Boot Key Harbor,24.705,-81.097,US
+Key West,,24.558,-81.805,US
+Dry Tortugas,Garden Key,24.628,-82.873,US
+Nassau,,25.078,-77.340,BS
+Paradise Island,Atlantis Marina,25.085,-77.323,BS
+Bimini,Alice Town|North Bimini,25.725,-79.298,BS
+Cat Cay,,25.556,-79.278,BS
+West End,Old Bahama Bay,26.690,-78.995,BS
+Freeport,Lucaya|Port Lucaya,26.517,-78.628,BS
+Great Harbour Cay,,25.747,-77.858,BS
+Chub Cay,,25.407,-77.908,BS
+Highbourne Cay,,24.711,-76.825,BS
+Norman's Cay,Normans Cay,24.600,-76.815,BS
+Shroud Cay,,24.530,-76.797,BS
+Warderick Wells,,24.395,-76.631,BS
+Compass Cay,,24.272,-76.513,BS
+Staniel Cay,,24.172,-76.444,BS
+Black Point,,24.100,-76.405,BS
+Little Farmer's Cay,Farmers Cay,23.960,-76.323,BS
+George Town,Georgetown Exuma|Elizabeth Harbour,23.510,-75.770,BS
+Cape Eleuthera,,24.835,-76.342,BS
+Governor's Harbour,Governors Harbour,25.195,-76.246,BS
+Spanish Wells,,25.546,-76.760,BS
+Harbour Island,Dunmore Town,25.502,-76.635,BS
+Marsh Harbour,,26.545,-77.060,BS
+Hope Town,Elbow Cay,26.537,-76.959,BS
+Man-O-War Cay,Man O War,26.595,-77.003,BS
+Green Turtle Cay,,26.766,-77.330,BS
+Treasure Cay,,26.670,-77.280,BS
+Fresh Creek,Andros,24.728,-77.785,BS
+Thompson Bay,Long Island Bahamas,23.355,-75.135,BS

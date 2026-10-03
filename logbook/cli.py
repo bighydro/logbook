@@ -82,7 +82,7 @@ from .store import (
     FormatError,
     Logbook,
     UnsortedFile,
-    _dedupe_key,
+    dedupe_key,
     now_utc,
     retractions,
     utc,
@@ -185,11 +185,13 @@ def _append_with(
     `recorded_as` — the input as the owner knows it (`import-backup` passes the source's folder
     under inbox/, whose every file the run read) — so `inbox list` can say the input is consumed.
     `given` are the command's own options (`source`, `tier`, `at`, `since`, `account`, `attachments`,
-    `only_labels`, `skip_labels`), passed when the adapter's `run` takes them; one it does not take
-    exits 2, so a flag is never silently ignored. An adapter whose `run` takes `owner_emails` gets
-    the record's own addresses from `logbook.json` (RFC 0015), with a hint when there are none; one
+    `only_labels`, `skip_labels`, `asset`, `routes`), passed when the adapter's `run` takes them;
+    one it does not take exits 2, so a flag is never silently ignored. An adapter whose `run` takes
+    `owner_emails` gets the record's own addresses from `logbook.json` (RFC 0015), with a hint when
+    there are none; one
     whose `run` takes `resolved` gets the refs the record already resolves, as `{(kind, value):
-    entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows.
+    entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows; one
+    that takes `asset` must be given a registered one.
     One whose `run` takes `progress` gets a reporter that prints every report it makes with the
     bytes read and the rate; one whose `run` takes `cursor` gets the inbox manifest's cursor
     (`logbook.inbox`), so an import that stopped resumes where the record holds the source up to,
@@ -199,6 +201,7 @@ def _append_with(
     if _say_disabled(lb, adapter.NAME):
         return 0
     counts: dict[str, int] = {}
+    report: list[str] = []
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
     options: dict[str, Any] = {}
     given = {k: v for k, v in (given or {}).items() if v is not None}
@@ -217,6 +220,8 @@ def _append_with(
         options["counts"] = counts
     if _takes(adapter, "progress"):
         options["progress"] = _read_progress(str(getattr(adapter, "UNIT", "items")))
+    if _takes(adapter, "report"):
+        options["report"] = report
     if _takes(adapter, "timezone"):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "store"):
@@ -227,6 +232,14 @@ def _append_with(
         options["assets"] = _registry(lb, "add")
     if _takes(adapter, "resolved"):
         options["resolved"] = _resolved(lb)
+    if _takes(adapter, "asset"):
+        _check_asset(lb, adapter, (given or {}).get("asset"))
+    if _takes(adapter, "places"):
+        try:
+            options["places"] = places.read(lb.root)
+        except places.PlaceError as e:
+            print(f"add: {e}", file=sys.stderr)
+            sys.exit(2)
     if _takes(adapter, "owner_emails"):
         owner_emails = lb.meta.get("owner_emails") or []
         options["owner_emails"] = owner_emails
@@ -250,6 +263,8 @@ def _append_with(
     if dry_run:
         _say_dry_run(lb, adapter.NAME, drafts)
         _report_skipped(counts)
+        for text in report:
+            print(f"  {text}")
         return 0
     n = lb.append_many(
         _counted(drafts, produced),
@@ -258,6 +273,8 @@ def _append_with(
     )
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
+    for text in report:
+        print(f"  {text}")
     inbox.record(lb.root, inbox.finished(lb, recorded_as or p, adapter.NAME, produced[0], n, seq_before))
     return n
 
@@ -292,6 +309,25 @@ def _counted(drafts: Iterable[dict[str, Any]], tally: list[int]) -> Iterator[dic
     for draft in drafts:
         tally[0] += 1
         yield draft
+
+
+def _check_asset(lb: Logbook, adapter: adapters.Adapter, asset: object) -> None:
+    """An adapter whose `run` takes `asset` (`passages`) reads a log that belongs to one registered
+    asset: `--asset` must be given and name an entry of `assets.json`, else exit 2 saying which."""
+    if not asset:
+        print(
+            f"add: {adapter.NAME} needs --asset ASSET-ID, the registered asset the log belongs to"
+            " (logbook assets list)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if asset not in {a.id for a in _registry(lb, "add")}:
+        print(
+            f"add: --asset {asset} is not registered in assets.json; register it first:"
+            f" logbook assets add {asset} --kind {'|'.join(assets.KINDS)} --name NAME [--mmsi N]",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 
 def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
@@ -332,7 +368,8 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     (a live adapter's list for the feeds it could not read), `progress` (a file adapter's own
     reporter, every 10,000 items with the bytes read), `cursor` (the inbox manifest's, so a long
     import resumes), or one of
-    `assets` (the asset registry, ADR 0018), `listen_s`, `notice` and `status` (a source that listens
+    `assets` (the asset registry, ADR 0018), `places` (the record's named places), `report` (lines
+    `add` prints after the counts), `listen_s`, `notice` and `status` (a source that listens
     to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
     if live and isinstance(adapter, adapters.LiveAdapter):
@@ -348,6 +385,8 @@ SKIP_PHRASES = {
     "skipped_no_timestamp": "without a timestamp",
     "skipped_bad_coordinates": "with unusable coordinates",
     "skipped_no_ref": "without a phone or email",
+    "skipped_no_place": "without a departure place",
+    "skipped_unknown_timezone": "with a timezone the zone database does not know",
     "skipped_empty_ref": "with an empty phone or email",
     "skipped_duplicate_ref": "with a phone or email already seen",
     "skipped_already_resolved": "already resolved in the record",
@@ -564,6 +603,8 @@ def cmd_add(a: argparse.Namespace) -> None:
         "only_labels": _csv(a.only_labels),
         "skip_labels": _csv(a.skip_labels),
         "restart": True if a.restart else None,
+        "asset": a.asset,
+        "routes": Path(a.routes).expanduser() if a.routes else None,
     }
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         _add_flight(lb, " ".join(a.what[1:]), given["airports"] or _airports(None))
@@ -1050,7 +1091,7 @@ def cmd_infer(a: argparse.Namespace) -> None:
     if a.dry_run:
         found = list(drafts)
         with lb.index() as idx:  # what append_many would skip: the observations the record already holds
-            already = len(idx.existing({key for d in found if (key := _dedupe_key(d)) is not None}))
+            already = len(idx.existing({key for d in found if (key := dedupe_key(d)) is not None}))
         n = len(found) - already
     else:
         n = lb.append_many(drafts, skipped=skipped)
@@ -1159,7 +1200,7 @@ def _infer_keepers(a: argparse.Namespace) -> None:
 
     if a.dry_run:
         with lb.index() as idx:
-            already = len(idx.existing({key for d in drafts if (key := _dedupe_key(d)) is not None}))
+            already = len(idx.existing({key for d in drafts if (key := dedupe_key(d)) is not None}))
         n = len(drafts) - already
     else:
         n = lb.append_many(drafts, skipped=skipped)
@@ -3407,6 +3448,14 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="mail: read the file from its first byte again, not from where inbox/manifest.json says"
         " the last import of it got to",
+    )
+    s.add_argument(
+        "--asset", metavar="ASSET-ID", help="passages: the registered asset the deck log belongs to"
+    )
+    s.add_argument(
+        "--routes",
+        metavar="DIR",
+        help="passages: a folder of ECDIS route files (RTZ) that position the legs they name",
     )
     s.add_argument(
         "--dry-run",

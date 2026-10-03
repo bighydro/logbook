@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<route xmlns="http://www.cirm.org/RTZ/1/0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0">
+  <routeInfo routeName="LA SPEZIA - BONIFACIO" routeAuthor="Nordlys" routeStatus="planned" vesselName="NORDLYS" vesselMMSI="970123456">
+    <extensions>
+      <extension manufacturer="MARIS" name="MDS" version="1.0"/>
+    </extensions>
+  </routeInfo>
+  <waypoints>
+    <defaultWaypoint radius="0.30">
+      <leg starboardXTD="0.20" portsideXTD="0.20" geometryType="Loxodrome"/>
+    </defaultWaypoint>
+    <waypoint id="1" name="LA SPEZIA" revision="0">
+      <position lat="44.1020" lon="9.8300"/>
+    </waypoint>
+    <waypoint id="2" name="PORTOVENERE" revision="0">
+      <position lat="44.0400" lon="9.8300"/>
+    </waypoint>
+    <waypoint id="3" name="OFF CAPRAIA" revision="0">
+      <position lat="43.0500" lon="9.7500"/>
+    </waypoint>
+    <waypoint id="4" name="OFF CAP CORSE" revision="0">
+      <position lat="42.5000" lon="9.6000"/>
+    </waypoint>
+    <waypoint id="5" name="BONIFACIO" revision="0">
+      <position lat="41.3880" lon="9.1590"/>
+    </waypoint>
+  </waypoints>
+</route>

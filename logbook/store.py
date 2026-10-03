@@ -434,11 +434,11 @@ class Logbook:
             while True:
                 batch, error = _take(it, META_EVERY)
                 taken += len(batch)
-                keys = {key for d in batch if (key := _dedupe_key(d)) is not None}
+                keys = {key for d in batch if (key := dedupe_key(d)) is not None}
                 found = idx.existing(keys) if keys else set()
                 lines: list[tuple[Path, Line]] = []
                 for d in batch:
-                    key = _dedupe_key(d)
+                    key = dedupe_key(d)
                     if key is not None:
                         if key in found:
                             if skipped is not None:
@@ -667,6 +667,6 @@ def _seq_of(line: Line) -> int:
     return seq if isinstance(seq, int) and not isinstance(seq, bool) else 0
 
 
-def _dedupe_key(line: dict[str, Any]) -> tuple[str, str] | None:
+def dedupe_key(line: dict[str, Any]) -> tuple[str, str] | None:
     raw_id = (line.get("payload") or {}).get("raw_id")
     return (str(line.get("source")), str(raw_id)) if raw_id is not None else None
