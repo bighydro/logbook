@@ -307,9 +307,11 @@ def test_a_year_streams_in_chunks_through_the_index_never_a_scan(
     readings: list[tuple[str, str]] = []
     real = reading.read
 
-    def counted(lb_: Logbook, first: str, last: str, airports: Any = None) -> reading.Reading:
+    def counted(
+        lb_: Logbook, first: str, last: str, airports: Any = None, tiers: Any = None
+    ) -> reading.Reading:
         readings.append((first, last))
-        return real(lb_, first, last, airports)
+        return real(lb_, first, last, airports, tiers)
 
     monkeypatch.setattr(reading, "read", counted)
     rows = days_reader.read(lb, "2026-01-01", "2026-12-31")

@@ -196,11 +196,16 @@ class GatedIndex(Index):
             return None
         return str(found[0]), str(found[1])
 
-    def source_days(self, first: str, last: str) -> tuple[int, dict[str, int]]:
+    def source_days(
+        self, first: str, last: str, tiers: Sequence[int] | None = None
+    ) -> tuple[int, dict[str, int]]:
         where = "day_local BETWEEN ? AND ? AND kind != 'retraction'"
         self._count_above(where, (first, last))
         where += " AND tier <= ?"
-        args = (first, last, self.gate.max_tier)
+        args: tuple[object, ...] = (first, last, self.gate.max_tier)
+        if tiers is not None:  # a reader's own gate on top of the ceiling (`reading.read(..., tiers)`)
+            where += f" AND tier IN ({','.join('?' * len(tiers))})"
+            args += tuple(int(t) for t in tiers)
         (logged,) = self.db.execute(
             f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", args
         ).fetchone()

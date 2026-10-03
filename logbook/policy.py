@@ -35,6 +35,8 @@ MCP_DESTINATION = "mcp"  # `logbook mcp`: an agent on this machine, reading thro
 MCP_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name the mcp destination
 VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on the owner's own disk
 VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
+SITE_DESTINATION = "site"  # `logbook export site`: a folder of static HTML the owner may publish anywhere
+SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 DEFAULT_POLICY: dict[str, Any] = {
     DEFAULT_DESTINATION: {"max_tier": 2},
     MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
@@ -116,6 +118,13 @@ def vault_ceiling(root: Path) -> int:
     when the file does not name it — the vault is a folder on the owner's own disk, like the `mcp`
     client, and tier 1 is what crosses on its own (ADR 0016). `--tier 1,2` needs the entry."""
     return _ceiling_or_default(root, VAULT_DESTINATION, VAULT_DEFAULT_TIER)
+
+
+def site_ceiling(root: Path) -> int:
+    """The highest tier `logbook export site` may render: the `site` entry of the policy, or tier 1
+    when the file does not name it, as the vault. A site is pages the owner may publish anywhere, so
+    tier 1 is what crosses on its own (ADR 0016) and `--tier 1,2` needs the entry; tier 3 never."""
+    return _ceiling_or_default(root, SITE_DESTINATION, SITE_DEFAULT_TIER)
 
 
 def _ceiling_or_default(root: Path, destination: str, default: int) -> int:

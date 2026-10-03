@@ -568,17 +568,23 @@ class Index:
             return None
         return str(found[0]), str(found[1])
 
-    def source_days(self, first: str, last: str) -> tuple[int, dict[str, int]]:
+    def source_days(
+        self, first: str, last: str, tiers: Sequence[int] | None = None
+    ) -> tuple[int, dict[str, int]]:
         """For `days`: how many local days in [first, last] have a line, and per source on how many
         of them it has one; retractions aside (a retraction is a mark on another line, not a source
-        speaking). Two aggregates on the `day_local` index; nothing is read from the files."""
+        speaking). With `tiers`, only the lines of those tiers count (a gated reading's days). Two
+        aggregates on the `day_local` index; nothing is read from the files."""
         where = "day_local BETWEEN ? AND ? AND kind != 'retraction'"
+        params: list[object] = [first, last]
+        if tiers is not None:
+            where += f" AND tier IN ({','.join('?' * len(tiers))})"
+            params += [int(t) for t in tiers]
         (logged,) = self.db.execute(
-            f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", (first, last)
+            f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", params
         ).fetchone()
         found = self.db.execute(
-            f"SELECT source, count(DISTINCT day_local) FROM lines WHERE {where} GROUP BY source",
-            (first, last),
+            f"SELECT source, count(DISTINCT day_local) FROM lines WHERE {where} GROUP BY source", params
         ).fetchall()
         return int(logged), {str(source): int(n) for source, n in found}
 

@@ -22,7 +22,12 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
 - Read-only. The pages call the readers; the readers never write (not even `policy/stays.json`).
 
 The text grammar is the commands' own (`day.span_text`, `days.night_text`, `gaps.runs`, …), so a
-row reads here as it prints there."""
+row reads here as it prints there.
+
+`logbook export site` writes the same pages as files (`logbook/site.py`): a `Site` made with `href`
+renders every link through it (a relative path to a file, or None for plain text), through the gate
+`tiers` (`reading.read`), with its own `nav` and `footer`, and without the forms and pagers a static
+page has nothing to submit to. The rendering is this module's either way."""
 
 from __future__ import annotations
 
@@ -54,6 +59,7 @@ YEAR = re.compile(r"^\d{4}$")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
 Cell = str | tuple[str, str]  # a table cell: text, or (text, css class)
+Href = Callable[[str], str | None]  # a server path → the link to write, or None for plain text
 
 STYLE = """
 :root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
@@ -137,14 +143,43 @@ class Response(NamedTuple):
 
 class Site:
     """The pages of one record. `respond(path, query)` is pure: the same record at the same head
-    and the same request give the same page. The airports table is loaded once, here."""
+    and the same request give the same page. The airports table is loaded once, here.
+
+    `tiers` reads the record through that gate (`reading.read`); the server reads every tier, since
+    nothing leaves the machine. `href` makes the site static (`logbook export site`): every link is
+    written as `href(path)` says, a page carries `nav` and `footer` in place of the server's, and no
+    form or pager is rendered."""
 
     def __init__(
-        self, lb: Logbook, airports: Airports | None = None, now: Callable[[], datetime] | None = None
+        self,
+        lb: Logbook,
+        airports: Airports | None = None,
+        now: Callable[[], datetime] | None = None,
+        tiers: Sequence[int] | None = None,
+        href: Href | None = None,
+        nav: str = NAV,
+        footer: str | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
         self.now = now or (lambda: datetime.now(UTC))
+        self.tiers = tiers
+        self._href = href
+        self.static = href is not None
+        self.nav = nav
+        self.footer = footer
+
+    def href(self, path: str) -> str | None:
+        """The link to write for a server path: the path itself, or what `href` makes of it."""
+        return path if self._href is None else self._href(path)
+
+    def link(self, text: str, path: str, cls: str = "") -> str:
+        """`text` (already escaped) as a link to `path`, or as it is when the path has no page."""
+        href = self.href(path)
+        if href is None:
+            return text
+        attrs = f' class="{cls}"' if cls else ""
+        return f'<a href="{escape(href)}"{attrs}>{text}</a>'
 
     @property
     def tz(self) -> ZoneInfo:
@@ -182,14 +217,16 @@ class Site:
 
     def _error(self, status: int, message: str) -> Response:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
-        return Response(status, self._document(str(status), body).encode("utf-8"))
+        return Response(status, self.document(str(status), body).encode("utf-8"))
 
-    def _document(self, title: str, body: str) -> str:
+    def document(self, title: str, body: str) -> str:
         meta = self.lb.meta
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
             f"read-only{DOT}head <code>{escape(head)}…</code>{DOT}{escape(str(meta.get('timezone')))}"
             f"{DOT}nothing here leaves this machine"
+            if self.footer is None
+            else self.footer
         )
         return (
             "<!doctype html>\n"
@@ -197,7 +234,7 @@ class Site:
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             f"<title>{escape(title)} · Logbook</title>\n"
             f"<style>{STYLE}</style>\n</head>\n<body>\n"
-            f"<header><nav>{NAV}</nav></header>\n<main>\n{body}</main>\n"
+            f"<header><nav>{self.nav}</nav></header>\n<main>\n{body}</main>\n"
             f"<footer>{footer}</footer>\n</body>\n</html>\n"
         )
 
@@ -214,7 +251,7 @@ class Site:
         parts = ["<h1>Logbook</h1>\n"]
         if whole is None or first is None or last is None:
             parts.append("<p>The record has no lines yet.</p>\n")
-            return self._document("Logbook", "".join(parts))
+            return self.document("Logbook", "".join(parts))
         tz = self.tz
         parts.append(
             f"<p>{total:,} lines, {escape(_local_day(first, tz))} {EN_DASH} {escape(_local_day(last, tz))}"
@@ -224,35 +261,35 @@ class Site:
         year = whole[1][:4]
         parts.append(
             '<ul class="plain">\n'
-            f'<li><a href="/day/{whole[1]}">The last day</a>, {whole[1]}: the Day as a timeline.</li>\n'
-            f'<li><a href="/days?from={a}&amp;to={b}">The last fortnight</a>, one row per day.</li>\n'
-            f'<li><a href="/trips?year={year}">Trips of {year}</a>: runs of nights away.</li>\n'
-            '<li><a href="/places">Places</a>: the named places of the record.</li>\n'
-            '<li><a href="/assets">Assets</a>: the assets tracked and the last fix of each.</li>\n'
-            '<li><a href="/gaps">Gaps</a>: where each source went quiet.</li>\n'
+            f"<li>{self.link('The last day', f'/day/{whole[1]}')}, {whole[1]}: the Day as a timeline.</li>\n"
+            f"<li>{self.link('The last fortnight', f'/days?from={a}&to={b}')}, one row per day.</li>\n"
+            f"<li>{self.link(f'Trips of {year}', f'/trips?year={year}')}: runs of nights away.</li>\n"
+            f"<li>{self.link('Places', '/places')}: the named places of the record.</li>\n"
+            f"<li>{self.link('Assets', '/assets')}: the assets tracked and the last fix of each.</li>\n"
+            f"<li>{self.link('Gaps', '/gaps')}: where each source went quiet.</li>\n"
             "</ul>\n"
         )
-        return self._document("Logbook", "".join(parts))
+        return self.document("Logbook", "".join(parts))
 
     # -- /day/YYYY-MM-DD ------------------------------------------------------------------------------------
 
     def page_day(self, day: str, expanded: bool = False) -> str:
         """The Day; with `expanded` every toggle is open, so a page prints or saves whole."""
-        data = day_reader.read(self.lb, day, self.airports)
+        data = day_reader.read(self.lb, day, self.airports, self.tiers)
         tz = ZoneInfo(data["tz"])
         d = date.fromisoformat(day)
         before, after = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=1)).isoformat()
         a, b = (d - timedelta(days=6)).isoformat(), (d + timedelta(days=7)).isoformat()
+        toggle = (
+            self.link("collapse all", f"/day/{day}")
+            if expanded
+            else self.link("expand all", f"/day/{day}?open=1")
+        )
         parts = [
             f"<h1>{day} <small>{escape(data['weekday'])}</small></h1>\n",
-            f'<p class="pager"><a href="/day/{before}">← {before}</a>{DOT}'
-            f'<a href="/days?from={a}&amp;to={b}">the fortnight around</a>{DOT}'
-            + (
-                f'<a href="/day/{day}">collapse all</a>'
-                if expanded
-                else f'<a href="/day/{day}?open=1">expand all</a>'
-            )
-            + f'{DOT}<a href="/day/{after}">{after} →</a></p>\n',
+            f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}"
+            f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             '<dl class="header">\n',
             _dt("night before", day_reader.night_text(data["nights"]["before"])),
             _dt("night after", day_reader.night_text(data["nights"]["after"])),
@@ -305,25 +342,27 @@ class Site:
                     line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
                     parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
                 parts.append("</ul>\n")
-        return self._document(f"{day} {data['weekday']}", "".join(parts))
+        return self.document(f"{day} {data['weekday']}", "".join(parts))
 
     # -- /days ----------------------------------------------------------------------------------------------
 
     def page_days(self, first: str | None, last: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self._document("days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n")
+            return self.document("days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n")
         if last is None:
             last = whole[1] if first is None else _clip(first, WINDOW_DAYS - 1, whole)
         else:
             last = parse_day(last).isoformat()
         first = _clip(last, -(WINDOW_DAYS - 1), whole) if first is None else parse_day(first).isoformat()
         rows: list[list[Cell]] = []
-        for r in days_reader.read(self.lb, first, last, self.airports):
+        ids: list[str] = []
+        for r in days_reader.read(self.lb, first, last, self.airports, tiers=self.tiers):
             people = ", ".join(r["people"]["names"])
+            ids.append(str(r["day"]))
             rows.append(
                 [
-                    (f'<a href="/day/{r["day"]}">{r["day"]}</a>', "day"),
+                    (self.link(str(r["day"]), f"/day/{r['day']}"), "day"),
                     escape(r["weekday"][:3]),
                     escape(days_reader.night_text(r)),
                     (escape(days_reader.km_text(r["moved_m"])), "num"),
@@ -343,40 +382,43 @@ class Site:
             (date.fromisoformat(last) + timedelta(days=1)).isoformat(),
             (date.fromisoformat(last) + timedelta(days=span)).isoformat(),
         )
-        body = (
-            f"<h1>Days <small>{first} {EN_DASH} {last}</small></h1>\n"
-            f'<form class="window" action="/days" method="get">'
-            f'<label>from <input type="date" name="from" value="{first}"></label> '
-            f'<label>to <input type="date" name="to" value="{last}"></label> '
-            f"<button>show</button></form>\n"
-            f'<p class="pager"><a href="/days?from={earlier[0]}&amp;to={earlier[1]}">← earlier</a>{DOT}'
-            f'<a href="/days?from={later[0]}&amp;to={later[1]}">later →</a>{DOT}'
-            f"the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n"
-        )
+        body = f"<h1>Days <small>{first} {EN_DASH} {last}</small></h1>\n"
+        if not self.static:
+            body += (
+                f'<form class="window" action="/days" method="get">'
+                f'<label>from <input type="date" name="from" value="{first}"></label> '
+                f'<label>to <input type="date" name="to" value="{last}"></label> '
+                f"<button>show</button></form>\n"
+                f'<p class="pager"><a href="/days?from={earlier[0]}&amp;to={earlier[1]}">← earlier</a>{DOT}'
+                f'<a href="/days?from={later[0]}&amp;to={later[1]}">later →</a>{DOT}'
+                f"the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n"
+            )
         body += _table(
-            ["day", "", "night", ("moved", "num"), "flights", "stays", "with", "health", "gaps"], rows
+            ["day", "", "night", ("moved", "num"), "flights", "stays", "with", "health", "gaps"],
+            rows,
+            ids if self.static else None,
         )
-        return self._document(f"days {first} {EN_DASH} {last}", body)
+        return self.document(f"days {first} {EN_DASH} {last}", body)
 
     # -- /trips ---------------------------------------------------------------------------------------------
 
     def page_trips(self, year: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self._document("trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n")
+            return self.document("trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n")
         year = year or whole[1][:4]
         if not YEAR.fullmatch(year):
             raise ValueError(f"not a year (YYYY): {year!r}")
         years = range(int(whole[0][:4]), int(whole[1][:4]) + 1)
         links = DOT.join(
-            f"<b>{y}</b>" if str(y) == year else f'<a href="/trips?year={y}">{y}</a>' for y in years
+            f"<b>{y}</b>" if str(y) == year else self.link(str(y), f"/trips?year={y}") for y in years
         )
         parts = [f"<h1>Trips <small>{year}</small></h1>\n", f'<p class="pager">{links}</p>\n']
         first, last = max(f"{year}-01-01", whole[0]), min(f"{year}-12-31", whole[1])
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
-            return self._document(f"trips {year}", "".join(parts))
-        rd = reading.read(self.lb, first, last, self.airports)
+            return self.document(f"trips {year}", "".join(parts))
+        rd = reading.read(self.lb, first, last, self.airports, self.tiers)
         found, warning = trips.trips(rd)
         if warning:
             parts.append(f"<p>{escape(warning)}</p>\n")
@@ -386,10 +428,16 @@ class Site:
             parts.append(
                 _table(
                     ["days", "nights", "route", "flights", "places", "with"],
-                    [_trip_row(t, rd) for t in found],
+                    [self.trip_row(t, rd) for t in found],
                 )
             )
-        return self._document(f"trips {year}", "".join(parts))
+        return self.document(f"trips {year}", "".join(parts))
+
+    def trip_row(self, trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
+        """One row of the trips table; the dates link the trip's days (`/days?from=&to=`, which a
+        static site maps to the trip's own page)."""
+        dates = self.link(f"{trip.start} {EN_DASH} {trip.end}", f"/days?from={trip.start}&to={trip.until}")
+        return _trip_row(trip, rd, dates)
 
     # -- /places, /assets, /gaps ----------------------------------------------------------------------------
 
@@ -400,7 +448,7 @@ class Site:
             body += (
                 f"<p>no places ({escape(places.PLACES_FILE)}): `logbook places add` or `places propose`</p>\n"
             )
-            return self._document("places", body)
+            return self.document("places", body)
         rows: list[list[Cell]] = [
             [
                 escape(p.name),
@@ -413,14 +461,14 @@ class Site:
             for p in found
         ]
         body += _table(["name", ("position", "num"), ("radius", "num"), "kind", "tags", "country"], rows)
-        return self._document("places", body)
+        return self.document("places", body)
 
     def page_assets(self) -> str:
         registry = assets.read(self.lb.root)
         body = "<h1>Assets</h1>\n"
         if not registry:
             body += f"<p>no assets registered ({escape(assets.ASSETS_FILE)}); `logbook assets add`</p>\n"
-            return self._document("assets", body)
+            return self.document("assets", body)
         named = places.read(self.lb.root)
         statuses = asset_status.read(self.lb, registry, named, self.now())
         tz = self.tz
@@ -455,7 +503,7 @@ class Site:
             ],
             rows,
         )
-        return self._document("assets", body)
+        return self.document("assets", body)
 
     def page_gaps(self, since: str | None) -> str:
         data = gaps.report(self.lb, since=since)
@@ -468,7 +516,7 @@ class Site:
         )
         if not data["sources"]:
             body += "<p>no lines</p>\n"
-            return self._document("gaps", body)
+            return self.document("gaps", body)
         rows: list[list[Cell]] = []
         for s in data["sources"]:
             if s["lines"] == 0:
@@ -501,7 +549,7 @@ class Site:
             f'<p class="mute">{escape(span)}, today {escape(data["today"])} ({escape(data["timezone"])});'
             " counted through the index, every line, retracted or not</p>\n"
         )
-        return self._document("gaps", body)
+        return self.document("gaps", body)
 
 
 # -- the Day's rows ---------------------------------------------------------------------------------------
@@ -608,7 +656,7 @@ def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:
     return "".join(out)
 
 
-def _trip_row(trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
+def _trip_row(trip: trips.Trip, rd: reading.Reading, dates: str) -> list[Cell]:
     nights = _plural(trip.nights, "night")
     if trip.asset:
         asset = rd.assets.get(trip.asset)
@@ -621,10 +669,7 @@ def _trip_row(trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
             name = f"{f['carrier']} {f['number']} " if f["number"] else ""
             flights.append(f"{label} {name}{f['from']} {ARROW} {f['to']}")
     return [
-        (
-            f'<a href="/days?from={trip.start}&amp;to={trip.until}">{trip.start} {EN_DASH} {trip.end}</a>',
-            "day",
-        ),
+        (dates, "day"),
         escape(nights),
         escape(f" {ARROW} ".join(trip.route)) if trip.route else '<span class="mute">unknown</span>',
         escape(", ".join(flights)),
@@ -636,15 +681,16 @@ def _trip_row(trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
 # -- fragments --------------------------------------------------------------------------------------------
 
 
-def _table(head: Sequence[Cell], rows: Iterable[Sequence[Cell]]) -> str:
-    """A table from cells already escaped (or marked up): a cell is text, or (text, css class)."""
+def _table(head: Sequence[Cell], rows: Iterable[Sequence[Cell]], ids: Sequence[str] | None = None) -> str:
+    """A table from cells already escaped (or marked up): a cell is text, or (text, css class).
+    `ids`, one per row, are the rows' anchors."""
     out = ["<table>\n<thead><tr>"]
     for cell in head:
         text, cls = cell if isinstance(cell, tuple) else (cell, "")
         out.append(f'<th class="{cls}">{text}</th>' if cls else f"<th>{text}</th>")
     out.append("</tr></thead>\n<tbody>\n")
-    for row in rows:
-        out.append("<tr>")
+    for n, row in enumerate(rows):
+        out.append(f'<tr id="{escape(ids[n])}">' if ids is not None else "<tr>")
         for cell in row:
             text, cls = cell if isinstance(cell, tuple) else (cell, "")
             out.append(f'<td class="{cls}">{text}</td>' if cls else f"<td>{text}</td>")

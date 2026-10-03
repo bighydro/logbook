@@ -85,16 +85,20 @@ DOT = " · "
 # -- the reading --------------------------------------------------------------------------------------------
 
 
-def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, Any]:
-    """The Day as one JSON-ready object. `ValueError` for a day that is not one;
-    `stays.SettingsError` when the record's settings, places or assets file is not what it should
-    be. Nothing is written, not even the settings file."""
+def read(
+    lb: Logbook, day: str, airports: Airports | None = None, tiers: Sequence[int] | None = None
+) -> dict[str, Any]:
+    """The Day as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
+    health and story lines included. `ValueError` for a day that is not one; `stays.SettingsError`
+    when the record's settings, places or assets file is not what it should be. Nothing is written,
+    not even the settings file."""
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
-    rd = reading.read(lb, before, day, airports)
+    rd = reading.read(lb, before, day, airports, tiers)
     with lb.index() as idx:
-        found = idx.by_kind(health.KIND, before, day)
-        told = idx.by_kind(story.KIND)  # every story: a story is about a day it was not told on
+        found = reading.crossing(idx.by_kind(health.KIND, before, day), tiers)
+        # every story: a story is about a day it was not told on
+        told = reading.crossing(idx.by_kind(story.KIND), tiers)
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["received"] = received(lb, day)
     return data

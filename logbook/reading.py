@@ -14,11 +14,19 @@ owner's points and the registered assets' (`Index.locations`), the evidence that
 (`Index.evidence`), the retracted ids (`Index.superseded`) — so two years of a record of millions
 of lines are read in seconds. The only lines read whole are the Google Timeline visits, found
 through the index by their `raw_id`. The same window and the same rules as `read`, so the stays
-are the same stays."""
+are the same stays.
+
+`read(..., tiers=(1,))` is the same reading through a gate (ADR 0016): only the lines whose tier is
+in `tiers` are in it, so every stay, night, trip, companion and count a reader derives from it comes
+from lines that cross, and a line held back is not a row, not a night and not a name. The
+resolution lines are read whole either way: they are the record's name overlay (a `ref` to an entity),
+never a row of their own, and the gate is on the line that puts someone somewhere, as the vault and
+a crossing apply it. The retractions too: a hidden line stays hidden. `crossing(lines, tiers)` is
+the same gate for the lines a reader takes beside the reading (health, stories)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -54,6 +62,7 @@ class Reading:
     airports: Airports
     owner: present.Owner = field(default_factory=lambda: present.Owner(frozenset(), frozenset(), frozenset()))
     retracted: dict[str, Line] = field(default_factory=dict)
+    tiers: tuple[int, ...] | None = None  # the gate the reading was read through; None is every tier
 
     @property
     def owner_stays(self) -> list[stays.Segment]:
@@ -99,10 +108,24 @@ def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
         return idx.span(kind)
 
 
-def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -> Reading:
-    """The reading of `[first, last]` (local days, inclusive). Raises `stays.SettingsError` when the
-    settings, the places or the assets file is not what it should be. The settings file is never
-    written here."""
+def crossing(lines: Iterable[Line], tiers: Sequence[int] | None) -> list[Line]:
+    """The lines whose tier is in `tiers`; every line when `tiers` is None."""
+    if tiers is None:
+        return list(lines)
+    allowed = {int(t) for t in tiers}
+    return [line for line in lines if int(line.get("tier") or 0) in allowed]
+
+
+def read(
+    lb: Logbook,
+    first: str,
+    last: str,
+    airports: Airports | None = None,
+    tiers: Sequence[int] | None = None,
+) -> Reading:
+    """The reading of `[first, last]` (local days, inclusive); through the gate `tiers` when given
+    (the module's docstring). Raises `stays.SettingsError` when the settings, the places or the
+    assets file is not what it should be. The settings file is never written here."""
     tz = ZoneInfo(str(lb.meta["timezone"]))
     settings = stays.read_settings(lb.root)
     known = stays.read_places(lb.root, settings.radius_m)
@@ -113,7 +136,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
     _night_start, end = stays.night_window(last, tz, settings)
     with lb.index() as idx:
         spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
-        found = [line for _day, line in idx.between(first, spill)]
+        found = crossing((line for _day, line in idx.between(first, spill)), tiers)
         marks = idx.retractions()  # from every file: a retraction applies wherever its line is
         resolutions = idx.resolutions()
     retracted = retractions(marks)
@@ -160,6 +183,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         airports=airports,
         owner=owner,
         retracted=retracted,
+        tiers=None if tiers is None else tuple(int(t) for t in tiers),
     )
 
 
