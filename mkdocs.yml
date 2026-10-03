@@ -68,6 +68,8 @@ nav:
       - "0001 location/v1": rfcs/0001-location-v1.md
       - "0002 photo/v1": rfcs/0002-photo-v1.md
       - "Benchmark: per-line sealing (2026-10)": rfcs/bench-encryption-2026-10.md
+      - "0029 custody/v1 (draft)": rfcs/0029-custody.md
+      - "0030 asset-package/v1 (draft)": rfcs/0030-asset-transfer.md
   - The Day: day.md
   - In a browser: serve.md
   - The rollups: rollups.md
