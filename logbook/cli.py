@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import inspect
 import json
 import os
@@ -87,6 +88,7 @@ from . import (
 )
 from .adapters import ais, apple_photos, ios_contacts, screentime
 from .adapters import weather as weather_adapter
+from .adapters.takeout import maps as takeout_maps
 from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
@@ -3455,7 +3457,10 @@ def cmd_places(a: argparse.Namespace) -> None:
     unnamed stays of the window, grouped and ranked by hours, with the nearest known place, any
     Google Timeline visit overlapping them and a suggested name; `--write` asks for each and
     names the ones accepted (a name, Enter for the suggestion, `s` to skip, `q` to stop).
-    `import-takeout` proposes entries from Google Maps' saved places (`_places_import_takeout`)."""
+    `--takeout` adds Google Maps' saved places as candidates (`takeout.maps.candidates`): one near a
+    proposal is shown under it with its list and the day it was saved and becomes the suggested
+    name; the rest are listed after the proposals for `places add`. `import-takeout` proposes
+    entries from Google Maps' saved places in bulk (`_places_import_takeout`)."""
     lb = Logbook.find()
     try:
         if a.verb == "list":
@@ -3538,26 +3543,70 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
     proposals = places.propose(unnamed, read.places, read.timeline_visits)
     if a.top is not None:
         proposals = proposals[: a.top]
+    saved = _saved_candidates(a.takeout) if getattr(a, "takeout", None) else []
+    nearby = {p.id: takeout_maps.near(saved, p.lat, p.lon, places.GROUP_M) for p in proposals}
+    if saved:  # a saved place at the stay is the better name than a timeline's semantic type
+        proposals = [
+            dataclasses.replace(p, suggested=nearby[p.id][0].name) if nearby[p.id] else p for p in proposals
+        ]
+    at_a_proposal = {c.name.casefold() for found in nearby.values() for c in found}
+    named = {place.name.casefold() for place in read.places}
+    elsewhere = [
+        c for c in saved if c.name.casefold() not in at_a_proposal and c.name.casefold() not in named
+    ]
     if a.json:
-        print(
-            json.dumps(
-                {"window": reading.window_json(read), "proposals": [p.to_json() for p in proposals]}, indent=2
-            )
-        )
+        out: dict[str, Any] = {"window": reading.window_json(read), "proposals": []}
+        for p in proposals:
+            row = p.to_json()
+            if saved:
+                row["saved"] = [c.to_json() for c in nearby[p.id]]
+            out["proposals"].append(row)
+        if saved:
+            out["saved_elsewhere"] = [c.to_json() for c in elsewhere]
+        print(json.dumps(out, indent=2))
         return
     if not proposals:
         print(f"{first} {EN_DASH} {last}: no unnamed stays")
+        _say_saved_elsewhere(elsewhere)
         return
     print(f"{first} {EN_DASH} {last}: {_plural(len(proposals), 'unnamed place')}, by hours")
     for n, proposal in enumerate(proposals, 1):
         for text in _proposal_rows(n, proposal):
             print(text)
+        for c in nearby[proposal.id][:3]:
+            print(f"      saved: {_saved_row(c)}")
         if a.write:
             accepted = _ask_name(proposal)
             if accepted is None:
                 break
             if accepted:
                 _name_place(lb, places.Place(accepted, proposal.lat, proposal.lon, read.settings.radius_m))
+    _say_saved_elsewhere(elsewhere)
+
+
+def _saved_candidates(path: str) -> list[takeout_maps.Candidate]:
+    try:
+        return takeout_maps.candidates(Path(path).expanduser())
+    except FileNotFoundError as e:
+        raise ValueError(f"--takeout: no such file or directory: {e}") from e
+
+
+def _saved_row(c: takeout_maps.Candidate) -> str:
+    parts = [c.name, f"{c.lat:.4f},{c.lon:.4f}", c.list]
+    if c.saved_at:
+        parts.append(f"saved {c.saved_at}")
+    if c.metres is not None:
+        parts.append(f"{_distance_text(c.metres)} away")
+    return " · ".join(parts)
+
+
+def _say_saved_elsewhere(elsewhere: list[takeout_maps.Candidate]) -> None:
+    """The saved places at no unnamed stay and not yet named: for `places add`, by hand."""
+    if not elsewhere:
+        return
+    print(f"{_plural(len(elsewhere), 'saved place')} near no unnamed stay; `logbook places add` names one:")
+    for c in elsewhere:
+        print(f"      {_saved_row(c)}")
 
 
 def _proposal_rows(n: int, p: places.Proposal) -> Iterator[str]:
@@ -4837,6 +4886,12 @@ def main(argv: list[str] | None = None) -> None:
         "--write", action="store_true", help="ask for each name; accepted ones become places and a note"
     )
     v.add_argument("--json", action="store_true", help="the proposals as one JSON object")
+    v.add_argument(
+        "--takeout",
+        metavar="PATH",
+        help="Google Maps' saved places (Takeout/, `Maps (your places)/`, `Saved/` or one file) as"
+        " candidates: one near an unnamed stay suggests its name; the rest are listed for `places add`",
+    )
     v.set_defaults(fn=cmd_places)
     s = sub.add_parser(
         "rollup",

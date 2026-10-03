@@ -9,7 +9,8 @@ them only with `--write`, adding to the file and never changing an entry already
     Takeout/Maps (your places)/Saved Places.json   GeoJSON: one Feature per place, the point in
                                                    `geometry.coordinates` ([lon, lat]), the name
                                                    in `properties.Title`, the address and business
-                                                   name under `properties.Location`
+                                                   name under `properties.Location`, the day it was
+                                                   saved in `properties.Published`
     Takeout/Saved/<list>.csv                       one list per file (`Favourites`, `Want to go`,
                                                    `Starred places`, the owner's own lists):
                                                    `Title,Note,URL,Comment`; coordinates only
@@ -35,6 +36,8 @@ from urllib.parse import unquote
 
 from logbook.places import PLACES_FILE
 
+from . import times
+
 __all__ = ["PLACES_FILE", "Proposal", "Report", "merge", "read"]
 
 GEOJSON_SUFFIX = ".json"
@@ -43,6 +46,7 @@ CSV_HEADER = ("Title", "Note", "URL")
 AT_COORDINATES = re.compile(r"/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)")
 SEARCH_COORDINATES = re.compile(r"/(?:search|place)/(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)")
 QUERY_COORDINATES = re.compile(r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)")
+REVIEW_KEYS = ("five_star_rating_published", "Star Rating")  # a feature of `Reviews.json`: not a saved place
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,7 @@ class Proposal:
     category: str
     address: str | None = None
     note: str | None = None
+    saved_at: str | None = None  # the day it was saved (`Published`), when the export says
 
     def entry(self) -> dict[str, Any]:
         found: dict[str, Any] = {"lat": self.lat, "lon": self.lon, "category": self.category}
@@ -112,6 +117,8 @@ def _geojson(path: Path) -> list[Proposal]:
         if not isinstance(feature, dict):
             continue
         props = _object(feature.get("properties"))
+        if any(key in props for key in REVIEW_KEYS):
+            continue  # a review (`takeout.maps` reads those); the same file may hold both
         location = _object(props.get("Location"))
         name = (
             _clean(props.get("Title"))
@@ -124,8 +131,17 @@ def _geojson(path: Path) -> list[Proposal]:
         if lat is None:
             geo = _object(location.get("Geo Coordinates"))
             lat, lon = _coordinates(geo.get("Latitude"), geo.get("Longitude"))
-        found.append(Proposal(name, lat, lon, path.stem, address=_clean(location.get("Address"))))
+        saved_at = _day(props.get("Published"))
+        found.append(
+            Proposal(name, lat, lon, path.stem, address=_clean(location.get("Address")), saved_at=saved_at)
+        )
     return found
+
+
+def _day(value: object) -> str | None:
+    """The day of an RFC 3339 time the export spells, or None."""
+    at, _ = times.parse(value)
+    return at[:10] if at else None
 
 
 def _object(value: object) -> dict[str, Any]:

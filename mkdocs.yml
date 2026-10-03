@@ -90,6 +90,10 @@ nav:
       - "Voice memos and transcription": adapters/voice-memos.md
       - "Google Takeout": adapters/takeout.md
       - Mail: adapters/mail.md
+      - "Takeout: Tasks": adapters/takeout-tasks.md
+      - "Takeout: Maps (your places)": adapters/takeout-maps.md
+      - "Takeout: Home App": adapters/takeout-home.md
+      - "Takeout: YouTube": adapters/takeout-youtube.md
       - Bounties: adapter-bounties.md
       - "Passages: a deck log as sea legs": adapters/passages.md
       - "Listening: Spotify and Apple Music": adapters/listen.md

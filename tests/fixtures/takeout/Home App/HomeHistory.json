@@ -1,0 +1,89 @@
+[
+  {
+    "eventId": "evt-0001",
+    "timestamp": "2026-06-08T06:40:12.000Z",
+    "eventType": "PRESENCE_CHANGED",
+    "structureName": "Home",
+    "deviceName": "Ines's phone",
+    "description": "Ines arrived home"
+  },
+  {
+    "eventId": "evt-0002",
+    "timestamp": "2026-06-08T07:55:00.000Z",
+    "eventType": "SECURITY_ALARM_ARMED",
+    "structureName": "Home",
+    "deviceName": "Nest Guard",
+    "alarmLevel": "AWAY_AND_GUARDING",
+    "description": "Alarm armed to Away and Guarding"
+  },
+  {
+    "eventId": "evt-0003",
+    "timestamp": "2026-06-08T07:56:30.000Z",
+    "eventType": "PRESENCE_CHANGED",
+    "structureName": "Home",
+    "deviceName": "Ines's phone",
+    "description": "Ines left home"
+  },
+  {
+    "eventId": "evt-0004",
+    "timestamp": "2026-06-08T16:10:00.000Z",
+    "eventType": "SECURITY_ALARM_DISARMED",
+    "structureName": "Home",
+    "deviceName": "Nest Guard",
+    "description": "Alarm disarmed by Ola"
+  },
+  {
+    "eventId": "evt-0005",
+    "timestamp": "2026-06-08T16:10:40.000Z",
+    "eventType": "PRESENCE_CHANGED",
+    "structureName": "Home",
+    "deviceName": "Ola's phone",
+    "description": "Ola arrived home"
+  },
+  {
+    "eventId": "evt-0006",
+    "timestamp": "2026-06-08T22:30:00.000Z",
+    "eventType": "SECURITY_ALARM_ARMED",
+    "structureName": "Home",
+    "deviceName": "Nest Guard",
+    "alarmLevel": "HOME_AND_GUARDING",
+    "description": "Alarm armed to Home and Guarding"
+  },
+  {
+    "eventId": "evt-0007",
+    "timestamp": "2026-06-09T03:12:00.000Z",
+    "eventType": "SOUND_SENSING",
+    "structureName": "Home",
+    "deviceName": "Nest Hub",
+    "description": "Glass breaking heard in the Kitchen"
+  },
+  {
+    "eventId": "evt-0008",
+    "timestamp": "2026-06-09T03:12:05.000Z",
+    "eventType": "SECURITY_ALARM_CLIP",
+    "structureName": "Home",
+    "deviceName": "Nest Cam",
+    "clip": "SecurityAlarmClips/clip-0001.mp4"
+  },
+  {
+    "eventId": "evt-0009",
+    "timestamp": "2026-06-09T06:00:00.000Z",
+    "eventType": "DEVICE_ADDED",
+    "structureName": "Home",
+    "deviceName": "Nest Hub",
+    "description": "Nest Hub added to the Kitchen"
+  },
+  {
+    "eventId": "evt-0010",
+    "eventType": "PRESENCE_CHANGED",
+    "structureName": "Home",
+    "description": "Ines arrived home"
+  },
+  {
+    "timestampMs": "1781337600000",
+    "eventType": "PRESENCE_CHANGED",
+    "structureName": "Cabin",
+    "deviceName": "Ola's phone",
+    "description": "Ola left Cabin"
+  }
+]
