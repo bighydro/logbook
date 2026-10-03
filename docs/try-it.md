@@ -248,7 +248,9 @@ with the highest tier they may see, then `logbook export crossing --to <name> --
 
 The month is a function of two numbers. `--seed 2` is the same story with other noise, other
 step counts, other times for the messages; `--days 90` is a summer; `--days 365` a year of 150,000
-lines, enough to feel what the index is for. When you are done:
+lines, enough to feel what the index is for. `--years 40` instead writes a life: forty years from
+her birth, in phases, thin until the phone and dense in the last month ([demo.md](demo.md)). When
+you are done:
 
 ```bash
 rm -r ~/Demo/Logbook
