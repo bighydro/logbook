@@ -584,6 +584,8 @@ logbook trips --year 2026                     # runs of nights away: route, plac
 logbook ledger --month 2026-06                # the transactions at the stay and in the trip, per day; shares per person
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints
 logbook trip trip:2026-06-15:2026-06-20       # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
+logbook year 2026 --html ~/2026.html --print  # the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter
+logbook trip trip:2026-06-15:2026-06-20 --html ~/week.html --print  # the same for one trip, a spread a day; docs/print.md says how to make the PDF
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
 logbook show asset solvind                    # trips aboard, nights, people, the track's summary
 logbook show place Office                     # visits, people, photos
