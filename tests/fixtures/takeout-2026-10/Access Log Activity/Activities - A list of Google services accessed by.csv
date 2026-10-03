@@ -1,0 +1,7 @@
+Gaia ID,Activity Timestamp,IP Address,Proxiedhost IP Address,Is Non-routable IP Address,Activity Country,Activity Region,Activity City,User Agent String,Product Name,Sub-Product Name,Activity Type,Gmail Access Channel
+000000000000000000001,2026-10-01 06:59:59 UTC,203.0.113.7,,false,NO,Oslo,Oslo,"Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15",Gmail,Gmail Mobile,Sign in,WEB
+000000000000000000001,2026-10-01 07:00:00 UTC,203.0.113.7,,false,NO,Akershus,Nesodden,"Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15",Gmail,,Access,IMAP
+000000000000000000001,2026-10-02 18:30:15 UTC,198.51.100.20,10.0.0.5,true,CH,Zurich,Zurich,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",Google Account,,Password change,
+000000000000000000001,2026-10-03T09:15:00Z,198.51.100.21,,false,,,,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",Google Drive,Drive Web,Access,
+000000000000000000001,2026-10-03 09:15:00 UTC,198.51.100.22,,false,,,,"Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Safari/605.1.15",Google Drive,Drive Web,Access,
+000000000000000000001,,203.0.113.7,,false,NO,Oslo,Oslo,"Mozilla/5.0 (iPhone)",Gmail,,Sign in,WEB

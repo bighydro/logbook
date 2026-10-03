@@ -1,0 +1,5 @@
+Time,Transaction ID,Description,Product,Payment method,Status,Amount,Fee,Net amount
+2026-10-01 10:35:12 UTC,TXN-0000000101,Kaffebrenneriet Oslo,Google Pay,Visa •••• 1234,Completed,-129.00 NOK,,-129.00 NOK
+2026-10-02 18:02:00 UTC,TXN-0000000102,Oslo Marina AS,Google Pay,Visa •••• 1234,Completed,NOK 2450.00,,NOK 2450.00
+2026-10-02 23:30:00 UTC,TXN-0000000103,Nesodden ferry,Google Pay,Visa •••• 1234,Pending,-NOK 45.00,,
+,TXN-0000000104,No time,Google Pay,Visa •••• 1234,Completed,-10.00 NOK,,-10.00 NOK

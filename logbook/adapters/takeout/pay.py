@@ -3,7 +3,10 @@ the passes that are tickets.
 
 Takeout writes `Takeout/Google Pay/Google transactions/transactions_<account>.csv` — `Time`,
 `Transaction ID`, `Description`, `Product`, `Payment Method`, `Status`, `Amount`, `Fee`, `Net Amount`,
-the amount as text with the currency in it (`-129.00 NOK`, `NOK 2450.00`, `€4,99`) — and
+the amount as text with the currency in it (`-129.00 NOK`, `NOK 2450.00`, `€4,99`), or a bare number
+with a `Currency` column beside it; the time in any clock Takeout has written (`times`): `Jun 10, 2026,
+10:35:12 AM UTC`, RFC3339, and in the export of 2026 `2026-10-01 10:35:12 UTC`, under `Time` or
+`Date` — and
 `Takeout/Google Pay/Passes/<id>.json`, one JSON per pass in Wallet, with `classType` (`EVENT_TICKET`,
 `TRANSIT`, `FLIGHT`, `LOYALTY`, `OFFER`, `GIFT_CARD`), `state`, `issuerName` and the fields of its
 class. Google renames and reorders the CSV columns between exports, so they are found by what the
@@ -17,7 +20,8 @@ option of this adapter), source `google-takeout`, `provider` `google-pay`, `at` 
 product or description says refund, received, reversal or credit. `currency` is the ISO code in the
 amount text, or the symbol's code (`€` EUR, `£` GBP, `$` USD); `kr` names three currencies, so a row
 with no code is skipped and counted (`skipped_no_currency`), as is a row with no amount or no time.
-`merchant` is the description, `account` the payment method as shown (a masked card), `status`
+A row with no transaction id is keyed `pay:<time>:<sha256(description|amount|currency)[:16]>` and
+counted. `merchant` is the description, `account` the payment method as shown (a masked card), `status`
 `posted` for Completed, `pending` for Pending, else the word lower-cased; `date` the day in the
 record's zone when it differs from the UTC day. The product, the amount text as written, the fee and
 the net amount go under `extra`.
@@ -59,18 +63,19 @@ EVENT_TIER = 1
 EVENT_SCHEMA = "event/v1"
 
 SNIFF_BYTES = 4096
-COLUMNS = {
-    "time": ("time",),
-    "id": ("transaction", "id"),
-    "description": ("description",),
-    "product": ("product",),
-    "method": ("payment", "method"),
-    "status": ("status",),
-    "amount": ("amount",),
-    "fee": ("fee",),
-    "net": ("net",),
+COLUMNS = {  # `net` and `fee` before `amount`, so `Net amount` is never taken for the amount
+    "time": (("time",), ("date",)),
+    "id": (("transaction", "id"), ("order", "id")),
+    "description": (("description",), ("merchant",)),
+    "product": (("product",),),
+    "method": (("payment", "method"), ("card",)),
+    "status": (("status",),),
+    "currency": (("currency",),),
+    "fee": (("fee",),),
+    "net": (("net",),),
+    "amount": (("amount",),),
 }
-REQUIRED = ("time", "id", "amount")
+REQUIRED = ("time", "amount")
 CODE = re.compile(r"\b([A-Z]{3})\b")
 SYMBOLS = {"€": "EUR", "£": "GBP", "$": "USD"}
 NUMBER = re.compile(r"[-+]?\d[\d.,]*")
@@ -127,9 +132,8 @@ def _kind_of(path: Path) -> str | None:
         head = fh.read(SNIFF_BYTES)
     if suffix == ".csv":
         header = head.split(b"\n", 1)[0].lower()
-        return (
-            "transactions" if b"transaction" in header and b"amount" in header and b"time" in header else None
-        )
+        timed = b"time" in header or b"date" in header
+        return "transactions" if b"transaction" in header and b"amount" in header and timed else None
     if head.lstrip().startswith(b"{") and _pass(path) is not None:
         return "pass"
     return None
@@ -222,11 +226,16 @@ def _transactions(file: Path, tz: str, counts: dict[str, int]) -> Iterator[dict[
             if amount is None:
                 _count(counts, "skipped_no_amount")
                 continue
-            currency = _currency(text)
+            currency = _currency(text) or cell(row, "currency").upper()
             if not currency:
                 _count(counts, "skipped_no_currency")
                 continue
-            raw_id = f"pay:{cell(row, 'id')}"
+            if transaction_id := cell(row, "id"):
+                raw_id = f"pay:{transaction_id}"
+            else:
+                digest = hashlib.sha256(f"{description}|{text}|{currency}".encode()).hexdigest()[:16]
+                raw_id = f"pay:{at}:{digest}"
+                _count(counts, "no_transaction_id")
             payload: dict[str, Any] = {
                 "schema": TRANSACTION_SCHEMA,
                 "raw_id": raw_id,

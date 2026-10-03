@@ -114,3 +114,53 @@ def test_cli_add_uses_owner_emails_dry_run_writes_nothing_and_a_re_add_appends_n
     assert "added 4 lines from google-takeout-meet" in out and "1 without a conference id" in out
     cli.main(["add", str(FIX)])
     assert "added 0 lines from google-takeout-meet" in capsys.readouterr().out
+
+
+FIX_2026 = ROOT / "tests" / "fixtures" / "takeout-2026-10" / "Google Meet"
+
+
+def test_the_2026_clock_reads_every_call():
+    counts: dict[str, int] = {}
+    lines = list(meet.run(FIX_2026, timezone=TZ, owner_emails=OWNER, counts=counts))
+    assert [line["at"] for line in lines] == [
+        "2026-10-01T14:00:00Z",
+        "2026-10-02T08:30:00Z",
+        "2026-10-02T16:00:00Z",
+    ]
+    assert counts == {"skipped_no_timestamp": 1}
+    first = lines[0]
+    assert first["end"] == "2026-10-01T14:30:12Z" and first["payload"]["raw_id"] == "meet:c-1a2b3c4d5e6f"
+    assert first["payload"]["direction"] == "outgoing" and first["payload"]["duration_s"] == 1812
+
+
+def test_renamed_columns_an_end_time_instead_of_a_duration_and_a_clock_duration_still_read(tmp_path):
+    csv = tmp_path / "Call history.csv"
+    csv.write_text(
+        "Conference ID,Meeting code,Start time (UTC),End time (UTC),Participant count,Organiser email,"
+        "Product type,Device type,Call type\n"
+        "c-aa,abc-defg-hij,2026-10-01 14:00:00 UTC,2026-10-01 14:30:12 UTC,2,per.persona@example.org,"
+        "Google Meet,Desktop,Video\n"
+        "c-bb,klm-nopq-rst,2026-10-02 08:30:00 UTC,,4,kari.nordmann@example.org,Google Meet,Mobile,Video\n",
+        encoding="utf-8",
+    )
+    assert meet.sniff(csv) and adapters.find(csv) is meet
+    lines = list(meet.run(csv, timezone=TZ, owner_emails=OWNER))
+    assert len(lines) == 2
+    assert lines[0]["payload"]["duration_s"] == 1812 and lines[0]["end"] == "2026-10-01T14:30:12Z"
+    assert (
+        lines[0]["payload"]["direction"] == "outgoing" and lines[0]["payload"]["extra"]["role"] == "organizer"
+    )
+    assert lines[0]["payload"]["extra"]["meeting_code"] == "abc-defg-hij"
+    assert lines[1]["payload"]["duration_s"] == 0 and lines[1]["end"] is None
+    assert lines[1]["payload"]["counterparty"] == {"kind": "email", "value": "kari.nordmann@example.org"}
+    clock = tmp_path / "clock.csv"
+    clock.write_text(
+        "Meeting code,Start time,Duration\nabc-defg-hij,2026-10-01 14:00:00 UTC,0:30:12\n", encoding="utf-8"
+    )
+    assert meet.sniff(clock)
+    (line,) = meet.run(clock, timezone=TZ, owner_emails=OWNER)
+    assert line["payload"]["duration_s"] == 1812 and line["end"] == "2026-10-01T14:30:12Z"
+    assert (
+        meet._seconds("1812") == 1812 and meet._seconds("0:30:12") == 1812 and meet._seconds("30:12") == 1812
+    )
+    assert meet._seconds("1h 2m 3s") == 3723 and meet._seconds("45 min") == 2700 and meet._seconds("") == 0
