@@ -734,6 +734,14 @@ The same ceiling as a crossing applies, per destination, and a page is a crossin
 line's hash, a file the manifest does not name — is refused with the check named and nothing of it is kept.
 The two pages under `tests/fixtures/share/` are the fixture a second implementation reads.
 
+## Opening it in Obsidian
+
+`logbook export vault ~/Vault` renders the record as a folder of plain Markdown with wikilinks — a page per
+day, place, person, trip and year — that Obsidian or Logseq opens as a vault, its graph view the record's
+shape ([docs/vault.md](vault.md)). It is tier-gated exactly like a crossing: tier 1 by default, the shape of
+every day and no text of any note or message; `--tier 1,2` when `policy/crossing.json` names `vault` with a
+ceiling of 2. Every run appends one `crossing/v1` line, and re-running rewrites only the files that changed.
+
 ## Asking an agent
 
 `logbook mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
