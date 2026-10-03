@@ -4,18 +4,15 @@ on:
   pull_request:
   schedule:
     - cron: "17 4 * * 1"   # weekly scorecard
-    - cron: "23 3 * * *"   # nightly: the whole matrix, Windows and the slow tier included
+    - cron: "23 3 * * *"   # nightly: the whole matrix with the slow tier
 permissions: { contents: read }
 jobs:
   test:
-    # The six `test (<os>, <python>)` checks are required by name on main; never rename a job or an entry.
-    # Windows takes 12-13 minutes where the others take 7-9, so on a pull request its two entries are skipped:
-    # they are the `test-windows` job below, named so its checks keep the same names. (A job-level `if`
-    # cannot read the matrix, and a workflow-level filter would leave the required checks pending.)
+    # The six `test (<os>, <python>)` checks are required by name on main; never rename the job or an entry.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.12", "3.13"]
     runs-on: ${{ matrix.os }}
     env:
@@ -38,34 +35,6 @@ jobs:
         run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
       - uses: codecov/codecov-action@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
-  test-windows:
-    # The Windows half of `test`: the same steps, kept identical. Its checks are `test (windows-latest, 3.12)`
-    # and `test (windows-latest, 3.13)`, the names the ruleset requires; a job skipped by `if` reports
-    # "skipped" under them, which the ruleset accepts. Runs on push to main and nightly, not on a pull request.
-    name: test (${{ matrix.os }}, ${{ matrix.python }})
-    if: github.event_name != 'pull_request'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-        python: ["3.12", "3.13"]
-    runs-on: ${{ matrix.os }}
-    env:
-      LOGBOOK_SLOW: "1"
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
-        with:
-          python-version: ${{ matrix.python }}
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          cache-suffix: py${{ matrix.python }}
-      - run: uv sync --group dev
-      - run: uv run ruff check . && uv run ruff format --check .
-      - run: uv run mypy logbook
-      - run: uv run pytest -n auto --durations=15 --cov=logbook --cov-report=xml
-      - name: conformance
-        run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
   nix:
     runs-on: ubuntu-latest
     steps:
