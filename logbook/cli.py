@@ -1,6 +1,6 @@
 """logbook — init · add · sync · import-backup · inbox · infer · transcribe · retract · show · stats ·
-derive · places · rollup · trips · trip · ledger · keepers · promises · serve · verify · doctor · export ·
-index · migrate · assets · sources · mcp · backup. Three verbs, twenty-two rare."""
+derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve · verify · doctor ·
+export · index · migrate · assets · sources · mcp · backup. Three verbs, twenty-three rare."""
 
 from __future__ import annotations
 
@@ -56,6 +56,7 @@ from . import (
     search,
     serve,
     stays,
+    taskdone,
     transcribe,
     trip_page,
     trips,
@@ -1526,6 +1527,72 @@ def _promises_done(lb: Logbook, a: argparse.Namespace) -> None:
     print(
         f"#{line['seq']} {line['at']}  done: \u201c{found.match.quote}\u201d"
         f"  ({found.day}, task/v1 line {line['id']})"
+    )
+
+
+def cmd_tasks(a: argparse.Namespace) -> None:
+    """`tasks [--open] [--propose-done] [--json]`: the record's tasks (`task/v1`, RFC 0016), each as
+    its latest standing snapshot (`logbook.taskdone`); `--propose-done` adds, for every open task,
+    the mail, calendar entry or transaction of the fortnight after it that the rules read as evidence
+    it was done, each with its line id, as proposals and never as facts. `tasks done <id> [--evidence
+    LINE-ID]` appends the `task/v1` line that marks one done and nothing else."""
+    lb = Logbook.find()
+    if a.verb == "done":
+        _tasks_done(lb, a)
+        return
+    report = taskdone.propose(lb) if a.propose_done else taskdone.read(lb)
+    found = [t for t in report.tasks if not a.open or t.open]
+    if a.json:
+        out = {
+            "open_only": bool(a.open),
+            "propose_done": bool(a.propose_done),
+            "window_days": report.window_days,
+            "matcher": report.matcher or None,
+            "tasks": [t.to_json() for t in found],
+            "proposals": [p.to_json() for p in report.proposals],
+        }
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    clock = lambda at: _clock(at, zone)  # noqa: E731
+    texts = (
+        taskdone.proposal_rows(report, clock)
+        if a.propose_done
+        else taskdone.rows(report, found, clock, open_only=bool(a.open))
+    )
+    for text in texts:
+        print(text)
+
+
+def _tasks_done(lb: Logbook, a: argparse.Namespace) -> None:
+    report = taskdone.read(lb)
+    found = next((t for t in report.tasks if t.id == a.id), None)
+    if found is None:
+        print(f"tasks: no task {a.id}; `logbook tasks` lists them with their ids", file=sys.stderr)
+        sys.exit(2)
+    if not found.open:
+        print(f"already {found.status}: “{found.title}” (task line {found.line})")
+        return
+    if a.evidence is not None:
+        with lb.index() as idx:
+            line = idx.by_id(a.evidence)
+        if line is None:
+            print(
+                f"tasks: no line {a.evidence} in the record; `--evidence` names a line by its id",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+    at = utc(now_utc())
+    line = lb.append(
+        at=at,
+        source="manual",
+        kind=taskdone.TASK,
+        tier=taskdone.TASK_TIER,
+        payload=taskdone.draft_done(found, at, a.evidence),
+    )
+    tail = f", evidence {a.evidence}" if a.evidence else ""
+    print(
+        f"#{line['seq']} {line['at']}  done: “{found.title}”  ({found.day}, task/v1 line {line['id']}{tail})"
     )
 
 
@@ -4266,6 +4333,30 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("id", help="the proposal's id, as `promises` prints it")
     v.add_argument("--note", metavar="TEXT", help="your words on how it was kept, kept in the task's notes")
     v.set_defaults(fn=cmd_promises)
+    s = sub.add_parser(
+        "tasks",
+        help="the tasks (task/v1), each as it stands; `--propose-done` the evidence an open one was done;"
+        " `done <id>` closes one",
+    )
+    s.add_argument("--open", action="store_true", help="only the tasks still open")
+    s.add_argument(
+        "--propose-done",
+        action="store_true",
+        help="for every open task, the mail, calendar entry or transaction of the"
+        f" {taskdone.WINDOW.days} days after it that reads as evidence it was done, by rules;"
+        " proposals, with the evidence line's id",
+    )
+    s.add_argument("--json", action="store_true", help="the report as one JSON object, with line ids")
+    s.set_defaults(fn=cmd_tasks, verb=None)
+    verbs = s.add_subparsers(dest="verb", required=False)
+    v = verbs.add_parser("done", help="mark one task done: appends a task/v1 line (RFC 0016), nothing else")
+    v.add_argument("id", help="the task's id, as `tasks` prints it")
+    v.add_argument(
+        "--evidence",
+        metavar="LINE-ID",
+        help="the id of the line that shows it was done, kept under the task's extra",
+    )
+    v.set_defaults(fn=cmd_tasks)
     s = sub.add_parser(
         "serve", help="read the record in a browser, from this machine only (http://127.0.0.1:8765/)"
     )

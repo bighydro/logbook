@@ -377,6 +377,14 @@ class Index:
         found = self.db.execute("SELECT file, offset FROM lines WHERE seq = ?", (seq,)).fetchall()
         return self._read(found)[0] if found else None
 
+    def by_id(self, line_id: str) -> Line | None:
+        """The line with this id, or None; the first in chain order when the record holds the id
+        twice (`id` is outside the hash, SPEC §2, so a writer could repeat one)."""
+        found = self.db.execute(
+            "SELECT file, offset FROM lines WHERE id = ? ORDER BY seq LIMIT 1", (line_id,)
+        ).fetchall()
+        return self._read(found)[0] if found else None
+
     def retractions(self) -> list[Line]:
         """Every retraction line, in chain order (the (kind, at) index)."""
         found = self.db.execute(
