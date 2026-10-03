@@ -449,3 +449,18 @@ def test_a_retracted_or_superseded_story_is_not_about_any_day(
     assert (
         json.loads(_run(capsys, "day", "1961-05-04", "--json"))["stories"] == []
     )  # superseded stays superseded
+
+
+def test_a_file_with_windows_line_endings_reads_the_same(tmp_path: Path) -> None:
+    # git on Windows checks text out with CRLF, and a story typed there has it too: the front
+    # matter, the heading and the text read the same, only the digest (the raw bytes) differs.
+    unix_bytes = (FIXTURES / "house-by-the-lake.md").read_bytes().replace(b"\r\n", b"\n")
+    lf, crlf = tmp_path / "lf" / "house-by-the-lake.md", tmp_path / "crlf" / "house-by-the-lake.md"
+    lf.parent.mkdir()
+    crlf.parent.mkdir()
+    lf.write_bytes(unix_bytes)  # the fixture itself is CRLF on a Windows checkout, so both are written here
+    crlf.write_bytes(unix_bytes.replace(b"\n", b"\r\n"))
+    unix, windows = story.read_file(lf), story.read_file(crlf)
+    assert windows.fields == unix.fields and windows.title == unix.title
+    assert windows.text == unix.text
+    assert windows.raw_id != unix.raw_id

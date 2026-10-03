@@ -236,6 +236,7 @@ def read_file(path: Path, timezone: str | None = None) -> Parsed:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as e:
         raise StoryError(f"{path.name} is not UTF-8 text") from e
+    text = text.replace("\r\n", "\n").replace("\r", "\n")  # a file typed or checked out on Windows
     if path.suffix.casefold() == ".json" or text.lstrip().startswith("{"):
         return _transcript(text, raw_id, timezone)
     return _prose(text, raw_id)
