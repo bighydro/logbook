@@ -603,6 +603,7 @@ logbook search '"with kari"' --since 2026-06-01   # full-text, literal, ranked, 
 logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
 logbook keepers --since 2026-06-01 --lane art
 logbook keepers --people                      # who appears on the keepers, per month: the faces the library named, proposed
+logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper photo (openlogbook[describe]); never a name, never a place
 
 logbook promises --judge                      # a local model reads every "I'll…" the rules found; the commitments, as proposals
 logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
@@ -653,7 +654,10 @@ same way.
 named Art is `art`. `add photos` writes them with the photo lines, and `infer keepers` reads the marks out of any
 library's photo lines once; `show <day>` lists the day's keepers first, as its hero photos. `keepers --people` is
 who appears on them per month, from the names your library gave its faces — proposed, never confirmed; a face's
-name is a person only when it is exactly a label a resolution line carries (`docs/adapters/photos.md`).
+name is a person only when it is exactly a label a resolution line carries (`docs/adapters/photos.md`). `describe keepers`
+(`docs/describe.md`) has a local vision model (`openlogbook[describe]`, mlx-vlm on Apple silicon) write one factual
+sentence and the visible things for each keeper whose file is reachable, as a derived note on the photo's day,
+once per photo; it is never told who is in the picture or where it was taken and may not guess either.
 
 **Promises** (`docs/promises.md`) are proposals, never facts: every sentence of a transcript or a note that reads
 as a first-person future or obligation, in English or German (`I'll send`, `we'll get back`, `let me`, `I need to`,
