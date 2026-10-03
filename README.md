@@ -588,6 +588,8 @@ logbook rollup money --year 2026              # the transactions by month, by co
 
 logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
 logbook ledger --month 2026-06                # the transactions at the stay and in the trip, per day; shares per person
+logbook lab chapters                          # the record as chapters: home changes, gaps in the track, long trips (docs/labs.md)
+logbook lab introductions                     # per person, the first day confirmed present with you and who else was there
 logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints
 logbook trip trip:2026-06-15:2026-06-20       # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
 logbook year 2026 --html ~/2026.html --print  # the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter

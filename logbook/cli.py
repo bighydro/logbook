@@ -1,7 +1,7 @@
 """logbook — init · setup · add · sync · import-backup · inbox · infer · transcribe · describe · retract ·
 show · stats · derive · places · rollup · trips · trip · ledger · keepers · promises · tasks · serve ·
-verify · doctor · export · share · receive · circle · index · migrate · assets · sources · mcp · backup.
-Three verbs, twenty-eight rare."""
+verify · doctor · export · share · receive · circle · index · migrate · assets · sources · mcp · backup · lab.
+Three verbs, twenty-nine rare."""
 
 from __future__ import annotations
 
@@ -99,6 +99,8 @@ from .adapters.takeout import places as takeout_places
 from .chain import Line, number_text
 from .export import day_packages, day_range, parse_day, write_package
 from .index import Index, local_date
+from .labs import chapters as lab_chapters
+from .labs import introductions as lab_introductions
 from .resolve import Ref, identities_from, labels
 from .store import (
     RETRACTION,
@@ -4110,6 +4112,39 @@ def cmd_trips(a: argparse.Namespace) -> None:
         print(text)
 
 
+def cmd_lab(a: argparse.Namespace) -> None:
+    """`lab introductions|chapters [--year YYYY | --since DAY --until DAY] [--json]`: the lab's readers
+    (docs/labs.md), derived from one reading of the window, clipped to the days the owner's track
+    covers, and never written. `introductions`: for every person, the first day the record confirms
+    them present at a stay with the owner and who else was confirmed present that day. `chapters
+    [--min-trip-nights N] [--min-gap-days N] [--min-home-nights N]`: the record cut into chapters
+    by home-region changes, gaps in the track and long trips, as a table of contents. A lab
+    reader's JSON may change between releases; neither is in SPEC §3.2."""
+    lb = Logbook.find()
+    try:
+        window = _rollup_days(lb, a)
+        if a.verb == "chapters":
+            settings = lab_chapters.Settings(a.min_trip_nights, a.min_gap_days, a.min_home_nights).check()
+        if window is None:
+            data = lab_chapters.empty(settings) if a.verb == "chapters" else lab_introductions.empty()
+        else:
+            read = reading.read(lb, window[0], window[1], _airports(a.airports))
+            if a.verb == "chapters":
+                data = lab_chapters.chapters(read, settings)
+            else:
+                whole = reading.record_days(lb, "location")
+                data = lab_introductions.first_seen(read, whole[0] if whole else None)
+    except (ValueError, stays.SettingsError) as e:
+        print(f"lab {a.verb}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2))
+        return
+    rows = lab_chapters.rows(data) if a.verb == "chapters" else lab_introductions.rows(data)
+    for text in rows:
+        print(text)
+
+
 def cmd_ledger(a: argparse.Namespace) -> None:
     """`ledger [--month YYYY-MM | --trip ID] [--json]`: the transaction lines (tier 3) of the window
     in context — each at the stay the owner was in, in its trip, per day, a shared expense's shares
@@ -5351,6 +5386,52 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
     s.set_defaults(fn=cmd_trips)
+    s = sub.add_parser(
+        "lab",
+        help="readers still finding their shape (docs/labs.md): introductions, chapters; read-only",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    for name, text in (
+        (
+            "introductions",
+            "per person, the first day confirmed present with the owner and who else was there",
+        ),
+        ("chapters", "the record cut into chapters by home changes, gaps in the track and long trips"),
+    ):
+        v = verbs.add_parser(name, help=text)
+        v.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
+        v.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+        v.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
+        v.add_argument(
+            "--airports",
+            metavar="FILE",
+            help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+        )
+        v.add_argument("--json", action="store_true", help="one JSON object, with line ids")
+        if name == "chapters":
+            v.add_argument(
+                "--min-trip-nights",
+                type=int,
+                default=lab_chapters.MIN_TRIP_NIGHTS,
+                metavar="N",
+                help=f"a trip this long is a chapter of its own (default {lab_chapters.MIN_TRIP_NIGHTS})",
+            )
+            v.add_argument(
+                "--min-gap-days",
+                type=int,
+                default=lab_chapters.MIN_GAP_DAYS,
+                metavar="N",
+                help=f"days without a location line that make a gap (default {lab_chapters.MIN_GAP_DAYS})",
+            )
+            v.add_argument(
+                "--min-home-nights",
+                type=int,
+                default=lab_chapters.MIN_HOME_NIGHTS,
+                metavar="N",
+                help="without dates in places.json, a home place holding this many nights is the home of the"
+                f" time (default {lab_chapters.MIN_HOME_NIGHTS})",
+            )
+        v.set_defaults(fn=cmd_lab)
     s = sub.add_parser(
         "ledger", help="the transactions in context: at the stay, in the trip, per day; shares per person"
     )
