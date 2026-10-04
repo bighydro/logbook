@@ -25,7 +25,7 @@ Then your own: `logbook setup` asks one question at a time ([the first hour](doc
 
 ## What it does
 
-**The record.** Everything that happened to you, written once, as JSON lines in files you own. One file per month, every line hash-chained to the one before, nothing ever edited or pruned. Fifty-odd adapters read the exports and app stores you already have: Google Takeout, an iPhone backup, Apple Health, Photos, WhatsApp, iMessage, mail, calendars, flights, music, money, boats and aircraft. Live sources (`sync`) write the same line for the same event, so backfill and live never duplicate.
+**The record.** Everything that happened to you, written once, as JSON lines in files you own. One file per month, every line hash-chained to the one before, nothing ever edited or pruned. Fifty-odd adapters read the exports and app stores you already have: Google Takeout, an iPhone backup, Apple Health, Photos, WhatsApp, iMessage, mail, calendars, flights, music, money, boats and aircraft. Live sources (`sync`) write the same line for the same event, so backfill and live never duplicate. What a tier 2 or 3 line says can be sealed at rest with [age](https://age-encryption.org) to keys only you hold; the chain verifies without any key ([sealing](docs/tour.md#sealing-tiers-2-and-3), [RFC 0029](rfcs/0029-encryption-at-rest.md)).
 
 **The recount.** The record reads your life back to you without your effort. `day` is one calendar day: the night, the stays, who was there, health, weather, what you wrote. `trips` finds runs of nights away; `year` composes a year; `digest` is the day in 25 lines with one question you may ignore; `rollup`, `ledger`, `people`, `promises`, `tasks` and `search` each read one aspect. `serve` shows it in a browser on this machine, `year --print` lays it out for paper, `export vault` renders it for Obsidian or Logseq, and `mcp` serves it to an agent on this machine behind a tier gate.
 
@@ -41,7 +41,7 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 4. **Nothing leaves without a name.** There is no server and no account. A share is a signed page handed to one named person, and the policy file says how much each person may receive.
 5. **Reading never opens a connection.** Every reader touches the record and the tables shipped in the package, nothing else. A socket opens only behind a command that says so, and a test enforces it.
 6. **Adapters are pure.** Export in, observations out. No network on the default path, no write to the source, and every app store is checked with `PRAGMA table_info` before it is read.
-7. **Every line has a tier.** 1 is where you were, 2 is what you said, 3 is money and health. Derived data inherits the highest tier of its evidence, and tiers 2 and 3 cross to no one by default.
+7. **Every line has a tier.** 1 is where you were, 2 is what you said, 3 is money and health. Derived data inherits the highest tier of its evidence, tiers 2 and 3 cross to no one by default, and a record with recipients seals them at rest.
 8. **Reveal, never reward.** No feed, no followers, no likes, no counts, no streaks, no ranking. The one evening question can be ignored forever.
 9. **Humans write, agents operate.** An agent may import, derive and draft. A note, a confirmation and a visibility decision are the owner's alone, enforced in the lowest layer.
 10. **The spec is the product.** The envelope changes only with a version bump, a regenerated conformance fixture and a decision record, and two independent implementations must agree before 1.0 is frozen.
@@ -69,10 +69,10 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 | [openlogbook](https://github.com/bighydro/logbook) (this repository) | Python | reference |
 | [logbook-ts](https://github.com/bighydro/logbook-ts) | TypeScript | independent, written from the spec alone |
 
-Both reproduce the conformance head in `conformance/expected.json`, and CI appends a line with one and verifies it with the other on every pull request. Level 2, the sealed sample `conformance/sample-logbook-sealed` with its published identity, is the reference's so far (SPEC §6).
+Both reproduce the conformance head in `conformance/expected.json` (Level 1), and CI appends a line with one and verifies it with the other on every pull request. Level 2, the sealed sample `conformance/sample-logbook-sealed` opened with the published fixture identity (`conformance/expected-sealed.json`), is the reference's so far; logbook-ts's Level 2 is the next step of RFC 0029 §14. Level 2, the sealed sample `conformance/sample-logbook-sealed` with its published identity, is the reference's so far (SPEC §6).
 
 ## Status
 
-Format `logbook/0.2`, package 0.5.0, status alpha. The record, the readers and sharing by file all ship; encryption at rest for tiers 2 and 3 and a transport for the circle are the next format work ([ROADMAP.md](ROADMAP.md)).
+Format `logbook/0.3`, package 0.5.0, status alpha. The record, the readers, sharing by file and sealing of tiers 2 and 3 at rest all ship; a transport for the circle is the next format work ([ROADMAP.md](ROADMAP.md)).
 
 Apache-2.0 for code. The specification is CC0.
