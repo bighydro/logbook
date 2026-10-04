@@ -18,6 +18,7 @@ google-takeout-activity file       disabled (every search and app opened; opt in
 google-takeout-chat  file       enabled
 google-takeout-chrome file       enabled
 google-takeout-contacts file       enabled
+google-takeout-fit   file       enabled
 google-takeout-home  file       enabled
 google-takeout-keep  file       enabled
 google-takeout-location file       enabled
@@ -54,4 +55,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-56 adapters, 2 disabled; the list is <root>/policy/import.json
+57 adapters, 2 disabled; the list is <root>/policy/import.json
