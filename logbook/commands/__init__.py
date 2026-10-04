@@ -21,8 +21,8 @@ A command is two functions in its family's module: `<command>_arguments(sub)` de
 arguments and sets `fn=cmd_<command>`; `cmd_<command>(a)` runs it. `parser.py` lists the
 `_arguments` functions in the order `logbook --help` shows them. `common.py` holds what the
 families share, `skips.py` the phrases for an adapter's counts, `rows.py` the row `show` prints
-for one line. A new command goes in the module whose family it belongs to, or a new module when
-it starts a family, plus its line in `parser.py`.
+for one line, `setup.py` the wizard behind `logbook setup`. A new command goes in the module
+whose family it belongs to, or a new module when it starts a family, plus its line in `parser.py`.
 
 `logbook --help` builds every family's arguments and must stay cheap: a family imports an
 adapter (`logbook.contrib.adapters.*`) or a labs module (`logbook.labs.*`: the model

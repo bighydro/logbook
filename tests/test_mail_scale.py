@@ -26,7 +26,7 @@ PROGRESS_EVERY = 10_000
 MEASURE = """
 import resource, sys, time
 from pathlib import Path
-from logbook.adapters import mail
+from logbook.contrib.adapters import mail
 path = Path(sys.argv[1])
 reports = []
 t = time.perf_counter()

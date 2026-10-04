@@ -51,8 +51,8 @@ from urllib.request import Request, urlopen
 
 from ...core.attachments import reference
 from ...core.store import uuid7
-from . import transcript
-from .transcript import KIND, TIER, Turn, draft
+from ...core.transcripts import Turn, _stamp_of, participants
+from .transcript import KIND, TIER, draft
 
 __all__ = [
     "ENV",
@@ -233,7 +233,7 @@ def transcript_of(note: Mapping[str, Any], segments: list[Any]) -> dict[str, Any
         turns=turns,
         tier=TIER,
         title=str(title) if isinstance(title, str) and title else None,
-        participants=transcript.participants(turns, _attendees(note.get("attendees"))),
+        participants=participants(turns, _attendees(note.get("attendees"))),
         source_uri=str(web_url) if isinstance(web_url, str) and web_url else None,
         extra=extra,
     )
@@ -397,4 +397,4 @@ def _attendees(attendees: object) -> list[dict[str, Any]]:
 def _stamp(value: object) -> str | None:
     if not isinstance(value, str) or not value:
         return None
-    return transcript._stamp_of(value, None)
+    return _stamp_of(value, None)

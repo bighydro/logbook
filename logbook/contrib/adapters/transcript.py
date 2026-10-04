@@ -33,13 +33,24 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from ...core.attachments import reference
+
+# The parser is core (`logbook.core.transcripts`): `search` and `promises` read it there. These
+# names stay reachable here too, for the code that learned them on this module.
+from ...core.transcripts import ARROW as ARROW
+from ...core.transcripts import SPEAKER as SPEAKER
+from ...core.transcripts import TIMING as TIMING
+from ...core.transcripts import Parsed as Parsed
+from ...core.transcripts import Turn as Turn
+from ...core.transcripts import _format_stamp, _parse_stamp, _stamp_of
+from ...core.transcripts import counts_of as counts_of
+from ...core.transcripts import parse_text as parse_text
+from ...core.transcripts import participants as participants
 
 NAME = "transcript"
 KIND = "transcript"
@@ -58,47 +69,13 @@ NO_START = "skipped_no_start"
 NOT_TRANSCRIPT = "skipped_not_transcript"
 SNIFF_BYTES = 4096
 
-TIMING = re.compile(r"(?:(\d+):)?(\d\d):(\d\d)[.,](\d{1,3})")
-ARROW = "-->"
 SRT_HEAD = re.compile(r"^\s*\d+\s*\r?\n\d\d:\d\d:\d\d,\d{3}\s*-->")
-VOICE = re.compile(r"<v(?:\.[^\s>]*)?\s+([^>]+)>")
-TAG = re.compile(r"</?[^>]+>")
 # `[00:12:30] **Name:** text`, `Name: text`; a name is short and has no colon
-SPEAKER = re.compile(r"^\s*(?:\[[^\]]*\]\s*)?[*_]{0,2}([^:*_\n]{1,60}?)[*_]{0,2}:[*_]{0,2}\s+(\S.*)$")
-HEADING = re.compile(r"^#{1,6}\s+(.*\S)\s*$")
-EMAIL_IN = re.compile(r"^(.*?)\s*[<(]\s*([^\s<>()]+@[^\s<>()]+)\s*[>)]\s*$")
 # a start in the file name: ISO-ish date and time, Zoom's GMT stamp, or a bare date
 NAME_STAMP = re.compile(
     r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?:[T _](\d{2})[-:.h]?(\d{2})(?:[-:.m]?(\d{2}))?\s*(Z|UTC)?)?(?!\d)"
 )
 ZOOM_STAMP = re.compile(r"GMT(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})")
-
-
-@dataclass(frozen=True)
-class Turn:
-    """One speaker turn as the source labels it; `speaker` None when the source names nobody."""
-
-    speaker: str | None
-    text: str
-
-
-@dataclass
-class Parsed:
-    """What a transcript file says, before it is a line."""
-
-    format: str
-    turns: list[Turn] = field(default_factory=list)
-    title: str | None = None
-    started_at: str | None = None  # RFC3339 UTC, when the file says
-    ended_at: str | None = None
-    duration_s: float | None = None  # from cue offsets, when the file has them
-    named: list[dict[str, Any]] = field(default_factory=list)  # participants the front matter names
-
-    @property
-    def participants(self) -> list[dict[str, Any]]:
-        """Front-matter participants first, then every speaker label not among them, in order of
-        first appearance. Source-native, never resolved."""
-        return participants(self.turns, self.named)
 
 
 def sniff(path: Path) -> bool:
@@ -160,15 +137,6 @@ def parse(path: Path) -> Parsed:
     return parse_text(data.decode("utf-8-sig"), _format(path, data) or "text")
 
 
-def parse_text(text: str, fmt: str) -> Parsed:
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    if fmt == "vtt":
-        return _cues(text, "vtt")
-    if fmt == "srt":
-        return _cues(text, "srt")
-    return _prose(text, fmt)
-
-
 def draft(
     *,
     source: str,
@@ -207,27 +175,6 @@ def draft(
         "tier": tier,
         "payload": payload,
     }
-
-
-def counts_of(turns: list[Turn], at: str | None, end: str | None) -> dict[str, Any]:
-    """`turns`, `speakers`, `unattributed` (when any) and `duration_s` (when both ends are known)."""
-    out: dict[str, Any] = {"turns": len(turns), "speakers": len({t.speaker for t in turns if t.speaker})}
-    unattributed = sum(1 for t in turns if not t.speaker)
-    if unattributed:
-        out["unattributed"] = unattributed
-    if at and end:
-        out["duration_s"] = (_parse_stamp(end) - _parse_stamp(at)).total_seconds()
-    return out
-
-
-def participants(turns: list[Turn], named: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    out = list(named or [])
-    seen = {str(p.get("name")) for p in out}
-    for t in turns:
-        if t.speaker and t.speaker not in seen:
-            seen.add(t.speaker)
-            out.append({"name": t.speaker})
-    return out
 
 
 def _speakers(turns: list[Turn]) -> list[dict[str, Any]]:
@@ -378,130 +325,10 @@ def _count(counts: dict[str, int], key: str) -> None:
 # -- cues: WebVTT and SRT --------------------------------------------------------------------------
 
 
-def _cues(text: str, fmt: str) -> Parsed:
-    parsed = Parsed(format=fmt)
-    last_end: float | None = None
-    for block in re.split(r"\n{2,}", text.strip("\n")):
-        lines = [line for line in block.split("\n") if line.strip()]
-        if not lines or lines[0].startswith(("WEBVTT", "NOTE", "STYLE", "REGION")):
-            continue
-        timing = next((i for i, line in enumerate(lines) if ARROW in line), None)
-        if timing is None:
-            continue
-        end_offset = _end_offset(lines[timing])
-        if end_offset is not None and (last_end is None or end_offset > last_end):
-            last_end = end_offset
-        body = " ".join(line.strip() for line in lines[timing + 1 :])
-        voice = VOICE.search(body)
-        body = TAG.sub("", body).strip()
-        speaker: str | None = None
-        if voice:
-            speaker = voice.group(1).strip()
-        else:
-            speaker, body = _split_speaker(body)
-        if body:
-            parsed.turns.append(Turn(speaker, body))
-    parsed.duration_s = last_end
-    return parsed
-
-
-def _end_offset(timing: str) -> float | None:
-    """The cue's end, in seconds from the start of the recording."""
-    _start, _, rest = timing.partition(ARROW)
-    m = TIMING.search(rest)
-    if m is None:
-        return None
-    hours, minutes, seconds, fraction = m.groups()
-    return int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds) + int(fraction.ljust(3, "0")) / 1000
-
-
-def _split_speaker(text: str) -> tuple[str | None, str]:
-    m = SPEAKER.match(text)
-    if m is None:
-        return None, text.strip()
-    return m.group(1).strip(), m.group(2).strip()
-
-
 # -- prose: Markdown and plain text ------------------------------------------------------------------
 
 
-def _prose(text: str, fmt: str) -> Parsed:
-    parsed = Parsed(format=fmt)
-    body = _front_matter(text, parsed)
-    current: Turn | None = None
-    for raw in body.split("\n"):
-        line = raw.strip()
-        if not line:
-            current = None
-            continue
-        heading = HEADING.match(line)
-        if heading:
-            if parsed.title is None:
-                parsed.title = heading.group(1)
-            current = None
-            continue
-        speaker, said = _split_speaker(line)
-        if speaker is None and current is not None:
-            current = Turn(current.speaker, f"{current.text} {said}")
-            parsed.turns[-1] = current
-            continue
-        current = Turn(speaker, said)
-        parsed.turns.append(current)
-    return parsed
-
-
-def _front_matter(text: str, parsed: Parsed) -> str:
-    """Read a leading `---` block into `parsed`; the rest of the text."""
-    if not text.startswith("---\n"):
-        return text
-    close = text.find("\n---", 4)
-    if close < 0:
-        return text
-    block, rest = text[4:close], text[close + 4 :]
-    key: str | None = None
-    for raw in block.split("\n"):
-        if not raw.strip():
-            continue
-        item = re.match(r"^\s+-\s+(.*)$", raw)
-        if item and key == "participants":
-            parsed.named.append(_participant(item.group(1).strip()))
-            continue
-        name, sep, value = raw.partition(":")
-        if not sep:
-            continue
-        key, value = name.strip().lower(), value.strip()
-        if key == "title" and value:
-            parsed.title = value.strip("\"'")
-        elif key in ("started_at", "start", "at") and value:
-            parsed.started_at = _stamp_of(value, None)
-        elif key in ("ended_at", "end") and value:
-            parsed.ended_at = _stamp_of(value, None)
-        elif key == "participants" and value:
-            parsed.named.extend(_participant(p.strip()) for p in value.strip("[]").split(",") if p.strip())
-    return rest.lstrip("\n")
-
-
-def _participant(text: str) -> dict[str, Any]:
-    m = EMAIL_IN.match(text)
-    if m and m.group(1).strip():
-        return {"name": m.group(1).strip(), "email": m.group(2)}
-    if m:
-        return {"name": m.group(2), "email": m.group(2)}
-    return {"name": text.strip("\"'")}
-
-
 # -- times -----------------------------------------------------------------------------------------
-
-
-def _stamp_of(value: str, timezone: str | None) -> str | None:
-    """`value` as RFC3339 UTC; a zone-less time is read in `timezone` (UTC when none)."""
-    try:
-        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=ZoneInfo(timezone) if timezone else UTC)
-    return _format_stamp(parsed)
 
 
 def _name_stamp(name: str, timezone: str | None) -> str | None:
@@ -524,14 +351,3 @@ def _build(y: int, mo: int, d: int, h: int, mi: int, s: int, zone: Any) -> str |
         return _format_stamp(datetime(y, mo, d, h, mi, s, tzinfo=zone))
     except ValueError:
         return None
-
-
-def _parse_stamp(stamp: str) -> datetime:
-    return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(UTC)
-
-
-def _format_stamp(when: datetime) -> str:
-    when = when.astimezone(UTC)
-    if when.microsecond:
-        return f"{when:%Y-%m-%dT%H:%M:%S}.{when.microsecond // 1000:03d}Z"
-    return when.strftime("%Y-%m-%dT%H:%M:%SZ")

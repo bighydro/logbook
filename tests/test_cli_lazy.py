@@ -13,8 +13,7 @@ import warnings
 import pytest
 
 from logbook import cli
-from logbook.commands import add, day, derive, parser, promises, record
-from logbook.contrib import setup
+from logbook.commands import add, day, derive, parser, promises, record, setup
 from logbook.contrib.adapters import screentime
 from logbook.labs import describe, judge, transcribe
 

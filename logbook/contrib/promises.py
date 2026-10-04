@@ -19,22 +19,18 @@ sentence agree on it and a close written against one holds for the other."""
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
-from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from ..core import policy, present
 from ..core.chain import Line
 from ..core.index import local_date
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
-
-if TYPE_CHECKING:
-    from .adapters.transcript import Turn
+from ..core.transcripts import SPEAKER, Turn, turns_of
 
 TRANSCRIPT = "transcript"
 NOTE = "note"
@@ -118,7 +114,6 @@ _CUES: tuple[tuple[re.Pattern[str], str, str], ...] = (
 )
 
 _SENTENCE_END = re.compile(r"(?<=[^0-9][.!?])\s+")
-_DIGEST = re.compile(r"[0-9a-f]{64}")  # an attachment's name (SPEC §1.1)
 _SPACE = re.compile(r"\s+")
 
 
@@ -504,8 +499,6 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
     """Every proposal in the transcript and note lines standing (not retracted, not superseded)
     whose local day is `since` or later, read through the index; closed ones carry the task line
     that closed them. Nothing is written."""
-    from .adapters.transcript import Turn  # an adapter: only when a transcript is read
-
     tz = str(lb.meta["timezone"])
     with lb.index() as idx:
         marks = idx.retractions()
@@ -707,8 +700,6 @@ def relabel(turns: Sequence[Turn], known: Callable[[str], bool]) -> list[Turn]:
     turn (a diarizer's `me` on a mixed segment, or a note, which is the owner's otherwise); a line
     that begins with any other word before a colon (`Plan:`) is text. `known(label)` says whether a
     label is a participant, the owner or a person the record resolves."""
-    from .adapters.transcript import SPEAKER, Turn  # an adapter: only when a transcript is read
-
     out: list[Turn] = []
     for turn in turns:
         current: Turn | None = None
@@ -726,75 +717,6 @@ def relabel(turns: Sequence[Turn], known: Callable[[str], bool]) -> list[Turn]:
                 current = Turn(current.speaker, f"{current.text}\n{raw}")
                 out[-1] = current
     return [turn for turn in out if turn.text.strip()]
-
-
-def turns_of(lb: Logbook, line: Line) -> list[Turn] | None:
-    """The speaker turns of a transcript line's text from the attachment store, by its media type:
-    WebVTT and SRT cues, Granola's JSON segments, or `Speaker: text` prose and plain text (the file
-    adapter's own parsers). None when the line names no text or the file is not in the store."""
-    from .adapters.transcript import parse_text  # an adapter: only when a transcript is read
-
-    content = (line.get("payload") or {}).get("content")
-    if not isinstance(content, dict):
-        return None
-    sha256 = content.get("sha256")
-    rel = PurePosixPath(content["path"]) if isinstance(content.get("path"), str) else None
-    if isinstance(sha256, str) and _DIGEST.fullmatch(sha256):
-        path = lb.root / "attachments" / sha256
-    elif rel is not None and rel.parts and not rel.is_absolute() and ".." not in rel.parts:
-        path = lb.root.joinpath(*rel.parts)  # inside the record, never beyond it
-    else:
-        return None
-    if not path.is_file():
-        return None
-    try:
-        text = path.read_bytes().decode("utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None
-    media = str(content.get("media_type") or "").split(";")[0].strip().casefold()
-    if media == "text/vtt":
-        return parse_text(text, "vtt").turns
-    if media in ("application/x-subrip", "text/srt"):
-        return parse_text(text, "srt").turns
-    if media == "application/json":
-        return _json_turns(text)
-    return parse_text(text, "text").turns
-
-
-def _json_turns(text: str) -> list[Turn]:
-    """Granola's segments (`{speaker: {name|diarization_label|attribution}, text}`), or any JSON
-    object carrying such a list under `segments` or `turns`; anything else has no turns."""
-    from .adapters.transcript import Turn  # an adapter: only when a transcript is read
-
-    try:
-        data = json.loads(text)
-    except ValueError:
-        return []
-    if isinstance(data, dict):
-        data = data.get("segments") or data.get("turns") or []
-    if not isinstance(data, list):
-        return []
-    turns = []
-    for segment in data:
-        if not isinstance(segment, dict):
-            continue
-        said = segment.get("text")
-        if not isinstance(said, str) or not said.strip():
-            continue
-        turns.append(Turn(_json_label(segment.get("speaker")), said))
-    return turns
-
-
-def _json_label(speaker: object) -> str | None:
-    if isinstance(speaker, str):
-        return speaker.strip() or None
-    if not isinstance(speaker, dict):
-        return None
-    for key in ("name", "diarization_label", "attribution", "label"):
-        value = speaker.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
 
 
 # -- the close -----------------------------------------------------------------------------------------

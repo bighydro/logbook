@@ -40,10 +40,10 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any
 
+from ..contrib import adapters, doctor, ios_backup
+from ..contrib.adapters import imessage_live
 from ..core import places, policy
 from ..core.store import CodeCheckoutError, Logbook, now_utc
-from . import adapters, doctor, ios_backup
-from .adapters import imessage_live
 
 STATE_FILE = PurePath("state") / "setup.json"
 STATE_VERSION = 1

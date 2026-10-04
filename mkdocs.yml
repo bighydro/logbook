@@ -42,6 +42,7 @@ nav:
   - Lore: LORE.md
   - Specification v0.2: SPEC.md
   - Architecture: ARCHITECTURE.md
+  - Migrating to 0.6: migration-0.6.md
   - How a line becomes a Day: line-to-day.md
   - Roadmap: ROADMAP.md
   - Decisions:

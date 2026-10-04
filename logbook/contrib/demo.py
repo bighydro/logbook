@@ -1442,21 +1442,13 @@ def story_of(days: int, seed: int, recorded_at: str) -> _Story:
     return story
 
 
-def generate(root: Path, days: int | None = None, seed: int = 1, years: int | None = None) -> Logbook:
+def generate(root: Path, days: int | None = None, seed: int = 1) -> Logbook:
     """Write the demo record under `root` (a folder that is not yet a logbook) and return it:
     `logbook.json` with an owner id from the seed, every line, the transcripts' text in the
     attachment store, two notes files, `assets.json` with the boat and `places.json` with home,
-    the office, the marina and the cabin. `days` (30 by default) is the month from `START`;
-    `years` instead is the persona's whole life to the month's last day (`logbook.demo_life`),
-    with its own places and the homes she moved between."""
-    if days is not None and years is not None:
-        raise ValueError("give days or years, not both")
-    if years is not None:
-        from ..labs import demo_life
-
-        if years < 1:
-            raise ValueError("years must be at least 1")
-        return demo_life.generate(root, years, seed)
+    the office, the marina and the cabin. `days` (30 by default) is the month from `START`. The
+    persona's whole life to the month's last day, with its own places and the homes she moved
+    between, is `logbook.labs.demo_life.generate` (`demo --years`), which builds on this module."""
     days = 30 if days is None else days
     if days < 1:
         raise ValueError("days must be at least 1")

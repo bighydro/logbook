@@ -276,8 +276,8 @@ def _gather(value: object, out: list[str]) -> None:
 
 
 def _transcript_text(line: Mapping[str, Any], root: Path) -> Iterable[str]:
-    from ..contrib.promises import turns_of
     from .store import Logbook
+    from .transcripts import turns_of  # a function-level import: `store` imports `index` imports here
 
     turns = turns_of(Logbook(root), dict(line))
     if not turns:

@@ -126,7 +126,7 @@ DEDUPE_CEILING_MB = 256  # a 100,000-draft batch deduped through the index on th
 MEASURE = """
 import resource, sys, time
 from pathlib import Path
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 mode, root = sys.argv[1], Path(sys.argv[2])
 lb = Logbook(root)
 t = time.perf_counter()

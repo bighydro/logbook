@@ -310,7 +310,10 @@ def cmd_demo(a: argparse.Namespace) -> None:
         print("demo: --days must be at least 1", file=sys.stderr)
         sys.exit(2)
     try:
-        lb = demo.generate(root, days=a.days, seed=a.seed, years=a.years)
+        if a.years is not None:
+            lb = demo_life.generate(root, a.years, a.seed)  # the life is labs, built on the month
+        else:
+            lb = demo.generate(root, days=a.days, seed=a.seed)
     except (FileExistsError, CodeCheckoutError, OSError) as e:
         print(f"demo: {e}", file=sys.stderr)
         sys.exit(2)
@@ -405,7 +408,7 @@ def setup_arguments(sub: Subparsers) -> None:
 def cmd_setup(a: argparse.Namespace) -> None:
     """The guided first run (`logbook/setup.py`): one question at a time, each with its default and why
     it is asked; resumable through `state/setup.json`; `--yes` takes every default and asks nothing."""
-    from ..contrib import setup
+    from . import setup
 
     status = setup.run(a, os.environ)
     if status:
