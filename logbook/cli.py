@@ -31,6 +31,7 @@ FAMILIES = (
     "derive",
     "export",
     "keepers",
+    "lab",
     "parser",
     "people",
     "places",
