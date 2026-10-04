@@ -155,7 +155,9 @@ def test_places_propose_takeout_feeds_saved_places_as_candidates_and_write_adopt
     lb.append_many(
         dwell("2026-06-10", "10:00", "12:00", (59.9074, 10.7390))
     )  # two hours by the harbour office
-    cli.main(["places", "propose", "--takeout", str(ROOT / "tests" / "fixtures" / "takeout"), "--json"])
+    cli.main(
+        ["setup", "places", "propose", "--takeout", str(ROOT / "tests" / "fixtures" / "takeout"), "--json"]
+    )
     data = json.loads(capsys.readouterr().out)
     (p,) = data["proposals"]
     (candidate,) = p["saved"]
@@ -168,22 +170,22 @@ def test_places_propose_takeout_feeds_saved_places_as_candidates_and_write_adopt
         and "Oslofjord chart shop" in elsewhere
         and "Havnekontoret" not in elsewhere
     )
-    cli.main(["places", "propose", "--takeout", str(FIX)])
+    cli.main(["setup", "places", "propose", "--takeout", str(FIX)])
     out = capsys.readouterr().out
     assert "saved: Havnekontoret · 59.9075,10.7389 · Saved Places · saved 2026-02-11 · " in out
     assert "suggested: Havnekontoret" in out
     assert "1 saved place near no unnamed stay; `logbook places add` names one:" in out
     assert "59°51'00.0\"N 10°39'00.0\"E · 59.8500,10.6500 · Saved Places · saved 2026-03-04" in out
     monkeypatch.setattr("builtins.input", lambda prompt="": "")  # Enter takes the suggestion
-    cli.main(["places", "propose", "--takeout", str(FIX), "--write"])
+    cli.main(["setup", "places", "propose", "--takeout", str(FIX), "--write"])
     assert "as Havnekontoret" in capsys.readouterr().out
-    cli.main(["places", "list"])
+    cli.main(["setup", "places", "list"])
     assert "Havnekontoret" in capsys.readouterr().out
-    cli.main(["places", "propose", "--takeout", str(FIX)])
+    cli.main(["setup", "places", "propose", "--takeout", str(FIX)])
     out = capsys.readouterr().out
     assert (
         "no unnamed stays" in out and "Havnekontoret" not in out
     )  # named now: neither a proposal nor elsewhere
     with pytest.raises(SystemExit) as e:
-        cli.main(["places", "propose", "--takeout", str(tmp_path / "nope")])
+        cli.main(["setup", "places", "propose", "--takeout", str(tmp_path / "nope")])
     assert e.value.code == 2 and "--takeout" in capsys.readouterr().err

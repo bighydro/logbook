@@ -309,7 +309,7 @@ def _digest_paper(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def questions_arguments(sub: Subparsers) -> None:
-    """`logbook questions`."""
+    """`logbook setup questions` (`logbook questions` until 0.6)."""
     s = sub.add_parser(
         "questions",
         help="the digest's closing questions (policy/questions.json): list, add one, disable one",

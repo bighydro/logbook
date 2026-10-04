@@ -178,12 +178,12 @@ def test_rollup_countries_and_flights(lb: Logbook, capsys: pytest.CaptureFixture
 
 
 def test_places_propose_ranks_the_unnamed_stays(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    data = _json(capsys, "places", "propose")
+    data = _json(capsys, "setup", "places", "propose")
     proposals = data["proposals"]
     assert len(proposals) >= 3
     assert proposals[0]["hours"] >= proposals[-1]["hours"]
     assert any(p["aboard"] == demo.BOAT for p in proposals), "the anchorages are aboard"
-    text = _run(capsys, "places", "propose", "--top", "3")
+    text = _run(capsys, "setup", "places", "propose", "--top", "3")
     assert "unnamed place" in text
 
 
@@ -196,9 +196,9 @@ def test_places_propose_reads_the_same_from_the_index_as_it_did_from_the_files(
     the earlier code on this same record (thirty days, seed 7)."""
     fixtures = Path(__file__).parent / "fixtures" / "demo"
     expected = json.loads((fixtures / "places_propose.json").read_text(encoding="utf-8"))
-    assert _json(capsys, "places", "propose") == expected
+    assert _json(capsys, "setup", "places", "propose") == expected
     text = (fixtures / "places_propose.txt").read_text(encoding="utf-8")
-    assert _run(capsys, "places", "propose").splitlines() == text.splitlines()
+    assert _run(capsys, "setup", "places", "propose").splitlines() == text.splitlines()
 
 
 def test_show_prints_a_day_and_the_keepers(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:

@@ -54,7 +54,7 @@ def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def places_arguments(sub: Subparsers) -> None:
-    """`logbook places`."""
+    """`logbook setup places` (`logbook places` until 0.6)."""
     s = sub.add_parser(
         "places", help="the named places of the record (places.json): list, add, name, propose"
     )

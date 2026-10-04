@@ -411,16 +411,28 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup`."""
+    """`logbook setup [places|assets|questions]`: the guided first run, and the settings of the record
+    that it asks about or that live beside its policy — the named places (`places.json`), the
+    assets it tracks (`assets.json`) and the digest's questions (`policy/questions.json`). Each
+    was a command of its own until 0.6 and is declared beside the code that reads its file."""
+    from .day import questions_arguments
+    from .places import places_arguments
+    from .sync import assets_arguments
+
     s = sub.add_parser(
         "setup",
         help="the guided first run: where the record lives, your timezone, who you are, your home, what is"
-        " on this machine to import; one question at a time, resumable; --yes takes every default",
+        " on this machine to import; one question at a time, resumable; --yes takes every default."
+        " The record's settings: places, assets, questions",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
     s.add_argument("--again", action="store_true", help="run every step again (the record is kept)")
     s.set_defaults(fn=cmd_setup)
+    settings = s.add_subparsers(dest="setting", required=False, metavar="<setting>")
+    places_arguments(settings)
+    assets_arguments(settings)
+    questions_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
