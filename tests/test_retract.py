@@ -88,7 +88,7 @@ def test_retract_refuses_to_retract_a_retraction(lb: Logbook):
 
 
 def test_cli_retract_writes_the_line(lb: Logbook):
-    r = _run(lb, "retract", "2", "wrong cafe")
+    r = _run(lb, "repair", "retract", "2", "wrong cafe")
     assert r.returncode == 0, r.stderr
     assert "#4" in r.stdout and "#2" in r.stdout and "wrong cafe" in r.stdout
     last = list(lb.lines())[-1]
@@ -97,7 +97,7 @@ def test_cli_retract_writes_the_line(lb: Logbook):
 
 @pytest.mark.parametrize("seq", ["99", "0"])
 def test_cli_retract_refuses_missing_seq_with_exit_2(lb: Logbook, seq: str):
-    r = _run(lb, "retract", seq, "nothing there")
+    r = _run(lb, "repair", "retract", seq, "nothing there")
     assert r.returncode == 2
     assert r.stdout == "" and len(r.stderr.splitlines()) == 1
     assert lb.meta["seq"] == 3
@@ -105,7 +105,7 @@ def test_cli_retract_refuses_missing_seq_with_exit_2(lb: Logbook, seq: str):
 
 def test_cli_retract_refuses_a_retraction_with_exit_2(lb: Logbook):
     lb.retract(2, "wrong cafe")
-    r = _run(lb, "retract", "4", "changed my mind")
+    r = _run(lb, "repair", "retract", "4", "changed my mind")
     assert r.returncode == 2
     assert lb.meta["seq"] == 4
 

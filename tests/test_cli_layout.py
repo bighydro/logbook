@@ -51,7 +51,7 @@ COMMANDS: dict[str, tuple[str, ...]] = {
     "rollup_health": ("rollup", "health"),
     "rollup_listen": ("rollup", "listen"),
     "rollup_money": ("rollup", "money"),
-    "sources": ("sources",),
+    "sources": ("doctor", "sources"),
     "assets_list": ("setup", "assets", "list"),
     "verify": ("verify",),
 }
