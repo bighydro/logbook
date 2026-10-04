@@ -30,7 +30,8 @@ def show_arguments(sub: Subparsers) -> None:
     until 0.6 (`show year`, `show trip`, `show trips`, `show days`, `show keepers`, `show stats`)."""
     s = sub.add_parser(
         "show",
-        help="one day's lines (default today), a page (person, asset, place), or a reader: year, trip,"
+        help="one day's lines, a page, or year, trip, trips, days, keepers, stats",
+        description="one day's lines (default today), a page (person, asset, place), or a reader: year, trip,"
         " trips, days, keepers, stats",
     )
     s.add_argument(
@@ -184,7 +185,9 @@ def cmd_show(a: argparse.Namespace) -> None:
 def day_arguments(sub: Subparsers) -> None:
     """`logbook day`."""
     s = sub.add_parser(
-        "day", help="one day read back: nights, country, stays and moves with who and what, flights, health"
+        "day",
+        help="one day read back: night, stays and moves, who was there, health",
+        description="one day read back: nights, country, stays and moves with who and what, flights, health",
     )
     s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
     s.add_argument(
@@ -221,7 +224,9 @@ def digest_arguments(sub: Subparsers) -> None:
     """`logbook digest`."""
     s = sub.add_parser(
         "digest",
-        help="one day in 25 lines at most: where, with whom, what attached, flights, promises due, gaps,"
+        help="one day in 25 lines at most, closing with one question",
+        description="one day in 25 lines at most: where, with whom, what attached, flights, promises due,"
+        " gaps,"
         " tomorrow, one question",
     )
     s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
@@ -493,7 +498,9 @@ def search_arguments(sub: Subparsers) -> None:
     """`logbook search`."""
     s = sub.add_parser(
         "search",
-        help='full-text search: words, "a phrase", kar* — literal, ranked, grouped by day, through the index',
+        help='full-text search through the index: words, "a phrase", kar*',
+        description='full-text search: words, "a phrase", kar* — literal, ranked, grouped by day, through'
+        " the index",
     )
     s.add_argument("text", help='the words; "in quotes" a phrase; a word ending in * matches by prefix')
     s.add_argument("--since", metavar="YYYY-MM-DD", help="the first local day searched")

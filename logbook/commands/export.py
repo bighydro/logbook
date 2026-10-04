@@ -20,7 +20,9 @@ def export_arguments(sub: Subparsers) -> None:
     """`logbook export`."""
     s = sub.add_parser(
         "export",
-        help="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a crossing-package/v1,"
+        help=".jsonl, day packages, crossing, vault, site, trip-bundle, share day",
+        description="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a"
+        " crossing-package/v1,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
         " readers as static HTML, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
         " YYYY-MM-DD --to NAME`: one day as a signed page",
@@ -425,7 +427,8 @@ def import_arguments(sub: Subparsers) -> None:
 
     s = sub.add_parser(
         "import",
-        help="an iOS backup (`backup DIR`), a trip bundle (`trip-bundle FOLDER`) or a shared page"
+        help="an iOS backup, a trip bundle, a shared page; inbox; attachments",
+        description="an iOS backup (`backup DIR`), a trip bundle (`trip-bundle FOLDER`) or a shared page"
         " (`page FILE`) brought in; `inbox`: what was imported; `attachments`: the store",
     )
     verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")

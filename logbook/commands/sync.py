@@ -64,7 +64,8 @@ def sync_arguments(sub: Subparsers) -> None:
     """`logbook sync`."""
     s = sub.add_parser(
         "sync",
-        help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
+        help="pull new items from a live source; --all for every configured one",
+        description="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
         " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day",
     )
     s.add_argument(

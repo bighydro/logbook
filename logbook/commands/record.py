@@ -122,7 +122,9 @@ def repair_arguments(sub: Subparsers) -> None:
     rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
     s = sub.add_parser(
         "repair",
-        help="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`), bring a"
+        help="put the record right, rewriting nothing: retract, migrate, index…",
+        description="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`),"
+        " bring a"
         " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), or append the lines that"
         " correct a known mistake (`health-units`)",
     )
@@ -277,7 +279,11 @@ def _stats_rows(s: dict[str, Any]) -> Iterator[str]:
 
 def demo_arguments(sub: Subparsers) -> None:
     """`logbook demo`."""
-    s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
+    s = sub.add_parser(
+        "demo",
+        help="a synthetic record to try the commands on; nothing in it is real",
+        description="write a synthetic record to try the commands on; nothing in it is real",
+    )
     s.add_argument("--days", type=int, metavar="N", help="local days from 2026-06-01 (default 30)")
     s.add_argument(
         "--years",
@@ -431,7 +437,9 @@ def setup_arguments(sub: Subparsers) -> None:
 
     s = sub.add_parser(
         "setup",
-        help="the guided first run: where the record lives, your timezone, who you are, your home, what is"
+        help="the guided first run; places, assets, questions: its settings",
+        description="the guided first run: where the record lives, your timezone, who you are, your home,"
+        " what is"
         " on this machine to import; one question at a time, resumable; --yes takes every default."
         " The record's settings: places, assets, questions",
     )
@@ -462,7 +470,9 @@ def doctor_arguments(sub: Subparsers) -> None:
 
     s = sub.add_parser(
         "doctor",
-        help="is this machine set up to keep the record? one line per check; exit 1 on a fail. `sources`:"
+        help="the check-up, one line each; sources: where each source went quiet",
+        description="is this machine set up to keep the record? one line per check; exit 1 on a fail."
+        " `sources`:"
         " every adapter, and with --gaps where each went quiet",
     )
     s.set_defaults(fn=cmd_doctor)
@@ -488,7 +498,8 @@ def backup_arguments(sub: Subparsers) -> None:
     """`logbook backup`."""
     s = sub.add_parser(
         "backup",
-        help="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
+        help="a verified snapshot on another disk; backup list; backup restore",
+        description="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
         " previous one where nothing changed; `backup list DEST`; `backup restore SNAPSHOT TARGET`",
     )
     s.add_argument(
@@ -615,7 +626,9 @@ def key_arguments(sub: Subparsers) -> None:
 
     s = sub.add_parser(
         "key",
-        help="the record's recipients and this machine's identity: init, show, add- and remove-recipient;"
+        help="the recipients and this machine's identity; seal; circle",
+        description="the record's recipients and this machine's identity: init, show, add- and"
+        " remove-recipient;"
         " seal: the lines written before the record had recipients; circle: the sharing keys",
     )
     verbs = s.add_subparsers(dest="verb", required=True, metavar="<verb>")

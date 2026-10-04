@@ -24,7 +24,8 @@ def people_arguments(sub: Subparsers) -> None:
     """`logbook people [NAME|merge]`."""
     s = sub.add_parser(
         "people",
-        help="everyone the record names, never the owner: channels, days together, last real contact;"
+        help="everyone the record names; NAME: one person's page; merge",
+        description="everyone the record names, never the owner: channels, days together, last real contact;"
         " NAME: one person's page; merge: the same person named twice",
     )
     s.add_argument(

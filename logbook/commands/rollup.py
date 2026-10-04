@@ -23,7 +23,9 @@ def rollup_arguments(sub: Subparsers) -> None:
     """`logbook rollup`."""
     s = sub.add_parser(
         "rollup",
-        help="the record per year: countries, flights, nights, places, people, listen, attention (hours by"
+        help="the record per year: countries, flights, nights, people, …; ledger",
+        description="the record per year: countries, flights, nights, places, people, listen, attention"
+        " (hours by"
         " app and category), money; per month or week: health, attention; ledger: the transactions in"
         " context",
     )

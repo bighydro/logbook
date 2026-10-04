@@ -420,7 +420,9 @@ def add_arguments(sub: Subparsers) -> None:
     """`logbook add`."""
     s = sub.add_parser(
         "add",
-        help='a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH …"`',
+        help="a sentence in your words, an export file, a folder, or a flight",
+        description='a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH'
+        ' …"`',
     )
     s.add_argument(
         "what",
