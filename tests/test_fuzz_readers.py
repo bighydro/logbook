@@ -245,7 +245,7 @@ def assert_reads_cleanly(label: str, args: list[str]) -> None:
     assert out.strip(), f"{command} printed nothing"
     if "--json" in args:
         try:
-            if args[0] == "days":  # JSON Lines: one object per line
+            if args[:2] == ["show", "days"]:  # JSON Lines: one object per line
                 parsed: Any = [json.loads(line) for line in out.splitlines() if line.strip()]
                 assert parsed and all(isinstance(p, dict) for p in parsed)
             else:
