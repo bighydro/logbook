@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 from pathlib import Path
 
 import pytest
@@ -68,7 +69,14 @@ def capture(root: Path) -> dict[str, str]:
     texts = {"demo": _run("demo", "--days", str(DAYS), "--seed", str(SEED), "--out", str(root))}
     for name, args in COMMANDS.items():
         texts[name] = _run(*args)
-    return {name: text.replace(str(root), "<root>") for name, text in texts.items()}
+    return {name: _masked(text, root) for name, text in texts.items()}
+
+
+def _masked(text: str, root: Path) -> str:
+    """`str(root)` as `<root>`, and the separators of a path that continues it as `/`, so the
+    fixture written on one platform holds on the others (Windows prints `<root>\\policy\\…`)."""
+    masked = text.replace(str(root), "<root>")
+    return re.sub(r"<root>[\\/][^\s'\"]*", lambda m: m.group(0).replace("\\", "/"), masked)
 
 
 @pytest.fixture(scope="module")
