@@ -24,10 +24,11 @@ JUDGE_DEFAULT_MODEL = "mlx-community/Qwen2.5-7B-Instruct-4bit"
 
 
 def promises_arguments(sub: Subparsers) -> None:
-    """`logbook promises`."""
+    """`logbook promises [done ID | tasks ...]`: the proposals, and the tasks they become."""
     s = sub.add_parser(
         "promises",
-        help="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>` closes one",
+        help="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>` closes one;"
+        " `tasks`: the tasks (task/v1), each as it stands",
     )
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only lines from this local day on")
     s.add_argument("--open", action="store_true", help="hide the ones a `promises done` closed")
@@ -61,6 +62,7 @@ def promises_arguments(sub: Subparsers) -> None:
     v.add_argument("id", help="the proposal's id, as `promises` prints it")
     v.add_argument("--note", metavar="TEXT", help="your words on how it was kept, kept in the task's notes")
     v.set_defaults(fn=cmd_promises)
+    tasks_arguments(verbs)
 
 
 def cmd_promises(a: argparse.Namespace) -> None:
@@ -162,7 +164,7 @@ def _promises_done(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def tasks_arguments(sub: Subparsers) -> None:
-    """`logbook tasks`."""
+    """`logbook promises tasks` (`logbook tasks` until 0.6)."""
     s = sub.add_parser(
         "tasks",
         help="the tasks (task/v1), each as it stands; `--propose-done` the evidence an open one was done;"
@@ -178,7 +180,7 @@ def tasks_arguments(sub: Subparsers) -> None:
     )
     s.add_argument("--json", action="store_true", help="the report as one JSON object, with line ids")
     s.set_defaults(fn=cmd_tasks, verb=None)
-    verbs = s.add_subparsers(dest="verb", required=False)
+    verbs = s.add_subparsers(dest="task_verb", required=False)
     v = verbs.add_parser("done", help="mark one task done: appends a task/v1 line (RFC 0016), nothing else")
     v.add_argument("id", help="the task's id, as `tasks` prints it")
     v.add_argument(
@@ -196,7 +198,7 @@ def cmd_tasks(a: argparse.Namespace) -> None:
     it was done, each with its line id, as proposals and never as facts. `tasks done <id> [--evidence
     LINE-ID]` appends the `task/v1` line that marks one done and nothing else."""
     lb = Logbook.find()
-    if a.verb == "done":
+    if a.task_verb == "done":
         _tasks_done(lb, a)
         return
     report = taskdone.propose(lb) if a.propose_done else taskdone.read(lb)

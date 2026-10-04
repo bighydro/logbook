@@ -16,15 +16,30 @@ from ..core.export import parse_day
 from ..core.store import Logbook
 from .common import Subparsers, _airports
 
+LEDGER = "ledger"  # `rollup ledger`: the command `ledger` until 0.6
+
 
 def rollup_arguments(sub: Subparsers) -> None:
     """`logbook rollup`."""
     s = sub.add_parser(
         "rollup",
         help="the record per year: countries, flights, nights, places, people, listen, attention (hours by"
-        " app and category), money; per month or week: health, attention",
+        " app and category), money; per month or week: health, attention; ledger: the transactions in"
+        " context",
     )
-    s.add_argument("what", choices=(*rollup.KINDS, listen_rollup.KIND), help="what to sum up")
+    s.add_argument(
+        "what",
+        choices=(*rollup.KINDS, listen_rollup.KIND, LEDGER),
+        help="what to sum up; ledger: the transactions at the stay, in the trip, per day; shares per person",
+    )
+    s.add_argument(
+        "--month",
+        metavar="YYYY-MM",
+        help="ledger: one calendar month (default: every day with a transaction)",
+    )
+    s.add_argument(
+        "--trip", metavar="ID", help="ledger: one trip's days, by the id `show trips --json` prints"
+    )
     s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
     s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
     s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
@@ -82,7 +97,10 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     the listen lines of the window (`listen_rollup`), the same way; or, for `people --drifting
     [--until DAY] [--window N] [--min-contacts N]`, the people whose contact frequency fell most
     between the last N days and the N before them (`drifting`). Every number carries the ids of
-    its lines under --json. Nothing is written."""
+    its lines under --json. Nothing is written. `rollup ledger` is `cmd_ledger`."""
+    if a.what == LEDGER:
+        cmd_ledger(a)
+        return
     lb = Logbook.find()
     try:
         if a.by and a.what not in ("health", "attention"):
@@ -207,26 +225,9 @@ def _raise_backwards(since: str, until: str) -> tuple[str, str]:
     raise ValueError(f"range runs backwards: {since} > {until}")
 
 
-def ledger_arguments(sub: Subparsers) -> None:
-    """`logbook ledger`."""
-    s = sub.add_parser(
-        "ledger", help="the transactions in context: at the stay, in the trip, per day; shares per person"
-    )
-    s.add_argument(
-        "--month", metavar="YYYY-MM", help="one calendar month (default: every day with a transaction)"
-    )
-    s.add_argument("--trip", metavar="ID", help="one trip's days, by the id `trips --json` prints")
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--json", action="store_true", help="the ledger as one JSON object, with line ids")
-    s.set_defaults(fn=cmd_ledger)
-
-
 def cmd_ledger(a: argparse.Namespace) -> None:
-    """`ledger [--month YYYY-MM | --trip ID] [--json]`: the transaction lines (tier 3) of the window
+    """`rollup ledger [--month YYYY-MM | --trip ID] [--json]` (`ledger` until 0.6): the transaction
+    lines (tier 3) of the window
     in context — each at the stay the owner was in, in its trip, per day, a shared expense's shares
     per person — from one reading of the window through the index (`logbook.core.ledger`). The window
     is the days the record has a transaction on, one month of them, or one trip's days (its first
