@@ -1,0 +1,3906 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/tour/">
+      
+      
+        <link rel="prev" href="../first-hour/">
+      
+      
+        <link rel="next" href="../demo/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The tour - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-tour-every-command-on-your-own-record" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The tour
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#sixty-seconds-with-an-iphone-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sixty seconds with an iPhone backup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-keep-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to keep the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sealing-tiers-2-and-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sealing tiers 2 and 3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-in-the-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is in the folder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-never-enters-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What never enters the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keep-it-flowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep it flowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-day-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the day back
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Day
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-a-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In a browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-a-window-to-someone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing a window to someone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-a-day-to-a-friend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing a day to a friend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opening-it-in-obsidian" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opening it in Obsidian
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asking-an-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking an agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_16" id="__nav_16_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_17" id="__nav_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_35" >
+        
+          
+          <label class="md-nav__link" for="__nav_35" id="__nav_35_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_35_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_35">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#sixty-seconds-with-an-iphone-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sixty seconds with an iPhone backup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-to-keep-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where to keep the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sealing-tiers-2-and-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sealing tiers 2 and 3
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-in-the-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is in the folder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-never-enters-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What never enters the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keep-it-flowing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep it flowing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-day-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the day back
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Day
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#in-a-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In a browser
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-a-window-to-someone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing a window to someone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handing-a-day-to-a-friend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handing a day to a friend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opening-it-in-obsidian" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opening it in Obsidian
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#asking-an-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Asking an agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-tour-every-command-on-your-own-record">The tour: every command on your own record</h1>
+<p><a href="../try-it/">Try it</a> is five minutes on a demo record and <a href="../first-hour/">The first hour</a> is <code>logbook setup</code>
+screen by screen. This page is the long form: what each command does on a record of your own, in the order
+you are likely to meet them. Every example is synthetic; the person lives in Oslo and does not exist.</p>
+<h2 id="sixty-seconds-with-an-iphone-backup">Sixty seconds with an iPhone backup</h2>
+<p>Plug the iPhone into a Mac, select it in Finder and press <em>Back Up Now</em>. The backup lands in
+<code>~/Library/Application Support/MobileSync/Backup/&lt;udid&gt;</code> (on Windows under
+<code>%APPDATA%\Apple Computer\MobileSync\Backup\</code>). Then:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_DIAL_PREFIX</span><span class="o">=</span><span class="m">47</span><span class="w">                       </span><span class="c1"># your country code, for numbers saved without one</span>
+logbook<span class="w"> </span>import-backup<span class="w"> </span>~/Library/Application<span class="se">\ </span>Support/MobileSync/Backup/&lt;udid&gt;<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># what is there, how big</span>
+logbook<span class="w"> </span>import-backup<span class="w"> </span>~/Library/Application<span class="se">\ </span>Support/MobileSync/Backup/&lt;udid&gt;
+logbook<span class="w"> </span>import-backup<span class="w"> </span>&lt;the<span class="w"> </span>same&gt;<span class="w"> </span>--only<span class="w"> </span>contacts,whatsapp<span class="w">        </span><span class="c1"># just some of it</span>
+</code></pre></div>
+<p>One command reads the backup's <code>Manifest.db</code>, finds the six stores the adapters know — Contacts, WhatsApp's
+contacts and chats, Messages, Calendar, Notes — copies each one with its <code>-wal</code>/<code>-shm</code> siblings and its media
+folder into <code>inbox/ios-backup-&lt;udid&gt;/&lt;source&gt;/</code>, checks every copy against the stored blob, and runs the adapters on the copies:
+contacts first, so the chats that follow already have their people. The backup itself is only ever read. Per
+source it prints found or not found, the lines added and what was skipped, and it ends with <code>verify</code>.
+Re-running it appends nothing already logged. <code>inbox/ios-backup-&lt;udid&gt;/copies.json</code> lists every copy. The
+manifest's <code>Size</code> is what a file measured on the phone and can be stale against the stored blob; a copy that
+matches the blob but not <code>Size</code> is one warning naming the file and both sizes, recorded in <code>copies.json</code>, never an error.</p>
+<p><strong>An encrypted backup</strong> (<em>Encrypt local backup</em> ticked in Finder) holds more than an unencrypted one: Health,
+the call log and Safari's history are only ever backed up encrypted. <code>import-backup</code> reads one with the
+<code>crypto</code> extra and the password in one environment variable, never a flag:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"openlogbook[crypto]"</span><span class="w">        </span><span class="c1"># or: uv tool install "openlogbook[crypto]"</span>
+<span class="nb">read</span><span class="w"> </span>-s<span class="w"> </span>LOGBOOK_BACKUP_PASSWORD<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">export</span><span class="w"> </span>LOGBOOK_BACKUP_PASSWORD<span class="w">   </span><span class="c1"># typed once, never echoed</span>
+logbook<span class="w"> </span>import-backup<span class="w"> </span>~/Library/Application<span class="se">\ </span>Support/MobileSync/Backup/&lt;udid&gt;
+</code></pre></div>
+<p>The keybag in <code>Manifest.plist</code> is unlocked first, so a wrong password fails on one line before any file is
+touched; then <code>Manifest.db</code> is decrypted into the inbox folder and every file is decrypted a chunk at a time
+on its way to the same <code>inbox/ios-backup-&lt;udid&gt;/&lt;source&gt;/</code> layout, so the adapters run unchanged. The
+password is never printed, never written anywhere, and never part of an error. <code>copies.json</code> records
+<code>encrypted: true</code> and each file's protection class. The stores only an encrypted backup carries come along:
+the call log (<code>ios-calls/CallHistory.storedata</code>) runs through its adapter like the others; Health
+(<code>health/healthdb_secure.sqlite</code>, <code>healthdb.sqlite</code>) and Safari (<code>safari/History.db</code>) are copied out beside
+them: Health runs through <code>apple-health</code> (RFC 0014; <code>healthdb.sqlite</code> is copied first so the store finds its
+source names beside it), Safari is reported as <em>copied, no adapter yet</em>; <code>--only calls,health</code> names them too. Without the extra
+installed the command prints the <code>pip install</code> line and exits 2; without the variable it says which one to set.</p>
+<h2 id="where-to-keep-the-record">Where to keep the record</h2>
+<p>Never in a folder that iCloud Drive, Dropbox, Google Drive or OneDrive syncs. Those services evict files to the
+cloud and fetch them back on demand, so reads stall on files that are not really there, and the record ends up
+on someone else's server. Keep it in a plain local folder and point <code>LOGBOOK_HOME</code> at it:</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>init<span class="w"> </span>~/Records/Logbook<span class="w">           </span><span class="c1"># once</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_HOME</span><span class="o">=</span>~/Records/Logbook<span class="w">    </span><span class="c1"># in your shell profile, so every command finds it</span>
+</code></pre></div>
+<p><code>logbook setup</code> asks for the folder and refuses one a sync client owns, with the reason; then the timezone, your own
+names, emails and phones (<code>policy/owner.json</code>, so you are never your own company), your home as coordinates pasted
+from a maps app, and what is on this machine to import — a Takeout in <code>~/Downloads</code>, an iPhone backup, Messages on
+a Mac — each with a dry run first. One question at a time, each with its default and why it is asked; <code>q</code> stops
+and <code>logbook setup</code> again continues where it stopped (<code>state/setup.json</code>); <code>--yes</code> takes every default. It never
+asks for a secret: a live source is named by its variable and where the key comes from.
+<a href="../first-hour/">docs/first-hour.md</a> shows every screen.</p>
+<p>Back it up with <code>logbook backup DEST</code>: one verified snapshot of the record under <code>DEST/&lt;owner_id&gt;/&lt;timestamp&gt;/</code>
+on another disk — the month files, <code>logbook.json</code>, <code>policy/</code>, <code>places.json</code>, <code>assets.json</code>, <code>attachments/</code> and
+<code>notes/</code>; never <code>index.sqlite</code>, <code>inbox/</code> or <code>state/</code> — with every file the previous snapshot already holds
+unchanged hard-linked to it, so a daily snapshot of a record with gigabytes of attachments costs the bytes that
+changed. The copy is verified where it lands and its head must be the live head, or nothing is kept; <code>--keep N</code>
+prunes to the newest N; <code>--verify</code> also hashes every attachment against its name. <code>backup list DEST</code> shows
+each snapshot with its lines, head and size; <code>backup restore SNAPSHOT TARGET</code> copies one back into an empty
+folder and verifies it. A destination inside the record or under a sync client's folder is refused. Time
+Machine or an equivalent that copies the folder as it is works too. <a href="../backup/">docs/backup.md</a> has the
+launchd and systemd examples for a nightly run.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>backup<span class="w"> </span>/Volumes/Backup/Logbook<span class="w"> </span>--keep<span class="w"> </span><span class="m">14</span><span class="w">     </span><span class="c1"># a verified snapshot, the newest fourteen kept</span>
+logbook<span class="w"> </span>backup<span class="w"> </span>list<span class="w"> </span>/Volumes/Backup/Logbook
+logbook<span class="w"> </span>backup<span class="w"> </span>restore<span class="w"> </span>/Volumes/Backup/Logbook/&lt;owner_id&gt;/2026-06-02T071500Z<span class="w"> </span>~/Records/Logbook
+</code></pre></div>
+<p><code>logbook doctor</code> checks that this machine is set up to keep the record, one line per check, <code>pass</code>, <code>warn</code> or
+<code>fail</code>, and exits 1 when anything fails: the record is found and <code>verify</code> is green with <code>logbook.json</code> at
+the head; <code>index.sqlite</code> is current; <code>policy/owner.json</code> names at least one alias; <code>places.json</code> has a
+home; <code>assets.json</code> is a registry; each optional extra (<code>ais</code>, <code>crypto</code>, <code>sealed</code>, <code>transcribe</code>) is installed,
+with its install line when not; the variables of every live source the record uses are set, by name only,
+never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
+Drive syncs, which is a fail with the reason. It reads and never writes, so it is safe to run any time.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>doctor
+pass<span class="w">  </span>record<span class="w">             </span><span class="m">12</span>,772<span class="w"> </span>lines,<span class="w"> </span>head<span class="w"> </span>53d39fda0b2c…,<span class="w"> </span>verified<span class="p">;</span><span class="w"> </span>/Users/ines/Records/Logbook
+pass<span class="w">  </span>index<span class="w">              </span>index.sqlite<span class="w"> </span>is<span class="w"> </span>current<span class="w"> </span>with<span class="w"> </span>logbook.json
+warn<span class="w">  </span>owner<span class="w">              </span>policy/owner.json<span class="w"> </span>is<span class="w"> </span>empty:<span class="w"> </span>add<span class="w"> </span>your<span class="w"> </span>other<span class="w"> </span>names,<span class="w"> </span>emails<span class="w"> </span>and<span class="w"> </span>phones<span class="w"> </span>so<span class="w"> </span>you<span class="w"> </span>are<span class="w"> </span>never<span class="w"> </span>your<span class="w"> </span>own<span class="w"> </span>company
+pass<span class="w">  </span>places<span class="w">             </span><span class="m">4</span><span class="w"> </span>place<span class="o">(</span>s<span class="o">)</span>,<span class="w"> </span>home:<span class="w"> </span>Home
+pass<span class="w">  </span>assets<span class="w">             </span><span class="m">1</span><span class="w"> </span>asset<span class="o">(</span>s<span class="o">)</span>:<span class="w"> </span>nordlys
+pass<span class="w">  </span>extra:ais<span class="w">          </span>websockets<span class="w"> </span>is<span class="w"> </span>installed
+pass<span class="w">  </span>extra:crypto<span class="w">       </span>cryptography<span class="w"> </span>is<span class="w"> </span>installed
+pass<span class="w">  </span>extra:sealed<span class="w">       </span>pyrage<span class="w"> </span>is<span class="w"> </span>installed
+warn<span class="w">  </span>extra:transcribe<span class="w">   </span>mlx-whisper<span class="w"> </span>or<span class="w"> </span>faster-whisper<span class="w"> </span>not<span class="w"> </span>installed:<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"openlogbook[transcribe]"</span>
+warn<span class="w">  </span>sync:dawarich<span class="w">      </span><span class="nb">set</span><span class="w"> </span>LOGBOOK_DAWARICH_KEY
+pass<span class="w">  </span>disk<span class="w">               </span><span class="m">184</span>.2<span class="w"> </span>GiB<span class="w"> </span>free<span class="w"> </span>on<span class="w"> </span>the<span class="w"> </span>record<span class="err">'</span>s<span class="w"> </span>volume
+pass<span class="w">  </span>folder<span class="w">             </span>a<span class="w"> </span>plain<span class="w"> </span><span class="nb">local</span><span class="w"> </span>folder,<span class="w"> </span>no<span class="w"> </span>sync<span class="w"> </span>client
+<span class="m">12</span><span class="w"> </span>checks:<span class="w"> </span><span class="m">9</span><span class="w"> </span>pass,<span class="w"> </span><span class="m">3</span><span class="w"> </span>warn,<span class="w"> </span><span class="m">0</span><span class="w"> </span>fail
+</code></pre></div>
+<h2 id="sealing-tiers-2-and-3">Sealing tiers 2 and 3</h2>
+<p>The envelope of every line is plain: when, what kind, which source. What a tier 2 or 3 line <em>says</em>, a note, a
+message, a transaction, a health sample, can be sealed at rest with <a href="https://age-encryption.org">age</a> to keys
+only you hold (SPEC §2 and §4, <a href="../rfcs/0029-encryption-at-rest/">RFC 0029</a>, <a href="../adr/0020-tiers-2-3-sealed-with-age/">ADR 0020</a>).
+The chain is untouched: <code>verify</code> checks every hash without any key and says how many lines it did not open;
+with your identity it opens each one and checks it against its digest too. Tier 1 is never sealed.</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"openlogbook[sealed]"</span><span class="w">          </span><span class="c1"># pyrage, age's Rust implementation; nothing else changes</span>
+logbook<span class="w"> </span>key<span class="w"> </span>init<span class="w"> </span>--recovery<span class="w">                </span><span class="c1"># this machine's identity, and a recovery identity printed once for paper</span>
+logbook<span class="w"> </span>seal<span class="w"> </span>--all<span class="w">                         </span><span class="c1"># seal the tier 2–3 lines written before the record had recipients</span>
+logbook<span class="w"> </span>verify<span class="w">                             </span><span class="c1"># valid — …; sealed: 4,100 lines, every one opened and checked</span>
+logbook<span class="w"> </span>key<span class="w"> </span>show<span class="w">                           </span><span class="c1"># the recipients, and whether this machine's identity opens the record</span>
+logbook<span class="w"> </span>key<span class="w"> </span>add-recipient<span class="w"> </span>--recipient<span class="w"> </span>age1…<span class="w">   </span><span class="c1"># a new laptop, a hardware key: resealed, no hash changes</span>
+</code></pre></div>
+<p>Two recipients or none: <code>key init</code> refuses to seal until a recovery identity exists, because a record that can
+lose its only key is not sealed, it is lost. The identity lives at <code>~/.config/logbook/identities/&lt;owner_id&gt;.txt</code>
+(<code>%APPDATA%\logbook\identities\</code> on Windows), readable by you alone, never inside the record, never in a
+variable that is on disk; <code>--identity-file PATH</code> or <code>LOGBOOK_IDENTITY_FILE=PATH</code> name another file. A machine
+without it reads tier 1, lists every day, verifies the chain and refuses to write tiers 2–3 in one sentence.
+Attachments a sealed line points at are sealed under the same name. The index is a plaintext locator and lives in
+your cache directory (<code>~/.cache/logbook/&lt;owner_id&gt;/</code>), not in the record, with chat ids blinded; <code>logbook search</code>
+does not search sealed lines. <code>export</code> writes opened payloads unless <code>--sealed</code>; a crossing package reseals to the
+destination's recipient from <code>policy/crossing.json</code>, or ships opened under <code>--open</code>. <code>seal --all</code> replaces the
+plain files and shreds nothing: a backup from before still holds the plaintext.</p>
+<h2 id="upgrading">Upgrading</h2>
+<p>0.3.0 changes how lines are hashed (format <code>logbook/0.2</code>, SPEC §3.1). A record written by 0.1.0 or 0.2.0 is refused until it is migrated. Back up first, then migrate once:</p>
+<div class="highlight"><pre><span></span><code>cp<span class="w"> </span>-a<span class="w"> </span>~/Logbook<span class="w"> </span>~/Logbook.bak<span class="w">    </span><span class="c1"># or wherever LOGBOOK_HOME points</span>
+logbook<span class="w"> </span>migrate<span class="w">                  </span><span class="c1"># same lines, new hashes; keeps the old files at logbook-0.1/</span>
+</code></pre></div>
+<p>Format <code>logbook/0.3</code> (sealing, SPEC §3.1) hashes by the same rule as 0.2, so a 0.2 record is read as it is and needs no migration; <code>logbook seal --all</code> is the one optional step, and it leaves a <code>migration/v1</code> line.</p>
+<p>0.5.0 corrects the units <code>apple-health</code> gave resting heart rate and HRV (RFC 0014). A record that imported a Health store with an earlier version carries those lines 60 and 1,000 times too large; put them right once:</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>repair<span class="w"> </span>health-units<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># how many lines it would retract and re-emit</span>
+logbook<span class="w"> </span>repair<span class="w"> </span>health-units<span class="w">             </span><span class="c1"># per wrong line a corrected line and a retraction; nothing rewritten</span>
+</code></pre></div>
+<h2 id="what-is-in-the-folder">What is in the folder</h2>
+<div class="highlight"><pre><span></span><code>~/Logbook/
+  logbook/          the record. one file per month. append only. never edit.
+    2026/09.jsonl
+  inbox/            drop anything here. `logbook inbox list` says what was read; `inbox clean` moves or deletes it.
+  notes/            what you write. plain Markdown, one file per day.
+  logbook.json      who this is, your timezone, the chain head.
+  policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
+                    stays.json: how long a stay is, how far a place reaches. yours to edit.
+                    import.json: the sources you switched off, each with a reason. yours to edit.
+                    owner.json: your own other names, emails and phones, so you are never your own company. yours to edit.
+                    questions.json: the digest's closing questions, each with the facts it asks on. yours to edit.
+  assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
+  places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
+  state/            where each live source left off, and which question the digest asked. bookkeeping, not the record.
+  exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
+</code></pre></div>
+<p>Nothing here needs the app to make sense. Open the files in any editor twenty years from now.</p>
+<p>If you also keep a clone of this repository, set <code>LOGBOOK_HOME</code> to your record's folder and pass that path to <code>logbook init</code>. On a case-insensitive disk (macOS by default) <code>~/Logbook</code> and a clone named <code>~/logbook</code> are the same folder; <code>init</code> refuses a folder that contains <code>pyproject.toml</code>, <code>.git</code> or <code>logbook/__init__.py</code>, and the CLI never picks such a folder as your record.</p>
+<h2 id="sources">Sources</h2>
+<p>Two ways in. <code>add</code> reads a file you already hold; <code>sync</code> asks a service you run for what is new.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>add<span class="w"> </span>~/Downloads/dawarich-export.json<span class="w">      </span><span class="c1"># any export the adapters recognise, or a folder</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/Takeout/<span class="s2">"Location History (Timeline)"</span>/Records.json<span class="w">   </span><span class="c1"># Google Takeout; Timeline.json works too</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/Takeout/<span class="s2">"Google Photos"</span><span class="w">                 </span><span class="c1"># Google Takeout photos: one line per file, the pixels stay put</span>
+logbook<span class="w"> </span>add<span class="w"> </span>takeout-chat<span class="w"> </span>~/Takeout/<span class="s2">"Google Chat"</span><span class="w">      </span><span class="c1"># Takeout by name: pay, chat, meet, contacts, keep, tasks, chrome, youtube, … (docs/adapters/takeout.md)</span>
+logbook<span class="w"> </span>add<span class="w"> </span>takeout-pay<span class="w"> </span>~/Takeout/<span class="s2">"Google Pay"</span><span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># any import: count against the record, write nothing</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/backup/31bb7ba8914766d4ba40d6dfb6113c8b614be442<span class="w">   </span><span class="c1"># iOS Contacts from an unencrypted Finder/iTunes backup</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/backup/7c7fba66680ef796b916b067077cc246adacf01d<span class="w">   </span><span class="c1"># WhatsApp (iOS) ChatStorage.sqlite from the same backup</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2<span class="w">   </span><span class="c1"># Apple Notes NoteStore.sqlite from the same backup</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/backup/2041457d5fe04d39d0ab481178355df6781e6858<span class="w">   </span><span class="c1"># iOS Calendar.sqlitedb from the same backup</span>
+logbook<span class="w"> </span>add<span class="w"> </span>ios-calls<span class="w"> </span>~/inbox/ios-backup-&lt;udid&gt;/ios-calls/CallHistory.storedata<span class="w">   </span><span class="c1"># the call log, by adapter name</span>
+logbook<span class="w"> </span>add<span class="w"> </span>health<span class="w"> </span>~/inbox/ios-backup-&lt;udid&gt;/health/healthdb_secure.sqlite<span class="w">   </span><span class="c1"># Apple Health, by adapter name (or apple-health)</span>
+logbook<span class="w"> </span>import-backup<span class="w"> </span>~/backup<span class="w">                    </span><span class="c1"># all of the above from the backup folder, in one go</span>
+logbook<span class="w"> </span>inbox<span class="w"> </span>list<span class="w">                                </span><span class="c1"># every file under inbox/: size, the import that read it, whether every line is in</span>
+logbook<span class="w"> </span>inbox<span class="w"> </span>clean<span class="w"> </span>--to<span class="w"> </span>/Volumes/Archive<span class="w">        </span><span class="c1"># move what is imported in full to an external disk (or --delete it); the rest stays</span>
+logbook<span class="w"> </span>attach<span class="w"> </span>import-backup<span class="w"> </span>~/backup<span class="w"> </span>--only<span class="w"> </span>whatsapp,imessage,photos<span class="w">   </span><span class="c1"># then the media the lines name, into attachments/</span>
+logbook<span class="w"> </span>add<span class="w"> </span>transcript<span class="w"> </span>~/Meetings/tromso.md<span class="w"> </span>--source<span class="w"> </span>manual<span class="w">   </span><span class="c1"># a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/Zoom/GMT20260301-130000_Recording.transcript.vtt<span class="w"> </span>--source<span class="w"> </span>zoom<span class="w">   </span><span class="c1"># VTT and SRT are recognised on sight</span>
+logbook<span class="w"> </span>add<span class="w"> </span>mail<span class="w"> </span>~/Takeout/Mail<span class="w"> </span>--account<span class="w"> </span>you@example.org<span class="w"> </span>--skip-labels<span class="w"> </span>Spam,Trash<span class="w">   </span><span class="c1"># Gmail via Google Takeout: one mail/v1 line per message</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>granola<span class="w">                              </span><span class="c1"># every Granola recording, and its summary as a derived note</span>
+logbook<span class="w"> </span>add<span class="w"> </span>flights<span class="w"> </span>~/Downloads/flighty.csv<span class="w">       </span><span class="c1"># a Flighty export: one flight/v1 line per flight, evidence tracked</span>
+logbook<span class="w"> </span>add<span class="w"> </span>flight<span class="w"> </span><span class="s2">"LX 561 NCE ZRH 2026-09-27 pilot"</span><span class="w">   </span><span class="c1"># your own word: evidence declared</span>
+logbook<span class="w"> </span>add<span class="w"> </span>story<span class="w"> </span>~/Stories/lake.md<span class="w"> </span>--teller<span class="w"> </span>ola@example.org<span class="w"> </span>--listener<span class="w"> </span>kari.nordmann@example.org<span class="w"> </span>--refers-to<span class="w"> </span><span class="m">1961</span><span class="w">   </span><span class="c1"># a told story (RFC 0028): on the day it was told, about the time it names</span>
+logbook<span class="w"> </span>infer<span class="w"> </span>flights<span class="w">                             </span><span class="c1"># calendar entries + your location points leaving one airport for another: evidence inferred</span>
+logbook<span class="w"> </span>transcribe<span class="w"> </span>voice-memos<span class="w">                    </span><span class="c1"># a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine</span>
+logbook<span class="w"> </span>add<span class="w"> </span>screentime<span class="w"> </span>--mac<span class="w">                      </span><span class="c1"># this Mac's Screen Time sessions (knowledgeC.db, behind Full Disk Access): app, span, device; never a title or URL</span>
+logbook<span class="w"> </span>add<span class="w"> </span>screentime<span class="w"> </span>--backup<span class="w"> </span>~/backup<span class="w">          </span><span class="c1"># the phone's Screen Time store out of an iOS backup: hourly totals per app (docs/adapters/screentime.md)</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>immich<span class="w">                               </span><span class="c1"># everything since the last run; safe to repeat</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>immich<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-01-01T00:00:00Z<span class="w">  </span><span class="c1"># or everything Immich received or changed since then</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>immich<span class="w"> </span>--dry-run<span class="w">                     </span><span class="c1"># count and summarise, write nothing</span>
+</code></pre></div>
+<p><code>sync</code> remembers where it got to in <code>state/&lt;source&gt;.json</code> and re-runs append nothing that is already
+in the log. The watermark is the source's own clock, when it received or last changed an item, not the
+capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tomorrow's sync and still
+lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
+and the command exits 2.</p>
+<p><code>logbook sync --all</code> runs every configured live source in turn — configured: at least one of its
+<code>LOGBOOK_*</code> variables set, and all it needs present — each from its own watermark; a disabled source
+or one with no variable set is skipped and said so, and a failure in one never stops the next. Each
+source prints its own summary as it runs, then one line per source closes the run (<code>ok</code>, <code>failed
+(status 1)</code>, <code>skipped (LOGBOOK_GRANOLA_KEY not set)</code>), and the exit status is 1 when any failed.
+<code>logbook sync --install-schedule</code> makes the machine run <code>sync --all</code> at 07:00 and 19:00 local: a
+launchd agent on macOS (<code>~/Library/LaunchAgents/org.logbook.sync.plist</code>), a systemd user timer on
+Linux (<code>~/.config/systemd/user/logbook-sync.timer</code>). The plist or unit is printed before it is
+written, nothing is written outside that directory, and <code>--uninstall-schedule</code> removes it again. The
+agent runs the Python that installed it and points at the record found at install time; the keys your
+sources need it reads from <code>~/.config/logbook/sync.env</code> (<code>KEY=value</code> lines, mode 600), which you write
+and the command never does. <code>sync weather</code> is the one source that asks a third party about your days:
+it is left out of <code>--all</code> unless that file (or the environment) says <code>LOGBOOK_WEATHER=1</code>.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>sync<span class="w"> </span>--all<span class="w">                                </span><span class="c1"># every configured source, one after the other</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>--all<span class="w"> </span>--dry-run<span class="w">                      </span><span class="c1"># count per source, write nothing</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>weather<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-06-01<span class="w">           </span><span class="c1"># the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>--install-schedule<span class="w">                   </span><span class="c1"># 07:00 and 19:00 local, by launchd or systemd</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>--uninstall-schedule
+</code></pre></div>
+<p>A nightly <code>logbook backup</code> goes on the same scheduler, by hand: <a href="../backup/">docs/backup.md</a> has the
+launchd agent and the systemd timer for a 03:00 snapshot that keeps two weeks.</p>
+<p>Contacts become resolution lines (RFC 0006): each contact mints a person or company id in the record, and
+every phone number and email address points at it. Set <code>LOGBOOK_DIAL_PREFIX</code> (for example <code>44</code>) so numbers
+saved without a country code get one, with the national trunk <code>0</code> dropped (<code>07700 900123</code> becomes
+<code>+447700900123</code>); a number that already starts with the prefix digits but no <code>+</code>, or any number when the
+variable is unset, is kept as entered and flagged <code>unnormalised</code>.</p>
+<p>WhatsApp messages become <code>message/v1</code> lines (RFC 0008), one per message, with the sender as the same kind of
+phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
+with the lines: a file found under <code>Message/</code> beside the database is hashed and its digest kept under
+<code>extra.media</code>, and <code>logbook attach import-backup &lt;backup&gt; --only whatsapp,imessage,photos</code> later streams every
+file the lines name out of the backup into the content-addressed store, checked against the line
+(<a href="../attachments/">docs/attachments.md</a>); set <code>LOGBOOK_WHATSAPP_HASH_MEDIA=0</code> to skip the hashing on a large store.
+A group message sent from a linked device carries a <code>@lid</code> id instead of a phone number, which no contact list
+knows; add WhatsApp's own ContactsV2.sqlite (it sits beside ChatStorage.sqlite) and each lid becomes an alias
+of the phone number WhatsApp pairs it with (RFC 0006 <code>alias_of</code>), so the sender takes the name your contacts
+import gave that number, whichever import came first.</p>
+<p>Google Photos from a Takeout become <code>photo/v1</code> lines (RFC 0002), one per media file in the <code>Google Photos/</code>
+folder, timed by the sidecar's taken time, with the place, the album, the caption and the names Google tagged as
+<code>extra.people</code> refs (never resolved); a live photo's still and motion halves are one <code>camera</code> line, a photo from a
+shared album is <code>received</code>, an edited copy with no sidecar is still a line, timed by the file. The sidecar naming
+Google uses (<code>.json</code>, <code>.supplemental-metadata.json</code>, the truncated and <code>(1)</code>-numbered variants) is matched
+defensively and a sidecar with no file is counted. Media files are hashed into <code>extra.media</code> as for WhatsApp, never
+copied; set <code>LOGBOOK_TAKEOUT_HASH_MEDIA=0</code> to skip the hashing.</p>
+<p>Apple Notes become <code>note/v1</code> lines (RFC 0010), one per note, with the plain text pulled out of the note archive,
+the title, the folder and the modification time. A note edited since the last import is a new line (its <code>raw_id</code>
+carries the modification time); password-protected notes are skipped because their body is encrypted; notes in
+Recently Deleted are logged and flagged <code>deleted</code>.</p>
+<p>Calendar entries become <code>event/v1</code> lines (RFC 0009), one per entry as the phone stores it: the span, the
+calendar, the place, the organizer and attendees as email refs, the status; a recurring entry is one line
+carrying its rule as RRULE text and a moved occurrence points back at it — occurrences are never expanded.
+An all-day entry is placed at local midnight in your record's timezone. The store's placeholder rows (a
+start before 1900, such as 1601) are skipped and counted; a birthday from 1965 is kept.</p>
+<p>Calls become <code>call/v1</code> lines (RFC 0012), one per call the phone's log stores, from the <code>CallHistory.storedata</code>
+an encrypted backup carries: the start, the end when the call was answered, the direction, whether it connected,
+the seconds it lasted, the other end as a phone, email or handle ref (the same shape as a message's sender, so
+one resolution of a number covers the address book, the chats and the calls) and the service as the phone names
+it — <code>cellular</code>, <code>facetime</code>, <code>facetime-audio</code>, or a third-party app such as <code>whatsapp</code>. A missed call is a line
+too. Tier 1: a call record is about your own time and carries nobody's words. Any <code>add ios-calls &lt;file&gt;</code> names
+the adapter for a store copied out under another name; <code>logbook add &lt;file&gt;</code> recognises it by content.</p>
+<p>Flights become <code>flight/v1</code> lines (RFC 0013), one per flight, from up to three places that meet on one key,
+<code>(date, carrier, number)</code>: a Flighty export (<code>add flights &lt;csv&gt;</code>, evidence <code>tracked</code>), your calendar plus your
+location points leaving one airport and next reaching another, silent in between or not (<code>infer flights</code>,
+evidence <code>inferred</code>), and your own sentence (<code>add flight "LX 561 NCE ZRH 2026-09-27 pilot"</code>, evidence <code>declared</code>). A
+flight seen twice is not written twice as two flights: the later observation supersedes the standing line with
+the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in; a
+codeshare (two numbers, one aircraft leaving once) is one flight too. An inferred leg is a flight only between airports
+150 km or more apart, never one a tracked flight already covers, and carries a number only when it is the flight the
+calendar entry names.
+The package ships the world's 1,150 large airports with their zones and OurAirports' <code>type</code>; <code>--airports FILE</code>
+(or <code>LOGBOOK_AIRPORTS</code>) adds a private field (<code>type</code> optional: <code>medium_airport</code> for a regional field with
+scheduled traffic). Tier 1; a booking reference is never kept.</p>
+<p>Apple Health becomes <code>health-sample/v1</code> lines (RFC 0014) from the <code>healthdb_secure.sqlite</code> an encrypted backup
+carries: steps, distance, active and basal energy and flights climbed summed into quarter-hour buckets per device;
+heart rate at its own resolution, at most one reading a minute per device; resting heart rate, heart-rate
+variability and weight one line each; every sleep stage as a span with its stage; every workout as a span with
+its duration, activity, energy and distance. Each line names the device that measured it (<code>Watch7,1</code>) and, when
+<code>healthdb.sqlite</code> is beside the store, the source's name. Tier 3 (SPEC §4; <code>--tier</code> overrides). <code>logbook add health &lt;file&gt;</code> names the adapter;
+<code>logbook add &lt;file&gt;</code> recognises the store by content. Re-importing a later backup appends only what is new.</p>
+<p><code>show</code> prints people by name — the sender of a message, the organizer and attendees of an event — and the
+names come from your own resolution lines, never from the raw lines: import your contacts to get them. The last unretracted resolution of a ref wins (RFC 0006); a ref
+nobody has resolved shows as the source gave it, after the name the source itself attached, if any.
+<code>show --raw</code> prints every ref unchanged, and a note's whole text where <code>show</code> prints its first line and
+<code>… (+N lines)</code>. A calendar entry two calendars carry (the same title, or the same flight number, within five
+minutes) is one row naming both sources. Either way, <code>show</code> only reads.</p>
+<p>Transcripts become <code>transcript/v1</code> lines (RFC 0004), one per recording, tier 3 by default because a transcript
+carries other people's words in full (<code>--tier</code> overrides). The text is never in the line: the file's own bytes go
+into the content-addressed store, <code>attachments/&lt;sha256&gt;</code> (SPEC §1.1), and the line points at them; <code>raw_id</code> is
+<code>&lt;source&gt;:&lt;sha256&gt;</code> unless the file brings one, so the same transcript added twice is one line. <code>logbook add
+transcript &lt;file|folder&gt; --source &lt;name&gt;</code> reads JSON already in transcript/v1 shape (the interchange format any tool
+can write: a <code>logbook export</code> line minus the chain fields), WebVTT and SRT (each cue a turn, the speaker from the
+voice tag or a leading <code>Name:</code>, else unknown), and Markdown or plain text with <code>Speaker: text</code> lines and an optional
+front-matter block for <code>title</code>, <code>started_at</code>, <code>ended_at</code> and <code>participants</code>. A file with no start of its own takes
+<code>--at</code>, else a date and time in its name (<code>2026-03-01T13-00-00Z …</code>, Zoom's <code>GMT20260301-130000_…</code>), else it is
+skipped and counted. Speakers stay as the source labels them; nothing is resolved here. Turn and speaker counts
+and the duration sit under <code>extra</code>.</p>
+<p>Mail becomes <code>mail/v1</code> lines (RFC 0015), one per message, tier 2 by default (<code>--tier</code> sets another for the whole
+import, never per message). <code>logbook add mail &lt;file.mbox|folder&gt;</code> reads a Google Takeout <code>Mail/</code> export — or any mbox —
+streamed, one message in memory at a time however large the file: the <code>Message-ID</code> as <code>raw_id</code> (prefixed by the
+mailbox when <code>--account</code> names it, so a re-import and a later live puller append nothing), the thread root from
+<code>References</code>, the sender and recipients as <code>{email, name}</code> exactly as the headers spell them (a resolution of the
+address names them in <code>show</code>, as for a message's sender), the subject, the <code>Date</code> header with its offset kept and
+<code>at</code> in UTC, Gmail's labels, the body as plain text (an HTML-only message stripped to its text, no library), the
+size, and every attachment by name, media type and length — never decoded. Attachments are decoded, hashed and put
+into <code>attachments/</code> only with <code>--attachments</code>; otherwise the line names them and the record holds no bytes.
+<code>direction</code> is <code>sent</code> when
+the sender is one of your addresses — put <code>"owner_emails": ["you@example.org"]</code> in <code>logbook.json</code>, or pass
+<code>--account</code> — else <code>received</code>. <code>--only-labels</code>/<code>--skip-labels</code> keep or drop by Gmail label, <code>--since</code> cuts by day or
+instant. A message with no <code>Message-ID</code> is keyed by the digest of its bytes and counted; a message with no readable
+<code>Date</code> is timed by its mbox separator and counted; a body longer than 64 KB is cut and counted; nothing is dropped
+silently. Built for a 20 GB Takeout: read in chunks at well over 40 MB/s with one message in memory, a progress line
+every 10,000 messages with the rate, and resumable — <code>inbox/manifest.json</code> keeps the byte offset of the last message
+the record holds, so an interrupted <code>add mail</code> picks up there and a finished one reads nothing (<code>--restart</code> reads
+it all again). <code>show</code> prints
+<code>✉ subject — from → to (n attachments)</code>, never the body; <code>show --raw</code> prints the body under the row.
+<a href="../adapters/mail/">docs/adapters/mail.md</a> has the whole of it.</p>
+<p><code>stats</code> is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
+resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; <code>--json</code> gives the same as one object.
+<code>stats --health</code> is one row per day from the health lines — hours asleep (the night that ends on that day, asleep
+stages only — never in bed or awake — each device's spans unioned so a night written twice counts once, then the longest device, never a sum across devices), steps (per quarter hour the larger device, summed) and resting heart rate — and
+prints no device, zone or other field; <code>--json</code> gives the rows as <code>days</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Variables</th>
+<th>What it logs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>immich</code></td>
+<td><code>LOGBOOK_IMMICH_URL</code>, <code>LOGBOOK_IMMICH_KEY</code></td>
+<td>one <code>photo/v1</code> line per asset: capture time, camera, place, size, faces as person ids, never the pixels</td>
+</tr>
+<tr>
+<td><code>dawarich</code></td>
+<td><code>LOGBOOK_DAWARICH_URL</code>, <code>LOGBOOK_DAWARICH_KEY</code> (<code>LOGBOOK_DAWARICH_LOOKBACK_H</code>, default 24)</td>
+<td>one <code>location/v1</code> line per point, identical to the line its export gives</td>
+</tr>
+<tr>
+<td><code>imessage</code></td>
+<td>none required: this Mac's <code>~/Library/Messages/chat.db</code> (<code>LOGBOOK_IMESSAGE_DB</code> for another store; <code>LOGBOOK_IMESSAGE_LOOKBACK_H</code>, default 24; <code>LOGBOOK_IMESSAGE_HASH_MEDIA=0</code> to skip hashing)</td>
+<td>one <code>message/v1</code> line per message, identical to the line the phone backup's sms.db gives</td>
+</tr>
+<tr>
+<td><code>granola</code></td>
+<td><code>LOGBOOK_GRANOLA_KEY</code> (<code>LOGBOOK_GRANOLA_URL</code>, default <code>https://public-api.granola.ai/v1</code>; <code>LOGBOOK_GRANOLA_LOOKBACK_H</code>, default 24; <code>LOGBOOK_GRANOLA_SUMMARIES=0</code> to skip the summaries)</td>
+<td>one <code>transcript/v1</code> line per recording, tier 3, the transcript in <code>attachments/</code>; plus Granola's AI summary as a tier-2 <code>note/v1</code> line with <code>extra.derived_from</code> the transcript line's id</td>
+</tr>
+<tr>
+<td><code>gcal</code></td>
+<td><code>LOGBOOK_GCAL_URLS</code>: Google Calendar's private iCal addresses, comma-separated, each optionally <code>name=url</code> (<code>LOGBOOK_GCAL_LOOKBACK_H</code>, default 24)</td>
+<td>one <code>event/v1</code> line per event, identical to the line the calendar's <code>.ics</code> export gives (<code>source</code> <code>ics</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Create the Immich key under <em>Account settings → API keys</em> with only the <strong>asset.read</strong> permission.
+The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.</p>
+<h2 id="what-never-enters-the-record">What never enters the record</h2>
+<p>Demo, sample or placeholder data never enters the record: an adapter existing is not a decision to run it.
+Your list of switched-off sources lives in <code>policy/import.json</code>, <code>{"disabled": [{"source": "sbb", "reason":
+"a demo account"}]}</code>; <code>add</code>, <code>sync</code> and <code>import-backup</code> skip a disabled source and say so, with or without
+<code>--only</code>, and <code>logbook sources</code> lists every adapter this build has, file and live, with its state and the
+reason. <code>init</code> writes the empty list, and a record made earlier gets it on the first run. An alias stands for
+its adapter (<code>books</code> for <code>apple-books</code>, <code>health</code> for <code>apple-health</code>), and a name no adapter carries is
+listed as such rather than silently ignored.</p>
+<h2 id="keep-it-flowing">Keep it flowing</h2>
+<p>Import your Dawarich export once, then let <code>sync</code> pick up every point your phone sends after it:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_DAWARICH_URL</span><span class="o">=</span>https://dawarich.example.org<span class="w">   </span><span class="c1"># your own server</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_DAWARICH_KEY</span><span class="o">=</span>...<span class="w">                            </span><span class="c1"># Settings → Account → API key</span>
+logbook<span class="w"> </span>add<span class="w"> </span>~/Downloads/dawarich-export.json<span class="w">               </span><span class="c1"># once: the history</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>dawarich<span class="w">                                      </span><span class="c1"># then, as often as you like</span>
+</code></pre></div>
+<p>Both write the same line for the same point (same <code>raw_id</code>), so nothing you already imported is written
+twice. The first <code>sync</code> starts from the newest Dawarich point already in the record; after that from the
+last point it saw. A phone uploads in batches, so a point can reach the server after newer ones: each
+sync looks back 24 hours before its watermark and skips what the record already has, and says how many
+that was. Set <code>LOGBOOK_DAWARICH_LOOKBACK_H</code> for a longer or shorter window; <code>--since</code> pulls from an exact
+time instead.</p>
+<p>On a Mac, <code>logbook sync imessage</code> reads the Messages database the Mac itself keeps, read-only, and writes
+the same line for the same message as the phone backup (same <code>raw_id</code>, the message guid), so a record
+seeded with <code>import-backup</code> carries on from its newest message and nothing is written twice. The first
+run starts from the newest iMessage line already in the record, later runs from the newest message seen,
+each looking back 24 hours (<code>LOGBOOK_IMESSAGE_LOOKBACK_H</code>) for a conversation another device synced late.
+Attachments stay where Messages keeps them; a file that is there is hashed into the line, one that is
+not is flagged. The terminal needs <strong>Full Disk Access</strong> (System Settings → Privacy &amp; Security) to read
+the database; without it the sync says so on one line and exits 1.</p>
+<p>Granola works the same way (ADR 0017: backfill and live share one mapping). Create the key under <em>Settings →
+Connectors → API keys</em> (Business and Enterprise plans; scope it to your personal notes), export it as
+<code>LOGBOOK_GRANOLA_KEY</code>, and run:</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>add<span class="w"> </span>transcript<span class="w"> </span>~/Granola-export/<span class="w"> </span>--source<span class="w"> </span>granola<span class="w">   </span><span class="c1"># once, if you have exports; optional</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>granola<span class="w">                                        </span><span class="c1"># then nightly: 0 5 * * * logbook sync granola</span>
+</code></pre></div>
+<p>Each recording is one <code>transcript/v1</code> line, <code>raw_id</code> <code>granola:&lt;note id&gt;</code>, with the transcript's segments stored
+under <code>attachments/</code> and the attendees as Granola names them; the AI summary follows as a <code>note/v1</code> line, tier 2,
+marked <code>extra.derived = true</code> and pointing at the transcript by id (set <code>LOGBOOK_GRANOLA_SUMMARIES=0</code> to skip it).
+A note made without a recording (one empty turn, zero seconds) gives no transcript line, only its summary,
+counted as <code>without a recording</code>.
+The watermark is the recording's end; each sync looks back 24 hours (<code>LOGBOOK_GRANOLA_LOOKBACK_H</code>) and skips what
+the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
+written: a batch is all or nothing.</p>
+<p><code>logbook sync gcal</code> pulls your Google calendars from their private iCal addresses (Google Calendar →
+Settings → the calendar → <em>Integrate calendar</em> → <em>Secret address in iCal format</em>), one whole calendar per
+URL, and reads each with the same reader <code>logbook add</code> uses for an <code>.ics</code> export, so a calendar you
+imported from a Takeout or settings-page export and the same calendar pulled by URL are one line per
+event (same <code>raw_id</code>, the event's UID and last-modified time; ADR 0017). Name a feed with <code>name=url</code> when it has no
+name of its own. The watermark is the newest last-modified time seen; each run keeps the events changed
+in the 24 hours before it (<code>LOGBOOK_GCAL_LOOKBACK_H</code>) and reports, per calendar, how many it saw and how
+many were new. A calendar that fails (an expired secret address is a 404) is one line on stderr, the others
+are still written, the watermark stays put and the exit is 1.</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_GCAL_URLS</span><span class="o">=</span><span class="s1">'Sailing=https://calendar.google.com/calendar/ical/…/private-…/basic.ics,https://…'</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>gcal<span class="w"> </span>--dry-run<span class="w">                                </span><span class="c1"># counts per calendar, nothing written</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>gcal
+</code></pre></div>
+<p>Your boat, your aircraft and your car are <em>subjects</em> with tracks of their own, not places (ADR 0018). Register
+each once in <code>assets.json</code>, then let <code>sync</code> ask the receivers that hear them:</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>assets<span class="w"> </span>add<span class="w"> </span>solvind<span class="w"> </span>--kind<span class="w"> </span>yacht<span class="w"> </span>--name<span class="w"> </span>Solvind<span class="w"> </span>--mmsi<span class="w"> </span><span class="m">999000001</span><span class="w">        </span><span class="c1"># synthetic MMSI; use your own</span>
+logbook<span class="w"> </span>assets<span class="w"> </span>add<span class="w"> </span>ln-zz1<span class="w"> </span>--kind<span class="w"> </span>aircraft<span class="w"> </span>--name<span class="w"> </span><span class="s2">"the club's Cub"</span><span class="w"> </span>--icao24<span class="w"> </span>000a01<span class="w"> </span>--registration<span class="w"> </span>ZZ-ZZ1
+logbook<span class="w"> </span>assets<span class="w"> </span>list
+logbook<span class="w"> </span>assets<span class="w"> </span>status<span class="w">                                       </span><span class="c1"># where each one last was, and how old that fix is</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">LOGBOOK_AISSTREAM_KEY</span><span class="o">=</span>...<span class="w">                            </span><span class="c1"># free key from aisstream.io</span>
+uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>ais<span class="w">                                         </span><span class="c1"># or: pip install 'openlogbook[ais]'</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>ais<span class="w"> </span>--dry-run<span class="w">                                  </span><span class="c1"># listen for 60 s, count, write nothing</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>ais<span class="w">                                            </span><span class="c1"># then: */10 * * * * logbook sync ais</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>ais<span class="w"> </span>--listen<span class="w"> </span><span class="m">3600</span><span class="w">                              </span><span class="c1"># or: one long sitting, written at the end</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>ais<span class="w"> </span>--until<span class="w"> </span><span class="m">18</span>:30<span class="w">                              </span><span class="c1"># … until the record's clock next shows 18:30</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>adsb<span class="w">                                           </span><span class="c1"># OpenSky, no key needed; LOGBOOK_OPENSKY_USER/PASS optional</span>
+</code></pre></div>
+<p>Each position is a <code>location/v1</code> line like your own, with <code>subject</code> set to the asset's id and <code>raw_id</code> from the
+receiver, the identifier and the fix time (<code>aisstream:&lt;mmsi&gt;:&lt;unix seconds&gt;</code>, <code>opensky:&lt;icao24&gt;:&lt;unix seconds&gt;</code>),
+so a report heard twice is one line, and a stream you saved to a file (<code>logbook add messages.jsonl</code>) and the same
+reports heard live are one line too. <code>state/ais.json</code> and <code>state/adsb.json</code> keep a watermark per asset. <code>show</code>
+lists the boat's points as their own run, named by the asset; whether you were aboard is for an engine to decide
+from the two tracks, never written on a line. <code>sync ais</code> listens for <code>--listen SECONDS</code>, or <code>--until HH:MM</code> (the
+record's local time, the next time the clock shows it), or else <code>LOGBOOK_AISSTREAM_LISTEN_S</code> (default 60 s; a
+vessel under way reports every few seconds), and writes at the end; while it listens it prints one line a minute
+with the messages heard per asset, reconnects with a wait that doubles from 1 s to 60 s when the socket drops,
+and on Ctrl-C still writes what it heard, then exits 130. The key is read from <code>LOGBOOK_AISSTREAM_KEY</code> only and
+never printed. OpenSky's <code>states/all</code> is the present, one fix per aircraft per poll, so poll as often as its
+rate limit allows.</p>
+<p><strong>A secret iCal address is the whole calendar</strong> to anyone who holds it; Google can reset it. Keep the
+URLs in the shell environment only, as the Dawarich key below: the logbook never prints one, naming a
+calendar by its name or by eight characters of the URL's hash.</p>
+<p><strong>A Dawarich API key is full access</strong> to your account: it can read and delete every point you have.
+Keep it in the shell environment only (your shell profile, a password manager's CLI, a secrets file
+outside the record) and never in the record, the repository or a script you share. The logbook sends it
+only in the <code>Authorization</code> header and never prints it.</p>
+<p><strong>Is every source still flowing?</strong> <code>logbook sources --gaps</code> reads the index alone, never the files, and
+prints one row per source with lines: how many, its last line's time, the longest silent stretch (between two
+lines, or since the last one, still running) and the days with no line from it, folded into runs, so a phone
+that stopped sending or a sync that died is seen on one screen. The range runs from each source's first line
+to today in the record's zone, or from <code>--since YYYY-MM-DD</code>; a line dated after today (a calendar's future
+entries) is outside it, and today counts as a missing day only once the source has been silent a full day.
+<code>--expect dawarich imessage</code> shows only those sources, marks one that has been silent a day or more at any
+point of the range, or has no line at all, with <code>!</code>, and exits 1 when any is marked, so a cron job can tell
+you: <code>0 7 * * * logbook sources --gaps --since 2026-09-01 --expect dawarich imessage</code>. Every line counts,
+retracted or not; <code>--json</code> gives the same report as data.</p>
+<h2 id="reading-the-day-back">Reading the day back</h2>
+<p><code>logbook derive stays</code> is the first reader of the record: it turns the day's <code>location/v1</code> lines into
+stays, stops and moves and prints them in your local time, or as JSON with <code>--json</code>. Nothing is written
+to the record; the thresholds live in <code>policy/stays.json</code> (created with defaults on the first run) and an
+optional <code>places.json</code> at the root names places.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>derive<span class="w"> </span>stays<span class="w">                          </span><span class="c1"># today</span>
+logbook<span class="w"> </span>derive<span class="w"> </span>stays<span class="w"> </span>--day<span class="w"> </span><span class="m">2026</span>-09-30
+logbook<span class="w"> </span>derive<span class="w"> </span>stays<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-09-01<span class="w"> </span>--until<span class="w"> </span><span class="m">2026</span>-09-30<span class="w"> </span>--json
+logbook<span class="w"> </span>derive<span class="w"> </span>stays<span class="w"> </span>--subject<span class="w"> </span>solvind<span class="w">        </span><span class="c1"># one asset's own track (assets.json)</span>
+</code></pre></div>
+<p>A stay is a span at one place of twenty minutes or more, or of any length when something is attached to
+it: a calendar event, a transcript, a note, a call, a message or a photo whose time falls inside it.
+Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
+flagged. A move is what lies between: its distance along the points, its duration, and a mode from the
+speed (walk, car, train, flight; flight also when a gap starts and ends near airports). The night of each
+day is the longest stay between 22:00 and 08:00; a night with none is in transit.</p>
+<p>A tracker such as Dawarich sends no points while you are still, so a silence is read as time at the place:
+a gap whose next point is back inside the stay's radius continues the stay however long it was, and a stay
+lasts until the tracker's next point when that point comes after a silence and lies within a short walk
+(1.2 km by default) — even when it is the next morning and already on your way out, so the night at home is
+seen. In <code>policy/stays.json</code>, <code>merge_gap_s</code> (600 s by default) governs an excursion, not a gap at the same
+place: step outside the radius and come back within it and the stay is one; come back later and it is two
+stays with a move between. A gap of <code>merge_gap_s</code> or more is a silence, and <code>walk_max_kmh</code> for <code>merge_gap_s</code>
+is the hop a silence may end with and still count as time at the place. An asset registered in
+<code>assets.json</code> (ADR 0018) gets its own stays and moves; when its position lies within the radius of yours for
+<code>aboard_min_s</code> (20 minutes) or longer you are aboard it, and the run of your stays and moves aboard it is one
+stay <code>aboard &lt;asset&gt;</code> with the run inside it, so the asset's movement never fragments your stay
+(<a href="../day/">docs/day.md</a>, <em>Aboard an asset</em>). A night aboard names the asset and carries its position.</p>
+<h2 id="the-day">The Day</h2>
+<p><code>logbook day 2026-06-13</code> is the day read back whole (<a href="../day/">docs/day.md</a>): the night before and the night
+after (home, away or in transit), the country of the day, the timeline of stays, stops, moves and flights with what
+attached to each (events, transcripts, notes, mail threads, calls, keepers named; messages and photos counted) and who
+was there — confirmed by a note, a transcript or a timed calendar entry; proposed by a face or an all-day entry —
+then what the calendar planned where the track has nothing, the night's sleep, the day's steps and resting heart rate,
+and which sources spoke and when they last did. A run of stays and moves aboard a boat or an aircraft is one stay
+<code>aboard &lt;asset&gt;</code> with the anchorages inside it; a silence of the tracker is a <code>gap</code> row that places nothing. <code>--json</code>
+gives the Day as one object, every row with the ids of its lines. Nothing is written.</p>
+<p>A <strong>story</strong> someone told — "in 1961 we moved to the house by the lake" — is a line on the day it was told, never on the
+day it is about (<code>add story &lt;file&gt; --teller &lt;ref&gt; --listener &lt;ref&gt; --refers-to 1961</code>, RFC 0028, a draft). <code>show</code> prints
+it on its told day as <code>📖 refers to 1961 — told by Ola Nordmann to Kari Nordmann</code>; <code>day 1961-05-04</code> lists it under
+<em>Stories about this day</em>, apart from the timeline, because a told year is a claim and the timeline is what was observed.</p>
+<h2 id="in-a-browser">In a browser</h2>
+<p><code>logbook serve</code> is the record read in a browser, on this machine only (<a href="../serve/">docs/serve.md</a>): the Day as a
+timeline with each row's attachments under a toggle (<code>/day/2026-06-17</code>), a window one row per day (<code>/days</code>), the trips of
+a year (<code>/trips</code>), the places, the assets with their last fix, and where each source went quiet — the same readers as the
+commands, rendered as HTML with one inline stylesheet and no script, nothing fetched from anywhere. The server binds
+<code>127.0.0.1</code> and refuses any other host; no page references a URL outside itself; nothing is written.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>serve<span class="w">                                 </span><span class="c1"># http://127.0.0.1:8765/</span>
+</code></pre></div>
+<h2 id="reading-the-record">Reading the record</h2>
+<p>The readers above the day page derive, and never append: every one of them is a function of the record at its
+head, and the same record reads the same way twice. The only lines they ever add are the captain's own namings.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>places<span class="w"> </span>propose<span class="w">                        </span><span class="c1"># unnamed stays ranked by hours, with the nearest known place and a suggested name</span>
+logbook<span class="w"> </span>places<span class="w"> </span>propose<span class="w"> </span>--write<span class="w">                </span><span class="c1"># name the ones you accept: places.json, and one note/v1 line each</span>
+logbook<span class="w"> </span>places<span class="w"> </span>add<span class="w"> </span>Home<span class="w"> </span>--lat<span class="w"> </span><span class="m">59</span>.9139<span class="w"> </span>--lon<span class="w"> </span><span class="m">10</span>.7522<span class="w"> </span>--kind<span class="w"> </span>home
+logbook<span class="w"> </span>places<span class="w"> </span>name<span class="w"> </span><span class="m">59</span>.92,10.74<span class="w"> </span>Cafe<span class="w">          </span><span class="c1"># or a stay id from `propose`; the naming is a note in the record</span>
+
+logbook<span class="w"> </span>rollup<span class="w"> </span>countries<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">          </span><span class="c1"># days per country from the overnight stay; in transit apart</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>flights<span class="w">                        </span><span class="c1"># count, km, long-haul, by evidence, from the flight lines standing</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>nights<span class="w">                         </span><span class="c1"># home, away, in transit, nights aboard, the longest trip</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>places<span class="w">                         </span><span class="c1"># nights, stays, hours, people per named place and asset; the top unnamed clusters</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>places<span class="w"> </span>--with<span class="w">                  </span><span class="c1"># the place × person table: stays, days and nights at each place per person</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>people<span class="w">                         </span><span class="c1"># days and nights together, last real contact, places shared, per person</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>health<span class="w"> </span>--by<span class="w"> </span>week<span class="w">               </span><span class="c1"># sleep, steps, resting heart rate, HRV per month or ISO week; — when missing</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>listen<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">             </span><span class="c1"># listens, hours, skips, the top artists by hours, hours by month, from every listen/v1 line</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>attention<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">          </span><span class="c1"># hours by app and by category (communication, browser, media, work, other) from Screen Time</span>
+logbook<span class="w"> </span>rollup<span class="w"> </span>money<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">              </span><span class="c1"># the transactions by month, by country of the stay, by the source's category</span>
+
+logbook<span class="w"> </span>trips<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">                     </span><span class="c1"># runs of nights away: route, places, people, flights in and out</span>
+logbook<span class="w"> </span>ledger<span class="w"> </span>--month<span class="w"> </span><span class="m">2026</span>-06<span class="w">                </span><span class="c1"># the transactions at the stay and in the trip, per day; shares per person</span>
+logbook<span class="w"> </span>year<span class="w"> </span><span class="m">2026</span><span class="w"> </span>--html<span class="w"> </span>~/2026.html<span class="w">          </span><span class="c1"># the year read back: the rollups, the trips, one day a month; a page that prints</span>
+logbook<span class="w"> </span>trip<span class="w"> </span>trip:2026-06-15:2026-06-20<span class="w">       </span><span class="c1"># one trip: the route as stays with a map, days, flights, people, keepers, health, spend</span>
+logbook<span class="w"> </span>year<span class="w"> </span><span class="m">2026</span><span class="w"> </span>--html<span class="w"> </span>~/2026.html<span class="w"> </span>--print<span class="w">  </span><span class="c1"># the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter</span>
+logbook<span class="w"> </span>trip<span class="w"> </span>trip:2026-06-15:2026-06-20<span class="w"> </span>--html<span class="w"> </span>~/week.html<span class="w"> </span>--print<span class="w">  </span><span class="c1"># the same for one trip, a spread a day; docs/print.md says how to make the PDF</span>
+logbook<span class="w"> </span><span class="nb">export</span><span class="w"> </span>trip-bundle<span class="w"> </span>trip:2026-06-15:2026-06-20<span class="w"> </span>--to<span class="w"> </span>kari<span class="w"> </span>--tier<span class="w"> </span><span class="m">1</span>,2<span class="w">   </span><span class="c1"># that trip for a member of the circle; `import trip-bundle` takes one in</span>
+logbook<span class="w"> </span>show<span class="w"> </span>person<span class="w"> </span><span class="s2">"Kari Nordmann"</span><span class="w">           </span><span class="c1"># first and last contact, days together, places, the last shared stays</span>
+logbook<span class="w"> </span>show<span class="w"> </span>asset<span class="w"> </span>solvind<span class="w">                    </span><span class="c1"># trips aboard, nights, people, the track's summary</span>
+logbook<span class="w"> </span>show<span class="w"> </span>place<span class="w"> </span>Office<span class="w">                     </span><span class="c1"># visits, people, photos</span>
+logbook<span class="w"> </span>people<span class="w"> </span>--year<span class="w"> </span><span class="m">2026</span><span class="w">                    </span><span class="c1"># everyone the record names: channels, days and nights together, last real contact</span>
+logbook<span class="w"> </span>person<span class="w"> </span>ola@example.org<span class="w">                </span><span class="c1"># one page: the numbers, then the shared days, most recent first</span>
+logbook<span class="w"> </span>people<span class="w"> </span>merge<span class="w">                          </span><span class="c1"># the same person named twice: proposals with the evidence; --apply ID merges</span>
+logbook<span class="w"> </span>search<span class="w"> </span><span class="s1">'"with kari"'</span><span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-06-01<span class="w">   </span><span class="c1"># full-text, literal, ranked, by day: notes, messages, mail, events, transcripts</span>
+
+logbook<span class="w"> </span>infer<span class="w"> </span>keepers<span class="w">                         </span><span class="c1"># favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)</span>
+logbook<span class="w"> </span>keepers<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-06-01<span class="w"> </span>--lane<span class="w"> </span>art
+logbook<span class="w"> </span>keepers<span class="w"> </span>--people<span class="w">                      </span><span class="c1"># who appears on the keepers, per month: the faces the library named, proposed</span>
+logbook<span class="w"> </span>describe<span class="w"> </span>keepers<span class="w"> </span>--photos<span class="w"> </span>~/Pictures/Photos<span class="se">\ </span>Library.photoslibrary<span class="w">   </span><span class="c1"># a local vision model's sentence per keeper photo (openlogbook[describe]); never a name, never a place</span>
+
+logbook<span class="w"> </span>promises<span class="w"> </span>--judge<span class="w">                      </span><span class="c1"># a local model reads every "I'll…" the rules found; the commitments, as proposals</span>
+logbook<span class="w"> </span>promises<span class="w"> </span>--all<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-06-01<span class="w">     </span><span class="c1"># every candidate the rules found, judged or not</span>
+logbook<span class="w"> </span>promises<span class="w"> </span><span class="k">done</span><span class="w"> </span>3b9e5d0f2a71c846<span class="w">        </span><span class="c1"># it was kept: one task/v1 line, so --open hides it</span>
+
+logbook<span class="w"> </span>tasks<span class="w"> </span>--open<span class="w">                          </span><span class="c1"># the task/v1 lines as they stand: the latest snapshot of each</span>
+logbook<span class="w"> </span>tasks<span class="w"> </span>--propose-done<span class="w">                  </span><span class="c1"># the mail, calendar entry or transaction that says an open task was done</span>
+logbook<span class="w"> </span>tasks<span class="w"> </span><span class="k">done</span><span class="w"> </span>0dd9108fb6d5d715<span class="w"> </span>--evidence<span class="w"> </span>01a0fda3-99b0-7af6-a986-0a377117a94b<span class="w">   </span><span class="c1"># one task/v1 line, done</span>
+
+logbook<span class="w"> </span>digest<span class="w">                                </span><span class="c1"># today in 25 lines at most, with one question you answer in a word</span>
+logbook<span class="w"> </span>digest<span class="w"> </span><span class="m">2026</span>-06-10<span class="w"> </span>--markdown<span class="w">          </span><span class="c1"># the same lines as Markdown; --json the sets behind them</span>
+</code></pre></div>
+<p>Every command takes <code>--json</code>, and under <code>--json</code> every number carries the ids of the lines it came from: a stay
+by its first and last location line (one unbroken run of points), a flight by the flight line standing, a person
+by the lines that put them there. The rollups are described in <a href="../rollups/">docs/rollups.md</a>. The ledger, the transactions in context, in <a href="../ledger/">docs/ledger.md</a>. A home region is a place of kind <code>home</code> in <code>places.json</code>; a night whose stay
+is within 400 m of one is a night at home whatever that place's radius, so a trip never starts or ends with the
+guest room across the street. Without a home place no night is home, there are no trips, and the commands say so.</p>
+<p><strong>Who was there.</strong> A stay's company comes from the record's own evidence: an attendee of a timed calendar entry
+held at the stay (its location geocodes within a kilometre of the stay — coordinates on the entry, or a
+location that names a place in <code>places.json</code> — or it has no location and overlaps the stay by more than an
+hour; an all-day entry places nobody), a participant of a transcript recorded inside it whom the record
+resolves to a person (<code>Speaker A</code>, <code>me</code> and <code>Unknown</code> are nobody), a note written inside it that says
+<code>with &lt;name&gt;</code> — all confirmed — and a face the photo library tagged, proposed only. Names resolve through the
+record's resolution lines (RFC 0006); a bare address nobody has named and a calendar system address
+(<code>calendar.google.com</code>, <code>noreply</code>, <code>reservations@</code>, <code>invite@</code>) are dropped. You are never your own company:
+the with module knows you by <code>owner_id</code> and <code>owner_emails</code> in <code>logbook.json</code>, by every resolution line that
+names those, and by <code>policy/owner.json</code>, <code>{"names": [...], "emails": [...], "phones": [...]}</code>, where your
+other spellings go; <code>init</code> writes it empty. <code>trips</code> lists at most twelve names, most evidence first.</p>
+<p><strong>Countries, coarsely.</strong> <code>rollup countries</code> has no map. The country of a night is the one a place in
+<code>places.json</code> carries (<code>country</code>, your word), else the nearest large airport within 300 km and the country its
+zone is filed under in the bundled <code>zone.tab</code>. That is wrong near borders and far from airports, and the method
+is printed with the numbers; name the place and give it a country when it matters.</p>
+<p><strong>Trips are derived, never written</strong> (ADR 0019). A trip is a run of consecutive days whose overnight stay is
+outside every home region, recomputed every time; a trip's name, when you give one, is a note. Its route is
+the night places in order: the named place, else an airport's code and city (<code>ZRH, Zurich</code>) when the stay is at
+one — within 3.5 km of the reference point of an airport with scheduled traffic (OurAirports type large or
+medium; a terminal often lies well off the runway midpoint the row marks), within 2 km of any other row — else
+the coordinates with <code>near &lt;place&gt;, x km</code> for a named place within 5 km, else the coordinates with the city of
+the nearest large airport within 30 km in parentheses (<code>53.5998,10.0130 (Hamburg)</code>; the city, never the
+airport's code); consecutive points within 200 m of each other are one. <code>logbook day</code> labels an unnamed stay the
+same way.</p>
+<p><strong>Keepers</strong> (RFC 0024) are the photos you marked: a favourite in the library is a <code>memory</code>, a photo in an album
+named Art is <code>art</code>. <code>add photos</code> writes them with the photo lines, and <code>infer keepers</code> reads the marks out of any
+library's photo lines once; <code>show &lt;day&gt;</code> lists the day's keepers first, as its hero photos. <code>keepers --people</code> is
+who appears on them per month, from the names your library gave its faces — proposed, never confirmed; a face's
+name is a person only when it is exactly a label a resolution line carries (<code>docs/adapters/photos.md</code>). <code>describe keepers</code>
+(<code>docs/describe.md</code>) has a local vision model (<code>openlogbook[describe]</code>, mlx-vlm on Apple silicon) write one factual
+sentence and the visible things for each keeper whose file is reachable, as a derived note on the photo's day,
+once per photo; it is never told who is in the picture or where it was taken and may not guess either.</p>
+<p><strong>Promises</strong> (<code>docs/promises.md</code>) are proposals, never facts: every sentence of a transcript or a note that reads
+as a first-person future or obligation, in English or German (<code>I'll send</code>, <code>we'll get back</code>, <code>let me</code>, <code>I need to</code>,
+<code>ich schicke</code>, <code>ich melde mich</code>, <code>ich muss</code>), with the day, the line, the speaker when the record resolves one and a
+due hint when a date phrase is in it (<code>by Friday</code>, <code>next week</code>, <code>bis Montag</code>), found by rules. The rules find far
+too many, so <code>--judge</code> has a local instruct model (<code>openlogbook[judge]</code>, mlx-lm on Apple silicon, a 4-bit
+Qwen2.5 by default) read each candidate in its context and say whether it is a commitment, by whom, to whom,
+what and by when; the verdicts are kept in the record and never redone, and the command shows the commitments
+it is sure of (<code>--all</code> for everything). No model runs unless you ask, never a cloud one, and nothing leaves the
+machine. <code>promises done &lt;id&gt;</code> is the one thing it writes: a <code>task/v1</code> line marked done.</p>
+<p><strong>Tasks</strong> (<code>docs/tasks.md</code>) are the <code>task/v1</code> lines a task app's export left, each as its latest snapshot (RFC 0016);
+<code>tasks --propose-done</code> asks the record whether an open one was done without anyone ticking it off: within the
+fortnight after the task, a mail subject that names its key nouns and confirms something (a booking confirmation
+for "book flights to Zürich"), a calendar entry for an appointment ("Call with Ola" for "call Ola"), a transaction
+at a merchant the task names — by rules, English and German, no model, no network — each a proposal with the
+evidence line's id. <code>tasks done &lt;id&gt; --evidence &lt;line&gt;</code> appends the closing <code>task/v1</code> line and nothing else. The
+matcher is a value, so the promises judge's engine can replace the rules later without changing the report.</p>
+<p><strong>The digest</strong> (<code>docs/digest.md</code>) is the day in 25 lines at most, composed from the readers above and never a
+list of everything: where, with whom confirmed, what attached; the flights; the open promises due within the week;
+the usual sources with no line; tomorrow's timed calendar entries; and one closing question you can answer in a
+word, so the day closes itself (ADR 0005). It writes nothing and sends nothing; delivery is a later decision.</p>
+<h2 id="handing-a-window-to-someone">Handing a window to someone</h2>
+<p>A crossing package (RFC 0005) is the bundle you hand a named member of your circle: the lines of a window,
+verbatim, the attachments they point at, and the resolution lines that let the reader name the people in
+them, so they need nothing else from your record. The first reader is Hermes, an agent that pulls one
+nightly and proposes actions.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span><span class="nb">export</span><span class="w"> </span>crossing<span class="w"> </span>--to<span class="w"> </span>hermes<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-03-01T00:00:00Z<span class="w"> </span>--dry-run<span class="w">     </span><span class="c1"># counts per kind and tier, writes nothing</span>
+logbook<span class="w"> </span><span class="nb">export</span><span class="w"> </span>crossing<span class="w"> </span>--to<span class="w"> </span>hermes<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-03-01T00:00:00Z<span class="w">               </span><span class="c1"># the first window, tier 1 only</span>
+logbook<span class="w"> </span><span class="nb">export</span><span class="w"> </span>crossing<span class="w"> </span>--to<span class="w"> </span>hermes<span class="w"> </span>--since<span class="w"> </span>last<span class="w"> </span>--tier<span class="w"> </span><span class="m">1</span>,2<span class="w">                    </span><span class="c1"># every night: since the last one, tiers 1 and 2</span>
+logbook<span class="w"> </span><span class="nb">export</span><span class="w"> </span>crossing<span class="w"> </span>--to<span class="w"> </span>hermes<span class="w"> </span>--since<span class="w"> </span>last<span class="w"> </span>--tier<span class="w"> </span><span class="m">1</span>,2<span class="w"> </span>--kinds<span class="w"> </span>message,event<span class="w"> </span>--out<span class="w"> </span>/srv/hermes/inbox/tonight
+</code></pre></div>
+<p>The window is <code>[--since, --until)</code>, <code>--until</code> defaulting to now; <code>--since last</code> starts where the last crossing
+to that destination ended (<code>exports/crossing.json</code>), and the first run must say where to start. The bundle
+lands under <code>export/crossing/&lt;destination&gt;/&lt;time&gt;/</code> unless <code>--out</code> says otherwise: <code>manifest.json</code>,
+<code>entries.jsonl</code>, <code>attachments/&lt;sha256&gt;</code> for every referenced file the store holds (a missing one stays a
+reference), and <code>resolution.jsonl</code> when any exported line names someone your contacts have resolved,
+alias hops included. A JSON parser is all a reader needs.</p>
+<p>How much may cross is a setting in your record, not in the code (ADR 0016): <code>policy/crossing.json</code> maps each
+destination to its ceiling, <code>{"hermes": {"max_tier": 2}}</code> by default. Tier 1 crosses by default; tier 2 only
+with <code>--tier 1,2</code>, and the manifest then lists every tier-2 line under <code>review</code>; tier 3 only when the file
+allows it <em>and</em> you type <code>--tier 1,2,3</code>, and the manifest and the console say loudly that it did. A request
+above the ceiling is refused with the file's name. Every real export appends one <code>crossing/v1</code> line (RFC 0011)
+to the chain — destination, window, counts per tier, the ceiling in force, the package's digest — so the
+record itself shows every time anything left it. <code>--dry-run</code> writes nothing and appends nothing.</p>
+<h2 id="handing-a-day-to-a-friend">Handing a day to a friend</h2>
+<p>A shared page (RFC 0025, <code>docs/rfcs/rfc-0025-shared-page-bundle.md</code>) is one day of your record for one person
+in your circle, as one signed zip: the day's lines verbatim, the attachments they point at, the day-package
+summary, and a manifest signed with your record's sharing key — made the first time you share, kept at
+<code>~/.config/logbook/share/&lt;owner_id&gt;.key</code>, its public half in <code>logbook.json</code> as <code>share_key</code>. The other side
+verifies the signature under the key they hold for you, recomputes every line's hash, and keeps the page beside
+their record, never in it.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>circle<span class="w"> </span>key<span class="w">                                   </span><span class="c1"># your public key; give it to Ola</span>
+logbook<span class="w"> </span>circle<span class="w"> </span>add<span class="w"> </span>ola<span class="w"> </span>5df798a3…<span class="w">                     </span><span class="c1"># Ola's, once; policy/circle.json</span>
+logbook<span class="w"> </span>share<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13<span class="w"> </span>--to<span class="w"> </span>ola<span class="w">                </span><span class="c1"># tier 1, under the ceiling policy/crossing.json gives ola</span>
+logbook<span class="w"> </span>share<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13<span class="w"> </span>--to<span class="w"> </span>ola<span class="w"> </span>--tier<span class="w"> </span><span class="m">2</span><span class="w"> </span>--out<span class="w"> </span>~/Desktop/saturday.zip
+logbook<span class="w"> </span>receive<span class="w"> </span>~/Downloads/saturday.zip<span class="w">             </span><span class="c1"># Ola's side: verified, then circle/ines/2026-06-13/</span>
+logbook<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13<span class="w">                               </span><span class="c1"># … and the Day ends with a `from ines` section</span>
+</code></pre></div>
+<p>The same ceiling as a crossing applies, per destination, and a page is a crossing: every share appends one
+<code>crossing/v1</code> line, so the record shows each day that left it. A page that fails any check — the signature, a
+line's hash, a file the manifest does not name — is refused with the check named and nothing of it is kept.
+The two pages under <code>tests/fixtures/share/</code> are the fixture a second implementation reads.</p>
+<h2 id="opening-it-in-obsidian">Opening it in Obsidian</h2>
+<p><code>logbook export vault ~/Vault</code> renders the record as a folder of plain Markdown with wikilinks — a page per
+day, place, person, trip and year — that Obsidian or Logseq opens as a vault, its graph view the record's
+shape (<a href="../vault/">docs/vault.md</a>). It is tier-gated exactly like a crossing: tier 1 by default, the shape of
+every day and no text of any note or message; <code>--tier 1,2</code> when <code>policy/crossing.json</code> names <code>vault</code> with a
+ceiling of 2. Every run appends one <code>crossing/v1</code> line, and re-running rewrites only the files that changed.</p>
+<h2 id="asking-an-agent">Asking an agent</h2>
+<p><code>logbook mcp</code> serves the record to an agent on this machine over the Model Context Protocol, on this
+process's stdin and stdout and nothing else: no port, no socket. The host starts it, and the tools are the
+readers above — <code>day</code>, <code>days</code>, <code>trips</code>, <code>places</code>, <code>people</code>, <code>person</code>, <code>promises</code>, <code>gaps</code>, and a <code>search</code> over
+the index — plus two that write through <code>Logbook.append</code> and nothing else: <code>add_note</code> (one <code>note/v1</code> line, as
+<code>logbook add</code>) and <code>promise_done</code> (one <code>task/v1</code> line, as <code>logbook promises done</code>).</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"openlogbook[mcp]"</span><span class="w">                </span><span class="c1"># the official Python MCP SDK</span>
+logbook<span class="w"> </span>mcp<span class="w"> </span>--inspect<span class="w">                         </span><span class="c1"># the tool table and a sample request; no record needed</span>
+logbook<span class="w"> </span>mcp<span class="w">                                   </span><span class="c1"># what a host runs; LOGBOOK_HOME or --root names the record</span>
+</code></pre></div>
+<p>Every answer passes the crossing gate of ADR 0016: <code>policy/crossing.json</code> names the <code>mcp</code> destination and its
+ceiling, 1 unless you raise it, and the answer says how many lines sat above it and were left out
+(<code>gate.withheld</code>). At 1 the agent sees the record's shape and no note, message or name; at 2 your notes and
+your circle too; tier 3 only when the file allows it <em>and</em> you start the server with <code>--allow-tier-3</code>.
+<a href="../mcp/">docs/mcp.md</a> has the host's config snippet and the tools.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

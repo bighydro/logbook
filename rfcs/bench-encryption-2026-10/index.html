@@ -1,0 +1,3360 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/rfcs/bench-encryption-2026-10/">
+      
+      
+        <link rel="prev" href="../0029-encryption-at-rest/">
+      
+      
+        <link rel="next" href="../rfc-0025-shared-page-bundle/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Benchmark: per-line sealing (2026-10) - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#benchmark-per-line-sealing-on-a-3000000-line-record" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Benchmark: per-line sealing (2026-10)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_16" id="__nav_16_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_17" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_17" id="__nav_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_17_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#machines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Machines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-line-stored-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per line, stored form
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-primitives-alone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The primitives alone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#against-the-drafts-9-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Against the draft's §9 estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_35" >
+        
+          
+          <label class="md-nav__link" for="__nav_35" id="__nav_35_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_35_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_35">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#machines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Machines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-line-stored-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per line, stored form
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-primitives-alone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The primitives alone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#against-the-drafts-9-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Against the draft's §9 estimates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="benchmark-per-line-sealing-on-a-3000000-line-record">Benchmark — per-line sealing on a 3,000,000-line record</h1>
+<p>Status: <strong>measured, 2026-10-02</strong> · answers open question 1 of RFC 0029, encryption at rest (<code>0029-encryption-at-rest.md</code>) · script: <code>scripts/bench_seal.py</code> · no code or spec change.</p>
+<h2 id="summary">Summary</h2>
+<p>On a 3,000,000-line record with 2,000,000 tier 2–3 lines, per-line age through <code>pyrage</code> costs <strong>128 µs a line to seal to one recipient and 214 µs to two</strong> (the age call alone is 88 and 170 µs; the rest is the Option C wrapper, canonical JSON, salt, SHA-256 and base64, in Python), and <strong>145 and 194 µs to open</strong>. A plain line costs about 106 µs end to end on the same machine, so a sealed tier 2–3 line is 2.2 times a plain one at one recipient and 3 times at two. The 20,000 lines a second floor is 50 µs a line; per-line age spends 2.5 to 4 times that on the seal alone, so <strong>the floor cannot hold for tier 2–3 under age and becomes tier-1-only</strong>, with a floor of its own for sealed lines. Keyed <code>verify</code> of the record takes 7.7 minutes (one recipient) or 9.7 (two) against 2.6–2.9 keyless, index rebuild with opening 6.4 or 8 minutes against 1.2 plain, all in flat memory (27–35 MB). The record grows from 1.98 GB to 3.37 GB (one recipient) or 3.63 GB (two). The record data key of §9.1 seals in 40 µs and opens in 10 µs a line, verifies keyed in 3 minutes and adds 0.68 GB; it is the recommendation's comparison point, not its recommendation (see the end).</p>
+<h2 id="method">Method</h2>
+<p><strong>The record.</strong> <code>scripts/bench_seal.py</code> generates 3,000,000 synthetic lines in chain order, the shape of the stress tests in <code>tests/test_stress.py</code>: 1,000,000 tier-1 <code>location/v1</code> points (source <code>sim</code>), 1,000,000 tier-3 <code>health-sample/v1</code> lines of about a hundred bytes of payload (<code>type</code>, <code>value</code>, <code>unit</code>, <code>device</code>, a <code>raw_id</code>) and 1,000,000 tier-2 <code>message/v1</code> lines with about 550 characters of text (a <code>chat</code> in the reserved UK range, <code>from_me</code>, a <code>raw_id</code>). The three kinds are interleaved and <code>at</code> is spread evenly over the ten years from 2016-10 to 2026-09, so the record is 120 month files of 25,000 lines each. Everything is synthetic; the Oslo persona does not exist. Generation alone is timed (16.8 s) so the write phases can be read net of it.</p>
+<p><strong>Option C as implemented.</strong> For every tier 2–3 line, exactly as the draft's §4.3 and §5 say:</p>
+<div class="highlight"><pre><span></span><code>plain       = canonical_json({"payload": &lt;the real payload&gt;, "salt": &lt;16 bytes from os.urandom, 32 lowercase hex&gt;})
+digest      = sha256(plain)                                   lowercase hex
+payload     = {"schema": "sealed/v1", "digest": digest}      hashed, as any payload
+payload_enc = base64(seal(plain))                            standard base64 with padding, outside the hash
+</code></pre></div>
+<p><code>canonical_json</code> is <code>logbook.chain.canonical_json</code>, the product's RFC 8785 serialiser; nothing is reimplemented. <code>seal</code> is one of three:</p>
+<ul>
+<li><strong>age, 1 recipient</strong> and <strong>age, 2 recipients</strong>: <code>pyrage.encrypt(plain, recipients)</code>, X25519 recipients, the identities generated fresh for the run. pyrage 1.4.0 (rage underneath). rage adds a random <code>-&gt; …-grease</code> stanza to every header, so a ciphertext is about 100 bytes longer than the header arithmetic in the draft's §3 gives: a 171-byte plaintext seals to 466 bytes for one recipient and 564 for two, where §3 predicts 371 and 469. The second recipient costs 98 bytes, as §3 says.</li>
+<li><strong>data key</strong> (the draft's §9.1 variant): one 32-byte key for the record, each line ChaCha20-Poly1305 under it with a fresh 12-byte nonce (<code>cryptography</code> 50 has no XChaCha, so the nonce is 12 bytes, not the 24 the draft names; the cost is the same), <code>payload_enc = base64(nonce + ciphertext)</code>.</li>
+</ul>
+<p><strong>Writing.</strong> The plain baseline is <code>Logbook.append_many</code>, the product's own path, index included. The sealed records cannot go through <code>append_many</code>: it hands each draft to <code>Logbook._line</code> as keyword arguments and <code>_line</code> knows no <code>payload_enc</code>. So the script carries a writer of its own that does what <code>append_many</code> does — drafts 10,000 at a time, the chain computed in memory through <code>Logbook._line</code>, the sealed line given its <code>payload_enc</code> after hashing (it is outside the hash), every batch written in the stored form <code>store._dumps</code> writes and fsynced, then <code>logbook.json</code>, then the index extended through <code>Index.add</code> with <code>index.row</code> (so a sealed line's <code>raw_id</code> column is NULL, as the draft's §8 says of an index built without the key). The plain record is written through this writer too, as a control: 317 s against <code>append_many</code>'s 339 s, 7% apart (the writer skips the dedupe SELECT), so the sealed columns below are comparable with the plain one. The seal step is timed per line inside the writer (two <code>perf_counter</code> calls a line, well under a microsecond), so "seal step alone" is canonical JSON + salt + SHA-256 + <code>seal</code> + base64, which is what Option C adds to a line; the primitives table isolates <code>seal</code> by itself.</p>
+<p><strong>The phases, each in a subprocess of its own so the peak memory is that phase's:</strong></p>
+<ul>
+<li><em>Open every sealed line</em>: stream the month files (<code>Logbook.lines_unsorted</code>), and for each <code>sealed/v1</code> line base64-decode, decrypt, compare <code>sha256(plain)</code> with <code>payload.digest</code> before parsing (§5 rule 6), parse. The decrypt-to-payload step is timed per line; the whole pass is timed too.</li>
+<li><em>Keyless verify</em>: the chain, <code>chain.verify_lines</code> over <code>Logbook.lines()</code> (the two lines <code>Logbook.verify</code> is made of), plus, for every sealed line, that <code>payload_enc</code> is base64 of bytes beginning <code>age-encryption.org/v1\n</code> (for the data key: at least a nonce and a tag). The record's <code>logbook.json</code> must name the head reached. On the plain record it is the product's <code>Logbook.verify</code> itself.</li>
+<li><em>Keyed verify</em>: the same chain pass, and every sealed line opened and its digest compared. Nothing is held: one line per month file, as <code>verify</code> today.</li>
+<li><em>Index rebuild (plain)</em>: the product's <code>Logbook.index_rebuild</code>. <em>Index rebuild with opening</em>: the same pass (<code>located_lines</code>, <code>index.row</code>, one INSERT per 10,000 rows, one transaction) into a second SQLite file, every sealed line opened first so <code>raw_id</code>, <code>supersedes</code>, <code>entity</code> and <code>media</code> are filled.</li>
+<li><em>Bytes on disk</em>: the sum of the month files; per line, the average stored length per kind, accumulated by the writer.</li>
+<li><em>Memory</em>: <code>resource.getrusage(RUSAGE_SELF).ru_maxrss</code> at the end of each subprocess (kilobytes on Linux, bytes on macOS); <code>psutil</code>'s <code>peak_wset</code> on Windows when installed.</li>
+<li><em>Primitives</em>: 100,000 health-sized and 100,000 message-sized plaintexts held in memory, sealed and opened each way with nothing else in the loop.</li>
+</ul>
+<p>The exact command, on this machine:</p>
+<div class="highlight"><pre><span></span><code>uv run --with pyrage python scripts/bench_seal.py --out bench-linux.json --markdown
+</code></pre></div>
+<p><code>--quick</code> is the same with 300,000 lines. pyrage is pulled in for the run only; it is not a dependency of the project. The whole run took 6,306 s (1 h 45 min) here.</p>
+<h2 id="machines">Machines</h2>
+<table>
+<thead>
+<tr>
+<th>Machine</th>
+<th>Ran</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>This machine</strong>: a cloud container, Linux 6.18 x86_64 (glibc 2.39), 4 vCPU Intel Xeon at 2.10 GHz, 16.9 GB, Python 3.12.3, pyrage 1.4.0, cryptography 50.0.1</td>
+<td>yes, the full 3,000,000 lines</td>
+<td>every number below. A slow core: the stress suite's own 200,000-point <code>append_many</code> test runs at 7,300 lines a second here (<code>LOGBOOK_SLOW=1</code>, measured the same day), against the 20,000 floor, so absolute rates are low and the ratios between columns are what carries over.</td>
+</tr>
+<tr>
+<td>GitHub <code>ubuntu-latest</code> (4 vCPU, 16 GB)</td>
+<td><strong>not run</strong></td>
+<td>workflow in place, not dispatched; see below</td>
+</tr>
+<tr>
+<td>GitHub <code>macos-latest</code> (arm64, 3–4 vCPU)</td>
+<td><strong>not run</strong></td>
+<td>same</td>
+</tr>
+<tr>
+<td>GitHub <code>windows-latest</code> (4 vCPU, 16 GB)</td>
+<td><strong>not run</strong></td>
+<td>same; memory peaks there need <code>psutil</code>, which the workflow adds</td>
+</tr>
+</tbody>
+</table>
+<p><code>.github/workflows/bench.yml</code> runs the same command on the three runners under <code>workflow_dispatch</code> only (never on push), with the line count as an input, and uploads each runner's JSON as an artifact. It could not be dispatched from the session that wrote this page: the GitHub connector and <code>gh</code> both answered <code>403 Resource not accessible by integration</code> on the dispatch endpoint (the session's token has no Actions write permission), so the three runner rows are empty and every number on this page is from the one machine above. The maintainer dispatches it from the repository's Actions tab (<code>bench</code>, branch <code>bench/encryption</code>; the default is the full 3,000,000 lines, <code>300000</code> is a short run of about ten minutes) and reads each runner's JSON from the run's artifacts; <code>scripts/bench_seal.py --markdown</code> prints the same tables from any of them.</p>
+<h2 id="results">Results</h2>
+<p>This machine (the only one that ran), 3,000,000 lines, 2,000,000 of them sealed (1,000,000 health-sized, 1,000,000 message-sized). Rates are lines a second of the whole record; "per line" is per sealed line.</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>plain</th>
+<th>age, 1 recipient</th>
+<th>age, 2 recipients</th>
+<th>data key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Write the record, end to end (3,000,000 lines)</td>
+<td>339 s · 8,850 lines/s · peak 81 MB</td>
+<td>589 s · 5,093 lines/s · peak 110 MB</td>
+<td>785 s · 3,820 lines/s · peak 115 MB</td>
+<td>420 s · 7,147 lines/s · peak 103 MB</td>
+</tr>
+<tr>
+<td>Seal step alone, per tier 2–3 line</td>
+<td>—</td>
+<td>128 µs · 7,792 lines/s</td>
+<td>214 µs · 4,683 lines/s</td>
+<td>40 µs · 24,916 lines/s</td>
+</tr>
+<tr>
+<td>Open, per sealed line (decode, decrypt, digest, parse)</td>
+<td>—</td>
+<td>145 µs · 6,917 lines/s</td>
+<td>194 µs · 5,143 lines/s</td>
+<td>10 µs · 99,051 lines/s</td>
+</tr>
+<tr>
+<td>Open every sealed line, whole pass</td>
+<td>—</td>
+<td>324 s · peak 27 MB</td>
+<td>427 s · peak 27 MB</td>
+<td>49 s · peak 31 MB</td>
+</tr>
+<tr>
+<td>Keyless verify</td>
+<td>175 s · 17,175 lines/s · peak 27 MB</td>
+<td>154 s · 19,527 lines/s · peak 27 MB</td>
+<td>160 s · 18,768 lines/s · peak 27 MB</td>
+<td>155 s · 19,391 lines/s · peak 27 MB</td>
+</tr>
+<tr>
+<td>Keyed verify</td>
+<td>—</td>
+<td>460 s · 6,526 lines/s · peak 27 MB</td>
+<td>583 s · 5,144 lines/s · peak 27 MB</td>
+<td>182 s · 16,487 lines/s · peak 31 MB</td>
+</tr>
+<tr>
+<td>Index rebuild, plain</td>
+<td>69 s · 43,312 lines/s · peak 33 MB</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Index rebuild with opening</td>
+<td>—</td>
+<td>382 s · 7,850 lines/s · peak 35 MB</td>
+<td>481 s · 6,234 lines/s · peak 35 MB</td>
+<td>99 s · 30,351 lines/s · peak 41 MB</td>
+</tr>
+<tr>
+<td>Month files on disk</td>
+<td>1.98 GB</td>
+<td>3.37 GB (+1.39 GB)</td>
+<td>3.63 GB (+1.65 GB)</td>
+<td>2.66 GB (+0.68 GB)</td>
+</tr>
+</tbody>
+</table>
+<p>The plain column's write is <code>append_many</code>; the script's writer wrote the same plain record in 317 s (9,478 lines/s, peak 81 MB). Net of the seal step the three sealed writes took 332, 358 and 340 s: writing a sealed line is otherwise as cheap as a plain one, a little more for the longer line. The writes' peak memory is the 10,000-line batch and its index rows; every reading phase stays at one line per month file, 27–41 MB whatever is being opened. Keyless verify is a little faster on a sealed record than on the plain one because a <code>sealed/v1</code> reference canonicalises in fewer bytes than a 600-character message.</p>
+<h3 id="per-line-stored-form">Per line, stored form</h3>
+<p>Bytes of the stored line (envelope included, which is about 400 bytes of it), and the ratio to the plain line:</p>
+<table>
+<thead>
+<tr>
+<th>Line</th>
+<th>plain</th>
+<th>age, 1 recipient</th>
+<th>age, 2 recipients</th>
+<th>data key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>health-sized (payload ≈ 110 B)</td>
+<td>513</td>
+<td>1,127 (2.20×)</td>
+<td>1,258 (2.45×)</td>
+<td>772 (1.50×)</td>
+</tr>
+<tr>
+<td>message-sized (payload ≈ 600 B)</td>
+<td>1,010</td>
+<td>1,786 (1.77×)</td>
+<td>1,917 (1.90×)</td>
+<td>1,431 (1.42×)</td>
+</tr>
+<tr>
+<td>location (tier 1, never sealed)</td>
+<td>460</td>
+<td>460</td>
+<td>460</td>
+<td>460</td>
+</tr>
+</tbody>
+</table>
+<p><code>payload_enc</code> itself is 622 characters for a health-sized line and 1,284 for a message-sized one at one recipient; the second recipient adds 131 characters a line, 261 MB over the 2,000,000 sealed lines; the data key's is 268 and 928.</p>
+<h3 id="the-primitives-alone">The primitives alone</h3>
+<p>100,000 plaintexts of each size in memory, the salted canonical text Option C seals, nothing else in the loop (microseconds per operation; ciphertext bytes before base64):</p>
+<table>
+<thead>
+<tr>
+<th>Plaintext</th>
+<th>age, 1 recipient: seal / open</th>
+<th>age, 2 recipients: seal / open</th>
+<th>data key: seal / open</th>
+<th>ciphertext bytes, 1 / 2 / key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>health-sized, 171 B</td>
+<td>88 / 133 µs</td>
+<td>167 / 179 µs</td>
+<td>2.6 / 1.9 µs</td>
+<td>466 / 564 / 199</td>
+</tr>
+<tr>
+<td>message-sized, 667 B</td>
+<td>89 / 134 µs</td>
+<td>172 / 181 µs</td>
+<td>3.1 / 2.3 µs</td>
+<td>962 / 1,060 / 695</td>
+</tr>
+</tbody>
+</table>
+<p>The size of the plaintext does not matter at these lengths; the cost is the key agreement. Opening is slower than sealing in pyrage. The difference between a primitive and the in-record "seal step alone" (40 µs for the data key, against a 3 µs cipher) is the Option C wrapper in Python — <code>canonical_json</code> of the payload with its salt, <code>token_hex</code>, SHA-256, base64 — about 37 µs a line, paid under every variant.</p>
+<h3 id="against-the-drafts-9-estimates">Against the draft's §9 estimates</h3>
+<table>
+<thead>
+<tr>
+<th>§9 said</th>
+<th>Measured here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Seal, Python via pyrage: 100–200 µs</td>
+<td>88 µs (age alone) and 128 µs (with the wrapper) to one recipient; 167 and 214 µs to two. Inside the range for one recipient, at its top for two.</td>
+</tr>
+<tr>
+<td>Open: 60–120 µs</td>
+<td>133 and 145 µs to one recipient, 179 and 194 µs to two. Above the estimate: in pyrage opening costs more than sealing, not less.</td>
+</tr>
+<tr>
+<td>Five to ten thousand sealed lines a second per core</td>
+<td>7,800 sealed, 6,900 opened a second to one recipient; 4,700 and 5,100 to two. One recipient is in the range; two is below it.</td>
+</tr>
+<tr>
+<td>Keyed <code>verify</code> on two million sealed lines: three to seven minutes</td>
+<td>5.1 minutes more than keyless to one recipient, 7.1 to two (7.7 and 9.7 minutes in all). In the range; two recipients at its edge.</td>
+</tr>
+<tr>
+<td>Keyless <code>verify</code>: unchanged</td>
+<td>154–160 s against 175 s on the plain record. Unchanged or better.</td>
+</tr>
+<tr>
+<td>Index rebuild: the same opening pass as keyed verify, once</td>
+<td>382 and 481 s against 69 s plain; the difference is the opening, 313 and 412 s, the same as verify's.</td>
+</tr>
+<tr>
+<td>Health-sized line about 2.5× its plain size, a 600-byte message about 1.7×</td>
+<td>2.20× and 1.77× at one recipient; 2.45× and 1.90× at two. The ciphertext is about 100 bytes longer than §3's arithmetic (rage's grease stanza) but the plain line is longer than §9 assumed too, so the ratios come out close.</td>
+</tr>
+<tr>
+<td>Two million sealed health-sized lines add roughly 1 GB</td>
+<td>1,000,000 health-sized and 1,000,000 message-sized added 1.39 GB at one recipient.</td>
+</tr>
+<tr>
+<td>131 base64 characters a line per further recipient, 260 MB per two million lines</td>
+<td>131 characters, 261 MB.</td>
+</tr>
+<tr>
+<td>Memory unchanged</td>
+<td>Unchanged: 27–41 MB in every reading phase, as the plain record's 27–33.</td>
+</tr>
+<tr>
+<td>§9.1 data key: opening a line one or two microseconds</td>
+<td>1.9–2.3 µs for the cipher, 10 µs with decode, digest and parse.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="recommendation">Recommendation</h2>
+<p><strong>Keep per-line age as the format's construction, make the 20,000 lines a second floor tier-1-only, and give sealed lines a floor of their own; do not adopt the record data key for the hot path now.</strong> The numbers say the floor cannot hold for tier 2–3 under age on any machine: 20,000 lines a second is 50 µs a line and the age call alone is 88 µs to one recipient and 167 to two, before the line is hashed or written, so even a core twice as fast as this one spends the whole budget on the seal. A sealed-line floor of 4,000 lines a second at two recipients (this slow core does 4,683; a laptop core should do two to three times that — an estimate, not measured) states what the owner actually gets: a backfill of 1,000,000 health samples takes 4 to 7 minutes to seal over the 2 minutes it takes to write, once, and the nightly keyed <code>verify</code> of a 3,000,000-line record takes 8 to 10 minutes in 27 MB where the draft allowed three to seven. The data key would cut the seal step to 40 µs (three quarters of which is the Option C wrapper, which it shares with age) and keyed verify to 3 minutes, a real gain but a one-time one for backfills and a nightly one for verify, and it is bought with everything §9.1 lists: a long-term key in the record where the draft drew the line at "never"; a line the <code>age</code> CLI alone cannot open, so the format gains a construction of its own where it had a file format anyone can check; a writer that needs the identity to seal, losing <code>sync</code> from a machine that holds only the recipient (§6.3); and rotation as a reseal of every line instead of every header. None of those is worth four minutes on a backfill. Two things to carry into the spec text: the second recipient costs 85 µs to seal, 50 to open and 131 characters a line, so two recipients is the right default and five is a decision, as §9 said; and <code>show</code> of a day opens its sealed lines at 145–194 µs each, so a day of a few thousand sealed lines is a few tenths of a second and the under-a-second floor holds, but a day of 5,000 or more (heart rate by the minute plus steps by the quarter hour) is at the edge — if real health records show such days, the middle road §9.1 declines, the data key for <code>health-sample/v1</code> alone, is the thing to measure next, not a reason to adopt the key for everything.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

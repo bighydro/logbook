@@ -1,0 +1,3323 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/day/">
+      
+      
+        <link rel="prev" href="../rfcs/0026-weather-v1/">
+      
+      
+        <link rel="next" href="../serve/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The Day - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-day" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The Day
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_16" id="__nav_16_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_17" id="__nav_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-day-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a Day is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-shows-in-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it shows, in order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-synthetic-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A synthetic example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aboard-an-asset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aboard an asset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The JSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-window-of-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A window of days
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_35" >
+        
+          
+          <label class="md-nav__link" for="__nav_35" id="__nav_35_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_35_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_35">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-day-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a Day is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-shows-in-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it shows, in order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-synthetic-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A synthetic example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aboard-an-asset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aboard an asset
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The JSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-window-of-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A window of days
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-day">The Day</h1>
+<p><code>logbook day YYYY-MM-DD [--json]</code> reads one calendar day back from the record: where you slept
+either side of it, which country it counts for, how you moved and where you stayed, what attached
+to each stay and who was there, the flights, the night's sleep and the day's steps, and which
+sources spoke. It is a reader (ADR 0013): a function of the record at its head, derived every time
+and never written. Nothing is appended, and not even <code>policy/stays.json</code> is created by it.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13<span class="w">          </span><span class="c1"># a Saturday, as text</span>
+logbook<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13<span class="w"> </span>--json<span class="w">   </span><span class="c1"># the same Day as one JSON object, every row with its line ids</span>
+logbook<span class="w"> </span>day<span class="w">                     </span><span class="c1"># today</span>
+</code></pre></div>
+<h2 id="what-a-day-is">What a Day is</h2>
+<p>The record's atom is the line. The reader's atom is the <strong>stay</strong>: a span at one place, as
+<code>derive stays</code> finds it. A <strong>Day</strong> is the ordered list of stays and moves between 00:00 and 24:00
+in the record's zone, with everything else — calendar entries, transcripts, notes, mail, calls,
+messages, photos, keepers — attached to the stay or move it falls inside. The <strong>night</strong> of a day is
+the longest stay in the night window (22:00 to 08:00 by default), and it decides home or away; a
+night with no such stay is in transit.</p>
+<p>Aboard an asset (a boat, an aircraft, a car registered in <code>assets.json</code>) the grammar nests: when
+your position matches the asset's own track, the run of stays and moves aboard it is one stay
+<code>aboard &lt;asset&gt;</code>, and inside it the same grammar runs on the asset's position — a berth, a
+passage, an anchorage. The asset's movement never fragments the stay. The rule is below, under
+<em>Aboard an asset</em>.</p>
+<h2 id="what-it-shows-in-order">What it shows, in order</h2>
+<ol>
+<li><strong>Header</strong> — the date and weekday; the night before and the night after (a named place,
+   <code>aboard &lt;asset&gt;</code> with the asset's position that night, or the coordinates; <code>home</code> when the stay
+   lies in a place of kind <code>home</code> or within 400 m of one — the night then names that place — else
+   <code>away</code>; <code>in transit</code> when no stay reaches the minimum); the country, from the night's position
+   by the same rule <code>rollup countries</code> uses (a place's own country, else the nearest large
+   airport's zone), from the longest stay of the day when the night is in transit; the day's
+   all-day calendar entries.</li>
+<li><strong>Timeline</strong> — one row per stay, stop, move and flight that touches the day, in time order.
+   A stay that began the evening before shows from <code>00:00</code> and one that runs on shows to <code>24:00</code>;
+   the duration printed is the part on the day, and <code>--json</code> keeps the real span beside it. An
+   unnamed stay at an airport is the airport's code and city (<code>ZRH, Zurich</code>: within 3.5 km of the
+   reference point of an airport with scheduled traffic, 2 km of any other); else its coordinates,
+   with <code>near &lt;place&gt;, x km</code> for the nearest named place within 5 km (<code>59.9200,10.7400 near Home,
+   1.0 km</code>), else the city of the nearest large airport within 30 km in parentheses
+   (<code>53.5998,10.0130 (Hamburg)</code>), the <code>trips</code> route's rule. A stop with nothing attached says so.
+   A move prints its distance, duration and mode (walk, car, train, boat, flight), with the
+   airports when it is a flight between two. A move with no points that lasts a silence or more
+   (<code>merge_gap_s</code>) and is not a flight is a <strong>gap</strong>: the tracker did not see it, so it places
+   nothing. Flights come from the <code>flight/v1</code> lines standing — the merged set <code>infer flights</code>
+   maintains, one line per flight — with their evidence: <code>tracked</code>, <code>inferred</code> or <code>declared</code>; the
+   move a flight covers names it under <code>--json</code>.
+   Under each row: its attachments, named for events (with their time; an entry several calendars
+   carry — the same start and end, the same flight or the same title, case and accents aside — is
+   one event, <code>×N sources</code>), transcripts, notes (the first line), mail threads (with the message
+   count), calls and keepers, and counted for messages and photos; then <strong>with</strong>, the people there, split into <strong>confirmed</strong> — declared in a note
+   (<code>with &lt;name&gt;</code>, only a name the record's resolution lines make a person: <code>with US</code> names
+   nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
+   stay — and <strong>proposed</strong> — a face the photo library tagged, by id or by the name it gave it
+   (<code>extra.faces</code>; a person only when the name is exactly a resolution line's label, else as
+   written), an attendee of an all-day entry. The owner is never their own company. A move
+   carries attachments but no company.</li>
+<li><strong>Unplaced</strong> — the day's events, transcripts, notes, mail and calls that fall inside no stay or
+   move: what the calendar planned where the track has nothing, or what happened while the tracker
+   was silent.
+   Then <strong>Stories about this day</strong> (RFC 0028, a draft): the <code>story/v1</code> lines standing whose
+   <code>refers_to</code> covers the date — a told year, month, day or decade — each as <code>show</code> prints it
+   (<code>📖 refers to 1961 — told by Ola Nordmann to Kari Nordmann</code>) with the teller's confidence and
+   the day it was told, and its first line under it. A story is a line on the day it was <em>told</em>;
+   it is never in the timeline of the day it is about, because the timeline is what was observed
+   and a story is what someone said. A story whose time is a phrase (<code>before the war</code>) is about no
+   day. The section is absent when no story is about the day.</li>
+<li><strong>Health</strong> — the night's sleep in hours (the asleep stages of the night that ends on the day,
+   per device the union of their spans, the longest device), the day's steps (the larger device per
+   quarter hour, summed), the resting heart rate (the day's mean), from the <code>health-sample/v1</code>
+   lines standing. A correction that <code>supersedes</code> a line wins over it.</li>
+<li><strong>Weather</strong> — when the day has <code>weather/v1</code> lines (RFC 0026, <code>logbook sync weather</code>,
+   <code>adapters/weather.md</code>), one row: the lowest and highest temperature, the precipitation, the
+   strongest wind, the weather in a word, sunrise and sunset, for the place of the night when the day
+   has one, else the first, and <code>· 2 places</code> when the day was spent in more than one. A day without
+   them has no row.</li>
+<li><strong>Sources</strong> — every source with a line on the day, how many, and its newest line's time, so a
+   tracker that fell silent in the afternoon is seen to have.</li>
+<li><strong>From the circle</strong> — one <code>from &lt;name&gt;</code> section per page someone shared for this day and
+   <code>logbook receive</code> verified (RFC 0025, <code>&lt;root&gt;/circle/&lt;name&gt;/&lt;date&gt;/</code>): how many lines by kind,
+   the tier it was shared at and the day it was shared, then the titles of its events, transcripts,
+   notes, mail and calls, one per row. The page is read from the folder it was kept in, never from
+   the chain; under <code>--json</code> it is <code>received</code>, each named line with its id. A day nobody shared
+   has no such section.</li>
+</ol>
+<h2 id="a-synthetic-example">A synthetic example</h2>
+<p>The Oslo persona of the test suite, who does not exist, spends a June Saturday aboard the yacht
+Solvind. The owner's position matches the boat's AIS track from the marina out to the anchorage, so the
+day is one stay aboard, with the berth, the passage and the anchorage inside it, a note that
+declares who was there, and the night aboard:</p>
+<div class="highlight"><pre><span></span><code>2026-06-13  Saturday
+  night before  Home · home
+  night after   aboard Solvind · 59.8500,10.6000 · away
+  country       NO (nearest airport OSL)
+
+  00:00–09:00  stay   Home · 9 h
+  09:00–09:15  move   1.4 km · 15 min · walk
+  09:15–24:00  aboard Solvind (yacht) · 14 h 45 min · 1 note, 1 photo, 1 keeper
+      09:15–10:00  stay   Marina · 45 min
+      10:00–12:00  move   9.7 km · 2 h · boat
+      12:00–24:00  stay   59.8500,10.6000 · 12 h
+      note         Anchored in the bay with Ola Nordmann. Grilled.
+      keeper       IMG_131730.HEIC (memory)
+      with         Ola Nordmann (note)
+
+  health        no lines
+  sources       dawarich 888 lines, last 23:58 · immich 1 line, last 19:30 · keeper-inference 1 line, last 19:30 · manual 1 line, last 19:00
+</code></pre></div>
+<p>A Thursday whose tracker was silent from nine to five, with a lunch in the calendar during the
+silence and an all-day entry, and the night's sleep, the steps and a resting reading (corrected
+once) in the record:</p>
+<div class="highlight"><pre><span></span><code>2026-07-02  Thursday
+  night before  Home · home
+  night after   Home · home
+  country       NO (nearest airport OSL)
+  all day       Kari in town
+
+  00:00–09:00  stay   Home · 9 h
+      with         proposed Kari Nordmann (calendar)
+  09:00–17:00  gap    8 h · no points · 6.3 km
+  17:00–19:00  stay   59.9600,10.8199 · 2 h
+      with         proposed Kari Nordmann (calendar)
+  19:00–19:30  move   6.4 km · 30 min · car
+  19:30–24:00  stay   Home · 4 h 30 min
+      with         proposed Kari Nordmann (calendar)
+
+  unplaced      12:00–13:00  event  Lunch
+
+  health        sleep 7.0 h · 3,250 steps · resting 56 bpm
+  sources       dawarich 191 lines, last 23:55 · apple-health 6 lines, last 17:00 · ios-calendar 2 lines, last 12:00
+</code></pre></div>
+<p>The gap is a row, said so; the lunch is unplaced rather than attached to it, because the track
+says nothing about where the owner was; the all-day entry proposes its attendee at every stay and
+confirms Kari at none.</p>
+<h2 id="aboard-an-asset">Aboard an asset</h2>
+<p>A stay aboard an asset is a <strong>container</strong>. <code>derive stays</code> finds it and <code>day</code> shows it; the rule is
+the stays engine's (<code>logbook/stays.py</code>), and <code>trips</code>, <code>days</code> and the rollups read what it finds.</p>
+<ul>
+<li><strong>Boarding is twenty minutes.</strong> You are aboard an asset when its own location lines (<code>subject</code> =
+  the asset's id, from <code>sync ais</code>, <code>sync adsb</code> or a saved stream) lie within the stay radius
+  (<code>radius_m</code>, 150 m) of your points for <code>aboard_min_s</code> — 20 minutes by default, a setting in
+  <code>policy/stays.json</code> — or longer. At anchor that is the asset's fixes inside the radius of your
+  stay's centre, first to last; under way it is your points within the radius of the asset's
+  position at that instant, read between the asset's two fixes around it when they are at most
+  twice <code>aboard_window_s</code> apart (an AIS fix every ten minutes places a boat under way well enough),
+  else from the nearest fix within the window. A boat that passes the quay once while you sit at
+  the cafe does not board you; your own boat alongside for the afternoon does.</li>
+<li><strong>The run is one stay.</strong> Consecutive stays and moves aboard one asset fold into one stay
+  <code>aboard &lt;asset&gt;</code>, from the first's start to the last's end; the run is inside it, and the
+  asset's movement never fragments it. Its centre is the inner stay you spent longest at (the
+  anchorage of the night, not the berth of the morning), and that is the coordinate in its id.
+  A single move aboard with no stay either side (a ferry walked on and off) stays a move.</li>
+<li><strong>The night names the asset.</strong> The overnight rule counts the stay aboard whole, so a passage
+  through the night is a night aboard, never a night in transit, and the night carries the asset's
+  position: the inner stay that held the longest part of the night window. The header reads
+  <code>night after   aboard REDUCE · 59.3400,10.5500 · away</code>; the country is that position's.</li>
+<li><strong>Downstream.</strong> <code>days</code> prints the night as <code>aboard &lt;asset&gt;</code>; <code>trips</code> makes a night aboard a route
+  element <code>aboard &lt;asset&gt;</code> and counts the trip's nights aboard per asset; <code>rollup places</code> has an
+  <code>aboard</code> section, one stay per run aboard with the run's whole hours, while the berths and
+  anchorages inside it are still unnamed places of their own, each marked <code>aboard</code>, and a night
+  aboard counts at the anchorage the asset lay at; <code>rollup nights</code> counts nights aboard per asset.</li>
+</ul>
+<p>The test fixture is the yacht REDUCE (MMSI 970123456, which does not exist), which weighs anchor
+at 22:30 and motors 40 km south through the night with the persona aboard, at anchor again by
+03:00: the Friday is one stay aboard with the first anchorage, the passage and the second
+anchorage inside it, and the night is <code>aboard REDUCE</code> at the second anchorage. In the control
+case the persona spends the same night at a cabin 3 km from the first anchorage while the boat
+moves without them: the night is at the cabin's coordinates, the boat's passage is the boat's
+own, and nothing says aboard.</p>
+<h2 id="the-json">The JSON</h2>
+<p><code>--json</code> prints one object: <code>day</code>, <code>weekday</code>, <code>tz</code>; <code>nights.before</code> and <code>nights.after</code> (<code>where</code>,
+<code>home</code>, <code>aboard</code>, <code>in_transit</code>, <code>position</code> — the night's <code>lat</code> and <code>lon</code>, the asset's for a night
+aboard — the stay's id and its first and last location line); <code>country</code>
+(<code>code</code>, <code>method</code>, <code>by</code>, <code>from</code>); <code>all_day</code>; <code>timeline</code>, one entry per row — a stay, stop or move
+as <code>derive stays --json</code> gives it plus <code>within_day</code> (the part on the day), <code>gap</code>, <code>attached</code>
+(<code>events</code>, <code>transcripts</code>, <code>notes</code>, <code>mail</code>, <code>calls</code>, <code>keepers</code> with their line ids; <code>messages</code> and
+<code>photos</code> as counts with their line ids) and <code>with</code> (<code>confirmed</code>, <code>proposed</code>, each person with their
+sources, reasons and lines); an <code>aboard</code> entry adds <code>asset</code> and <code>inside</code>; a <code>flight</code> entry carries
+the flight line's fields and <code>line</code>; a move lists the <code>flights</code> that cover it — then <code>flights</code>,
+<code>unplaced</code>, <code>stories</code> (the stories about the day: <code>line</code>, <code>told_at</code>, <code>title</code>, <code>text</code>, <code>refers_to</code>,
+<code>teller</code>, <code>listener</code>, <code>confidence</code>, <code>source</code>), <code>health</code> (with the ids of the lines each number came
+from), <code>sources</code>, and <code>received</code>, one object per page the circle shared for the day (<code>from</code>,
+<code>owner_id</code>, <code>created</code>, <code>max_tier</code>, <code>lines</code>, <code>held_back</code>, <code>by_kind</code>, <code>named</code> with each line's id,
+<code>attachments</code>).</p>
+<h2 id="a-window-of-days">A window of days</h2>
+<p><code>logbook days --from YYYY-MM-DD --to YYYY-MM-DD [--json]</code> reads a window back one line per day,
+composed from the Day of each: the date and weekday; where the night was spent (the night after,
+as the Day's header has it: a named place, <code>aboard &lt;asset&gt;</code>, the home place a night within 400 m
+of it lies by — the night rule, whatever the place's radius — or the coordinates with <code>near
+&lt;place&gt;, x km</code> for a named place within 5 km or the city of the nearest large airport, and the
+country when the night is away; <code>in transit</code> when no stay reaches the minimum; <code>no location</code> when
+the day has no location line at all, since nothing then says the owner moved); the kilometres
+moved (every move that started on the day, the flights'
+included, and aboard an asset its passages); the flights (<code>XY 561 OSL→ZRH</code>); the stays — a stay
+or a run aboard an asset; a stop is not one — with how many lines are attached across the day's
+rows; the people confirmed present (<code>with 2</code>; a proposed face is not counted); the health triple
+when the day has one; and a gap marker. Both bounds default to the days the owner's track covers.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>days<span class="w"> </span>--from<span class="w"> </span><span class="m">2026</span>-06-08<span class="w"> </span>--to<span class="w"> </span><span class="m">2026</span>-06-21<span class="w">          </span><span class="c1"># the persona's fortnight, as text</span>
+logbook<span class="w"> </span>days<span class="w"> </span>--from<span class="w"> </span><span class="m">2026</span>-01-01<span class="w"> </span>--to<span class="w"> </span><span class="m">2026</span>-12-31<span class="w"> </span>--json<span class="w">   </span><span class="c1"># a year, one JSON object per line</span>
+logbook<span class="w"> </span>days<span class="w">                                            </span><span class="c1"># the whole record</span>
+</code></pre></div>
+<p>The fortnight of the test persona, who does not exist:</p>
+<div class="highlight"><pre><span></span><code>2026-06-08  Mon  Home                             1.2 km  3 stays
+2026-06-09  Tue  Home                             1.2 km  3 stays
+2026-06-10  Wed  Home                             4.4 km  5 stays (2 attached) · with 1
+2026-06-11  Thu  Home                             1.3 km  3 stays (2 attached) · with 1
+2026-06-12  Fri  Home                             1.2 km  3 stays
+2026-06-13  Sat  aboard Solvind NO               11.1 km  2 stays (2 attached) · with 1
+2026-06-14  Sun  Home                            11.1 km  2 stays
+2026-06-15  Mon  47.3769,8.5417 (Zurich) CH     1,471 km  XY 561 OSL→ZRH · 4 stays (1 attached)
+2026-06-16  Tue  47.3769,8.5417 (Zurich) CH       0.0 km  1 stay (2 attached) · with 1
+2026-06-17  Wed  47.3769,8.5417 (Zurich) CH       0.0 km  1 stay
+2026-06-18  Thu  Home                           1,471 km  XY 562 ZRH→OSL · 4 stays
+2026-06-19  Fri  Home                             1.2 km  3 stays
+2026-06-20  Sat  Home                             1.2 km  3 stays
+2026-06-21  Sun  Home                             0.0 km  1 stay
+</code></pre></div>
+<p>The <strong>gap marker</strong> names every usual source with no standing line on the day — <code>gap dawarich</code>
+when the tracker said nothing all day, <code>gap apple-health, dawarich</code> on a day with nothing logged
+(the line then reads <code>no location</code> and <code>nothing logged</code>). A source is usual when it has a line on
+at least four in five of the window's days that have any line: the tracker, the watch, the boat's
+AIS, the messages; not the photos or the notes, which come every other day, and not a calendar
+that spoke once. The share is counted on the index in one aggregate (<code>Index.source_days</code>),
+nothing read from the files, before the first line is printed.</p>
+<p>Every number is the Day's: the night is <code>nights.after</code>, the country is the Day's, the flights are
+the Day's flight rows, the stays and their attachments are its timeline rows, the people are the
+union of its rows' confirmed company, the health row is its health line. What the window clips is
+a stay's start, and the night's stay id carries it: a hotel stay of three nights starts, in a
+reading that opens on its second day, at that day's midnight, as it does for <code>day</code> of that day.</p>
+<p>Under <code>--json</code> the output is JSON Lines — one object per day per line, so a year streams as text
+does: <code>day</code>, <code>weekday</code>, <code>night</code> (<code>where</code>, <code>home</code>, <code>aboard</code>, <code>in_transit</code>, <code>stay</code>), <code>country</code> (the
+code), <code>moved_m</code>, <code>flights</code> (<code>carrier</code>, <code>number</code>, <code>from</code>, <code>to</code>, <code>evidence</code>, <code>line</code>), <code>stays</code>
+(<code>count</code>, <code>attached</code>, <code>with_attachments</code>), <code>people</code> (<code>confirmed</code>, <code>names</code>), <code>health</code> (as the Day's,
+with its line ids), <code>sources</code> (as the Day's) and <code>gaps</code>.</p>
+<h2 id="performance">Performance</h2>
+<p>A Day is located through <code>index.sqlite</code>: one reading of the day and the day before (the night
+before is that day's night), the retraction and resolution lines, and the health lines of the two
+days, each by an indexed column. A record of millions of lines reads a day in the time that day's
+lines take; the files are never swept.</p>
+<p><code>days</code> reads the window in chunks of a month through one reading each — the chunk's days and the
+day before, so the first day has its night before, and the chunk's health lines in one indexed
+query — and asks that reading for each day in turn: a year is a dozen readings, never one per
+day, and the lines stream out as each chunk is read. A year of the demo record (<code>logbook demo
+--days 365</code>, 155,000 lines) prints in seconds, the first line within one.</p>
+<h2 id="what-it-is-not">What it is not</h2>
+<p>Not a narrative: no title, no summary, no score. The reader never writes a note, a confirmation or
+a naming; those are yours, and when you make one it is a line in the record that the next Day reads.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

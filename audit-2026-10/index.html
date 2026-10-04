@@ -1,0 +1,4152 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/audit-2026-10/">
+      
+      
+        <link rel="prev" href="../release-notes/">
+      
+      
+        <link rel="next" href="../adr/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Audit — October 2026 - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#audit-october-2026" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Audit — October 2026
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-size-and-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Size and shape
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Size and shape">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-the-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 The package
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-clipy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 cli.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-rfcs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 RFCs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.7 Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.8 Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-what-is-unused-or-dead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. What is unused or dead
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-what-disagrees-with-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What disagrees with itself
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-tests-what-the-suite-guards-and-what-it-only-pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tests: what the suite guards and what it only pins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-three-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The three decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. The three decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measured-against-the-expected-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured against the expected counts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-order-of-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Order of work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-appendix-commands-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Appendix: commands used
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_16" >
+        
+          
+          <label class="md-nav__link" for="__nav_16" id="__nav_16_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_16_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_16">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_17" >
+        
+          
+          <label class="md-nav__link" for="__nav_17" id="__nav_17_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_17_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_17">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_35" >
+        
+          
+          <label class="md-nav__link" for="__nav_35" id="__nav_35_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_35_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_35">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-size-and-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Size and shape
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Size and shape">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-the-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 The package
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-clipy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 cli.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-rfcs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 RFCs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.7 Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.8 Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-what-is-unused-or-dead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. What is unused or dead
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-what-disagrees-with-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What disagrees with itself
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-tests-what-the-suite-guards-and-what-it-only-pins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tests: what the suite guards and what it only pins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-three-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The three decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. The three decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measured-against-the-expected-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured against the expected counts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-order-of-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Order of work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-appendix-commands-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Appendix: commands used
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="audit-october-2026">Audit — October 2026</h1>
+<p>Measured on 3 October 2026 against commit <code>4d70394</code> (<code>main</code> after #200, version 0.5.0). Every number below comes from a command in the appendix; re-run them on a later commit before quoting them.</p>
+<h2 id="1-summary">1. Summary</h2>
+<ol>
+<li>The package is <code>logbook/</code> (there is no <code>src/</code> layout): 131 Python files, 57,227 lines, 20,331 of them in <code>logbook/adapters/</code>.</li>
+<li><code>logbook/cli.py</code> is 5,709 lines, imports 61 package modules at module level, and <code>import logbook.cli</code> loads 77 of the package's 131 modules before any command runs.</li>
+<li><code>logbook --help</code> lists 46 top-level commands in 119 lines.</li>
+<li>66 modules sit under <code>logbook/adapters/</code>; the <code>BUILT_IN</code> tuple names 58; <code>pyproject.toml</code> registers 25 entry points, every one a duplicate of a <code>BUILT_IN</code> name.</li>
+<li>31 profile strings appear in the package: 27 line profiles and 4 package manifests. 21 line profiles are read by a reader, rollup, derive or page; 6 are written and read by nothing but <code>show</code> or <code>search</code>; <code>commitment/v1</code> and <code>commitment-close/v1</code> are neither written nor read.</li>
+<li>RFC number 0025 names two different documents; RFC 0028 is one file under two names; 22 of the 27 RFCs in <code>rfcs/</code> are not on the docs site, and the site build has 48 broken links.</li>
+<li>The README names 17 commands and 14 profiles; all exist. 28 of the 46 top-level commands are not named in the README.</li>
+<li>The suite collects 2,853 tests in 141 files (50,594 lines); 7 are <code>stress</code>, 7 <code>slow</code>; 21 Hypothesis properties; 587 <code>readouterr()</code> calls; 8 whole-output equality assertions; 22 monkeypatches of underscore-prefixed names.</li>
+<li>No test loads a model: <code>judge</code>, <code>describe</code>, <code>transcribe</code> and <code>promises --judge</code> are tested through an injected <code>importer</code> and a <code>FakeEngine</code>.</li>
+<li>The runtime dependency is <code>ijson</code> (5 adapter modules) plus <code>tzdata</code> on Windows; <code>encrypted</code> and <code>share</code> are the same extra; <code>judge</code> and <code>describe</code> install nothing off Apple silicon.</li>
+</ol>
+<h2 id="2-size-and-shape">2. Size and shape</h2>
+<h3 id="21-the-package">2.1 The package</h3>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python files under <code>logbook/</code></td>
+<td>131 (63 outside <code>adapters/</code>, 68 inside)</td>
+</tr>
+<tr>
+<td>Lines, all <code>.py</code> under <code>logbook/</code></td>
+<td>57,227</td>
+</tr>
+<tr>
+<td>Lines under <code>logbook/adapters/</code></td>
+<td>20,331</td>
+</tr>
+<tr>
+<td>Lines in <code>logbook/cli.py</code></td>
+<td>5,709</td>
+</tr>
+<tr>
+<td><code>.py</code> files under <code>tests/</code></td>
+<td>149 (141 <code>test_*.py</code>, 8 helpers)</td>
+</tr>
+<tr>
+<td>Lines under <code>tests/</code></td>
+<td>50,594</td>
+</tr>
+<tr>
+<td>Pages under <code>docs/</code></td>
+<td>78 <code>.md</code> entries, 17 of them symlinks to root files or <code>rfcs/</code></td>
+</tr>
+</tbody>
+</table>
+<p>The ten largest files:</p>
+<table>
+<thead>
+<tr>
+<th>Lines</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5,709</td>
+<td><code>logbook/cli.py</code></td>
+</tr>
+<tr>
+<td>1,528</td>
+<td><code>logbook/demo.py</code></td>
+</tr>
+<tr>
+<td>1,168</td>
+<td><code>logbook/demo_life.py</code></td>
+</tr>
+<tr>
+<td>1,061</td>
+<td><code>logbook/vault.py</code></td>
+</tr>
+<tr>
+<td>1,005</td>
+<td><code>logbook/rollup.py</code></td>
+</tr>
+<tr>
+<td>974</td>
+<td><code>logbook/stays.py</code></td>
+</tr>
+<tr>
+<td>945</td>
+<td><code>logbook/flights.py</code></td>
+</tr>
+<tr>
+<td>941</td>
+<td><code>logbook/promises.py</code></td>
+</tr>
+<tr>
+<td>912</td>
+<td><code>logbook/day.py</code></td>
+</tr>
+<tr>
+<td>866</td>
+<td><code>logbook/print_page.py</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-clipy">2.2 <code>cli.py</code></h3>
+<ul>
+<li>33 module-level import statements; 0 function-level imports.</li>
+<li>61 package modules imported directly: 54 siblings through one <code>from . import (...)</code>, plus <code>.adapters</code>, <code>.adapters.takeout</code>, <code>.chain</code>, <code>.export</code>, <code>.index</code>, <code>.resolve</code>, <code>.store</code>.</li>
+<li><code>import logbook.cli</code> loads 218 modules not loaded before it, 77 of them <code>logbook.*</code> (the 61 above and their imports, among them 14 adapter modules), before argument parsing.</li>
+<li><code>import logbook</code> alone loads one module: <code>logbook/__init__.py</code> holds <code>__version__</code> and <code>FORMAT</code> and nothing else.</li>
+<li>68 <code>add_parser</code> calls build the tree: 46 top-level commands, and the parser reports 23 verbs under 11 of them (<code>assets</code>, <code>attach</code>, <code>circle</code>, <code>inbox</code>, <code>people</code>, <code>places</code>, <code>promises</code>, <code>questions</code>, <code>repair</code>, <code>share</code>, <code>tasks</code>); <code>derive</code>, <code>import</code>, <code>rollup</code> take a positional with fixed choices; <code>add</code>, <code>backup</code>, <code>describe</code>, <code>export</code>, <code>infer</code>, <code>transcribe</code> dispatch on a free positional inside their handler.</li>
+</ul>
+<h3 id="23-commands">2.3 Commands</h3>
+<p><code>logbook --help</code> is 119 lines and lists 46 top-level commands:</p>
+<div class="highlight"><pre><span></span><code>init add sync import-backup inbox attach infer transcribe describe retract
+search show people person day digest questions days year trip stats derive
+places rollup trips ledger keepers promises tasks serve mcp demo index verify
+setup doctor export import sources assets repair share receive circle migrate backup
+</code></pre></div>
+<h3 id="24-adapters">2.4 Adapters</h3>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Modules under <code>logbook/adapters/</code> (without <code>__init__.py</code>)</td>
+<td>66</td>
+</tr>
+<tr>
+<td>Names in <code>adapters.BUILT_IN</code></td>
+<td>58</td>
+</tr>
+<tr>
+<td>Entry points in <code>[project.entry-points."logbook.adapters"]</code></td>
+<td>25</td>
+</tr>
+<tr>
+<td>Adapters <code>all_adapters()</code> returns</td>
+<td>58 (49 file adapters, 9 live)</td>
+</tr>
+</tbody>
+</table>
+<p>On disk but not in <code>BUILT_IN</code> (8): <code>health_export</code>, <code>keyed_archive</code>, <code>myfitnesspal_export</code>, <code>phone</code>, <code>takeout.places</code>, <code>takeout.times</code>, <code>withings_export</code> are helpers with no <code>run</code>; <code>takeout.calendar</code> defines <code>NAME</code>, <code>sniff</code> and <code>run</code> and is reachable only because <code>ics</code> sniffs the same files (its docstring says so).</p>
+<p>In <code>BUILT_IN</code> but not an entry point (33): <code>adsb ais apple_reminders apple_wallet beeper copilot dawarich dawarich_live easypark gcal imessage_live immich ios_calls line passages splitwise takeout.access_log takeout.activity takeout.chat takeout.chrome takeout.contacts takeout.home takeout.keep takeout.location takeout.maps takeout.meet takeout.pay takeout.photos takeout.tasks takeout.youtube twitter weather wispr_flow</code>.</p>
+<p>Entry points not in <code>BUILT_IN</code>: none. Every entry point names a module <code>BUILT_IN</code> already imports; <code>all_adapters()</code> loads each of those 25 twice and drops the second by <code>(kind, NAME)</code>.</p>
+<h3 id="25-profiles">2.5 Profiles</h3>
+<p>31 distinct <code>name/vN</code> strings appear in <code>logbook/</code>. Four are package manifests, not line profiles: <code>crossing-package/v1</code> (<code>crossing.py</code>), <code>day-package/v1</code> (<code>export.py</code>), <code>trip-bundle/v1</code> (<code>trip_bundle.py</code>), <code>shared-page/v1</code> (<code>share.py</code>). The other 27 are written as <code>payload.schema</code> of a line.</p>
+<p><strong>Written, by whom</strong> (27 line profiles):</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Written by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>browse/v1</code></td>
+<td><code>pocket</code>, <code>safari</code>, <code>takeout.activity</code>, <code>takeout.chrome</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>call/v1</code></td>
+<td><code>ios_calls</code>, <code>takeout.meet</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>crossing/v1</code></td>
+<td><code>crossing.py</code> (every <code>export crossing</code>, <code>export vault</code>, <code>export trip-bundle</code>, <code>share</code>)</td>
+</tr>
+<tr>
+<td><code>event/v1</code></td>
+<td><code>apple_wallet</code>, <code>ics</code>, <code>ios_calendar</code>, <code>screentime</code> (kind <code>app-use</code>), <code>takeout.access_log</code>, <code>takeout.home</code>, <code>takeout.pay</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>flight/v1</code></td>
+<td><code>flights.py</code> (<code>add flight</code>, <code>infer flights</code>)</td>
+</tr>
+<tr>
+<td><code>health-sample/v1</code></td>
+<td><code>apple_health</code>, <code>myfitnesspal</code>, <code>myfitnesspal_export</code>, <code>withings</code>, <code>withings_export</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>highlight/v1</code></td>
+<td><code>apple_books</code>, <code>takeout.maps</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>keeper/v1</code></td>
+<td><code>keepers.py</code> (<code>infer keepers</code>)</td>
+</tr>
+<tr>
+<td><code>listen/v1</code></td>
+<td><code>apple_music</code>, <code>apple_podcasts</code>, <code>shazam</code>, <code>spotify</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>location/v1</code></td>
+<td><code>adsb</code>, <code>ais</code>, <code>dawarich</code>, <code>passages</code>, <code>takeout.location</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>mail/v1</code></td>
+<td><code>mail</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>message/v1</code></td>
+<td><code>beeper</code>, <code>imessage</code>, <code>line</code>, <code>takeout.chat</code>, <code>twitter</code>, <code>whatsapp</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>migration/v1</code></td>
+<td><code>store.py</code> (<code>migrate</code>)</td>
+</tr>
+<tr>
+<td><code>note/v1</code></td>
+<td><code>granola</code>, <code>ios_notes</code>, <code>takeout.keep</code>, <code>cli.py</code> (<code>add</code> a sentence), <code>describe.py</code>, <code>mcp_server.py</code>, <code>setup.py</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>photo/v1</code></td>
+<td><code>apple_photos</code>, <code>immich</code>, <code>takeout.photos</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>received/v1</code></td>
+<td><code>trip_bundle.py</code> (<code>import trip-bundle</code>)</td>
+</tr>
+<tr>
+<td><code>resolution/v1</code></td>
+<td><code>ios_contacts</code>, <code>takeout.contacts</code>, <code>whatsapp_contacts</code>, <code>people_merge.py</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>retraction/v1</code></td>
+<td><code>store.py</code> (<code>retract</code>), <code>repair.py</code></td>
+</tr>
+<tr>
+<td><code>story/v1</code></td>
+<td><code>story.py</code> (<code>add story</code>)</td>
+</tr>
+<tr>
+<td><code>task/v1</code></td>
+<td><code>apple_reminders</code>, <code>takeout.tasks</code>, <code>promises.py</code>, <code>taskdone.py</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>transaction/v1</code></td>
+<td><code>copilot</code>, <code>splitwise</code>, <code>takeout.pay</code>, <code>ledger.py</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>transcript/v1</code></td>
+<td><code>transcript</code>, <code>wispr_flow</code>, <code>story.py</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>trip/v1</code></td>
+<td><code>easypark</code>, <code>passages</code>, <code>sbb</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>trip-share/v1</code></td>
+<td><code>trip_bundle.py</code> (<code>export trip-bundle</code> writes <code>trip.json</code>; <code>import trip-bundle</code> appends it as a page line)</td>
+</tr>
+<tr>
+<td><code>voice-memo/v1</code></td>
+<td><code>voice_memos</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>watch/v1</code></td>
+<td><code>takeout.youtube</code>, <code>demo</code></td>
+</tr>
+<tr>
+<td><code>weather/v1</code></td>
+<td><code>weather.py</code> (<code>sync weather</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Read, by whom.</strong> A profile counts as read when a module other than the <code>show</code> renderer in <code>cli.py</code> and the <code>search</code> index selects lines of its kind and builds something from them (a Day, a rollup, a derived line, a page). 21 line profiles qualify:</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Read by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>call/v1</code></td>
+<td><code>day.py</code>; <code>stays.EVIDENCE</code></td>
+</tr>
+<tr>
+<td><code>event/v1</code></td>
+<td><code>day.py</code>, <code>digest.py</code>, <code>flights.py</code>, <code>people.py</code>, <code>rollup.py</code> (<code>attention</code>, kind <code>app-use</code>); <code>stays.EVIDENCE</code></td>
+</tr>
+<tr>
+<td><code>flight/v1</code></td>
+<td><code>trips.py</code>, <code>rollup.py</code> (<code>flights</code>), <code>trip_bundle.py</code></td>
+</tr>
+<tr>
+<td><code>health-sample/v1</code></td>
+<td><code>health.py</code>, <code>rollup.py</code>, <code>day.py</code>, <code>days.py</code>, <code>year.py</code>, <code>print_page.py</code>, <code>trip_page.py</code>, <code>repair.py</code></td>
+</tr>
+<tr>
+<td><code>keeper/v1</code></td>
+<td><code>day.py</code>, <code>describe.py</code>, <code>print_page.py</code>, <code>trip_page.py</code>, <code>year.py</code></td>
+</tr>
+<tr>
+<td><code>listen/v1</code></td>
+<td><code>listen_rollup.py</code> (<code>rollup listen</code>)</td>
+</tr>
+<tr>
+<td><code>location/v1</code></td>
+<td><code>reading.py</code> and <code>stays.py</code> through <code>Index.locations</code>, <code>flights.py</code></td>
+</tr>
+<tr>
+<td><code>mail/v1</code></td>
+<td><code>day.py</code>, <code>taskdone.py</code></td>
+</tr>
+<tr>
+<td><code>message/v1</code></td>
+<td><code>day.py</code>; <code>stays.EVIDENCE</code></td>
+</tr>
+<tr>
+<td><code>note/v1</code></td>
+<td><code>day.py</code>, <code>people.py</code>, <code>promises.py</code>, <code>setup.py</code>; <code>stays.EVIDENCE</code></td>
+</tr>
+<tr>
+<td><code>photo/v1</code></td>
+<td><code>day.py</code>, <code>people.py</code>, <code>pages.py</code>, <code>keepers.py</code>, <code>print_page.py</code>, <code>trip_bundle.py</code></td>
+</tr>
+<tr>
+<td><code>received/v1</code></td>
+<td><code>trip_bundle.shares</code>, called by <code>trip_page.py</code></td>
+</tr>
+<tr>
+<td><code>resolution/v1</code></td>
+<td><code>people.py</code>, <code>people_merge.py</code>, <code>resolve.py</code>, <code>crossing.py</code>, <code>digest.py</code>, <code>promises.py</code>, <code>questions.py</code>, <code>reading.py</code></td>
+</tr>
+<tr>
+<td><code>retraction/v1</code></td>
+<td>every reader, through <code>Index.retractions</code></td>
+</tr>
+<tr>
+<td><code>story/v1</code></td>
+<td><code>day.py</code>, <code>days.py</code></td>
+</tr>
+<tr>
+<td><code>task/v1</code></td>
+<td><code>promises.py</code>, <code>taskdone.py</code></td>
+</tr>
+<tr>
+<td><code>transaction/v1</code></td>
+<td><code>ledger.py</code> (<code>rollup money</code>), <code>taskdone.py</code>, <code>trip_page.py</code></td>
+</tr>
+<tr>
+<td><code>transcript/v1</code></td>
+<td><code>day.py</code>, <code>people.py</code>, <code>promises.py</code>, <code>story.py</code>; <code>stays.EVIDENCE</code></td>
+</tr>
+<tr>
+<td><code>trip-share/v1</code></td>
+<td><code>trip_bundle.shares</code>, called by <code>trip_page.py</code></td>
+</tr>
+<tr>
+<td><code>voice-memo/v1</code></td>
+<td><code>transcribe.py</code></td>
+</tr>
+<tr>
+<td><code>weather/v1</code></td>
+<td><code>trips.py</code>, <code>year.py</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Written but never read</strong> (6 line profiles): <code>browse/v1</code>, <code>watch/v1</code>, <code>trip/v1</code>, <code>highlight/v1</code>, <code>crossing/v1</code>, <code>migration/v1</code>. The first four are rendered by <code>show</code> and indexed by <code>search</code>; <code>crossing/v1</code> is rendered by <code>show</code> only; <code>migration/v1</code> is appended by <code>migrate</code> and read by nothing. Counting the 4 package manifests with them makes 10.</p>
+<p><strong>Neither written nor read</strong> (2): <code>commitment/v1</code> and <code>commitment-close/v1</code>. They appear in <code>rfcs/0007-commitment-v1.md</code>, in the tier table of <code>SPEC.md</code> (§4) and in <code>docs/promises.md</code>; no string <code>commitment</code> occurs in <code>logbook/</code>.</p>
+<h3 id="26-rfcs">2.6 RFCs</h3>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Numbered RFC files in <code>rfcs/</code></td>
+<td>27 (<code>0001</code>–<code>0026</code>, <code>0028</code>; no <code>0027</code>)</td>
+</tr>
+<tr>
+<td>Entries in <code>docs/rfcs/</code></td>
+<td>8: 5 symlinks into <code>rfcs/</code>, 3 regular files</td>
+</tr>
+<tr>
+<td>Regular files only in <code>docs/rfcs/</code></td>
+<td><code>0027-reflection.md</code>, <code>rfc-0025-shared-page-bundle.md</code>, <code>bench-encryption-2026-10.md</code></td>
+</tr>
+<tr>
+<td>Numbers that name two different documents</td>
+<td>1: <code>0025</code> (<code>rfcs/0025-trip-bundle-v1.md</code>, <code>trip-bundle/v1</code>; <code>docs/rfcs/rfc-0025-shared-page-bundle.md</code>, <code>shared-page/v1</code>)</td>
+</tr>
+<tr>
+<td>Files reachable under two names</td>
+<td>1: <code>docs/rfcs/0028-story.md</code> is a symlink to <code>rfcs/0028-story-v1.md</code></td>
+</tr>
+<tr>
+<td>RFCs in <code>rfcs/</code> absent from the docs site</td>
+<td>22 (<code>0003</code>–<code>0025</code> except as above)</td>
+</tr>
+</tbody>
+</table>
+<p><code>mkdocs.yml</code> lists 7 RFC pages. <code>rfcs/README.md</code> links to all 27 plus the two under <code>docs/rfcs/</code>; built as a site page, 26 of its links point outside the site.</p>
+<h3 id="27-tests">2.7 Tests</h3>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Collected</td>
+<td>2,853 (<code>pytest --collect-only</code>)</td>
+</tr>
+<tr>
+<td>Deselected by <code>-m "not stress"</code></td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>def test_</code> definitions</td>
+<td>2,401 (parametrization makes up the rest)</td>
+</tr>
+<tr>
+<td><code>@pytest.mark.slow</code></td>
+<td>7, in <code>test_fuzz_readers.py</code>, <code>test_stress.py</code>, <code>test_year.py</code></td>
+</tr>
+<tr>
+<td><code>@pytest.mark.stress</code></td>
+<td>7, all in <code>test_stress.py</code></td>
+</tr>
+<tr>
+<td>Files importing Hypothesis</td>
+<td>16; <code>@given</code> properties: 21</td>
+</tr>
+<tr>
+<td><code>readouterr()</code> calls</td>
+<td>587</td>
+</tr>
+<tr>
+<td>Substring assertions on captured output (<code>assert ... in out</code>)</td>
+<td>862</td>
+</tr>
+<tr>
+<td>Whole-output equality: <code>== """</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Whole-output equality: <code>.output ==</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Whole-output equality: <code>.stdout ==</code></td>
+<td>6</td>
+</tr>
+<tr>
+<td>Whole-output equality: <code>out == "..."</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>monkeypatch.setattr(&lt;module&gt;, "_name", ...)</code></td>
+<td>22</td>
+</tr>
+<tr>
+<td>Files running the CLI through <code>subprocess.run</code></td>
+<td>26</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Wall clock.</strong> <code>time uv run pytest --durations=15 -q -m "not stress" -p no:cacheprovider</code>, one worker (the <code>addopts</code> in <code>pyproject.toml</code> add <code>--dist loadfile</code>, which is inert without <code>-n</code>), on this run's Linux container:</p>
+<table>
+<thead>
+<tr>
+<th>Measure</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wall clock</td>
+<td>13 min 12 s (<code>real 13m12.158s</code>, <code>user 12m24.013s</code>)</td>
+</tr>
+<tr>
+<td>Outcomes</td>
+<td>2,839 passed, 7 skipped (<code>slow</code>, <code>LOGBOOK_SLOW</code> unset), 7 deselected (<code>stress</code>)</td>
+</tr>
+<tr>
+<td>Exit code</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>The fifteen slowest phases:</p>
+<table>
+<thead>
+<tr>
+<th>Seconds</th>
+<th>Phase</th>
+<th>Test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>447.51</td>
+<td>call</td>
+<td><code>tests/test_demo_years.py::test_the_long_trips</code></td>
+</tr>
+<tr>
+<td>14.70</td>
+<td>setup</td>
+<td><code>tests/test_demo_years.py::test_the_life_verifies_and_holds_every_profile</code></td>
+</tr>
+<tr>
+<td>9.46</td>
+<td>call</td>
+<td><code>tests/test_demo_years.py::test_nothing_in_it_is_real</code></td>
+</tr>
+<tr>
+<td>8.54</td>
+<td>call</td>
+<td><code>tests/test_demo_years.py::test_the_life_verifies_and_holds_every_profile</code></td>
+</tr>
+<tr>
+<td>3.48</td>
+<td>call</td>
+<td><code>tests/test_dawarich_live.py::test_any_page_yields_only_lines_valid_against_the_schema_and_rfc_0001</code></td>
+</tr>
+<tr>
+<td>2.58</td>
+<td>call</td>
+<td><code>tests/test_show.py::test_show_piped_into_head_exits_0_with_nothing_on_stderr</code></td>
+</tr>
+<tr>
+<td>2.24</td>
+<td>call</td>
+<td><code>tests/test_demo_years.py::test_trips_in_an_early_and_a_late_year</code></td>
+</tr>
+<tr>
+<td>2.00</td>
+<td>call</td>
+<td><code>tests/test_granola.py::test_a_connection_failure_is_retried_once</code></td>
+</tr>
+<tr>
+<td>1.93</td>
+<td>call</td>
+<td><code>tests/test_weather.py::test_day_year_and_trips_show_the_weather_without_the_network</code></td>
+</tr>
+<tr>
+<td>1.59</td>
+<td>call</td>
+<td><code>tests/test_demo_years.py::test_health_only_from_the_year_the_watch_appears</code></td>
+</tr>
+<tr>
+<td>1.57</td>
+<td>setup</td>
+<td><code>tests/test_demo_years.py::test_childhood_is_sparse_and_told_by_others</code></td>
+</tr>
+<tr>
+<td>1.47</td>
+<td>call</td>
+<td><code>tests/test_serve.py::test_no_page_references_a_url_outside_itself</code></td>
+</tr>
+<tr>
+<td>1.46</td>
+<td>call</td>
+<td><code>tests/test_whatsapp.py::test_cli_add_reports_lines_skips_and_media</code></td>
+</tr>
+<tr>
+<td>1.46</td>
+<td>call</td>
+<td><code>tests/test_migrate.py::test_cli_verify_and_add_refuse_then_migrate_then_verify</code></td>
+</tr>
+<tr>
+<td>1.45</td>
+<td>call</td>
+<td><code>tests/test_imessage.py::test_any_message_store_yields_only_valid_lines</code></td>
+</tr>
+</tbody>
+</table>
+<p>One test, <code>test_the_long_trips</code>, takes 447.5 s of the 792 s wall clock (56%) and carries no <code>slow</code> mark; the other 2,838 passing tests take 344 s together, 0.12 s each on average.</p>
+<h3 id="28-dependencies">2.8 Dependencies</h3>
+<p>Runtime: <code>ijson&gt;=3.3</code>; <code>tzdata</code> on Windows. <code>ijson</code> is imported by 5 modules, all adapters: <code>adapters/dawarich.py</code>, <code>adapters/spotify.py</code>, <code>adapters/takeout/activity.py</code>, <code>adapters/takeout/location.py</code>, <code>adapters/takeout/youtube.py</code>. Nothing outside <code>adapters/</code> imports it, and 61 of the 66 adapter modules do not.</p>
+<p>Extras, as <code>pyproject.toml</code> declares them and as <code>uv export --extra &lt;name&gt;</code> resolves them from <code>uv.lock</code> (every platform marker included; <code>ijson</code> and <code>tzdata</code> are in every count):</p>
+<table>
+<thead>
+<tr>
+<th>Extra</th>
+<th>Declared</th>
+<th>Packages resolved</th>
+<th>Platform</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>encrypted</code></td>
+<td><code>cryptography&gt;=42</code></td>
+<td>5</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>share</code></td>
+<td><code>cryptography&gt;=42</code></td>
+<td>5</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>ais</code></td>
+<td><code>websockets&gt;=13</code></td>
+<td>3</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>mcp</code></td>
+<td><code>mcp&gt;=2</code></td>
+<td>32</td>
+<td>all</td>
+</tr>
+<tr>
+<td><code>judge</code></td>
+<td><code>mlx-lm&gt;=0.20</code></td>
+<td>36</td>
+<td>Apple silicon only; installs nothing elsewhere</td>
+</tr>
+<tr>
+<td><code>transcribe</code></td>
+<td><code>mlx-whisper&gt;=0.4</code> or <code>faster-whisper&gt;=1.0</code></td>
+<td>45</td>
+<td><code>mlx-whisper</code> on Apple silicon, <code>faster-whisper</code> (with <code>torch</code>, <code>ctranslate2</code>, <code>onnxruntime</code>) elsewhere</td>
+</tr>
+<tr>
+<td><code>describe</code></td>
+<td><code>mlx-vlm&gt;=0.1.20</code>, <code>pillow-heif&gt;=0.18</code></td>
+<td>58</td>
+<td>Apple silicon only; installs nothing elsewhere</td>
+</tr>
+</tbody>
+</table>
+<p><code>encrypted</code> and <code>share</code> resolve to the same packages. <code>judge</code>, <code>describe</code> and <code>transcribe</code> share <code>mlx</code>, <code>mlx-metal</code>, <code>huggingface-hub</code>, <code>tokenizers</code>, <code>numpy</code> on Apple silicon.</p>
+<h2 id="3-what-is-unused-or-dead">3. What is unused or dead</h2>
+<ul>
+<li><code>commitment/v1</code> and <code>commitment-close/v1</code> (RFC 0007): specified, listed in <code>SPEC.md</code> §4 and <code>docs/promises.md</code>, never written, never read. <code>promises</code> writes <code>task/v1</code> instead.</li>
+<li><code>migration/v1</code>: written once per <code>migrate</code>, read by no module.</li>
+<li><code>crossing/v1</code>: written by every export and share, read back by nothing but <code>show</code>.</li>
+<li><code>browse/v1</code>, <code>watch/v1</code>, <code>trip/v1</code>, <code>highlight/v1</code>: written by 4, 1, 3 and 2 adapters respectively, read by <code>show</code> and <code>search</code> only. No Day, rollup, page or derive consumes them.</li>
+<li>The 25 entry points in <code>pyproject.toml</code>: each names a module <code>BUILT_IN</code> already loads; <code>all_adapters()</code> imports them a second time and discards the duplicates.</li>
+<li><code>logbook/adapters/takeout/calendar.py</code>: a complete adapter (<code>NAME</code>, <code>sniff</code>, <code>run</code>) in no registry; <code>add Takeout/Calendar</code> reaches the same files through <code>ics</code>.</li>
+<li><code>logbook demo</code> and <code>logbook demo --years</code>: <code>demo.py</code> and <code>demo_life.py</code> are 2,696 lines (4.7% of the package), imported by <code>cli.py</code> at module level for every command.</li>
+<li>22 RFCs under <code>rfcs/</code> are not in <code>mkdocs.yml</code>; the site links to them and the links are broken.</li>
+</ul>
+<h2 id="4-what-disagrees-with-itself">4. What disagrees with itself</h2>
+<ul>
+<li><strong>Two adapter registries.</strong> <code>BUILT_IN</code> (58) and the entry points (25) register the same modules by different names (<code>apple-books</code> vs <code>apple_books</code>); 33 adapters are in one and not the other; <code>docs/adapters/README.md</code> describes third-party adapters registering the entry point, which is the only purpose the group serves.</li>
+<li><strong><code>screentime</code></strong> writes kind <code>app-use</code> with schema <code>event/v1</code>; every other writer of <code>event/v1</code> writes kind <code>event</code>. <code>rollup attention</code> selects by <code>screentime.KIND</code>, so the lines are read; <code>day.py</code>'s <code>event</code> selection does not see them.</li>
+<li><strong>RFC 0025</strong> is two documents: <code>rfcs/0025-trip-bundle-v1.md</code> (<code>trip-bundle/v1</code>, <code>trip-share/v1</code>, <code>received/v1</code>; 119 lines, dated 2026-10-03) and <code>docs/rfcs/rfc-0025-shared-page-bundle.md</code> (<code>shared-page/v1</code>; 217 lines, dated 2026-10-02). <code>rfcs/README.md</code> links both under the same number.</li>
+<li><strong>RFC 0028</strong> is one file with two names: <code>rfcs/0028-story-v1.md</code> and the symlink <code>docs/rfcs/0028-story.md</code>; <code>mkdocs.yml</code> names it "0028 story/v1 (draft, unfinished)".</li>
+<li><strong>RFC 0027</strong> exists only under <code>docs/rfcs/</code>; the sequence in <code>rfcs/</code> skips it.</li>
+<li><strong><code>rfcs/README.md</code></strong> calls <code>commitment/v1</code> a seed profile and links its RFC; the code has no writer and no reader.</li>
+<li><strong><code>SPEC.md</code> §4</strong> places <code>commitment/v1</code> and <code>commitment-close/v1</code> in the tier table beside profiles the code writes.</li>
+<li><strong>README vs code.</strong> Every command the README names exists: 17 top-level names in backticks, 50 two-word forms (<code>export vault</code>, <code>backup restore</code>, <code>infer keepers</code>, <code>add story</code>, <code>rollup money</code>, …), all dispatched in <code>cli.py</code>. Every profile the README names (14) is written by the code. The README does not name 28 of the 46 top-level commands: <code>assets circle days describe digest import import-backup index infer keepers ledger migrate people person questions receive repair retract rollup search share show stats tasks transcribe trip trips verify year</code> (several appear in two-word forms or without the <code>logbook</code> prefix). The README's live-source table names 5 of the 9 live adapters; <code>adsb</code>, <code>ais</code> and <code>weather</code> appear in command examples, <code>apple-podcasts</code> nowhere.</li>
+<li><strong>The docs site</strong> builds with 48 warnings, every one a link to a file outside <code>docs/</code>: 26 from <code>rfcs/README.md</code>, 15 from <code>index.md</code>, 6 from <code>CHANGELOG.md</code>, 1 from <code>CONTRIBUTING.md</code>. <code>mkdocs build --strict</code> fails; <code>.github/workflows/docs.yml</code> deploys without <code>--strict</code>.</li>
+<li><strong>Pre-commit</strong> excludes <code>docs/rfcs/*.md</code> from the whitespace hooks because the files are symlinks; three of them are regular files.</li>
+</ul>
+<h2 id="5-tests-what-the-suite-guards-and-what-it-only-pins">5. Tests: what the suite guards and what it only pins</h2>
+<p>What it guards:</p>
+<ul>
+<li>The envelope and the chain: <code>conformance/sample-logbook</code> with <code>conformance/expected.json</code> is verified in CI by <code>logbook verify --expect</code>, and <code>tests/test_jcs.py</code> pins RFC 8785 hashing.</li>
+<li>Adapters against drift: 21 Hypothesis properties in 16 files generate exports and assert every yielded line validates; <code>test_fuzz_readers.py</code> carries 3 of the 7 <code>slow</code> marks.</li>
+<li>No network on the default path: <code>tests/test_no_network.py</code> and the socket guards in <code>conftest.py</code>, <code>test_describe.py</code>, <code>test_promise_judge.py</code>, <code>test_transcribe.py</code>, <code>test_ais.py</code>, <code>test_gcal.py</code>, <code>test_serve.py</code>, <code>test_mcp.py</code>.</li>
+<li>The CLI end to end: 26 files run <code>logbook</code> through <code>subprocess.run</code>.</li>
+</ul>
+<p>What it only pins:</p>
+<ul>
+<li>Console text. 587 <code>readouterr()</code> calls and 862 substring assertions on captured output check wording, column layout and phrases from <code>cli.SKIP_PHRASES</code>. A rename of a command or a rewording of a line fails tests without any line of the record changing. Whole-output equality is rare (8 assertions), so the pinning is by phrase, not by screen.</li>
+<li>Private names. 22 <code>monkeypatch.setattr</code> calls target underscore-prefixed attributes (<code>_together</code>, <code>_finite</code>, …); those tests bind the suite to the current factoring of the module.</li>
+<li>The model commands. <code>test_promise_judge.py</code> (16 tests), <code>test_describe.py</code> (19) and <code>test_transcribe.py</code> (20) pass a fake <code>importer</code> or a <code>FakeEngine</code> into <code>judge.py</code>, <code>describe.py</code> and <code>transcribe.py</code>; no test imports <code>mlx_lm</code>, <code>mlx_vlm</code>, <code>mlx_whisper</code> or <code>faster_whisper</code>, and <code>tests/test_mcp.py</code> is the only <code>importorskip</code>. The suite proves the plumbing around a model, never a model's answer.</li>
+<li>Markers. <code>slow</code> tests run only with <code>LOGBOOK_SLOW=1</code> (CI: push to <code>main</code> and nightly, not pull requests); <code>stress</code> never runs in CI. A pull request therefore runs 2,839 of the 2,853 collected tests and skips 7; the one test that takes 56% of the wall clock, <code>test_demo_years.py::test_the_long_trips</code>, has no mark and runs on every pull request.</li>
+</ul>
+<h2 id="6-dependencies">6. Dependencies</h2>
+<ul>
+<li>One runtime dependency, <code>ijson</code>, carried by 5 of 66 adapter modules; the other 126 modules of the package need the standard library only. A core without adapters has no third-party dependency.</li>
+<li>Two extras are one: <code>encrypted</code> and <code>share</code> both declare <code>cryptography&gt;=42</code> and resolve identically.</li>
+<li>Three extras are Apple-silicon-only in effect: <code>judge</code> and <code>describe</code> install nothing on any other platform and the commands exit 2 with an install line; <code>transcribe</code> falls back to <code>faster-whisper</code>, which pulls <code>torch</code> (45 packages).</li>
+<li><code>mcp</code> pulls 32 packages (<code>pydantic</code>, <code>starlette</code>, <code>uvicorn</code>, <code>jsonschema</code>, …) for one command, <code>logbook mcp</code>.</li>
+<li>The dev group installs <code>pytest</code>, <code>pytest-xdist</code>, <code>pytest-cov</code>, <code>hypothesis</code>, <code>ruff</code>, <code>mypy</code>, <code>pre-commit</code>; <code>mkdocs-material</code> and <code>pymdown-extensions</code> are not in the lockfile and the docs workflow fetches them with <code>uvx</code>.</li>
+</ul>
+<h2 id="7-the-three-decisions">7. The three decisions</h2>
+<p>Recorded as the owner gave them on 3 October 2026.</p>
+<p><strong>Decision 1 — Commands:</strong> 46 top-level commands become 22. Every old name stays as a hidden alias that prints one line naming the new command. Help fits on one screen.</p>
+<p><strong>Decision 2 — Profiles:</strong> the profiles read by readers are frozen for v1.0 (expected 18); profiles written but never read are parked (expected 10): their adapters keep writing them, their schemas are marked "parked, may change", nothing is frozen about them. commitment/v1 and commitment-close/v1, neither written nor read, are deleted. trip/v1 is renamed journey/v1 with a reader-side alias for existing records. The freeze is specified in its own RFC.</p>
+<p><strong>Decision 3 — Packaging:</strong> one package, <code>openlogbook</code>, with three tiers inside it — core (format, record, verify, the frozen profiles' readers), contrib (adapters, exports, derived readers), labs (model-touching and experimental commands). Old import paths keep working through shims for one minor version. No split into two distributions before v1.0.</p>
+<h3 id="measured-against-the-expected-counts">Measured against the expected counts</h3>
+<table>
+<thead>
+<tr>
+<th>Set</th>
+<th>Expected</th>
+<th>Measured (§2.5)</th>
+<th>Difference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read by readers (to freeze)</td>
+<td>18</td>
+<td>21</td>
+<td>3 more: <code>voice-memo/v1</code> (read only by <code>transcribe</code>, a labs command), <code>received/v1</code> and <code>trip-share/v1</code> (read only by the <code>shared</code> section of <code>trip &lt;id&gt;</code>). Without those three the set is the expected 18.</td>
+</tr>
+<tr>
+<td>Written, never read (to park)</td>
+<td>10</td>
+<td>6 line profiles; 10 with the 4 package manifests</td>
+<td>The 6: <code>browse/v1</code>, <code>watch/v1</code>, <code>trip/v1</code>, <code>highlight/v1</code>, <code>crossing/v1</code>, <code>migration/v1</code>. The manifests <code>crossing-package/v1</code>, <code>day-package/v1</code>, <code>trip-bundle/v1</code>, <code>shared-page/v1</code> are formats of a folder, not of a line; the freeze RFC has to say whether they are in scope.</td>
+</tr>
+<tr>
+<td>Neither written nor read (to delete)</td>
+<td>2</td>
+<td>2</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>The counts differ from the expectation on the first two rows. The 21 and the 6 are what the commands in the appendix return; the freeze RFC must name its 18 and its 10 explicitly and decide the fate of the five profiles that fall between the two definitions (<code>voice-memo/v1</code>, <code>received/v1</code>, <code>trip-share/v1</code>, <code>crossing/v1</code>, <code>migration/v1</code>).</p>
+<p>Two facts the decisions rest on, checked: the distribution is already named <code>openlogbook</code> (<code>pyproject.toml</code> line 2; the import package is <code>logbook</code>); <code>trip/v1</code> is written by <code>easypark</code>, <code>sbb</code>, <code>passages</code> and <code>demo</code> and read by no reader, so the rename to <code>journey/v1</code> touches 4 writers, the <code>show</code> renderer, <code>search.KINDS</code>, RFC 0020 and the README.</p>
+<h2 id="8-order-of-work">8. Order of work</h2>
+<ol>
+<li><strong>Hygiene first</strong>, because every later step is measured against a baseline without duplicates: delete the 25 entry points or <code>BUILT_IN</code> (one registry); move the three regular files out of <code>docs/rfcs/</code> or the 22 missing RFCs into <code>mkdocs.yml</code>; renumber one of the two 0025s; make <code>mkdocs build --strict</code> pass and run it in CI; remove <code>commitment/v1</code> and <code>commitment-close/v1</code> from <code>SPEC.md</code> §4, <code>rfcs/README.md</code> and <code>docs/promises.md</code> and mark RFC 0007 withdrawn. No behaviour changes; no changelog line a user needs.</li>
+<li><strong>One package, three tiers</strong> (Decision 3), because the command and profile work must land in the tier it belongs to: <code>logbook/core</code>, <code>logbook/contrib</code>, <code>logbook/labs</code>, with shims at the old paths. The import graph in §2.2 is the checklist: <code>cli.py</code> must stop importing 61 modules at module level or every tier loads for every command.</li>
+<li><strong>Commands</strong> (Decision 1), because it depends on the tiers: 46 become 22, old names become hidden aliases, and the 862 substring assertions on console output in §2.7 tell which tests pin the old wording.</li>
+<li><strong>Property tests</strong> for the frozen readers, because the freeze needs a guard that does not depend on console phrases: one Hypothesis property per frozen profile asserting that any valid line is read without error and that <code>Day</code> is a function of the lines alone, alongside the 21 properties that already cover adapters.</li>
+<li><strong>The freeze RFC</strong> (Decision 2) last, because it names the 18 and the 10 from the tiers and the readers as they stand after steps 2–4, renames <code>trip/v1</code> to <code>journey/v1</code>, and is the one document the v1.0 tag points at.</li>
+</ol>
+<h2 id="9-appendix-commands-used">9. Appendix: commands used</h2>
+<p>Run from the repository root at commit <code>4d70394</code>, Python 3.12, <code>uv sync --group dev</code> done.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># §2.1 size</span>
+find<span class="w"> </span>logbook<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+find<span class="w"> </span>logbook<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span>-not<span class="w"> </span>-path<span class="w"> </span><span class="s1">'*/adapters/*'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+find<span class="w"> </span>logbook<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>wc<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+find<span class="w"> </span>logbook/adapters<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>wc<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+find<span class="w"> </span>logbook<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>wc<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'2,11p'</span>
+wc<span class="w"> </span>-l<span class="w"> </span>logbook/cli.py
+ls<span class="w"> </span>tests/test_*.py<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>ls<span class="w"> </span>tests/*.py<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+find<span class="w"> </span>tests<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>wc<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+find<span class="w"> </span>docs<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.md'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>find<span class="w"> </span>docs<span class="w"> </span>-type<span class="w"> </span>l<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+
+<span class="c1"># §2.2 cli.py imports</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'PY'</span>
+<span class="s">import ast, sys</span>
+<span class="s">tree = ast.parse(open("logbook/cli.py").read())</span>
+<span class="s">top = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]</span>
+<span class="s">nested = [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom)) and n not in top]</span>
+<span class="s">sib = [a.name for n in top if isinstance(n, ast.ImportFrom) and n.level == 1 and n.module is None for a in n.names]</span>
+<span class="s">print(len(top), "module-level import statements;", len(nested), "nested;", len(sib), "names from '.'")</span>
+<span class="s">before = set(sys.modules); import logbook.cli</span>
+<span class="s">new = set(sys.modules) - before</span>
+<span class="s">print(len(new), "modules loaded;", len([m for m in new if m.startswith("logbook")]), "logbook.*")</span>
+<span class="s">PY</span>
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import sys; b=set(sys.modules); import logbook; print(len([m for m in set(sys.modules)-b if m.startswith('logbook')]))"</span>
+grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">'\.add_parser('</span><span class="w"> </span>logbook/cli.py
+
+<span class="c1"># §2.3 commands</span>
+uv<span class="w"> </span>run<span class="w"> </span>logbook<span class="w"> </span>--help<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+uv<span class="w"> </span>run<span class="w"> </span>logbook<span class="w"> </span>--help<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'2p'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">' {}.'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">','</span><span class="w"> </span><span class="s1">'\n'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span>.
+
+<span class="c1"># §2.4 adapters</span>
+find<span class="w"> </span>logbook/adapters<span class="w"> </span>-name<span class="w"> </span><span class="s1">'*.py'</span><span class="w"> </span>!<span class="w"> </span>-name<span class="w"> </span><span class="s1">'__init__.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'PY'</span>
+<span class="s">import tomllib, pathlib</span>
+<span class="s">from logbook import adapters as a</span>
+<span class="s">built = set(a.BUILT_IN)</span>
+<span class="s">eps = tomllib.load(open("pyproject.toml", "rb"))["project"]["entry-points"]["logbook.adapters"]</span>
+<span class="s">ep = {v.removeprefix("logbook.adapters.") for v in eps.values()}</span>
+<span class="s">disk = {".".join(f.with_suffix("").parts[2:]) for f in pathlib.Path("logbook/adapters").rglob("*.py") if f.name != "__init__.py"}</span>
+<span class="s">print(len(disk), len(built), len(eps), len(a.all_adapters()), len(a.live_adapters()))</span>
+<span class="s">print("disk-not-BUILT_IN", sorted(disk - built)); print("ep-not-BUILT_IN", sorted(ep - built)); print("BUILT_IN-not-ep", sorted(built - ep))</span>
+<span class="s">PY</span>
+
+<span class="c1"># §2.5 profiles: every profile string, per file; writers are the files holding SCHEMA constants or</span>
+<span class="c1"># "schema": literals; readers are selections by kind (by_kind, of_kind, evidence, kind ==, X.KIND,</span>
+<span class="c1"># Index.locations/resolutions/retractions) in modules outside adapters/, cli.py's show renderer and search.py</span>
+grep<span class="w"> </span>-rhoE<span class="w"> </span><span class="s1">'"[a-z][a-z-]*/v[0-9]+"'</span><span class="w"> </span>logbook<span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">'"'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
+grep<span class="w"> </span>-rnoE<span class="w"> </span><span class="s1">'"[a-z][a-z-]*/v[0-9]+"'</span><span class="w"> </span>logbook<span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">'"'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F:<span class="w"> </span><span class="s1">'{print $1, $3}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+grep<span class="w"> </span>-rnE<span class="w"> </span><span class="s1">'^[A-Z_]*(KIND|SCHEMA|PROFILE)[A-Z_]* *= *"[^"]+"'</span><span class="w"> </span>logbook<span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.py'</span>
+grep<span class="w"> </span>-rnE<span class="w"> </span><span class="s1">'by_kind\(|of_kind\(|evidence\(|\.locations\(|\.resolutions\(|\.retractions\(|\.KIND\b|kind *(==|!=|in) *"'</span><span class="w"> </span>logbook<span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.py'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span><span class="s1">'logbook/adapters/'</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'2895,2930p'</span><span class="w"> </span>logbook/cli.py<span class="w">          </span><span class="c1"># the show renderer's kind chain</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'48,62p'</span><span class="w"> </span>logbook/search.py<span class="w">           </span><span class="c1"># search.KINDS</span>
+grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'commitment'</span><span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.py'</span><span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.md'</span><span class="w"> </span>--include<span class="o">=</span><span class="s1">'*.json'</span><span class="w"> </span>.<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span><span class="s1">'^./.venv'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>CHANGELOG
+
+<span class="c1"># §2.6 RFCs</span>
+ls<span class="w"> </span>rfcs<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>ls<span class="w"> </span>docs/rfcs<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>find<span class="w"> </span>docs/rfcs<span class="w"> </span>-type<span class="w"> </span>l
+ls<span class="w"> </span>rfcs<span class="w"> </span>docs/rfcs<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">'[0-9]{4}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'$1&gt;1'</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s1">'rfcs/'</span><span class="w"> </span>mkdocs.yml
+uvx<span class="w"> </span>--with<span class="w"> </span>mkdocs-material<span class="w"> </span>--with<span class="w"> </span>pymdown-extensions<span class="w"> </span>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict<span class="w"> </span>-d<span class="w"> </span>/tmp/site<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span>WARNING
+uvx<span class="w"> </span>--with<span class="w"> </span>mkdocs-material<span class="w"> </span>--with<span class="w"> </span>pymdown-extensions<span class="w"> </span>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict<span class="w"> </span>-d<span class="w"> </span>/tmp/site<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-oE<span class="w"> </span><span class="s2">"Doc file '[^']+'"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c
+
+<span class="c1"># §4 README vs code</span>
+grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">'`logbook [a-z][a-z-]*'</span><span class="w"> </span>README.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">'s/`logbook //'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w">          </span><span class="c1"># compare with the 46 names</span>
+grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">'\blogbook [a-z][a-z-]+ [a-z][a-z-]+\b'</span><span class="w"> </span>README.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w">                  </span><span class="c1"># two-word forms; check each in cli.py</span>
+grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">'`?[a-z][a-z-]*/v[0-9]`?'</span><span class="w"> </span>README.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">'`'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w">             </span><span class="c1"># ai/v1 is a URL, not a profile</span>
+grep<span class="w"> </span>-oE<span class="w"> </span><span class="s1">'^\| `[a-z-]+` \|'</span><span class="w"> </span>README.md<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span>-d<span class="w"> </span><span class="s1">'`| '</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w">                           </span><span class="c1"># the live-source table</span>
+
+<span class="c1"># §2.7 tests</span>
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>--collect-only<span class="w"> </span>-q<span class="w"> </span>-o<span class="w"> </span><span class="nv">addopts</span><span class="o">=</span><span class="s2">""</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>--collect-only<span class="w"> </span>-q<span class="w"> </span>-o<span class="w"> </span><span class="nv">addopts</span><span class="o">=</span><span class="s2">""</span><span class="w"> </span>-m<span class="w"> </span><span class="s2">"not stress"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+grep<span class="w"> </span>-rhoE<span class="w"> </span><span class="s1">'^\s*(async )?def test_[a-zA-Z0-9_]+'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'pytest.mark.slow'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'pytest.mark.stress'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rln<span class="w"> </span><span class="s1">'hypothesis'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'@given'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'readouterr()'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rnE<span class="w"> </span><span class="s1">'assert .* in (out|err|res\.stdout|r\.stdout|result\.stdout|text)\b'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rn<span class="w"> </span>--<span class="w"> </span><span class="s1">'== """'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>grep<span class="w"> </span>-rn<span class="w"> </span>--<span class="w"> </span><span class="s1">'\.output =='</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rn<span class="w"> </span>--<span class="w"> </span><span class="s1">'\.stdout =='</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="p">;</span><span class="w"> </span>grep<span class="w"> </span>-rnE<span class="w"> </span>--<span class="w"> </span><span class="s1">'\bout == "'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rnE<span class="w"> </span><span class="s1">'monkeypatch\.(setattr|setitem|delattr)\([^,]+, *"_[A-Za-z]'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+grep<span class="w"> </span>-rln<span class="w"> </span><span class="s1">'subprocess.run'</span><span class="w"> </span>tests<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+<span class="nb">time</span><span class="w"> </span>uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>--durations<span class="o">=</span><span class="m">15</span><span class="w"> </span>-q<span class="w"> </span>-m<span class="w"> </span><span class="s2">"not stress"</span><span class="w"> </span>-p<span class="w"> </span>no:cacheprovider
+
+<span class="c1"># §5 model-touching commands</span>
+grep<span class="w"> </span>-rn<span class="w"> </span><span class="s1">'importorskip\|^import mlx\|^from mlx\|faster_whisper'</span><span class="w"> </span>tests
+grep<span class="w"> </span>-cE<span class="w"> </span><span class="s1">'^\s*def test_'</span><span class="w"> </span>tests/test_promise_judge.py<span class="w"> </span>tests/test_describe.py<span class="w"> </span>tests/test_transcribe.py
+grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">'importer='</span><span class="w"> </span>tests/test_promise_judge.py<span class="w"> </span>tests/test_describe.py<span class="w"> </span>tests/test_transcribe.py
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s1">'import_module\|module = "'</span><span class="w"> </span>logbook/judge.py<span class="w"> </span>logbook/describe.py<span class="w"> </span>logbook/transcribe.py
+
+<span class="c1"># §2.8 / §6 dependencies</span>
+grep<span class="w"> </span>-rln<span class="w"> </span><span class="s1">'import ijson\|from ijson'</span><span class="w"> </span>logbook<span class="w"> </span>scripts<span class="w"> </span>tests
+<span class="k">for</span><span class="w"> </span>e<span class="w"> </span><span class="k">in</span><span class="w"> </span>encrypted<span class="w"> </span>share<span class="w"> </span>ais<span class="w"> </span>transcribe<span class="w"> </span>judge<span class="w"> </span>describe<span class="w"> </span>mcp<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$e</span><span class="s2"> </span><span class="k">$(</span>uv<span class="w"> </span><span class="nb">export</span><span class="w"> </span>--extra<span class="w"> </span><span class="nv">$e</span><span class="w"> </span>--no-hashes<span class="w"> </span>--no-dev<span class="w"> </span>--no-emit-project<span class="w"> </span>--frozen<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-vE<span class="w"> </span><span class="s1">'^(#|-e|\.)'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="k">)</span><span class="s2">"</span>
+<span class="k">done</span>
+uv<span class="w"> </span><span class="nb">export</span><span class="w"> </span>--extra<span class="w"> </span>encrypted<span class="w"> </span>--no-hashes<span class="w"> </span>--no-dev<span class="w"> </span>--no-emit-project<span class="w"> </span>--frozen<span class="w"> </span><span class="p">|</span><span class="w"> </span>diff<span class="w"> </span>-<span class="w"> </span>&lt;<span class="o">(</span>uv<span class="w"> </span><span class="nb">export</span><span class="w"> </span>--extra<span class="w"> </span>share<span class="w"> </span>--no-hashes<span class="w"> </span>--no-dev<span class="w"> </span>--no-emit-project<span class="w"> </span>--frozen<span class="o">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>same
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
