@@ -110,7 +110,7 @@ def test_an_asset_without_a_track_and_an_unknown_asset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
-    cli.main(["assets", "add", "kite", "--kind", "aircraft", "--name", "Kite"])
+    cli.main(["setup", "assets", "add", "kite", "--kind", "aircraft", "--name", "Kite"])
     capsys.readouterr()
     data = _json(capsys, "asset", "kite")
     assert data["track"] is None and data["trips"] == [] and data["nights"] == 0

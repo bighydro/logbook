@@ -18,7 +18,7 @@ from logbook.core.store import Logbook
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
-    cli.main(["places", *args])
+    cli.main(["setup", "places", *args])
     return capsys.readouterr().out
 
 
@@ -109,13 +109,13 @@ def test_add_refuses_a_name_already_taken_and_coordinates_off_the_earth(
     _empty(tmp_path, monkeypatch)
     _run(capsys, "add", "Home", "--lat", "59.9", "--lon", "10.7")
     with pytest.raises(SystemExit) as e:
-        cli.main(["places", "add", "home", "--lat", "59.9", "--lon", "10.7"])
+        cli.main(["setup", "places", "add", "home", "--lat", "59.9", "--lon", "10.7"])
     assert e.value.code == 2 and "Home" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["places", "add", "Pole", "--lat", "95", "--lon", "10.7"])
+        cli.main(["setup", "places", "add", "Pole", "--lat", "95", "--lon", "10.7"])
     assert e.value.code == 2
     with pytest.raises(SystemExit):
-        cli.main(["places", "add", "Tiny", "--lat", "59.9", "--lon", "10.7", "--radius", "0"])
+        cli.main(["setup", "places", "add", "Tiny", "--lat", "59.9", "--lon", "10.7", "--radius", "0"])
 
 
 def test_an_unreadable_file_is_refused_with_its_name(
@@ -124,7 +124,7 @@ def test_an_unreadable_file_is_refused_with_its_name(
     lb = _empty(tmp_path, monkeypatch)
     (lb.root / "places.json").write_text("[]", encoding="utf-8")
     with pytest.raises(SystemExit) as e:
-        cli.main(["places", "list"])
+        cli.main(["setup", "places", "list"])
     assert e.value.code == 2 and "places.json" in capsys.readouterr().err
 
 

@@ -311,7 +311,7 @@ def test_a_question_asked_for_a_day_stands_when_the_day_is_read_again(lb: Logboo
     questions.pick(lb.root, facts, "2026-06-11")
     questions.pick(lb.root, facts, "2026-06-09")
     assert questions.pick(lb.root, facts, "2026-06-10") == first
-    cli.main(["questions", "disable", str(first["id"])])
+    cli.main(["setup", "questions", "disable", str(first["id"])])
     again = questions.pick(lb.root, facts, "2026-06-10")
     assert again["id"] != first["id"], "a question disabled since is chosen anew"
 
@@ -392,7 +392,7 @@ def test_the_former_rules_live_on_as_default_questions(
     assert proposed and all("{proposed}" in q.text for q in proposed)
     for q in bank.values():  # only the proposed-face question is in play on the Friday
         if "proposed" not in q.when:
-            cli.main(["questions", "disable", q.id])
+            cli.main(["setup", "questions", "disable", q.id])
     capsys.readouterr()
     friday = json.loads(_run(capsys, "digest", "2026-06-19", "--json"))
     assert friday["shape"]["with"] == {"confirmed": [], "proposed": ["Per Hansen"]}
@@ -422,12 +422,12 @@ def test_a_broken_bank_stops_the_digest_naming_the_file(
 
 
 def test_questions_list_add_disable(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    listed = _run(capsys, "questions", "list")
+    listed = _run(capsys, "setup", "questions", "list")
     bank = questions.read(lb.root)
     assert len(listed.splitlines()) == len(bank)
     for q in bank:
         assert any(line.startswith(f"  {q.id}") and q.text in line for line in listed.splitlines())
-    as_json = json.loads(_run(capsys, "questions", "list", "--json"))
+    as_json = json.loads(_run(capsys, "setup", "questions", "list", "--json"))
     assert [q["id"] for q in as_json["questions"]] == [q.id for q in bank]
     added = _run(
         capsys,
@@ -457,11 +457,11 @@ def test_questions_list_add_disable(lb: Logbook, capsys: pytest.CaptureFixture[s
         json.loads(questions.questions_path(lb.root).read_text(encoding="utf-8"))["questions"][-1]["id"]
         == "sea-air"
     )
-    disabled = _run(capsys, "questions", "disable", "sea-air")
+    disabled = _run(capsys, "setup", "questions", "disable", "sea-air")
     assert "sea-air" in disabled and "disabled" in disabled
     [new] = [q for q in questions.read(lb.root) if q.id == "sea-air"]
     assert new.enabled is False
-    assert "(disabled)" in _run(capsys, "questions", "list")
+    assert "(disabled)" in _run(capsys, "setup", "questions", "list")
 
 
 def test_questions_add_refuses_a_duplicate_id_an_unknown_fact_and_a_bad_kind(
@@ -475,10 +475,10 @@ def test_questions_add_refuses_a_duplicate_id_an_unknown_fact_and_a_bad_kind(
         ["disable", "nobody-has-this-id"],
     ):
         with pytest.raises(SystemExit) as e:
-            cli.main(["questions", *args])
+            cli.main(["setup", "questions", *args])
         assert e.value.code == 2 and capsys.readouterr().err.startswith("questions: ")
     with pytest.raises(SystemExit):
-        cli.main(["questions", "add", "new", "--text", "new?", "--kind", "wondering"])
+        cli.main(["setup", "questions", "add", "new", "--text", "new?", "--kind", "wondering"])
     assert [q.id for q in questions.read(lb.root)] == before, "nothing written"
 
 
@@ -489,6 +489,6 @@ def test_questions_list_on_a_record_with_an_edited_bank_prints_it_as_is(
         lb.root,
         {"id": "one", "text": "One two?", "kind": "gratitude", "when": ["travelled", "!photos"], "weight": 3},
     )
-    [line] = _run(capsys, "questions", "list").splitlines()
+    [line] = _run(capsys, "setup", "questions", "list").splitlines()
     assert line.startswith("  one ") and line.endswith("  One two?")
     assert line.split()[:5] == ["one", "gratitude", "3", "travelled", "!photos"]

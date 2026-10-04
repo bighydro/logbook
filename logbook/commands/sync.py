@@ -665,7 +665,7 @@ def cmd_sources(a: argparse.Namespace) -> None:
 
 
 def assets_arguments(sub: Subparsers) -> None:
-    """`logbook assets`."""
+    """`logbook setup assets` (`logbook assets` until 0.6)."""
     s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
     verbs = s.add_subparsers(dest="verb", required=True)
     v = verbs.add_parser("list", help="one line per registered asset")

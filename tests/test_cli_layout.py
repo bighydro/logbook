@@ -35,12 +35,12 @@ COMMANDS: dict[str, tuple[str, ...]] = {
     "people": ("people",),
     "person": ("people", "Ola Nordmann"),
     "show_person": ("show", "person", "Ola Nordmann"),
-    "places_list": ("places", "list"),
+    "places_list": ("setup", "places", "list"),
     "keepers": ("show", "keepers"),
     "promises": ("promises", "--all"),
     "tasks": ("tasks",),
     "ledger": ("ledger",),
-    "questions_list": ("questions", "list"),
+    "questions_list": ("setup", "questions", "list"),
     "derive_stays": ("derive", "stays", "--since", "2026-06-01", "--until", "2026-06-07"),
     "derive_stays_json": ("derive", "stays", "--since", "2026-06-01", "--until", "2026-06-07", "--json"),
     "rollup_countries": ("rollup", "countries"),
@@ -52,7 +52,7 @@ COMMANDS: dict[str, tuple[str, ...]] = {
     "rollup_listen": ("rollup", "listen"),
     "rollup_money": ("rollup", "money"),
     "sources": ("sources",),
-    "assets_list": ("assets", "list"),
+    "assets_list": ("setup", "assets", "list"),
     "verify": ("verify",),
 }
 

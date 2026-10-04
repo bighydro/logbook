@@ -126,7 +126,7 @@ def test_the_age_of_a_fix_reads_as_people_say_it(seconds, text):
 
 def test_assets_status_prints_one_line_per_asset_with_the_fix_or_no_fix_yet(lb, capsys):
     _fix(lb, "nordlys", "2026-06-15T10:00:00Z", 59.9080, 10.7300, speed_mps=3.1)
-    cli.main(["assets", "status"])
+    cli.main(["setup", "assets", "status"])
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 2
     assert lines[0].startswith("nordlys")
@@ -138,7 +138,7 @@ def test_assets_status_prints_one_line_per_asset_with_the_fix_or_no_fix_yet(lb, 
 
 def test_assets_status_json_carries_the_fix_and_null_for_none(lb, capsys):
     _fix(lb, "nordlys", "2026-06-15T10:00:00Z", 59.9080, 10.7300)
-    cli.main(["assets", "status", "--json"])
+    cli.main(["setup", "assets", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
     nordlys, skarv = out["assets"]
     assert nordlys["id"] == "nordlys" and nordlys["fix"]["at"] == "2026-06-15T10:00:00Z"
@@ -150,6 +150,6 @@ def test_assets_status_json_carries_the_fix_and_null_for_none(lb, capsys):
 
 def test_assets_status_with_nothing_registered_says_how_to_add_one(lb, capsys):
     assets.write(lb.root, [])
-    cli.main(["assets", "status"])
+    cli.main(["setup", "assets", "status"])
     out = capsys.readouterr().out
     assert "no assets" in out and "logbook assets add" in out

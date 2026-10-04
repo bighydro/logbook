@@ -24,6 +24,7 @@ DAYS, SEED = 30, 7
 #: old name -> the arguments both forms run with on the demo record; every alias has one, so an
 #: alias added without its proof fails `test_every_alias_has_a_sample`
 SAMPLE: dict[str, tuple[str, ...]] = {
+    "assets": ("list",),
     "attach": ("status",),
     "days": (),
     "describe": ("keepers", "--dry-run"),
@@ -32,6 +33,8 @@ SAMPLE: dict[str, tuple[str, ...]] = {
     "infer": ("flights", "--dry-run"),
     "keepers": (),
     "person": ("Ola Nordmann",),
+    "places": ("list",),
+    "questions": ("list",),
     "receive": ("no-such-page.zip",),
     "stats": (),
     "transcribe": ("voice-memos", "--dry-run"),

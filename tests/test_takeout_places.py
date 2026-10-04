@@ -94,17 +94,17 @@ def test_cli_proposes_without_write_and_writes_with_it(tmp_path, capsys, monkeyp
     monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "lb"))
     cli.main(["init", str(tmp_path / "lb"), "--timezone", TZ])
     capsys.readouterr()
-    cli.main(["places", "import-takeout", str(FIX)])
+    cli.main(["setup", "places", "import-takeout", str(FIX)])
     out = capsys.readouterr().out
     assert "Havnekontoret" in out and "59.9075, 10.7389" in out and "Saved Places" in out
     assert "4 places proposed" in out and "3 without coordinates" in out and "nothing written" in out
     assert not (tmp_path / "lb" / "places.json").exists()
-    cli.main(["places", "import-takeout", str(FIX), "--write"])
+    cli.main(["setup", "places", "import-takeout", str(FIX), "--write"])
     out = capsys.readouterr().out
     assert "wrote 4 places to" in out
     data = json.loads((tmp_path / "lb" / "places.json").read_text(encoding="utf-8"))
     assert len(data) == 4
-    cli.main(["places", "import-takeout", str(SAVED_CSV / "Starred places.csv"), "--write"])
+    cli.main(["setup", "places", "import-takeout", str(SAVED_CSV / "Starred places.csv"), "--write"])
     out = capsys.readouterr().out
     assert "1 already in places.json" in out and "wrote 0" not in out and "nothing new" in out
 
@@ -113,6 +113,6 @@ def test_cli_missing_path_exits_2(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "lb"))
     cli.main(["init", str(tmp_path / "lb"), "--timezone", TZ])
     with pytest.raises(SystemExit) as e:
-        cli.main(["places", "import-takeout", str(tmp_path / "nope.csv")])
+        cli.main(["setup", "places", "import-takeout", str(tmp_path / "nope.csv")])
     assert e.value.code == 2
     assert "places:" in capsys.readouterr().err

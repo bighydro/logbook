@@ -151,7 +151,7 @@ def test_by_mmsi_and_by_icao24_index_the_assets_that_carry_one():
 
 
 def _assets(*args: str) -> None:
-    cli.main(["assets", *args])
+    cli.main(["setup", "assets", *args])
 
 
 def test_assets_add_registers_an_asset_and_says_so(lb, capsys):

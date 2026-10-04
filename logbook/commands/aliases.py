@@ -13,6 +13,7 @@ A name is removed from this table only with a major version."""
 from __future__ import annotations
 
 ALIASES: dict[str, tuple[str, ...]] = {
+    "assets": ("setup", "assets"),
     "attach": ("import", "attachments"),
     "days": ("show", "days"),
     "describe": ("derive", "descriptions"),
@@ -21,6 +22,8 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "infer": ("derive",),
     "keepers": ("show", "keepers"),
     "person": ("people",),
+    "places": ("setup", "places"),
+    "questions": ("setup", "questions"),
     "receive": ("import", "page"),
     "stats": ("show", "stats"),
     "transcribe": ("derive", "transcripts"),

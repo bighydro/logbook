@@ -440,7 +440,7 @@ def test_assets_status_reads_the_declared_departure_as_the_last_fix(lb, capsys):
     fix = found[0].fix
     assert fix is not None and fix.at == "2026-06-26T06:00:00Z"
     assert fix.near is not None and fix.near[0] == "Porto Cervo"
-    cli.main(["assets", "status"])
+    cli.main(["setup", "assets", "status"])
     out = capsys.readouterr().out
     assert "nordlys" in out and "2026-06-26 08:00" in out and "41.1370,9.5350" in out
 

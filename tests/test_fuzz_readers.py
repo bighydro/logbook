@@ -278,16 +278,16 @@ def windowed_readers(
         ["rollup", kind, "--since", since, "--until", until, "--json"],
         ["rollup", "health", "--by", by, "--since", since, "--until", until, "--json"],
         ["rollup", "places", "--with", "--since", since, "--until", until, "--json"],
-        ["places", "propose", "--since", since, "--until", until, "--top", str(top)],
-        ["places", "propose", "--since", since, "--until", until, "--json"],
+        ["setup", "places", "propose", "--since", since, "--until", until, "--top", str(top)],
+        ["setup", "places", "propose", "--since", since, "--until", until, "--json"],
         ["show", "keepers", "--since", since, "--until", until],
         ["show", "keepers", "--since", since, "--until", until, "--lane", lane, "--json"],
         ["sources", "--gaps", "--since", since],
         ["sources", "--gaps", "--since", since, "--json"],
         ["promises", "--all", "--since", since],
         ["promises", "--all", "--since", since, "--json"],
-        ["assets", "status"],
-        ["assets", "status", "--json"],
+        ["setup", "assets", "status"],
+        ["setup", "assets", "status", "--json"],
         ["doctor"],
     ]
 
@@ -300,8 +300,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["show", "trips", "--json"],
     *([["rollup", kind, "--json"] for kind in rollup.KINDS]),
     ["rollup", "countries"],
-    ["places", "propose"],
-    ["places", "propose", "--json"],
+    ["setup", "places", "propose"],
+    ["setup", "places", "propose", "--json"],
     ["show", "keepers"],
     ["show", "keepers", "--json"],
     ["sources", "--gaps"],
@@ -479,7 +479,7 @@ def test_a_window_that_runs_backwards_is_refused_without_a_traceback(short: Logb
         ["show", "trips", "--since", since, "--until", until],
         ["derive", "stays", "--since", since, "--until", until, "--dry-run"],
         ["rollup", "countries", "--since", since, "--until", until],
-        ["places", "propose", "--since", since, "--until", until],
+        ["setup", "places", "propose", "--since", since, "--until", until],
     ]
     with at_home(short):
         for args in backwards:
@@ -506,11 +506,11 @@ def test_a_record_timezone_the_host_lacks_is_said_never_a_traceback(
         ["derive", "stays", "--day", "2026-06-01", "--dry-run", "--json"],
         ["derive", "flights", "--dry-run"],
         ["rollup", "countries", "--json"],
-        ["places", "propose", "--json"],
+        ["setup", "places", "propose", "--json"],
         ["show", "keepers", "--json"],
         ["sources", "--gaps", "--json"],
         ["promises", "--all", "--json"],
-        ["assets", "status", "--json"],
+        ["setup", "assets", "status", "--json"],
     ]
     for args in readers:
         code, out, err = run("unknown record timezone", args)
