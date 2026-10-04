@@ -1,0 +1,18 @@
+2026-06-08  Monday
+  night before  Home · home
+  night after   47.3769,8.5417 (Zurich) · away
+  country       CH (nearest airport ZRH)
+
+  00:00–04:55  stay   Home · 4 h 55 min
+  04:55–05:40  move   36.7 km · 45 min · car
+  05:40–06:50  stay   OSL, Oslo · 1 h 10 min
+  06:50–09:20  move   1426 km · 2 h 30 min · flight · OSL → ZRH · 1 event
+      event        Flight to Zürich (XY 561) 07:05–09:15
+  07:12–09:10  flight XY 561  OSL → ZRH · tracked
+  09:20–09:55  stay   ZRH, Zurich · 35 min · 2 messages
+  09:55–10:30  move   9.0 km · 35 min · car
+  10:30–24:00  stay   47.3769,8.5417 (Zurich) · 13 h 30 min · 1 note, 2 messages
+      note         Zürich. The hotel by the river; kickoff tomorrow at nine.
+
+  health        sleep 6.6 h · 8,115 steps · resting 53 bpm
+  sources       dawarich 253 lines, last 23:55 · apple-health 84 lines, last 22:26 · ais 24 lines, last 23:00 · whatsapp 4 lines, last 16:45 · safari 2 lines, last 21:32 · apple-podcasts 1 line, last 07:40 · flighty 1 line, last 07:12 · google-takeout 1 line, last 20:44 · ios-calendar 1 line, last 07:05 · manual 1 line, last 22:00 · taxi 1 line, last 10:00

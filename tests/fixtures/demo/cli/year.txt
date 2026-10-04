@@ -1,0 +1,79 @@
+2026  2026-06-01 – 2026-06-30 · 30 days
+  countries     NO 25 days · CH 3 days · DK 2 days · in transit 0
+  nights        18 home · 12 away · 0 in transit · 6 nights aboard Nordlys
+  trips         4 trips · 12 nights away
+    2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann
+    2026-06-08 – 2026-06-10  3 nights · route 47.3769,8.5417 (Zurich) · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
+    2026-06-15 – 2026-06-20  6 nights aboard nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann
+    2026-06-25 – 2026-06-26  2 nights · route 55.6850,12.5500 (Copenhagen) · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen
+  flights       4 flights · 3,886 km · 0 long-haul · declared 1, inferred 1, tracked 2
+    2026-06-08  XY 561  OSL → ZRH · 1,426 km · tracked
+    2026-06-11  XY 562  ZRH → OSL · 1,426 km · inferred
+    2026-06-25  XY 571  OSL → CPH · 517 km · tracked
+    2026-06-27  XY 572  CPH → OSL · 517 km · declared
+  places        by nights
+    Home (home)                                 18 nights · 19 stays · 274 h
+    Marina (asset-berth)                        1 night · 3 stays · 27 h · with Anders Vik, Ola Nordmann, Sigrid Moen
+    Cabin (other)                               1 night · 1 stay · 26 h · with Ola Nordmann
+    Office (other)                              0 nights · 14 stays · 107 h · with Per Hansen, Liv Berg
+    Nordlys (nordlys) (yacht)                   6 nights · 3 stays · 148 h · with Anders Vik, Ola Nordmann, Sigrid Moen
+    unnamed:
+    47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58 h · with Marta Keller
+    59.0500,10.0300 aboard nordlys (Sandefjord) 2 nights · 2 stays · 41 h
+    59.8500,10.6000 aboard nordlys              2 nights · 2 stays · 40 h
+    55.6850,12.5500 (Copenhagen)                2 nights · 2 stays · 33 h · with Freja Lund
+    59.4300,10.4800 aboard nordlys (Sandefjord) 1 night · 1 stay · 18 h
+  people        by days together
+    Per Hansen                                  10 days · 0 nights · last 2026-06-30 · Office
+    Liv Berg                                    9 days · 0 nights · last 2026-06-29 · Office
+    Ola Nordmann                                3 days · 1 night · last 2026-06-15 · Cabin, Marina
+    Anders Vik                                  2 days · 0 nights · last 2026-06-15 · Marina
+    Jonas Weber                                 1 day · 0 nights · last 2026-06-09 · 47.3700,8.5300 (Zurich)
+    Marta Keller                                1 day · 1 night · last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich)
+    Sigrid Moen                                 1 day · 0 nights · last 2026-06-13 · Marina
+    Freja Lund                                  1 day · 1 night · last 2026-06-26 · 55.6950,12.5700 (Copenhagen), 55.6850,12.5500 (Copenhagen)
+  health        by month
+    2026-06  sleep 6.8 h (29 nights) · 8,425 steps (30 days) · resting 57 bpm (52–61, 30 days) · hrv —
+  keepers       by month
+    2026-06  9 (8 memory, 1 art)
+
+  one day each
+  January       no days
+  February      no days
+  March         no days
+  April         no days
+  May           no days
+  June          2026-06-03 · 10 attachments, 1 person, a new place
+    2026-06-03  Wednesday
+      night before  Home · home
+      night after   Home · home
+      country       NO (place Home)
+
+      00:00–07:25  stay   Home · 7 h 25 min
+      07:25–07:45  move   643 m · 20 min · walk
+      07:45–11:45  stay   Office · 4 h · 1 event
+          event        One to one 09:00–09:45
+          with         Liv Berg (calendar)
+      11:45–12:00  move   1.6 km · 15 min · walk
+      12:00–12:55  stay   59.9200,10.7400 near Home, 1.0 km · 55 min · 1 event, 1 photo, 1 keeper
+          event        Lunch 12:00–13:00
+          keeper       IMG_06031030.HEIC (memory)
+          with         proposed Kari Nordmann (photo)
+      12:55–13:10  move   1.5 km · 15 min · walk · 1 event, 1 note
+          event        Lunch 12:00–13:00
+          note         Lunch with Kari Nordmann at the cafe. She is thinking about Tromsø agai…
+      13:10–17:25  stay   Office · 4 h 15 min · 1 mail thread, 2 messages
+          mail         Agenda for next week (1 message)
+      17:25–17:45  move   652 m · 20 min · walk
+      17:45–24:00  stay   Home · 6 h 15 min · 1 call
+          call         ← Ola Nordmann, 19 min
+
+      health        sleep 6.5 h · 7,830 steps · resting 58 bpm
+      spend         NOK -168.00 · 1 transaction · Kafé Måken
+      sources       dawarich 288 lines, last 23:55 · apple-health 85 lines, last 22:39 · ais 24 lines, last 23:00 · safari 3 lines, last 09:11 · ios-calendar 2 lines, last 12:00 · whatsapp 2 lines, last 13:23 · copilot 1 line, last 12:48 · immich 1 line, last 12:30 · ios-calls 1 line, last 18:50 · keeper-inference 1 line, last 12:30 · mail 1 line, last 13:56 · manual 1 line, last 13:05 · shazam 1 line, last 16:50
+  July          no days
+  August        no days
+  September     no days
+  October       no days
+  November      no days
+  December      no days
