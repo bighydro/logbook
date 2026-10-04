@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .. import serve
-from ..store import Logbook
+from ..core.store import Logbook
 from .common import Subparsers, _airports
 
 

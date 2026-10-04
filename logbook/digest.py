@@ -45,13 +45,14 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import day as day_reader
-from . import days, events, gaps, promises, questions
-from . import flights as flight_lines
-from .chain import Line
-from .export import parse_day
-from .flights import Airports
-from .store import Logbook, retractions
+from . import gaps, promises, questions
+from .core import day as day_reader
+from .core import days, events
+from .core import flights as flight_lines
+from .core.chain import Line
+from .core.export import parse_day
+from .core.flights import Airports
+from .core.store import Logbook, retractions
 
 LIMIT = 25  # lines, the hard limit of the text and the Markdown
 DUE_DAYS = 7  # an open promise due within this many days of the day is in

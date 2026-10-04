@@ -22,7 +22,8 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import __version__, policy
+from .. import __version__
+from . import policy
 from .chain import Line
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7

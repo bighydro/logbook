@@ -22,9 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters
 from logbook.adapters import dawarich, ios_contacts, whatsapp, whatsapp_contacts
 from logbook.adapters.takeout import location
-from logbook.export import write_day_package
-from logbook.resolve import labels
-from logbook.store import Logbook
+from logbook.core.export import write_day_package
+from logbook.core.resolve import labels
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 DAWARICH = ROOT / "tests" / "fixtures" / "dawarich" / "export.json"

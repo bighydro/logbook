@@ -46,9 +46,9 @@ from typing import Any, NamedTuple
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ..assets import Asset
-from ..flights import distance_km
-from ..places import Place
+from ..core.assets import Asset
+from ..core.flights import distance_km
+from ..core.places import Place
 
 NAME = "passages"
 KIND = "trip"

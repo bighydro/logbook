@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters, cli
 from logbook.adapters import apple_health, ios_calls
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))

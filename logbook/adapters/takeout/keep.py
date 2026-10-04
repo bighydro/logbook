@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...attachments import DIR as ATTACHMENTS_DIR
+from ...core.attachments import DIR as ATTACHMENTS_DIR
 from . import SOURCE
 
 NAME = "google-takeout-keep"

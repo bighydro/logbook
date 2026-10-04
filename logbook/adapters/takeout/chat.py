@@ -37,7 +37,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
-from ...attachments import DIR as ATTACHMENTS_DIR
+from ...core.attachments import DIR as ATTACHMENTS_DIR
 from . import SOURCE, times
 
 NAME = "google-takeout-chat"

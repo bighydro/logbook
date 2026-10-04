@@ -39,8 +39,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
-from . import attachments, doctor
-from .store import Logbook
+from . import doctor
+from .core import attachments
+from .core.store import Logbook
 
 META = "logbook.json"
 #: the directories copied whole, every file under them (a name beginning with `.` left out: an

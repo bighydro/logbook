@@ -30,7 +30,13 @@ def _modules_after(code: str) -> set[str]:
 
 
 def test_importing_cli_imports_nothing_else() -> None:
-    assert _modules_after("import logbook.cli") == {"logbook", "logbook.cli"}
+    """The package itself (with the shim for the 0.5 import paths) and the entry point: no command."""
+    assert _modules_after("import logbook.cli") == {
+        "logbook",
+        "logbook._shim",
+        "logbook.layout",
+        "logbook.cli",
+    }
 
 
 def test_help_imports_no_adapter_and_no_model_code() -> None:

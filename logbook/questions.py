@@ -45,9 +45,9 @@ from datetime import date, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import days
-from .policy import PolicyError
-from .store import Logbook
+from .core import days
+from .core.policy import PolicyError
+from .core.store import Logbook
 
 QUESTIONS_FILE = PurePosixPath("policy/questions.json")  # record-relative
 STATE_FILE = PurePosixPath("state/questions.json")

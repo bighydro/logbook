@@ -36,7 +36,7 @@ from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from .. import __version__
-from ..weather import KIND, SCHEMA, SOURCE, Cluster
+from ..core.weather import KIND, SCHEMA, SOURCE, Cluster
 
 __all__ = [
     "ARCHIVE",

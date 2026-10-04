@@ -46,9 +46,10 @@ from platform import machine
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from . import attachments, keepers, transcribe
-from .chain import Line
-from .store import Logbook
+from . import transcribe
+from .core import attachments, keepers
+from .core.chain import Line
+from .core.store import Logbook
 
 SOURCE = "description"  # the `source` of every line this command writes, whatever the engine
 KIND = "note"

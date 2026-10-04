@@ -13,8 +13,8 @@ from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from .. import assets, flights, policy
-from ..store import Logbook
+from ..core import assets, flights, policy
+from ..core.store import Logbook
 
 if TYPE_CHECKING:
     from .. import adapters

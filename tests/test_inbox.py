@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_import_backup import UDID, _backup
 
 from logbook import cli, inbox
-from logbook.store import Logbook, now_utc
+from logbook.core.store import Logbook, now_utc
 
 ROOT = Path(__file__).resolve().parents[1]
 DAWARICH = ROOT / "tests" / "fixtures" / "dawarich" / "export.json"

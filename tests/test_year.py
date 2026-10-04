@@ -13,10 +13,11 @@ from typing import Any
 import pytest
 from persona import TZ, note, persona_record, utc
 
-from logbook import cli, reading, rollup, year
-from logbook import day as day_reader
-from logbook import trips as trips_reader
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import day as day_reader
+from logbook.core import reading, rollup, year
+from logbook.core import trips as trips_reader
+from logbook.core.store import Logbook
 
 ARROW = "\u2192"
 EN_DASH = "\u2013"

@@ -36,8 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from logbook.flights import distance_km
-
+from ...core.flights import distance_km
 from . import SOURCE, times
 from . import places as saved_places
 

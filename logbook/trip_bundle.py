@@ -41,13 +41,14 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from . import crossing, policy, present, stays, trip_page, trips
-from .chain import Line, compute_hash
-from .flights import Airports
-from .places import distance_m
-from .reading import Reading
-from .resolve import Ref, standing, walk
-from .store import Logbook, retractions, uuid7
+from . import trip_page
+from .core import crossing, policy, present, stays, trips
+from .core.chain import Line, compute_hash
+from .core.flights import Airports
+from .core.places import distance_m
+from .core.reading import Reading
+from .core.resolve import Ref, standing, walk
+from .core.store import Logbook, retractions, uuid7
 
 COMMAND = "trip-bundle"  # `export trip-bundle`, `import trip-bundle`
 PROFILE = "trip-bundle/v1"  # the manifest's `profile`: a crossing package cut to one trip

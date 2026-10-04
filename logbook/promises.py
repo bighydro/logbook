@@ -27,11 +27,11 @@ from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
-from . import policy, present
-from .chain import Line
-from .index import local_date
-from .resolve import Identity, Ref, identities_from
-from .store import Logbook, retractions
+from .core import policy, present
+from .core.chain import Line
+from .core.index import local_date
+from .core.resolve import Identity, Ref, identities_from
+from .core.store import Logbook, retractions
 
 if TYPE_CHECKING:
     from .adapters.transcript import Turn

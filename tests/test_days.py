@@ -29,11 +29,12 @@ from persona import (
 )
 from test_day import _gap_record, _health
 
-from logbook import cli, reading
-from logbook import day as day_reader
-from logbook import days as days_reader
-from logbook.index import Index
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import day as day_reader
+from logbook.core import days as days_reader
+from logbook.core import reading
+from logbook.core.index import Index
+from logbook.core.store import Logbook
 
 ARROW = "→"
 

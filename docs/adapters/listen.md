@@ -172,7 +172,7 @@ listen 2026-01-01 – 2026-03-20
           2026-03  1.6 h · 7 listens · 2 skipped
 ```
 
-The rollup lives in `logbook/listen_rollup.py`, in `rollup.py`'s manner but beside it, so the
+The rollup lives in `logbook/core/listen_rollup.py`, in `rollup.py`'s manner but beside it, so the
 listening rollup grows without touching the others.
 
 ## `add --dry-run`

@@ -34,8 +34,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from logbook.places import PLACES_FILE
-
+from ...core.places import PLACES_FILE
 from . import times
 
 __all__ = ["PLACES_FILE", "Proposal", "Report", "merge", "read"]

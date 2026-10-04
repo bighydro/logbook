@@ -20,7 +20,7 @@ from jsonschema import Draft202012Validator
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters, cli
 from logbook.adapters import voice_memos
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 RFC = ROOT / "rfcs" / "0023-voice-memo-v1.md"

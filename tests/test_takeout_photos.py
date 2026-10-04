@@ -18,8 +18,8 @@ from jsonschema import Draft202012Validator
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters
 from logbook.adapters.takeout import location, photos
-from logbook.chain import canonical_json
-from logbook.store import Logbook
+from logbook.core.chain import canonical_json
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 RECORDS = ROOT / "tests" / "fixtures" / "takeout" / "Records.json"

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from logbook import adapters, cli, doctor
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 GIB = 1024**3
 HOME = {"Home": {"lat": 59.9139, "lon": 10.7522, "radius_m": 120, "kind": "home"}}

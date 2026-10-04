@@ -34,9 +34,10 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 
-from . import attachments, ios_backup
-from .index import Index
-from .store import RETRACTION, Logbook
+from . import ios_backup
+from .core import attachments
+from .core.index import Index
+from .core.store import RETRACTION, Logbook
 
 PROGRESS_EVERY = 500
 Progress = Callable[[int, float], None]  # files handled so far, seconds elapsed

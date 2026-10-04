@@ -18,8 +18,9 @@ from test_imessage import IMAGE_BYTES, VOICE_BYTES
 from test_import_backup import WHATSAPP, _backup, _file_id, _snapshot
 from test_import_backup_encrypted import PASSWORD, _encrypted_backup
 
-from logbook import attach, attachments, cli
-from logbook.store import Logbook
+from logbook import attach, cli
+from logbook.core import attachments
+from logbook.core.store import Logbook
 
 IMAGE = hashlib.sha256(IMAGE_BYTES).hexdigest()  # WhatsApp's photo.jpg and Messages' stern.jpg alike
 VOICE = hashlib.sha256(VOICE_BYTES).hexdigest()  # Messages' note.caf

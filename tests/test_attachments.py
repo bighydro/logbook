@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import attachments
-from logbook.store import Logbook, uuid7
+from logbook.core import attachments
+from logbook.core.store import Logbook, uuid7
 
 TEXT = "Kari: Skal vi ta turen til Tromsø i mai?\nOla: Ja, gjerne.\n".encode()
 SHA = hashlib.sha256(TEXT).hexdigest()

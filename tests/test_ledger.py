@@ -13,8 +13,9 @@ from typing import Any
 import pytest
 from persona import CAFE, KARI, OLA, OLA_ID, PLACES, persona_record, utc
 
-from logbook import cli, ledger
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import ledger
+from logbook.core.store import Logbook
 
 OWNER_ID = "019cadd3-6bc0-7dcd-9133-00000000000a"
 OWNER_EMAIL = "owner@example.org"
@@ -184,9 +185,9 @@ def test_the_month_places_each_transaction_at_the_stay_and_in_its_trip(
     [ice_cream] = days["2026-06-14"]["transactions"]
     assert ice_cream["deleted"] is True and days["2026-06-14"]["totals"] == {}
     hotel, zunfthaus = days["2026-06-16"]["transactions"]
-    assert hotel["where"]["by"] == "day", (
-        "a transaction filed by the day only is placed by the day's longest stay"
-    )
+    assert (
+        hotel["where"]["by"] == "day"
+    ), "a transaction filed by the day only is placed by the day's longest stay"
     assert hotel["where"]["place"] is None and hotel["where"]["label"].startswith("47.37")
     assert hotel["where"]["country"] == "CH" and zunfthaus["where"]["country"] == "CH"
     assert hotel["trip"] == zunfthaus["trip"] == "trip:2026-06-15:2026-06-17"
@@ -199,9 +200,9 @@ def test_the_month_places_each_transaction_at_the_stay_and_in_its_trip(
     }
     assert trips["trip:2026-06-15:2026-06-17"]["count"] == 2
     assert trips["trip:2026-06-13:2026-06-13"]["count"] == 1
-    assert set(trips["trip:2026-06-13:2026-06-13"]["lines"]) == set(dinner["lines"] + ice_cream["lines"]), (
-        "the return day is the trip's; a deleted line is listed under it, never counted"
-    )
+    assert set(trips["trip:2026-06-13:2026-06-13"]["lines"]) == set(
+        dinner["lines"] + ice_cream["lines"]
+    ), "the return day is the trip's; a deleted line is listed under it, never counted"
     assert lb.meta["head"] == head, "the ledger is read, never written"
     text = _run(capsys, "--month", "2026-06")
     assert text.splitlines()[0].startswith(f"ledger 2026-06-10 {EN_DASH} 2026-06-19")
@@ -262,9 +263,9 @@ def test_a_retracted_or_corrected_transaction_is_out_and_an_empty_month_says_so(
     data = _json(capsys, "--month", "2026-06")
     merchants = [t["merchant"] for d in data["days"] for t in d["transactions"]]
     assert "Fjordkaffe" not in merchants and merchants.count("Eksempel AS") == 1
-    assert data["totals"]["NOK"]["received"] == 45500.0, (
-        "the correction stands in the superseded line's place"
-    )
+    assert (
+        data["totals"]["NOK"]["received"] == 45500.0
+    ), "the correction stands in the superseded line's place"
     data = _json(capsys, "--month", "2026-05")
     assert data["window"] is None and data["count"] == 0 and data["days"] == []
     assert "no transactions" in _run(capsys, "--month", "2026-05")
@@ -295,8 +296,8 @@ def test_an_empty_record_has_no_ledger(
 
 
 def test_shares_resolve_through_resolutions_never_through_faces() -> None:
-    from logbook.present import Owner
-    from logbook.resolve import Identity
+    from logbook.core.present import Owner
+    from logbook.core.resolve import Identity
 
     identities = {
         ("email", OLA["email"]): Identity(OLA_ID, "person", "Ola Nordmann"),

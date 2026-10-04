@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import cli
 from logbook.adapters.takeout import places
-from logbook.stays import read_places
+from logbook.core.stays import read_places
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "takeout"

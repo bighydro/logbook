@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import FORMAT
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 HERE = Path(__file__).parent
 ROOT = HERE / "sample-logbook"

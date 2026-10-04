@@ -55,8 +55,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .. import flights
-from ..flights import Airlines, Airports
+from ..core import flights
+from ..core.flights import Airlines, Airports
 
 NAME = "flighty"
 KIND = flights.KIND

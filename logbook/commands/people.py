@@ -9,8 +9,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .. import people, policy, reading, stays
-from ..store import Logbook
+from ..core import people, policy, reading, stays
+from ..core.store import Logbook
 from .common import Subparsers, _plural
 
 if TYPE_CHECKING:

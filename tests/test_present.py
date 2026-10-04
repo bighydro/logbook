@@ -23,7 +23,7 @@ from persona import (
     transcript,
 )
 
-from logbook import present, reading, resolve, stays
+from logbook.core import present, reading, resolve, stays
 
 
 def _stay(start: str, end: str, place: str | None = "Office", aboard: str | None = None) -> stays.Segment:
@@ -136,7 +136,7 @@ def test_a_timed_event_located_inside_the_stay_puts_its_attendees_there() -> Non
 
 
 def test_a_located_event_geocodes_through_the_named_places_and_an_unknown_location_does_not_count() -> None:
-    from logbook.places import Place
+    from logbook.core.places import Place
 
     places = [Place("Office", 59.91, 10.76, 120), Place("Cafe", 59.92, 10.74, 120)]
     lines = _lines(

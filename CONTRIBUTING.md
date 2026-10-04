@@ -36,7 +36,7 @@ Anything that touched a real record is scrubbed before it is staged, and the scr
 
 [logbook-ts](https://github.com/bighydro/logbook-ts) exists to prove that SPEC.md is enough to implement the format (SPEC §6: two independent implementations must agree before v1.0 is frozen). It proves that only while it stays independent, so:
 
-- A contributor to logbook-ts works from SPEC.md, the RFCs in `rfcs/` and `conformance/`. Never from this repository's source: not `logbook/chain.py`, not the tests, not a diff. If you have read the Python to understand a rule, the rule is underspecified; file that against the spec instead of carrying the answer across.
+- A contributor to logbook-ts works from SPEC.md, the RFCs in `rfcs/` and `conformance/`. Never from this repository's source: not `logbook/core/chain.py`, not the tests, not a diff. If you have read the Python to understand a rule, the rule is underspecified; file that against the spec instead of carrying the answer across.
 - Nothing is ported in either direction. A fix found by one implementation is written up as a spec question (logbook-ts keeps its `SPEC-QUESTIONS`), resolved in SPEC.md with a CHANGELOG line that names the finder, and only then implemented on each side from the spec's words.
 - The two must agree on a record the other wrote, and CI checks it on every PR (`cross-impl`, below). A disagreement is a spec bug until proven otherwise; a change that makes one implementation pass by copying the other is wrong even when it is green.
 - Keep the two in separate checkouts and separate sessions. An agent that has one open does not open the other.

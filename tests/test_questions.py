@@ -16,8 +16,8 @@ import pytest
 from persona import HOME, OLA_ID, TZ, note, persona_record, resolution, utc
 
 from logbook import cli, digest, gaps, questions
-from logbook.policy import PolicyError
-from logbook.store import Logbook
+from logbook.core.policy import PolicyError
+from logbook.core.store import Logbook
 
 NOW = datetime(2026, 6, 22, 18, 0, tzinfo=UTC)  # the Monday evening after the persona's fortnight
 

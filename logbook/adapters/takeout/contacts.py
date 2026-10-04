@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...store import uuid7
+from ...core.store import uuid7
 from .. import phone
 from ..ios_contacts import DIAL_PREFIX_ENV
 from . import SOURCE

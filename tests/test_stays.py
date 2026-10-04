@@ -13,9 +13,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from logbook import cli, stays
+from logbook import cli
 from logbook.commands.common import EN_DASH
-from logbook.store import Logbook
+from logbook.core import stays
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 DAY = "2026-06-10"  # CEST, UTC+2

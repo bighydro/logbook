@@ -21,9 +21,10 @@ from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 from persona import FJORD, HOME, ZURICH, persona_record
 
-from logbook import adapters, cli, weather
+from logbook import adapters, cli
 from logbook.adapters import weather as weather_adapter
 from logbook.commands import sync as sync_commands
+from logbook.core import weather
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))

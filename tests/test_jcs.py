@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.chain import canonical_json
+from logbook.core.chain import canonical_json
 
 # --- RFC 8785 §3.2.2, "Assume the following JSON object is parsed:" (verbatim) ---
 SECTION_3_2_2_INPUT = r"""

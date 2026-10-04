@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from ..attachments import reference
+from ..core.attachments import reference
 
 NAME = "wispr-flow"
 KIND = "transcript"

@@ -17,7 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO
 
-from . import FORMAT, attachments, policy
+from .. import FORMAT
+from . import attachments, policy
 from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
 from .index import Index, Located, Row, TextRow, row, text_row

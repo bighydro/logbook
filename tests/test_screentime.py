@@ -15,9 +15,10 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, apps, cli
+from logbook import adapters, cli
 from logbook.adapters import screentime
-from logbook.store import Logbook
+from logbook.core import apps
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 APPLE_EPOCH = 978_307_200
@@ -513,7 +514,7 @@ def test_add_screentime_backup_says_when_the_backup_has_no_store(lb, tmp_path, c
 
 
 def test_a_disabled_source_is_skipped_either_way(lb, tmp_path, capsys):
-    from logbook import policy
+    from logbook.core import policy
 
     policy.import_path(lb.root).write_text(
         json.dumps({"disabled": [{"source": "screentime", "reason": "not this year"}]}), encoding="utf-8"

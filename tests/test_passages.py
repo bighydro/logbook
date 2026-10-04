@@ -17,10 +17,11 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, asset_status, assets, cli, places, reading, stays
+from logbook import adapters, asset_status, cli
 from logbook.adapters import passages
-from logbook.assets import Asset
-from logbook.store import Logbook
+from logbook.core import assets, places, reading, stays
+from logbook.core.assets import Asset
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "passages"

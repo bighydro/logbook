@@ -40,10 +40,10 @@ from platform import machine
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from . import attachments
 from .adapters import transcript
-from .chain import Line
-from .store import Logbook
+from .core import attachments
+from .core.chain import Line
+from .core.store import Logbook
 
 SOURCE = "transcription"  # the `source` of every transcript this command writes, whatever the engine
 MEMO_KIND = "voice-memo"

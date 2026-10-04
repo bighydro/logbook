@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.export import write_day_package
-from logbook.store import Logbook
+from logbook.core.export import write_day_package
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 TZ = "Europe/Oslo"  # UTC+1 in March: 23:30Z on the 1st is 00:30 local on the 2nd

@@ -28,9 +28,9 @@ from persona import (
 )
 
 from logbook import cli
-from logbook import day as day_reader
-from logbook.index import Index
-from logbook.store import Logbook
+from logbook.core import day as day_reader
+from logbook.core.index import Index
+from logbook.core.store import Logbook
 
 EN_DASH = "\u2013"
 FAR = (59.9600, 10.8200)  # ~5 km from HOME: too far for a silence to be read as stillness

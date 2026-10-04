@@ -24,10 +24,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from .export import parse_day
+from .core.export import parse_day
 
 if TYPE_CHECKING:
-    from .store import Logbook
+    from .core.store import Logbook
 
 FLAG_SECONDS = 86400  # an expected source silent this long, at any point of the range, is flagged
 RUNS_SHOWN = 3  # runs of missing days printed per row before `+N runs`

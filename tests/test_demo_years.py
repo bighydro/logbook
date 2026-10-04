@@ -13,9 +13,10 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, demo, demo_life, people, reading
-from logbook.index import local_date
-from logbook.store import Logbook
+from logbook import cli, demo, demo_life
+from logbook.core import people, reading
+from logbook.core.index import local_date
+from logbook.core.store import Logbook
 
 YEARS = 40
 SEED = 7

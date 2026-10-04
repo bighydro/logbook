@@ -43,7 +43,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .. import apps
+from ..core import apps
 
 NAME = "screentime"
 KIND = apps.KIND

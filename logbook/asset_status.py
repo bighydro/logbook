@@ -12,11 +12,11 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from .assets import Asset
-from .places import Place, nearest
+from .core.assets import Asset
+from .core.places import Place, nearest
 
 if TYPE_CHECKING:
-    from .store import Logbook
+    from .core.store import Logbook
 
 NEAR_M = 5000.0  # a named place this close is where the asset is
 

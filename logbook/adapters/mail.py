@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import IO, Any, Protocol
 from urllib.parse import unquote_to_bytes
 
-from ..attachments import DIR as ATTACHMENTS_DIR
+from ..core.attachments import DIR as ATTACHMENTS_DIR
 
 NAME = "mail"
 KIND = "mail"

@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import attachments, flights, keepers
-from . import places as named_places
-from .store import Logbook
+from .core import attachments, flights, keepers
+from .core import places as named_places
+from .core.store import Logbook
 
 START = date(2026, 6, 1)  # a Monday; day 0 of the story
 CYCLE = 28  # the story repeats every four weeks

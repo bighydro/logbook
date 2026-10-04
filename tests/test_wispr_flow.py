@@ -12,9 +12,10 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, attachments, cli
+from logbook import adapters, cli
 from logbook.adapters import wispr_flow
-from logbook.store import Logbook
+from logbook.core import attachments
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))

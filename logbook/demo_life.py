@@ -35,7 +35,9 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import demo, flights, keepers
+from . import demo
+from .core import flights, keepers
+from .core.store import Logbook
 from .demo import (
     ANDERS,
     BAY_A,
@@ -81,7 +83,6 @@ from .demo import (
     _Story,
     _utc,
 )
-from .store import Logbook
 
 TODAY = date(2026, 6, 30)  # the last day of the default month; a life ends where the month does
 

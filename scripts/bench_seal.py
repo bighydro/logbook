@@ -64,9 +64,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from logbook import index as index_module
-from logbook.chain import Line, canonical_json, verify_lines
-from logbook.store import META_EVERY, Logbook, _dumps
+from logbook.core import index as index_module
+from logbook.core.chain import Line, canonical_json, verify_lines
+from logbook.core.store import META_EVERY, Logbook, _dumps
 
 LINES = 3_000_000
 TIER1 = 1_000_000

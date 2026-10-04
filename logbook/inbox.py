@@ -52,7 +52,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePath, PurePosixPath
 from typing import Any
 
-from .store import Logbook, now_utc
+from .core.store import Logbook, now_utc
 
 INBOX = "inbox"
 LEDGER = PurePath("state") / "imports.jsonl"

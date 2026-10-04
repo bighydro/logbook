@@ -33,7 +33,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 *expand all* link is that.
 
 Every row reads as the command prints it, because it is the same code: the grammar of a stay, a
-move or a night is `logbook/day.py`'s and `logbook/days.py`'s, a trip's is `logbook/trips.py`'s, a
+move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip's is `logbook/core/trips.py`'s, a
 silence's is `logbook/gaps.py`'s. A number here points at the lines it came from as it does under
 `--json`: hover an attachment and its line ids are the tooltip.
 

@@ -19,7 +19,7 @@ from test_ics import AGM, BRIEFING, CALENDAR, DENTIST, SURVEY, TRAINING
 
 from logbook import adapters, cli
 from logbook.adapters import gcal, ics
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 URLS_ENV = "LOGBOOK_GCAL_URLS"
 LOOKBACK_ENV = "LOGBOOK_GCAL_LOOKBACK_H"

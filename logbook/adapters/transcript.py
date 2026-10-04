@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..attachments import reference
+from ..core.attachments import reference
 
 NAME = "transcript"
 KIND = "transcript"

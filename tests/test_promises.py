@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 from persona import KARI, KARI_ID, OLA, OLA_ID, resolution
 
-from logbook import attachments, cli, promises
-from logbook.store import Logbook
+from logbook import cli, promises
+from logbook.core import attachments
+from logbook.core.store import Logbook
 
 OWNER_ID = "019cadd3-6bc0-7dcd-9133-000000000099"
 OWNER_EMAIL = "ines@example.org"

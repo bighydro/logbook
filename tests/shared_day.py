@@ -18,8 +18,8 @@ from typing import Any
 import pytest
 from persona import TZ, note, photo, transcript, utc
 
-from logbook import share
-from logbook.store import Logbook
+from logbook.core import share
+from logbook.core.store import Logbook
 
 DAY = "2026-06-13"
 NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # the DNS namespace, as demo.py uses it

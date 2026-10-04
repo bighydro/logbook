@@ -15,7 +15,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from logbook.adapters import ics
+from .. import ics
 
 NAME = ics.NAME
 FOLDER = "Calendar"  # Takeout/Calendar/

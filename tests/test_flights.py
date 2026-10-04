@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import flights
-from logbook.flights import Airlines, Airports
+from logbook.core import flights
+from logbook.core.flights import Airlines, Airports
 
 # -- airports ----------------------------------------------------------------------------------------
 
@@ -384,7 +384,7 @@ def test_merge_of_a_codeshare_keeps_the_number_first_seen_unless_the_other_is_th
 def test_reconcile_merges_a_codeshare_pair_into_one_standing_flight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))

@@ -49,8 +49,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from ..attachments import reference
-from ..store import uuid7
+from ..core.attachments import reference
+from ..core.store import uuid7
 from . import transcript
 from .transcript import KIND, TIER, Turn, draft
 

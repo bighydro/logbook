@@ -40,7 +40,7 @@ payload is `event/v1` (RFC 0009's shape): `title` the app's name when known, els
 | `extra` | What it holds |
 |---|---|
 | `bundle_id` | the app's bundle identifier, as the store names it (`com.apple.Safari`) |
-| `app` | the app's name, when the built-in table (`logbook/apps.py`) or the phone's own app table names it; absent otherwise, and the line is counted "without an app name" |
+| `app` | the app's name, when the built-in table (`logbook/core/apps.py`) or the phone's own app table names it; absent otherwise, and the line is counted "without an app name" |
 | `device` | `mac` for this Mac's own sessions; a device identifier for a session another device synced into the Mac's store, and for the phone's store; `iphone` when the phone's store has no device table |
 | `device_name` | the phone's name for itself (`iPhone`), when the store has it |
 | `duration_s` | the span's length in seconds |
@@ -141,7 +141,7 @@ twenty apps of a period and counts the rest. Nothing is written.
 
 ### Naming and sorting the apps: `policy/apps.json`
 
-A small built-in table (`logbook/apps.py`, `BUILT_IN`) names and sorts the common apps under both
+A small built-in table (`logbook/core/apps.py`, `BUILT_IN`) names and sorts the common apps under both
 their Mac and their iOS bundle ids: Messages, Mail, WhatsApp, Slack, Teams and Zoom under
 communication; Safari, Chrome, Firefox, Arc under browser; Music, TV, Podcasts, Photos, Spotify,
 YouTube, Netflix, Instagram under media; Xcode, Terminal, VS Code, Pages, Notes, Calendar, Notion

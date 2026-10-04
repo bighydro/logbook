@@ -26,7 +26,7 @@ from typing import Any
 
 import ijson
 
-from logbook.adapters.takeout import SOURCE
+from . import SOURCE
 
 NAME = "google-takeout-location"
 KIND = "location"

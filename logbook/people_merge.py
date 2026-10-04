@@ -56,12 +56,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import people, reading, resolve
 from .adapters import phone as phones
 from .adapters.ios_contacts import DIAL_PREFIX_ENV
-from .chain import Line
-from .resolve import Identity, Ref
-from .store import Logbook, now_utc
+from .core import people, reading, resolve
+from .core.chain import Line
+from .core.resolve import Identity, Ref
+from .core.store import Logbook, now_utc
 
 SCHEMA = "resolution/v1"
 SOURCE = "manual"

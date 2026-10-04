@@ -14,7 +14,7 @@ from test_keyed_archive import archive
 
 from logbook import adapters
 from logbook.adapters import beeper, ios_notes, whatsapp
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))

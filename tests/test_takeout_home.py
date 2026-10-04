@@ -131,8 +131,8 @@ def test_a_home_line_is_evidence_the_day_attaches_to_the_night_at_home(tmp_path,
 
     from persona import HOME, dwell
 
-    from logbook import places as named
-    from logbook.store import Logbook
+    from logbook.core import places as named
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))

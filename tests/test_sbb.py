@@ -16,7 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import adapters, cli
 from logbook.adapters import sbb
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 

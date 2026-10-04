@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
     from .commands.parser import build_parser  # every family's arguments, and nothing that runs one
 
     a = build_parser().parse_args(argv)
-    from .store import FormatError  # the command just chosen has imported the store by now
+    from .core.store import FormatError  # the command just chosen has imported the store by now
 
     try:
         a.fn(a)

@@ -88,5 +88,5 @@ the stays themselves stay in the location lines, and nothing here lets a reader 
 rebuild them. The request never carries the record's owner id or any identifier of yours.
 
 The reference adapter is `logbook/adapters/weather.py`; the clustering and the readers' side are in
-`logbook/weather.py`; the tests run against a fake Open-Meteo in memory and never open a socket, and one
+`logbook/core/weather.py`; the tests run against a fake Open-Meteo in memory and never open a socket, and one
 of them checks every request URL for a coordinate with more than one decimal.

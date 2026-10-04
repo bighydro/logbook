@@ -14,7 +14,7 @@ import pytest
 from persona import KARI_ID, OLA_ID, persona_record
 
 from logbook import cli, vault
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 SATURDAY = "2026-06-13"  # aboard Solvind with Ola, by a tier-2 note
 TUESDAY = "2026-06-16"  # dinner in Zürich with Ola, by a tier-1 calendar entry

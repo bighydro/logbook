@@ -37,12 +37,13 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
-from . import asset_status, assets, gaps, places, reading, stays, trips, weather
-from . import day as day_reader
-from . import days as days_reader
-from .export import parse_day
-from .flights import Airports
-from .store import Logbook
+from . import asset_status, gaps
+from .core import assets, places, reading, stays, trips, weather
+from .core import day as day_reader
+from .core import days as days_reader
+from .core.export import parse_day
+from .core.flights import Airports
+from .core.store import Logbook
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765

@@ -16,7 +16,7 @@ import pytest
 from persona import persona_record
 
 from logbook import cli, serve
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 PAGES = (
     "/",

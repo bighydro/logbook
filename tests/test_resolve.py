@@ -12,8 +12,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.resolve import labels, labels_from
-from logbook.store import Logbook
+from logbook.core.resolve import labels, labels_from
+from logbook.core.store import Logbook
 
 PERSON_A = "019cadd3-6bc0-7dcd-9133-043f5aabf2a9"
 PERSON_B = "019cadd3-6bc0-7dcd-9133-043f5aabf2aa"

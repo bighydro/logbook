@@ -14,8 +14,9 @@ import pytest
 from circle import ANDERS, EVA, LIV, NILS, OLA, OWNER, PER, call, mail, message
 from persona import OFFICE, OLA_ID, PLACES, TZ, attendee, dwell, event, resolution, utc
 
-from logbook import cli, drifting, people
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import drifting, people
+from logbook.core.store import Logbook
 
 UNTIL = "2026-06-28"  # the recent window is 15 to 28 June; the earlier one 1 to 14 June
 WINDOW = 14

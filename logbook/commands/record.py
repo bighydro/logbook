@@ -15,8 +15,9 @@ from datetime import datetime, timedelta
 from pathlib import Path, PurePath
 from typing import Any
 
-from .. import FORMAT, demo, health, repair
-from ..store import CodeCheckoutError, FormatError, Logbook
+from .. import FORMAT, demo
+from ..core import health, repair
+from ..core.store import CodeCheckoutError, FormatError, Logbook
 from .common import Subparsers, _plural, _progress, _under_home
 
 _LOCALTIME = "/etc/localtime"

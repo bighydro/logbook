@@ -26,10 +26,11 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from logbook import cli, demo, rollup
-from logbook.index import local_date
-from logbook.keepers import LANES
-from logbook.store import Logbook
+from logbook import cli, demo
+from logbook.core import rollup
+from logbook.core.index import local_date
+from logbook.core.keepers import LANES
+from logbook.core.store import Logbook
 
 Draft = dict[str, Any]
 Mutation = Callable[[list[Draft], random.Random], None]

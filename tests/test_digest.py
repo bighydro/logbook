@@ -21,7 +21,7 @@ from persona import HOME, KARI, OLA_ID, TZ, attendee, dwell, event, note, person
 
 from logbook import cli, digest, gaps, promises, questions
 from logbook.commands import day as day_commands
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 NOW = datetime(2026, 6, 22, 18, 0, tzinfo=UTC)  # the Monday evening after the persona's fortnight
 EN_DASH = "\u2013"

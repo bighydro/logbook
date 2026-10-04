@@ -13,9 +13,10 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, flights
+from logbook import adapters
 from logbook.adapters import flighty
-from logbook.store import Logbook
+from logbook.core import flights
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "flighty" / "export.csv"

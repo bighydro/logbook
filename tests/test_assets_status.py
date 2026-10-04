@@ -14,9 +14,10 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import asset_status, assets, cli, places
-from logbook.assets import Asset
-from logbook.store import Logbook
+from logbook import asset_status, cli
+from logbook.core import assets, places
+from logbook.core.assets import Asset
+from logbook.core.store import Logbook
 
 NORDLYS = Asset(id="nordlys", kind="yacht", name="Nordlys", mmsi="970000001", registration="ZZ-LOG1")
 SKARV = Asset(id="skarv", kind="yacht", name="Skarv", mmsi="970000002")

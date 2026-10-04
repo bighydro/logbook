@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 from persona import KARI, KARI_ID, OLA, OLA_ID, TZ, persona_record, resolution
 
-from logbook import cli, story
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import story
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "story"

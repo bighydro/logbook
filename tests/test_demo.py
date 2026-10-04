@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 
 from logbook import cli, demo
-from logbook.index import local_date
-from logbook.store import Logbook
+from logbook.core.index import local_date
+from logbook.core.store import Logbook
 
 PHONE = re.compile(r"\+447700900\d{3}$")  # the UK reserved range, nothing else
 

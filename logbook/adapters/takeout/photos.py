@@ -40,7 +40,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from logbook.adapters.takeout import SOURCE
+from . import SOURCE
 
 NAME = "google-takeout-photos"
 KIND = "photo"

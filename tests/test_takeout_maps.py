@@ -147,7 +147,7 @@ def test_places_propose_takeout_feeds_saved_places_as_candidates_and_write_adopt
     import pytest
     from persona import dwell
 
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))

@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 from persona import KARI, TZ, attendee, event, note, persona_record, utc
 
-from logbook import cli, mcp_server, policy
-from logbook.store import Logbook
+from logbook import cli, mcp_server
+from logbook.core import policy
+from logbook.core.store import Logbook
 
 pytest.importorskip("mcp")  # the `mcp` extra; the client below is imported where it is used
 

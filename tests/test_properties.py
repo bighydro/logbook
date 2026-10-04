@@ -5,8 +5,8 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from logbook.chain import verify_lines
-from logbook.store import Logbook
+from logbook.core.chain import verify_lines
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 payload = st.fixed_dictionaries({"schema": st.just("note/v1"), "text": st.text(max_size=80)})

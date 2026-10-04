@@ -39,8 +39,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, TextIO
 
-from . import adapters, assets, index, places, policy
-from .store import FormatError, Logbook
+from . import adapters
+from .core import assets, index, places, policy
+from .core.store import FormatError, Logbook
 
 Status = Literal["pass", "warn", "fail"]
 Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, as shutil.disk_usage

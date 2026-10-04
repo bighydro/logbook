@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook.adapters import dawarich
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 POINTS = 200_000
 MIN_LINES_PER_SECOND = 20_000

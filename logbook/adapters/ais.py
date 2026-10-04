@@ -47,8 +47,8 @@ from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any
 
-from ..assets import Asset, by_mmsi
-from ..store import utc
+from ..core.assets import Asset, by_mmsi
+from ..core.store import utc
 
 __all__ = [
     "ENV",

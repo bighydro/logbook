@@ -32,16 +32,29 @@ from datetime import date, timedelta
 from itertools import pairwise
 from typing import Any, NamedTuple
 
-from . import day as day_reader
-from . import days as days_reader
-from . import health, keepers, present, reading, rollup, stays, trip_bundle, trips
-from . import places as named_places
-from .chain import Line
-from .export import day_range, parse_day
-from .flights import Airports
-from .reading import Reading
-from .store import Logbook
-from .year import ARROW, CSS, DOT, EN_DASH, Cell, escape, footer, health_text, keepers_text, section, table
+from . import trip_bundle
+from .core import day as day_reader
+from .core import days as days_reader
+from .core import health, keepers, present, reading, rollup, stays, trips
+from .core import places as named_places
+from .core.chain import Line
+from .core.export import day_range, parse_day
+from .core.flights import Airports
+from .core.reading import Reading
+from .core.store import Logbook
+from .core.year import (
+    ARROW,
+    CSS,
+    DOT,
+    EN_DASH,
+    Cell,
+    escape,
+    footer,
+    health_text,
+    keepers_text,
+    section,
+    table,
+)
 
 MARGIN_DAYS = 7  # the reading starts this many days before the trip and ends this many after …
 WIDEN = 4  # … and widens by this factor while the run of nights away touches the window's edge
