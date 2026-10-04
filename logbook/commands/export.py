@@ -389,14 +389,28 @@ def _trip_bundle_rows(prepared: trip_bundle.Prepared) -> Iterator[str]:
 
 
 def import_arguments(sub: Subparsers) -> None:
-    """`logbook import`."""
+    """`logbook import backup|trip-bundle|page|inbox|attachments`: what a phone backup, another record
+    or a friend hands over. `backup`, `inbox` and `attachments` are declared beside `add`, the
+    family that reads the files; `page` beside `share`, its other side."""
+    from .add import attach_arguments, import_backup_arguments, inbox_arguments
+
     s = sub.add_parser(
-        "import", help="a trip bundle another record exported (RFC 0030): its lines appended as received"
+        "import",
+        help="an iOS backup (`backup DIR`), a trip bundle (`trip-bundle FOLDER`) or a shared page"
+        " (`page FILE`) brought in; `inbox`: what was imported; `attachments`: the store",
     )
-    s.add_argument("what", choices=[trip_bundle.COMMAND], help="what the folder holds")
-    s.add_argument("path", metavar="FOLDER", help="the bundle: manifest.json, entries.jsonl, trip.json, …")
-    s.add_argument("--dry-run", action="store_true", help="count what would be received; write nothing")
-    s.set_defaults(fn=cmd_import)
+    verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")
+    import_backup_arguments(verbs)
+    v = verbs.add_parser(
+        trip_bundle.COMMAND,
+        help="a trip bundle another record exported (RFC 0030): its lines appended as received",
+    )
+    v.add_argument("path", metavar="FOLDER", help="the bundle: manifest.json, entries.jsonl, trip.json, …")
+    v.add_argument("--dry-run", action="store_true", help="count what would be received; write nothing")
+    v.set_defaults(fn=cmd_import)
+    receive_arguments(verbs)
+    inbox_arguments(verbs)
+    attach_arguments(verbs)
 
 
 def cmd_import(a: argparse.Namespace) -> None:
@@ -501,9 +515,9 @@ def cmd_share(a: argparse.Namespace) -> None:
 
 
 def receive_arguments(sub: Subparsers) -> None:
-    """`logbook receive`."""
+    """`logbook import page` (`logbook receive` until 0.6)."""
     s = sub.add_parser(
-        "receive", help="verify a page someone shared and keep it beside the record, never in the chain"
+        "page", help="verify a page someone shared and keep it beside the record, never in the chain"
     )
     s.add_argument("file", metavar="FILE", help="the page, a zip")
     s.add_argument("--from", dest="sender", metavar="NAME", help="check against this circle member's key")

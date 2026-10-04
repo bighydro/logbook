@@ -807,9 +807,9 @@ def _dial_prefix_hint() -> str:
 
 
 def import_backup_arguments(sub: Subparsers) -> None:
-    """`logbook import-backup`."""
+    """`logbook import backup` (`logbook import-backup` until 0.6)."""
     s = sub.add_parser(
-        "import-backup",
+        "backup",
         help="every phone source from an iOS backup folder: copy each store into inbox/, add it"
         f" (an encrypted backup's password comes from {PASSWORD_ENV})",
     )
@@ -1028,7 +1028,7 @@ def _plan_row(p: ios_backup.Plan, inbox_folder: Path) -> str:
 
 
 def inbox_arguments(sub: Subparsers) -> None:
-    """`logbook inbox`."""
+    """`logbook import inbox` (`logbook inbox` until 0.6)."""
     s = sub.add_parser(
         "inbox", help="what is in inbox/, which import consumed it, and moving or deleting what is done"
     )
@@ -1139,9 +1139,9 @@ def _inside(path: Path, folder: Path) -> bool:
 
 
 def attach_arguments(sub: Subparsers) -> None:
-    """`logbook attach`."""
+    """`logbook import attachments` (`logbook attach` until 0.6)."""
     s = sub.add_parser(
-        "attach",
+        "attachments",
         help="the attachment store (SPEC §1.1): fill it from an iOS backup, count it, check every file",
     )
     verbs = s.add_subparsers(dest="verb", required=True)

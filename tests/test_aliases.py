@@ -23,7 +23,12 @@ DAYS, SEED = 30, 7
 
 #: old name -> the arguments both forms run with on the demo record; every alias has one, so an
 #: alias added without its proof fails `test_every_alias_has_a_sample`
-SAMPLE: dict[str, tuple[str, ...]] = {}
+SAMPLE: dict[str, tuple[str, ...]] = {
+    "attach": ("status",),
+    "import-backup": ("no-such-backup", "--dry-run"),
+    "inbox": ("list",),
+    "receive": ("no-such-page.zip",),
+}
 
 
 @dataclass(frozen=True)

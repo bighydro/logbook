@@ -12,7 +12,12 @@ A name is removed from this table only with a major version."""
 
 from __future__ import annotations
 
-ALIASES: dict[str, tuple[str, ...]] = {}
+ALIASES: dict[str, tuple[str, ...]] = {
+    "attach": ("import", "attachments"),
+    "import-backup": ("import", "backup"),
+    "inbox": ("import", "inbox"),
+    "receive": ("import", "page"),
+}
 
 # The root options that may stand before the command: the ones that take a value, and the flags.
 _ROOT_OPTIONS_WITH_VALUE = frozenset({"--identity-file"})
