@@ -1,0 +1,50 @@
+{
+  "Data Source": "derived:com.google.distance.delta:com.google.android.gms:merge_distance_delta",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 85.5
+          }
+        }
+      ],
+      "dataTypeName": "com.google.distance.delta",
+      "endTimeNanos": 1780893660000000000,
+      "startTimeNanos": 1780893600000000000,
+      "modifiedTimeMillis": 1780893661234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.distance.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 92.25
+          }
+        }
+      ],
+      "dataTypeName": "com.google.distance.delta",
+      "endTimeNanos": 1780893780000000000,
+      "startTimeNanos": 1780893720000000000,
+      "modifiedTimeMillis": 1780893781234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.distance.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 140.0
+          }
+        }
+      ],
+      "dataTypeName": "com.google.distance.delta",
+      "endTimeNanos": 1780894020000000000,
+      "startTimeNanos": 1780893960000000000,
+      "modifiedTimeMillis": 1780894021234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.distance.delta:com.google.android.gms:Google:Pixel 8:7f3a2b1c:derived_step_deltas"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-# Health: Apple Health, Withings, MyFitnessPal
+# Health: Apple Health, Withings, MyFitnessPal, Google Fit
 
-Three adapters write `health-sample/v1` (RFC 0014): one measurement the body made and a device
+Four adapters write `health-sample/v1` (RFC 0014): one measurement the body made and a device
 recorded — a weight, a heart-rate reading, a quarter hour of steps, a stage of one night's sleep, a
 logged meal — with its number, its unit, the span it covers and the device, never what it means.
 Every line is tier 3 (`logbook add --tier` lowers it). Interpretation is a reader's job: `logbook
@@ -19,9 +19,12 @@ logbook add withings ~/Downloads/data_KN_1718000000 --dry-run   # what would be 
 | `apple-health` | `healthdb_secure.sqlite` from an encrypted iPhone backup | steps, distance, energy and flights in quarter-hour buckets per device; heart rate capped at one reading a minute; resting heart rate, HRV, weight; sleep stages and workouts as spans |
 | `withings` | the app's per-profile stores from a backup, **or the account's data export** (below) | weight and body composition, one line per quantity; heart rate; from the export also sleep, steps, distance, calories and workouts |
 | `myfitnesspal` | the app's `maindb.sqlite` from a backup, **or the account's CSV export** (below) | logged foods or meals as `energy_intake` in kcal; from the store also weights and exercise |
+| `google-takeout-fit` | the `Fit/` folder of a Google Takeout ([page](takeout-fit.md)) | steps and distance in quarter-hour buckets per device, or per day where only the daily sheet has them; heart rate capped at one reading a minute; weight and body fat; sleep stages and workouts as spans; `source` is `google-takeout` |
 
 The stores are what `import-backup` copies out of a phone backup; the adapters' module docstrings
-have the tables. This page is about the exports, which hold the whole history where a phone keeps
+have the tables. Google Fit comes only as a Takeout folder and has its own page; a phone running Fit
+and a watch feeding Apple Health count the same quarter hour twice, and the record keeps both lines,
+each under its source and device (rule 5), for a reader to choose between. This page is about the exports, which hold the whole history where a phone keeps
 weeks, and about what happens when a later export changes a number.
 
 ## The Withings data export

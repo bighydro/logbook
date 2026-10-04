@@ -96,6 +96,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "google-takeout-contacts",
         "google-takeout-maps",
         "google-takeout-home",
+        "google-takeout-fit",
         "ios-contacts",
         "whatsapp",
         "whatsapp-contacts",
