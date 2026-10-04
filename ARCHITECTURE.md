@@ -28,4 +28,4 @@ A shared page is a signed bundle: one day's lines the owner's policy lets cross,
 
 ## Reference stack
 
-Python 3.12; layer 1 depends only on ijson (streaming JSON, so a multi-gigabyte export never has to fit in memory). Engines may use SQLite as an index; PostGIS is a plugin, never a requirement. Web layer: server-rendered HTML. Everything runs on one machine that is always on, or on a laptop that sometimes is.
+Python 3.12; layer 1 (the folder, the chain, the CLI) is standard library only. The package's one runtime dependency, ijson, belongs to layer 2: the Google Takeout and Dawarich adapters stream their JSON exports through it, so a multi-gigabyte export never has to fit in memory. Engines may use SQLite as an index; PostGIS is a plugin, never a requirement. Web layer: server-rendered HTML. Everything runs on one machine that is always on, or on a laptop that sometimes is.

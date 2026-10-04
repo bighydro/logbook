@@ -46,8 +46,9 @@ The easiest and most useful thing to build is an adapter for the export you alre
 1. Copy `adapters/template/` to `logbook/adapters/<source>.py` with its tests and `tests/fixtures/<source>/`.
 2. Put a small, synthetic export in the fixture folder. Never real data, not even yours.
 3. Write `NAME`, `sniff(path) -> bool` and `run(input_path, since)` yielding observations with a `payload.schema` from an existing RFC. A new shape is a new RFC first (below).
-4. Run the tests; the expected output is generated on the first run and checked in. Add the entry point in `pyproject.toml` and a page under `docs/adapters/` when the source needs explaining.
-5. Open the pull request as `adapter: <source>`.
+4. Register the module once, in `pyproject.toml` under `[project.entry-points."logbook.adapters"]`, where `logbook add` should try it (the order is `find`'s precedence); `tests/test_adapter_registry.py` fails on a module that is not there. Add a page under `docs/adapters/` when the source needs explaining.
+5. Run the tests; the expected output is generated on the first run and checked in.
+6. Open the pull request as `adapter: <source>`.
 
 A source that has both an export and a live API is one adapter with one mapping: backfill and live share it, so the same observation arrives once, with one shape and one `raw_id`, whichever way it came ([ADR 0017](docs/adr/0017-backfill-and-live-share-one-mapping.md)).
 

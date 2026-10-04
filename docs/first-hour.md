@@ -285,7 +285,7 @@ pass  owner             policy/owner.json names 2 names, 1 emails, 1 phones
 pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
 pass  extra:ais         websockets is installed
-pass  extra:encrypted   cryptography is installed
+pass  extra:crypto      cryptography is installed
 warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
 pass  disk              29.0 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client

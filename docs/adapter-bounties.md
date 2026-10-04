@@ -90,7 +90,7 @@ Spotify and Pocket are not on this list: Pocket is in the package (`browse/v1`, 
 
 **Export.** None from Apple. This Mac keeps `~/Library/Application Support/Knowledge/knowledgeC.db`, a SQLite store the terminal can read with Full Disk Access: `ZOBJECT` rows whose `ZSTREAMNAME` is `/app/usage` or `/app/inFocus`, `ZSTARTDATE` and `ZENDDATE` as seconds since 2001, `ZVALUESTRING` the bundle id, with `ZSTRUCTUREDMETADATA` for the device. The phone's equivalent is not in a backup. A live adapter on the Mac itself, like `imessage`, reading a copy of the store.
 
-**Target.** No profile fits. An app in the foreground for a span is not a browse, not a note, not an event; it is the `activity/v1` profile `rfcs/README.md` lists as to be written. Propose it first: `kind` `activity`, a span, `app` the bundle id, `device`, `raw_id` `screen-time:<device>:<start>:<bundle id>`; the window title never, the content never. Then the adapter.
+**Target.** No profile fits. An app in the foreground for a span is not a browse, not a note, not an event; it is an `activity/v1` profile nobody has proposed yet. Propose it first: `kind` `activity`, a span, `app` the bundle id, `device`, `raw_id` `screen-time:<device>:<start>:<bundle id>`; the window title never, the content never. Then the adapter.
 
 **Tier** 2: what you were doing on the computer is as private as what you were reading. **Good first adapter:** no. An RFC comes first, and the schema of `knowledgeC.db` shifts between macOS versions, so every column is confirmed by `PRAGMA table_info` and a missing one leaves its field out.
 

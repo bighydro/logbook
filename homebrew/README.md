@@ -91,8 +91,8 @@ done (step 6 of `docs/releasing.md`).
   release on PyPI can lag `main` by a command: `logbook demo` is not in 0.5.0). Nothing of the
   tester's is read.
 
-The formula installs the base package only. An optional extra (`openlogbook[encrypted]`,
-`openlogbook[share]`, `openlogbook[mcp]`, `[ais]`, `[transcribe]`, `[judge]`, `[describe]`) is a
+The formula installs the base package only. An optional extra (`openlogbook[crypto]`,
+`openlogbook[mcp]`, `[ais]`, `[transcribe]`, `[judge]`, `[describe]`) is a
 `pipx inject logbook <package>`-style addition that Homebrew does not model; a user who needs one
-installs with `pipx install "openlogbook[encrypted]"` or `uv tool install "openlogbook[encrypted]"`
+installs with `pipx install "openlogbook[crypto]"` or `uv tool install "openlogbook[crypto]"`
 instead, as `docs/install.md` says.

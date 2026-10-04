@@ -28,10 +28,10 @@ matches the blob but not `Size` is one warning naming the file and both sizes, r
 
 **An encrypted backup** (*Encrypt local backup* ticked in Finder) holds more than an unencrypted one: Health,
 the call log and Safari's history are only ever backed up encrypted. `import-backup` reads one with the
-`encrypted` extra and the password in one environment variable, never a flag:
+`crypto` extra and the password in one environment variable, never a flag:
 
 ```bash
-pip install "openlogbook[encrypted]"        # or: uv tool install "openlogbook[encrypted]"
+pip install "openlogbook[crypto]"        # or: uv tool install "openlogbook[crypto]"
 read -s LOGBOOK_BACKUP_PASSWORD && export LOGBOOK_BACKUP_PASSWORD   # typed once, never echoed
 logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid>
 ```
@@ -86,7 +86,7 @@ logbook backup restore /Volumes/Backup/Logbook/<owner_id>/2026-06-02T071500Z ~/R
 `logbook doctor` checks that this machine is set up to keep the record, one line per check, `pass`, `warn` or
 `fail`, and exits 1 when anything fails: the record is found and `verify` is green with `logbook.json` at
 the head; `index.sqlite` is current; `policy/owner.json` names at least one alias; `places.json` has a
-home; `assets.json` is a registry; each optional extra (`ais`, `encrypted`, `transcribe`) is installed,
+home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `transcribe`) is installed,
 with its install line when not; the variables of every live source the record uses are set, by name only,
 never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
 Drive syncs, which is a fail with the reason. It reads and never writes, so it is safe to run any time.
@@ -99,7 +99,7 @@ warn  owner              policy/owner.json is empty: add your other names, email
 pass  places             4 place(s), home: Home
 pass  assets             1 asset(s): nordlys
 pass  extra:ais          websockets is installed
-pass  extra:encrypted    cryptography is installed
+pass  extra:crypto       cryptography is installed
 warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
 warn  sync:dawarich      set LOGBOOK_DAWARICH_KEY
 pass  disk               184.2 GiB free on the record's volume

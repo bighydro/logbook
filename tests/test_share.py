@@ -254,7 +254,7 @@ def test_share_needs_the_extra(
 ):
     monkeypatch.setattr(share, "_ed25519", lambda: (_ for _ in ()).throw(share.MissingExtra()))
     code, err = _failure(capsys, "share", "day", DAY, "--to", "ola", "--out", str(tmp_path / "x.zip"))
-    assert code == 2 and "openlogbook[share]" in err
+    assert code == 2 and "openlogbook[crypto]" in err
 
 
 # -- circle -------------------------------------------------------------------------------------------------

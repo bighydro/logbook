@@ -17,6 +17,8 @@ from logbook import cli, demo, demo_life, people, reading
 from logbook.index import local_date
 from logbook.store import Logbook
 
+pytestmark = pytest.mark.slow  # forty synthetic years: main and nightly, never a pull request
+
 YEARS = 40
 SEED = 7
 PHONE = re.compile(r"\+447700900\d{3}$")  # the UK reserved range, nothing else

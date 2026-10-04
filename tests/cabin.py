@@ -1,4 +1,4 @@
-"""Two synthetic records of the same cabin weekend, for the shared-trip tests (RFC 0025).
+"""Two synthetic records of the same cabin weekend, for the shared-trip tests (RFC 0030).
 
 Ines Lund and Ola Nordmann, who do not exist, spend Friday 12 to Sunday 14 June 2026 at a cabin in
 the mountains, each with their own record: Ines calls the place "Cabin", Ola calls it "Hytta" and

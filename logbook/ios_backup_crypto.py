@@ -31,7 +31,7 @@ is not refused, only the records that are needed are; class numbers are whatever
 classes iOS adds later just work.
 
 `cryptography` is the only dependency, imported lazily: the package installs and runs without it,
-and an encrypted backup then raises `MissingExtra` naming `openlogbook[encrypted]`. PBKDF2 is
+and an encrypted backup then raises `MissingExtra` naming `openlogbook[crypto]`. PBKDF2 is
 hashlib's. The password is a parameter, never stored on the keybag, never in a message; the
 derived key and the class keys live only in the `Keybag` object."""
 
@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-EXTRA = 'pip install "openlogbook[encrypted]"'
+EXTRA = 'pip install "openlogbook[crypto]"'
 WRAP_DEVICE = 1
 WRAP_PASSCODE = 2
 CLASS_KEY_TAGS = frozenset({"CLAS", "WRAP", "WPKY", "KTYP", "PBKY"})
@@ -56,10 +56,10 @@ CHUNK = 1 << 20  # 1 MiB of ciphertext at a time; a file is never held whole
 
 
 class MissingExtra(ImportError):
-    """`cryptography` is not installed: the `encrypted` extra is needed."""
+    """`cryptography` is not installed: the `crypto` extra is needed."""
 
     def __init__(self) -> None:
-        super().__init__(f"reading an encrypted backup needs the encrypted extra: {EXTRA}")
+        super().__init__(f"reading an encrypted backup needs the crypto extra: {EXTRA}")
 
 
 class DecryptError(Exception):

@@ -13,8 +13,8 @@ folder with every file, Manifest.db included, encrypted under its own key (`ios_
 file is touched — and decrypts Manifest.db into `dest`, from where it is read exactly as an
 unencrypted one; each file row then also carries its protection class and its unwrapped key, and
 `copy` decrypts the file a chunk at a time on the way to its copy. The layout of the copies is the
-same either way, so the adapters never know. `unlock` needs the `encrypted` extra
-(`openlogbook[encrypted]`, `cryptography`); without it, `MissingExtra` says how to install it.
+same either way, so the adapters never know. `unlock` needs the `crypto` extra
+(`openlogbook[crypto]`, `cryptography`); without it, `MissingExtra` says how to install it.
 
 SOURCES lists, in import order, the store each adapter reads and where the phone keeps it:
 

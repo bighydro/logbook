@@ -14,7 +14,7 @@ The checks, in the order they print:
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
   (`trips`, `rollup nights`). None is a warn, not a places file is a fail.
 - `assets`: `assets.json` is a registry when it exists (ADR 0018). Absent is fine.
-- `extra:<name>`: each optional extra (`ais`, `encrypted`, `transcribe`) is installed, with its
+- `extra:<name>`: each optional extra (`ais`, `crypto`, `transcribe`) is installed, with its
   install line when not (a warn).
 - `sync:<name>`: for each live source the record uses — a `state/<name>.json` watermark, or lines of
   that source when the index is current — the variables its adapter reads are set. Names only,
@@ -52,8 +52,7 @@ PIP = 'pip install "openlogbook[{extra}]"'
 #: each extra with the modules that satisfy it, any one of them; `transcribe` has an engine per platform
 EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ais", ("websockets",)),
-    ("encrypted", ("cryptography",)),
-    ("share", ("cryptography",)),
+    ("crypto", ("cryptography",)),
     ("transcribe", ("mlx_whisper", "faster_whisper")),
 )
 #: a path part that begins with one of these, case-folded, names the service: `Dropbox (Personal)`,

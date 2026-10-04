@@ -1431,21 +1431,18 @@ dependencies = [
 ais = [
     { name = "websockets" },
 ]
+crypto = [
+    { name = "cryptography" },
+]
 describe = [
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "pillow-heif", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-]
-encrypted = [
-    { name = "cryptography" },
 ]
 judge = [
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
 mcp = [
     { name = "mcp" },
-]
-share = [
-    { name = "cryptography" },
 ]
 transcribe = [
     { name = "faster-whisper", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
@@ -1454,23 +1451,20 @@ transcribe = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "cryptography" },
     { name = "hypothesis" },
     { name = "jsonschema" },
-    { name = "mcp" },
     { name = "mypy" },
+    { name = "openlogbook", extra = ["ais", "crypto", "mcp"] },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "websockets" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", marker = "extra == 'encrypted'", specifier = ">=42" },
-    { name = "cryptography", marker = "extra == 'share'", specifier = ">=42" },
+    { name = "cryptography", marker = "extra == 'crypto'", specifier = ">=42" },
     { name = "faster-whisper", marker = "(platform_machine != 'arm64' and extra == 'transcribe') or (sys_platform != 'darwin' and extra == 'transcribe')", specifier = ">=1.0" },
     { name = "ijson", specifier = ">=3.3" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2" },
@@ -1481,21 +1475,19 @@ requires-dist = [
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "websockets", marker = "extra == 'ais'", specifier = ">=13" },
 ]
-provides-extras = ["encrypted", "share", "ais", "transcribe", "judge", "describe", "mcp"]
+provides-extras = ["crypto", "ais", "transcribe", "judge", "describe", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "cryptography", specifier = ">=42" },
     { name = "hypothesis", specifier = ">=6.168.0" },
     { name = "jsonschema", specifier = ">=4" },
-    { name = "mcp", specifier = ">=2" },
     { name = "mypy", specifier = ">=1.11" },
+    { name = "openlogbook", extras = ["crypto", "ais", "mcp"] },
     { name = "pre-commit", specifier = ">=4" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.6" },
-    { name = "websockets", specifier = ">=13" },
 ]
 
 [[package]]

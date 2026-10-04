@@ -420,7 +420,7 @@ def test_import_backup_without_the_extra_says_how_to_install_it(lb, tmp_path, mo
         _run(str(built.folder))
     assert e.value.code == 2
     err = capsys.readouterr().err
-    assert err.count("\n") == 1 and 'pip install "openlogbook[encrypted]"' in err
+    assert err.count("\n") == 1 and 'pip install "openlogbook[crypto]"' in err
     assert not any((lb.root / "inbox").glob("ios-backup-*"))
 
 
