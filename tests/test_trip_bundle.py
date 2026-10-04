@@ -1,4 +1,4 @@
-"""The shared trip (RFC 0029): `logbook export trip-bundle <trip> --to <member>` writes a
+"""The shared trip (RFC 0030): `logbook export trip-bundle <trip> --to <member>` writes a
 crossing-style package of one trip's days under `policy/crossing.json`; `logbook import trip-bundle
 <folder>` writes its lines as `received`, never over the record's own; `logbook trip <id>` then
 shows what each record saw. Two synthetic records of one cabin weekend (`tests/cabin.py`); nobody

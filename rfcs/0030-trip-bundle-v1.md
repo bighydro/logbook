@@ -1,4 +1,4 @@
-# RFC 0029 — bundle profile `trip-bundle/v1`, page `trip-share/v1`, line `received/v1`
+# RFC 0030 — bundle profile `trip-bundle/v1`, page `trip-share/v1`, line `received/v1`
 
 Status: draft · 2026-10-03 · comment period: two weeks
 

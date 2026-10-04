@@ -3,7 +3,7 @@
 Two people on one trip keep two records of it. `logbook export trip-bundle` hands one of them to the
 other as a folder; `logbook import trip-bundle` takes it in as *received* lines that never mix with
 your own; `logbook trip` then shows the trip as both records saw it — who was there according to
-each, the places they agree on, and what one of them saw alone. The format is RFC 0029, a crossing
+each, the places they agree on, and what one of them saw alone. The format is RFC 0030, a crossing
 package (RFC 0005) cut to one trip, under the same ceiling as every crossing (ADR 0016).
 
 ```bash

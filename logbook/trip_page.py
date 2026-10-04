@@ -669,7 +669,7 @@ def _people_html(people: Mapping[str, Any]) -> list[str]:
 
 def _shared_html(shared: Sequence[Mapping[str, Any]]) -> list[str]:
     """Per sender: who was there according to each record and the places the records agree on,
-    each with a `seen only by` column (RFC 0029)."""
+    each with a `seen only by` column (RFC 0030)."""
     out = []
     for share in shared:
         their = share["trip"]
