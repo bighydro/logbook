@@ -38,7 +38,6 @@ from ..core import attachments, sealing
 from ..core.index import Index
 from ..core.store import RETRACTION, Logbook
 from . import ios_backup
-from .adapters import ALIASES
 
 PROGRESS_EVERY = 500
 Progress = Callable[[int, float], None]  # files handled so far, seconds elapsed
@@ -87,7 +86,8 @@ SOURCES: tuple[MediaSource, ...] = (
 
 def source(name: str) -> MediaSource | None:
     """The media source called `name`; `photos` stands for `apple-photos` as `add` has it."""
-    from .adapters import ALIASES  # the registry, only when a name is looked up: `--help` names SOURCES
+
+    from .adapters import ALIASES  # the registry, imported when a source is named, never at --help
 
     wanted = ALIASES.get(name, name)
     return next((s for s in SOURCES if s.name == wanted), None)

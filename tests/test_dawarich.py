@@ -14,9 +14,9 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
+from logbook.store import Logbook
 
 from logbook.adapters import dawarich
-from logbook.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))

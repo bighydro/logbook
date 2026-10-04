@@ -61,6 +61,7 @@ resolves `logbook.core.store`, not `logbook.store`.
 | `logbook.repair` | `logbook.core.repair` |  |
 | `logbook.resolve` | `logbook.core.resolve` |  |
 | `logbook.rollup` | `logbook.core.rollup` |  |
+| `logbook.sealing` | `logbook.core.sealing` | tiers 2–3 sealed at rest (RFC 0029), new on main while 0.6 was built |
 | `logbook.search` | `logbook.core.search` |  |
 | `logbook.share` | `logbook.core.share` |  |
 | `logbook.stays` | `logbook.core.stays` |  |
