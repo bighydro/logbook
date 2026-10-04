@@ -5,6 +5,8 @@ line per track per day, at the hour)."""
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -56,7 +58,11 @@ def test_play_activity_is_one_line_per_play_end_with_device_duration_and_the_ski
         assert set(line) == ENVELOPE
         assert line["kind"] == "listen" and line["source"] == "apple-music" and line["tier"] == 2
         assert line["tz"] == TZ and line["payload"]["service"] == "apple-music"
-        assert "192.0.2.1" not in str(line) and "1000000001" not in str(line), "no address, no Apple ID"
+        # the line without `raw_id`: its sixteen hex characters could spell a digit-only secret by
+        # chance (the wallet test did, once in several runs), so the digest is held to its shape instead
+        assert re.fullmatch(r"apple-music:[0-9a-f]{16}:.+", line["payload"]["raw_id"])
+        text = json.dumps({**line, "payload": {k: v for k, v in line["payload"].items() if k != "raw_id"}})
+        assert "192.0.2.1" not in text and "1000000001" not in text, "no address, no Apple ID"
     by = {line["payload"]["title"]: line for line in lines}
     assert [line["at"] for line in lines] == sorted(line["at"] for line in lines)
     line = by["Fjordsang"]
