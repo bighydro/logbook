@@ -4,6 +4,7 @@ service, device and location when the row has them. Every address here is a docu
 from __future__ import annotations
 
 import hashlib
+import re
 import sys
 from pathlib import Path
 
@@ -26,6 +27,13 @@ AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.
 
 def _lines(path=FIX, **kw):
     return list(access_log.run(path, timezone=TZ, **kw))
+
+
+def _without_digest(line) -> str:
+    """The line as text, `raw_id` held to its shape and left out: its sixteen hex characters could
+    spell a digit-only secret (the account id) by chance, as the wallet test once saw in a hash."""
+    assert re.fullmatch(r"access-log:.+:[0-9a-f]{16}", line["payload"]["raw_id"]), line["payload"]["raw_id"]
+    return repr({**line, "payload": {k: v for k, v in line["payload"].items() if k != "raw_id"}})
 
 
 def test_registry_has_access_log_as_a_file_adapter_under_both_names():
@@ -83,7 +91,7 @@ def test_device_and_location_are_kept_when_present_and_the_address_and_agent_nev
     drive = next(line["payload"] for line in _lines() if line["payload"]["title"] == "Google Drive: Access")
     assert "location" not in drive and "device" not in drive["extra"] and "country" not in drive["extra"]
     for line in _lines():  # the address and the browser are hashed into the id, never written
-        text = repr(line)
+        text = _without_digest(line)
         assert "203.0.113" not in text and "198.51.100" not in text and "Mozilla" not in text
 
 
@@ -120,7 +128,7 @@ def test_the_2026_export_reads_every_row_with_its_coarse_place_and_never_the_add
     drive = lines[3]["payload"]
     assert "location" not in drive and "country" not in drive["extra"]
     for line in lines:
-        text = repr(line)
+        text = _without_digest(line)
         assert "203.0.113" not in text and "198.51.100" not in text and "10.0.0.5" not in text
         assert "Mozilla" not in text and "000000000000000000001" not in text and "Gaia" not in text
         assert "ip" not in line["payload"]["extra"] and "user_agent" not in line["payload"]["extra"]
