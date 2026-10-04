@@ -21,6 +21,8 @@ $ logbook --version
 
 If the second line prints a version, you are ready. If it says the command is not found, close the
 terminal, open a new one, and try again: `pipx` tells the shell about new commands on the next start.
+If you do not have `pipx`, or you are on a Mac and would rather `brew install bighydro/logbook/logbook`,
+[install.md](install.md) takes the install one step at a time, with what each step prints.
 
 ## `logbook setup`
 

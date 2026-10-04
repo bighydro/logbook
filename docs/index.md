@@ -4,6 +4,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 
 ## Start
 
+- [Install](install.md): one line on each platform, for someone who has never opened a terminal, with what each step prints.
 - [Try it](try-it.md): five minutes with a demo record, every reader on a month that never happened.
 - [The first hour](first-hour.md): `logbook setup` screen by screen, for someone who has never used a terminal.
 - [The tour](tour.md): every command on your own record, from the first import to handing a day to a friend.
