@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/bighydro/logbook/security/advisories/new
+    about: Report it privately. SECURITY.md has the threat model and the response time.
+  - name: Question or idea
+    url: https://github.com/bighydro/logbook/discussions
+    about: Anything that is not a bug, an adapter or an RFC yet.

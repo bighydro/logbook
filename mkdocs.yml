@@ -36,6 +36,7 @@ nav:
   - Home: index.md
   - Try it: try-it.md
   - The first hour: first-hour.md
+  - The tour: tour.md
   - A life in a record: demo.md
   - Your life in a folder: launch-post.md
   - Vision: VISION.md
@@ -44,6 +45,7 @@ nav:
   - Architecture: ARCHITECTURE.md
   - How a line becomes a Day: line-to-day.md
   - Roadmap: ROADMAP.md
+  - Release notes: release-notes.md
   - Decisions:
       - About ADRs: adr/README.md
       - "0001 Files are the truth": adr/0001-files-are-the-truth.md

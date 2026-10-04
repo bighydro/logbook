@@ -1,0 +1,2 @@
+### Docs
+- The repository reads in ten minutes: the README is a landing page (the long form moved to `docs/tour.md`), `docs/index.md` lists every page in one line each, `docs/release-notes.md` says what 0.5 and 0.6 changed for you in five bullets each, SECURITY.md carries the threat model on one page (tiers 2 and 3 are marked, not yet encrypted), CONTRIBUTING.md has one way to do each thing, and the issue templates ask for a synthetic reproduction, an adapter's export and tier, or an RFC's schema and example. The stale version and phase strings are gone.

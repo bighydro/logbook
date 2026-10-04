@@ -200,7 +200,7 @@ def _add_file(
         return True
     if not quiet:
         print(
-            f"{shown or p.name}: no adapter for this file yet (roadmap phase 1). "
+            f"{shown or p.name}: no adapter for this file yet. "
             "Put it in inbox/ and it will be read when one exists."
         )
     return False

@@ -43,6 +43,8 @@ mcp = ["mcp>=2"]  # `openlogbook[mcp]`: `logbook mcp` serves the record to an MC
 Homepage = "https://github.com/bighydro/logbook"
 Specification = "https://github.com/bighydro/logbook/blob/main/SPEC.md"
 Changelog = "https://github.com/bighydro/logbook/blob/main/CHANGELOG.md"
+Documentation = "https://bighydro.github.io/logbook/"
+Issues = "https://github.com/bighydro/logbook/issues"
 
 [project.scripts]
 logbook = "logbook.cli:main"

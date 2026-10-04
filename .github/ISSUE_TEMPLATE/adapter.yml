@@ -1,0 +1,55 @@
+name: Adapter request
+description: A source the record should read, with its export format, the profile it would write and its tier.
+labels: [adapter]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The ones already wanted are in `docs/adapter-bounties.md`; check it first and comment there if yours is listed. If you hold the export yourself, you are the best person to write the adapter: `CONTRIBUTING.md`, *Write an adapter*, is the whole recipe, and `adapters/template/` is the starting point.
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: The app or service, and whether the data comes as an export, an app store from a phone backup or this Mac, or a live API.
+      placeholder: Strava, the account's bulk export (a zip of CSV and FIT files)
+    validations:
+      required: true
+  - type: textarea
+    id: format
+    attributes:
+      label: Export format and how to get it
+      description: The menu path or request that produces it, the files inside, and the fields that matter. A few synthetic lines of the file are welcome; never real ones.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: Payload profile
+      description: The RFC profile the lines would carry (`location/v1`, `event/v1`, `health-sample/v1` and so on). If none fits, say so; a new shape is an RFC first.
+      placeholder: location/v1 for the track, event/v1 for the activity
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Tier
+      description: 1 is where you were and public activity, 2 is what you said and who to, 3 is money and health (SPEC §4).
+      options:
+        - "1"
+        - "2"
+        - "3"
+    validations:
+      required: true
+  - type: textarea
+    id: dedupe
+    attributes:
+      label: What makes a row unique
+      description: The field or fields that become `raw_id`, so a second import of the same export writes nothing twice. If the source also has a live API, name it; backfill and live share one mapping (ADR 0017).
+  - type: checkboxes
+    id: fixture
+    attributes:
+      label: Fixture
+      options:
+        - label: I can write a small synthetic fixture for this source, by hand or with checked-in code, never from real data.
+        - label: I want to write the adapter myself.
