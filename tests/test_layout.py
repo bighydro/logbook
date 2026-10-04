@@ -131,7 +131,6 @@ def test_a_submodule_of_a_moved_package_is_the_same_module() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         import logbook.adapters.takeout.maps as via_old
-
         from logbook.adapters import screentime as via_from
 
     assert via_old is maps and via_from is screentime
