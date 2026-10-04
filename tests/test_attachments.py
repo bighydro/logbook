@@ -103,7 +103,7 @@ def test_index_line_id_finds_a_line_by_source_and_raw_id(lb: Logbook):
 
 
 def test_stats_counts_a_content_reference_as_an_attachment(lb: Logbook):
-    from logbook.cli import record_stats
+    from logbook.commands.record import record_stats
 
     lb.attach(TEXT)
     lb.append(

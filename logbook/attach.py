@@ -35,7 +35,6 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from . import attachments, ios_backup
-from .adapters import ALIASES
 from .index import Index
 from .store import RETRACTION, Logbook
 
@@ -86,6 +85,8 @@ SOURCES: tuple[MediaSource, ...] = (
 
 def source(name: str) -> MediaSource | None:
     """The media source called `name`; `photos` stands for `apple-photos` as `add` has it."""
+    from .adapters import ALIASES  # the registry, only when a name is looked up: `--help` names SOURCES
+
     wanted = ALIASES.get(name, name)
     return next((s for s in SOURCES if s.name == wanted), None)
 

@@ -20,7 +20,6 @@ from . import flights as flight_lines
 from . import health as health_lines
 from . import ledger, present, stays, trips
 from . import places as named_places
-from .adapters import screentime
 from .chain import Line
 from .export import day_range
 from .index import local_date
@@ -760,9 +759,7 @@ def _app_use_standing(lines: Iterable[Line]) -> list[Line]:
     """The app-use lines standing: not retracted, not superseded by another app-use line."""
     found = list(lines)
     retracted = retractions(found)
-    kept = [
-        line for line in found if line.get("kind") == screentime.KIND and str(line["id"]) not in retracted
-    ]
+    kept = [line for line in found if line.get("kind") == app_table.KIND and str(line["id"]) not in retracted]
     superseded = {
         str(line["payload"]["supersedes"])
         for line in kept

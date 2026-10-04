@@ -57,6 +57,7 @@ from test_withings import _health_store as _withings_health
 from test_withings import _measure_store as _withings_measure
 
 from logbook import cli, ios_backup
+from logbook.commands.add import _plan_row
 from logbook.store import Logbook
 
 UDID = "00008030-000A1B2C3D4E5F60"
@@ -910,7 +911,7 @@ def test_folder_source_plans_every_matching_file_and_copies_them_below_the_folde
     assert (out / "0001.pkpass" / "card.json").read_bytes() == b'{"n": 1}'
     assert not (out / "0000.pkpass" / "logo.png").exists()
     assert len(p.copied) == 2
-    row = cli._plan_row(p, tmp_path / "inbox")
+    row = _plan_row(p, tmp_path / "inbox")
     assert row.startswith("cards: 2 card.json files (16 bytes) under Library/Cards/ → ")
 
 
@@ -918,7 +919,7 @@ def test_folder_source_with_no_matching_file_is_not_found(tmp_path):
     backup = _backup(tmp_path, sources=("ios-notes",))
     (p,) = ios_backup.plan(ios_backup.Manifest(backup), (FOLDER,))
     assert not p.listed and not p.found and p.files == []
-    assert cli._plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
+    assert _plan_row(p, tmp_path / "inbox") == "cards: no card.json under Library/Cards"
     with pytest.raises(ValueError):
         ios_backup.copy(p, tmp_path / "out")
 

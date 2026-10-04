@@ -26,6 +26,11 @@ from typing import Any
 
 from .policy import PolicyError
 
+KIND = (
+    "app-use"  # the kind of a Screen Time line; `adapters.screentime` writes it, `rollup attention` reads it
+)
+SCHEMA = "event/v1"  # its payload schema
+
 __all__ = ["PolicyError"]
 
 APPS_FILE = PurePosixPath("policy/apps.json")  # record-relative

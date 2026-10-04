@@ -23,6 +23,7 @@ from persona import FJORD, HOME, ZURICH, persona_record
 
 from logbook import adapters, cli, weather
 from logbook.adapters import weather as weather_adapter
+from logbook.commands import sync as sync_commands
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))
@@ -97,7 +98,7 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> FakeOpenMeteo:
     served = FakeOpenMeteo()
     monkeypatch.setattr(weather_adapter, "urlopen", served)
     monkeypatch.setattr(weather_adapter, "sleep", lambda _s: None)
-    monkeypatch.setattr(cli, "_today", lambda: TODAY)
+    monkeypatch.setattr(sync_commands, "_today", lambda: TODAY)
     return served
 
 

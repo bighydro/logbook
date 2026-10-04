@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from logbook import cli, stays
-from logbook.cli import EN_DASH
+from logbook.commands.common import EN_DASH
 from logbook.store import Logbook
 
 TZ = "Europe/Oslo"

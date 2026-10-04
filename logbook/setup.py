@@ -333,20 +333,20 @@ def messages_store(home: Path) -> Path | None:
 
 
 def _default_import(lb: Logbook, adapter: adapters.Adapter, path: Path, dry_run: bool) -> int:
-    from . import cli  # the command's own import path, so what setup imports is what `logbook add` imports
+    from .commands import add  # the command's own code, so what setup imports is what `logbook add` imports
 
-    return cli._append_with(lb, adapter, path, None, dry_run=dry_run)
+    return add._append_with(lb, adapter, path, None, dry_run=dry_run)
 
 
 def _default_import_backup(folder: Path, only: tuple[str, ...], dry_run: bool) -> None:
-    from . import cli
+    from .commands import add
 
     args = argparse.Namespace(backup=str(folder), only=",".join(only), dry_run=dry_run, attachments=False)
-    cli.cmd_import_backup(args)
+    add.cmd_import_backup(args)
 
 
 def _default_sync(name: str, dry_run: bool) -> None:
-    from . import cli
+    from .commands import sync
 
     args = argparse.Namespace(
         name=name,
@@ -358,13 +358,13 @@ def _default_sync(name: str, dry_run: bool) -> None:
         until=None,
         dry_run=dry_run,
     )
-    cli.cmd_sync(args)
+    sync.cmd_sync(args)
 
 
 def _default_detect_timezone() -> str | None:
-    from . import cli
+    from .commands import record
 
-    return cli._detect_timezone()
+    return record._detect_timezone()
 
 
 class Wizard:

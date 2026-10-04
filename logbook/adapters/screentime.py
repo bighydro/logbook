@@ -46,9 +46,9 @@ from typing import Any
 from .. import apps
 
 NAME = "screentime"
-KIND = "app-use"
+KIND = apps.KIND
 TIER = 2  # what the owner did with their time; `logbook add --tier` overrides
-SCHEMA = "event/v1"
+SCHEMA = apps.SCHEMA
 CALENDAR = {"id": "screen-time", "name": "Screen Time"}
 MAC_DEVICE = "mac"  # the local device of a knowledgeC.db, which has no identifier of its own
 IOS_DEVICE = "iphone"  # a phone store without a device table
