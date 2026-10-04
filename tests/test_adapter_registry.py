@@ -14,7 +14,7 @@ from importlib import import_module
 from importlib.metadata import entry_points
 from pathlib import Path
 
-from logbook import adapters
+from logbook.contrib import adapters
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "logbook" / "contrib" / "adapters"

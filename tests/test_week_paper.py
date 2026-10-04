@@ -10,12 +10,12 @@ import json
 from pathlib import Path
 
 import pytest
-from logbook.store import Logbook
 from paper import structure
 from persona import TZ, note, persona_record, utc
 
-from logbook import cli, demo, gaps, print_layout
-from logbook.contrib import week_paper
+from logbook import cli
+from logbook.contrib import demo, gaps, print_layout, week_paper
+from logbook.core.store import Logbook
 
 FIXTURES = Path(__file__).parent / "fixtures" / "demo"
 WEEK = "2026-W25"  # 15 to 21 June: the demo's yacht week

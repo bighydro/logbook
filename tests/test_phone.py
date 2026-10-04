@@ -9,7 +9,8 @@ import re
 
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-from logbook.adapters import phone
+
+from logbook.contrib.adapters import phone
 
 PUNCTUATION = re.compile(r"[\s\-.()]")
 E164 = re.compile(r"\+[0-9]+")

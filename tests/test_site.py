@@ -14,11 +14,11 @@ import sys
 from pathlib import Path
 
 import pytest
-from logbook.store import Logbook
 from persona import persona_record
 
 from logbook import cli
 from logbook.contrib import site
+from logbook.core.store import Logbook
 
 SATURDAY_TRIP = "trip-2026-06-13-2026-06-13"  # the night aboard Solvind: Ola is there by a tier-2 note only
 ZURICH_TRIP = "trip-2026-06-15-2026-06-17"  # Ola at the dinner, a tier-1 calendar entry

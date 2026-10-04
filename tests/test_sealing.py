@@ -15,9 +15,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.chain import canonical_json, is_sealed
-
-from logbook import sealing
+from logbook.core import sealing
+from logbook.core.chain import canonical_json, is_sealed
 
 # the fixture's recipient, conformance/identity.txt
 EXAMPLE_RECIPIENT = "age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl"
@@ -190,7 +189,7 @@ def test_index_key_round_trips_sealed_and_blinds_deterministically(keys):
 
 # -- the record ---------------------------------------------------------------------------------
 
-from logbook.store import Logbook  # noqa: E402
+from logbook.core.store import Logbook  # noqa: E402
 
 
 @pytest.fixture
@@ -397,7 +396,7 @@ def test_readers_through_the_index_get_opened_lines(sealed_lb: Logbook):
 
 # -- attachments (RFC 0029 §7) ------------------------------------------------------------------
 
-from logbook import attachments  # noqa: E402
+from logbook.core import attachments  # noqa: E402
 
 TEXT = "Kari: Skal vi ta turen til Tromsø i mai?\nOla: Ja, gjerne.\n".encode()
 SHA = hashlib.sha256(TEXT).hexdigest()

@@ -11,12 +11,12 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from logbook.store import Logbook
 from paper import structure
 from persona import TZ, persona_record
 
-from logbook import cli, demo, print_layout
-from logbook.contrib import year_poster
+from logbook import cli
+from logbook.contrib import demo, print_layout, year_poster
+from logbook.core.store import Logbook
 
 FIXTURES = Path(__file__).parent / "fixtures" / "demo"
 NAMES = ("Nordlys", "Nordmann", "Ines", "Ola", "Marta", "example.org", "07700", "Home", "Office", "Zürich")

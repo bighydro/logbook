@@ -14,10 +14,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-from logbook.index import local_date
-from logbook.store import utc
 
-from logbook import stays
+from logbook.core import stays
+from logbook.core.index import local_date
+from logbook.core.store import utc
 from properties.common import CI, instants, stamp
 
 # Zones with a DST rule, a half-hour or quarter-hour offset, a 30-minute DST step, an offset past ±12,

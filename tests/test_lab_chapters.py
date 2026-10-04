@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from logbook.store import Logbook
 from persona import KARI, KARI_ID, OLA, OLA_ID, TZ, attendee, dwell, event, resolution, travel, utc
 
 from logbook import cli
+from logbook.core.store import Logbook
 
 HOME_A = (59.9139, 10.7522)  # the first flat, central Oslo
 OFFICE_A = (59.9100, 10.7600)

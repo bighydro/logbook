@@ -377,7 +377,7 @@ def test_the_store_is_counted_by_digest_names_only(lb):
 def test_attach_import_backup_seals_the_files_of_a_sealing_record_and_verify_opens_them(
     lb, imported, tmp_path, monkeypatch, capsys
 ):
-    from logbook import sealing
+    from logbook.core import sealing
 
     pairs = [sealing.generate_identity() for _ in range(2)]
     meta = lb.meta
