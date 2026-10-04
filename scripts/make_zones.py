@@ -6,7 +6,7 @@
 Reads the system's `/usr/share/zoneinfo/zone.tab` (or the file given) and writes `zone,country`:
 every zone the database lists, with the ISO 3166-1 alpha-2 country it files it under, sorted by
 zone. zone.tab names each zone once under one country; the readers use it to turn the airports
-table's zone into a coarse country (`logbook/countries.py`). A development script, never run by
+table's zone into a coarse country (`logbook/core/countries.py`). A development script, never run by
 the CLI.
 """
 

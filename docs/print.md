@@ -90,9 +90,9 @@ printer.
 Every typographic constant — the margins, the text block, the six-column grid, the type scale (a
 major third from 10 pt), the faces (the system's: a document that fetches nothing carries no
 webfont), the ink, the map's box, the photo heights per layout — is in one module,
-[`logbook/print_layout.py`](https://github.com/bighydro/logbook/blob/main/logbook/print_layout.py),
+[`logbook/contrib/print_layout.py`](https://github.com/bighydro/logbook/blob/main/logbook/print_layout.py),
 whose `stylesheet()` builds the one stylesheet from them. A designer retheming the paper edition
-changes that file and touches no logic: the renderer (`logbook/print_page.py`) names classes and
+changes that file and touches no logic: the renderer (`logbook/contrib/print_page.py`) names classes and
 never a length.
 
 ## The fixtures

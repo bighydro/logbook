@@ -14,7 +14,7 @@ against the manifest, and keeps the page beside its own record, never in it. Tra
 defined (ARCHITECTURE.md, *The circle*): a page travels by mail, by a shared folder, by a USB stick.
 
 `logbook share day`, `logbook receive` and `logbook circle` are the reference implementation
-(`logbook/share.py`). The two bundles under `tests/fixtures/share/`, with the two public keys in
+(`logbook/core/share.py`). The two bundles under `tests/fixtures/share/`, with the two public keys in
 `keys.json` beside them, are the fixture a second implementation reads and reproduces.
 
 ## Relation to `crossing-package/v1` and `day-package/v1`

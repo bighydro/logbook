@@ -1,0 +1,25 @@
+ledger 2026-06-03 – 2026-06-30: 10 transactions · CHF -94.50 · DKK -240.00 · NOK -1,250.00
+  2026-06-03  Wednesday · NOK -168.00
+    12:48  NOK -168.00  Kafé Måken · at 59.9200,10.7400 near Home, 1.0 km · restaurants · copilot
+  2026-06-06  Saturday · NOK -438.00
+    09:03  NOK -119.00  Havnekiosken · nowhere · groceries · copilot · trip 2026-06-06 – 2026-06-06
+    10:40  NOK -319.00  Havnekiosken · nowhere · groceries · copilot · trip 2026-06-06 – 2026-06-06
+  2026-06-09  Tuesday · CHF -94.50
+    21:05  CHF -94.50  Gasthaus zur Brücke · at 47.3769,8.5417 (Zurich) · restaurants · copilot · trip 2026-06-08 – 2026-06-10
+  2026-06-12  Friday · NOK -119.00
+    10:31  NOK -119.00  Havnekiosken · at Office · groceries · copilot
+  2026-06-18  Thursday · NOK -119.00
+    08:27  NOK -119.00  Havnekiosken · aboard Nordlys · groceries · copilot · trip 2026-06-15 – 2026-06-20
+  2026-06-23  Tuesday · NOK -168.00
+    12:48  NOK -168.00  Kafé Måken · at 59.9200,10.7401 near Home, 1.0 km · restaurants · copilot
+  2026-06-24  Wednesday · NOK -119.00
+    09:55  NOK -119.00  Havnekiosken · at Office · groceries · copilot
+  2026-06-26  Friday · DKK -240.00
+    14:10  DKK -240.00  Café Havnen · at 55.6950,12.5700 (Copenhagen) · restaurants · copilot · trip 2026-06-25 – 2026-06-26
+  2026-06-30  Tuesday · NOK -119.00
+    08:02  NOK -119.00  Havnekiosken · at Office · groceries · copilot
+  trips
+    2026-06-06 – 2026-06-06  Cabin · 2 transactions · NOK -438.00
+    2026-06-08 – 2026-06-10  47.3769,8.5417 (Zurich) · 1 transaction · CHF -94.50
+    2026-06-15 – 2026-06-20  aboard Nordlys · 1 transaction · NOK -119.00
+    2026-06-25 – 2026-06-26  55.6850,12.5500 (Copenhagen) · 1 transaction · DKK -240.00

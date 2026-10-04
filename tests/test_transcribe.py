@@ -17,8 +17,10 @@ from typing import Any
 
 import pytest
 
-from logbook import attachments, cli, transcribe
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import attachments
+from logbook.core.store import Logbook
+from logbook.labs import transcribe
 
 TZ = "Europe/Oslo"
 RATE = 16_000

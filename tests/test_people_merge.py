@@ -36,8 +36,10 @@ from duplicates import (
     duplicate_record,
 )
 
-from logbook import cli, people_merge, resolve
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import people_merge
+from logbook.core import resolve
+from logbook.core.store import Logbook
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:

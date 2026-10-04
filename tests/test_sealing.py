@@ -1,5 +1,5 @@
 """Tiers 2 and 3 sealed at rest (SPEC §2 and §4, RFC 0029, ADR 0020): the primitives of
-`logbook/sealing.py`, then the record: a tier 2 or 3 line is sealed on append when `logbook.json` names
+`logbook/core/sealing.py`, then the record: a tier 2 or 3 line is sealed on append when `logbook.json` names
 recipients, keyless `verify` checks the chain and counts what it did not open, keyed `verify` opens
 every sealed line and fails on bytes that do not match their digest. Every key here is generated for
 the test or is the published example pair from age's README; nothing is real."""
@@ -15,8 +15,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import sealing
 from logbook.chain import canonical_json, is_sealed
+
+from logbook import sealing
 
 # the fixture's recipient, conformance/identity.txt
 EXAMPLE_RECIPIENT = "age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl"

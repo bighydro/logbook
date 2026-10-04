@@ -33,13 +33,13 @@ aboard the yacht Nordlys. Nothing in it is real.*
 *expand all* link is that.
 
 Every row reads as the command prints it, because it is the same code: the grammar of a stay, a
-move or a night is `logbook/day.py`'s and `logbook/days.py`'s, a trip's is `logbook/trips.py`'s, a
-silence's is `logbook/gaps.py`'s. A number here points at the lines it came from as it does under
+move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip's is `logbook/core/trips.py`'s, a
+silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it came from as it does under
 `--json`: hover an attachment and its line ids are the tooltip.
 
 ## Three rules
 
-Each is enforced in `logbook/serve.py` and tested in `tests/test_serve.py`.
+Each is enforced in `logbook/contrib/serve.py` and tested in `tests/test_serve.py`.
 
 **This machine only.** The server binds `127.0.0.1` and refuses any other host before a socket is
 opened: `--host 0.0.0.0`, `::`, a LAN address, even `localhost` (a name, and a name may resolve to

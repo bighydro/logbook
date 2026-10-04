@@ -13,8 +13,10 @@ from typing import Any
 import pytest
 from persona import KARI, photo
 
-from logbook import attachments, cli, describe, keepers
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import attachments, keepers
+from logbook.core.store import Logbook
+from logbook.labs import describe
 
 DAY = "2026-06-10"
 QUAY = "A wooden sailing boat moored at a stone quay under a grey sky."

@@ -1,0 +1,12 @@
+money 2026-06-03 – 2026-06-30
+  2026  10 transactions · CHF -94.50 · DKK -240.00 · NOK -1,250.00
+        by month:
+        2026-06        10 transactions · CHF -94.50 · DKK -240.00 · NOK -1,250.00
+        by country (of the stay each transaction is placed at):
+        NO             6 transactions · NOK -812.00
+        unplaced       2 transactions · NOK -438.00
+        CH             1 transaction · CHF -94.50
+        DK             1 transaction · DKK -240.00
+        by category (the source's own):
+        groceries      6 transactions · NOK -914.00
+        restaurants    4 transactions · CHF -94.50 · DKK -240.00 · NOK -336.00

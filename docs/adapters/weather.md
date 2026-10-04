@@ -87,6 +87,6 @@ leave `LOGBOOK_WEATHER` unset, run the command for the days you choose, or disab
 the stays themselves stay in the location lines, and nothing here lets a reader of the weather lines
 rebuild them. The request never carries the record's owner id or any identifier of yours.
 
-The reference adapter is `logbook/adapters/weather.py`; the clustering and the readers' side are in
-`logbook/weather.py`; the tests run against a fake Open-Meteo in memory and never open a socket, and one
+The reference adapter is `logbook/contrib/adapters/weather.py`; the clustering and the readers' side are in
+`logbook/core/weather.py`; the tests run against a fake Open-Meteo in memory and never open a socket, and one
 of them checks every request URL for a coordinate with more than one decimal.

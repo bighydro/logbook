@@ -1,7 +1,7 @@
 """`logbook days --from DATE --to DATE [--json]`: a window of the record, one line per day — the night,
 the kilometres moved, the flights, the stays with what attached, the people confirmed, the health
 triple, and a gap marker when a source that is usually present has no lines that day. Composed
-from the Day (`logbook/day.py`) over readings of the window in chunks, so a year streams through the
+from the Day (`logbook/core/day.py`) over readings of the window in chunks, so a year streams through the
 index in seconds and never costs a reading per day. Synthetic Oslo persona, who does not exist."""
 
 from __future__ import annotations
@@ -29,11 +29,12 @@ from persona import (
 )
 from test_day import _gap_record, _health
 
-from logbook import cli, reading
-from logbook import day as day_reader
-from logbook import days as days_reader
-from logbook.index import Index
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import day as day_reader
+from logbook.core import days as days_reader
+from logbook.core import reading
+from logbook.core.index import Index
+from logbook.core.store import Logbook
 
 ARROW = "→"
 

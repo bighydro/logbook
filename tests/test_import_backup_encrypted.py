@@ -30,8 +30,9 @@ from test_ios_calls import _store as _call_store
 from test_safari import LINES as SAFARI_LINES
 from test_safari import _store as _safari_store
 
-from logbook import cli, ios_backup, ios_backup_crypto
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import ios_backup, ios_backup_crypto
+from logbook.core.store import Logbook
 
 UDID = "00008030-000A1B2C3D4E5F61"
 PASSWORD = "correct horse battery staple"

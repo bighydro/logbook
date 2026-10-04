@@ -1,0 +1,4 @@
+Home                      59.9139,10.7522  120 m  home
+Office                    59.9100,10.7600  120 m  other
+Marina                    59.9050,10.7350  150 m  asset-berth  boat
+Cabin                     60.6000,9.1000  200 m  other  mountains

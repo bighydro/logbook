@@ -14,7 +14,6 @@ from pathlib import Path
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
-
 from logbook.adapters import dawarich
 from logbook.store import Logbook
 

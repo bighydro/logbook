@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.adapters import dawarich
-from logbook.store import Logbook
+from logbook.contrib.adapters import dawarich
+from logbook.core.store import Logbook
 
 POINTS = 200_000
 MIN_LINES_PER_SECOND = 20_000
@@ -126,7 +126,7 @@ DEDUPE_CEILING_MB = 256  # a 100,000-draft batch deduped through the index on th
 MEASURE = """
 import resource, sys, time
 from pathlib import Path
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 mode, root = sys.argv[1], Path(sys.argv[2])
 lb = Logbook(root)
 t = time.perf_counter()

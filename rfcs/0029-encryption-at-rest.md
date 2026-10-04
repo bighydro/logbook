@@ -421,7 +421,7 @@ Not before the readers have settled.
 
 ## 15. Where the implementation parts from this text
 
-The reference implementation landed with this number (v0.6, `logbook/sealing.py` and the changes around it). Where it decided something this text left open, or chose differently, the implementation is the rule and this section says so:
+The reference implementation landed with this number (v0.6, `logbook/core/sealing.py` and the changes around it). Where it decided something this text left open, or chose differently, the implementation is the rule and this section says so:
 
 - **The search table** (`logbook search`, which landed after the draft) holds no words of a sealed line: the index is a plaintext locator in the cache directory, and a full-text table of tier 2–3 words would undo the sealing for anyone who copied it. A sealed record is searched by its plain lines only, until a design for a sealed search table exists.
 - **An attachment whose line's tier the writer does not know is sealed.** Adapters hand bytes to the store before they yield the draft that points at them, so `Logbook.attach` seals whenever the record names recipients unless the caller says `tier=1`; the photo adapters do not say so yet, so a sealing record seals its photos too. §7's "higher tier wins" is kept; the default sits on the safe side.

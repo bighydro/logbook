@@ -11,8 +11,9 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, taskdone
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import taskdone
+from logbook.core.store import Logbook
 
 OWNER_EMAIL = "ines@example.org"
 OLA_EMAIL = "ola@example.org"

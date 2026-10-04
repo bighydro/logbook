@@ -19,7 +19,6 @@ from zoneinfo import ZoneInfo
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
-
 from logbook.adapters import health_export
 from logbook.store import Logbook, uuid7
 

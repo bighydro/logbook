@@ -12,9 +12,10 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli, health
 from logbook.adapters.takeout import fit
 from logbook.store import Logbook
+
+from logbook import adapters, cli, health
 
 ROOT = Path(__file__).resolve().parents[1]
 TAKEOUT = ROOT / "tests" / "fixtures" / "takeout"

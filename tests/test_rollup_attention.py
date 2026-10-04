@@ -13,7 +13,7 @@ import pytest
 from persona import TZ, utc
 
 from logbook import cli
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 EM_DASH = "\u2014"
 EN_DASH = "\u2013"

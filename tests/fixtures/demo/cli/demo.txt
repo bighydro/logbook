@@ -1,0 +1,4 @@
+demo record: 30 days, 2026-06-01 to 2026-06-30, seed 7; nothing in it is real
+wrote 12,766 lines to <root>, head f68cabe0349a…
+  export LOGBOOK_HOME=<root>
+  logbook show 2026-06-08

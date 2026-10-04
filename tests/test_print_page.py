@@ -15,8 +15,10 @@ from typing import Any
 import pytest
 from persona import TZ, persona_record, photo, utc
 
-from logbook import attachments, cli, demo, keepers, print_layout, print_page
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import demo, print_layout, print_page
+from logbook.core import attachments, keepers
+from logbook.core.store import Logbook
 
 EN_DASH = "\u2013"
 YACHT_WEEK = "trip:2026-06-15:2026-06-20"

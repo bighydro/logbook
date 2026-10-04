@@ -30,7 +30,7 @@ from persona import (
 )
 from persona import OLA as PERSONA_OLA
 
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 OWNER = {"name": "Ines Nordmann", "email": "ines.nordmann@example.org", "phone": "+447700900000"}
 OLA = {"id": OLA_ID, "name": "Ola Nordmann", **PERSONA_OLA, "face": None}

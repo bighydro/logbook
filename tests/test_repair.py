@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from logbook import cli
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 WRONG: list[dict[str, Any]] = [  # what the adapter wrote before the fix: the store's 56 bpm became 3360
     {

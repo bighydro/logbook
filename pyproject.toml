@@ -16,14 +16,17 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-    "ijson>=3.3",
-    "tzdata; sys_platform == 'win32'",
+    "tzdata; sys_platform == 'win32'",  # zoneinfo needs a zone database Windows does not ship
 ]
 
 [project.optional-dependencies]
 # `openlogbook[crypto]`: import-backup on an encrypted iOS backup; share and receive a signed page (Ed25519)
 crypto = ["cryptography>=42"]
 sealed = ["pyrage>=1.2"]          # `openlogbook[sealed]`: tiers 2–3 sealed at rest with age (SPEC §4, RFC 0029)
+# `openlogbook[stream]`: ijson, streaming JSON, for the five adapters that read a multi-gigabyte export
+# (dawarich, spotify, google-takeout-location, -activity, -youtube). Imported when such a file is read;
+# without it `logbook add` names this extra and exits 2, and nothing else is affected.
+stream = ["ijson>=3.3"]
 ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
 # `openlogbook[transcribe]`: transcribe voice-memos, locally; mlx-whisper on Apple silicon, faster-whisper elsewhere
 transcribe = [
@@ -55,65 +58,65 @@ logbook = "logbook.cli:main"
 # a third-party adapter registers under it too, and tests/test_adapter_registry.py checks this table
 # against the modules under logbook/adapters/ and against what the installed package reports.
 [project.entry-points."logbook.adapters"]
-dawarich = "logbook.adapters.dawarich"
-immich = "logbook.adapters.immich"
-dawarich-live = "logbook.adapters.dawarich_live"
-takeout-location = "logbook.adapters.takeout.location"
-takeout-photos = "logbook.adapters.takeout.photos"
-takeout-keep = "logbook.adapters.takeout.keep"
-takeout-tasks = "logbook.adapters.takeout.tasks"
-takeout-chrome = "logbook.adapters.takeout.chrome"
-takeout-youtube = "logbook.adapters.takeout.youtube"
-takeout-pay = "logbook.adapters.takeout.pay"
-takeout-chat = "logbook.adapters.takeout.chat"
-takeout-meet = "logbook.adapters.takeout.meet"
-takeout-access-log = "logbook.adapters.takeout.access_log"
-takeout-activity = "logbook.adapters.takeout.activity"
-takeout-contacts = "logbook.adapters.takeout.contacts"
-takeout-maps = "logbook.adapters.takeout.maps"
-takeout-home = "logbook.adapters.takeout.home"
-takeout-fit = "logbook.adapters.takeout.fit"
-ios-contacts = "logbook.adapters.ios_contacts"
-whatsapp = "logbook.adapters.whatsapp"
-whatsapp-contacts = "logbook.adapters.whatsapp_contacts"
-imessage = "logbook.adapters.imessage"
-imessage-live = "logbook.adapters.imessage_live"
-ios-notes = "logbook.adapters.ios_notes"
-ios-calendar = "logbook.adapters.ios_calendar"
-ios-calls = "logbook.adapters.ios_calls"
-apple-wallet = "logbook.adapters.apple_wallet"
-easypark = "logbook.adapters.easypark"
-wispr-flow = "logbook.adapters.wispr_flow"
-flighty = "logbook.adapters.flighty"
-apple-health = "logbook.adapters.apple_health"
-ics = "logbook.adapters.ics"
-transcript = "logbook.adapters.transcript"
-granola = "logbook.adapters.granola"
-gcal = "logbook.adapters.gcal"
-ais = "logbook.adapters.ais"
-adsb = "logbook.adapters.adsb"
-mail = "logbook.adapters.mail"
-safari = "logbook.adapters.safari"
-shazam = "logbook.adapters.shazam"
-apple-podcasts = "logbook.adapters.apple_podcasts"
-pocket = "logbook.adapters.pocket"
-apple-reminders = "logbook.adapters.apple_reminders"
-copilot = "logbook.adapters.copilot"
-splitwise = "logbook.adapters.splitwise"
-beeper = "logbook.adapters.beeper"
-line = "logbook.adapters.line"
-twitter = "logbook.adapters.twitter"
-apple-books = "logbook.adapters.apple_books"
-voice-memos = "logbook.adapters.voice_memos"
-apple-photos = "logbook.adapters.apple_photos"
-withings = "logbook.adapters.withings"
-myfitnesspal = "logbook.adapters.myfitnesspal"
-sbb = "logbook.adapters.sbb"
-passages = "logbook.adapters.passages"
-spotify = "logbook.adapters.spotify"
-apple-music = "logbook.adapters.apple_music"
-screentime = "logbook.adapters.screentime"
-weather = "logbook.adapters.weather"
+dawarich = "logbook.contrib.adapters.dawarich"
+immich = "logbook.contrib.adapters.immich"
+dawarich-live = "logbook.contrib.adapters.dawarich_live"
+takeout-location = "logbook.contrib.adapters.takeout.location"
+takeout-photos = "logbook.contrib.adapters.takeout.photos"
+takeout-keep = "logbook.contrib.adapters.takeout.keep"
+takeout-tasks = "logbook.contrib.adapters.takeout.tasks"
+takeout-chrome = "logbook.contrib.adapters.takeout.chrome"
+takeout-youtube = "logbook.contrib.adapters.takeout.youtube"
+takeout-pay = "logbook.contrib.adapters.takeout.pay"
+takeout-chat = "logbook.contrib.adapters.takeout.chat"
+takeout-meet = "logbook.contrib.adapters.takeout.meet"
+takeout-access-log = "logbook.contrib.adapters.takeout.access_log"
+takeout-activity = "logbook.contrib.adapters.takeout.activity"
+takeout-contacts = "logbook.contrib.adapters.takeout.contacts"
+takeout-maps = "logbook.contrib.adapters.takeout.maps"
+takeout-home = "logbook.contrib.adapters.takeout.home"
+takeout-fit = "logbook.contrib.adapters.takeout.fit"
+ios-contacts = "logbook.contrib.adapters.ios_contacts"
+whatsapp = "logbook.contrib.adapters.whatsapp"
+whatsapp-contacts = "logbook.contrib.adapters.whatsapp_contacts"
+imessage = "logbook.contrib.adapters.imessage"
+imessage-live = "logbook.contrib.adapters.imessage_live"
+ios-notes = "logbook.contrib.adapters.ios_notes"
+ios-calendar = "logbook.contrib.adapters.ios_calendar"
+ios-calls = "logbook.contrib.adapters.ios_calls"
+apple-wallet = "logbook.contrib.adapters.apple_wallet"
+easypark = "logbook.contrib.adapters.easypark"
+wispr-flow = "logbook.contrib.adapters.wispr_flow"
+flighty = "logbook.contrib.adapters.flighty"
+apple-health = "logbook.contrib.adapters.apple_health"
+ics = "logbook.contrib.adapters.ics"
+transcript = "logbook.contrib.adapters.transcript"
+granola = "logbook.contrib.adapters.granola"
+gcal = "logbook.contrib.adapters.gcal"
+ais = "logbook.contrib.adapters.ais"
+adsb = "logbook.contrib.adapters.adsb"
+mail = "logbook.contrib.adapters.mail"
+safari = "logbook.contrib.adapters.safari"
+shazam = "logbook.contrib.adapters.shazam"
+apple-podcasts = "logbook.contrib.adapters.apple_podcasts"
+pocket = "logbook.contrib.adapters.pocket"
+apple-reminders = "logbook.contrib.adapters.apple_reminders"
+copilot = "logbook.contrib.adapters.copilot"
+splitwise = "logbook.contrib.adapters.splitwise"
+beeper = "logbook.contrib.adapters.beeper"
+line = "logbook.contrib.adapters.line"
+twitter = "logbook.contrib.adapters.twitter"
+apple-books = "logbook.contrib.adapters.apple_books"
+voice-memos = "logbook.contrib.adapters.voice_memos"
+apple-photos = "logbook.contrib.adapters.apple_photos"
+withings = "logbook.contrib.adapters.withings"
+myfitnesspal = "logbook.contrib.adapters.myfitnesspal"
+sbb = "logbook.contrib.adapters.sbb"
+passages = "logbook.contrib.adapters.passages"
+spotify = "logbook.contrib.adapters.spotify"
+apple-music = "logbook.contrib.adapters.apple_music"
+screentime = "logbook.contrib.adapters.screentime"
+weather = "logbook.contrib.adapters.weather"
 
 [dependency-groups]
 dev = [
@@ -127,7 +130,7 @@ dev = [
   "jsonschema>=4",
   # the extras whose tests run and whose modules mypy sees (an in-process MCP client, a faked socket):
   # named once, under [project.optional-dependencies], never repeated here
-  "openlogbook[crypto,sealed,ais,mcp]",
+  "openlogbook[crypto,sealed,ais,mcp,stream]",
 ]
 
 [build-system]

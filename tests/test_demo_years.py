@@ -13,9 +13,12 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, demo, demo_life, people, reading
-from logbook.index import local_date
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import demo
+from logbook.core import people, reading
+from logbook.core.index import local_date
+from logbook.core.store import Logbook
+from logbook.labs import demo_life
 
 pytestmark = pytest.mark.slow  # forty synthetic years: main and nightly, never a pull request
 
@@ -109,9 +112,9 @@ def test_nothing_in_it_is_real(lb: Logbook) -> None:
 
 
 def test_the_same_seed_gives_the_same_head(tmp_path: Path) -> None:
-    a = demo.generate(tmp_path / "a", years=2, seed=1)
-    b = demo.generate(tmp_path / "b", years=2, seed=1)
-    c = demo.generate(tmp_path / "c", years=2, seed=2)
+    a = demo_life.generate(tmp_path / "a", years=2, seed=1)
+    b = demo_life.generate(tmp_path / "b", years=2, seed=1)
+    c = demo_life.generate(tmp_path / "c", years=2, seed=2)
     assert a.meta["head"] == b.meta["head"] and a.meta["seq"] == b.meta["seq"]
     assert c.meta["head"] != a.meta["head"]
     for f in a.files():

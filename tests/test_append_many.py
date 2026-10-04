@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import store
-from logbook.store import Logbook
+from logbook.core import store
+from logbook.core.store import Logbook
 
 
 def _draft(i: int, source: str = "dawarich") -> dict[str, Any]:

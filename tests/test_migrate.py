@@ -18,8 +18,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import FORMAT
-from logbook.chain import CONTENT_FIELDS, GENESIS, Line
-from logbook.store import MIGRATE_MESSAGE, FormatError, Logbook
+from logbook.core.chain import CONTENT_FIELDS, GENESIS, Line
+from logbook.core.store import MIGRATE_MESSAGE, FormatError, Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 KEPT_FIELDS = ("id", "seq", *CONTENT_FIELDS, "recorded_at")
@@ -184,7 +184,7 @@ def test_migrate_runs_once(legacy):
 
 
 def test_migrate_reports_progress(legacy, monkeypatch):
-    from logbook import store
+    from logbook.core import store
 
     monkeypatch.setattr(store, "MIGRATE_PROGRESS_EVERY", 2)
     lb, old = legacy

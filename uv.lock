@@ -1423,7 +1423,6 @@ name = "openlogbook"
 version = "0.5.0"
 source = { editable = "." }
 dependencies = [
-    { name = "ijson" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
@@ -1447,6 +1446,9 @@ mcp = [
 sealed = [
     { name = "pyrage" },
 ]
+stream = [
+    { name = "ijson" },
+]
 transcribe = [
     { name = "faster-whisper", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
@@ -1457,7 +1459,7 @@ dev = [
     { name = "hypothesis" },
     { name = "jsonschema" },
     { name = "mypy" },
-    { name = "openlogbook", extra = ["ais", "crypto", "mcp", "sealed"] },
+    { name = "openlogbook", extra = ["ais", "crypto", "mcp", "sealed", "stream"] },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -1469,7 +1471,7 @@ dev = [
 requires-dist = [
     { name = "cryptography", marker = "extra == 'crypto'", specifier = ">=42" },
     { name = "faster-whisper", marker = "(platform_machine != 'arm64' and extra == 'transcribe') or (sys_platform != 'darwin' and extra == 'transcribe')", specifier = ">=1.0" },
-    { name = "ijson", specifier = ">=3.3" },
+    { name = "ijson", marker = "extra == 'stream'", specifier = ">=3.3" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'judge'", specifier = ">=0.20" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'describe'", specifier = ">=0.1.20" },
@@ -1479,14 +1481,14 @@ requires-dist = [
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "websockets", marker = "extra == 'ais'", specifier = ">=13" },
 ]
-provides-extras = ["crypto", "sealed", "ais", "transcribe", "judge", "describe", "mcp"]
+provides-extras = ["crypto", "sealed", "stream", "ais", "transcribe", "judge", "describe", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6.168.0" },
     { name = "jsonschema", specifier = ">=4" },
     { name = "mypy", specifier = ">=1.11" },
-    { name = "openlogbook", extras = ["crypto", "sealed", "ais", "mcp"] },
+    { name = "openlogbook", extras = ["crypto", "sealed", "ais", "mcp", "stream"] },
     { name = "pre-commit", specifier = ">=4" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },

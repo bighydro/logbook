@@ -2,8 +2,8 @@
 
 `logbook demo` writes a month (`--days`, [try-it.md](try-it.md)). `logbook demo --years N` writes
 a life instead: Ines Nordmann, who does not exist, from her birth to 30 June 2026, in phases that
-change the shape of the data. The record is invented in code (`logbook/demo_life.py`, on the month's
-`logbook/demo.py`), reads nothing, and is a function of `--years` and `--seed`: the same two
+change the shape of the data. The record is invented in code (`logbook/labs/demo_life.py`, on the month's
+`logbook/contrib/demo.py`), reads nothing, and is a function of `--years` and `--seed`: the same two
 numbers give the same chain head on any machine.
 
 ```bash
@@ -47,7 +47,7 @@ photos from 3, absent through the university years, and back for good at 29.
 - `--seed S`: the same seed gives the same record; another seed is the same life with other noise,
   other step counts, other days for the photos and the cabin weekends. The dates of the phases, the
   journeys and the moves do not depend on the seed.
-- The ages are constants at the top of `logbook/demo_life.py` (`PHONE_AGE`, `STUDENT_AGE`,
+- The ages are constants at the top of `logbook/labs/demo_life.py` (`PHONE_AGE`, `STUDENT_AGE`,
   `WORK_AGE`, `OLA_BACK_AGE`, `TRACKER_AGE`, `MOVE_AGE`, `WATCH_AGE`, `BOAT_AGE`), and the
   journeys of each year are planned in one place (`_journeys`), so a different life is a small edit.
 

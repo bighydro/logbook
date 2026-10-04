@@ -29,7 +29,7 @@ import pytest
 from circle import mail, message
 from persona import attendee, event, transcript, utc
 
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 OWNER = {"name": "Ines Nordmann", "email": "ines.nordmann@example.org", "phone": "+447700900100"}

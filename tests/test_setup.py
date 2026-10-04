@@ -18,8 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_imessage import _store as _messages_store
 from test_import_backup import _backup
 
-from logbook import cli, setup
-from logbook.store import Logbook
+from logbook import cli
+from logbook.commands import setup
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 TAKEOUT_FIXTURE = ROOT / "tests" / "fixtures" / "takeout"

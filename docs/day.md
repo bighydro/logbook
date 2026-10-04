@@ -148,7 +148,7 @@ confirms Kari at none.
 ## Aboard an asset
 
 A stay aboard an asset is a **container**. `derive stays` finds it and `day` shows it; the rule is
-the stays engine's (`logbook/stays.py`), and `trips`, `days` and the rollups read what it finds.
+the stays engine's (`logbook/core/stays.py`), and `trips`, `days` and the rollups read what it finds.
 
 - **Boarding is twenty minutes.** You are aboard an asset when its own location lines (`subject` =
   the asset's id, from `sync ais`, `sync adsb` or a saved stream) lie within the stay radius

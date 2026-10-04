@@ -1,0 +1,15 @@
+trip:2026-06-08:2026-06-10  2026-06-08 – 2026-06-10 · 3 nights · until 2026-06-11
+  route
+     1  2026-06-08 – 2026-06-10  3 nights  47.3769,8.5417 (Zurich)
+  flights       in XY 561 OSL → ZRH · out XY 562 ZRH → OSL
+  with          Marta Keller, Jonas Weber
+  days
+    2026-06-08  Mon  47.3769,8.5417 (Zurich) CH     1,471 km  XY 561 OSL→ZRH · 4 stays (6 attached) · sleep 6.6 h · 8,115 steps · resting 53 bpm
+    2026-06-09  Tue  47.3769,8.5417 (Zurich) CH       2.3 km  3 stays (5 attached) · with 2 · sleep 7.2 h · 10,894 steps · resting 61 bpm
+    2026-06-10  Wed  47.3769,8.5417 (Zurich) CH       3.9 km  4 stays (6 attached) · sleep 6.8 h · 10,556 steps · resting 54 bpm
+    2026-06-11  Thu  Home                           1,471 km  XY 562 ZRH→OSL · 4 stays (4 attached) · sleep 7.6 h · 8,828 steps · resting 61 bpm
+  keepers       2 (1 memory, 1 art)
+    2026-06-10  1 memory, 1 art  IMG_06101500.HEIC, IMG_06101520.HEIC
+  health        sleep 7.0 h (4 nights) · 9,598 steps (4 days) · resting 57 bpm (53–61, 4 days) · hrv —
+  spend         −94.50 CHF (1 transaction)
+    2026-06-09  Gasthaus zur Brücke  −94.50 CHF  restaurants

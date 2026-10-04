@@ -1,0 +1,198 @@
+2026-06-08
+  00:00  location   dawarich       1 point
+  00:00  location   ais            nordlys: 1 point
+  00:05–00:20  location   dawarich       4 points
+  00:23  health     apple-health   device=Watch, raw_id=sleep:2026-06-07T22:23:00Z:Watch, source_name=Watch, stage=in_bed, type=sleep, unit=s, value=27540
+  00:25–01:00  location   dawarich       8 points
+  01:00  location   ais            nordlys: 1 point
+  01:05–01:20  location   dawarich       4 points
+  01:23  health     apple-health   device=Watch, raw_id=sleep:2026-06-07T23:23:00Z:Watch, source_name=Watch, stage=deep, type=sleep, unit=s, value=1680
+  01:25–01:50  location   dawarich       6 points
+  01:51  health     apple-health   device=Watch, raw_id=sleep:2026-06-07T23:51:00Z:Watch, source_name=Watch, stage=rem, type=sleep, unit=s, value=900
+  01:55–02:00  location   dawarich       2 points
+  02:00  location   ais            nordlys: 1 point
+  02:05  location   dawarich       1 point
+  02:06  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T00:06:00Z:Watch, source_name=Watch, stage=core, type=sleep, unit=s, value=4200
+  02:10–03:00  location   dawarich       11 points
+  03:00  location   ais            nordlys: 1 point
+  03:05–03:15  location   dawarich       3 points
+  03:16  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T01:16:00Z:Watch, source_name=Watch, stage=deep, type=sleep, unit=s, value=2040
+  03:20–03:45  location   dawarich       6 points
+  03:50  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T01:50:00Z:Watch, source_name=Watch, stage=rem, type=sleep, unit=s, value=720
+  03:50–04:00  location   dawarich       3 points
+  04:00  location   ais            nordlys: 1 point
+  04:02  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T02:02:00Z:Watch, source_name=Watch, stage=awake, type=sleep, unit=s, value=60
+  04:03  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T02:03:00Z:Watch, source_name=Watch, stage=core, type=sleep, unit=s, value=2340
+  04:05–04:40  location   dawarich       8 points
+  04:42  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T02:42:00Z:Watch, source_name=Watch, stage=deep, type=sleep, unit=s, value=1140
+  04:45–04:55  location   dawarich       3 points
+  05:00  location   ais            nordlys: 1 point
+  05:01  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T03:01:00Z:Watch, source_name=Watch, stage=rem, type=sleep, unit=s, value=1560
+  05:06–05:26  location   dawarich       4 points
+  05:27  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T03:27:00Z:Watch, source_name=Watch, stage=awake, type=sleep, unit=s, value=120
+  05:29  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T03:29:00Z:Watch, source_name=Watch, stage=core, type=sleep, unit=s, value=3900
+  05:33–06:00  location   dawarich       6 points
+  06:00  location   ais            nordlys: 1 point
+  06:00  health     apple-health   device=Watch, raw_id=resting_hr:2026-06-08T04:00:00Z:Watch, source_name=Watch, type=resting_hr, unit=bpm, value=53
+  06:05–06:30  location   dawarich       6 points
+  06:34  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T04:34:00Z:Watch, source_name=Watch, stage=deep, type=sleep, unit=s, value=1020
+  06:35–06:50  location   dawarich       4 points
+  06:51  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T04:51:00Z:Watch, source_name=Watch, stage=rem, type=sleep, unit=s, value=1020
+  07:00  location   ais            nordlys: 1 point
+  07:00  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T05:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=125
+  07:05  event      ios-calendar   Flight to Zürich (XY 561)
+  07:08  health     apple-health   device=Watch, raw_id=sleep:2026-06-08T05:08:00Z:Watch, source_name=Watch, stage=core, type=sleep, unit=s, value=3240
+  07:12  flight     flighty        XY 561 OSL → ZRH, arrives 09:10, A320 ZZ-ABC, tracked
+  07:15  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T05:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=83
+  07:30  health     apple-health   device=Phone, extra={'samples': 2}, raw_id=steps:2026-06-08T05:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=87
+  07:40  listen     apple-podcasts Anchors that hold
+  07:45  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T05:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=144
+  08:00  location   ais            nordlys: 1 point
+  08:00  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T06:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=195
+  08:12  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T06:12:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=73
+  08:15  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T06:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=63
+  08:27  browse     safari         The bowline, step by step
+  08:30  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T06:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=105
+  08:45  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T06:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=135
+  09:00  location   ais            nordlys: 1 point
+  09:00  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T07:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=80
+  09:15  health     apple-health   device=Phone, extra={'samples': 3}, raw_id=steps:2026-06-08T07:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=75
+  09:20–09:25  location   dawarich       2 points
+  09:25  message    whatsapp       +447700900001: Landed?
+  09:27  message    whatsapp       me → Ola: Just now. Taxi in ten.
+  09:30  location   dawarich       1 point
+  09:30  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T07:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=106
+  09:35–09:45  location   dawarich       3 points
+  09:45  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T07:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=140
+  09:50–09:55  location   dawarich       2 points
+  10:00  location   ais            nordlys: 1 point
+  10:00  trip       taxi           ZRH → the Zürich hotel, ride, taxi, 62 CHF
+  10:00  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T08:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=88
+  10:07–10:15  location   dawarich       2 points
+  10:15  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T08:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=116
+  10:22–10:30  location   dawarich       2 points
+  10:30  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T08:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=191
+  10:35–10:40  location   dawarich       2 points
+  10:42  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T08:42:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=65
+  10:45  location   dawarich       1 point
+  10:45  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T08:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=130
+  10:50–11:00  location   dawarich       3 points
+  11:00  location   ais            nordlys: 1 point
+  11:00  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T09:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=93
+  11:05–11:15  location   dawarich       3 points
+  11:15  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T09:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=73
+  11:20–11:30  location   dawarich       3 points
+  11:30  health     apple-health   device=Phone, extra={'samples': 2}, raw_id=steps:2026-06-08T09:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=208
+  11:35–11:45  location   dawarich       3 points
+  11:45  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T09:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=145
+  11:50–12:00  location   dawarich       3 points
+  12:00  location   ais            nordlys: 1 point
+  12:00  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T10:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=147
+  12:05–12:15  location   dawarich       3 points
+  12:15  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T10:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=145
+  12:20–12:30  location   dawarich       3 points
+  12:30  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T10:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=114
+  12:35–12:40  location   dawarich       2 points
+  12:43  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T10:43:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=101
+  12:45  location   dawarich       1 point
+  12:45  health     apple-health   device=Phone, extra={'samples': 3}, raw_id=steps:2026-06-08T10:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=168
+  12:50–13:00  location   dawarich       3 points
+  13:00  location   ais            nordlys: 1 point
+  13:00  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T11:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=192
+  13:05–13:15  location   dawarich       3 points
+  13:15  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T11:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=125
+  13:20–13:30  location   dawarich       3 points
+  13:30  health     apple-health   device=Phone, extra={'samples': 2}, raw_id=steps:2026-06-08T11:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=151
+  13:35–13:45  location   dawarich       3 points
+  13:45  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T11:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=134
+  13:50–14:00  location   dawarich       3 points
+  14:00  location   ais            nordlys: 1 point
+  14:00  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T12:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=211
+  14:05–14:15  location   dawarich       3 points
+  14:15  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T12:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=69
+  14:20–14:30  location   dawarich       3 points
+  14:30  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T12:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=191
+  14:35–14:45  location   dawarich       3 points
+  14:45  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T12:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=130
+  14:46  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T12:46:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=64
+  14:50–15:00  location   dawarich       3 points
+  15:00  location   ais            nordlys: 1 point
+  15:00  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T13:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=118
+  15:05–15:15  location   dawarich       3 points
+  15:15  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T13:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=158
+  15:20–15:30  location   dawarich       3 points
+  15:30  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T13:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=70
+  15:35–15:45  location   dawarich       3 points
+  15:45  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T13:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=187
+  15:50–16:00  location   dawarich       3 points
+  16:00  location   ais            nordlys: 1 point
+  16:00  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T14:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=119
+  16:05–16:10  location   dawarich       2 points
+  16:12  message    whatsapp       +447700900001: Train is late again
+  16:15  location   dawarich       1 point
+  16:15  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T14:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=204
+  16:20–16:30  location   dawarich       3 points
+  16:30  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T14:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=174
+  16:35–16:40  location   dawarich       2 points
+  16:40  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T14:40:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=59
+  16:45  location   dawarich       1 point
+  16:45  message    whatsapp       me → Ola: I'll keep the food warm.
+  16:45  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T14:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=146
+  16:50–17:00  location   dawarich       3 points
+  17:00  location   ais            nordlys: 1 point
+  17:00  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T15:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=216
+  17:05–17:15  location   dawarich       3 points
+  17:15  health     apple-health   device=Phone, extra={'samples': 6}, raw_id=steps:2026-06-08T15:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=55
+  17:20–17:30  location   dawarich       3 points
+  17:30  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T15:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=81
+  17:35–17:45  location   dawarich       3 points
+  17:45  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T15:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=170
+  17:50–18:00  location   dawarich       3 points
+  18:00  location   ais            nordlys: 1 point
+  18:00  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T16:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=201
+  18:05–18:15  location   dawarich       3 points
+  18:15  health     apple-health   device=Phone, extra={'samples': 3}, raw_id=steps:2026-06-08T16:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=173
+  18:20–18:30  location   dawarich       3 points
+  18:30  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T16:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=164
+  18:35–18:45  location   dawarich       3 points
+  18:45  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T16:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=119
+  18:46  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T16:46:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=100
+  18:50–19:00  location   dawarich       3 points
+  19:00  location   ais            nordlys: 1 point
+  19:00  health     apple-health   device=Phone, extra={'samples': 2}, raw_id=steps:2026-06-08T17:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=59
+  19:05–19:15  location   dawarich       3 points
+  19:15  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T17:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=101
+  19:20–19:30  location   dawarich       3 points
+  19:30  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T17:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=72
+  19:35–19:45  location   dawarich       3 points
+  19:45  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T17:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=219
+  19:50–20:00  location   dawarich       3 points
+  20:00  location   ais            nordlys: 1 point
+  20:00  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T18:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=200
+  20:05–20:15  location   dawarich       3 points
+  20:15  health     apple-health   device=Phone, extra={'samples': 2}, raw_id=steps:2026-06-08T18:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=74
+  20:20–20:30  location   dawarich       3 points
+  20:30  health     apple-health   device=Phone, extra={'samples': 9}, raw_id=steps:2026-06-08T18:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=124
+  20:31  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T18:31:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=67
+  20:35–20:40  location   dawarich       2 points
+  20:44  watch      google-takeout Cabin stove maintenance
+  20:45  location   dawarich       1 point
+  20:45  health     apple-health   device=Phone, extra={'samples': 7}, raw_id=steps:2026-06-08T18:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=192
+  20:50–21:00  location   dawarich       3 points
+  21:00  location   ais            nordlys: 1 point
+  21:00  health     apple-health   device=Phone, extra={'samples': 3}, raw_id=steps:2026-06-08T19:00:00Z:Phone, source_name=Phone, type=steps, unit=count, value=109
+  21:05–21:15  location   dawarich       3 points
+  21:15  health     apple-health   device=Phone, extra={'samples': 8}, raw_id=steps:2026-06-08T19:15:00Z:Phone, source_name=Phone, type=steps, unit=count, value=98
+  21:20–21:30  location   dawarich       3 points
+  21:30  health     apple-health   device=Phone, extra={'samples': 4}, raw_id=steps:2026-06-08T19:30:00Z:Phone, source_name=Phone, type=steps, unit=count, value=143
+  21:32  browse     safari         Opening hours
+  21:35–21:45  location   dawarich       3 points
+  21:45  health     apple-health   device=Phone, extra={'samples': 5}, raw_id=steps:2026-06-08T19:45:00Z:Phone, source_name=Phone, type=steps, unit=count, value=210
+  21:50–22:00  location   dawarich       3 points
+  22:00  location   ais            nordlys: 1 point
+  22:00  note       manual         Zürich. The hotel by the river; kickoff tomorrow at nine.
+  22:05–22:25  location   dawarich       5 points
+  22:26  health     apple-health   device=Watch, raw_id=heart_rate:2026-06-08T20:26:00Z:Watch, source_name=Watch, type=heart_rate, unit=bpm, value=61
+  22:30–23:00  location   dawarich       7 points
+  23:00  location   ais            nordlys: 1 point
+  23:05–23:55  location   dawarich       11 points

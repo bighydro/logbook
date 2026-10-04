@@ -16,10 +16,10 @@ from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters
-from logbook.adapters.takeout import location, photos
-from logbook.chain import canonical_json
-from logbook.store import Logbook
+from logbook.contrib import adapters
+from logbook.contrib.adapters.takeout import location, photos
+from logbook.core.chain import canonical_json
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 RECORDS = ROOT / "tests" / "fixtures" / "takeout" / "Records.json"
@@ -200,7 +200,7 @@ def test_registry_lists_google_takeout_photos():
 
 
 def test_takeout_package_registers_photos_beside_location():
-    from logbook.adapters import takeout as package
+    from logbook.contrib.adapters import takeout as package
 
     assert package.SUB_ADAPTERS == (
         "location",

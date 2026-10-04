@@ -1,0 +1,12 @@
+Ola Nordmann  (ola.nordmann@example.org, +447700900001, immich:f_01)
+  first contact 2026-06-06 · last 2026-06-15
+  2026  4 days together
+  places  Cabin, Marina
+  commitments  none open (open commitments wait for a reader of commitment/v1 lines (RFC 0007); none are read yet)
+  last 6 shared stays
+    2026-06-20  Marina · face in IMG_06201730.HEIC, face in IMG_06210730.HEIC (proposed)
+    2026-06-18  aboard nordlys · face in IMG_06181730.HEIC (proposed)
+    2026-06-16  aboard nordlys · face in IMG_06161730.HEIC (proposed)
+    2026-06-15  Marina · note says with Ola Nordmann
+    2026-06-13  Marina · attendee of Boat prep, face in IMG_06131100.HEIC
+    2026-06-06  Cabin · attendee of Cabin weekend, note says with Ola Nordmann, face in IMG_06061630.HEIC, face in IMG_06070900.HEIC

@@ -14,8 +14,9 @@ from typing import Any
 import pytest
 from persona import KARI, OLA, TZ, ZURICH, persona_record, photo, utc
 
-from logbook import cli, demo, trip_page
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import demo, trip_page
+from logbook.core.store import Logbook
 
 ARROW = "\u2192"
 EN_DASH = "\u2013"

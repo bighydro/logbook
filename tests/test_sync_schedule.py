@@ -13,8 +13,9 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, schedule
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import schedule
+from logbook.core.store import Logbook
 
 PYTHON = "/opt/logbook/venv/bin/python3"
 

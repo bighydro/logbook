@@ -119,7 +119,7 @@ the point.
 
 ## Adapters and readers
 
-Half of the code in this repository is adapters: some forty modules under `logbook/adapters/`,
+Half of the code in this repository is adapters: some forty modules under `logbook/contrib/adapters/`,
 one per source, each a mapping from one app's own store or export to the envelope. The reason is
 plain. The envelope is small and fixed. The world is not: every phone app keeps its own SQLite
 schema, every export has its own shape, and each of them changes under you. The spec stays the

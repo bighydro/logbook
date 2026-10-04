@@ -18,9 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
-MODULE = ROOT / "logbook" / "adapters" / "__init__.py"
+MODULE = ROOT / "logbook" / "contrib" / "adapters" / "__init__.py"
 GROUP = "logbook.adapters"
-PREFIX = "logbook.adapters."
+PREFIX = "logbook.contrib.adapters."
 BLOCK = re.compile(r"BUILT_IN = \(.*?\n\)\n", re.S)
 
 

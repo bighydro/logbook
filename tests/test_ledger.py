@@ -13,8 +13,9 @@ from typing import Any
 import pytest
 from persona import CAFE, KARI, OLA, OLA_ID, PLACES, persona_record, utc
 
-from logbook import cli, ledger
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import ledger
+from logbook.core.store import Logbook
 
 OWNER_ID = "019cadd3-6bc0-7dcd-9133-00000000000a"
 OWNER_EMAIL = "owner@example.org"
@@ -295,8 +296,8 @@ def test_an_empty_record_has_no_ledger(
 
 
 def test_shares_resolve_through_resolutions_never_through_faces() -> None:
-    from logbook.present import Owner
-    from logbook.resolve import Identity
+    from logbook.core.present import Owner
+    from logbook.core.resolve import Identity
 
     identities = {
         ("email", OLA["email"]): Identity(OLA_ID, "person", "Ola Nordmann"),

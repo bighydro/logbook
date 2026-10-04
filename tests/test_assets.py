@@ -1,4 +1,4 @@
-"""The asset registry (ADR 0018): `<root>/assets.json`, read and written by `logbook.assets`, and
+"""The asset registry (ADR 0018): `<root>/assets.json`, read and written by `logbook.core.assets`, and
 `logbook assets list|add`. Every identifier here is synthetic: MMSI under MID 999 (allocated to no
 country), icao24 in the unallocated 000000 block, registrations under the unassigned `ZZ` prefix."""
 
@@ -11,9 +11,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import assets, cli
-from logbook.assets import Asset, AssetError
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import assets
+from logbook.core.assets import Asset, AssetError
+from logbook.core.store import Logbook
 
 YACHT = Asset(id="solvind", kind="yacht", name="Solvind", mmsi="999000001", registration="ZZ-LOG1")
 PLANE = Asset(id="ln-zz1", kind="aircraft", name="the club's Cub", icao24="000a01", registration="ZZ-ZZ1")

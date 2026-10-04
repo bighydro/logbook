@@ -7,9 +7,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters import spotify
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import spotify
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FOLDER = ROOT / "tests" / "fixtures" / "spotify" / "Spotify Extended Streaming History"

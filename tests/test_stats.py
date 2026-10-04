@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, index, store
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import index, store
+from logbook.core.store import Logbook
 
 # Every string here is synthetic; the person lives in Oslo and does not exist.
 PERSON_A = "019cadd3-6bc0-7dcd-9133-043f5aabf2a9"

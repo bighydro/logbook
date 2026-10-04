@@ -19,11 +19,11 @@ from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters
-from logbook.adapters import dawarich, ios_contacts
-from logbook.adapters.takeout import location
-from logbook.export import write_day_package
-from logbook.store import Logbook
+from logbook.contrib import adapters
+from logbook.contrib.adapters import dawarich, ios_contacts
+from logbook.contrib.adapters.takeout import location
+from logbook.core.export import write_day_package
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 DAWARICH = ROOT / "tests" / "fixtures" / "dawarich" / "export.json"
