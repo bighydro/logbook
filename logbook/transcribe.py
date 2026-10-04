@@ -40,7 +40,7 @@ from platform import machine
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from .adapters import transcript
+from .contrib.adapters import transcript
 from .core import attachments
 from .core.chain import Line
 from .core.store import Logbook

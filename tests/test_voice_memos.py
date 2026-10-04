@@ -18,8 +18,9 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters import voice_memos
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import voice_memos
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]

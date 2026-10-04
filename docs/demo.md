@@ -3,7 +3,7 @@
 `logbook demo` writes a month (`--days`, [try-it.md](try-it.md)). `logbook demo --years N` writes
 a life instead: Ines Nordmann, who does not exist, from her birth to 30 June 2026, in phases that
 change the shape of the data. The record is invented in code (`logbook/demo_life.py`, on the month's
-`logbook/demo.py`), reads nothing, and is a function of `--years` and `--seed`: the same two
+`logbook/contrib/demo.py`), reads nothing, and is a function of `--years` and `--seed`: the same two
 numbers give the same chain head on any machine.
 
 ```bash

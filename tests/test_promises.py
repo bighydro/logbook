@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 from persona import KARI, KARI_ID, OLA, OLA_ID, resolution
 
-from logbook import cli, promises
+from logbook import cli
+from logbook.contrib import promises
 from logbook.core import attachments
 from logbook.core.store import Logbook
 

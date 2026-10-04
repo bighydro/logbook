@@ -14,7 +14,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_import_backup import UDID, _backup
 
-from logbook import cli, inbox
+from logbook import cli
+from logbook.contrib import inbox
 from logbook.core.store import Logbook, now_utc
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -19,8 +19,9 @@ from typing import Any
 import pytest
 from persona import HOME, KARI, OLA_ID, TZ, attendee, dwell, event, note, persona_record, resolution, utc
 
-from logbook import cli, digest, gaps, promises, questions
+from logbook import cli
 from logbook.commands import day as day_commands
+from logbook.contrib import digest, gaps, promises, questions
 from logbook.core.store import Logbook
 
 NOW = datetime(2026, 6, 22, 18, 0, tzinfo=UTC)  # the Monday evening after the persona's fortnight

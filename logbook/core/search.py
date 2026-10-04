@@ -276,7 +276,9 @@ def _gather(value: object, out: list[str]) -> None:
 
 
 def _transcript_text(line: Mapping[str, Any], root: Path) -> Iterable[str]:
-    from ..promises import turns_of  # the file adapter's parsers, by media type; a late import (no cycle)
+    from ..contrib.promises import (
+        turns_of,  # the file adapter's parsers, by media type; a late import (no cycle)
+    )
     from .store import Logbook
 
     turns = turns_of(Logbook(root), dict(line))

@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_imessage import _store as _messages_store
 from test_import_backup import _backup
 
-from logbook import cli, setup
+from logbook import cli
+from logbook.contrib import setup
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -26,7 +26,8 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from logbook import cli, demo
+from logbook import cli
+from logbook.contrib import demo
 from logbook.core import rollup
 from logbook.core.index import local_date
 from logbook.core.keepers import LANES

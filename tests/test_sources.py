@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from logbook import adapters, cli
+from logbook import cli
+from logbook.contrib import adapters
 from logbook.core import policy
 from logbook.core.store import Logbook
 

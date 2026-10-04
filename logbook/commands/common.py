@@ -17,7 +17,7 @@ from ..core import assets, flights, policy
 from ..core.store import Logbook
 
 if TYPE_CHECKING:
-    from .. import adapters
+    from ..contrib import adapters
 
 
 type Subparsers = argparse._SubParsersAction[argparse.ArgumentParser]  # what `add_subparsers` returns
@@ -44,7 +44,7 @@ def _registry(lb: Logbook, command: str) -> list[assets.Asset]:
 def _disabled(lb: Logbook) -> dict[str, str]:
     """The disabled sources of `policy/import.json` by adapter NAME (`books` stands for `apple-books`,
     `health` for `apple-health`, as in `adapters.ALIASES`); a malformed file exits 2 naming it."""
-    from .. import adapters
+    from ..contrib import adapters
 
     try:
         listed = policy.disabled(lb.root)
@@ -56,7 +56,7 @@ def _disabled(lb: Logbook) -> dict[str, str]:
 
 def _say_disabled(lb: Logbook, name: str) -> bool:
     """True, having said so, when the owner disabled the source `name` in `policy/import.json`."""
-    from .. import adapters
+    from ..contrib import adapters
 
     reason = _disabled(lb).get(adapters.ALIASES.get(name, name))
     if reason is None:
@@ -78,7 +78,7 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     `add` prints after the counts), `listen_s`, `notice` and `status` (a source that listens
     to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
-    from .. import adapters
+    from ..contrib import adapters
 
     if live and isinstance(adapter, adapters.LiveAdapter):
         return option in inspect.signature(adapter.pull).parameters

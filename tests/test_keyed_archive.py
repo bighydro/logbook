@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.adapters import keyed_archive
+from logbook.contrib.adapters import keyed_archive
 
 
 def archive(root: object) -> bytes:

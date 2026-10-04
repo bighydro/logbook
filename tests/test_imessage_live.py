@@ -16,8 +16,9 @@ from typing import Any
 import pytest
 from test_imessage import IMAGE_BYTES, T0, _by_rowid, _ns, _store
 
-from logbook import adapters, cli
-from logbook.adapters import imessage, imessage_live
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import imessage, imessage_live
 from logbook.core.store import Logbook
 
 DB_ENV = "LOGBOOK_IMESSAGE_DB"

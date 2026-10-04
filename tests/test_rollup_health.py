@@ -229,7 +229,7 @@ def test_hrv_is_reported_in_ms(
 def test_the_adapter_and_the_repair_keep_hrv_in_ms() -> None:
     """The Apple Health adapter writes HRV (type 183) as the store keeps it, in ms, and never
     rescales it; `repair health-units` stamps the corrected line `ms`."""
-    from logbook.adapters import apple_health
+    from logbook.contrib.adapters import apple_health
     from logbook.core import repair
 
     assert apple_health.TYPES[183] == "hrv" and apple_health.UNITS["hrv"] == "ms"

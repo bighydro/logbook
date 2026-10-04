@@ -18,7 +18,8 @@ from test_imessage import IMAGE_BYTES, VOICE_BYTES
 from test_import_backup import WHATSAPP, _backup, _file_id, _snapshot
 from test_import_backup_encrypted import PASSWORD, _encrypted_backup
 
-from logbook import attach, cli
+from logbook import cli
+from logbook.contrib import attach
 from logbook.core import attachments
 from logbook.core.store import Logbook
 

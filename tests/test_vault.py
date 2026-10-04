@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 from persona import KARI_ID, OLA_ID, persona_record
 
-from logbook import cli, vault
+from logbook import cli
+from logbook.contrib import vault
 from logbook.core.store import Logbook
 
 SATURDAY = "2026-06-13"  # aboard Solvind with Ola, by a tier-2 note

@@ -15,8 +15,9 @@ import pytest
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters import transcript
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import transcript
 from logbook.core import attachments
 from logbook.core.store import Logbook
 

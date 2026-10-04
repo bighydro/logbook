@@ -15,7 +15,8 @@ from typing import Any
 import pytest
 from persona import HOME, OLA_ID, TZ, note, persona_record, resolution, utc
 
-from logbook import cli, digest, gaps, questions
+from logbook import cli
+from logbook.contrib import digest, gaps, questions
 from logbook.core.policy import PolicyError
 from logbook.core.store import Logbook
 

@@ -14,7 +14,7 @@ from ..core.store import Logbook
 from .common import Subparsers, _plural
 
 if TYPE_CHECKING:
-    from .. import people_merge
+    from ..contrib import people_merge
 
 
 def people_arguments(sub: Subparsers) -> None:
@@ -82,7 +82,7 @@ def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
     the same person named twice or more by the resolution lines (`logbook.people_merge`), proposed
     with the evidence and never merged on its own. `--apply` and `--apply-review` append the alias
     lines (RFC 0006) through `Logbook.append`; every id or row is checked before the first one."""
-    from .. import people_merge
+    from ..contrib import people_merge
 
     try:
         report = people_merge.read(lb)
@@ -115,7 +115,7 @@ def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def _say_merged(applied: list[people_merge.Applied], as_json: bool) -> None:
-    from .. import people_merge
+    from ..contrib import people_merge
 
     if as_json:
         print(json.dumps({"applied": [a.to_json() for a in applied]}, indent=2, ensure_ascii=False))

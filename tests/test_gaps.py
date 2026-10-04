@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from logbook import cli, gaps
+from logbook import cli
+from logbook.contrib import gaps
 from logbook.core.index import Index
 from logbook.core.store import Logbook
 

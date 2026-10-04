@@ -18,7 +18,7 @@ from ..core.store import Logbook, now_utc
 from .common import EN_DASH, Subparsers, _csv, _distance_text, _plural
 
 if TYPE_CHECKING:
-    from ..adapters.takeout import maps as takeout_maps
+    from ..contrib.adapters.takeout import maps as takeout_maps
 
 
 def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
@@ -26,7 +26,7 @@ def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
     `Maps (your places)/` and `Saved/` folders, or one file of them) proposed as entries of
     <root>/places.json — a setting of the record, outside the chain — and written only with
     `--write`, never changing an entry already there (`logbook/adapters/takeout/places.py`)."""
-    from ..adapters.takeout import places as takeout_places
+    from ..contrib.adapters.takeout import places as takeout_places
 
     try:
         proposals = takeout_places.read(Path(a.path).expanduser())
@@ -184,7 +184,7 @@ def _name_place(lb: Logbook, place: places.Place) -> Line:
 def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
     """The owner's unnamed stays of the window, from the index alone (`reading.owner_track`): the
     window cut in the query, the points and the evidence its own columns, no month file opened."""
-    from ..adapters.takeout import maps as takeout_maps
+    from ..contrib.adapters.takeout import maps as takeout_maps
 
     first, last = _reader_days(lb, a.since, a.until)
     read = reading.owner_track(lb, first, last)
@@ -238,7 +238,7 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def _saved_candidates(path: str) -> list[takeout_maps.Candidate]:
-    from ..adapters.takeout import maps as takeout_maps
+    from ..contrib.adapters.takeout import maps as takeout_maps
 
     try:
         return takeout_maps.candidates(Path(path).expanduser())

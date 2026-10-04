@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters.takeout import access_log
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters.takeout import access_log
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]

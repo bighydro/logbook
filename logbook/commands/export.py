@@ -8,7 +8,7 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-from .. import trip_bundle, vault
+from ..contrib import trip_bundle, vault
 from ..core import crossing, flights, policy, share, stays
 from ..core.chain import Line
 from ..core.export import day_packages, day_range, parse_day, write_package

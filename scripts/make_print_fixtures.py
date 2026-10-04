@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from logbook import demo, print_page
+from logbook.contrib import demo, print_page
 
 DAYS, SEED = 30, 7
 YEAR = "2026"

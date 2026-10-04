@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from logbook import backup, cli
+from logbook import cli
+from logbook.contrib import backup
 from logbook.core.store import Logbook
 
 PLACES = {"Home": {"lat": 59.9139, "lon": 10.7522, "radius_m": 120, "kind": "home"}}

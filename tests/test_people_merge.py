@@ -36,7 +36,8 @@ from duplicates import (
     duplicate_record,
 )
 
-from logbook import cli, people_merge
+from logbook import cli
+from logbook.contrib import people_merge
 from logbook.core import resolve
 from logbook.core.store import Logbook
 

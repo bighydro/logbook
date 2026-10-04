@@ -7,7 +7,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .. import trip_bundle
+from ..contrib import trip_bundle
 from ..core import apps, events, flights, keepers, story
 from ..core.chain import Line, number_text
 from ..core.resolve import Ref

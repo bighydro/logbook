@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from logbook import cli, serve
+from logbook import cli
+from logbook.contrib import serve
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]

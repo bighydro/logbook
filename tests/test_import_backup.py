@@ -56,8 +56,9 @@ from test_withings import LINES as WITHINGS_LINES
 from test_withings import _health_store as _withings_health
 from test_withings import _measure_store as _withings_measure
 
-from logbook import cli, ios_backup
+from logbook import cli
 from logbook.commands.add import _plan_row
+from logbook.contrib import ios_backup
 from logbook.core.store import Logbook
 
 UDID = "00008030-000A1B2C3D4E5F60"

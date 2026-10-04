@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .. import print_page, trip_page
+from ..contrib import print_page, trip_page
 from ..core import flights, reading, stays, trips
 from ..core.store import Logbook
 from .common import Subparsers, _airports, _print_target

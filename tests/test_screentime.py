@@ -15,8 +15,9 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters import screentime
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import screentime
 from logbook.core import apps
 from logbook.core.store import Logbook
 

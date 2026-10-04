@@ -15,7 +15,8 @@ from typing import Any
 import pytest
 from persona import TZ, persona_record, photo, utc
 
-from logbook import cli, demo, print_layout, print_page
+from logbook import cli
+from logbook.contrib import demo, print_layout, print_page
 from logbook.core import attachments, keepers
 from logbook.core.store import Logbook
 

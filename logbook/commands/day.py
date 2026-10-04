@@ -10,8 +10,8 @@ from datetime import date
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .. import digest as digest_reader
-from .. import print_page, questions
+from ..contrib import digest as digest_reader
+from ..contrib import print_page, questions
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core import flights, keepers, pages, policy, reading, search, stays

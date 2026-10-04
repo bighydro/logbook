@@ -8,7 +8,7 @@ import sys
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from .. import promises, taskdone
+from ..contrib import promises, taskdone
 from ..core.export import parse_day
 from ..core.store import Logbook, now_utc, utc
 from .common import Subparsers, _clock

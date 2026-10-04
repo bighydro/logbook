@@ -10,8 +10,8 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters
-from logbook.adapters import ios_notes, twitter, whatsapp
+from logbook.contrib import adapters
+from logbook.contrib.adapters import ios_notes, twitter, whatsapp
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]

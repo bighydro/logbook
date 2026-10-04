@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from .. import asset_status, gaps, schedule
+from ..contrib import asset_status, gaps, schedule
 from ..core import assets, places, policy, reading, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
@@ -32,7 +32,7 @@ from .common import (
 from .skips import _report_skipped
 
 if TYPE_CHECKING:
-    from .. import adapters
+    from ..contrib import adapters
 
 
 def _page_progress(unit: str, status: Mapping[str, Any] | None = None) -> Callable[[int, float], None]:
@@ -112,7 +112,7 @@ def cmd_sync(a: argparse.Namespace) -> None:
     advance the watermark. `sync --all`: every configured source in turn (`_sync_all`). `sync
     --install-schedule` / `--uninstall-schedule`: `sync --all` twice a day by the machine's own
     scheduler (`_sync_schedule`, `logbook.schedule`)."""
-    from .. import adapters
+    from ..contrib import adapters
 
     if a.install_schedule or a.uninstall_schedule:
         _sync_schedule(a)
@@ -137,7 +137,7 @@ def _sync_all(a: argparse.Namespace) -> None:
     listens to a stream (ais, status 130) ends the run there: the sources not reached are listed as
     `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen` and `--until`
     are a single source's and refused."""
-    from .. import adapters
+    from ..contrib import adapters
 
     if a.name is not None:
         print(
@@ -263,9 +263,9 @@ def _sync_source(a: argparse.Namespace) -> None:
     """Pull from a live source since its stored watermark (or --since), append, advance the watermark.
     The watermark is the source's own clock (adapter.watermark), not the event time, so late uploads of
     old items are still picked up. It lives in <root>/state/<name>.json — bookkeeping, not the record."""
-    from .. import adapters
-    from ..adapters import ais
-    from ..adapters import weather as weather_adapter
+    from ..contrib import adapters
+    from ..contrib.adapters import ais
+    from ..contrib.adapters import weather as weather_adapter
 
     adapter = adapters.live(a.name)
     if adapter is None:
@@ -431,7 +431,7 @@ def _sync_weather(a: argparse.Namespace) -> None:
     points that arrive late) — or the record's first located day — up to yesterday. A dry run plans
     and counts and neither fetches nor writes. The variable `LOGBOOK_WEATHER` is `sync --all`'s to
     read: by name the command needs none."""
-    from ..adapters import weather as weather_adapter
+    from ..contrib.adapters import weather as weather_adapter
 
     if a.listen is not None:
         print("sync: --listen is for a source that listens to a stream (ais), not weather", file=sys.stderr)
@@ -558,7 +558,7 @@ def _listen_flag(a: argparse.Namespace, listens: bool) -> float | None:
     """`--listen SECONDS` as a number, None when not given; exits 2 when the source does not listen,
     when both --listen and --until are given, or when the seconds are not a number above 0.
     `--until` is turned into seconds later, once the record's zone is known."""
-    from ..adapters import ais
+    from ..contrib.adapters import ais
 
     if a.listen is None and a.until is None:
         return None
@@ -626,7 +626,7 @@ def cmd_sources(a: argparse.Namespace) -> None:
     last line's time, the longest silent stretch and the days with no line. With `--expect` only
     those sources are shown, a flagged one marked `!`, and the command exits 1 when any is flagged,
     so a cron job can say so. Nothing is written."""
-    from .. import adapters
+    from ..contrib import adapters
 
     if not a.gaps and (a.since is not None or a.expect is not None or a.json):
         print("sources: --since, --expect and --json go with --gaps", file=sys.stderr)

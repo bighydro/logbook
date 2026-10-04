@@ -13,8 +13,9 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import cli, inbox
-from logbook.adapters import mail
+from logbook import cli
+from logbook.contrib import inbox
+from logbook.contrib.adapters import mail
 from logbook.core import store
 from logbook.core.store import Logbook
 

@@ -14,7 +14,8 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import asset_status, cli
+from logbook import cli
+from logbook.contrib import asset_status
 from logbook.core import assets, places
 from logbook.core.assets import Asset
 from logbook.core.store import Logbook

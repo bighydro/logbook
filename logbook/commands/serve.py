@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .. import serve
+from ..contrib import serve
 from ..core.store import Logbook
 from .common import Subparsers, _airports
 
@@ -73,7 +73,7 @@ def cmd_mcp(a: argparse.Namespace) -> None:
     stdin and stdout, nothing else open, until the host closes them (`logbook.mcp_server`; the
     tools and the ceiling are documented in `docs/mcp.md`). `--inspect` prints the tool table and
     one sample request and needs neither a record nor the `mcp` extra."""
-    from .. import mcp_server
+    from ..contrib import mcp_server
 
     if a.inspect:
         print(mcp_server.inspect_text())

@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from logbook import adapters, cli, doctor
+from logbook import cli
+from logbook.contrib import adapters, doctor
 from logbook.core.store import Logbook
 
 GIB = 1024**3

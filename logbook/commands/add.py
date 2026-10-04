@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from .. import attach, inbox, ios_backup, ios_backup_crypto
+from ..contrib import attach, inbox, ios_backup, ios_backup_crypto
 from ..core import assets, attachments, flights, keepers, places, story
 from ..core.export import parse_day
 from ..core.resolve import Ref, identities_from, labels
@@ -35,8 +35,8 @@ from .rows import _flight_text
 from .skips import _report_skipped
 
 if TYPE_CHECKING:
-    from .. import adapters
-    from ..adapters import apple_photos
+    from ..contrib import adapters
+    from ..contrib.adapters import apple_photos
 
 
 def _add_file(
@@ -50,7 +50,7 @@ def _add_file(
     """Append one file through the adapter that recognises it. False when nothing does, said unless
     `quiet` (a file met while walking a folder is counted, not named) and under `shown` (the path
     as the walk prints it) when given."""
-    from .. import adapters
+    from ..contrib import adapters
 
     adapter = adapters.find(p)
     if adapter is not None:
@@ -119,7 +119,7 @@ def _walk(
     read: list[Path],
     unread: list[Path],
 ) -> None:
-    from .. import adapters
+    from ..contrib import adapters
 
     adapter = adapters.find(folder)
     if adapter is not None and _add_file(lb, folder, given, dry_run=dry_run):
@@ -506,8 +506,8 @@ def add_arguments(sub: Subparsers) -> None:
 
 
 def cmd_add(a: argparse.Namespace) -> None:
-    from .. import adapters
-    from ..adapters import screentime
+    from ..contrib import adapters
+    from ..contrib.adapters import screentime
 
     lb = Logbook.find()
     given = {
@@ -600,7 +600,7 @@ def _add_screentime(lb: Logbook, a: argparse.Namespace, given: Mapping[str, Any]
     a store that cannot be opened names Full Disk Access); `add screentime --backup DIR` copies
     Screen Time's store out of an iOS backup into the inbox, as `import-backup --only screentime`
     does, and runs the adapter on the copy; one or the other, with `screentime` and nothing else."""
-    from ..adapters import screentime
+    from ..contrib.adapters import screentime
 
     if a.what != [screentime.NAME]:
         print(f"add: --mac and --backup go with `add {screentime.NAME}`", file=sys.stderr)
@@ -794,7 +794,7 @@ WRONG_PASSWORD = f"{PASSWORD_ENV} does not unlock this backup's keybag (wrong pa
 
 
 def _dial_prefix_hint() -> str:
-    from ..adapters import ios_contacts
+    from ..contrib.adapters import ios_contacts
 
     return (
         f"  {ios_contacts.DIAL_PREFIX_ENV} is not set: numbers saved without a country code stay as entered;"
@@ -843,8 +843,8 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
     beside it), Safari's history through `safari` (RFC 0017). A source the owner disabled in
     `policy/import.json` is skipped and said so before anything is copied, `--only` or not."""
-    from .. import adapters
-    from ..adapters import ios_contacts
+    from ..contrib import adapters
+    from ..contrib.adapters import ios_contacts
 
     lb = Logbook.find()
     try:

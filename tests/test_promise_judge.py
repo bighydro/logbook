@@ -15,7 +15,8 @@ from persona import OLA, OLA_ID, resolution
 from test_promises import OWNER_EMAIL, OWNER_ID, _by_quote, _run, _transcript
 from test_promises import lb as record
 
-from logbook import cli, judge, promises
+from logbook import cli, judge
+from logbook.contrib import promises
 from logbook.core import attachments
 from logbook.core.store import Logbook
 

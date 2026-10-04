@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path, PurePath
 from typing import Any
 
-from .. import FORMAT, demo
+from .. import FORMAT
+from ..contrib import demo
 from ..core import health, repair
 from ..core.store import CodeCheckoutError, FormatError, Logbook
 from .common import Subparsers, _plural, _progress, _under_home
@@ -404,7 +405,7 @@ def setup_arguments(sub: Subparsers) -> None:
 def cmd_setup(a: argparse.Namespace) -> None:
     """The guided first run (`logbook/setup.py`): one question at a time, each with its default and why
     it is asked; resumable through `state/setup.json`; `--yes` takes every default and asks nothing."""
-    from .. import setup
+    from ..contrib import setup
 
     status = setup.run(a, os.environ)
     if status:
@@ -422,7 +423,7 @@ def doctor_arguments(sub: Subparsers) -> None:
 def cmd_doctor(a: argparse.Namespace) -> None:
     """One line per check of the record and this machine (`logbook/doctor.py`); exit 1 when one fails.
     Reads only: a missing settings file is reported, never written."""
-    from .. import doctor as doctor_checks
+    from ..contrib import doctor as doctor_checks
 
     try:
         lb: Logbook | None = Logbook.find()
@@ -464,7 +465,7 @@ def cmd_backup(a: argparse.Namespace) -> None:
     `backup list DEST`: every snapshot with its lines, head and size. `backup restore SNAPSHOT
     TARGET`: a copy back, verified (`logbook/backup.py`, docs/backup.md). A refusal exits 2; a copy
     that does not verify is removed and exits 1."""
-    from .. import backup
+    from ..contrib import backup
 
     verb, paths = (a.paths[0], a.paths[1:]) if a.paths[0] in ("list", "restore") else (None, a.paths)
     usage = {None: "backup DEST", "list": "backup list DEST", "restore": "backup restore SNAPSHOT TARGET"}
@@ -493,7 +494,7 @@ def cmd_backup(a: argparse.Namespace) -> None:
 
 
 def _backup_snapshot(lb: Logbook, dest: Path, a: argparse.Namespace) -> None:
-    from .. import backup
+    from ..contrib import backup
 
     result = backup.snapshot(lb, dest, verify_attachments=a.verify)
     print(f"backup: {result.path.name} → {result.path}")
@@ -509,7 +510,7 @@ def _backup_snapshot(lb: Logbook, dest: Path, a: argparse.Namespace) -> None:
 
 
 def _backup_list(dest: Path) -> None:
-    from .. import backup
+    from ..contrib import backup
 
     shown = 0
     for owner, entries in backup.listing(dest):
@@ -526,7 +527,7 @@ def _backup_list(dest: Path) -> None:
 
 
 def _backup_restore(source: Path, target: Path) -> None:
-    from .. import backup
+    from ..contrib import backup
 
     result = backup.restore(source, target)
     print(f"restored {source.name} → {result.path}")

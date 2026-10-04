@@ -11,7 +11,7 @@ import pytest
 from persona import persona_record
 
 from logbook import cli
-from logbook.adapters import immich
+from logbook.contrib.adapters import immich
 from logbook.core import keepers
 from logbook.core.store import Logbook
 

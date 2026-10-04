@@ -1,6 +1,6 @@
 """`logbook/cli.py` is a thin entry point and `logbook --help` is cheap: neither imports an adapter or
 a model module. The commands live in `logbook/commands/`, one family per module, and a family
-imports an adapter (`logbook.adapters.*`) or a labs module (`judge`, `describe`, `transcribe`,
+imports an adapter (`logbook.contrib.adapters.*`) or a labs module (`judge`, `describe`, `transcribe`,
 `demo_life`) inside the function that runs the command. Where the help text needs a constant from
 one of them, the family keeps a copy, and this file holds the copy to the original."""
 
@@ -12,11 +12,12 @@ import warnings
 
 import pytest
 
-from logbook import cli, describe, judge, setup, transcribe
-from logbook.adapters import screentime
+from logbook import cli, describe, judge, transcribe
 from logbook.commands import add, day, derive, parser, promises, record
+from logbook.contrib import setup
+from logbook.contrib.adapters import screentime
 
-ADAPTER_PREFIX = "logbook.adapters."
+ADAPTER_PREFIX = "logbook.contrib.adapters."
 LABS = {"logbook.judge", "logbook.describe", "logbook.transcribe", "logbook.demo_life"}
 
 
@@ -48,7 +49,7 @@ def test_help_imports_no_adapter_and_no_model_code() -> None:
     )
     assert "logbook.commands.parser" in loaded
     assert not {m for m in loaded if m.startswith(ADAPTER_PREFIX)}, "an adapter module was imported"
-    assert "logbook.adapters" not in loaded, "the adapter registry was imported"
+    assert "logbook.contrib.adapters" not in loaded, "the adapter registry was imported"
     assert not (loaded & LABS), "a labs module was imported"
 
 
