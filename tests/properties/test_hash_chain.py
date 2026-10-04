@@ -14,9 +14,9 @@ from typing import Any
 import pytest
 from hypothesis import Phase, given, settings
 from hypothesis import strategies as st
-from logbook.chain import GENESIS, compute_hash, content_hash, parse_line, verify_lines
-from logbook.store import Logbook
 
+from logbook.core.chain import GENESIS, compute_hash, content_hash, parse_line, verify_lines
+from logbook.core.store import Logbook
 from properties.common import CI, drafts
 
 Stored = tuple[int, Path, int, int, bytes]  # (seq, file, line number in the file, offset, the bytes)

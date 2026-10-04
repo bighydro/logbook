@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from logbook.store import Logbook
 from persona import (
     HOME,
     KARI,
@@ -30,6 +29,7 @@ from persona import (
 )
 
 from logbook import cli
+from logbook.core.store import Logbook
 
 PER = {"id": "019cadd3-6bc0-7dcd-9133-000000000003", "name": "Per Hansen", "email": "per.hansen@example.org"}
 LIV = {"id": "019cadd3-6bc0-7dcd-9133-000000000004", "name": "Liv Berg", "email": "liv.berg@example.org"}

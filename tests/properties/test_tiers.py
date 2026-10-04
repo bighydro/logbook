@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from logbook.chain import CONTENT_FIELDS, Line, content_hash
-from logbook.store import Logbook
 
-from logbook import crossing, policy
+from logbook.core import crossing, policy
+from logbook.core.chain import CONTENT_FIELDS, Line, content_hash
+from logbook.core.store import Logbook
 from properties.common import CI, drafts, instants, profile_tiers, stamp, text
 
 TZ = "Europe/Oslo"

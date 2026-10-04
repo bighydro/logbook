@@ -167,3 +167,10 @@ markers = [
   "slow: takes more than about five seconds; skipped unless LOGBOOK_SLOW=1 (CI sets it on push to main and nightly, not on a pull request)",
   "stress: generated millions-of-lines tests with timing and memory assertions; skipped unless LOGBOOK_STRESS=1, never in CI",
 ]
+# The 0.5 import paths (`logbook._shim`, `layout.MOVED`) warn once where they are imported, so the
+# warning is attributed to the importing test, not to the shim: the filter matches its message. In
+# the suite that warning is an error, and a test that drifts back to an old path fails on import
+# (`scripts/rewrite_test_imports.py` moves it). The shims themselves, and a user's own code, still warn.
+filterwarnings = [
+  "error:^logbook\\.[a-z_.]+ is logbook\\.[a-z_.]+ since 0\\.6;:DeprecationWarning",
+]
