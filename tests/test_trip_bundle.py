@@ -213,7 +213,7 @@ def test_import_writes_received_lines_and_never_over_the_records_own(
 ) -> None:
     bundle, _text = _bundle(ola, tmp_path, monkeypatch, capsys)
     monkeypatch.setenv("LOGBOOK_HOME", str(ines.root))
-    before = json.loads(_run(capsys, "trips", "--json"))
+    before = json.loads(_run(capsys, "show", "trips", "--json"))
     seq = ines.meta["seq"]
     text = _run(capsys, "import", "trip-bundle", str(bundle))
     assert "2 lines received" in text and "3 resolutions" in text and "1 kept as yours" in text
@@ -246,7 +246,7 @@ def test_import_writes_received_lines_and_never_over_the_records_own(
     text = _run(capsys, "import", "trip-bundle", str(bundle))
     assert "0 lines received" in text and "received before" in text and ines.meta["seq"] == seq
     # the record's own readers are unmoved: received lines are nobody's photos and nobody's names
-    assert json.loads(_run(capsys, "trips", "--json")) == before
+    assert json.loads(_run(capsys, "show", "trips", "--json")) == before
     day = _run(capsys, "show", "2026-06-13")
     assert f"from {OLA['name']}" in day and "photo" in day
 
@@ -299,9 +299,9 @@ def test_the_trip_page_shows_what_each_record_saw(
 ) -> None:
     bundle, _text = _bundle(ola, tmp_path, monkeypatch, capsys)
     monkeypatch.setenv("LOGBOOK_HOME", str(ines.root))
-    assert json.loads(_run(capsys, "trip", TRIP, "--json"))["shared"] == []
+    assert json.loads(_run(capsys, "show", "trip", TRIP, "--json"))["shared"] == []
     _run(capsys, "import", "trip-bundle", str(bundle))
-    data = json.loads(_run(capsys, "trip", TRIP, "--json"))
+    data = json.loads(_run(capsys, "show", "trip", TRIP, "--json"))
     (share,) = data["shared"]
     assert share["from"] == {"id": ola.meta["owner_id"], "name": OLA["name"]}
     assert share["trip"]["id"] == TRIP and share["photos"] == 2
@@ -320,11 +320,11 @@ def test_the_trip_page_shows_what_each_record_saw(
     assert (
         bakery["label"] is None and "near Hytta" in bakery["theirs"] and bakery["seen_only_by"] == OLA["name"]
     )
-    text = _run(capsys, "trip", TRIP)
+    text = _run(capsys, "show", "trip", TRIP)
     assert f"shared with {OLA['name']}" in text
     assert "seen only by" in text and f"{KARI['name']}" in text and "Hytta" in text
     html = tmp_path / "trip.html"
-    _run(capsys, "trip", TRIP, "--html", str(html))
+    _run(capsys, "show", "trip", TRIP, "--html", str(html))
     page = html.read_text(encoding="utf-8")
     assert "<h2>Shared</h2>" in page and KARI["name"] in page and "seen only by" in page
 
@@ -354,4 +354,4 @@ def test_a_page_of_another_trip_is_not_on_this_one(
     manifest_file.write_bytes((json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     monkeypatch.setenv("LOGBOOK_HOME", str(ines.root))
     _run(capsys, "import", "trip-bundle", str(bundle))
-    assert json.loads(_run(capsys, "trip", TRIP, "--json"))["shared"] == []
+    assert json.loads(_run(capsys, "show", "trip", TRIP, "--json"))["shared"] == []

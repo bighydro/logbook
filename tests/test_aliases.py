@@ -25,9 +25,15 @@ DAYS, SEED = 30, 7
 #: alias added without its proof fails `test_every_alias_has_a_sample`
 SAMPLE: dict[str, tuple[str, ...]] = {
     "attach": ("status",),
+    "days": (),
     "import-backup": ("no-such-backup", "--dry-run"),
     "inbox": ("list",),
+    "keepers": (),
     "receive": ("no-such-page.zip",),
+    "stats": (),
+    "trip": ("trip:2026-06-08:2026-06-10",),
+    "trips": (),
+    "year": ("2026",),
 }
 
 
@@ -72,7 +78,8 @@ def test_no_old_name_is_listed_by_help() -> None:
     out = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
         cli.main(["--help"])
-    listed = {m.group(1) for m in re.finditer(r"^\s{2,}([a-z][a-z-]*)(?:\s|$)", out.getvalue(), re.M)}
+    # the command column: a name at the left, after two to four spaces; a wrapped line sits deeper
+    listed = {m.group(1) for m in re.finditer(r"^ {2,4}([a-z][a-z-]*)(?:\s{2,}|$)", out.getvalue(), re.M)}
     assert not listed & set(aliases.ALIASES), sorted(listed & set(aliases.ALIASES))
 
 

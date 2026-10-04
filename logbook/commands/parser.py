@@ -16,7 +16,6 @@ from . import (
     day,
     derive,
     export,
-    keepers,
     lab,
     people,
     places,
@@ -25,7 +24,6 @@ from . import (
     rollup,
     serve,
     sync,
-    trips,
 )
 from .common import Subparsers
 
@@ -44,16 +42,10 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
     day.day_arguments,
     day.digest_arguments,
     day.questions_arguments,
-    day.days_arguments,
-    day.year_arguments,
-    trips.trip_arguments,
-    record.stats_arguments,
     derive.derive_arguments,
     places.places_arguments,
     rollup.rollup_arguments,
-    trips.trips_arguments,
     rollup.ledger_arguments,
-    keepers.keepers_arguments,
     promises.promises_arguments,
     promises.tasks_arguments,
     serve.serve_arguments,

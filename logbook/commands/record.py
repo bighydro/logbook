@@ -150,18 +150,6 @@ BAR = "\u2588"  # one full block per ~1% of the busiest year
 BAR_WIDTH = 100
 
 
-def stats_arguments(sub: Subparsers) -> None:
-    """`logbook stats`."""
-    s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
-    s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
-    s.add_argument(
-        "--health",
-        action="store_true",
-        help="one row per day of the health lines: sleep hours, steps, resting HR",
-    )
-    s.set_defaults(fn=cmd_stats)
-
-
 def cmd_stats(a: argparse.Namespace) -> None:
     """One screen of what the record holds, counted through the index (one SELECT per table,
     nothing read from the files): kinds, sources, years, retractions, resolutions, attachments.

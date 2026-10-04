@@ -155,7 +155,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 
 
 def _stats(capsys: pytest.CaptureFixture[str], *args: str) -> str:
-    cli.main(["stats", *args])
+    cli.main(["show", "stats", *args])
     return capsys.readouterr().out
 
 

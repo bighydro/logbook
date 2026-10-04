@@ -14,9 +14,15 @@ from __future__ import annotations
 
 ALIASES: dict[str, tuple[str, ...]] = {
     "attach": ("import", "attachments"),
+    "days": ("show", "days"),
     "import-backup": ("import", "backup"),
     "inbox": ("import", "inbox"),
+    "keepers": ("show", "keepers"),
     "receive": ("import", "page"),
+    "stats": ("show", "stats"),
+    "trip": ("show", "trip"),
+    "trips": ("show", "trips"),
+    "year": ("show", "year"),
 }
 
 # The root options that may stand before the command: the ones that take a value, and the flags.
