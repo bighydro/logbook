@@ -50,6 +50,7 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 
 | You want to | Read |
 |---|---|
+| install it, one line on each platform | [Install](docs/install.md) |
 | try it in five minutes, nothing of yours | [Try it](docs/try-it.md) |
 | set up your own record, one question at a time | [The first hour](docs/first-hour.md) |
 | see every command on your own record | [The tour](docs/tour.md) |

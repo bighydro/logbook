@@ -230,7 +230,7 @@ which prints *Resolved*, *Installed* and `Installed 1 executable: logbook`. Both
 put the command in `~/.local/bin`; if the terminal cannot find `logbook` afterwards, that folder is
 not on your path and `pipx ensurepath` or `uv tool update-shell` adds it, from the next terminal on.
 
-Nix and Docker users: the README has the `nix run` and `docker run` lines.
+Nix and Docker users: [the tour](tour.md) has the `nix run` and `docker run` lines.
 
 ## Did it work?
 
