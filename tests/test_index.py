@@ -100,7 +100,7 @@ def _draft(i: int, source: str = "dawarich") -> dict[str, Any]:
 
 def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, capsys):
     assert not (lb.index_path).exists()
-    cli.main(["index"])
+    cli.main(["repair", "index"])
     out = capsys.readouterr().out
     assert "indexed 4 lines" in out and "index.sqlite" in out
     assert _rows(lb, "SELECT count(*) FROM lines") == [(4,)]
@@ -337,7 +337,7 @@ def test_interrupted_append_many_leaves_the_index_at_the_last_checkpoint(tmp_pat
 def test_retract_finds_the_line_through_the_index_and_records_the_retraction(lb: Logbook, capsys):
     _build(lb)
     (lb.index_path).unlink()
-    cli.main(["retract", "2", "wrong cafe"])
+    cli.main(["repair", "retract", "2", "wrong cafe"])
     assert "retracted #2" in capsys.readouterr().out
     assert _rows(lb, "SELECT kind FROM lines WHERE seq = 5") == [("retraction",)]
     cli.main(["show", "2026-03-01"])

@@ -588,7 +588,7 @@ def _report_listening(status: Mapping[str, Any]) -> None:
 
 
 def sources_arguments(sub: Subparsers) -> None:
-    """`logbook sources`."""
+    """`logbook doctor sources` (`logbook sources` until 0.6)."""
     s = sub.add_parser(
         "sources",
         help="every adapter, file and live, and whether policy/import.json has disabled it;"

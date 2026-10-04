@@ -100,7 +100,7 @@ def _file_progress(n_files: int) -> Callable[[str, int, int, float], None]:
 
 
 def retract_arguments(sub: Subparsers) -> None:
-    """`logbook retract`."""
+    """`logbook repair retract SEQ REASON` (`logbook retract` until 0.6)."""
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
@@ -118,9 +118,18 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def repair_arguments(sub: Subparsers) -> None:
-    """`logbook repair`."""
-    s = sub.add_parser("repair", help="append the lines that put a known mistake right; nothing is rewritten")
-    verbs = s.add_subparsers(dest="verb", required=True)
+    """`logbook repair retract|migrate|index|health-units`: what puts the record right, never by
+    rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
+    s = sub.add_parser(
+        "repair",
+        help="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`), bring a"
+        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), or append the lines that"
+        " correct a known mistake (`health-units`)",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True, metavar="<what>")
+    retract_arguments(verbs)
+    migrate_arguments(verbs)
+    index_arguments(verbs)
     v = verbs.add_parser(
         "health-units",
         help="retract apple-health resting_hr and hrv lines written 60 and 1,000 times too large and"
@@ -326,7 +335,7 @@ def cmd_demo(a: argparse.Namespace) -> None:
 
 
 def index_arguments(sub: Subparsers) -> None:
-    """`logbook index`."""
+    """`logbook repair index` (`logbook index` until 0.6)."""
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
 
@@ -447,11 +456,18 @@ def cmd_setup(a: argparse.Namespace) -> None:
 
 
 def doctor_arguments(sub: Subparsers) -> None:
-    """`logbook doctor`."""
+    """`logbook doctor [sources]`: the check-up, and where each source went quiet (`sources`, a command
+    of its own until 0.6, declared beside `sync`)."""
+    from .sync import sources_arguments
+
     s = sub.add_parser(
-        "doctor", help="is this machine set up to keep the record? one line per check; exit 1 on a fail"
+        "doctor",
+        help="is this machine set up to keep the record? one line per check; exit 1 on a fail. `sources`:"
+        " every adapter, and with --gaps where each went quiet",
     )
     s.set_defaults(fn=cmd_doctor)
+    checks = s.add_subparsers(dest="check", required=False, metavar="<check>")
+    sources_arguments(checks)
 
 
 def cmd_doctor(a: argparse.Namespace) -> None:
@@ -571,7 +587,7 @@ def _backup_restore(source: Path, target: Path) -> None:
 
 
 def migrate_arguments(sub: Subparsers) -> None:
-    """`logbook migrate`."""
+    """`logbook repair migrate` (`logbook migrate` until 0.6)."""
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record forward (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)

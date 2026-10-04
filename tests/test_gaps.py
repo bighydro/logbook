@@ -203,7 +203,7 @@ def test_durations_read_as_days_hours_or_minutes():
 
 
 def test_sources_gaps_is_one_screen(lb: Logbook, capsys):
-    cli.main(["sources", "--gaps"])
+    cli.main(["doctor", "sources", "--gaps"])
     out = capsys.readouterr().out
     rows = {line.split()[0]: line for line in out.splitlines() if line.startswith("  ")}
     phone = rows["sim-phone"]
@@ -218,7 +218,9 @@ def test_sources_gaps_is_one_screen(lb: Logbook, capsys):
 
 def test_sources_gaps_expect_flags_and_exits_1(lb: Logbook, capsys):
     with pytest.raises(SystemExit) as e:
-        cli.main(["sources", "--gaps", "--expect", "sim-phone", "imessage", "--since", "2026-09-15"])
+        cli.main(
+            ["doctor", "sources", "--gaps", "--expect", "sim-phone", "imessage", "--since", "2026-09-15"]
+        )
     assert e.value.code == 1
     out = capsys.readouterr().out
     lines = out.splitlines()
@@ -230,14 +232,14 @@ def test_sources_gaps_expect_flags_and_exits_1(lb: Logbook, capsys):
 
 def test_sources_gaps_expect_exits_0_when_every_source_is_alive(lb: Logbook, capsys, monkeypatch):
     monkeypatch.setattr(gaps, "now", lambda: datetime(2026, 9, 21, 6, 0, tzinfo=UTC))
-    cli.main(["sources", "--gaps", "--expect", "sim-phone"])
+    cli.main(["doctor", "sources", "--gaps", "--expect", "sim-phone"])
     out = capsys.readouterr().out
     assert "1 expected source, none flagged" in out
     assert not any(line.startswith("! ") for line in out.splitlines())
 
 
 def test_sources_gaps_json(lb: Logbook, capsys):
-    cli.main(["sources", "--gaps", "--json", "--since", "2026-09-15"])
+    cli.main(["doctor", "sources", "--gaps", "--json", "--since", "2026-09-15"])
     data = json.loads(capsys.readouterr().out)
     assert data["since"] == "2026-09-15" and data["today"] == "2026-09-30"
     assert data["sources"][0]["source"] == "sim-phone"
@@ -248,18 +250,18 @@ def test_sources_gaps_on_an_empty_record(tmp_path: Path, monkeypatch: pytest.Mon
     lb = Logbook.init(tmp_path / "empty", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     monkeypatch.setattr(gaps, "now", lambda: NOW)
-    cli.main(["sources", "--gaps"])
+    cli.main(["doctor", "sources", "--gaps"])
     assert "no lines" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
     "argv",
     [
-        ["sources", "--since", "2026-09-15"],
-        ["sources", "--expect", "sim-phone"],
-        ["sources", "--json"],
-        ["sources", "--gaps", "--since", "15.09.2026"],
-        ["sources", "--gaps", "--since", "2026-10-01"],
+        ["doctor", "sources", "--since", "2026-09-15"],
+        ["doctor", "sources", "--expect", "sim-phone"],
+        ["doctor", "sources", "--json"],
+        ["doctor", "sources", "--gaps", "--since", "15.09.2026"],
+        ["doctor", "sources", "--gaps", "--since", "2026-10-01"],
     ],
 )
 def test_sources_gaps_usage_errors_exit_2(lb: Logbook, capsys, argv: list[str]):
@@ -270,6 +272,6 @@ def test_sources_gaps_usage_errors_exit_2(lb: Logbook, capsys, argv: list[str]):
 
 
 def test_sources_without_gaps_is_unchanged(lb: Logbook, capsys):
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     assert "adapters," in out and "sim-phone" not in out

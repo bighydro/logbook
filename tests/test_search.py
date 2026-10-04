@@ -155,7 +155,7 @@ def _tamper(lb: Logbook, *sql: str) -> None:
 
 
 def test_index_command_builds_the_search_table_for_the_lines_that_carry_text(lb: Logbook, capsys):
-    cli.main(["index"])
+    cli.main(["repair", "index"])
     assert "indexed 9 lines" in capsys.readouterr().out
     tables = {r[0] for r in _rows(lb, "SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert "search" in tables
@@ -174,7 +174,7 @@ def test_index_command_builds_the_search_table_for_the_lines_that_carry_text(lb:
 
 
 def test_an_index_built_by_the_previous_schema_is_rebuilt_once_with_the_search_table(lb: Logbook, capsys):
-    cli.main(["index"])
+    cli.main(["repair", "index"])
     capsys.readouterr()
     _tamper(lb, "DROP TABLE search", "UPDATE meta SET value = '5' WHERE key = 'schema'")
     assert _search(capsys, "kari")[0].startswith("2026-06-")
