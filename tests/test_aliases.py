@@ -26,6 +26,7 @@ DAYS, SEED = 30, 7
 SAMPLE: dict[str, tuple[str, ...]] = {
     "assets": ("list",),
     "attach": ("status",),
+    "circle": (),
     "days": (),
     "describe": ("keepers", "--dry-run"),
     "import-backup": ("no-such-backup", "--dry-run"),
@@ -37,6 +38,8 @@ SAMPLE: dict[str, tuple[str, ...]] = {
     "places": ("list",),
     "questions": ("list",),
     "receive": ("no-such-page.zip",),
+    "seal": (),
+    "share": ("day", "2026-06-08", "--to", "nobody"),
     "stats": (),
     "tasks": (),
     "transcribe": ("voice-memos", "--dry-run"),

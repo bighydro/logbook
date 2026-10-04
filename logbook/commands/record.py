@@ -593,20 +593,33 @@ def cmd_migrate(a: argparse.Namespace) -> None:
 
 
 def key_arguments(sub: Subparsers) -> None:
-    """`logbook key <verb>`."""
+    """`logbook key init|show|add-recipient|remove-recipient|seal|circle`: the keys of the record.
+    `seal` and `circle` were commands of their own until 0.6; `circle` is declared beside `share`."""
+    from .export import circle_arguments
+
     s = sub.add_parser(
         "key",
-        help="the record's recipients and this machine's identity: init, show, add- and remove-recipient",
+        help="the record's recipients and this machine's identity: init, show, add- and remove-recipient;"
+        " seal: the lines written before the record had recipients; circle: the sharing keys",
     )
-    s.add_argument("verb", choices=("init", "show", "add-recipient", "remove-recipient"))
-    s.add_argument("--recipient", action="append", metavar="age1…", help="a recipient (repeatable)")
-    s.add_argument(
-        "--recovery",
-        action="store_true",
-        help="init: make a recovery identity, print it once for paper, add its recipient",
-    )
-    s.add_argument("--root", help="logbook folder (default: find)")
-    s.set_defaults(fn=cmd_key)
+    verbs = s.add_subparsers(dest="verb", required=True, metavar="<verb>")
+    for verb, text in (
+        ("init", "make this machine's identity and the record's first recipients"),
+        ("show", "the recipients, and whether this machine's identity opens the record"),
+        ("add-recipient", "one more recipient (--recipient) for every line sealed from now on"),
+        ("remove-recipient", "a recipient (--recipient) the lines sealed from now on are not for"),
+    ):
+        v = verbs.add_parser(verb, help=text)
+        v.add_argument("--recipient", action="append", metavar="age1…", help="a recipient (repeatable)")
+        v.add_argument(
+            "--recovery",
+            action="store_true",
+            help="init: make a recovery identity, print it once for paper, add its recipient",
+        )
+        v.add_argument("--root", help="logbook folder (default: find)")
+        v.set_defaults(fn=cmd_key)
+    seal_arguments(verbs)
+    circle_arguments(verbs)
 
 
 def cmd_key(a: argparse.Namespace) -> None:
@@ -717,7 +730,7 @@ def _sealed_what(result: Mapping[str, Any]) -> str:
 
 
 def seal_arguments(sub: Subparsers) -> None:
-    """`logbook seal --all`."""
+    """`logbook key seal --all` (`logbook seal` until 0.6)."""
     s = sub.add_parser("seal", help="seal the tier 2 and 3 lines written before the record had recipients")
     s.add_argument("--all", action="store_true", help="every plain tier 2 or 3 line and the files they name")
     s.add_argument("--root", help="logbook folder (default: find)")
