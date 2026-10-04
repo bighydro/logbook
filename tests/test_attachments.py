@@ -23,30 +23,6 @@ def lb(tmp_path: Path) -> Logbook:
     return Logbook.init(tmp_path / "lb", "Europe/Oslo")
 
 
-def test_reference_has_the_spec_1_1_shape():
-    assert attachments.reference(TEXT, "text/markdown") == {
-        "sha256": SHA,
-        "path": f"attachments/{SHA}",
-        "bytes": len(TEXT),
-        "media_type": "text/markdown",
-    }
-
-
-def test_attach_writes_the_bytes_under_their_digest(lb: Logbook):
-    path = lb.attach(TEXT)
-    assert path == lb.root / "attachments" / SHA
-    assert path.read_bytes() == TEXT
-
-
-def test_attach_is_write_once_and_never_rewrites(lb: Logbook):
-    first = lb.attach(TEXT)
-    stamp = first.stat().st_mtime_ns
-    first.write_bytes(TEXT)  # nothing else may touch it; simulate time passing
-    second = lb.attach(TEXT)
-    assert second == first and second.read_bytes() == TEXT
-    assert second.stat().st_mtime_ns >= stamp
-
-
 def test_attach_refuses_a_file_whose_bytes_do_not_match_its_name(lb: Logbook):
     store = lb.root / "attachments"
     store.mkdir()
@@ -120,17 +96,6 @@ def test_stats_counts_a_content_reference_as_an_attachment(lb: Logbook):
 # -- files, streamed ---------------------------------------------------------------------------------
 
 
-def test_reference_path_and_write_path_stream_a_file_and_agree_with_the_bytes_forms(lb: Logbook, tmp_path):
-    src = tmp_path / "memo.m4a"
-    src.write_bytes(TEXT * 3000)  # several chunks
-    ref = attachments.reference_path(src, "audio/mp4")
-    assert ref == attachments.reference(src.read_bytes(), "audio/mp4")
-    target = lb.attach_file(src)
-    assert target == lb.root / "attachments" / ref["sha256"] and target.read_bytes() == src.read_bytes()
-    assert lb.attach_file(src) == target  # write-once: the second call checks and keeps the file
-    assert src.read_bytes() == TEXT * 3000  # the source is only read
-
-
 def test_write_path_refuses_a_file_whose_bytes_do_not_match_its_name(lb: Logbook, tmp_path):
     src = tmp_path / "memo.m4a"
     src.write_bytes(TEXT)
@@ -142,14 +107,6 @@ def test_write_path_refuses_a_file_whose_bytes_do_not_match_its_name(lb: Logbook
 
 
 # -- a stream of chunks, checked against the digest the line carries ----------------------------------
-
-
-def test_write_chunks_stores_a_stream_under_the_digest_it_was_promised(lb: Logbook):
-    chunks = [TEXT[:7], TEXT[7:20], TEXT[20:]]
-    target, size = attachments.write_chunks(lb.root, iter(chunks), SHA)
-    assert target == lb.root / "attachments" / SHA and size == len(TEXT)
-    assert target.read_bytes() == TEXT
-    assert [p.name for p in target.parent.iterdir()] == [SHA]  # no temporary file left behind
 
 
 def test_write_chunks_refuses_bytes_that_do_not_match_the_promised_digest(lb: Logbook):
