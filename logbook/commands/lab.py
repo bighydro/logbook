@@ -22,7 +22,8 @@ def lab_arguments(sub: Subparsers) -> None:
     """`logbook lab introductions|chapters`."""
     s = sub.add_parser(
         "lab",
-        help="readers still finding their shape (docs/labs.md): introductions, chapters; read-only",
+        help="readers still finding their shape (docs/labs.md); read-only",
+        description="readers still finding their shape (docs/labs.md): introductions, chapters; read-only",
     )
     verbs = s.add_subparsers(dest="verb", required=True)
     for name, text in (

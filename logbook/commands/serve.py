@@ -16,7 +16,9 @@ def serve_arguments(sub: Subparsers) -> None:
     its own until 0.6)."""
     s = sub.add_parser(
         "serve",
-        help="read the record in a browser, from this machine only (http://127.0.0.1:8765/); `mcp`: serve it"
+        help="the record in a browser, from this machine only; mcp: to an agent",
+        description="read the record in a browser, from this machine only (http://127.0.0.1:8765/); `mcp`:"
+        " serve it"
         " to an MCP host over stdin and stdout",
     )
     s.add_argument(

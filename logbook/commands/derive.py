@@ -191,7 +191,8 @@ def derive_arguments(sub: Subparsers) -> None:
     was `describe`, until 0.6; each keeps its options."""
     s = sub.add_parser(
         "derive",
-        help="what the record reads out of itself: stays (nothing appended); flights and keepers"
+        help="stays; flights and keepers inferred; transcripts; descriptions",
+        description="what the record reads out of itself: stays (nothing appended); flights and keepers"
         " (inferred, RFC 0013, RFC 0024); transcripts of voice memos and descriptions of keepers, by a"
         " local model, nothing leaving the machine",
     )

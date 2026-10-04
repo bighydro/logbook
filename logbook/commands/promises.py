@@ -27,7 +27,9 @@ def promises_arguments(sub: Subparsers) -> None:
     """`logbook promises [done ID | tasks ...]`: the proposals, and the tasks they become."""
     s = sub.add_parser(
         "promises",
-        help="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>` closes one;"
+        help="commitments the transcripts and notes suggest; done ID; tasks",
+        description="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>`"
+        " closes one;"
         " `tasks`: the tasks (task/v1), each as it stands",
     )
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only lines from this local day on")
