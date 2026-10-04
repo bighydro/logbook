@@ -402,7 +402,9 @@ def test_lines_append_validate_an_updated_pass_supersedes_and_a_tracked_flight_w
     assert last["payload"]["extra"]["seat"] == "14C"
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == LINES + 2
-    text = "\n".join(json.dumps(ln, ensure_ascii=False) for ln in lb.lines())
+    # the payloads only: `id`, `hash`, `prev` and `raw_id` are hex, and a digit-only secret such as
+    # "0042" turns up inside a hash by chance (one PR run in several did)
+    text = "\n".join(json.dumps(ln["payload"], ensure_ascii=False) for ln in lb.lines())
     for secret in NEVER:
         assert secret not in text, secret
 
