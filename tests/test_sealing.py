@@ -681,7 +681,7 @@ def test_seal_all_and_add_recipient_from_the_command_line(tmp_path: Path, monkey
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     code, err = _cli_fails(capsys, "seal")
     assert code == 2 and "--all" in err
-    out = _cli(capsys, "seal", "--all")
+    out = _cli(capsys, "key", "seal", "--all")
     assert "sealed 2 lines and 1 attachment of 3" in out and "backup taken before now" in out
     assert lb.verify()[2] == []
     _, third = sealing.generate_identity()

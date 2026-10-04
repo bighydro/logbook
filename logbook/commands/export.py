@@ -22,26 +22,38 @@ def export_arguments(sub: Subparsers) -> None:
         "export",
         help="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a crossing-package/v1,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
-        " readers as static HTML, or `trip-bundle TRIP`: one trip for a member of the circle",
+        " readers as static HTML, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
+        " YYYY-MM-DD --to NAME`: one day as a signed page",
     )
     s.add_argument(
         "path",
         nargs="?",
         help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md),"
-        " `site` (docs/site.md) or `trip-bundle` (RFC 0030)",
+        " `site` (docs/site.md), `trip-bundle` (RFC 0030) or `share day` (RFC 0025)",
     )
     s.add_argument(
         "target",
         nargs="?",
-        metavar="FOLDER|TRIP",
+        metavar="FOLDER|TRIP|day",
         help="vault: the folder to write the pages into (an Obsidian vault); site: the folder to write"
-        " the HTML into; trip-bundle: the trip id as `trips` prints it, or a day inside it",
+        " the HTML into; trip-bundle: the trip id as `show trips` prints it, or a day inside it; share:"
+        " the word `day`",
     )
+    s.add_argument("shared_day", nargs="?", metavar="YYYY-MM-DD", help="share day: the local day")
     s.add_argument("--day", metavar="YYYY-MM-DD", help="one day-package/v1 directory")
     s.add_argument("--days", nargs=2, metavar=("FROM", "TO"), help="one directory per day, inclusive")
-    s.add_argument("--out", metavar="DIR", help="where to write (default <root>/export/<date>/)")
+    s.add_argument(
+        "--out",
+        metavar="DIR",
+        help="where to write (default <root>/export/<date>/); share: the zip (default"
+        " <root>/export/share/<to>/<date>.zip)",
+    )
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
-    s.add_argument("--to", metavar="DESTINATION", help="crossing: the circle member, e.g. hermes")
+    s.add_argument(
+        "--to",
+        metavar="DESTINATION",
+        help="crossing: the circle member, e.g. hermes; share: the member as policy/crossing.json names them",
+    )
     s.add_argument(
         "--since",
         metavar="RFC3339|last|DAY",
@@ -56,7 +68,8 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--tier",
         metavar="1|1,2|1,2,3",
-        help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3",
+        help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3; share: the highest tier"
+        " to share (default 1; never above the ceiling)",
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
@@ -87,7 +100,23 @@ def export_arguments(sub: Subparsers) -> None:
     s.set_defaults(fn=cmd_export)
 
 
+SHARE = "share"  # `export share day`: the command `share day` until 0.6
+
+
 def cmd_export(a: argparse.Namespace) -> None:
+    if a.path == SHARE:
+        if a.target != "day" or a.shared_day is None:
+            print("export share: `export share day YYYY-MM-DD --to NAME` hands one day over", file=sys.stderr)
+            sys.exit(2)
+        if not a.to:
+            print("export share day: --to NAME, the circle member, is needed", file=sys.stderr)
+            sys.exit(2)
+        a.day = a.shared_day
+        cmd_share(a)
+        return
+    if a.shared_day is not None:
+        print(f"export: {a.path!r} takes one argument, not {a.shared_day!r}", file=sys.stderr)
+        sys.exit(2)
     lb = Logbook.find()
     if a.path == crossing.KIND:
         _export_crossing(lb, a)
@@ -460,28 +489,9 @@ def _tier3_warning(req: crossing.Request, sel: crossing.Selection) -> None:
     print(text, file=sys.stderr)
 
 
-def share_arguments(sub: Subparsers) -> None:
-    """`logbook share`."""
-    s = sub.add_parser("share", help="hand one day to a member of the circle as a signed page (RFC 0025)")
-    verbs = s.add_subparsers(dest="what", required=True)
-    v = verbs.add_parser(
-        "day", help="one local day: its lines at or under the tier, their attachments, signed"
-    )
-    v.add_argument("day", metavar="YYYY-MM-DD", help="the local day")
-    v.add_argument(
-        "--to", required=True, metavar="NAME", help="the circle member, as policy/crossing.json names them"
-    )
-    v.add_argument(
-        "--tier", metavar="1|2|3", help="the highest tier to share (default 1; never above the ceiling)"
-    )
-    v.add_argument(
-        "--out", metavar="FILE", help="the zip to write (default <root>/export/share/<to>/<date>.zip)"
-    )
-    v.set_defaults(fn=cmd_share)
-
-
 def cmd_share(a: argparse.Namespace) -> None:
-    """`share day YYYY-MM-DD --to NAME [--tier 1|2|3] [--out FILE]`: one local day as a signed page
+    """`export share day YYYY-MM-DD --to NAME [--tier 1|2|3] [--out FILE]` (`share day` until 0.6):
+    one local day as a signed page
     for a member of the circle (RFC 0025, `logbook.core.share`): the day's lines at or under the tier,
     verbatim, the attachments they point at, the day-package summary and a manifest signed with
     this record's sharing key (made on first use). The tier may not exceed the destination's ceiling
@@ -555,7 +565,7 @@ def cmd_receive(a: argparse.Namespace) -> None:
 
 
 def circle_arguments(sub: Subparsers) -> None:
-    """`logbook circle`."""
+    """`logbook key circle [add NAME KEY | key]` (`logbook circle` until 0.6)."""
     s = sub.add_parser("circle", help="the people whose pages this record accepts: their sharing keys")
     s.set_defaults(fn=cmd_circle, verb=None)
     verbs = s.add_subparsers(dest="verb", required=False)

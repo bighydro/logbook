@@ -15,6 +15,7 @@ from __future__ import annotations
 ALIASES: dict[str, tuple[str, ...]] = {
     "assets": ("setup", "assets"),
     "attach": ("import", "attachments"),
+    "circle": ("key", "circle"),
     "days": ("show", "days"),
     "describe": ("derive", "descriptions"),
     "import-backup": ("import", "backup"),
@@ -26,6 +27,8 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "places": ("setup", "places"),
     "questions": ("setup", "questions"),
     "receive": ("import", "page"),
+    "seal": ("key", "seal"),
+    "share": ("export", "share"),
     "stats": ("show", "stats"),
     "tasks": ("promises", "tasks"),
     "transcribe": ("derive", "transcripts"),
