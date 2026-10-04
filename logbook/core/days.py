@@ -161,21 +161,27 @@ def _moved(timeline: Sequence[Mapping[str, Any]]) -> float:
 def row(r: Mapping[str, Any]) -> str:
     """The day as one line: date, weekday, the night, the kilometres, then the flights, the stays,
     the people, the health triple and the gap marker, the empty parts out."""
-    parts: list[str] = []
-    if r["flights"]:
-        parts.append(", ".join(flight_text(f) for f in r["flights"]))
-    if r["sources"]:
-        parts.append(stays_text(r["stays"]))
-    else:
-        parts.append("nothing logged")
-    if r["people"]["confirmed"]:
-        parts.append(f"with {r['people']['confirmed']}")
-    if r["health"] is not None:
-        parts.append(day_reader.health_text(r["health"]))
-    if r["gaps"]:
-        parts.append("gap " + ", ".join(r["gaps"]))
     head = f"{r['day']}  {r['weekday'][:3]}  {night_text(r):<{NIGHT_WIDTH}}  {km_text(r['moved_m']):>9}"
-    return f"{head}  {DOT.join(parts)}".rstrip()
+    return f"{head}  {DOT.join(parts(r))}".rstrip()
+
+
+def parts(r: Mapping[str, Any]) -> list[str]:
+    """The line's parts after the kilometres: the flights, the stays, the people, the health
+    triple and the gap marker, the empty ones out."""
+    found: list[str] = []
+    if r["flights"]:
+        found.append(", ".join(flight_text(f) for f in r["flights"]))
+    if r["sources"]:
+        found.append(stays_text(r["stays"]))
+    else:
+        found.append("nothing logged")
+    if r["people"]["confirmed"]:
+        found.append(f"with {r['people']['confirmed']}")
+    if r["health"] is not None:
+        found.append(day_reader.health_text(r["health"]))
+    if r["gaps"]:
+        found.append("gap " + ", ".join(r["gaps"]))
+    return found
 
 
 def night_text(r: Mapping[str, Any]) -> str:

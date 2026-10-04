@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2026-W25 · Logbook</title>
+<style>
+@page {
+  size: auto;
+  margin: 16.00mm 14.00mm 20.00mm 20.00mm;
+  @bottom-center { content: counter(page); font: 8.00pt -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b; }
+}
+@page :left { margin-left: 14.00mm; margin-right: 20.00mm; }
+@page :right { margin-left: 20.00mm; margin-right: 14.00mm; }
+@page cover { @bottom-center { content: none; } }
+:root { color-scheme: light; }
+html { background: #ffffff; }
+body { margin: 0; padding: 0; color: #1b1b1b; background: #ffffff;
+  font: 10.00pt/1.4 Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman", serif; }
+h1, h2, h3 { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+h1 { font-size: 59.60pt; line-height: 1; }
+h2 { font-size: 24.41pt; line-height: 1.1; }
+h3 { font-size: 15.62pt; line-height: 1.2; margin: 0 0 2.50mm; }
+p { margin: 0 0 2.50mm; }
+.kicker { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: uppercase;
+  letter-spacing: .12em; color: #6b6b6b; margin: 0 0 2.50mm; }
+.lead { font-size: 12.50pt; color: #6b6b6b; }
+.muted { color: #6b6b6b; }
+.n { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+
+section.cover { page: cover; break-after: page; min-height: 219.06mm;
+  display: flex; flex-direction: column; justify-content: flex-end; }
+section.cover h1 { margin: 0 0 5.00mm; }
+section.cover .name { font-size: 15.62pt; margin: 0; }
+section.cover .dates { font-size: 12.50pt; color: #6b6b6b; }
+section.cover .rule { border: 0; border-top: 1px solid #1b1b1b; margin: 5.00mm 0; }
+
+section.contents { break-after: page; }
+section.contents h2 { margin-bottom: 5.00mm; }
+ol.contents { list-style: none; margin: 0; padding: 0; }
+ol.contents li { display: grid; grid-template-columns: 55.33mm 1fr;
+  gap: 0 5.00mm; padding: 2.50mm 0; border-bottom: 1px solid #ebebe7;
+  break-inside: avoid; }
+ol.contents li .what { font-family: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; }
+ol.contents li .about { color: #6b6b6b; }
+section.route { break-before: page; break-after: page; }
+section.route h2 { margin-bottom: 5.00mm; }
+section.route figure.map { margin: 0 0 5.00mm; }
+section.route figure.map svg { max-width: 140.00mm; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 5.00mm; }
+th, td { text-align: left; vertical-align: top; padding: 1.00mm 2.50mm 1.00mm 0;
+  border-bottom: 1px solid #ebebe7; }
+th { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b; text-transform: uppercase;
+  letter-spacing: .06em; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+td.d { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+section.spread > article { break-before: page; }
+article.facts { display: grid; grid-template-columns: 55.33mm 1fr;
+  gap: 0 5.00mm; }
+article.facts header { grid-column: 1 / -1; margin-bottom: 5.00mm;
+  padding-bottom: 2.50mm; border-bottom: 1px solid #1b1b1b; }
+article.facts header h2 { margin: 0; }
+article.facts header .lead { margin: 1.00mm 0 0; }
+dl.facts { margin: 0; }
+dl.facts dt { font: 600 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; text-transform: uppercase;
+  letter-spacing: .08em; color: #6b6b6b; margin-top: 2.50mm; }
+dl.facts dd { margin: 0; }
+dl.facts dd.empty { color: #6b6b6b; }
+ol.places { margin: 0; padding-left: 1.4em; }
+ol.places li { padding-left: .2em; }
+ol.places .count { color: #6b6b6b; }
+figure.map { margin: 0; align-self: start; }
+figure.map svg { display: block; width: 100%; height: auto; border: 1px solid #c9c9c4; }
+figure.map figcaption { font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b;
+  margin-top: 1.50mm; }
+figure.map.empty .none { display: flex; align-items: center; justify-content: center;
+  height: 75.91mm; border: 1px solid #c9c9c4; color: #6b6b6b; }
+.track { fill: none; stroke: #1b1b1b; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.leg { fill: none; stroke: #1b1b1b; stroke-width: 2; stroke-linecap: round; }
+.leg.transit { stroke-dasharray: 6 5; }
+.stay { fill: #ffffff; stroke: #1b1b1b; stroke-width: 1.5; }
+.mark { font: 600 11px -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #1b1b1b; }
+.scale { stroke: #1b1b1b; stroke-width: 1.5; }
+.scale-text { font: 10px -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #6b6b6b; }
+
+article.photos { display: grid; gap: 5.00mm; align-content: start; }
+article.photos.n1 { grid-template-columns: 1fr; }
+article.photos.n2 { grid-template-columns: 1fr; }
+article.photos.n4 { grid-template-columns: 1fr 1fr; }
+article.photos.n6 { grid-template-columns: 1fr 1fr; }
+figure.photo { margin: 0; break-inside: avoid; }
+figure.photo img, figure.photo .frame { display: block; width: 100%; object-fit: contain;
+  object-position: left top; }
+figure.photo .frame { display: flex; align-items: center; justify-content: center; text-align: center;
+  background: #ebebe7; color: #6b6b6b; font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.n1 figure.photo img, .n1 figure.photo .frame { height: 236.40mm; }
+.n2 figure.photo img, .n2 figure.photo .frame { height: 109.70mm; }
+.n4 figure.photo img, .n4 figure.photo .frame { height: 109.70mm; }
+.n6 figure.photo img, .n6 figure.photo .frame { height: 69.13mm; }
+figure.photo figcaption { font: 8.00pt/1.4 -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; color: #6b6b6b;
+  height: 7.00mm; overflow: hidden; margin-top: 1.00mm; }
+
+footer.colophon { break-before: page; color: #6b6b6b; font-size: 8.00pt;
+  border-top: 1px solid #c9c9c4; padding-top: 2.50mm; }
+
+@media screen {
+  body { max-width: 176.00mm; margin: 16.00mm auto;
+    padding: 0 14.00mm; }
+  section.cover, section.contents, section.route, section.spread > article, footer.colophon {
+    padding-bottom: 10.00mm; margin-bottom: 10.00mm;
+    border-bottom: 1px dashed #c9c9c4; }
+}
+
+@page { size: A4; }
+section.page { break-after: page; }
+section.page:last-of-type { break-after: auto; }
+section.page > header { margin-bottom: 5.00mm; padding-bottom: 2.50mm;
+  border-bottom: 1px solid #1b1b1b; }
+section.page > header h2 { margin: 0; }
+section.page > header .lead { margin: 1.00mm 0 0; }
+ol.contents.days li { grid-template-columns: 30.17mm 1fr; }
+ol.contents.days li .about { color: #1b1b1b; }
+ol.contents.days li .night { color: #6b6b6b; }
+ul.titles { margin: 0 0 2.50mm; padding-left: 1.2em; }
+ul.titles li { padding-left: .2em; break-inside: avoid; }
+blockquote { margin: 0; font-style: italic; }
+footer.note { color: #6b6b6b; font-size: 8.00pt; margin-top: 10.00mm;
+  border-top: 1px solid #c9c9c4; padding-top: 2.50mm; }
+@media screen {
+  section.page { padding-bottom: 10.00mm; margin-bottom: 10.00mm;
+    border-bottom: 1px dashed #c9c9c4; }
+}
+</style>
+</head>
+<body>
+<section class="page" id="p-days">
+<header>
+<p class="kicker">Logbook · 2026-W25</p>
+<h2>The week</h2>
+<p class="lead">15–21 June 2026 · ines.nordmann@example.org</p>
+</header>
+<ol class="contents days">
+<li class="day"><span class="what">Monday 15 June</span><span class="about"><span class="night">aboard Nordlys NO · 11.1 km</span> · 2 stays (2 attached) · with 2 · sleep 6.2 h · 6,671 steps · resting 54 bpm · gap immich</span></li>
+<li class="day"><span class="what">Tuesday 16 June</span><span class="about"><span class="night">aboard Nordlys NO · 47.2 km</span> · 1 stay (4 attached) · sleep 6.2 h · 5,978 steps · resting 56 bpm</span></li>
+<li class="day"><span class="what">Wednesday 17 June</span><span class="about"><span class="night">aboard Nordlys NO · 49.4 km</span> · 1 stay (3 attached) · sleep 6.5 h · 6,474 steps · resting 58 bpm</span></li>
+<li class="day"><span class="what">Thursday 18 June</span><span class="about"><span class="night">aboard Nordlys NO · 2.0 km</span> · 3 stays (3 attached) · sleep 6.3 h · 6,127 steps · resting 61 bpm</span></li>
+<li class="day"><span class="what">Friday 19 June</span><span class="about"><span class="night">aboard Nordlys NO · 94.6 km</span> · 1 stay (5 attached) · sleep 7.6 h · 6,340 steps · resting 58 bpm</span></li>
+<li class="day"><span class="what">Saturday 20 June</span><span class="about"><span class="night">aboard Nordlys NO · 9.7 km</span> · 1 stay (3 attached) · sleep 6.7 h · 6,627 steps · resting 52 bpm</span></li>
+<li class="day"><span class="what">Sunday 21 June</span><span class="about"><span class="night">Home · 1.4 km</span> · 2 stays (3 attached) · sleep 7.5 h · 6,703 steps · resting 55 bpm</span></li>
+</ol>
+</section>
+<section class="page" id="p-with">
+<header>
+<p class="kicker">Logbook · 2026-W25</p>
+<h2>With</h2>
+<p class="lead">the people confirmed present, by days; the week&#x27;s keepers</p>
+</header>
+<table>
+<thead><tr>
+<th>who</th>
+<th class="n">days</th>
+</tr></thead>
+<tbody>
+<tr><td>Anders Vik</td><td class="n">1</td></tr>
+<tr><td>Ola Nordmann</td><td class="n">1</td></tr>
+</tbody>
+</table>
+<h3>Keepers</h3>
+<table>
+<thead><tr>
+<th>day</th>
+<th>lane</th>
+<th>photo</th>
+</tr></thead>
+<tbody>
+<tr><td class="d">16 June 2026</td><td>memory</td><td>IMG_06161730.HEIC</td></tr>
+<tr><td class="d">19 June 2026</td><td>memory</td><td>IMG_06191730.HEIC</td></tr>
+<tr><td class="d">21 June 2026</td><td>memory</td><td>IMG_06210730.HEIC</td></tr>
+</tbody>
+</table>
+</section>
+<section class="page" id="p-due">
+<header>
+<p class="kicker">Logbook · 2026-W25</p>
+<h2>Promises due</h2>
+<p class="lead">open, due this week, as the promises reader proposes them</p>
+</header>
+<p class="muted">none due this week</p>
+</section>
+<section class="page" id="p-read">
+<header>
+<p class="kicker">Logbook · 2026-W25</p>
+<h2>Read</h2>
+<p class="lead">the pages visited, titles only</p>
+</header>
+<h3>Monday 15 June</h3>
+<ul class="titles"><li>Visitor berths and prices</li></ul>
+<h3>Tuesday 16 June</h3>
+<ul class="titles"><li>Fish soup for a crowd</li></ul>
+<h3>Wednesday 17 June</h3>
+<ul class="titles"><li>Oslofjord: a winter guide</li><li>Opening hours</li></ul>
+<h3>Thursday 18 June</h3>
+<ul class="titles"><li>Timetable</li><li>Fish soup for a crowd</li><li>Oslofjord forecast</li></ul>
+<h3>Friday 19 June</h3>
+<ul class="titles"><li>The bowline, step by step</li><li>Stacking firewood that dries</li></ul>
+<h3>Saturday 20 June</h3>
+<ul class="titles"><li>Timetable</li></ul>
+<h3>Sunday 21 June</h3>
+<ul class="titles"><li>Opening hours</li><li>Fish soup for a crowd</li></ul>
+<footer class="note"><p>Read from the record at head f68cabe0349a…: derived, never written; the same record gives the same paper. The titles are the browse lines' own; no address is printed.</p></footer>
+</section>
+</body>
+</html>

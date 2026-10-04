@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
-from ..contrib import print_page, questions
+from ..contrib import gaps, print_layout, print_page, questions, week_paper, year_poster
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core import flights, keepers, pages, policy, reading, search, stays
@@ -123,6 +123,14 @@ def digest_arguments(sub: Subparsers) -> None:
     form = s.add_mutually_exclusive_group()
     form.add_argument("--json", action="store_true", help="the digest as one JSON object, with line ids")
     form.add_argument("--markdown", action="store_true", help="the same lines as Markdown")
+    s.add_argument(
+        "--paper",
+        action="store_true",
+        help="the week as four pages of A4: the days one line each, who was there and the keepers,"
+        " the promises due, what was read (titles only); to --html PATH, else stdout",
+    )
+    s.add_argument("--week", metavar="YYYY-Www", help="with --paper: the ISO week (default the day's week)")
+    s.add_argument("--html", metavar="PATH", help="with --paper: write the document here instead of stdout")
     s.set_defaults(fn=cmd_digest)
 
 
@@ -133,6 +141,12 @@ def cmd_digest(a: argparse.Namespace) -> None:
     closing question the owner answers in a word (`logbook.contrib.digest`, composed from the readers).
     Nothing is written and nothing is sent: delivery is a later decision (ADR 0005)."""
     lb = Logbook.find()
+    if a.paper:  # the week's paper (`logbook.contrib.week_paper`), as a document
+        _digest_paper(lb, a)
+        return
+    if a.week or a.html:
+        print("digest: --week and --html belong to --paper; give it too", file=sys.stderr)
+        sys.exit(2)
     day = _today() if a.day in (None, "today") else a.day
     try:
         data = digest_reader.read(lb, day, _airports(a.airports))
@@ -144,6 +158,44 @@ def cmd_digest(a: argparse.Namespace) -> None:
         return
     for text in digest_reader.markdown(data) if a.markdown else digest_reader.rows(data):
         print(text)
+
+
+def _digest_paper(lb: Logbook, a: argparse.Namespace) -> None:
+    """`digest --paper [--week YYYY-Www | YYYY-MM-DD] [--html PATH | --json]`: the week as four
+    pages of A4 (`logbook.contrib.week_paper`) — the days one line each, the people confirmed and the
+    keepers, the promises due, what was read — written to `--html PATH` (its folder made), else
+    to stdout; `--json` is the paper's object. The week is the one given, else the week of the
+    day given, else of today in the record's zone. Nothing is written to the record."""
+    if a.markdown:
+        print("digest: --paper is a document; --markdown is the day's digest", file=sys.stderr)
+        sys.exit(2)
+    if a.week and a.day not in (None, "today"):
+        print("digest: --paper takes a week or a day, not both", file=sys.stderr)
+        sys.exit(2)
+    try:
+        if a.week:
+            week = a.week
+        elif a.day in (None, "today"):
+            week = week_paper.week_of(
+                gaps.now().astimezone(ZoneInfo(str(lb.meta["timezone"]))).date().isoformat()
+            )
+        else:
+            week = week_paper.week_of(a.day)
+        data = week_paper.read(lb, week, _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"digest: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    page = week_paper.html(data)
+    if a.html:
+        out = Path(a.html)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(page.encode("utf-8"))
+        print(f"digest {data['week']}: wrote {out}")
+        return
+    print(page, end="")
 
 
 def questions_arguments(sub: Subparsers) -> None:
@@ -281,6 +333,17 @@ def year_arguments(sub: Subparsers) -> None:
         help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
     s.add_argument("--json", action="store_true", help="the Year as one JSON object, the picks' Days inside")
+    s.add_argument(
+        "--poster",
+        action="store_true",
+        help="one sheet: a square a day in the ink of its night (home, away, aboard, in transit), the"
+        " countries under it, no names; to --html PATH, else stdout",
+    )
+    s.add_argument(
+        "--sheet",
+        choices=sorted(print_layout.POSTER_SHEETS),
+        help=f"with --poster: the sheet (default {year_poster.SHEET})",
+    )
     s.set_defaults(fn=cmd_year)
 
 
@@ -291,7 +354,24 @@ def cmd_year(a: argparse.Namespace) -> None:
     the year's days (`logbook.core.year`). `--html` writes one self-contained page. Nothing is written
     to the record."""
     lb = Logbook.find()
+    if a.poster and a.print:
+        print("year: --poster is one sheet and --print the paper edition; give one", file=sys.stderr)
+        sys.exit(2)
+    if a.sheet and not a.poster:
+        print("year: --sheet is the poster's; give --poster too", file=sys.stderr)
+        sys.exit(2)
     try:
+        if a.poster:  # one sheet (`logbook.contrib.year_poster`), written where --html says, else to stdout
+            poster = year_poster.read(lb, a.year, _airports(a.airports))
+            page = year_poster.html(poster, a.sheet or year_poster.SHEET)
+            if a.html:
+                out = Path(a.html)
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(page.encode("utf-8"))
+                print(f"year {poster['year']}: wrote {out}")
+            else:
+                print(page, end="")
+            return
         if a.print:  # the paper edition (`logbook.contrib.print_page`), written where --html says
             out = _print_target(a, "year")
             data = print_page.read_year(lb, a.year, _airports(a.airports))

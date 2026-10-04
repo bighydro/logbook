@@ -142,6 +142,10 @@ does.
 per month with the facts, a map drawn from the location lines and the keepers as hero photos, for
 A4 and US Letter — and [On paper](print.md) says how to make the PDF.
 
+The Year also prints: `--html PATH --print` is the paper edition (a cover, contents, a spread a
+month) and `--poster` one sheet, A2 or A3, a square a day in the ink of its night — both in
+[On paper](print.md).
+
 ## The JSON
 
 `--json` prints one object: `year`; `window` (`since`, `until`, `days`; `null` for a year the

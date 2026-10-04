@@ -95,12 +95,70 @@ whose `stylesheet()` builds the one stylesheet from them. A designer retheming t
 changes that file and touches no logic: the renderer (`logbook/contrib/print_page.py`) names classes and
 never a length.
 
+## The poster
+
+`logbook year YYYY --poster [--sheet A2|A3] [--html PATH]` writes the year on one sheet: twelve
+columns of thirty-one squares, a month a column and a day a row, each square in the ink of where
+the night was. Four inks, the four night tokens of `print_layout.py` — **home** (the quiet one:
+most nights), **away**, **aboard** an asset, **in transit** (no stay reached the minimum) — and a
+day the record has no night for shows the paper. Under the grid, one line: the countries of the
+year with their days, as `rollup countries` counts them. Nothing else is on the sheet: no name of
+a person, a place or an asset, no photo, no map, nothing fetched.
+
+```bash
+logbook year 2026 --poster --html ~/2026-poster.html              # A2, the default
+logbook year 2026 --poster --sheet A3 > ~/2026-poster.html        # A3; without --html the document goes to stdout
+```
+
+The sheet is one inline SVG drawn in millimetres of A2 and scaled by the stylesheet to the sheet
+chosen: A3 is A2 at 1/√2, the A series keeps its proportions, so the two sheets are the same
+drawing and a print shop can make either. The page has no margin of its own, the drawing fills it;
+print with the browser's margins off. `--poster` and `--print` are two different documents; the
+command takes one. The reading is the Year's (`year.window`, one `reading.read`), each night
+classified from the reading's nights: in transit when no stay reached the minimum, aboard before
+away, home by the home region of `places.json`, else away. A year the record has no day in is an
+empty grid that says so in its kicker.
+
+## The week on paper
+
+`logbook digest --paper [--week YYYY-Www | YYYY-MM-DD] [--html PATH | --json]` writes the week as
+four pages of A4, set from the same typographic constants as the Year — the text block, the grid,
+the type scale, the ink — with the sheet pinned:
+
+1. **The week**: the seven days, Monday to Sunday, each with its one line — the line `logbook
+   days` prints: the night after and the kilometres, then the flights, the stays with what
+   attached, the people confirmed, the health triple and the usual sources with no line.
+2. **With**: the people **confirmed** present (never a proposed face, never an all-day
+   attendee), with how many days each; then the week's keepers (RFC 0024) by day, lane and name.
+3. **Promises due**: the open promises due within the week, as the promises reader proposes them
+   (`promises.extract`, narrowed the way the digest narrows them): when, who, the sentence, where
+   it was said.
+4. **Read**: what was read — the browse lines of the week, titles only, a title once a day, never
+   the address and never the source.
+
+```bash
+logbook digest --paper --week 2026-W40 --html ~/w40.html   # an ISO week, Monday to Sunday
+logbook digest --paper 2026-10-01 > ~/w40.html             # the week of a day; stdout without --html
+logbook digest --paper                                      # this week, by the record's clock
+logbook digest --paper --week 2026-W40 --json               # the paper's object, with the lines' ids
+```
+
+A week is an ISO week (`2026-W01` begins on Monday 29 December 2025; 2026 has 53). The paper is
+composed from the readers and derives nothing of its own; nothing is written, not even the
+digest's question state, since the paper asks no question. The head the record was read at is in
+the note at the foot of the last page.
+
 ## The fixtures
 
 `tests/fixtures/demo/print_year_2026.html` and `print_trip_2026-06-15.html` are the documents
 the demo record of thirty days with seed 7 gives for 2026 and for its yacht week, pinned byte for
 byte by `tests/test_print_page.py`, which also checks every document structurally — every tag
 closed in order, one stylesheet, no script, no link, every `src` an `img`'s, every `img` with
-`alt`, nothing from the network — and that a day with no photos still lays out. After a change to
-the renderer or the layout that is meant, `uv run python scripts/make_print_fixtures.py` writes
-them again. Open either fixture in a browser to see the page; nothing in them is real.
+`alt`, nothing from the network — and that a day with no photos still lays out. Beside them,
+`poster_year_2026_A2.html` and `poster_year_2026_A3.html` are the same record's poster on both
+sheets and `paper_week_2026-W25.html` its yacht week on paper, checked structurally by
+`tests/test_year_poster.py` and `tests/test_week_paper.py` (a square a day in one of the five
+classes, the four tokens in the legend, no name on the sheet; four pages, seven days, titles and
+never an address). After a change to a renderer or the layout that is meant, `uv run python
+scripts/make_print_fixtures.py` writes them all again. Open any fixture in a browser to see the
+page; nothing in them is real.
