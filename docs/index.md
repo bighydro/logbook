@@ -7,6 +7,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Install](install.md): one line on each platform, for someone who has never opened a terminal, with what each step prints.
 - [Try it](try-it.md): five minutes with a demo record, every reader on a month that never happened.
 - [The first hour](first-hour.md): `logbook setup` screen by screen, for someone who has never used a terminal.
+- [The commands](commands.md): the 22 commands by what you are doing, and the older names each still answers to.
 - [The tour](tour.md): every command on your own record, from the first import to handing a day to a friend.
 - [A life in a record](demo.md): `logbook demo --years N`, a synthetic life in phases from a childhood of scanned photos to the boat.
 - [Your life in a folder](launch-post.md): the launch post, with everything in it synthetic.

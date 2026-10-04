@@ -9,6 +9,8 @@ from __future__ import annotations
 import contextlib
 import io
 import re
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +20,9 @@ import pytest
 from logbook import cli
 from logbook.commands import aliases
 from logbook.commands.parser import build_parser
+
+ROOT = Path(__file__).resolve().parents[1]
+COMMANDS_DOC = ROOT / "docs" / "commands.md"
 
 DAYS, SEED = 30, 7
 
@@ -132,6 +137,28 @@ def test_rewrite_keeps_the_root_options_in_front() -> None:
     assert aliases.rewrite(argv) == (["--identity-file", "key.txt", *new, "--json"], aliases.notice(old))
     argv = ["--identity-file=key.txt", old]
     assert aliases.rewrite(argv) == (["--identity-file=key.txt", *new], aliases.notice(old))
+
+
+def test_the_table_in_the_docs_is_the_one_the_script_writes_from_the_code() -> None:
+    """`docs/commands.md` carries the old-to-new table between its markers, as
+    `scripts/command_aliases.py` writes it from `ALIASES`; `--check` exits 1 when they differ."""
+    check = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "command_aliases.py"), "--check"],
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert check.returncode == 0, check.stdout + check.stderr
+    text = COMMANDS_DOC.read_text(encoding="utf-8")
+    for old, new in aliases.ALIASES.items():
+        assert f"| `logbook {old}` | `logbook {' '.join(new)}` |" in text, old
+
+
+def test_the_docs_name_the_twenty_two_and_no_old_name_as_a_command() -> None:
+    text = COMMANDS_DOC.read_text(encoding="utf-8")
+    listed = text.split("## The old names")[0]
+    headed = set(re.findall(r"^\| `([a-z-]+)` \|", listed, re.M))
+    assert headed == set(_top_level()), headed ^ set(_top_level())
 
 
 @pytest.mark.parametrize("old", sorted(aliases.ALIASES))
