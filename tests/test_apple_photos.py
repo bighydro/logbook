@@ -437,7 +437,7 @@ def test_add_photos_writes_a_keeper_per_favourite_once(lb, tmp_path, capsys):
     assert "added 0 lines from apple-photos" in out
     assert f"keepers: 0 new from 1 marked photo of {LINES} ({KEEPERS} already in the record)" in out
     assert lb.verify()[0] == LINES + KEEPERS
-    cli.main(["infer", "keepers"])  # the later pass finds nothing left to write
+    cli.main(["derive", "keepers"])  # the later pass finds nothing left to write
     assert "0 new keepers" in capsys.readouterr().out
     assert lb.verify()[0] == LINES + KEEPERS
 

@@ -32,9 +32,9 @@ def test_infer_keepers_writes_a_memory_per_favourite_and_an_art_per_album_photo(
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
     seq = lb.meta["seq"]
-    out = _run(capsys, "infer", "keepers", "--dry-run")
+    out = _run(capsys, "derive", "keepers", "--dry-run")
     assert "4 keepers" in out and "nothing written" in out and lb.meta["seq"] == seq
-    out = _run(capsys, "infer", "keepers")
+    out = _run(capsys, "derive", "keepers")
     assert "4 new keepers" in out
     found = _keepers(lb)
     assert len(found) == 4 and lb.meta["seq"] == seq + 4
@@ -67,7 +67,7 @@ def test_infer_keepers_writes_a_memory_per_favourite_and_an_art_per_album_photo(
         "source": "immich",
     }
     assert all(line["payload"]["source"] == "immich" for line in found)
-    out = _run(capsys, "infer", "keepers")
+    out = _run(capsys, "derive", "keepers")
     assert "0 new keepers" in out and "4 already" in out, "a re-run appends nothing"
     assert lb.meta["seq"] == seq + 4
     assert lb.verify()[2] == []
@@ -86,7 +86,7 @@ def test_apple_photos_marks_read_as_ios_photos_and_albums_may_be_a_list(
     neither = photo("2026-06-01T11:00:00Z", library="apple-photos")
     neither["payload"]["albums"] = ["Holiday"]
     lb.append_many([both, neither])
-    _run(capsys, "infer", "keepers")
+    _run(capsys, "derive", "keepers")
     found = _keepers(lb)
     assert sorted(line["payload"]["lane"] for line in found) == ["art", "memory"]
     assert {line["payload"]["source"] for line in found} == {"ios-photos"}
@@ -97,11 +97,11 @@ def test_a_retracted_keeper_is_never_written_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
-    _run(capsys, "infer", "keepers")
+    _run(capsys, "derive", "keepers")
     art = next(line for line in _keepers(lb) if line["payload"]["lane"] == "art")
     lb.retract(art["seq"], "not art after all")
     seq = lb.meta["seq"]
-    out = _run(capsys, "infer", "keepers")
+    out = _run(capsys, "derive", "keepers")
     assert "0 new keepers" in out and lb.meta["seq"] == seq
     data = json.loads(_run(capsys, "show", "keepers", "--json"))
     assert len(data["keepers"]) == 3 and all(k["lane"] == "memory" for k in data["keepers"])
@@ -112,7 +112,7 @@ def test_keepers_lists_them_by_day_and_lane(
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
     assert "no keepers" in _run(capsys, "show", "keepers")
-    _run(capsys, "infer", "keepers")
+    _run(capsys, "derive", "keepers")
     text = _run(capsys, "show", "keepers")
     assert text.count("memory") == 3 and text.count("art") == 1 and "IMG_" in text
     assert "2026-06-10" in text and "2026-06-16" in text
@@ -137,7 +137,7 @@ def test_a_days_hero_photos_are_its_keepers(
     persona_record(tmp_path, monkeypatch)
     text = _run(capsys, "show", "2026-06-10")
     assert "hero" not in text
-    _run(capsys, "infer", "keepers")
+    _run(capsys, "derive", "keepers")
     lines = _run(capsys, "show", "2026-06-10").splitlines()
     assert lines[0] == "2026-06-10"
     assert lines[1].strip().startswith("hero") and "IMG_101030.HEIC" in lines[1]
@@ -177,7 +177,7 @@ def test_keepers_people_lists_who_appears_on_the_keepers_per_month(
     )
     seq = lb.meta["seq"]
     assert "no keepers" in _run(capsys, "show", "keepers", "--people")
-    _run(capsys, "infer", "keepers")
+    _run(capsys, "derive", "keepers")
     seq += 4
     text = _run(capsys, "show", "keepers", "--people")
     assert lb.meta["seq"] == seq, "a reader; nothing written"

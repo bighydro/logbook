@@ -176,7 +176,7 @@ def test_a_day_aboard_the_boat_is_one_stay_with_the_anchorages_inside(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
-    cli.main(["infer", "keepers"])
+    cli.main(["derive", "keepers"])
     capsys.readouterr()
     data = _json(capsys, "2026-06-13")
     kinds = [e["kind"] for e in data["timeline"]]
