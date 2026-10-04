@@ -9,6 +9,7 @@ import re
 
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
+
 from logbook.adapters import phone
 
 PUNCTUATION = re.compile(r"[\s\-.()]")
