@@ -18,6 +18,7 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "import-backup": ("import", "backup"),
     "inbox": ("import", "inbox"),
     "keepers": ("show", "keepers"),
+    "person": ("people",),
     "receive": ("import", "page"),
     "stats": ("show", "stats"),
     "trip": ("show", "trip"),

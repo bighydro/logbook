@@ -204,9 +204,9 @@ def test_apply_appends_alias_lines_and_the_readers_follow_them(
     }
     assert kari["channels"]["messages"]["lines"] == 3, "the JID's message is hers now"
     assert kari["channels"]["mail"]["lines"] == 1 and kari["name"] == "Kari Nordmann"
-    page = _json(capsys, "person", f"handle:{KARI_JID}")
+    page = _json(capsys, "people", f"handle:{KARI_JID}")
     assert page["id"] == KARI_A, "a secondary's ref finds the primary's page"
-    page = _json(capsys, "person", f"phone:{PER_ENTERED}")
+    page = _json(capsys, "people", f"phone:{PER_ENTERED}")
     assert page["id"] == PER_A and page["channels"]["calendar"]["lines"] == 1
     left = _by_primary(_json(capsys, "people", "merge"))
     assert set(left) == {LIV_A, ANDERS_A}, "a merge applied is proposed no more"

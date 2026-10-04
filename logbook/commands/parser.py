@@ -38,7 +38,6 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
     day.search_arguments,
     day.show_arguments,
     people.people_arguments,
-    people.person_arguments,
     day.day_arguments,
     day.digest_arguments,
     day.questions_arguments,
