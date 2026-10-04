@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 
-from . import attachments, ios_backup
+from . import attachments, ios_backup, sealing
 from .adapters import ALIASES
 from .index import Index
 from .store import RETRACTION, Logbook
@@ -257,8 +257,8 @@ def import_backup(
                     else:
                         try:
                             _target, size = attachments.write_chunks(
-                                lb.root, ios_backup.plain_chunks(f), ref.sha256
-                            )
+                                lb.root, ios_backup.plain_chunks(f), ref.sha256, lb.recipients
+                            )  # sealed under its plaintext digest in a record that seals (RFC 0029 §7)
                         except (attachments.DigestMismatch, ios_backup.DecryptError, OSError) as e:
                             tally.refused += 1
                             message = f"attach import-backup: {src.name}: {ref.relative_path}: refused: {e}"
@@ -377,34 +377,48 @@ class VerifyReport:
     checked: int = 0
     bytes: int = 0
     other: int = 0
+    sealed: int = 0  # sealed files nobody here could open (no identity): not checked, not an error
     bad: list[tuple[str, str]] = field(default_factory=list)  # (name, the digest the bytes hash to)
 
 
 def verify(lb: Logbook, progress: Progress | None = None) -> VerifyReport:
     """Every file under `attachments/` whose name is a digest, streamed through SHA-256 (a chunk
     at a time, never whole); a file whose bytes hash to another digest is listed. An entry under
-    another name (a temporary file a run left behind, a stray) is counted and otherwise ignored."""
+    another name (a temporary file a run left behind, a stray) is counted and otherwise ignored.
+    A sealed file (RFC 0029 §7) is opened with the identity and its plaintext checked; without the
+    identity it is counted as sealed and left unchecked, never an error."""
     report = VerifyReport()
     folder = lb.root / attachments.DIR
     if not folder.is_dir():
         return report
     started = time.monotonic()
+    identities = lb.identities
     for p in sorted(folder.iterdir()):
         if not attachments.is_digest(p.name) or not p.is_file():
             report.other += 1
             continue
-        found, size = attachments.digest_path(p)
-        report.checked += 1
-        report.bytes += size
-        if found != p.name:
-            report.bad.append((p.name, found))
+        if sealing.is_sealed_file(p):
+            matches = attachments.check(p, identities)
+            if matches is None:
+                report.sealed += 1
+                continue
+            report.checked += 1
+            report.bytes += p.stat().st_size
+            if not matches:
+                report.bad.append((p.name, "another plaintext"))
+        else:
+            found, size = attachments.digest_path(p)
+            report.checked += 1
+            report.bytes += size
+            if found != p.name:
+                report.bad.append((p.name, found))
         if progress is not None and report.checked % PROGRESS_EVERY == 0:
             progress(report.checked, time.monotonic() - started)
     return report
 
 
 def verify_rows(report: VerifyReport) -> Iterator[str]:
-    if not report.checked and not report.other:
+    if not report.checked and not report.other and not report.sealed:
         yield "attachments/: no store yet"
         return
     files = f"{report.checked:,} file{'s' if report.checked != 1 else ''}"
@@ -415,6 +429,8 @@ def verify_rows(report: VerifyReport) -> Iterator[str]:
             yield f"  {attachments.DIR}/{name}: hashes to {found[:12]}…"
     else:
         yield f"attachments/: {files} checked, {report.bytes:,} bytes, every file matches its name"
+    if report.sealed:
+        yield f"{report.sealed:,} sealed file{'s' if report.sealed != 1 else ''} not opened (no identity)"
     if report.other:
         n = report.other
         yield f"{n:,} other entr{'ies' if n != 1 else 'y'} ignored (not a digest name)"

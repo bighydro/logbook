@@ -93,9 +93,9 @@ def test_speed_is_carried_when_the_line_has_it(lb):
 
 def test_the_fix_is_found_through_the_index_not_a_sweep_of_the_files(lb, monkeypatch):
     _fix(lb, "nordlys", "2026-06-15T10:00:00Z", 59.9080, 10.7300)
-    assert not (lb.root / "index.sqlite").exists()
+    assert not (lb.index_path).exists()
     (status,) = asset_status.read(lb, [NORDLYS], [], NOW)  # builds the index once
-    assert status.fix is not None and (lb.root / "index.sqlite").exists()
+    assert status.fix is not None and (lb.index_path).exists()
     monkeypatch.setattr(Logbook, "located_lines", _never)
     (status,) = asset_status.read(lb, [NORDLYS], [], NOW)  # the index is current: no file is swept
     assert status.fix is not None

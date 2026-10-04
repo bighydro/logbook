@@ -1,4 +1,5 @@
 """Logbook — a diary that writes itself. Layer 1: the folder, the chain, the CLI."""
 
 __version__ = "0.5.0"
-FORMAT = "logbook/0.2"  # SPEC §3.1: 0.2 hashes with RFC 8785 exactly; a 0.1 record must be migrated
+FORMAT = "logbook/0.3"  # SPEC §3.1: RFC 8785 exactly, tiers 2 and 3 sealable (RFC 0029); 0.1 is migrated
+PREVIOUS_FORMAT = "logbook/0.2"  # the same hash rule without sealing: read and written as is, never migrated

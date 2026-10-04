@@ -62,13 +62,13 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 def _rows(lb: Logbook, sql: str) -> list[tuple[Any, ...]]:
     """Read the index with a connection that is closed before the call returns: an open handle
     would stop the code under test from deleting the file (Windows refuses; Unix does not)."""
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         return list(db.execute(sql))
 
 
 def _tamper(lb: Logbook, *sql: str) -> None:
     """Run statements against the index and close the connection before returning."""
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         for statement in sql:
             db.execute(statement)
         db.commit()
@@ -98,7 +98,7 @@ def _draft(i: int, source: str = "dawarich") -> dict[str, Any]:
 
 
 def test_index_command_builds_from_the_files_and_records_the_head(lb: Logbook, capsys):
-    assert not (lb.root / "index.sqlite").exists()
+    assert not (lb.index_path).exists()
     cli.main(["index"])
     out = capsys.readouterr().out
     assert "indexed 4 lines" in out and "index.sqlite" in out
@@ -169,11 +169,11 @@ def test_deleting_the_index_loses_nothing_show_rebuilds_it_silently(lb: Logbook,
     _build(lb)
     cli.main(["show", "2026-03-01"])
     before = capsys.readouterr()
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     cli.main(["show", "2026-03-01"])
     after = capsys.readouterr()
     assert after.out == before.out and after.err == ""
-    assert (lb.root / "index.sqlite").exists() and _head_in_index(lb) == lb.meta["head"]
+    assert (lb.index_path).exists() and _head_in_index(lb) == lb.meta["head"]
 
 
 def test_a_stale_index_is_rebuilt_before_it_is_read(lb: Logbook):
@@ -184,7 +184,7 @@ def test_a_stale_index_is_rebuilt_before_it_is_read(lb: Logbook):
 
 
 def test_an_unreadable_index_is_treated_as_missing(lb: Logbook):
-    (lb.root / "index.sqlite").write_bytes(b"not a database")
+    (lb.index_path).write_bytes(b"not a database")
     assert [line["seq"] for line in lb.day_lines("2026-03-02")] == [3, 4]
     assert _head_in_index(lb) == lb.meta["head"]
 
@@ -198,12 +198,12 @@ def test_a_changed_timezone_rebuilds_the_index(lb: Logbook):
 
 
 def test_verify_never_opens_the_index(lb: Logbook, capsys):
-    (lb.root / "index.sqlite").write_bytes(b"not a database")
+    (lb.index_path).write_bytes(b"not a database")
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == 4
     cli.main(["verify"])
     assert capsys.readouterr().out.startswith("valid")
-    assert (lb.root / "index.sqlite").read_bytes() == b"not a database"
+    assert (lb.index_path).read_bytes() == b"not a database"
 
 
 # -- connections: closed before any unlink, on every platform -------------------------------
@@ -212,7 +212,7 @@ def test_verify_never_opens_the_index(lb: Logbook, capsys):
 def test_an_index_can_be_closed_deleted_and_reopened(lb: Logbook):
     idx = lb.index()
     idx.close()
-    (lb.root / "index.sqlite").unlink()  # Windows would refuse this with the connection still open
+    (lb.index_path).unlink()  # Windows would refuse this with the connection still open
     with lb.index() as again:
         assert again.by_seq(1) is not None
     assert _head_in_index(lb) == lb.meta["head"]
@@ -225,9 +225,9 @@ def test_discard_closes_its_own_connection_and_refuses_while_another_is_open(lb:
         other = index.Index.open(lb)
         with pytest.raises(RuntimeError):
             other.discard()
-        assert (lb.root / "index.sqlite").exists() and held.by_seq(1) is not None
+        assert (lb.index_path).exists() and held.by_seq(1) is not None
     other.discard()  # `held` is closed now; `other` was closed by the refused attempt
-    assert not (lb.root / "index.sqlite").exists()
+    assert not (lb.index_path).exists()
 
 
 def test_a_closed_index_refuses_to_be_read(lb: Logbook):
@@ -269,7 +269,7 @@ def test_append_discards_a_stale_index_rather_than_extending_it(lb: Logbook):
         tier=2,
         payload={"schema": "note/v1", "text": "x"},
     )
-    assert not (lb.root / "index.sqlite").exists()
+    assert not (lb.index_path).exists()
 
 
 def test_append_many_updates_the_index_at_each_checkpoint(tmp_path, monkeypatch):
@@ -335,7 +335,7 @@ def test_interrupted_append_many_leaves_the_index_at_the_last_checkpoint(tmp_pat
 
 def test_retract_finds_the_line_through_the_index_and_records_the_retraction(lb: Logbook, capsys):
     _build(lb)
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     cli.main(["retract", "2", "wrong cafe"])
     assert "retracted #2" in capsys.readouterr().out
     assert _rows(lb, "SELECT kind FROM lines WHERE seq = 5") == [("retraction",)]
@@ -347,7 +347,7 @@ def test_retract_finds_the_line_through_the_index_and_records_the_retraction(lb:
 def test_export_day_reads_the_same_package_with_or_without_the_index(lb: Logbook, tmp_path: Path):
     lb.retract(3, "not me", at="2026-03-05T09:00:00Z")
     write_day_package(lb, "2026-03-02", tmp_path / "a", generated_at="2026-03-06T00:00:00Z")
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     write_day_package(lb, "2026-03-02", tmp_path / "b", generated_at="2026-03-06T00:00:00Z")
     a, b = (tmp_path / "a" / "package.json").read_bytes(), (tmp_path / "b" / "package.json").read_bytes()
     assert a == b
@@ -525,7 +525,7 @@ def test_locations_serves_the_points_of_a_window_from_the_index_alone(lb: Logboo
 
 
 def owner_id(lb: Logbook, seq: int) -> str:
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         return str(db.execute("SELECT id FROM lines WHERE seq = ?", (seq,)).fetchone()[0])
 
 

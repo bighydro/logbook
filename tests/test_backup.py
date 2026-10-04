@@ -56,7 +56,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     (root / "inbox" / "takeout.zip").write_bytes(b"PK\x05\x06 not a real archive")
     (root / "state").mkdir()
     (root / "state" / "immich.json").write_text('{"since": "2026-06-01T00:00:00Z"}\n', encoding="utf-8")
-    assert (root / "index.sqlite").exists()
+    assert (Logbook(root).index_path).exists()
     return lb
 
 
@@ -156,7 +156,7 @@ def test_the_snapshot_never_holds_the_index_the_inbox_or_the_watermarks(
     result = backup.snapshot(lb, dest)
     names = _files(result.path)
     assert not any(n.startswith(("inbox/", "state/", "index")) for n in names)
-    assert (lb.root / "index.sqlite").exists(), "the live index is untouched"
+    assert (lb.index_path).exists(), "the live index is untouched"
 
 
 # -- the second snapshot: hard links for what did not change -------------------------------------------------
@@ -438,7 +438,7 @@ def test_restore_copies_a_snapshot_back_and_verifies_it(
         assert (target / rel).read_bytes() == (snap.path / rel).read_bytes()
         assert not _same_file(target / rel, snap.path / rel), f"{rel}: a copy, never a link into the backup"
     assert Logbook(target).verify() == (2, snap.head, [])
-    assert not (target / "index.sqlite").exists(), "the next reader builds it"
+    assert not (target / "index.sqlite").exists(), "a restored folder carries no locator; the cache does"
 
 
 def test_restore_never_writes_into_a_folder_that_holds_anything(

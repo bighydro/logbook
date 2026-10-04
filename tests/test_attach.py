@@ -367,3 +367,31 @@ def test_the_store_is_counted_by_digest_names_only(lb):
     assert attach.store_size(lb) == (1, len(IMAGE_BYTES), 2)
     report = attach.verify(lb, lambda n, elapsed: None)
     assert (report.checked, report.bytes, report.other, report.bad) == (1, len(IMAGE_BYTES), 2, [])
+
+
+# -- a record that seals (RFC 0029 §7) ---------------------------------------------------------------
+
+
+def test_attach_import_backup_seals_the_files_of_a_sealing_record_and_verify_opens_them(
+    lb, imported, tmp_path, monkeypatch, capsys
+):
+    from logbook import sealing
+
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    meta = lb.meta
+    meta["recipients"] = [r for _, r in pairs]
+    lb._save_meta(meta)
+    identity = tmp_path / "id.txt"
+    sealing.write_identity_file(identity, pairs[0][0], "test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    _attach("import-backup", str(imported), "--only", "whatsapp,imessage,photos")
+    capsys.readouterr()
+    store = lb.root / "attachments"
+    assert all(sealing.is_sealed_file(p) for p in store.iterdir() if attach.attachments.is_digest(p.name))
+    assert Logbook(lb.root).attachment_bytes(VOICE) == VOICE_BYTES, "the name is the plaintext digest"
+    _attach("verify")
+    assert "3 files checked" in capsys.readouterr().out
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(tmp_path / "nowhere.txt"))
+    _attach("verify")
+    out = capsys.readouterr().out
+    assert "3 sealed files not opened (no identity)" in out and "CORRUPT" not in out

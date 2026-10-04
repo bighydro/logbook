@@ -103,6 +103,18 @@ def ceiling(root: Path, destination: str) -> int:
     return int(entry["max_tier"])
 
 
+def recipient(root: Path, destination: str) -> str | None:
+    """The age recipient the policy names for `destination` (RFC 0029 §7), or None: a crossing
+    package to it is then shipped opened, and only when the owner types `--open`."""
+    entry = read(root).get(destination)
+    found = entry.get("recipient") if isinstance(entry, dict) else None
+    if found is None:
+        return None
+    if not isinstance(found, str) or not found.startswith("age1"):
+        raise PolicyError(f"{policy_path(root)}: {destination!r} has a recipient that is not an age1… string")
+    return found
+
+
 def mcp_ceiling(root: Path) -> int:
     """The highest tier `logbook mcp` may hand to its client: the `mcp` entry of the policy, or
     tier 1 when the file does not name it — a destination with a default, since the client is an

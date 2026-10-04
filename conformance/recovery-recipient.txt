@@ -1,0 +1,3 @@
+# The fixture's second recipient (a record seals to two at least). Its identity is not published;
+# nothing needs it. The fixture generator reads this file.
+age1u5rrshgfc7553eh4kgzp85xnzmyfjgze9reeeqzkvmxmdv7udvrskr6xs0

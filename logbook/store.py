@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import heapq
 import json
 import os
@@ -17,10 +18,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO
 
-from . import FORMAT, attachments, policy
-from .chain import GENESIS, Line, compute_hash, parse_line, verify_lines
+from . import FORMAT, PREVIOUS_FORMAT, attachments, policy, sealing
+from .chain import GENESIS, Line, Opener, compute_hash, is_sealed, parse_line, verify_lines
 from .index import FILE_NAME as INDEX_FILE
-from .index import Index, Located, Row, TextRow, row, text_row
+from .index import Index, Located, Row, TextRow
 
 
 def now_utc() -> str:
@@ -67,6 +68,7 @@ OLD_FORMAT = "logbook/0.1"  # hashed with a canonicalisation that deviated from 
 MIGRATE_MESSAGE = "created as logbook/0.1 before the canonicalisation fix; run: logbook migrate"
 MIGRATE_PROGRESS_EVERY = 100_000  # migrate: lines between progress reports
 MIGRATION = "migration"  # kind of the one line a migration appends (SPEC §3.1)
+REKEY = "rekey"  # kind of the one line a reseal to other recipients appends (RFC 0029 §6.4)
 NOT_INTACT = "the 0.1 record is not intact; nothing was changed"
 
 
@@ -96,11 +98,19 @@ def code_checkout_marker(root: Path) -> str | None:
     return next((m for m in CHECKOUT_MARKERS if (Path(root) / m).exists()), None)
 
 
+IDENTITY_NEEDED = (
+    "this record seals tiers 2 and 3 and writing them needs the identity (RFC 0029 §6.3); "
+    "none at {path}: pass --identity-file, set LOGBOOK_IDENTITY_FILE, or run `logbook key init`"
+)
+
+
 class Logbook:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, identity_file: Path | None = None):
         self.root = Path(root)
         self.meta_path = self.root / "logbook.json"
         self.log_dir = self.root / "logbook"
+        self._identity_file = identity_file  # `--identity-file`; else the variable, else the default path
+        self._identities: list[Any] | None = None  # loaded once, on first need
 
     # -- lifecycle -----------------------------------------------------------
     @classmethod
@@ -131,20 +141,87 @@ class Logbook:
         return cls(root)
 
     @classmethod
-    def find(cls, start: Path | None = None) -> Logbook:
+    def find(cls, start: Path | None = None, identity_file: Path | None = None) -> Logbook:
         env = os.environ.get("LOGBOOK_HOME")
         candidates = [Path(env)] if env else []
         p = Path(start or Path.cwd()).resolve()
         candidates += [p, *p.parents, Path.home() / "Logbook"]
         for c in candidates:
             if (c / "logbook.json").exists() and code_checkout_marker(c) is None:
-                return cls(c)
+                return cls(c, identity_file)
         raise FileNotFoundError("no logbook found; run `logbook init`")
 
     @property
     def meta(self) -> dict[str, Any]:
         data: dict[str, Any] = json.loads(self.meta_path.read_text(encoding="utf-8"))
         return data
+
+    @property
+    def index_path(self) -> Path:
+        """`<cache dir>/logbook/<owner_id>/index.sqlite` (RFC 0029 §8): a derived locator, outside
+        the folder that is the record, so a copy of the record never carries it."""
+        folder = sealing.cache_dir(os.environ) / str(self.meta.get("owner_id"))
+        folder.mkdir(parents=True, exist_ok=True)  # a cache folder; nothing of the record is in it
+        return folder / INDEX_FILE
+
+    # -- sealing (SPEC §2 and §4, RFC 0029) ------------------------------------------------------
+    @property
+    def recipients(self) -> list[str]:
+        """The age recipients `logbook.json` names; a record that names none seals nothing."""
+        return sealing.recipients_of(self.meta)
+
+    @property
+    def identity_file(self) -> Path:
+        """Where the identity is looked for: `--identity-file`, else `LOGBOOK_IDENTITY_FILE`, else
+        `<config dir>/logbook/identities/<owner_id>.txt` (RFC 0029 §6.2)."""
+        return sealing.identity_path(str(self.meta.get("owner_id")), os.environ, self._identity_file)
+
+    @property
+    def identities(self) -> list[Any]:
+        """The owner's identities, loaded once from `identity_file`; empty when the file is not
+        there. A file that is there but holds no identity is an error naming the path."""
+        if self._identities is None:
+            path = self.identity_file
+            self._identities = sealing.load_identities(path) if path.exists() else []
+        return self._identities
+
+    def opened(self, line: Line) -> Line:
+        """The line a reader shows: a sealed line with its real payload in place of the reference
+        and no `payload_enc`, when the identity is here; any other line as it is. A sealed line
+        that will not open raises SealError; one without an identity is returned sealed, so a
+        reader without the key still lists the day and says so."""
+        if not is_sealed(line):
+            return line
+        identities = self.identities
+        if not identities:
+            return line
+        opened = dict(line)
+        opened["payload"] = sealing.open_line(line, identities)
+        opened.pop(sealing.FIELD, None)
+        return opened
+
+    def _opener(self) -> Opener | None:
+        """What `verify` opens sealed lines with: None (keyless) when there is no identity."""
+        identities = self.identities
+        if not identities:
+            return None
+
+        def check(line: Line) -> str | None:
+            try:
+                sealing.open_line(line, identities)
+            except (sealing.SealError, sealing.MissingExtra) as e:
+                return str(e).removeprefix(f"line {line.get('seq')}: ")  # verify_lines names the line once
+            return None
+
+        return check
+
+    def _require_identity(self, tiers: Iterable[int]) -> None:
+        """A tier 2 or 3 line is sealed on append and deduped through the blinded index, both of which
+        need the identity: a writer that holds only the recipients refuses (RFC 0029 §6.3)."""
+        if not self.recipients or not any(t in (2, 3) for t in tiers):
+            return
+        if not self.identities:
+            raise sealing.IdentityRequired(IDENTITY_NEEDED.format(path=self.identity_file))
 
     def _save_meta(self, meta: dict[str, Any]) -> None:
         tmp = self.meta_path.with_name("logbook.json.tmp")
@@ -183,9 +260,11 @@ class Logbook:
         return listed
 
     def _check_format(self, meta: dict[str, Any]) -> None:
-        """verify and every writer refuse a record hashed by another rule (SPEC §3.1)."""
+        """verify and every writer refuse a record hashed by another rule (SPEC §3.1). A 0.2
+        record hashes by the same rule as 0.3 and only lacks sealing: read and written as it is;
+        `logbook key init` is what moves it to 0.3."""
         found = meta.get("format")
-        if found == FORMAT:
+        if found in (FORMAT, PREVIOUS_FORMAT):
             return
         if found == OLD_FORMAT:
             raise FormatError(MIGRATE_MESSAGE)
@@ -298,7 +377,7 @@ class Logbook:
     def _index_if_current(self, meta: dict[str, Any]) -> Index | None:
         """For a writer: the index when it exists and is current, so it can be extended; a stale
         one is deleted (the next reader rebuilds) and a missing one is left missing."""
-        if not (self.root / INDEX_FILE).exists():
+        if not self.index_path.exists():
             return None
         idx = Index.open(self)
         if idx.matches(meta):
@@ -316,22 +395,34 @@ class Logbook:
             return idx.by_seq(seq)
 
     def verify(
-        self, warnings: list[str] | None = None, progress: FileProgress | None = None
+        self,
+        warnings: list[str] | None = None,
+        progress: FileProgress | None = None,
+        counts: dict[str, int] | None = None,
+        keyed: bool | None = None,
     ) -> tuple[int, str, list[str]]:
         """(seq, head, errors) of the files, never the index, streamed through `lines()`: memory is
         one line per month file however long the record. What this release only warns about
         (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given.
-        `progress` is told of each month file as it is finished."""
+        `progress` is told of each month file as it is finished. Sealed lines are opened and
+        checked against their digest when the identity is here (`keyed` None), always when
+        `keyed` is True (no identity is then an error), never when False; `counts` is told how
+        many were sealed, opened and plain at tier 2 or 3 (RFC 0029 §4.3)."""
         meta = self.meta
         self._check_format(meta)
         kept = 0 if warnings is None else len(warnings)
+        opener = None if keyed is False else self._opener()
+        if keyed is True and opener is None:
+            return 0, GENESIS, [f"no identity at {self.identity_file} to open the sealed lines with"]
+        tally = {} if counts is None else counts
         try:
             try:
-                seq, head, errors = verify_lines(self.lines(progress), warnings)
+                seq, head, errors = verify_lines(self.lines(progress), warnings, opener, tally)
             except UnsortedFile:  # not written by this code; SPEC §3 orders by seq regardless
                 if warnings is not None:
                     del warnings[kept:]
-                seq, head, errors = verify_lines(self._lines_by_seq(progress), warnings)
+                tally.clear()
+                seq, head, errors = verify_lines(self._lines_by_seq(progress), warnings, opener, tally)
         except ValueError as e:  # a line that is not one JSON object with distinct keys (SPEC §2)
             return 0, GENESIS, [str(e)]
         if meta["seq"] != seq or meta["head"] != head:
@@ -355,6 +446,7 @@ class Logbook:
     ) -> Line:
         meta = self.meta
         self._check_format(meta)
+        self._require_identity((tier,))
         line = self._line(
             meta, meta["seq"] + 1, meta["head"], at, source, kind, tier, payload, end, tz, recorded_at
         )
@@ -371,8 +463,7 @@ class Logbook:
         self._save_meta(meta)
         if idx is not None:
             with idx:
-                line_row = row(line, meta["timezone"], self._relative(path), offset)
-                words = text_row(line, self.root, line_row)
+                line_row, words = idx.rows_of(line, meta, self._relative(path), offset)
                 idx.add([line_row], meta, [] if words is None else [words])
         return line
 
@@ -393,13 +484,28 @@ class Logbook:
             payload={"schema": "retraction/v1", "supersedes": target["id"], "seq": seq, "reason": reason},
         )
 
-    def attach(self, data: bytes) -> Path:
-        """Put `data` in the SPEC §1.1 store, `<root>/attachments/<sha256>`, once; the file."""
-        return attachments.write(self.root, data)
+    def attach(self, data: bytes, tier: int | None = None) -> Path:
+        """Put `data` in the SPEC §1.1 store, `<root>/attachments/<sha256>`, once; the file. In a
+        record that names recipients the file is sealed (RFC 0029 §7) unless `tier` says the line
+        that will point at it is tier 1; a caller that does not know the tier gets the safe side."""
+        return attachments.write(self.root, data, self._attachment_recipients(tier))
 
-    def attach_file(self, path: Path) -> Path:
-        """Put the file at `path` in the SPEC §1.1 store, streamed, once; the file in the store."""
-        return attachments.write_path(self.root, path)
+    def attach_file(self, path: Path, tier: int | None = None) -> Path:
+        """Put the file at `path` in the SPEC §1.1 store, streamed, once; the file in the store.
+        Sealed as `attach` is."""
+        return attachments.write_path(self.root, path, self._attachment_recipients(tier))
+
+    def _attachment_recipients(self, tier: int | None) -> list[str]:
+        return [] if tier == 1 else self.recipients
+
+    def attachment_bytes(self, sha256: str) -> bytes:
+        """The plaintext of the store file named `sha256`, opened with the identity when sealed."""
+        return attachments.read_bytes(self.root, sha256, self.identities)
+
+    def attachment(self, sha256: str) -> contextlib.AbstractContextManager[Path]:
+        """A path to the plaintext of the store file named `sha256`, for a decoder: the file
+        itself when plain, a temporary copy when sealed, gone on exit (`attachments.opened`)."""
+        return attachments.opened(self.root, sha256, self.identities)
 
     def append_many(
         self,
@@ -434,7 +540,6 @@ class Logbook:
         meta = self.meta
         self._check_format(meta)
         idx = self.index()
-        tz = str(meta["timezone"])
         seq, head = meta["seq"], meta["head"]
         handles: dict[Path, BinaryIO] = {}
         n, taken, started = 0, 0, time.monotonic()
@@ -455,9 +560,8 @@ class Logbook:
                 rel, offset = self._relative(path), fh.tell()
                 encoded = [_dumps(line).encode("utf-8") for line in batch]
                 for line, raw in zip(batch, encoded, strict=True):
-                    line_row = row(line, tz, rel, offset)
+                    line_row, words = idx.rows_of(line, meta, rel, offset)
                     rows.append(line_row)
-                    words = text_row(line, self.root, line_row)
                     if words is not None:
                         texts.append(words)
                     offset += len(raw)
@@ -473,6 +577,7 @@ class Logbook:
             while True:
                 batch, error = _take(it, META_EVERY)
                 taken += len(batch)
+                self._require_identity(int(d.get("tier", 0)) for d in batch if isinstance(d.get("tier"), int))
                 keys = {key for d in batch if (key := dedupe_key(d)) is not None}
                 found = idx.existing(keys) if keys else set()
                 lines: list[tuple[Path, Line]] = []
@@ -568,9 +673,7 @@ class Logbook:
         lineage = meta.setdefault("lineage", [])
         lineage.append({"from_format": OLD_FORMAT, "from_head": old_head, "migrated_at": migrated_at})
         self._save_meta(meta)
-        if (
-            self.root / INDEX_FILE
-        ).exists():  # ADR 0007: disposable; closed through the registry, then deleted
+        if self.index_path.exists():  # ADR 0007: disposable; closed through the registry, then deleted
             Index.open(self).discard()
         line = self.append(
             at=migrated_at,
@@ -581,6 +684,202 @@ class Logbook:
             recorded_at=migrated_at,
         )
         return {"lines": n, "from_head": old_head, "head": line["hash"], "kept": kept}
+
+    # -- sealing the past, and resealing (RFC 0029 §6.4 and §10.2) ------------------------------------
+    def seal_all(self, progress: Callable[[int, float], None] | None = None) -> dict[str, Any]:
+        """Seal every plain tier 2 or 3 line of the record to its recipients (RFC 0029 §10.2): the ADR
+        0014 road. Every line keeps `id`, `seq`, `at`, `end`, `tz`, `source`, `kind`, `tier` and
+        `recorded_at`; a plain tier 2 or 3 payload becomes the sealed reference with its content in
+        `payload_enc`; `prev` and `hash` are recomputed in seq order from the first changed line;
+        every attachment such a line names is sealed in place under its name. New month files are
+        written under <root>/logbook.sealing/ and swapped in; the plain files are **not** kept
+        beside the record, and the caller says so once (a backup taken before holds them still).
+        `logbook.json` gets `format` 0.3 and a `lineage` entry; the index is dropped; one manual
+        `migration/v1` line records the head it replaced and the counts. Refuses a record with no
+        recipients, and a record whose chain is not intact; nothing is touched then."""
+        meta = self.meta
+        self._check_format(meta)
+        recipients = self.recipients
+        if not recipients:
+            raise sealing.IdentityRequired("this record names no recipients; run `logbook key init` first")
+        if not self.identities:
+            raise sealing.IdentityRequired(IDENTITY_NEEDED.format(path=self.identity_file))
+        old_head, old_format = str(meta["head"]), str(meta["format"])
+        digests: set[str] = set()
+
+        def transform(line: Line) -> Line:
+            if line.get("tier") in (2, 3) and not is_sealed(line):
+                payload = line["payload"]
+                digests.update(attachments.digests_in(payload))
+                line["payload"], line[sealing.FIELD] = sealing.seal(payload, recipients)
+            return line
+
+        n, head, changed = self._rewrite("logbook.sealing", transform, recompute=True, progress=progress)
+        sealed_files = 0
+        for sha256 in sorted(digests):
+            file = self.root / attachments.DIR / sha256
+            if file.is_file() and not sealing.is_sealed_file(file):
+                attachments.write_path(self.root, file, recipients)  # sealed in place: raised, never lowered
+                sealed_files += 1
+        migrated_at = now_utc()
+        meta = self.meta
+        meta["format"], meta["head"] = FORMAT, head
+        meta.setdefault("lineage", []).append(
+            {"from_format": old_format, "from_head": old_head, "migrated_at": migrated_at}
+        )
+        self._save_meta(meta)
+        if self.index_path.exists():
+            Index.open(self).discard()
+        line = self.append(
+            at=migrated_at,
+            source="manual",
+            kind=MIGRATION,
+            tier=1,
+            payload={
+                "schema": "migration/v1",
+                "from_format": old_format,
+                "from_head": old_head,
+                "sealed_lines": changed,
+                "sealed_attachments": sealed_files,
+            },
+            recorded_at=migrated_at,
+        )
+        return {
+            "lines": n,
+            "sealed_lines": changed,
+            "sealed_attachments": sealed_files,
+            "from_head": old_head,
+            "head": line["hash"],
+        }
+
+    def reseal(
+        self, recipients: list[str], progress: Callable[[int, float], None] | None = None
+    ) -> dict[str, Any]:
+        """Reseal every sealed line and attachment to `recipients` (RFC 0029 §6.4: a recipient
+        added, an identity rotated). No hash changes: `payload_enc` is outside the hash, so this is
+        a rewrite of the stored form, done the migration way (a temporary folder, a swap). Then
+        `logbook.json` names the new recipients, the index is dropped (its key was sealed to the
+        old ones) and one `rekey/v1` line, tier 1, says it happened. The identity here must open
+        the record as it is; the new list is checked (two at least)."""
+        meta = self.meta
+        self._check_format(meta)
+        before = self.recipients
+        if not before:
+            raise sealing.IdentityRequired("this record names no recipients; run `logbook key init` first")
+        new = sealing.check_recipients(recipients)
+        identities = self.identities
+        if not identities:
+            raise sealing.IdentityRequired(IDENTITY_NEEDED.format(path=self.identity_file))
+
+        def transform(line: Line) -> Line:
+            if is_sealed(line):
+                plain = sealing.open_bytes(line, identities)
+                line[sealing.FIELD] = sealing.encode(sealing.seal_bytes(plain, new))
+            return line
+
+        n, head, changed = self._rewrite("logbook.resealing", transform, recompute=False, progress=progress)
+        if head != meta["head"]:  # cannot happen: nothing hashed was touched
+            raise RuntimeError(f"resealing changed the head to {head[:12]}…; the record was not swapped")
+        store = self.root / attachments.DIR
+        sealed_files = 0
+        for file in sorted(store.iterdir()) if store.is_dir() else []:
+            if file.is_file() and not file.name.startswith(".") and sealing.is_sealed_file(file):
+                with attachments.opened(self.root, file.name, identities) as plain:
+                    tmp = store / f".{file.name}.{os.getpid()}.resealing"
+                    try:
+                        sealing.seal_file(plain, tmp, new)
+                        os.replace(tmp, file)
+                    finally:
+                        tmp.unlink(missing_ok=True)
+                sealed_files += 1
+        meta = self.meta
+        meta["recipients"] = new
+        self._save_meta(meta)
+        if self.index_path.exists():
+            Index.open(self).discard()
+        at = now_utc()
+        line = self.append(
+            at=at,
+            source="logbook",
+            kind=REKEY,
+            tier=1,
+            payload={
+                "schema": "rekey/v1",
+                "recipients_before": len(before),
+                "recipients_after": len(new),
+                "recipients": new,
+                "sealed_lines": changed,
+                "sealed_attachments": sealed_files,
+            },
+            recorded_at=at,
+        )
+        return {"lines": n, "sealed_lines": changed, "sealed_attachments": sealed_files, "head": line["hash"]}
+
+    def _rewrite(
+        self,
+        tmp_name: str,
+        transform: Callable[[Line], Line],
+        recompute: bool,
+        progress: Callable[[int, float], None] | None,
+    ) -> tuple[int, str, int]:
+        """Every line through `transform`, in seq order, into new month files under <root>/<tmp_name>/,
+        then swapped in; the old files are removed. With `recompute`, `prev` and `hash` are
+        recomputed as a migration does. The chain is checked on the way (`seq`, `prev`) and an
+        intact record is required; an exception leaves the record as it was. Returns (lines, head,
+        lines the transform changed)."""
+        meta = self.meta
+        tmp = self.root / tmp_name
+        if tmp.exists():
+            shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
+        tmp.mkdir()
+        handles: dict[Path, TextIO] = {}
+        n, changed, prev, old_prev, started = 0, 0, GENESIS, GENESIS, time.monotonic()
+        try:
+            for line in self._lines_by_seq():
+                n += 1
+                if line.get("seq") != n or line.get("prev") != old_prev:
+                    raise ValueError(f"line {n}: the chain is not intact; nothing was changed")
+                old_prev = line["hash"]
+                before = _dumps(line)
+                line = transform(line)
+                if _dumps(line) != before:
+                    changed += 1
+                if recompute:
+                    line["prev"] = prev
+                    line["hash"] = compute_hash(line)
+                elif line["hash"] != compute_hash(line):
+                    raise ValueError(f"line {n}: hash does not recompute; nothing was changed")
+                prev = line["hash"]
+                path = tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl"
+                fh = handles.get(path)
+                if fh is None:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fh = handles[path] = path.open("a", encoding="utf-8", newline="\n")
+                fh.write(_dumps(line))
+                if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
+                    progress(n, time.monotonic() - started)
+            if (n, old_prev) != (meta["seq"], meta["head"]):
+                raise ValueError(
+                    f"logbook.json says seq={meta['seq']} head={str(meta['head'])[:12]}…, files say seq={n} "
+                    f"head={old_prev[:12]}…; nothing was changed"
+                )
+            for fh in handles.values():
+                fh.flush()
+                os.fsync(fh.fileno())
+                fh.close()
+        except BaseException:
+            for fh in handles.values():
+                fh.close()
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        old = self.root / f"{tmp_name}.old"
+        if old.exists():
+            shutil.rmtree(old)
+        if self.log_dir.exists():
+            os.rename(self.log_dir, old)
+        os.rename(tmp, self.log_dir)
+        shutil.rmtree(old, ignore_errors=True)  # not kept beside the record (RFC 0029 §10.2)
+        return n, prev, changed
 
     def _lines_by_seq(self, progress: FileProgress | None = None) -> Iterator[Line]:
         """Every line in chain order with one line in memory at a time, whatever order the files
@@ -626,12 +925,19 @@ class Logbook:
         tz: str | None = None,
         recorded_at: str | None = None,
         id: str | None = None,
+        payload_enc: str | None = None,
     ) -> Line:
-        """A complete, hashed line; nothing is written."""
+        """A complete, hashed line; nothing is written. A tier 2 or 3 payload is sealed to the record's
+        recipients when it names any (SPEC §4, RFC 0029 §5): the hashed `payload` becomes the
+        reference and the content goes in `payload_enc`, outside the hash. A draft that already
+        carries a `payload_enc` (a line re-added from `export --sealed`) is kept as it came."""
         if "schema" not in payload:
             raise ValueError("payload.schema is required")
         if tier not in (1, 2, 3):
             raise ValueError("tier must be 1, 2 or 3")
+        recipients = sealing.recipients_of(meta)
+        if payload_enc is None and sealing.needs_sealing(tier, payload, recipients):
+            payload, payload_enc = sealing.seal(payload, recipients)
         line: Line = {
             "id": id or uuid7(),
             "seq": seq,
@@ -646,6 +952,8 @@ class Logbook:
             "prev": prev,
         }
         line["hash"] = compute_hash(line)
+        if payload_enc is not None:
+            line[sealing.FIELD] = payload_enc
         return line
 
     def _parse(self, path: Path, n: int, raw: str | bytes) -> Line:

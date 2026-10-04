@@ -61,6 +61,7 @@ from . import (
     repair,
     rollup,
     schedule,
+    sealing,
     search,
     serve,
     setup,
@@ -96,7 +97,7 @@ from .adapters import ais, apple_photos, ios_contacts, screentime
 from .adapters import weather as weather_adapter
 from .adapters.takeout import maps as takeout_maps
 from .adapters.takeout import places as takeout_places
-from .chain import Line, number_text
+from .chain import Line, is_sealed, number_text
 from .export import day_packages, day_range, parse_day, write_package
 from .index import Index, local_date
 from .resolve import Ref, identities_from, labels
@@ -2891,8 +2892,11 @@ def _line_row(
 
 def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
     """The text part of a line's row: the profile's own summary where the kind has one, else the
-    payload's text, title, name or url, else every field as `key=value`."""
+    payload's text, title, name or url, else every field as `key=value`. A line still sealed at
+    this point (no identity on this machine; RFC 0029) says so and nothing else."""
     p = line["payload"]
+    if is_sealed(line):
+        return f"[sealed {p.get('of')}; no identity to open it]"
     if line["kind"] == "flight":
         text = _flight_text(p, tz)
     elif line["kind"] == "message":
@@ -4253,14 +4257,20 @@ def cmd_index(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     started = time.monotonic()
     n = lb.index_rebuild(progress=_progress)
-    print(f"indexed {n:,} lines in {time.monotonic() - started:,.1f}s → {lb.root / 'index.sqlite'}")
+    print(f"indexed {n:,} lines in {time.monotonic() - started:,.1f}s → {lb.index_path}")
 
 
 def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
-    seq, head, errors = lb.verify(warnings, progress=_file_progress(len(lb.files())) if a.progress else None)
+    counts: dict[str, int] = {}
+    seq, head, errors = lb.verify(
+        warnings,
+        progress=_file_progress(len(lb.files())) if a.progress else None,
+        counts=counts,
+        keyed=False if a.keyless else None,
+    )
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
         if (exp["seq"], exp["head"]) != (seq, head):
@@ -4273,10 +4283,30 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + e)
         sys.exit(1)
     print(f"valid — {seq} lines, head {head}")
+    for text in _sealed_report(lb, counts):
+        print("  " + text)
     if warnings:
         print(f"WARNING — {len(warnings)} timestamp(s) the next release will reject:")
         for w in warnings:
             print("  " + w)
+
+
+def _sealed_report(lb: Logbook, counts: Mapping[str, int]) -> Iterator[str]:
+    """What `verify` says about sealing (RFC 0029 §4.3): the sealed lines it opened and checked, or
+    could not open; the tier 2 or 3 lines still plain in a record that seals."""
+    sealed, opened, plain = counts.get("sealed", 0), counts.get("opened", 0), counts.get("plain", 0)
+    if sealed:
+        if opened == sealed:
+            yield f"sealed: {_plural(sealed, 'line')}, every one opened and checked against its digest"
+        else:
+            yield f"sealed: {_plural(sealed, 'line')}, not opened (no identity at {lb.identity_file})"
+    if plain and lb.recipients:
+        yield f"plain at tier 2 or 3: {_plural(plain, 'line')}; `logbook seal --all` seals them"
+    if 0 < len(lb.recipients) < sealing.MIN_RECIPIENTS:
+        yield (
+            f"recipients: {len(lb.recipients)}; a record seals to two at least (RFC 0029 §6.1): this one"
+            " and a recovery one: `logbook key add-recipient --recipient age1…`"
+        )
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
@@ -4383,6 +4413,132 @@ def cmd_migrate(a: argparse.Namespace) -> None:
     )
 
 
+def cmd_key(a: argparse.Namespace) -> None:
+    """`key init`, `key show`, `key add-recipient age1…`, `key remove-recipient age1…` (RFC 0029 §6):
+    the record's recipients and this machine's identity."""
+    lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
+    try:
+        if a.verb == "init":
+            _key_init(lb, a)
+        elif a.verb == "show":
+            _key_show(lb)
+        else:
+            _key_change(lb, a)
+    except ValueError as e:
+        print(f"key {a.verb}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _key_init(lb: Logbook, a: argparse.Namespace) -> None:
+    """Make this machine's identity (or use the one at the identity path), take a second recipient
+    (`--recovery` prints one for paper, `--recipient` names one), and write both into logbook.json.
+    Refuses with one recipient: a record that can lose its only key is not sealed, it is lost."""
+    if lb.recipients:
+        raise ValueError(
+            f"this record already names {_plural(len(lb.recipients), 'recipient')} (`logbook key show`); "
+            "`logbook key add-recipient` adds one"
+        )
+    if not a.recovery and not a.recipient:
+        raise ValueError(
+            "a second recipient is required before anything is sealed: --recovery prints a recovery"
+            " identity to keep on paper, or --recipient age1… names one you already hold"
+        )
+    path = lb.identity_file
+    if path.exists():
+        owner = sealing.recipient_of(str(sealing.load_identities(path)[0]))
+        print(f"identity: {_under_home(path)} (already there)")
+    else:
+        secret, owner = sealing.generate_identity()
+        sealing.write_identity_file(path, secret, f"logbook identity for record {lb.meta.get('owner_id')}")
+        print(f"identity: {_under_home(path)} (written; readable by you only; never copy it into the record)")
+    others = list(a.recipient or [])
+    if a.recovery:
+        recovery_secret, recovery = sealing.generate_identity()
+        others.append(recovery)
+        print(
+            "\nRECOVERY IDENTITY — print this and keep the paper somewhere else; it is shown once and"
+            f" stored nowhere:\n\n    {recovery_secret}\n\n    (its recipient: {recovery})\n"
+        )
+    recipients = sealing.check_recipients([owner, *others])
+    meta = lb.meta
+    meta["recipients"] = recipients
+    meta["format"] = FORMAT
+    lb._save_meta(meta)
+    if lb.index_path.exists():
+        Index.open(lb).discard()
+    print(f"recipients: {len(recipients)} in {_under_home(lb.root / 'logbook.json')}")
+    for r in recipients:
+        print(f"  {r}")
+    counts: dict[str, int] = {}
+    lb.verify(counts=counts, keyed=False)
+    plain = counts.get("plain", 0)
+    tail = f"; `logbook seal --all` seals the {_plural(plain, 'line')} already there" if plain else ""
+    print(f"tier 2 and 3 lines are sealed from now on{tail}")
+
+
+def _key_show(lb: Logbook) -> None:
+    recipients = lb.recipients
+    print(f"format: {lb.meta.get('format')}")
+    none = "" if recipients else " (nothing is sealed; `logbook key init`)"
+    print(f"recipients: {len(recipients)}{none}")
+    for r in recipients:
+        print(f"  {r}")
+    path = lb.identity_file
+    if not path.exists():
+        print(f"identity: none at {_under_home(path)}")
+        return
+    mine = [sealing.recipient_of(str(i)) for i in lb.identities]
+    opens = any(r in recipients for r in mine)
+    state = "opens this record" if opens else "is not one of its recipients"
+    print(f"identity: {_under_home(path)} ({state})")
+
+
+def _key_change(lb: Logbook, a: argparse.Namespace) -> None:
+    """add-recipient / remove-recipient: reseal every sealed line and file to the new list (no hash
+    changes), then one rekey/v1 line says so (RFC 0029 §6.4)."""
+    current = lb.recipients
+    given = list(a.recipient or [])
+    if not given:
+        raise ValueError(f"{a.verb} needs --recipient age1…")
+    if a.verb == "add-recipient":
+        new = [*current, *(r for r in given if r not in current)]
+    else:
+        missing = [r for r in given if r not in current]
+        if missing:
+            raise ValueError(f"not a recipient of this record: {', '.join(missing)}")
+        new = [r for r in current if r not in given]
+    result = lb.reseal(new, progress=_progress)
+    what = _sealed_what(result)
+    head = result["head"][:12]
+    print(f"resealed {what} to {_plural(len(new), 'recipient')}; head {head}… (no hash changed)")
+    if a.verb == "remove-recipient":
+        print("an old copy of the record still opens with the removed identity; this one does not")
+
+
+def _sealed_what(result: Mapping[str, Any]) -> str:
+    lines = _plural(result["sealed_lines"], "line")
+    return f"{lines} and {_plural(result['sealed_attachments'], 'attachment')}"
+
+
+def cmd_seal(a: argparse.Namespace) -> None:
+    """`seal --all`: seal every plain tier 2 or 3 line and the files they name (RFC 0029 §10.2)."""
+    lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
+    if not a.all:
+        print("seal: `logbook seal --all` seals the past; new lines are sealed as written", file=sys.stderr)
+        sys.exit(2)
+    try:
+        result = lb.seal_all(progress=_progress)
+    except ValueError as e:
+        print(f"seal: {e}", file=sys.stderr)
+        sys.exit(2)
+    what = _sealed_what(result)
+    print(f"sealed {what} of {result['lines']}: head {result['from_head'][:12]}… → {result['head'][:12]}…")
+    print(
+        "the plain files were replaced, not kept; a backup taken before now still holds the plaintext,"
+        " and this command shreds nothing"
+    )
+
+
 def cmd_export(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if a.path == crossing.KIND:
@@ -4402,19 +4558,45 @@ def cmd_export(a: argparse.Namespace) -> None:
         sys.exit(2)
     out = Path(a.path).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
-    n = _write_lines(lb.lines(), out)
-    if n is None:  # a month file not in seq order (not one this code wrote): the sorted read
-        n = _write_lines(lb._lines_by_seq(), out)
-    print(f"exported {n} lines to {out} — verify with: logbook verify")
+    opener = None if a.sealed else _export_opener(lb)
+    try:
+        n = _write_lines(lb.lines(), out, opener)
+        if n is None:  # a month file not in seq order (not one this code wrote): the sorted read
+            n = _write_lines(lb._lines_by_seq(), out, opener)
+    except sealing.IdentityRequired:
+        out.unlink(missing_ok=True)
+        raise
+    how = "sealed lines verbatim" if a.sealed else "sealed lines opened for re-entry"
+    print(f"exported {n} lines to {out} ({how}) — verify with: logbook verify")
 
 
-def _write_lines(lines: Iterator[Line], out: Path) -> int | None:
-    """Stream `lines` to `out` as JSON lines, one in memory at a time; the count, or None when
-    the files turned out to need the sorted read (the caller starts the file over)."""
+def _export_opener(lb: Logbook) -> Callable[[Line], Line]:
+    """`export` writes every line with its real payload (ADR 0017: the interchange form a line
+    re-enters the record by), so a sealed line needs the identity; `--sealed` is the other way."""
+
+    def opened(line: Line) -> Line:
+        if is_sealed(line) and not lb.identities:
+            raise sealing.IdentityRequired(
+                "export writes opened payloads unless --sealed, and this record has sealed lines; "
+                f"no identity at {lb.identity_file}"
+            )
+        return lb.opened(line)
+
+    return opened
+
+
+def _write_lines(
+    lines: Iterator[Line], out: Path, opener: Callable[[Line], Line] | None = None
+) -> int | None:
+    """Stream `lines` to `out` as JSON lines, one in memory at a time, each through `opener` when
+    one is given; the count, or None when the files turned out to need the sorted read (the
+    caller starts the file over)."""
     n = 0
     with out.open("w", encoding="utf-8") as fh:
         try:
             for line in lines:
+                if opener is not None:
+                    line = opener(line)
                 fh.write(json.dumps(line, ensure_ascii=False, sort_keys=True) + "\n")
                 n += 1
         except UnsortedFile:
@@ -4467,6 +4649,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             a.until or generated_at,
             crossing.parse_tiers("1" if a.tier is None else a.tier),
             crossing.parse_kinds(a.kinds),
+            open_sealed=a.open,
         )
     except crossing.EmptyWindow as e:
         print(f"{a.to}: {e}; nothing written")
@@ -4475,7 +4658,11 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         print(f"export crossing: {e}", file=sys.stderr)
         sys.exit(2)
     out = Path(a.out).expanduser() if a.out else crossing.default_out(lb, req.destination, generated_at)
-    sel = crossing.select(lb, req)
+    try:
+        sel = crossing.select(lb, req)
+    except crossing.CrossingError as e:  # sealed lines with no recipient and no --open, or no identity
+        print(f"export crossing: {e}", file=sys.stderr)
+        sys.exit(2)
     window = f"{req.since} {EN_DASH} {req.until}"
     tiers = ",".join(map(str, req.tiers))
     if a.dry_run:
@@ -4496,6 +4683,9 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     print(f"{req.destination}: {sel.counts()['crossed']} lines crossed, {window}, tiers {tiers} → {out}")
     for text in _crossing_rows(sel):
         print(text)
+    if sel.sealed:
+        how = f"resealed to {req.recipient}" if req.recipient else "opened (--open)"
+        print(f"  sealed: {_plural(len(sel.sealed), 'line')} {how}")
     review = result.manifest.get("review")
     if review is not None:
         print(f"  review: {len(review)} tier-2 line(s) listed in {crossing.MANIFEST_FILE}")
@@ -4761,6 +4951,11 @@ def main(argv: list[str] | None = None) -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="logbook", description="A diary that writes itself.")
     ap.add_argument("--version", action="version", version=__version__)
+    ap.add_argument(
+        "--identity-file",
+        metavar="PATH",
+        help=f"the age identity that opens the record (default ${sealing.IDENTITY_ENV}, else the config dir)",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("init", help="create a logbook (default ~/Logbook)")
     s.add_argument("path", nargs="?")
@@ -5483,6 +5678,9 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="one line per month file on stderr, in path order, as file n of N",
     )
+    s.add_argument(
+        "--keyless", action="store_true", help="never open a sealed line, even when the identity is here"
+    )
     s.set_defaults(fn=cmd_verify)
     s = sub.add_parser(
         "setup",
@@ -5551,7 +5749,34 @@ def main(argv: list[str] | None = None) -> None:
         metavar="FILE",
         help=f"trip-bundle: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
+    s.add_argument(
+        "--open",
+        action="store_true",
+        help="crossing: ship sealed lines and files opened, for a destination the policy gives no recipient",
+    )
+    s.add_argument(
+        "--sealed",
+        action="store_true",
+        help="whole log: write sealed lines verbatim (default: opened, the form a line re-enters by)",
+    )
     s.set_defaults(fn=cmd_export)
+    s = sub.add_parser(
+        "key",
+        help="the record's recipients and this machine's identity: init, show, add- and remove-recipient",
+    )
+    s.add_argument("verb", choices=("init", "show", "add-recipient", "remove-recipient"))
+    s.add_argument("--recipient", action="append", metavar="age1…", help="a recipient (repeatable)")
+    s.add_argument(
+        "--recovery",
+        action="store_true",
+        help="init: make a recovery identity, print it once for paper, add its recipient",
+    )
+    s.add_argument("--root", help="logbook folder (default: find)")
+    s.set_defaults(fn=cmd_key)
+    s = sub.add_parser("seal", help="seal the tier 2 and 3 lines written before the record had recipients")
+    s.add_argument("--all", action="store_true", help="every plain tier 2 or 3 line and the files they name")
+    s.add_argument("--root", help="logbook folder (default: find)")
+    s.set_defaults(fn=cmd_seal)
     s = sub.add_parser(
         "import", help="a trip bundle another record exported (RFC 0030): its lines appended as received"
     )
@@ -5645,7 +5870,7 @@ def main(argv: list[str] | None = None) -> None:
     v.set_defaults(fn=cmd_circle)
     v = verbs.add_parser("key", help="print this record's own public sharing key (made on first use)")
     v.set_defaults(fn=cmd_circle)
-    s = sub.add_parser("migrate", help="bring a logbook/0.1 record to logbook/0.2 (same lines, new hashes)")
+    s = sub.add_parser("migrate", help="bring a logbook/0.1 record forward (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
     s = sub.add_parser(
@@ -5670,12 +5895,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     s.set_defaults(fn=cmd_backup)
     a = ap.parse_args(argv)
+    if a.identity_file:  # a path, in this process's environment only; a key is never in a variable
+        os.environ[sealing.IDENTITY_ENV] = str(Path(a.identity_file).expanduser())
     try:
         a.fn(a)
         sys.stdout.flush()  # a short listing sits in the buffer until exit: meet the closed pipe here
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
+    except (sealing.IdentityRequired, sealing.MissingExtra) as e:  # RFC 0029: one sentence, exit 2
+        print(f"{a.cmd}: {e}", file=sys.stderr)
+        sys.exit(2)
+    except sealing.SealError as e:  # a sealed line or file that does not open: the record's error
+        print(f"{a.cmd}: {e}", file=sys.stderr)
+        sys.exit(1)
     except zoneinfo.ZoneInfoNotFoundError as e:  # SPEC §2: a zone this host lacks is said, never swapped
         reason = e.args[0] if e.args else str(e)
         print(f"{a.cmd}: {reason}; this machine's zone database does not know it", file=sys.stderr)

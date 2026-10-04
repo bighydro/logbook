@@ -15,15 +15,16 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from collections import Counter
-from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import __version__, policy
-from .chain import Line
+from . import __version__, attachments, policy, sealing
+from .chain import Line, is_sealed
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
 
@@ -34,6 +35,7 @@ SOURCE = "logbook"  # its source: the tool itself, not the owner and not an adap
 MANIFEST_FILE = "manifest.json"
 ENTRIES_FILE = "entries.jsonl"
 RESOLUTION_FILE = "resolution.jsonl"
+OPEN_FIELD = "payload_open"  # a sealed line shipped opened: {payload, salt}, the digest's pre-image
 ATTACHMENTS_DIR = "attachments"  # the SPEC §1.1 layout, so a verbatim `path` resolves in the bundle
 WATERMARK_FILE = PurePosixPath("exports/crossing.json")
 LAST = "last"  # `--since last`: from the watermark
@@ -92,6 +94,8 @@ class Request:
     tiers: tuple[int, ...]
     kinds: frozenset[str] | None
     max_tier: int
+    recipient: str | None = None  # the destination's age recipient (policy), to reseal sealed lines to
+    open_sealed: bool = False  # `--open`: ship sealed lines and files opened, when there is no recipient
 
     @property
     def tier3(self) -> bool:
@@ -105,10 +109,12 @@ def request(
     until: str,
     tiers: tuple[int, ...],
     kinds: frozenset[str] | None = None,
+    open_sealed: bool = False,
 ) -> Request:
     """Resolve `--since last`, check the window, and hold the request against the policy: a tier
     above the destination's ceiling is refused naming the policy file. Tier 3 is in `tiers` only
-    when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016)."""
+    when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016). The
+    destination's recipient, when the policy names one, is what sealed lines are resealed to."""
     if since == LAST:
         since = last_until(lb, destination)
     since, until = utc(_checked(since)), utc(_checked(until))
@@ -118,6 +124,7 @@ def request(
         raise CrossingError(f"the window runs backwards: --since {since} --until {until}")
     try:
         max_tier = policy.ceiling(lb.root, destination)
+        recipient = policy.recipient(lb.root, destination)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     if max(tiers) > max_tier:
@@ -126,7 +133,7 @@ def request(
             f"{policy.policy_path(lb.root)} allows max_tier {max_tier}; "
             "raise it there if that is what you want"
         )
-    return Request(destination, since, until, tiers, kinds, max_tier)
+    return Request(destination, since, until, tiers, kinds, max_tier, recipient, open_sealed)
 
 
 def _checked(stamp: str) -> str:
@@ -171,6 +178,7 @@ class Selection:
     resolutions_held_back: int  # overlay lines above the requested tiers
     blobs: list[dict[str, Any]]  # SPEC §1.1 references whose file the store holds
     missing: int  # distinct digests referenced whose file the store does not hold
+    sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
 
     @property
     def held_back(self) -> int:
@@ -220,11 +228,27 @@ def select(lb: Logbook, req: Request) -> Selection:
             for p in inside
             if p.tier in req.tiers and (req.kinds is None or p.kind in req.kinds) and p.id not in retracted
         ]
-        lines = idx.read((p.file, p.offset) for p in wanted)
-        last = standing([*retraction_lines, *idx.resolutions()])
+        raw = idx.read(((p.file, p.offset) for p in wanted), opened=False)
+        raw_resolutions = idx.resolutions(opened=False)
+    sealed = {str(line["id"]): line for line in [*raw, *raw_resolutions] if is_sealed(line)}
+    if sealed:
+        if not lb.identities:
+            raise CrossingError(
+                f"{len(sealed)} sealed line(s) are in the window and there is no identity at "
+                f"{lb.identity_file} to open them with"
+            )
+        if req.recipient is None and not req.open_sealed:
+            raise CrossingError(
+                f"{req.destination!r} has no recipient in {policy.policy_path(lb.root)} and sealed lines "
+                "are in the window: add one (RFC 0029 §7), or pass --open to ship them opened"
+            )
+    lines = [lb.opened(line) for line in raw]
+    last = standing([*retraction_lines, *(lb.opened(line) for line in raw_resolutions)])
     overlay, held = _overlay(lines, last, req.tiers)
     found, missing = blobs(lb, lines)
-    return Selection(lines, len(inside), overlay, held, found, missing)
+    crossed = {str(line["id"]) for line in [*lines, *overlay]}
+    carried = {k: v for k, v in sealed.items() if k in crossed}
+    return Selection(lines, len(inside), overlay, held, found, missing, carried)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
@@ -267,10 +291,12 @@ def blobs(lb: Logbook, lines: list[Line]) -> tuple[list[dict[str, Any]], int]:
             file = store / sha256
             if file.is_file():
                 media_type = ref.get("media_type")
+                size = ref.get("bytes")  # the plaintext's length; the file may be sealed (RFC 0029 §7)
+                known = isinstance(size, int) and not isinstance(size, bool)
                 present[sha256] = {
                     "sha256": sha256,
                     "path": f"{ATTACHMENTS_DIR}/{sha256}",
-                    "bytes": file.stat().st_size,
+                    "bytes": size if known else file.stat().st_size,
                     "media_type": media_type
                     if isinstance(media_type, str) and media_type
                     else "application/octet-stream",
@@ -312,7 +338,7 @@ def export(lb: Logbook, req: Request, sel: Selection, out: Path, generated_at: s
     head = str(lb.meta["head"])
     bundle_id = uuid7()
     manifest = build_manifest(lb, req, sel, generated_at, bundle_id, head)
-    package_sha256 = write_bundle(lb, sel, manifest, out)
+    package_sha256 = write_bundle(lb, sel, manifest, out, req)
     line = record(lb, req, sel, generated_at, bundle_id, head, package_sha256)
     write_watermark(lb, req.destination, req.until, generated_at, bundle_id)
     return Result(out, manifest, package_sha256, line)
@@ -397,22 +423,35 @@ def build_manifest(
             "lines": n,
             "warning": f"{TIER3_WARNING}: {n} tier-3 line(s) for {req.destination}",
         }
+    if sel.sealed:  # RFC 0029 §7: how the sealed lines and files of the record are carried
+        manifest["sealing"] = (
+            {"lines": len(sel.sealed), "mode": "resealed", "recipient": req.recipient}
+            if req.recipient
+            else {"lines": len(sel.sealed), "mode": "opened"}
+        )
     return manifest
 
 
-def write_bundle(lb: Logbook, sel: Selection, manifest: dict[str, Any], out: Path) -> str:
+def write_bundle(
+    lb: Logbook, sel: Selection, manifest: dict[str, Any], out: Path, req: Request | None = None
+) -> str:
     """The files under `out` in RFC 0005's layout; the manifest last, carrying the digest of each
-    other file. Returns the digest of manifest.json. Re-running into the same folder overwrites."""
+    other file. Returns the digest of manifest.json. Re-running into the same folder overwrites.
+    A line the record holds sealed crosses in its sealed form with `payload_enc` resealed to the
+    destination's recipient, or, under `--open`, with `payload_open` in its place (RFC 0029 §7);
+    its hashed fields are the owner's, verbatim, either way."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    manifest["entries_sha256"] = _write_jsonl(out / ENTRIES_FILE, sel.lines)
+    carry = _carrier(lb, sel, req)
+    manifest["entries_sha256"] = _write_jsonl(out / ENTRIES_FILE, (carry(line) for line in sel.lines))
     if sel.resolutions:
-        manifest["resolution_sha256"] = _write_jsonl(out / RESOLUTION_FILE, sel.resolutions)
+        resolutions = (carry(line) for line in sel.resolutions)
+        manifest["resolution_sha256"] = _write_jsonl(out / RESOLUTION_FILE, resolutions)
     if sel.blobs:
         (out / ATTACHMENTS_DIR).mkdir(exist_ok=True)
         for blob in sel.blobs:
             sha256 = str(blob["sha256"])
-            _copy_checked(lb.root / ATTACHMENTS_DIR / sha256, out / ATTACHMENTS_DIR / sha256, sha256)
+            _copy_checked(lb, req, lb.root / ATTACHMENTS_DIR / sha256, out / ATTACHMENTS_DIR / sha256, sha256)
     # Encoded once and written as bytes: text mode would turn the newlines into CRLF on Windows
     # and the digest must name the bytes on disk, never the string that was formatted.
     raw = (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
@@ -431,9 +470,41 @@ def _write_jsonl(path: Path, lines: Iterable[Line]) -> str:
     return digest.hexdigest()
 
 
-def _copy_checked(src: Path, dst: Path, sha256: str) -> None:
+def _carrier(lb: Logbook, sel: Selection, req: Request | None) -> Callable[[Line], Line]:
+    """How an opened line is written into the bundle: as it is when the record holds it plain;
+    else the sealed line with `payload_enc` resealed to the destination, or opened into
+    `payload_open` = {payload, salt} so the member recomputes the digest (RFC 0029 §4.3, §7)."""
+    identities = lb.identities if sel.sealed else []
+
+    def carry(line: Line) -> Line:
+        raw = sel.sealed.get(str(line.get("id")))
+        if raw is None:
+            return line
+        plain = sealing.open_bytes(raw, identities)
+        crossed = dict(raw)
+        if req is not None and req.recipient:
+            crossed[sealing.FIELD] = sealing.encode(sealing.seal_bytes(plain, [req.recipient]))
+        else:
+            crossed.pop(sealing.FIELD, None)
+            crossed[OPEN_FIELD] = json.loads(plain.decode("utf-8"))
+        return crossed
+
+    return carry
+
+
+def _copy_checked(lb: Logbook, req: Request | None, src: Path, dst: Path, sha256: str) -> None:
     """Copy one attachment, hashing on the way: a store file whose bytes do not match its name is
-    an error (SPEC §1.1), never something a recipient should find out."""
+    an error (SPEC §1.1), never something a recipient should find out. A sealed file is opened
+    with the identity, checked, and resealed to the destination or copied opened (RFC 0029 §7)."""
+    if sealing.is_sealed_file(src):
+        with attachments.opened(lb.root, sha256, lb.identities) as plain:
+            if attachments.digest_path(plain)[0] != sha256:
+                raise CrossingError(f"{src} opens to bytes that do not hash to its name; repair the record")
+            if req is not None and req.recipient:
+                sealing.seal_file(plain, dst, [req.recipient])
+            else:
+                shutil.copyfile(plain, dst)
+        return
     digest = hashlib.sha256()
     with src.open("rb") as fi, dst.open("wb") as fo:
         while chunk := fi.read(COPY_CHUNK):

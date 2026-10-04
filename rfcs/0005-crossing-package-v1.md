@@ -104,6 +104,25 @@ line (cf. ADR 0005, "one evening message"); tier 3 never — except the standing
 Given `logbook_head` and `policy`, the crossing is reproducible, and the split between "what arrived" (the
 log) and "what crossed" (this bundle) is auditable.
 
+## Sealed lines (RFC 0029)
+
+A record that seals tiers 2–3 holds such a line with a `payload` that is a reference (`sealed/v1`: `of`, `digest`)
+and the content in `payload_enc`, outside the hash. The line's hashed fields cross **verbatim**, as every line
+does; only `payload_enc` is replaced, in one of two ways, named by the manifest's `sealing` field:
+
+- `{"lines": N, "mode": "resealed", "recipient": "age1…"}` — `policy/crossing.json` gives the destination an age
+  recipient (`{"hermes": {"max_tier": 2, "recipient": "age1…"}}`), and `payload_enc` is the content resealed to it.
+  The member opens each line with its own identity, checks that the SHA-256 of the opened bytes is
+  `payload.digest`, and recomputes the line hash from the envelope as before.
+- `{"lines": N, "mode": "opened"}` — the destination has no recipient and the owner typed `--open`: `payload_enc`
+  is absent and `payload_open` carries the pre-image `{"payload": …, "salt": "…"}` as an object. The member
+  canonicalises it (RFC 8785), hashes it, and compares with `payload.digest`.
+
+A sealed attachment crosses under its plaintext digest the same two ways: resealed to the destination, or opened.
+Without a recipient and without `--open` the export refuses; so does an exporter without the owner's identity.
+A package therefore never carries ciphertext its reader cannot open, and the owner's hashes are never recomputed
+for it.
+
 ## Notes
 
 - **Delta or window.** `covers.since_head` lets a consumer pull only what is new since it last acknowledged

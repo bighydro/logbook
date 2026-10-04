@@ -89,8 +89,8 @@ as above, and a code checkout is never empty, so that rule covers it. The restor
 
 A snapshot is an ordinary record: `logbook verify --root SNAPSHOT` checks it where it lies, and
 `LOGBOOK_HOME=SNAPSHOT logbook day 2026-06-02` reads one day from the backup disk without restoring
-anything (the reader builds an `index.sqlite` in the snapshot; it is not part of the record and the next
-backup does not copy it). Never append to a snapshot; the next backup links against its files.
+anything (the reader builds its locator in your cache directory, keyed by the record's `owner_id`; nothing is
+written into the snapshot). Never append to a snapshot; the next backup links against its files.
 
 ## `backup list`
 

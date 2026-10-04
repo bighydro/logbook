@@ -69,7 +69,7 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 | [openlogbook](https://github.com/bighydro/logbook) (this repository) | Python | reference |
 | [logbook-ts](https://github.com/bighydro/logbook-ts) | TypeScript | independent, written from the spec alone |
 
-Both reproduce the conformance head in `conformance/expected.json`, and CI appends a line with one and verifies it with the other on every pull request.
+Both reproduce the conformance head in `conformance/expected.json`, and CI appends a line with one and verifies it with the other on every pull request. Level 2, the sealed sample `conformance/sample-logbook-sealed` with its published identity, is the reference's so far (SPEC §6).
 
 ## Status
 

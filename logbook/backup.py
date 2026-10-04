@@ -210,12 +210,15 @@ def _verify_copy(copy: Path, expected_head: str | None, check_attachments: bool)
     checked = 0
     if check_attachments:
         store = copy / attachments.DIR
+        identities = Logbook(copy).identities  # a sealed file is checked when the identity is here
         for file in sorted(store.iterdir()) if store.is_dir() else []:
             if not file.is_file() or file.name.startswith("."):
                 continue
-            if attachments.digest_path(file)[0] != file.name:
+            matches = attachments.check(file, identities)
+            if matches is False:
                 raise Invalid(f"{attachments.DIR}/{file.name} holds bytes that do not match its name")
-            checked += 1
+            if matches:
+                checked += 1
     return seq, head, checked
 
 

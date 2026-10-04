@@ -161,3 +161,49 @@ def test_find_still_locates_a_real_logbook_past_a_checkout(tmp_path, monkeypatch
     monkeypatch.delenv("LOGBOOK_HOME", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     assert Logbook.find(start=tmp_path / "real" / "clone").root == real.root
+
+
+# -- Level 2: the sealed sample (SPEC §6, RFC 0029) -----------------------------------------------
+
+SEALED = ROOT / "conformance" / "sample-logbook-sealed"
+IDENTITY = ROOT / "conformance" / "identity.txt"
+
+
+def test_sealed_sample_verifies_to_its_head_keyless_and_keyed():
+    expected = json.loads((ROOT / "conformance" / "expected-sealed.json").read_text())
+    keyless = Logbook(SEALED, identity_file=SEALED / "nowhere.txt")
+    counts: dict[str, int] = {}
+    seq, head, errors = keyless.verify(counts=counts)
+    assert errors == [] and (seq, head) == (expected["seq"], expected["head"])
+    assert counts["sealed"] > 0 and counts["opened"] == 0 and counts["plain"] == 0
+    keyed = Logbook(SEALED, identity_file=IDENTITY)
+    opened: dict[str, int] = {}
+    seq, head, errors = keyed.verify(counts=opened)
+    assert errors == [] and (seq, head) == (expected["seq"], expected["head"])
+    assert opened["opened"] == opened["sealed"] == counts["sealed"]
+    assert expected["format"] == json.loads((SEALED / "logbook.json").read_text())["format"] == "logbook/0.3"
+
+
+def test_sealed_sample_tampered_ciphertext_passes_keyless_and_fails_keyed(tmp_path):
+    shutil.copytree(SEALED, tmp_path / "lb")
+    f = next((tmp_path / "lb" / "logbook").glob("*/*.jsonl"))
+    lines = f.read_text().splitlines()
+    rows = [json.loads(line) for line in lines]
+    i, row = next((i, r) for i, r in enumerate(rows) if "payload_enc" in r)
+    raw = bytearray(__import__("base64").b64decode(row["payload_enc"]))
+    raw[-1] ^= 0x01  # one bit of the last chunk's tag
+    row["payload_enc"] = __import__("base64").b64encode(bytes(raw)).decode()
+    lines[i] = json.dumps(row, sort_keys=True)
+    f.write_text("\n".join(lines) + "\n")
+    assert Logbook(tmp_path / "lb", identity_file=tmp_path / "none").verify()[2] == []
+    _, _, errors = Logbook(tmp_path / "lb", identity_file=IDENTITY).verify()
+    assert len(errors) == 1 and "does not open" in errors[0]
+
+
+def test_a_tier_2_line_appended_to_the_sealed_sample_is_sealed(tmp_path):
+    shutil.copytree(SEALED, tmp_path / "lb")
+    lb = Logbook(tmp_path / "lb", identity_file=IDENTITY)
+    note = {"schema": "note/v1", "text": "one more"}
+    line = lb.append(at="2026-03-02T09:00:00Z", source="manual", kind="note", tier=2, payload=note)
+    assert line["payload"]["schema"] == "sealed/v1" and line["payload"]["of"] == "note/v1"
+    assert lb.verify()[2] == [] and lb.opened(line)["payload"]["text"] == "one more"

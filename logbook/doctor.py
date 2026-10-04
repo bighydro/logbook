@@ -14,7 +14,7 @@ The checks, in the order they print:
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
   (`trips`, `rollup nights`). None is a warn, not a places file is a fail.
 - `assets`: `assets.json` is a registry when it exists (ADR 0018). Absent is fine.
-- `extra:<name>`: each optional extra (`ais`, `crypto`, `transcribe`) is installed, with its
+- `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed, with its
   install line when not (a warn).
 - `sync:<name>`: for each live source the record uses — a `state/<name>.json` watermark, or lines of
   that source when the index is current — the variables its adapter reads are set. Names only,
@@ -53,6 +53,7 @@ PIP = 'pip install "openlogbook[{extra}]"'
 EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ais", ("websockets",)),
     ("crypto", ("cryptography",)),
+    ("sealed", ("pyrage",)),
     ("transcribe", ("mlx_whisper", "faster_whisper")),
 )
 #: a path part that begins with one of these, case-folded, names the service: `Dropbox (Personal)`,
@@ -108,7 +109,7 @@ def record_check(lb: Logbook) -> Check:
 def index_state(lb: Logbook) -> tuple[str, set[str]]:
     """(`current`, `stale` or `missing`, the sources the index holds when current), read-only: the
     file is opened for reading only, so an index another command is building is never discarded."""
-    path = lb.root / index.FILE_NAME
+    path = lb.index_path
     if not path.exists():
         return "missing", set()
     try:
@@ -117,6 +118,8 @@ def index_state(lb: Logbook) -> tuple[str, set[str]]:
         return "stale", set()
     try:
         stored = dict(db.execute("SELECT key, value FROM meta"))
+        stored.pop(index.INDEX_KEY, None)
+        stored.pop("opened", None)
         if stored != index.Index._meta_of(lb.meta):
             return "stale", set()
         return "current", {source for (source,) in db.execute("SELECT DISTINCT source FROM lines")}

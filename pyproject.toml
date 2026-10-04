@@ -23,6 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 # `openlogbook[crypto]`: import-backup on an encrypted iOS backup; share and receive a signed page (Ed25519)
 crypto = ["cryptography>=42"]
+sealed = ["pyrage>=1.2"]          # `openlogbook[sealed]`: tiers 2–3 sealed at rest with age (SPEC §4, RFC 0029)
 ais = ["websockets>=13"]          # `openlogbook[ais]`: sync ais listens to aisstream.io's websocket
 # `openlogbook[transcribe]`: transcribe voice-memos, locally; mlx-whisper on Apple silicon, faster-whisper elsewhere
 transcribe = [
@@ -125,7 +126,7 @@ dev = [
   "jsonschema>=4",
   # the extras whose tests run and whose modules mypy sees (an in-process MCP client, a faked socket):
   # named once, under [project.optional-dependencies], never repeated here
-  "openlogbook[crypto,ais,mcp]",
+  "openlogbook[crypto,sealed,ais,mcp]",
 ]
 
 [build-system]
@@ -148,7 +149,7 @@ strict = true
 python_version = "3.12"
 
 [[tool.mypy.overrides]]
-module = "ijson"
+module = ["ijson", "pyrage", "pyrage.*"]
 ignore_missing_imports = true  # no py.typed, no stubs
 
 [[tool.mypy.overrides]]

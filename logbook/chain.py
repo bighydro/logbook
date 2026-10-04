@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 Line = dict[str, Any]
@@ -13,6 +14,14 @@ Line = dict[str, Any]
 GENESIS = "0" * 64
 CONTENT_FIELDS = ("at", "end", "tz", "source", "kind", "tier", "payload")
 ENVELOPE_FIELDS = ("id", "seq", *CONTENT_FIELDS, "recorded_at", "prev", "hash")  # all present, SPEC §2
+
+# A sealed line (SPEC §2, RFC 0029): its `payload` is a reference to content kept in `payload_enc`,
+# an age file as standard base64, outside the hash as `id` is. What a verifier without the key
+# checks of it is here; opening it is `logbook/sealing.py`.
+SEALED_SCHEMA = "sealed/v1"
+SEALED_FIELD = "payload_enc"
+SEALED_KEYS = frozenset({"schema", "of", "digest"})
+AGE_MAGIC = b"age-encryption.org/v1\n"
 
 
 def parse_line(text: str | bytes) -> Line:
@@ -135,6 +144,41 @@ def _es6_number(x: float) -> str:
     return f"{sign}{mant}e{'+' if e >= 0 else '-'}{abs(e)}"
 
 
+def is_sealed(line: Line) -> bool:
+    payload = line.get("payload")
+    return isinstance(payload, dict) and payload.get("schema") == SEALED_SCHEMA
+
+
+def decode_sealed(payload_enc: object) -> bytes | None:
+    """The age file inside `payload_enc`, or None when it is not standard base64 of bytes that
+    begin with the age header: all a keyless verifier can check of it."""
+    if not isinstance(payload_enc, str) or not payload_enc:
+        return None
+    try:
+        raw = base64.b64decode(payload_enc, validate=True)
+    except (ValueError, TypeError):
+        return None
+    return raw if raw.startswith(AGE_MAGIC) else None
+
+
+def sealed_envelope_error(line: Line) -> str | None:
+    """The envelope rule for sealing (SPEC §2): a `sealed/v1` payload is exactly {schema, of,
+    digest} with a well-formed `payload_enc`, and no other payload has a `payload_enc`."""
+    enc = line.get(SEALED_FIELD)
+    if is_sealed(line):
+        payload = line["payload"]
+        if set(payload) != SEALED_KEYS or not isinstance(payload["of"], str):
+            return "sealed/v1 payload must be exactly {schema, of, digest}"
+        digest = payload["digest"]
+        if not isinstance(digest, str) or len(digest) != 64 or digest != digest.lower():
+            return "sealed/v1 digest is not a lowercase hex sha256"
+        if decode_sealed(enc) is None:
+            return f"sealed/v1 line without a well-formed {SEALED_FIELD}"
+    elif enc is not None:
+        return f"{SEALED_FIELD} on a line whose payload is not sealed/v1"
+    return None
+
+
 def content_hash(line: Line) -> str:
     content = {k: line.get(k) for k in CONTENT_FIELDS}
     return hashlib.sha256(canonical_json(content).encode("utf-8")).hexdigest()
@@ -152,13 +196,41 @@ TIMESTAMP_FIELDS = ("at", "end", "recorded_at")
 OFFSET_WARNING = "is not UTC with a literal Z (SPEC §2); a warning in this release, an error in the next"
 
 
-def verify_lines(lines: Iterable[Line], warnings: list[str] | None = None) -> tuple[int, str, list[str]]:
+# For a sealed line: None when it opened and its bytes hash to its digest, else what went wrong.
+Opener = Callable[[Line], str | None]
+
+
+def verify_lines(
+    lines: Iterable[Line],
+    warnings: list[str] | None = None,
+    opener: Opener | None = None,
+    counts: dict[str, int] | None = None,
+) -> tuple[int, str, list[str]]:
     """Walk lines in order. Returns (count, head, errors); what this release only warns about is
-    appended to `warnings` when a list is given."""
+    appended to `warnings` when a list is given. A sealed line is checked by the envelope rule
+    whatever the key, and opened through `opener` when one is given: its error is the record's
+    error (SPEC §3). `counts`, when given, is told how many lines were `sealed`, how many of those
+    were `opened`, and how many tier 2 or 3 lines are `plain` (RFC 0029 §5 rule 1)."""
     errors: list[str] = []
     prev, seq, head = GENESIS, 0, GENESIS
+    tally = {"sealed": 0, "opened": 0, "plain": 0} if counts is None else counts
+    for k in ("sealed", "opened", "plain"):
+        tally.setdefault(k, 0)
     for n, line in enumerate(lines, 1):
         errors.extend(f"line {n}: {k} is missing" for k in ENVELOPE_FIELDS if k not in line)
+        sealed_error = sealed_envelope_error(line)
+        if sealed_error is not None:
+            errors.append(f"line {n}: {sealed_error}")
+        elif is_sealed(line):
+            tally["sealed"] += 1
+            if opener is not None:
+                opened = opener(line)
+                if opened is None:
+                    tally["opened"] += 1
+                else:
+                    errors.append(f"line {n}: {opened}")
+        elif line.get("tier") in (2, 3):
+            tally["plain"] += 1
         if warnings is not None:
             for k in TIMESTAMP_FIELDS:
                 stamp = line.get(k)
