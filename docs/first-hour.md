@@ -136,8 +136,8 @@ copy the two numbers it shows, like 59.9139, 10.7522. Never type an address here
 Your home, as latitude, longitude [skip] (e.g. 59.9139, 10.7522):
 ```
 
-Not sure yet? Enter skips it; `logbook places name Home 59.9139,10.7522 --kind home` does it later, or
-`logbook setup --step home` asks again.
+Not sure yet? Enter skips it; `logbook setup places name Home 59.9139,10.7522 --kind home` does it later,
+or `logbook setup --step home` asks again.
 
 ### Step 5: what is on this machine
 
@@ -332,17 +332,18 @@ needs this program to be read.
 ```
 $ logbook add "coffee with Kari, talked about the summer"
 $ logbook show today
-$ logbook stats
+$ logbook show stats
 $ logbook verify
 ```
 
 `add` with a sentence is a note in your words. `show today` reads the day back: what was imported,
-what you wrote. `stats` counts what the record holds, by kind, source and year, and never shows a
-line's text. `verify` recomputes every hash and says *valid*; it will say so every time, until a byte
+what you wrote. `show stats` counts what the record holds, by kind, source and year, and never shows
+a line's text. `verify` recomputes every hash and says *valid*; it will say so every time, until a byte
 changes.
 
 Then, at your pace: [Try it](try-it.md) runs every command on a demo record of a person who does not
-exist; the README's *Sources* lists every export the adapters read, with the command for each; and
+exist; [the 22 commands](commands.md) are one page, with the older names each still answers to; the
+README's *Sources* lists every export the adapters read, with the command for each; and
 `logbook doctor` is there whenever something feels off.
 
 ## `--yes`
