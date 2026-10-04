@@ -27,9 +27,10 @@ from shared_day import (
     use,
 )
 
-from logbook import cli, share
-from logbook.chain import canonical_json
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import share
+from logbook.core.chain import canonical_json
+from logbook.core.store import Logbook
 
 PHOTO_SHA = hashlib.sha256(PHOTO_BYTES).hexdigest()
 

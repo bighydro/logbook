@@ -281,7 +281,7 @@ resolved), the **podcasts** section — the episodes' hours by show and by month
 one — and **by month** every month the window touches with its hours, listens and skips — a
 month with no listen is an em dash, never a zero. The window is clipped to the days the listen
 lines cover; a correction that `supersedes` a line wins and a retracted line is out. It lives in
-`logbook/listen_rollup.py`, beside `rollup.py` and in its manner. The adapters and the rollup are
+`logbook/core/listen_rollup.py`, beside `rollup.py` and in its manner. The adapters and the rollup are
 described in [adapters/listen.md](adapters/listen.md).
 ## Per year, month or week: attention
 

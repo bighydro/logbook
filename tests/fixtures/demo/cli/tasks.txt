@@ -1,0 +1,6 @@
+5 tasks, 2 open (the latest snapshot of each task is its state, RFC 0016)
+  2026-06-10  08:30  done  due 2026-06-18  “Buy the long rope”  [Boat]  f8225279cda2bff8
+  2026-06-13  08:30  open  due 2026-06-17  “Service the outboard”  [Boat]  e0cd530d32643a72
+  2026-06-21  08:30  open  due 2026-06-24  “Renew the boat insurance”  [Boat]  d967b6e552e75ba7
+  2026-06-24  08:30  done  due 2026-06-26  “Send the Copenhagen slides”  [Work]  cf3f13b1f1956b69
+  2026-06-30  08:30  done  due 2026-07-09  “Book the Zürich hotel”  [Work]  dab73a1436336c6a

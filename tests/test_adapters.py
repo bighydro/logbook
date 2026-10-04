@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters
-from logbook.adapters import dawarich
-from logbook.store import Logbook
+from logbook.contrib import adapters
+from logbook.contrib.adapters import dawarich
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "dawarich" / "export.json"
@@ -309,3 +309,25 @@ def test_run_coordinates_are_floats_not_decimals():
     p = next(dawarich.run(FIXTURE))["payload"]
     assert type(p["lat"]) is float and type(p["lon"]) is float
     json.dumps(p)  # canonical JSON must be able to serialise every payload value
+
+
+def test_the_entry_points_name_every_built_in_and_nothing_else():
+    """One registry: `adapters.BUILT_IN` (in code, ordered) is the source of truth, and pyproject's
+    `logbook.adapters` entry points list exactly those modules, at their current paths, so a tool
+    reading the distribution's metadata and `logbook sources` agree. The keys are unique names."""
+    import tomllib
+
+    with (ROOT / "pyproject.toml").open("rb") as f:
+        table = tomllib.load(f)["project"]["entry-points"]["logbook.adapters"]
+    assert set(table.values()) == {f"logbook.contrib.adapters.{m}" for m in adapters.BUILT_IN}
+    assert len(table) == len(adapters.BUILT_IN)
+    assert list(table.values()) == [f"logbook.contrib.adapters.{m}" for m in adapters.BUILT_IN], "same order"
+
+
+def test_a_built_in_is_registered_once_whichever_road_found_it():
+    """A built-in is both in BUILT_IN and an entry point of the installed distribution; the registry
+    hands it out once per kind, as the module object."""
+    found = adapters.all_adapters()
+    keys = [(isinstance(a, adapters.LiveAdapter), a.NAME) for a in found]
+    assert len(keys) == len(set(keys))
+    assert dawarich in found

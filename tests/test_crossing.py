@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from logbook import cli
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 PERSON_A = "019cadd3-6bc0-7dcd-9133-043f5aabf2a9"

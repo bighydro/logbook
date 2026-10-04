@@ -18,7 +18,7 @@ from typing import Any
 
 from persona import attendee, dwell, event, note, photo, resolution, travel, utc
 
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 INES_HOME = (59.9300, 10.7000)

@@ -9,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from logbook import adapters, cli, policy
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.core import policy
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 POCKET_CSV = ROOT / "tests" / "fixtures" / "pocket" / "part_000000.csv"

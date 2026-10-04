@@ -43,7 +43,7 @@ Register the signing key on GitHub ([how](https://docs.github.com/en/authenticat
 
 The easiest and most useful thing to build is an adapter for the export you already have. The ones wanted, with their export formats, profiles and tiers, are in [the bounty list](https://bighydro.github.io/logbook/adapter-bounties/); the ones marked `good first adapter` are a few hours each.
 
-1. Copy `adapters/template/` to `logbook/adapters/<source>.py` with its tests and `tests/fixtures/<source>/`.
+1. Copy `adapters/template/` to `logbook/contrib/adapters/<source>.py` with its tests and `tests/fixtures/<source>/`.
 2. Put a small, synthetic export in the fixture folder. Never real data, not even yours.
 3. Write `NAME`, `sniff(path) -> bool` and `run(input_path, since)` yielding observations with a `payload.schema` from an existing RFC. A new shape is a new RFC first (below).
 4. Register the module once, in `pyproject.toml` under `[project.entry-points."logbook.adapters"]`, where `logbook add` should try it (the order is `find`'s precedence); `tests/test_adapter_registry.py` fails on a module that is not there. Add a page under `docs/adapters/` when the source needs explaining.
@@ -67,3 +67,13 @@ The suite runs in parallel (`uv run pytest -n auto`) and a pull request's CI sho
 ## What CI checks
 
 Every pull request and every push to `main`: ruff and mypy; the suite on Linux, macOS and Windows with Python 3.12 and 3.13; the conformance rule (`logbook verify` on `conformance/sample-logbook` prints the head in `conformance/expected.json`); the Nix and Docker builds; `cross-impl`, which builds logbook-ts at its `main`, checks that it prints the same head on the sample, appends one note to a copy with this CLI and verifies the copy with that one; and `changelog`, which fails a pull request that edits CHANGELOG.md or adds no fragment unless it carries the `no-changelog` label.
+
+## Where does my code go
+
+One package, three tiers ([ARCHITECTURE.md](ARCHITECTURE.md); `logbook/layout.py` declares them, `tests/test_layout.py` holds the tree to it):
+
+- `logbook/core/` — the format and what SPEC.md freezes with it: the chain, the record, the index, the attachment store, the tiers, and a reader whose JSON a second implementation is compared on (§6.1). A change here is a spec change until proven otherwise.
+- `logbook/contrib/` — an adapter (`contrib/adapters/<source>.py`, one module per source, registered once in `pyproject.toml`; `BUILT_IN` is generated from that table), an import or sync, an export, or a derived reader whose output is a reader's own. Imports core and contrib, never labs.
+- `logbook/labs/` — anything that runs a model, or is still an experiment. Imported only when its command runs.
+- `logbook/commands/` — the command itself: `<name>_arguments(sub)` and `cmd_<name>(a)` in the family's module, a line in `parser.py`; an adapter or a labs module imported inside the function, so `logbook --help` stays cheap.
+- A module that moves keeps its old import path for one minor version (`layout.MOVED`, `docs/migration-0.6.md`).

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.store import CodeCheckoutError, Logbook
+from logbook.core.store import CodeCheckoutError, Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "conformance" / "sample-logbook"

@@ -11,8 +11,9 @@ from typing import Any
 import pytest
 from persona import BOAT, KARI_ID, OLA_ID, PLACES, persona_record
 
-from logbook import cli, countries
-from logbook.flights import Airports
+from logbook import cli
+from logbook.core import countries
+from logbook.core.flights import Airports
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
@@ -37,7 +38,7 @@ def test_country_comes_from_the_place_else_the_nearest_airports_zone() -> None:
     assert oslo == countries.Country("NO", "airport", "OSL")
     zurich = countries.country_of(47.3769, 8.5417, [], airports, table)
     assert zurich.code == "CH" and zurich.method == "airport"
-    from logbook.places import Place
+    from logbook.core.places import Place
 
     home = Place("Home", 59.9139, 10.7522, 120, "home", country="SE")  # the captain's word wins
     assert countries.country_of(59.9139, 10.7522, [home], airports, table) == countries.Country(
@@ -77,7 +78,7 @@ def test_a_night_in_transit_is_listed_separately(
 ) -> None:
     from persona import HOME, OSL, dwell, travel
 
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
@@ -131,7 +132,7 @@ def test_a_long_haul_an_unknown_airport_and_a_superseded_line(
 ) -> None:
     from persona import flight
 
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
@@ -204,7 +205,7 @@ def test_year_and_since_until_are_exclusive_and_an_unknown_kind_is_refused(
 def test_an_empty_record_rolls_up_to_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
@@ -255,7 +256,7 @@ def test_places_rollup_lists_the_top_unnamed_clusters(
     the Zürich hotel, the anchorage aboard Solvind, the two airports, the cafe."""
     from persona import FJORD, ZURICH
 
-    from logbook import rollup
+    from logbook.core import rollup
 
     persona_record(tmp_path, monkeypatch)
     data = _json(capsys, "places", "--year", "2026")

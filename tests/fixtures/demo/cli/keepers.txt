@@ -1,0 +1,9 @@
+  2026-06-03  12:30  memory immich     IMG_06031030.HEIC
+  2026-06-06  18:30  memory immich     IMG_06061630.HEIC
+  2026-06-10  17:00  art    immich     IMG_06101500.HEIC
+  2026-06-10  17:20  memory immich     IMG_06101520.HEIC
+  2026-06-16  19:30  memory immich     IMG_06161730.HEIC
+  2026-06-19  19:30  memory immich     IMG_06191730.HEIC
+  2026-06-21  09:30  memory immich     IMG_06210730.HEIC
+  2026-06-23  12:30  memory immich     IMG_06231030.HEIC
+  2026-06-26  13:00  memory immich     IMG_06261100.HEIC

@@ -1,0 +1,6 @@
+flights 2026-05-31 – 2026-06-30
+  2026  4 flights · 3,886 km · 0 long-haul · declared 1, inferred 1, tracked 2
+        2026-06-08  XY 561  OSL → ZRH · 1,426 km · tracked
+        2026-06-11  XY 562  ZRH → OSL · 1,426 km · inferred
+        2026-06-25  XY 571  OSL → CPH · 517 km · tracked
+        2026-06-27  XY 572  CPH → OSL · 517 km · declared

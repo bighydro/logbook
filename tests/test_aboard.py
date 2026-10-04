@@ -31,9 +31,10 @@ from persona import (
     utc,
 )
 
-from logbook import cli, stays
-from logbook.flights import distance_km
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import stays
+from logbook.core.flights import distance_km
+from logbook.core.store import Logbook
 
 FRI, SAT = PASSAGE_DAY, PASSAGE_NEXT
 

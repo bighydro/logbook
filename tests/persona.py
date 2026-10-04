@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from logbook.store import Logbook
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 UTC = ZoneInfo("UTC")

@@ -15,7 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from synthetic_mbox import BLOB_SIZES, write_mbox
 
-from logbook.adapters import mail
+from logbook.contrib.adapters import mail
 
 TZ = "Europe/Oslo"
 BENCHMARK_BYTES = 500_000_000
@@ -26,7 +26,7 @@ PROGRESS_EVERY = 10_000
 MEASURE = """
 import resource, sys, time
 from pathlib import Path
-from logbook.adapters import mail
+from logbook.contrib.adapters import mail
 path = Path(sys.argv[1])
 reports = []
 t = time.perf_counter()

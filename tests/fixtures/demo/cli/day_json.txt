@@ -1,0 +1,617 @@
+{
+  "day": "2026-06-08",
+  "weekday": "Monday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-06-07",
+      "where": "Home",
+      "home": true,
+      "aboard": null,
+      "in_transit": false,
+      "stay": "stay:owner:20260607T1500Z@59.9139,10.7522",
+      "position": {
+        "lat": 59.913889,
+        "lon": 10.752209
+      },
+      "lines": [
+        "019ea299-0d80-7e32-98f0-f25c4339ca4e",
+        "019ea527-a7a0-7875-a438-3c6b0d04d925"
+      ]
+    },
+    "after": {
+      "day": "2026-06-08",
+      "where": "47.3769,8.5417 (Zurich)",
+      "home": false,
+      "aboard": null,
+      "in_transit": false,
+      "stay": "stay:owner:20260608T0830Z@47.3769,8.5417",
+      "position": {
+        "lat": 47.376897,
+        "lon": 8.5417
+      },
+      "lines": [
+        "019ea65a-5b40-7708-a14a-88b381345ec5",
+        "019eaaf7-6300-75fb-9ea4-71829a961d93"
+      ]
+    }
+  },
+  "country": {
+    "code": "CH",
+    "method": "airport",
+    "by": "ZRH",
+    "from": "night"
+  },
+  "all_day": [],
+  "timeline": [
+    {
+      "id": "stay:owner:20260607T1500Z@59.9139,10.7522",
+      "kind": "stay",
+      "start": "2026-06-07T15:00:00Z",
+      "end": "2026-06-08T02:55:00Z",
+      "start_local": "2026-06-07T17:00:00+02:00",
+      "end_local": "2026-06-08T04:55:00+02:00",
+      "within_day": {
+        "start": "2026-06-07T22:00:00Z",
+        "end": "2026-06-08T02:55:00Z",
+        "duration_s": 17700
+      },
+      "duration_s": 42900,
+      "where": "Home",
+      "place": "Home",
+      "lat": 59.913889,
+      "lon": 10.752209,
+      "aboard": null,
+      "mode": null,
+      "distance_m": null,
+      "airports": [],
+      "points": 144,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea299-0d80-7e32-98f0-f25c4339ca4e",
+        "last": "019ea527-a7a0-7875-a438-3c6b0d04d925"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 0,
+          "lines": []
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      }
+    },
+    {
+      "id": "move:owner:20260608T0255Z",
+      "kind": "move",
+      "start": "2026-06-08T02:55:00Z",
+      "end": "2026-06-08T03:40:00Z",
+      "start_local": "2026-06-08T04:55:00+02:00",
+      "end_local": "2026-06-08T05:40:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T02:55:00Z",
+        "end": "2026-06-08T03:40:00Z",
+        "duration_s": 2700
+      },
+      "duration_s": 2700,
+      "where": null,
+      "place": null,
+      "lat": null,
+      "lon": null,
+      "aboard": null,
+      "mode": "car",
+      "distance_m": 36671,
+      "airports": [],
+      "points": 5,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea527-a7a0-7875-a438-3c6b0d04d925",
+        "last": "019ea550-da80-7343-9945-ea8c29cbfe53"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 0,
+          "lines": []
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      },
+      "flights": []
+    },
+    {
+      "id": "stay:owner:20260608T0340Z@60.1939,11.1004",
+      "kind": "stay",
+      "start": "2026-06-08T03:40:00Z",
+      "end": "2026-06-08T04:50:00Z",
+      "start_local": "2026-06-08T05:40:00+02:00",
+      "end_local": "2026-06-08T06:50:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T03:40:00Z",
+        "end": "2026-06-08T04:50:00Z",
+        "duration_s": 4200
+      },
+      "duration_s": 4200,
+      "where": "OSL, Oslo",
+      "place": null,
+      "lat": 60.193902,
+      "lon": 11.100417,
+      "aboard": null,
+      "mode": null,
+      "distance_m": null,
+      "airports": [],
+      "points": 15,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea550-da80-7343-9945-ea8c29cbfe53",
+        "last": "019ea590-f0c0-73bc-82b5-740ed8e02aff"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 0,
+          "lines": []
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      }
+    },
+    {
+      "id": "move:owner:20260608T0450Z",
+      "kind": "move",
+      "start": "2026-06-08T04:50:00Z",
+      "end": "2026-06-08T07:20:00Z",
+      "start_local": "2026-06-08T06:50:00+02:00",
+      "end_local": "2026-06-08T09:20:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T04:50:00Z",
+        "end": "2026-06-08T07:20:00Z",
+        "duration_s": 9000
+      },
+      "duration_s": 9000,
+      "where": null,
+      "place": null,
+      "lat": null,
+      "lon": null,
+      "aboard": null,
+      "mode": "flight",
+      "distance_m": 1425770,
+      "airports": [
+        "OSL",
+        "ZRH"
+      ],
+      "points": 0,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea590-f0c0-73bc-82b5-740ed8e02aff",
+        "last": "019ea61a-4500-72ba-b262-d957e2ff67fb"
+      },
+      "attached": {
+        "events": [
+          {
+            "title": "Flight to Zürich (XY 561)",
+            "start": "2026-06-08T05:05:00Z",
+            "end": "2026-06-08T07:15:00Z",
+            "line": "019ea59e-ac60-7fcf-8b3e-3fd583a52923",
+            "sources": [
+              "ios-calendar"
+            ],
+            "lines": [
+              "019ea59e-ac60-7fcf-8b3e-3fd583a52923"
+            ]
+          }
+        ],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 0,
+          "lines": []
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      },
+      "flights": [
+        "019ea59e-ac60-724e-af4a-0611cd85a4f2"
+      ]
+    },
+    {
+      "id": "019ea59e-ac60-724e-af4a-0611cd85a4f2",
+      "kind": "flight",
+      "start": "2026-06-08T05:12:00Z",
+      "end": "2026-06-08T07:10:00Z",
+      "start_local": "2026-06-08T07:12:00+02:00",
+      "end_local": "2026-06-08T09:10:00+02:00",
+      "carrier": "XY",
+      "number": "561",
+      "from": "OSL",
+      "to": "ZRH",
+      "evidence": "tracked",
+      "role": "passenger",
+      "aircraft": {
+        "registration": "ZZ-ABC",
+        "type": "A320"
+      },
+      "line": "019ea59e-ac60-724e-af4a-0611cd85a4f2"
+    },
+    {
+      "id": "stay:owner:20260608T0720Z@47.4582,8.5481",
+      "kind": "stay",
+      "start": "2026-06-08T07:20:00Z",
+      "end": "2026-06-08T07:55:00Z",
+      "start_local": "2026-06-08T09:20:00+02:00",
+      "end_local": "2026-06-08T09:55:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T07:20:00Z",
+        "end": "2026-06-08T07:55:00Z",
+        "duration_s": 2100
+      },
+      "duration_s": 2100,
+      "where": "ZRH, Zurich",
+      "place": null,
+      "lat": 47.458151,
+      "lon": 8.548075,
+      "aboard": null,
+      "mode": null,
+      "distance_m": null,
+      "airports": [],
+      "points": 8,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea61a-4500-72ba-b262-d957e2ff67fb",
+        "last": "019ea63a-5020-79cf-b7ce-59e375908c67"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 2,
+          "lines": [
+            "019ea61e-d8e0-71f6-acdc-1ee5de493425",
+            "019ea620-ada0-7592-93d9-788003ce6e35"
+          ]
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      }
+    },
+    {
+      "id": "move:owner:20260608T0755Z",
+      "kind": "move",
+      "start": "2026-06-08T07:55:00Z",
+      "end": "2026-06-08T08:30:00Z",
+      "start_local": "2026-06-08T09:55:00+02:00",
+      "end_local": "2026-06-08T10:30:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T07:55:00Z",
+        "end": "2026-06-08T08:30:00Z",
+        "duration_s": 2100
+      },
+      "duration_s": 2100,
+      "where": null,
+      "place": null,
+      "lat": null,
+      "lon": null,
+      "aboard": null,
+      "mode": "car",
+      "distance_m": 9043,
+      "airports": [],
+      "points": 3,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea63a-5020-79cf-b7ce-59e375908c67",
+        "last": "019ea65a-5b40-7708-a14a-88b381345ec5"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 0,
+          "lines": []
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      },
+      "flights": []
+    },
+    {
+      "id": "stay:owner:20260608T0830Z@47.3769,8.5417",
+      "kind": "stay",
+      "start": "2026-06-08T08:30:00Z",
+      "end": "2026-06-09T06:00:00Z",
+      "start_local": "2026-06-08T10:30:00+02:00",
+      "end_local": "2026-06-09T08:00:00+02:00",
+      "within_day": {
+        "start": "2026-06-08T08:30:00Z",
+        "end": "2026-06-08T22:00:00Z",
+        "duration_s": 48600
+      },
+      "duration_s": 77400,
+      "where": "47.3769,8.5417 (Zurich)",
+      "place": null,
+      "lat": 47.376897,
+      "lon": 8.5417,
+      "aboard": null,
+      "mode": null,
+      "distance_m": null,
+      "airports": [],
+      "points": 259,
+      "promoted": false,
+      "gap": false,
+      "lines": {
+        "first": "019ea65a-5b40-7708-a14a-88b381345ec5",
+        "last": "019eaaf7-6300-75fb-9ea4-71829a961d93"
+      },
+      "attached": {
+        "events": [],
+        "transcripts": [],
+        "notes": [
+          {
+            "text": "Zürich. The hotel by the river; kickoff tomorrow at nine.",
+            "line": "019ea8d2-1200-7ded-8425-b60d6960f5c4"
+          }
+        ],
+        "mail": [],
+        "calls": [],
+        "messages": {
+          "count": 2,
+          "lines": [
+            "019ea793-7780-7ad0-a047-20748769f632",
+            "019ea7b1-ade0-7ee7-b3dd-7034f0596a47"
+          ]
+        },
+        "photos": {
+          "count": 0,
+          "lines": []
+        },
+        "keepers": []
+      },
+      "with": {
+        "confirmed": [],
+        "proposed": []
+      }
+    }
+  ],
+  "flights": [
+    {
+      "id": "019ea59e-ac60-724e-af4a-0611cd85a4f2",
+      "kind": "flight",
+      "start": "2026-06-08T05:12:00Z",
+      "end": "2026-06-08T07:10:00Z",
+      "start_local": "2026-06-08T07:12:00+02:00",
+      "end_local": "2026-06-08T09:10:00+02:00",
+      "carrier": "XY",
+      "number": "561",
+      "from": "OSL",
+      "to": "ZRH",
+      "evidence": "tracked",
+      "role": "passenger",
+      "aircraft": {
+        "registration": "ZZ-ABC",
+        "type": "A320"
+      },
+      "line": "019ea59e-ac60-724e-af4a-0611cd85a4f2"
+    }
+  ],
+  "unplaced": [],
+  "stories": [],
+  "health": {
+    "sleep_h": 6.6,
+    "steps": 8115,
+    "resting_hr": 53,
+    "hrv": null,
+    "lines": [
+      "019ea465-9020-735e-bd11-6b957df5d9e6",
+      "019ea47f-32a0-7a40-8208-cdcbe1b41f4f",
+      "019ea48c-ee40-72f1-b8fe-19005511fd75",
+      "019ea4cd-0480-7e8f-828e-ffe7a2f2598a",
+      "019ea4ec-2540-7b6e-9a29-6f9b36a658b4",
+      "019ea4f8-0c20-7210-b687-c91d952e5bbb",
+      "019ea51b-c0c0-78b0-b2a0-98cbc8cdaf83",
+      "019ea52d-25e0-70e7-bf59-81fcc84408e2",
+      "019ea546-c860-7cb3-9547-085d27431f04",
+      "019ea582-4ac0-7561-a81c-9428bfeab612",
+      "019ea591-db20-7418-ae45-f96a05716ba6",
+      "019ea5a1-6b80-79ad-86b6-3422b91ab1fe",
+      "019ea59a-1880-70dc-8abe-131d7a89552a",
+      "019ea5a7-d420-76c1-9da9-404aeb1e522f",
+      "019ea5b5-8fc0-7ed9-835c-61a37ee5fa2e",
+      "019ea5c3-4b60-77f6-b417-009dfe4e3d9c",
+      "019ea5d1-0700-7cf1-9008-e5d2765fc93e",
+      "019ea5de-c2a0-7b87-9e28-e30fba60b295",
+      "019ea5ec-7e40-7e0f-a3da-34687d6b9978",
+      "019ea5fa-39e0-7e24-afeb-95c92cc15ccc",
+      "019ea607-f580-71a3-8d89-b477d47d5c1d",
+      "019ea615-b120-716c-96e8-3a7619fb26dd",
+      "019ea623-6cc0-7c3a-b11d-60b6b6d3f09a",
+      "019ea631-2860-75e6-bc09-bfe13fa2ceae",
+      "019ea63e-e400-73a4-9c39-2e562d70f4b9",
+      "019ea64c-9fa0-7d5a-af96-88878316f3e0",
+      "019ea65a-5b40-7b6e-96b7-b21c94854dae",
+      "019ea668-16e0-78c8-a1fc-2862d0391e4a",
+      "019ea675-d280-7f53-94ea-79e4d8581ec3",
+      "019ea683-8e20-7dea-9924-c3e5bfd35252",
+      "019ea691-49c0-76d1-8e83-c65bb82f4583",
+      "019ea69f-0560-726a-9f5e-c5f34d2eedf3",
+      "019ea6ac-c100-752c-ad9e-58e72573b5a9",
+      "019ea6ba-7ca0-7058-a0ab-d128e1bb4307",
+      "019ea6c8-3840-7a5c-b67a-cc8e890feb8c",
+      "019ea6d5-f3e0-7fea-827b-37b8f718e489",
+      "019ea6e3-af80-78be-9dea-3dd63296f476",
+      "019ea6f1-6b20-7aa3-a9f2-8e814523626d",
+      "019ea6ff-26c0-7f3a-8eac-d12e9d421d55",
+      "019ea70c-e260-76f1-813c-c71aa542bc29",
+      "019ea71a-9e00-7ef9-8707-b610b605366c",
+      "019ea728-59a0-70e1-b8cd-92f035b40e59",
+      "019ea736-1540-7879-a23f-023d26787e81",
+      "019ea743-d0e0-7f77-9be5-8a0e5a482ebf",
+      "019ea751-8c80-7149-a54c-d8c689aabd83",
+      "019ea75f-4820-7ec1-a7ac-2c5d0c381302",
+      "019ea76d-03c0-788c-883b-edb64a993300",
+      "019ea77a-bf60-7d19-ab13-b7a8b71611e7",
+      "019ea788-7b00-731b-99ad-395d2872c794",
+      "019ea796-36a0-7449-964e-1a4e0d618bd9",
+      "019ea7a3-f240-7086-a520-5c8a65b96240",
+      "019ea7b1-ade0-7b61-8245-038823f53d1f",
+      "019ea7bf-6980-784b-9b94-60f3427820fc",
+      "019ea7cd-2520-7296-9125-f92ef3827dfa",
+      "019ea7da-e0c0-7bef-96e2-2a684e02bf55",
+      "019ea7e8-9c60-7953-9047-582bef144a64",
+      "019ea7f6-5800-78bc-8d6d-3aeca03b6e8b",
+      "019ea804-13a0-7d2a-a5c1-341b1b96c24a",
+      "019ea811-cf40-71b3-bf3f-cca04bdd5b0d",
+      "019ea81f-8ae0-77bf-a325-1854965902fb",
+      "019ea82d-4680-7bfa-84fe-190b1c7d93be",
+      "019ea83b-0220-7cbc-b241-e75f9d377444",
+      "019ea848-bdc0-7298-bf24-290071d02ff9",
+      "019ea856-7960-73f3-a809-44e3ccc6c815",
+      "019ea864-3500-7df3-af29-5162155d0b44",
+      "019ea871-f0a0-7b5e-a627-6df1f135903c",
+      "019ea87f-ac40-7c3a-9499-bb458651173a",
+      "019ea88d-67e0-791f-8434-07480e9737c0",
+      "019ea89b-2380-7c61-9971-41b580aad972",
+      "019ea8a8-df20-758d-a065-c764b81e546f",
+      "019ea8b6-9ac0-7ba3-8222-ab0449a35d0b",
+      "019ea8c4-5660-72f8-a705-7836b416fbdf",
+      "019ea563-2a00-7bd0-a341-c68bb04e0bc6"
+    ]
+  },
+  "spend": null,
+  "weather": null,
+  "sources": [
+    {
+      "source": "dawarich",
+      "lines": 253,
+      "first": "2026-06-07T22:00:00Z",
+      "newest": "2026-06-08T21:55:00Z"
+    },
+    {
+      "source": "apple-health",
+      "lines": 84,
+      "first": "2026-06-07T22:23:00Z",
+      "newest": "2026-06-08T20:26:00Z"
+    },
+    {
+      "source": "ais",
+      "lines": 24,
+      "first": "2026-06-07T22:00:00Z",
+      "newest": "2026-06-08T21:00:00Z"
+    },
+    {
+      "source": "whatsapp",
+      "lines": 4,
+      "first": "2026-06-08T07:25:00Z",
+      "newest": "2026-06-08T14:45:00Z"
+    },
+    {
+      "source": "safari",
+      "lines": 2,
+      "first": "2026-06-08T06:27:00Z",
+      "newest": "2026-06-08T19:32:00Z"
+    },
+    {
+      "source": "apple-podcasts",
+      "lines": 1,
+      "first": "2026-06-08T05:40:00Z",
+      "newest": "2026-06-08T05:40:00Z"
+    },
+    {
+      "source": "flighty",
+      "lines": 1,
+      "first": "2026-06-08T05:12:00Z",
+      "newest": "2026-06-08T05:12:00Z"
+    },
+    {
+      "source": "google-takeout",
+      "lines": 1,
+      "first": "2026-06-08T18:44:00Z",
+      "newest": "2026-06-08T18:44:00Z"
+    },
+    {
+      "source": "ios-calendar",
+      "lines": 1,
+      "first": "2026-06-08T05:05:00Z",
+      "newest": "2026-06-08T05:05:00Z"
+    },
+    {
+      "source": "manual",
+      "lines": 1,
+      "first": "2026-06-08T20:00:00Z",
+      "newest": "2026-06-08T20:00:00Z"
+    },
+    {
+      "source": "taxi",
+      "lines": 1,
+      "first": "2026-06-08T08:00:00Z",
+      "newest": "2026-06-08T08:00:00Z"
+    }
+  ],
+  "received": []
+}

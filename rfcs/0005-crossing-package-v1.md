@@ -14,7 +14,7 @@ and enough provenance to be reproducible. Hermes is the first consumer; the form
 properties, and both stay:
 
 - **`day-package/v1`** — a *safe index of a day*: identity and shape, and **never a payload** (see
-  `logbook/export.py` `entry()`). A lightweight overview you can share widely.
+  `logbook/core/export.py` `entry()`). A lightweight overview you can share widely.
 - **`crossing-package/v1`** — verbatim log lines **including their payloads**, plus the referenced blobs. A
   selective-disclosure export for a trusted circle member.
 

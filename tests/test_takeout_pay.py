@@ -9,8 +9,9 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters.takeout import pay
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters.takeout import pay
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "takeout" / "Google Pay"

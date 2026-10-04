@@ -31,7 +31,7 @@ array each, one object per stream, with `ts` (when the stream **stopped**, UTC),
 track's name, album artist and album, its `spotify:track:` URI, or an episode's name, show and
 `spotify:episode:` URI, or an audiobook chapter, and the flags `skipped`, `shuffle`, `offline`,
 `reason_start`, `reason_end`, the `platform` and the connecting country and IP address. The adapter
-reads the folder (every history file in it) or one file, streamed through `ijson` so a decade of
+reads the folder (every history file in it) or one file, streamed through `ijson` (the `stream` extra: `pip install "openlogbook[stream]"`) so a decade of
 history never sits in memory at once. The shorter *Account data* export (`StreamingHistory0.json`,
 end time to the minute, no URI) is not this format and is not read.
 
@@ -172,7 +172,7 @@ listen 2026-01-01 – 2026-03-20
           2026-03  1.6 h · 7 listens · 2 skipped
 ```
 
-The rollup lives in `logbook/listen_rollup.py`, in `rollup.py`'s manner but beside it, so the
+The rollup lives in `logbook/core/listen_rollup.py`, in `rollup.py`'s manner but beside it, so the
 listening rollup grows without touching the others.
 
 ## `add --dry-run`

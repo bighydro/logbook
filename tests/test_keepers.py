@@ -10,9 +10,10 @@ from typing import Any
 import pytest
 from persona import persona_record
 
-from logbook import cli, keepers
-from logbook.adapters import immich
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib.adapters import immich
+from logbook.core import keepers
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 

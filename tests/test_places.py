@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 from persona import BOAT, CAFE, FJORD, HOME, PLACES, ZURICH, persona_drafts, persona_record
 
-from logbook import cli, places
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import places
+from logbook.core.store import Logbook
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:

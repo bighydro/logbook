@@ -1,0 +1,69 @@
+2026-06-01
+  00:00–07:25    stay  Home · 7 h 25 min
+  07:25–07:41    move  446 m · 16 min · walk
+  07:41–08:15    stay  59.9102,10.7595 · 34 min
+  08:15–08:20    move  31 m · 5 min · gap
+  08:20–17:25    stay  Office · 9 h 5 min · 1 event, 2 messages
+  17:25–17:41    move  462 m · 16 min · walk
+  17:41–17:55    stop  59.9136,10.7530 · 14 min · nothing attached
+  17:55–18:00    move  13 m · 5 min · gap
+  18:00–07:25+1  stay  Home · 13 h 25 min
+  night          Home · 18:00–07:25+1 · home
+2026-06-02
+  07:25–07:45    move  628 m · 20 min · walk
+  07:45–17:25    stay  Office · 9 h 40 min · 1 event, 2 messages
+  17:25–17:41    move  439 m · 16 min · walk
+  17:41–18:05    stay  59.9136,10.7526 · 24 min
+  18:05–18:10    move  24 m · 5 min · gap
+  18:10–07:25+1  stay  Home · 13 h 15 min
+  night          Home · 18:10–07:25+1 · home
+2026-06-03
+  07:25–07:45    move  643 m · 20 min · walk
+  07:45–11:45    stay  Office · 4 h · 1 event
+  11:45–12:00    move  1.6 km · 15 min · walk
+  12:00–12:55    stay  59.9200,10.7400 · 55 min · 1 event, 1 photo
+  12:55–13:10    move  1.5 km · 15 min · walk
+  13:10–17:25    stay  Office · 4 h 15 min · 2 messages
+  17:25–17:45    move  652 m · 20 min · walk
+  17:45–07:25+1  stay  Home · 13 h 40 min · 1 call
+  night          Home · 17:45–07:25+1 · home
+2026-06-04
+  07:25–07:41    move  471 m · 16 min · walk
+  07:41–07:45    stop  59.9105,10.7588 · 4 min · nothing attached
+  07:45–07:50    move  49 m · 5 min · gap
+  07:50–17:25    stay  Office · 9 h 35 min · 1 event, 1 transcript, 2 messages
+  17:25–17:41    move  466 m · 16 min · walk
+  17:41–17:50    stop  59.9135,10.7529 · 9 min · nothing attached
+  17:50–17:55    move  13 m · 5 min · gap
+  17:55–07:25+1  stay  Home · 13 h 30 min · 1 note
+  night          Home · 17:55–07:25+1 · home
+2026-06-05
+  07:25–07:41    move  480 m · 16 min · walk
+  07:41–08:35    stay  59.9102,10.7595 · 54 min
+  08:35–08:40    move  16 m · 5 min · gap
+  08:40–17:25    stay  Office · 8 h 45 min · 1 event, 1 message
+  17:25–17:41    move  465 m · 16 min · walk
+  17:41–17:55    stop  59.9135,10.7530 · 14 min · nothing attached
+  17:55–18:00    move  12 m · 5 min · gap
+  18:00–08:55+1  stay  Home · 14 h 55 min
+  night          Home · 18:00–08:55+1 · home
+2026-06-06
+  08:55–12:00    move  119 km · 3 h 5 min · car
+  12:00–13:55+1  stay  Cabin · 25 h 55 min · 1 event, 1 note, 2 messages, 3 photos
+  night          Cabin · 12:00–13:55+1
+2026-06-07
+  13:55–17:00    move  119 km · 3 h 5 min · car
+  17:00–04:55+1  stay  Home · 11 h 55 min · 1 note, 1 call
+  night          Home · 17:00–04:55+1 · home
+2026-06-08
+  04:55–05:40    move  36.7 km · 45 min · car
+  05:40–06:50    stay  60.1939,11.1004 · 1 h 10 min
+— nordlys (Nordlys, yacht)
+2026-06-01
+  00:00–08:00+7  stay  Marina · 176 h
+2026-06-02: no location lines
+2026-06-03: no location lines
+2026-06-04: no location lines
+2026-06-05: no location lines
+2026-06-06: no location lines
+2026-06-07: no location lines

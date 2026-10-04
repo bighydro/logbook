@@ -23,7 +23,7 @@ index rebuild, with and without opening; bytes on disk.
 
 The sealed record is written by this script, not by `append_many`, because `append_many` hands a
 draft to `Logbook._line` as keyword arguments and knows no `payload_enc`; the writer here computes
-the same chain with `logbook.chain`, writes the same stored form (`store._dumps`) in the same
+the same chain with `logbook.core.chain`, writes the same stored form (`store._dumps`) in the same
 batches, fsyncs, saves `logbook.json` and extends the index the same way. Writing the plain record
 through both paths shows how close the two are.
 
@@ -64,9 +64,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from logbook import index as index_module
-from logbook.chain import Line, canonical_json, verify_lines
-from logbook.store import META_EVERY, Logbook, _dumps
+from logbook.core import index as index_module
+from logbook.core.chain import Line, canonical_json, verify_lines
+from logbook.core.store import META_EVERY, Logbook, _dumps
 
 LINES = 3_000_000
 TIER1 = 1_000_000

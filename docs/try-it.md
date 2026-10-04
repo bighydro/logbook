@@ -1,7 +1,7 @@
 # Five minutes with a demo record
 
 Nothing to import, nothing of yours. `logbook demo` writes a month of a person who does not exist
-and every command reads it back. The record is invented in code (`logbook/demo.py`), read from
+and every command reads it back. The record is invented in code (`logbook/contrib/demo.py`), read from
 nowhere, and the same arguments give the same record on any machine.
 
 ```bash

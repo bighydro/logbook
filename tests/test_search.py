@@ -15,8 +15,9 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import cli, index, search
-from logbook.store import Logbook
+from logbook import cli
+from logbook.core import index, search
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"  # CEST in June: 18:00Z is 20:00 local
 TRANSCRIPT = "Speaker A: We will ship the search feature by Friday.\nSpeaker B: Fine, Friday then.\n"

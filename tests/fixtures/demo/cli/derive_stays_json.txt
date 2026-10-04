@@ -1,0 +1,1285 @@
+{
+  "window": {
+    "since": "2026-05-31T22:00:00Z",
+    "until": "2026-06-08T06:00:00Z",
+    "days": [
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07"
+    ]
+  },
+  "settings": {
+    "stay_min_s": 1200,
+    "stop_min_s": 180,
+    "merge_gap_s": 600,
+    "radius_m": 150,
+    "airport_km": 8,
+    "night": [
+      "22:00",
+      "08:00"
+    ],
+    "modes": {
+      "walk_max_kmh": 7,
+      "car_max_kmh": 130,
+      "flight_min_kmh": 150
+    },
+    "aboard_window_s": 300,
+    "aboard_min_s": 1200
+  },
+  "subjects": [
+    null,
+    "nordlys"
+  ],
+  "segments": [
+    {
+      "id": "stay:owner:20260531T2200Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-05-31T22:00:00Z",
+      "end": "2026-06-01T05:25:00Z",
+      "start_local": "2026-06-01T00:00:00+02:00",
+      "end_local": "2026-06-01T07:25:00+02:00",
+      "duration_s": 26700,
+      "points": 90,
+      "aboard": null,
+      "lines": {
+        "first": "019e800d-0f00-714f-9337-4815930d6eaf",
+        "last": "019e81a4-77e0-7a7f-8fe2-2bd633736dcc",
+        "points": 90
+      },
+      "lat": 59.913898,
+      "lon": 10.75219,
+      "place": "Home",
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260601T0525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-01T05:25:00Z",
+      "end": "2026-06-01T05:41:15Z",
+      "start_local": "2026-06-01T07:25:00+02:00",
+      "end_local": "2026-06-01T07:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e81a4-77e0-7a7f-8fe2-2bd633736dcc",
+        "last": "019e81b3-5878-7963-9936-f2340aaaaf81",
+        "points": 2
+      },
+      "distance_m": 446,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260601T0541Z@59.9102,10.7595",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-01T05:41:15Z",
+      "end": "2026-06-01T06:15:00Z",
+      "start_local": "2026-06-01T07:41:15+02:00",
+      "end_local": "2026-06-01T08:15:00+02:00",
+      "duration_s": 2025,
+      "points": 6,
+      "aboard": null,
+      "lines": {
+        "first": "019e81b3-5878-7963-9936-f2340aaaaf81",
+        "last": "019e81d2-3ea0-715c-82ad-de6207fa22f7",
+        "points": 6
+      },
+      "lat": 59.910171,
+      "lon": 10.759474,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260601T0615Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-01T06:15:00Z",
+      "end": "2026-06-01T06:20:00Z",
+      "start_local": "2026-06-01T08:15:00+02:00",
+      "end_local": "2026-06-01T08:20:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e81d2-3ea0-715c-82ad-de6207fa22f7",
+        "last": "019e81d6-d280-7606-9ce3-82ddd5f860c3",
+        "points": 0
+      },
+      "distance_m": 31,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260601T0620Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-01T06:20:00Z",
+      "end": "2026-06-01T15:25:00Z",
+      "start_local": "2026-06-01T08:20:00+02:00",
+      "end_local": "2026-06-01T17:25:00+02:00",
+      "duration_s": 32700,
+      "points": 110,
+      "aboard": null,
+      "lines": {
+        "first": "019e81d6-d280-7606-9ce3-82ddd5f860c3",
+        "last": "019e83c9-c8e0-72bf-844b-5025eced8ded",
+        "points": 110
+      },
+      "lat": 59.909989,
+      "lon": 10.760026,
+      "place": "Office",
+      "attached": {
+        "event": 1,
+        "message": 2
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260601T1525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-01T15:25:00Z",
+      "end": "2026-06-01T15:41:15Z",
+      "start_local": "2026-06-01T17:25:00+02:00",
+      "end_local": "2026-06-01T17:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e83c9-c8e0-72bf-844b-5025eced8ded",
+        "last": "019e83d8-a978-7f9b-9ee5-2795e9ad2bc7",
+        "points": 2
+      },
+      "distance_m": 462,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stop:owner:20260601T1541Z@59.9136,10.7530",
+      "kind": "stop",
+      "subject": null,
+      "start": "2026-06-01T15:41:15Z",
+      "end": "2026-06-01T15:55:00Z",
+      "start_local": "2026-06-01T17:41:15+02:00",
+      "end_local": "2026-06-01T17:55:00+02:00",
+      "duration_s": 825,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e83d8-a978-7f9b-9ee5-2795e9ad2bc7",
+        "last": "019e83e5-4020-7d44-8bb5-b518791397a3",
+        "points": 3
+      },
+      "lat": 59.91356,
+      "lon": 10.753021,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260601T1555Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-01T15:55:00Z",
+      "end": "2026-06-01T16:00:00Z",
+      "start_local": "2026-06-01T17:55:00+02:00",
+      "end_local": "2026-06-01T18:00:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e83e5-4020-7d44-8bb5-b518791397a3",
+        "last": "019e83e9-d400-7280-96fd-422862320fa3",
+        "points": 0
+      },
+      "distance_m": 13,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260601T1600Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-01T16:00:00Z",
+      "end": "2026-06-02T05:25:00Z",
+      "start_local": "2026-06-01T18:00:00+02:00",
+      "end_local": "2026-06-02T07:25:00+02:00",
+      "duration_s": 48300,
+      "points": 162,
+      "aboard": null,
+      "lines": {
+        "first": "019e83e9-d400-7280-96fd-422862320fa3",
+        "last": "019e86ca-d3e0-79c2-a47d-d10bb1e0ae35",
+        "points": 162
+      },
+      "lat": 59.913913,
+      "lon": 10.75217,
+      "place": "Home",
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260602T0525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-02T05:25:00Z",
+      "end": "2026-06-02T05:45:00Z",
+      "start_local": "2026-06-02T07:25:00+02:00",
+      "end_local": "2026-06-02T07:45:00+02:00",
+      "duration_s": 1200,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e86ca-d3e0-79c2-a47d-d10bb1e0ae35",
+        "last": "019e86dd-2360-7556-8c15-5dbc38b98187",
+        "points": 3
+      },
+      "distance_m": 628,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260602T0545Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-02T05:45:00Z",
+      "end": "2026-06-02T15:25:00Z",
+      "start_local": "2026-06-02T07:45:00+02:00",
+      "end_local": "2026-06-02T17:25:00+02:00",
+      "duration_s": 34800,
+      "points": 117,
+      "aboard": null,
+      "lines": {
+        "first": "019e86dd-2360-7556-8c15-5dbc38b98187",
+        "last": "019e88f0-24e0-7f97-bd8e-6ccd66bffc83",
+        "points": 117
+      },
+      "lat": 59.909991,
+      "lon": 10.759972,
+      "place": "Office",
+      "attached": {
+        "event": 1,
+        "message": 2
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260602T1525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-02T15:25:00Z",
+      "end": "2026-06-02T15:41:15Z",
+      "start_local": "2026-06-02T17:25:00+02:00",
+      "end_local": "2026-06-02T17:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e88f0-24e0-7f97-bd8e-6ccd66bffc83",
+        "last": "019e88ff-0578-7a88-a429-57594c0aba50",
+        "points": 2
+      },
+      "distance_m": 439,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260602T1541Z@59.9136,10.7526",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-02T15:41:15Z",
+      "end": "2026-06-02T16:05:00Z",
+      "start_local": "2026-06-02T17:41:15+02:00",
+      "end_local": "2026-06-02T18:05:00+02:00",
+      "duration_s": 1425,
+      "points": 5,
+      "aboard": null,
+      "lines": {
+        "first": "019e88ff-0578-7a88-a429-57594c0aba50",
+        "last": "019e8914-c3e0-73a2-bdfc-669e2e355b29",
+        "points": 5
+      },
+      "lat": 59.913612,
+      "lon": 10.752609,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260602T1605Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-02T16:05:00Z",
+      "end": "2026-06-02T16:10:00Z",
+      "start_local": "2026-06-02T18:05:00+02:00",
+      "end_local": "2026-06-02T18:10:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e8914-c3e0-73a2-bdfc-669e2e355b29",
+        "last": "019e8919-57c0-738a-b596-aa5ddcb7695e",
+        "points": 0
+      },
+      "distance_m": 24,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260602T1610Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-02T16:10:00Z",
+      "end": "2026-06-03T05:25:00Z",
+      "start_local": "2026-06-02T18:10:00+02:00",
+      "end_local": "2026-06-03T07:25:00+02:00",
+      "duration_s": 47700,
+      "points": 160,
+      "aboard": null,
+      "lines": {
+        "first": "019e8919-57c0-738a-b596-aa5ddcb7695e",
+        "last": "019e8bf1-2fe0-7666-9ffc-e893647f770c",
+        "points": 160
+      },
+      "lat": 59.913892,
+      "lon": 10.752181,
+      "place": "Home",
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260603T0525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-03T05:25:00Z",
+      "end": "2026-06-03T05:45:00Z",
+      "start_local": "2026-06-03T07:25:00+02:00",
+      "end_local": "2026-06-03T07:45:00+02:00",
+      "duration_s": 1200,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e8bf1-2fe0-7666-9ffc-e893647f770c",
+        "last": "019e8c03-7f60-7eca-8446-469869c7d7e8",
+        "points": 3
+      },
+      "distance_m": 643,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260603T0545Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-03T05:45:00Z",
+      "end": "2026-06-03T09:45:00Z",
+      "start_local": "2026-06-03T07:45:00+02:00",
+      "end_local": "2026-06-03T11:45:00+02:00",
+      "duration_s": 14400,
+      "points": 49,
+      "aboard": null,
+      "lines": {
+        "first": "019e8c03-7f60-7eca-8446-469869c7d7e8",
+        "last": "019e8cdf-3960-7cd7-826f-aab1003df689",
+        "points": 49
+      },
+      "lat": 59.909994,
+      "lon": 10.75995,
+      "place": "Office",
+      "attached": {
+        "event": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260603T0945Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-03T09:45:00Z",
+      "end": "2026-06-03T10:00:00Z",
+      "start_local": "2026-06-03T11:45:00+02:00",
+      "end_local": "2026-06-03T12:00:00+02:00",
+      "duration_s": 900,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e8cdf-3960-7cd7-826f-aab1003df689",
+        "last": "019e8cec-f500-7435-89d1-82200a9429df",
+        "points": 2
+      },
+      "distance_m": 1592,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260603T1000Z@59.9200,10.7400",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-03T10:00:00Z",
+      "end": "2026-06-03T10:55:00Z",
+      "start_local": "2026-06-03T12:00:00+02:00",
+      "end_local": "2026-06-03T12:55:00+02:00",
+      "duration_s": 3300,
+      "points": 12,
+      "aboard": null,
+      "lines": {
+        "first": "019e8cec-f500-7435-89d1-82200a9429df",
+        "last": "019e8d1f-4fa0-77e7-a4e1-16a29b3ed083",
+        "points": 12
+      },
+      "lat": 59.919999,
+      "lon": 10.740026,
+      "place": null,
+      "attached": {
+        "event": 1,
+        "photo": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260603T1055Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-03T10:55:00Z",
+      "end": "2026-06-03T11:10:00Z",
+      "start_local": "2026-06-03T12:55:00+02:00",
+      "end_local": "2026-06-03T13:10:00+02:00",
+      "duration_s": 900,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e8d1f-4fa0-77e7-a4e1-16a29b3ed083",
+        "last": "019e8d2d-0b40-7852-9d28-eebc62a7ec8b",
+        "points": 2
+      },
+      "distance_m": 1546,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260603T1110Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-03T11:10:00Z",
+      "end": "2026-06-03T15:25:00Z",
+      "start_local": "2026-06-03T13:10:00+02:00",
+      "end_local": "2026-06-03T17:25:00+02:00",
+      "duration_s": 15300,
+      "points": 52,
+      "aboard": null,
+      "lines": {
+        "first": "019e8d2d-0b40-7852-9d28-eebc62a7ec8b",
+        "last": "019e8e16-80e0-7a5f-b171-aeda3bed2520",
+        "points": 52
+      },
+      "lat": 59.910024,
+      "lon": 10.759986,
+      "place": "Office",
+      "attached": {
+        "message": 2
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260603T1525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-03T15:25:00Z",
+      "end": "2026-06-03T15:45:00Z",
+      "start_local": "2026-06-03T17:25:00+02:00",
+      "end_local": "2026-06-03T17:45:00+02:00",
+      "duration_s": 1200,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e8e16-80e0-7a5f-b171-aeda3bed2520",
+        "last": "019e8e28-d060-7b32-8100-77c03a1571fd",
+        "points": 3
+      },
+      "distance_m": 652,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260603T1545Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-03T15:45:00Z",
+      "end": "2026-06-04T05:25:00Z",
+      "start_local": "2026-06-03T17:45:00+02:00",
+      "end_local": "2026-06-04T07:25:00+02:00",
+      "duration_s": 49200,
+      "points": 165,
+      "aboard": null,
+      "lines": {
+        "first": "019e8e28-d060-7b32-8100-77c03a1571fd",
+        "last": "019e9117-8be0-75c5-8212-3b1368dd76ea",
+        "points": 165
+      },
+      "lat": 59.913891,
+      "lon": 10.752221,
+      "place": "Home",
+      "attached": {
+        "call": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260604T0525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-04T05:25:00Z",
+      "end": "2026-06-04T05:41:15Z",
+      "start_local": "2026-06-04T07:25:00+02:00",
+      "end_local": "2026-06-04T07:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e9117-8be0-75c5-8212-3b1368dd76ea",
+        "last": "019e9126-6c78-7564-86f2-c08178e41367",
+        "points": 2
+      },
+      "distance_m": 471,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stop:owner:20260604T0541Z@59.9105,10.7588",
+      "kind": "stop",
+      "subject": null,
+      "start": "2026-06-04T05:41:15Z",
+      "end": "2026-06-04T05:45:00Z",
+      "start_local": "2026-06-04T07:41:15+02:00",
+      "end_local": "2026-06-04T07:45:00+02:00",
+      "duration_s": 225,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e9126-6c78-7564-86f2-c08178e41367",
+        "last": "019e9129-db60-77cd-97a2-01b41a22e956",
+        "points": 2
+      },
+      "lat": 59.910469,
+      "lon": 10.758831,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260604T0545Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-04T05:45:00Z",
+      "end": "2026-06-04T05:50:00Z",
+      "start_local": "2026-06-04T07:45:00+02:00",
+      "end_local": "2026-06-04T07:50:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e9129-db60-77cd-97a2-01b41a22e956",
+        "last": "019e912e-6f40-7b64-b94d-e1ba2192636c",
+        "points": 0
+      },
+      "distance_m": 49,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260604T0550Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-04T05:50:00Z",
+      "end": "2026-06-04T15:25:00Z",
+      "start_local": "2026-06-04T07:50:00+02:00",
+      "end_local": "2026-06-04T17:25:00+02:00",
+      "duration_s": 34500,
+      "points": 116,
+      "aboard": null,
+      "lines": {
+        "first": "019e912e-6f40-7b64-b94d-e1ba2192636c",
+        "last": "019e933c-dce0-774d-94d2-63a895ef018b",
+        "points": 116
+      },
+      "lat": 59.909989,
+      "lon": 10.760004,
+      "place": "Office",
+      "attached": {
+        "event": 1,
+        "transcript": 1,
+        "message": 2
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260604T1525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-04T15:25:00Z",
+      "end": "2026-06-04T15:41:15Z",
+      "start_local": "2026-06-04T17:25:00+02:00",
+      "end_local": "2026-06-04T17:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e933c-dce0-774d-94d2-63a895ef018b",
+        "last": "019e934b-bd78-77ee-8ea5-dea65725b1f6",
+        "points": 2
+      },
+      "distance_m": 466,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stop:owner:20260604T1541Z@59.9135,10.7529",
+      "kind": "stop",
+      "subject": null,
+      "start": "2026-06-04T15:41:15Z",
+      "end": "2026-06-04T15:50:00Z",
+      "start_local": "2026-06-04T17:41:15+02:00",
+      "end_local": "2026-06-04T17:50:00+02:00",
+      "duration_s": 525,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e934b-bd78-77ee-8ea5-dea65725b1f6",
+        "last": "019e9353-c040-7461-bec9-97e39857eeb8",
+        "points": 3
+      },
+      "lat": 59.91353,
+      "lon": 10.752944,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260604T1550Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-04T15:50:00Z",
+      "end": "2026-06-04T15:55:00Z",
+      "start_local": "2026-06-04T17:50:00+02:00",
+      "end_local": "2026-06-04T17:55:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e9353-c040-7461-bec9-97e39857eeb8",
+        "last": "019e9358-5420-7f17-9075-bc9d7712ab28",
+        "points": 0
+      },
+      "distance_m": 13,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260604T1555Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-04T15:55:00Z",
+      "end": "2026-06-05T05:25:00Z",
+      "start_local": "2026-06-04T17:55:00+02:00",
+      "end_local": "2026-06-05T07:25:00+02:00",
+      "duration_s": 48600,
+      "points": 163,
+      "aboard": null,
+      "lines": {
+        "first": "019e9358-5420-7f17-9075-bc9d7712ab28",
+        "last": "019e963d-e7e0-7134-87ea-383869d1f9d4",
+        "points": 163
+      },
+      "lat": 59.913904,
+      "lon": 10.752198,
+      "place": "Home",
+      "attached": {
+        "note": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260605T0525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-05T05:25:00Z",
+      "end": "2026-06-05T05:41:15Z",
+      "start_local": "2026-06-05T07:25:00+02:00",
+      "end_local": "2026-06-05T07:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e963d-e7e0-7134-87ea-383869d1f9d4",
+        "last": "019e964c-c878-7f56-8e2f-33d43d135512",
+        "points": 2
+      },
+      "distance_m": 480,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260605T0541Z@59.9102,10.7595",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-05T05:41:15Z",
+      "end": "2026-06-05T06:35:00Z",
+      "start_local": "2026-06-05T07:41:15+02:00",
+      "end_local": "2026-06-05T08:35:00+02:00",
+      "duration_s": 3225,
+      "points": 7,
+      "aboard": null,
+      "lines": {
+        "first": "019e964c-c878-7f56-8e2f-33d43d135512",
+        "last": "019e967d-fe20-7fbd-bbf1-695438400d42",
+        "points": 7
+      },
+      "lat": 59.910182,
+      "lon": 10.759549,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260605T0635Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-05T06:35:00Z",
+      "end": "2026-06-05T06:40:00Z",
+      "start_local": "2026-06-05T08:35:00+02:00",
+      "end_local": "2026-06-05T08:40:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e967d-fe20-7fbd-bbf1-695438400d42",
+        "last": "019e9682-9200-7ffa-a23b-59ce68bbb7b6",
+        "points": 0
+      },
+      "distance_m": 16,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260605T0640Z@59.9100,10.7600",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-05T06:40:00Z",
+      "end": "2026-06-05T15:25:00Z",
+      "start_local": "2026-06-05T08:40:00+02:00",
+      "end_local": "2026-06-05T17:25:00+02:00",
+      "duration_s": 31500,
+      "points": 106,
+      "aboard": null,
+      "lines": {
+        "first": "019e9682-9200-7ffa-a23b-59ce68bbb7b6",
+        "last": "019e9863-38e0-7455-9f29-fb8f2d9d57ab",
+        "points": 106
+      },
+      "lat": 59.909994,
+      "lon": 10.760012,
+      "place": "Office",
+      "attached": {
+        "event": 1,
+        "message": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260605T1525Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-05T15:25:00Z",
+      "end": "2026-06-05T15:41:15Z",
+      "start_local": "2026-06-05T17:25:00+02:00",
+      "end_local": "2026-06-05T17:41:15+02:00",
+      "duration_s": 975,
+      "points": 2,
+      "aboard": null,
+      "lines": {
+        "first": "019e9863-38e0-7455-9f29-fb8f2d9d57ab",
+        "last": "019e9872-1978-7816-ac29-4702c8769be3",
+        "points": 2
+      },
+      "distance_m": 465,
+      "mode": "walk",
+      "airports": []
+    },
+    {
+      "id": "stop:owner:20260605T1541Z@59.9135,10.7530",
+      "kind": "stop",
+      "subject": null,
+      "start": "2026-06-05T15:41:15Z",
+      "end": "2026-06-05T15:55:00Z",
+      "start_local": "2026-06-05T17:41:15+02:00",
+      "end_local": "2026-06-05T17:55:00+02:00",
+      "duration_s": 825,
+      "points": 3,
+      "aboard": null,
+      "lines": {
+        "first": "019e9872-1978-7816-ac29-4702c8769be3",
+        "last": "019e987e-b020-7e98-8816-b1e47f187c32",
+        "points": 3
+      },
+      "lat": 59.913506,
+      "lon": 10.75297,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260605T1555Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-05T15:55:00Z",
+      "end": "2026-06-05T16:00:00Z",
+      "start_local": "2026-06-05T17:55:00+02:00",
+      "end_local": "2026-06-05T18:00:00+02:00",
+      "duration_s": 300,
+      "points": 0,
+      "aboard": null,
+      "lines": {
+        "first": "019e987e-b020-7e98-8816-b1e47f187c32",
+        "last": "019e9883-4400-792e-b73d-ca227f522209",
+        "points": 0
+      },
+      "distance_m": 12,
+      "mode": null,
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260605T1600Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-05T16:00:00Z",
+      "end": "2026-06-06T06:55:00Z",
+      "start_local": "2026-06-05T18:00:00+02:00",
+      "end_local": "2026-06-06T08:55:00+02:00",
+      "duration_s": 53700,
+      "points": 180,
+      "aboard": null,
+      "lines": {
+        "first": "019e9883-4400-792e-b73d-ca227f522209",
+        "last": "019e9bb6-a9a0-76d4-aa14-bb05bc548814",
+        "points": 180
+      },
+      "lat": 59.913908,
+      "lon": 10.752208,
+      "place": "Home",
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260606T0655Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-06T06:55:00Z",
+      "end": "2026-06-06T10:00:00Z",
+      "start_local": "2026-06-06T08:55:00+02:00",
+      "end_local": "2026-06-06T12:00:00+02:00",
+      "duration_s": 11100,
+      "points": 23,
+      "aboard": null,
+      "lines": {
+        "first": "019e9bb6-a9a0-76d4-aa14-bb05bc548814",
+        "last": "019e9c60-0900-7197-966e-729cf34cec5d",
+        "points": 23
+      },
+      "distance_m": 118845,
+      "mode": "car",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260606T1000Z@60.6000,9.1000",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-06T10:00:00Z",
+      "end": "2026-06-07T11:55:00Z",
+      "start_local": "2026-06-06T12:00:00+02:00",
+      "end_local": "2026-06-07T13:55:00+02:00",
+      "duration_s": 93300,
+      "points": 312,
+      "aboard": null,
+      "lines": {
+        "first": "019e9c60-0900-7197-966e-729cf34cec5d",
+        "last": "019ea1ef-ae20-7499-9a75-a0e70650c615",
+        "points": 312
+      },
+      "lat": 60.599988,
+      "lon": 9.10001,
+      "place": "Cabin",
+      "attached": {
+        "event": 1,
+        "note": 1,
+        "message": 2,
+        "photo": 3
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260607T1155Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-07T11:55:00Z",
+      "end": "2026-06-07T15:00:00Z",
+      "start_local": "2026-06-07T13:55:00+02:00",
+      "end_local": "2026-06-07T17:00:00+02:00",
+      "duration_s": 11100,
+      "points": 23,
+      "aboard": null,
+      "lines": {
+        "first": "019ea1ef-ae20-7499-9a75-a0e70650c615",
+        "last": "019ea299-0d80-7e32-98f0-f25c4339ca4e",
+        "points": 23
+      },
+      "distance_m": 118857,
+      "mode": "car",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260607T1500Z@59.9139,10.7522",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-07T15:00:00Z",
+      "end": "2026-06-08T02:55:00Z",
+      "start_local": "2026-06-07T17:00:00+02:00",
+      "end_local": "2026-06-08T04:55:00+02:00",
+      "duration_s": 42900,
+      "points": 144,
+      "aboard": null,
+      "lines": {
+        "first": "019ea299-0d80-7e32-98f0-f25c4339ca4e",
+        "last": "019ea527-a7a0-7875-a438-3c6b0d04d925",
+        "points": 144
+      },
+      "lat": 59.913889,
+      "lon": 10.752209,
+      "place": "Home",
+      "attached": {
+        "note": 1,
+        "call": 1
+      },
+      "promoted": false
+    },
+    {
+      "id": "move:owner:20260608T0255Z",
+      "kind": "move",
+      "subject": null,
+      "start": "2026-06-08T02:55:00Z",
+      "end": "2026-06-08T03:40:00Z",
+      "start_local": "2026-06-08T04:55:00+02:00",
+      "end_local": "2026-06-08T05:40:00+02:00",
+      "duration_s": 2700,
+      "points": 5,
+      "aboard": null,
+      "lines": {
+        "first": "019ea527-a7a0-7875-a438-3c6b0d04d925",
+        "last": "019ea550-da80-7343-9945-ea8c29cbfe53",
+        "points": 5
+      },
+      "distance_m": 36671,
+      "mode": "car",
+      "airports": []
+    },
+    {
+      "id": "stay:owner:20260608T0340Z@60.1939,11.1004",
+      "kind": "stay",
+      "subject": null,
+      "start": "2026-06-08T03:40:00Z",
+      "end": "2026-06-08T04:50:00Z",
+      "start_local": "2026-06-08T05:40:00+02:00",
+      "end_local": "2026-06-08T06:50:00+02:00",
+      "duration_s": 4200,
+      "points": 15,
+      "aboard": null,
+      "lines": {
+        "first": "019ea550-da80-7343-9945-ea8c29cbfe53",
+        "last": "019ea590-f0c0-73bc-82b5-740ed8e02aff",
+        "points": 15
+      },
+      "lat": 60.193902,
+      "lon": 11.100417,
+      "place": null,
+      "attached": {},
+      "promoted": false
+    },
+    {
+      "id": "stay:nordlys:20260531T2200Z@59.9050,10.7350",
+      "kind": "stay",
+      "subject": "nordlys",
+      "start": "2026-05-31T22:00:00Z",
+      "end": "2026-06-08T06:00:00Z",
+      "start_local": "2026-06-01T00:00:00+02:00",
+      "end_local": "2026-06-08T08:00:00+02:00",
+      "duration_s": 633600,
+      "points": 177,
+      "aboard": null,
+      "lines": {
+        "first": "019e800d-0f00-7e44-afb1-adfbe3f1bdf6",
+        "last": "019ea5d1-0700-76a5-9773-3baf130b443e",
+        "points": 177
+      },
+      "lat": 59.905002,
+      "lon": 10.735003,
+      "place": "Marina",
+      "attached": {},
+      "promoted": false
+    }
+  ],
+  "nights": [
+    {
+      "day": "2026-06-01",
+      "stay": {
+        "id": "stay:owner:20260601T1600Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-01T16:00:00Z",
+        "end": "2026-06-02T05:25:00Z",
+        "start_local": "2026-06-01T18:00:00+02:00",
+        "end_local": "2026-06-02T07:25:00+02:00",
+        "duration_s": 48300,
+        "points": 162,
+        "aboard": null,
+        "lines": {
+          "first": "019e83e9-d400-7280-96fd-422862320fa3",
+          "last": "019e86ca-d3e0-79c2-a47d-d10bb1e0ae35",
+          "points": 162
+        },
+        "lat": 59.913913,
+        "lon": 10.75217,
+        "place": "Home",
+        "attached": {},
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913913,
+        "lon": 10.75217
+      }
+    },
+    {
+      "day": "2026-06-02",
+      "stay": {
+        "id": "stay:owner:20260602T1610Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-02T16:10:00Z",
+        "end": "2026-06-03T05:25:00Z",
+        "start_local": "2026-06-02T18:10:00+02:00",
+        "end_local": "2026-06-03T07:25:00+02:00",
+        "duration_s": 47700,
+        "points": 160,
+        "aboard": null,
+        "lines": {
+          "first": "019e8919-57c0-738a-b596-aa5ddcb7695e",
+          "last": "019e8bf1-2fe0-7666-9ffc-e893647f770c",
+          "points": 160
+        },
+        "lat": 59.913892,
+        "lon": 10.752181,
+        "place": "Home",
+        "attached": {},
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913892,
+        "lon": 10.752181
+      }
+    },
+    {
+      "day": "2026-06-03",
+      "stay": {
+        "id": "stay:owner:20260603T1545Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-03T15:45:00Z",
+        "end": "2026-06-04T05:25:00Z",
+        "start_local": "2026-06-03T17:45:00+02:00",
+        "end_local": "2026-06-04T07:25:00+02:00",
+        "duration_s": 49200,
+        "points": 165,
+        "aboard": null,
+        "lines": {
+          "first": "019e8e28-d060-7b32-8100-77c03a1571fd",
+          "last": "019e9117-8be0-75c5-8212-3b1368dd76ea",
+          "points": 165
+        },
+        "lat": 59.913891,
+        "lon": 10.752221,
+        "place": "Home",
+        "attached": {
+          "call": 1
+        },
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913891,
+        "lon": 10.752221
+      }
+    },
+    {
+      "day": "2026-06-04",
+      "stay": {
+        "id": "stay:owner:20260604T1555Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-04T15:55:00Z",
+        "end": "2026-06-05T05:25:00Z",
+        "start_local": "2026-06-04T17:55:00+02:00",
+        "end_local": "2026-06-05T07:25:00+02:00",
+        "duration_s": 48600,
+        "points": 163,
+        "aboard": null,
+        "lines": {
+          "first": "019e9358-5420-7f17-9075-bc9d7712ab28",
+          "last": "019e963d-e7e0-7134-87ea-383869d1f9d4",
+          "points": 163
+        },
+        "lat": 59.913904,
+        "lon": 10.752198,
+        "place": "Home",
+        "attached": {
+          "note": 1
+        },
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913904,
+        "lon": 10.752198
+      }
+    },
+    {
+      "day": "2026-06-05",
+      "stay": {
+        "id": "stay:owner:20260605T1600Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-05T16:00:00Z",
+        "end": "2026-06-06T06:55:00Z",
+        "start_local": "2026-06-05T18:00:00+02:00",
+        "end_local": "2026-06-06T08:55:00+02:00",
+        "duration_s": 53700,
+        "points": 180,
+        "aboard": null,
+        "lines": {
+          "first": "019e9883-4400-792e-b73d-ca227f522209",
+          "last": "019e9bb6-a9a0-76d4-aa14-bb05bc548814",
+          "points": 180
+        },
+        "lat": 59.913908,
+        "lon": 10.752208,
+        "place": "Home",
+        "attached": {},
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913908,
+        "lon": 10.752208
+      }
+    },
+    {
+      "day": "2026-06-06",
+      "stay": {
+        "id": "stay:owner:20260606T1000Z@60.6000,9.1000",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-06T10:00:00Z",
+        "end": "2026-06-07T11:55:00Z",
+        "start_local": "2026-06-06T12:00:00+02:00",
+        "end_local": "2026-06-07T13:55:00+02:00",
+        "duration_s": 93300,
+        "points": 312,
+        "aboard": null,
+        "lines": {
+          "first": "019e9c60-0900-7197-966e-729cf34cec5d",
+          "last": "019ea1ef-ae20-7499-9a75-a0e70650c615",
+          "points": 312
+        },
+        "lat": 60.599988,
+        "lon": 9.10001,
+        "place": "Cabin",
+        "attached": {
+          "event": 1,
+          "note": 1,
+          "message": 2,
+          "photo": 3
+        },
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": false,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 60.599988,
+        "lon": 9.10001
+      }
+    },
+    {
+      "day": "2026-06-07",
+      "stay": {
+        "id": "stay:owner:20260607T1500Z@59.9139,10.7522",
+        "kind": "stay",
+        "subject": null,
+        "start": "2026-06-07T15:00:00Z",
+        "end": "2026-06-08T02:55:00Z",
+        "start_local": "2026-06-07T17:00:00+02:00",
+        "end_local": "2026-06-08T04:55:00+02:00",
+        "duration_s": 42900,
+        "points": 144,
+        "aboard": null,
+        "lines": {
+          "first": "019ea299-0d80-7e32-98f0-f25c4339ca4e",
+          "last": "019ea527-a7a0-7875-a438-3c6b0d04d925",
+          "points": 144
+        },
+        "lat": 59.913889,
+        "lon": 10.752209,
+        "place": "Home",
+        "attached": {
+          "note": 1,
+          "call": 1
+        },
+        "promoted": false
+      },
+      "in_transit": false,
+      "home": true,
+      "aboard": null,
+      "inside": null,
+      "position": {
+        "lat": 59.913889,
+        "lon": 10.752209
+      }
+    }
+  ],
+  "noise_points": 10
+}

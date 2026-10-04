@@ -56,7 +56,7 @@ The digest already reads the Day, its shape, the promises due, the gaps and tomo
 | `tomorrow_busy` | tomorrow has three timed entries or more |
 | `weekend` | a Saturday or a Sunday in the record's zone |
 
-The thresholds (90 days, 9 h, 6 h, 3 entries) are the reader's constants, named in `logbook/questions.py`; a fact name the file uses that this table does not have is refused when the file is read, so a typo is seen the day it is made and not as a question that never comes. Under `--json` the digest's `question` carries `facts`, the names that held, so the owner writing a `when` can see what a day looked like to the chooser.
+The thresholds (90 days, 9 h, 6 h, 3 entries) are the reader's constants, named in `logbook/contrib/questions.py`; a fact name the file uses that this table does not have is refused when the file is read, so a typo is seen the day it is made and not as a question that never comes. Under `--json` the digest's `question` carries `facts`, the names that held, so the owner writing a `when` can see what a day looked like to the chooser.
 
 ## The choice
 

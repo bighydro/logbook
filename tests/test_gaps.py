@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from logbook import cli, gaps
-from logbook.index import Index
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import gaps
+from logbook.core.index import Index
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"  # CEST in September: local midnight is 22:00Z the evening before
 NOW = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)  # a Wednesday afternoon in Oslo

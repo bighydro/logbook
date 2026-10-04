@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters.takeout import location, maps
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters.takeout import location, maps
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "takeout" / "Maps (your places)"
@@ -147,7 +148,7 @@ def test_places_propose_takeout_feeds_saved_places_as_candidates_and_write_adopt
     import pytest
     from persona import dwell
 
-    from logbook.store import Logbook
+    from logbook.core.store import Logbook
 
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))

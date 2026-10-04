@@ -13,8 +13,9 @@ from typing import Any
 
 import pytest
 
-from logbook import adapters, cli
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.core.store import Logbook
 
 
 class Fake:

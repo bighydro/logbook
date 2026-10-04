@@ -9,9 +9,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters.takeout import activity, youtube
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters.takeout import activity, youtube
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "takeout" / "My Activity"
@@ -105,12 +106,12 @@ def test_an_app_opened_is_a_visit_to_its_store_page_and_maps_searches_name_maps(
 
 
 def test_a_youtube_entry_is_the_youtube_adapters_own_line_so_the_two_dedupe():
-    (ours,) = [line for line in _lines() if line["kind"] == "watch"]
-    (theirs,) = [
+    (ours,) = (line for line in _lines() if line["kind"] == "watch")
+    (theirs,) = (
         line
         for line in youtube.run(YT_HISTORY / "watch-history.json", timezone=TZ)
         if line["payload"]["title"] == "Splicing a three-strand rope"
-    ]
+    )
     assert ours == theirs
 
 

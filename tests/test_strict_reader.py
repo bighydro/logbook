@@ -14,8 +14,8 @@ from typing import Any
 import jsonschema
 import pytest
 
-from logbook.chain import GENESIS, compute_hash
-from logbook.store import Logbook
+from logbook.core.chain import GENESIS, compute_hash
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 

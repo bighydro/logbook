@@ -1,5 +1,5 @@
 """The adapter registry is one table, pyproject.toml's `logbook.adapters` entry points: every adapter
-module under logbook/adapters/ is in it, every entry in it is an adapter module, the installed package
+module under logbook/contrib/adapters/ is in it, every entry in it is an adapter module, the installed package
 reports the same names and modules, and `BUILT_IN` — the package's copy of the table in its order,
 which the installed metadata sorts away — is what `scripts/adapter_registry.py` generates from it. So
 the table the file states and the registry the code reads can never disagree, and a module with no
@@ -17,7 +17,7 @@ from pathlib import Path
 from logbook import adapters
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "logbook" / "adapters"
+PACKAGE = ROOT / "logbook" / "contrib" / "adapters"
 #: adapter modules that are deliberately not registered, each with the reason its docstring gives
 UNREGISTERED = {
     "takeout.calendar": "reached through `ics`, which sniffs every iCalendar file, folder or not",
@@ -46,7 +46,7 @@ def test_every_entry_is_an_adapter_module_of_this_package() -> None:
     for name, value in _table().items():
         assert value.startswith(adapters.BUILT_IN_PREFIX), (name, value)
         module = value.removeprefix(adapters.BUILT_IN_PREFIX)
-        assert module in modules, f"{name} names {value}, which is not under logbook/adapters/"
+        assert module in modules, f"{name} names {value}, which is not under logbook/contrib/adapters/"
         assert modules[module], f"{name} names {value}, which is neither a file nor a live adapter"
         assert name == module.replace(".", "-").replace("_", "-"), (name, module)
 

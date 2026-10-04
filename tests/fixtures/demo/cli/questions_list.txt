@@ -1,0 +1,11 @@
+  day-where        place      5    !logged                          Where were you?
+  gap-switched-off open       3    gap                              Was {missing} switched off?
+  night-where      place      4    night_in_transit                 Where did you sleep?
+  company-proposed people     4    proposed                         Was {proposed} with you?
+  event-happened   open       3    event_unplaced                   Did {event} happen?
+  promise-done     open       3    promise_due                      Is {promise} done?
+  people-reunion   people     4    reunion                          How was it, seeing {person} again?
+  savouring-new    savouring  2    travelled                        What did you see today that you had not seen before?
+  body-long-sleep  body       2    long_sleep                       Did the long sleep help?
+  gratitude-day    gratitude  1    logged                           What were you glad of today?
+  open-add         open       1    logged                           Anything to add?

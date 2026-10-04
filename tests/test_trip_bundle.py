@@ -26,9 +26,11 @@ from cabin import (
     ola_record,
 )
 
-from logbook import cli, crossing, trip_bundle
-from logbook.chain import compute_hash
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import trip_bundle
+from logbook.core import crossing
+from logbook.core.chain import compute_hash
+from logbook.core.store import Logbook
 
 
 @pytest.fixture

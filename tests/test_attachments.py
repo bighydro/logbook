@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import attachments
-from logbook.store import Logbook, uuid7
+from logbook.core import attachments
+from logbook.core.store import Logbook, uuid7
 
 TEXT = "Kari: Skal vi ta turen til Tromsø i mai?\nOla: Ja, gjerne.\n".encode()
 SHA = hashlib.sha256(TEXT).hexdigest()
@@ -103,7 +103,7 @@ def test_index_line_id_finds_a_line_by_source_and_raw_id(lb: Logbook):
 
 
 def test_stats_counts_a_content_reference_as_an_attachment(lb: Logbook):
-    from logbook.cli import record_stats
+    from logbook.commands.record import record_stats
 
     lb.attach(TEXT)
     lb.append(

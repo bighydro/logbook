@@ -14,9 +14,10 @@ from typing import Any
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import adapters, cli
-from logbook.adapters import apple_photos
-from logbook.store import Logbook
+from logbook import cli
+from logbook.contrib import adapters
+from logbook.contrib.adapters import apple_photos
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 APPLE_EPOCH = 978_307_200

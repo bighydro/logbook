@@ -30,8 +30,8 @@ from circle import (
 )
 
 from logbook import cli
-from logbook.index import Index
-from logbook.store import Logbook
+from logbook.core.index import Index
+from logbook.core.store import Logbook
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:

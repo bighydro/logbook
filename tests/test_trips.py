@@ -12,8 +12,8 @@ import pytest
 from persona import BOAT, OLA_ID, persona_record
 
 from logbook import cli
-from logbook.flights import Airports
-from logbook.store import Logbook
+from logbook.core.flights import Airports
+from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -205,7 +205,7 @@ def test_a_trip_never_starts_or_ends_with_a_night_near_home(
 def _stay(where: tuple[float, float], place: str | None = None) -> Any:
     from datetime import UTC, datetime
 
-    from logbook import stays
+    from logbook.core import stays
 
     return stays.Segment(
         kind=stays.STAY,
@@ -222,7 +222,7 @@ def _stay(where: tuple[float, float], place: str | None = None) -> Any:
 def _places() -> list[Any]:
     from persona import HOME, OFFICE
 
-    from logbook.places import Place
+    from logbook.core.places import Place
 
     return [Place("Home", *HOME, 120, "home"), Place("Office", *OFFICE, 120)]
 
@@ -230,9 +230,9 @@ def _places() -> list[Any]:
 def test_an_unnamed_night_far_from_any_place_names_the_city_of_the_nearest_large_airport() -> None:
     """Hamburg city, 4 km from the airport and with no named place near: the coordinates, then the
     airport's city in parentheses — the city only, never the airport's name."""
-    from logbook.flights import Airports
-    from logbook.places import Place
-    from logbook.trips import route_of
+    from logbook.core.flights import Airports
+    from logbook.core.places import Place
+    from logbook.core.trips import route_of
 
     airports = Airports.load()
     hamburg = _stay((53.5998, 10.0130))
@@ -249,8 +249,8 @@ def test_an_unnamed_night_far_from_any_place_names_the_city_of_the_nearest_large
 def test_a_route_names_an_airport_by_its_code_and_city() -> None:
     from persona import ZRH, ZURICH
 
-    from logbook import trips
-    from logbook.flights import Airports
+    from logbook.core import trips
+    from logbook.core.flights import Airports
 
     airports = Airports.load()
     [at_airport] = trips.route_of([_stay((47.4700, 8.5481))], _places(), airports)  # 1.3 km from ZRH
@@ -269,7 +269,7 @@ FAR = (60.5 + 3.7 / 111.32, 11.5)  # 3.7 km north
 
 
 def _field(kind: str, municipality: str = "Eidsvoll") -> Airports:
-    from logbook.flights import Airport
+    from logbook.core.flights import Airport
 
     return Airports([Airport("ZZZ", "ENZZ", "Example Airport", *FIELD, "Europe/Oslo", municipality, kind)])
 
@@ -278,7 +278,7 @@ def test_a_terminal_2_8_km_from_a_scheduled_airports_reference_point_is_at_that_
     """An airport with scheduled traffic (OurAirports type large or medium) is labelled within
     3.5 km, since a terminal often lies well off the row's reference point; every other row keeps
     the 2 km rule."""
-    from logbook import trips
+    from logbook.core import trips
 
     for kind in ("large_airport", "medium_airport"):
         airports = _field(kind)
@@ -294,15 +294,15 @@ def test_a_terminal_2_8_km_from_a_scheduled_airports_reference_point_is_at_that_
 
 
 def test_an_airport_whose_row_names_no_city_is_labelled_by_its_code_alone() -> None:
-    from logbook import trips
+    from logbook.core import trips
 
     assert trips.route_of([_stay(NEAR)], [], _field("large_airport", municipality="")) == ["ZZZ"]
 
 
 def test_airport_at_prefers_the_scheduled_airport_over_a_closer_small_field_out_of_its_radius() -> None:
     """A small strip 2.5 km away is outside its 2 km; the large airport 3 km away is inside its 3.5."""
-    from logbook import trips
-    from logbook.flights import Airport, Airports
+    from logbook.core import trips
+    from logbook.core.flights import Airport, Airports
 
     strip = Airport(
         "ZZY", "ENZY", "Example strip", 60.5 + 2.5 / 111.32, 11.5, "Europe/Oslo", "", "small_airport"
@@ -325,8 +325,8 @@ def test_airport_at_prefers_the_scheduled_airport_over_a_closer_small_field_out_
 def test_a_route_point_within_5_km_of_a_named_place_says_near_it_with_the_distance() -> None:
     from persona import CAFE, FJORD
 
-    from logbook import trips
-    from logbook.flights import Airports
+    from logbook.core import trips
+    from logbook.core.flights import Airports
 
     airports = Airports.load()
     [label] = trips.route_of([_stay(CAFE)], _places(), airports)  # 1.6 km from Office, 960 m from Home
@@ -340,8 +340,8 @@ def test_a_route_point_within_5_km_of_a_named_place_says_near_it_with_the_distan
 def test_consecutive_route_points_within_200_m_collapse_to_one() -> None:
     from persona import ZURICH
 
-    from logbook import trips
-    from logbook.flights import Airports
+    from logbook.core import trips
+    from logbook.core.flights import Airports
 
     step = 10 / 111_320  # ten metres of latitude
     three = [_stay((ZURICH[0] + i * step, ZURICH[1])) for i in range(3)]
