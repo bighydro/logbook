@@ -13,11 +13,11 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from logbook.adapters import phone
 from logbook.adapters.ios_contacts import _normalise as contact_normalise
 from logbook.store import Logbook
 
 from logbook import people, people_merge, resolve
-from logbook.adapters import phone
 from properties.common import CI
 
 # Numbers come only from reserved fictional ranges: the UK 07700 900xxx range and the +47 9000 000x range
