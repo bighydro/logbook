@@ -19,7 +19,7 @@ from .common import EM_DASH, EN_DASH, Subparsers, _airports, _distance_text, _du
 from .skips import _report_skipped
 
 if TYPE_CHECKING:
-    from .. import describe, transcribe
+    from ..labs import describe, transcribe
 
 
 def infer_arguments(sub: Subparsers) -> None:
@@ -118,7 +118,7 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
     """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]`: a
     transcript/v1 line per standing voice memo whose audio is in the store, heard by a local engine
     (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is needed for a dry run."""
-    from .. import transcribe
+    from ..labs import transcribe
 
     if a.what != "voice-memos":
         print(f"transcribe: voice-memos can be transcribed, not {a.what!r}", file=sys.stderr)
@@ -187,7 +187,7 @@ def cmd_describe(a: argparse.Namespace) -> None:
     person's name, never a place (`logbook.describe`); a photo already described is skipped. No
     model runs unless asked; a dry run needs no engine. Without the engine or the model the command
     prints the install and fetch lines and exits 2."""
-    from .. import describe
+    from ..labs import describe
 
     if a.what != "keepers":
         print(f"describe: keepers can be described, not {a.what!r}", file=sys.stderr)

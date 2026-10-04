@@ -29,7 +29,7 @@ def _day_rows(
     that photo instead of as a row of its own; with no keeper row standing it is a row. `names` is
     the label map; None is the `--raw` path: refs exactly as the sources gave them, no label, no
     fallback."""
-    from .. import describe
+    from ..labs import describe
 
     run: list[Line] = []
     rows, folded = events.fold(rows, flights.Airlines.load(), retracted)
@@ -94,7 +94,7 @@ def _line_row(
 def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
     """The text part of a line's row: the profile's own summary where the kind has one, else the
     payload's text, title, name or url, else every field as `key=value`."""
-    from .. import describe
+    from ..labs import describe
 
     p = line["payload"]
     if line["kind"] == "flight":

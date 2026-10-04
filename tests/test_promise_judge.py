@@ -15,10 +15,11 @@ from persona import OLA, OLA_ID, resolution
 from test_promises import OWNER_EMAIL, OWNER_ID, _by_quote, _run, _transcript
 from test_promises import lb as record
 
-from logbook import cli, judge
+from logbook import cli
 from logbook.contrib import promises
 from logbook.core import attachments
 from logbook.core.store import Logbook
+from logbook.labs import judge
 
 CRANE = "I will book the crane for next week."
 PHOTOS = "I'll send you the mooring photos by Friday."

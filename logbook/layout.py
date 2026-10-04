@@ -85,7 +85,12 @@ TIERS: dict[str, tuple[str, ...]] = {
         "trip_page",
         "vault",
     ),
-    "labs": (),
+    "labs": (
+        "demo_life",
+        "describe",
+        "judge",
+        "transcribe",
+    ),
 }
 
 # the modules beside the tiers: the package itself, the entry point, this table and the shim

@@ -1452,7 +1452,7 @@ def generate(root: Path, days: int | None = None, seed: int = 1, years: int | No
     if days is not None and years is not None:
         raise ValueError("give days or years, not both")
     if years is not None:
-        from .. import demo_life
+        from ..labs import demo_life
 
         if years < 1:
             raise ValueError("years must be at least 1")

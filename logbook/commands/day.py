@@ -38,7 +38,7 @@ def cmd_show(a: argparse.Namespace) -> None:
     in time order (then chain order for the same instant). Senders, organizers and attendees
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
-    from .. import describe
+    from ..labs import describe
 
     lb = Logbook.find()
     if a.day in pages.PAGES:

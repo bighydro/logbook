@@ -297,7 +297,7 @@ def cmd_demo(a: argparse.Namespace) -> None:
     persona, invented in `logbook/demo.py` (a month) or `logbook/demo_life.py` (a life), written
     to a new folder; the same days or years and seed give the same head. Nothing in it is real
     and nothing outside the folder is read."""
-    from .. import demo_life
+    from ..labs import demo_life
 
     root = Path(a.out).expanduser()
     if a.years is not None and a.days is not None:

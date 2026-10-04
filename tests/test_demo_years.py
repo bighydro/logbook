@@ -13,11 +13,12 @@ from typing import Any
 
 import pytest
 
-from logbook import cli, demo_life
+from logbook import cli
 from logbook.contrib import demo
 from logbook.core import people, reading
 from logbook.core.index import local_date
 from logbook.core.store import Logbook
+from logbook.labs import demo_life
 
 YEARS = 40
 SEED = 7

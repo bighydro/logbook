@@ -33,9 +33,9 @@ from pathlib import Path, PurePosixPath
 from platform import machine
 from typing import Any, Protocol
 
+from ..contrib.promises import OWNER, THRESHOLD, UNKNOWN, Judgement, Proposal, Report
+from ..core.store import now_utc
 from . import transcribe
-from .contrib.promises import OWNER, THRESHOLD, UNKNOWN, Judgement, Proposal, Report
-from .core.store import now_utc
 
 DEFAULT_MODEL = "mlx-community/Qwen2.5-7B-Instruct-4bit"
 EXTRA = "openlogbook[judge]"

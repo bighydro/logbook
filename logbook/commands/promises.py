@@ -14,7 +14,7 @@ from ..core.store import Logbook, now_utc, utc
 from .common import Subparsers, _clock
 
 if TYPE_CHECKING:
-    from .. import judge
+    from ..labs import judge
 
 
 # What `promises --judge` names in its help. `logbook.judge` owns both and is imported only when the
@@ -71,7 +71,7 @@ def cmd_promises(a: argparse.Namespace) -> None:
     `policy/promises-cache.json`); `--all` every candidate; `--judge` runs the model on the unjudged
     ones first, at most `--limit`. `promises done <id>` appends the `task/v1` line (RFC 0016) that
     marks one done, so `--open` hides it. Nothing else is written to the chain."""
-    from .. import judge
+    from ..labs import judge
 
     since = a.since
     if since is not None:

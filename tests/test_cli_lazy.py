@@ -12,13 +12,14 @@ import warnings
 
 import pytest
 
-from logbook import cli, describe, judge, transcribe
+from logbook import cli
 from logbook.commands import add, day, derive, parser, promises, record
 from logbook.contrib import setup
 from logbook.contrib.adapters import screentime
+from logbook.labs import describe, judge, transcribe
 
 ADAPTER_PREFIX = "logbook.contrib.adapters."
-LABS = {"logbook.judge", "logbook.describe", "logbook.transcribe", "logbook.demo_life"}
+LABS_PREFIX = "logbook.labs."
 
 
 def _modules_after(code: str) -> set[str]:
@@ -50,7 +51,7 @@ def test_help_imports_no_adapter_and_no_model_code() -> None:
     assert "logbook.commands.parser" in loaded
     assert not {m for m in loaded if m.startswith(ADAPTER_PREFIX)}, "an adapter module was imported"
     assert "logbook.contrib.adapters" not in loaded, "the adapter registry was imported"
-    assert not (loaded & LABS), "a labs module was imported"
+    assert not {m for m in loaded if m.startswith(LABS_PREFIX)}, "a labs module was imported"
 
 
 def test_every_command_runs_from_the_module_that_declares_it() -> None:
