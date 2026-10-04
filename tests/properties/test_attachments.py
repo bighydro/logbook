@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from logbook.store import Logbook
 
 from logbook import attachments
-from logbook.store import Logbook
 from properties.common import CI
 
 data = st.binary(max_size=3000)

@@ -12,8 +12,8 @@ from typing import Any
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from logbook.chain import canonical_json
+
 from properties.common import CI
 
 I_JSON = 2**53  # RFC 8785 §3.1 / RFC 7493: the integers every implementation represents exactly
