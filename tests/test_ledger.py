@@ -24,7 +24,7 @@ CAFE_PLACE = {"Cafe": {"lat": CAFE[0], "lon": CAFE[1], "radius_m": 120, "kind": 
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
-    cli.main(["ledger", *args])
+    cli.main(["rollup", "ledger", *args])
     return capsys.readouterr().out
 
 
@@ -384,11 +384,11 @@ def test_rollup_money_without_categories_and_with_an_unplaced_transaction(
     cli.main(["rollup", "money"])
     text = capsys.readouterr().out
     assert "unplaced       1 transaction · NOK -42.50" in text and "by category" not in text
-    cli.main(["ledger", "--json"])
+    cli.main(["rollup", "ledger", "--json"])
     data = json.loads(capsys.readouterr().out)
     [bread] = data["days"][0]["transactions"]
     assert bread["where"] is None and bread["trip"] is None
-    cli.main(["ledger"])
+    cli.main(["rollup", "ledger"])
     assert "Brødbua · nowhere · copilot" in capsys.readouterr().out
 
 
