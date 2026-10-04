@@ -71,6 +71,7 @@ MIGRATE_PROGRESS_EVERY = 100_000  # migrate: lines between progress reports
 MIGRATION = "migration"  # kind of the one line a migration appends (SPEC §3.1)
 REKEY = "rekey"  # kind of the one line a reseal to other recipients appends (RFC 0029 §6.4)
 NOT_INTACT = "the 0.1 record is not intact; nothing was changed"
+CUT_SHORT = "the file ends inside this line (cut short)"  # a month file a crash tore (SPEC §3)
 
 
 class CodeCheckoutError(Exception):
@@ -275,7 +276,9 @@ class Logbook:
     def files(self) -> list[Path]:
         return sorted(self.log_dir.glob("*/*.jsonl"))
 
-    def lines(self, progress: FileProgress | None = None) -> Iterator[Line]:
+    def lines(
+        self, progress: FileProgress | None = None, unreadable: list[str] | None = None
+    ) -> Iterator[Line]:
         """All lines in chain order (by seq), streamed. Files partition by month of `at`;
         backfilled history lands in old files, so file order is not chain order, but the writer
         appends each file in chain order, so this is a merge: every month file open at once, one
@@ -284,7 +287,12 @@ class Logbook:
         each file in path order: a file that finishes early is held until every earlier path
         has finished, so `--progress` reads as file 1, 2, … N. A file whose lines are not in seq order raises
         UnsortedFile after some lines have been yielded; `verify` then reads again, sorted
-        (`_lines_by_seq`), as SPEC §3 orders by seq wherever a line was found."""
+        (`_lines_by_seq`), as SPEC §3 orders by seq wherever a line was found. A line that is not
+        one (a month file cut inside its last line, bytes that are not one JSON object with
+        distinct keys) raises ValueError naming its file and line number, so a reader never takes
+        a broken record; when `unreadable` is a list the message goes there instead and the file is
+        read no further, every line before it in that file and every other file's still merged,
+        so `verify` reports the lines a crash left whole (SPEC §3, truncation)."""
         files = self.files()
         handles = [f.open("rb") for f in files]
         try:
@@ -316,7 +324,13 @@ class Logbook:
                 while raw := fh.readline():
                     counts[file_no] += 1
                     if raw.strip():
-                        line = self._parse(f, counts[file_no], raw)
+                        try:
+                            line = self._parse(f, counts[file_no], raw)
+                        except ValueError as e:
+                            if unreadable is None:
+                                raise
+                            unreadable.append(str(e))
+                            break  # the file ends here for the reader: read no further
                         seq = _seq_of(line)
                         if seq < after:
                             raise UnsortedFile(
@@ -403,8 +417,12 @@ class Logbook:
         keyed: bool | None = None,
     ) -> tuple[int, str, list[str]]:
         """(seq, head, errors) of the files, never the index, streamed through `lines()`: memory is
-        one line per month file however long the record. What this release only warns about
-        (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given.
+        one line per month file however long the record. A month file cut inside a line (a crash,
+        SPEC §3) or a line that is not one JSON object is an error naming the file and line, and
+        `seq` and `head` are still those of the lines read, so a torn record reports the last line
+        written whole and its hash, never 0 and GENESIS while a line survives. What this release
+        only warns about (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when
+        a list is given.
         `progress` is told of each month file as it is finished. Sealed lines are opened and
         checked against their digest when the identity is here (`keyed` None), always when
         `keyed` is True (no identity is then an error), never when False; `counts` is told how
@@ -416,16 +434,18 @@ class Logbook:
         if keyed is True and opener is None:
             return 0, GENESIS, [f"no identity at {self.identity_file} to open the sealed lines with"]
         tally = {} if counts is None else counts
+        unreadable: list[str] = []  # lines that are not one (SPEC §3, truncation), by file and line
         try:
-            try:
-                seq, head, errors = verify_lines(self.lines(progress), warnings, opener, tally)
-            except UnsortedFile:  # not written by this code; SPEC §3 orders by seq regardless
-                if warnings is not None:
-                    del warnings[kept:]
-                tally.clear()
-                seq, head, errors = verify_lines(self._lines_by_seq(progress), warnings, opener, tally)
-        except ValueError as e:  # a line that is not one JSON object with distinct keys (SPEC §2)
-            return 0, GENESIS, [str(e)]
+            seq, head, errors = verify_lines(self.lines(progress, unreadable), warnings, opener, tally)
+        except UnsortedFile:  # not written by this code; SPEC §3 orders by seq regardless
+            if warnings is not None:
+                del warnings[kept:]
+            tally.clear()
+            unreadable.clear()
+            seq, head, errors = verify_lines(
+                self._lines_by_seq(progress, unreadable), warnings, opener, tally
+            )
+        errors.extend(unreadable)
         if meta["seq"] != seq or meta["head"] != head:
             errors.append(
                 f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, "
@@ -882,11 +902,14 @@ class Logbook:
         shutil.rmtree(old, ignore_errors=True)  # not kept beside the record (RFC 0029 §10.2)
         return n, prev, changed
 
-    def _lines_by_seq(self, progress: FileProgress | None = None) -> Iterator[Line]:
+    def _lines_by_seq(
+        self, progress: FileProgress | None = None, unreadable: list[str] | None = None
+    ) -> Iterator[Line]:
         """Every line in chain order with one line in memory at a time, whatever order the files
         are in: a first pass notes where each seq lives (two integers per line), a second reads
         them back in seq order. `lines()` is the one-pass merge for files the writer kept in seq
-        order; this is for `migrate` and for `verify`'s fallback."""
+        order; this is for `migrate` and for `verify`'s fallback. `unreadable` is as `lines()`
+        takes it: a line that is not one ends its file for the reader."""
         files = self.files()
         seqs: array[int] = array("q")
         places: array[int] = array("q")  # file number << 40 | byte offset
@@ -896,7 +919,14 @@ class Logbook:
                 offset, before = 0, len(seqs)
                 for n, raw in enumerate(fh, 1):
                     if raw.strip():
-                        seqs.append(_seq_of(self._parse(f, n, raw)))
+                        try:
+                            line = self._parse(f, n, raw)
+                        except ValueError as e:
+                            if unreadable is None:
+                                raise
+                            unreadable.append(str(e))
+                            break  # the file ends here for the reader: read no further
+                        seqs.append(_seq_of(line))
                         places.append((file_no << 40) | offset)
                     offset += len(raw)
             if progress is not None:
@@ -958,9 +988,16 @@ class Logbook:
         return line
 
     def _parse(self, path: Path, n: int, raw: str | bytes) -> Line:
-        """One stored line as a dict; a bad one is reported by file and line number."""
+        """One stored line as a dict; a bad one is reported by file and line number. A last line
+        with no newline that is not JSON is a file cut inside it (SPEC §3): said plainly, without
+        the decoder's position."""
         try:
             return parse_line(raw)
+        except json.JSONDecodeError as e:
+            whole = raw.endswith(b"\n") if isinstance(raw, bytes) else raw.endswith("\n")
+            if not whole:
+                raise ValueError(f"{self._relative(path)} line {n}: {CUT_SHORT}") from e
+            raise ValueError(f"{self._relative(path)} line {n}: {e}") from e
         except ValueError as e:
             raise ValueError(f"{self._relative(path)} line {n}: {e}") from e
 

@@ -203,30 +203,24 @@ def test_truncating_the_record_at_a_line_boundary_reports_the_last_good_head(
     cut = data.draw(st.sampled_from(boundaries))
     seq, head, errors, whole = truncated(lb, cut)
     assert seq == len(whole)
-    assert head == (original_hash(lb, whole[-1][0]) if whole else GENESIS)
+    assert head == (original_hash(whole[-1]) if whole else GENESIS)
     if len(whole) == len(lines):
         assert errors == []
     else:
         assert len(errors) == 1 and "logbook.json" in errors[0]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="two lines, the file cut one byte into the second: verify() reports seq 0 and head GENESIS, "
-    "not seq 1 and the first line's hash; Logbook.verify (store.py) turns the parse error of the partial "
-    "line into (0, GENESIS, [error]) and forgets the lines before it, so a crash-truncated record never "
-    "learns which prefix of its chain is intact",
-)
-# No shrinking: the shrunk counterexample is in the reason above, and shrinking a record on disk costs
-# twenty seconds a run; the first counterexample found is reported instead.
+# No shrinking: the shrunk counterexample (two lines, the file cut one byte into the second, once
+# reported seq 0 and GENESIS) is the first example below, and shrinking a record on disk costs twenty
+# seconds a run; the first counterexample found is reported instead.
 @settings(CI, max_examples=15, phases=(Phase.explicit, Phase.reuse, Phase.generate))
 @given(drafts(min_size=1, max_size=3, end=datetime(2026, 4, 1, tzinfo=UTC)), st.data())
 def test_truncating_the_record_inside_a_line_reports_the_last_good_head(
     tmp_path_factory: pytest.TempPathFactory, lines: list[dict[str, Any]], data: st.DataObject
 ) -> None:
     """SPEC §3, write order, continued: cut the month file inside any line. The lines before the cut
-    are still a valid prefix, so `verify` reports their count and head, and an error naming the bytes
-    that are not a line. (Stated as the audit asked; the current code reports seq 0 and GENESIS.)"""
+    are still a valid prefix, so `verify` reports their count and head (the last good head; GENESIS
+    when none survives), and an error naming the cut line by its file and line number."""
     lb = record(tmp_path_factory.mktemp("lb"), lines)
     rows = stored(lb)
     row = data.draw(st.sampled_from(rows))
@@ -234,15 +228,14 @@ def test_truncating_the_record_inside_a_line_reports_the_last_good_head(
     seq, head, errors, whole = truncated(lb, cut)
     assert errors, "the cut line is not a line"
     assert seq == len(whole)
-    assert head == (original_hash(lb, whole[-1][0]) if whole else GENESIS)
+    assert head == (original_hash(whole[-1]) if whole else GENESIS)
+    assert names(errors, lb, 0, row[1], row[2]), (errors, row[2])
 
 
-def original_hash(lb: Logbook, seq: int) -> str:
-    """The hash line `seq` had: recomputed from the stored line, which the cut left whole."""
-    for row in stored(lb):
-        if row[0] == seq:
-            return str(parse_line(row[4])["hash"])
-    raise AssertionError(seq)
+def original_hash(row: Stored) -> str:
+    """The hash a line had, from the bytes the cut left whole (the file is not read again: after a
+    cut inside a line it holds bytes that are not one)."""
+    return str(parse_line(row[4])["hash"])
 
 
 @settings(CI, max_examples=40)

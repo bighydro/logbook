@@ -112,9 +112,10 @@ def test_duplicate_key_in_a_line_makes_verify_report_invalid(tmp_path: Path):
     text = json.dumps(_hand_line())
     duplicated = text[:-1] + ', "tier": 2}'  # the same key twice, same value: json.loads would not notice
     lb = _write_by_hand(tmp_path / "lb", duplicated)
-    _seq, _head, errors = lb.verify()
-    assert len(errors) == 1
+    seq, head, errors = lb.verify()
     assert "duplicate key" in errors[0] and "tier" in errors[0] and "03.jsonl" in errors[0]
+    assert (seq, head) == (0, GENESIS)  # no line read whole before it
+    assert len(errors) == 2 and "logbook.json" in errors[1]  # and logbook.json names the line it cannot read
 
 
 def test_duplicate_key_nested_in_payload_is_invalid_too(tmp_path: Path):
@@ -123,7 +124,7 @@ def test_duplicate_key_nested_in_payload_is_invalid_too(tmp_path: Path):
     assert text != json.dumps(line)
     lb = _write_by_hand(tmp_path / "lb", text)
     _seq, _head, errors = lb.verify()
-    assert len(errors) == 1 and "duplicate key" in errors[0] and "text" in errors[0]
+    assert len(errors) == 2 and "duplicate key" in errors[0] and "text" in errors[0]
 
 
 def test_reader_refuses_a_line_with_a_duplicate_key(tmp_path: Path):
