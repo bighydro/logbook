@@ -131,9 +131,8 @@ def test_an_address_is_one_ref_whatever_its_case_and_whitespace(a: str, b: str, 
     sa, sb = data.draw(spelled_address(a)), data.draw(spelled_address(b))
     assert contact_normalise("email", sa, "") == (a, False)
     assert people_merge._email_key(("email", sa)) == ("email", a)
-    assert people_merge._email_key(("handle", sa)) == ("email", a), (
-        "an address used as a handle is the address"
-    )
+    as_handle = people_merge._email_key(("handle", sa))
+    assert as_handle == ("email", a), "an address used as a handle is the address"
     assert people._refs_of(sa.strip())[0] == ("email", a)
     assert (people_merge._email_key(("email", sa)) == people_merge._email_key(("email", sb))) == (a == b)
 

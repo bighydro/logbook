@@ -120,9 +120,8 @@ def test_exporting_then_importing_at_the_same_tier_is_idempotent_on_the_head(
         fresh = record(tmp_path_factory.mktemp("fresh"), [])
         assert fresh.append_many(as_drafts) == len(subset)
         head = fresh.meta["head"]
-        assert fresh.append_many(as_drafts) == 0 and fresh.meta["head"] == head, (
-            "a second import changes nothing"
-        )
+        again_written = fresh.append_many(as_drafts)
+        assert (again_written, fresh.meta["head"]) == (0, head), "a second import changes nothing"
         again = exported(fresh, t)
         assert [content_hash(line) for line in again] == [content_hash(line) for line in subset]
         assert [line["id"] for line in again] == [line["id"] for line in subset]
