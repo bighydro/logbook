@@ -70,7 +70,7 @@ SCHEMA = (
     *(
         (
             # unicode61: case and diacritics folded, no stemmer in any language — a word matches
-            # itself and never a stem of it (`logbook/search.py`)
+            # itself and never a stem of it (`logbook/core/search.py`)
             f"CREATE VIRTUAL TABLE {SEARCH} USING fts5("
             "body, kind UNINDEXED, tier UNINDEXED, day UNINDEXED, tokenize = 'unicode61')",
         )

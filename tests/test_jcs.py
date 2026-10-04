@@ -1,4 +1,4 @@
-"""RFC 8785 (JSON Canonicalization Scheme) test vectors, run against ``logbook.chain.canonical_json``.
+"""RFC 8785 (JSON Canonicalization Scheme) test vectors, run against ``logbook.core.chain.canonical_json``.
 
 SPEC.md §3 says ``canonical_json`` *is* RFC 8785. These vectors are transcribed from the RFC text:
 

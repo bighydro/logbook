@@ -1,7 +1,7 @@
 """`logbook promises --judge`: a local instruct model reads each candidate the rules found and says
 whether it is a commitment, by whom, to whom, what, by when and how sure it is.
 
-The rules (`logbook.promises`) over-propose by design: on a real record most of their candidates
+The rules (`logbook.contrib.promises`) over-propose by design: on a real record most of their candidates
 are conversational ("I'll have a look", "we'll see"). The judge is a second pass over the same
 candidates, never a new extractor: it adds a `Judgement` to a proposal and changes neither the
 proposal, its id nor what `promises done` writes. Each candidate is shown with the two sentences

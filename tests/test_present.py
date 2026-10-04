@@ -1,4 +1,4 @@
-"""`logbook.present`, the "with" module: who was present at a stay, with a confidence and a reason,
+"""`logbook.core.present`, the "with" module: who was present at a stay, with a confidence and a reason,
 from calendar attendees, transcript speakers, a note that says "with <name>", and faces in photos
 (proposed only). Names resolve through the record's resolution lines. Synthetic persona; pure."""
 

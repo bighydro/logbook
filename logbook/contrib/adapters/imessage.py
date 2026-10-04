@@ -36,7 +36,7 @@ Media, v1 rule: the file is never copied into the record — the §1.1 attachmen
 yet. The `filename` column is a path like `~/Library/SMS/Attachments/ab/12/<guid>/<name>`; the part
 after `Attachments` is looked up under `<db folder>/Attachments/`, with pathlib parts, and must stay
 inside that folder. When the file exists its SHA-256 and size are recorded under `extra.media` so
-the attach pass (`logbook attach import-backup --only imessage`, `logbook/attach.py`) finds the bytes
+the attach pass (`logbook attach import-backup --only imessage`, `logbook/contrib/attach.py`) finds the bytes
 in the backup by the path and puts them in the §1.1 store under the digest, checked against it;
 when it does not, `extra.media_missing` is true.
 `payload.media` is never set. A message with several attachments puts the first under `extra.media`

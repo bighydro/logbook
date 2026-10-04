@@ -184,7 +184,7 @@ def cmd_describe(a: argparse.Namespace) -> None:
     """`describe keepers [--since DAY] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
     [--dry-run] [--json]`: a derived note/v1 line per standing keeper (RFC 0024) whose photo file is
     reachable — one factual sentence and the visible things, by a local vision model, never a
-    person's name, never a place (`logbook.describe`); a photo already described is skipped. No
+    person's name, never a place (`logbook.labs.describe`); a photo already described is skipped. No
     model runs unless asked; a dry run needs no engine. Without the engine or the model the command
     prints the install and fetch lines and exits 2."""
     from ..labs import describe

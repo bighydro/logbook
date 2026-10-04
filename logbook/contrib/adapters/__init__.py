@@ -13,7 +13,7 @@ zone, for a source whose times are floating (an all-day calendar entry has a day
 `assets: list[Asset]`, the record's asset registry (`assets.json`, ADR 0018), for a source that reports
 the positions of the owner's boats and aircraft rather than the owner's own. A source read front to back
 from one big file (`mail`) may take `progress(items, bytes_read, elapsed)`, which `add` prints with the
-rate, and `cursor`, the inbox manifest's (`logbook.inbox.Cursor`): `cursor.start(file)` is the byte
+rate, and `cursor`, the inbox manifest's (`logbook.contrib.inbox.Cursor`): `cursor.start(file)` is the byte
 offset to begin at and `cursor.reached(file, ordinal, offset)` is told, before every draft, how far the
 file is read, so an interrupted import resumes at the last draft the record holds; `places: list[Place]`, the
 record's named places (`places.json`), for a source that positions a place by its name; or

@@ -22,7 +22,7 @@ time are skipped and counted; a removed video is a line with no url, counted.
 ## The two flavours
 
 **JSON** is one array per file of `{header, title, titleUrl?, subtitles?, time, products, details?}`,
-streamed with `ijson` one entry at a time. `raw_id` is `youtube:<time as spelled>:<sha256(url, else
+streamed with `ijson` (the `stream` extra: `pip install "openlogbook[stream]"`) one entry at a time. `raw_id` is `youtube:<time as spelled>:<sha256(url, else
 the title)[:16]>`.
 
 **HTML** is one Material card per entry: a `div.outer-cell` whose `header-cell` names the product,

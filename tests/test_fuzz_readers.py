@@ -2,7 +2,7 @@
 date window, and ANY spec-legal reshaping of the record, every reader exits 0 and prints
 well-formed output (JSON under `--json`), never a traceback.
 
-The record is `logbook demo` (`logbook.demo`), rewritten through `Logbook.append_many` with the
+The record is `logbook demo` (`logbook.contrib.demo`), rewritten through `Logbook.append_many` with the
 drafts reshaped first: optional payload fields left out (the MAY rows of each profile's RFC
 table), a string `chat` (the shape before RFC 0008), a `tz` the host's zone database lacks, a day
 with only tier-3 lines; and, after the write, an empty month file. SPEC §5 forbids a reader

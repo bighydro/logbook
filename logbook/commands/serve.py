@@ -27,7 +27,7 @@ def serve_arguments(sub: Subparsers) -> None:
 
 
 def cmd_serve(a: argparse.Namespace) -> None:
-    """`serve [--port N]`: the record read in a browser, from this machine only (`logbook/serve.py`).
+    """`serve [--port N]`: the record read in a browser, from this machine only (`logbook/contrib/serve.py`).
     Server-rendered pages from the index and the readers — the Day as a timeline, a window one row
     per day, the trips of a year, the places, the assets and their last fix, where each source went
     quiet — at http://127.0.0.1:8765/. Any other host is refused before a socket is opened; no page
@@ -70,7 +70,7 @@ def mcp_arguments(sub: Subparsers) -> None:
 
 def cmd_mcp(a: argparse.Namespace) -> None:
     """`mcp [--root DIR] [--allow-tier-3]`: serve the record to an MCP host over this process's
-    stdin and stdout, nothing else open, until the host closes them (`logbook.mcp_server`; the
+    stdin and stdout, nothing else open, until the host closes them (`logbook.contrib.mcp_server`; the
     tools and the ceiling are documented in `docs/mcp.md`). `--inspect` prints the tool table and
     one sample request and needs neither a record nor the `mcp` extra."""
     from ..contrib import mcp_server

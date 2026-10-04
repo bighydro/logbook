@@ -228,7 +228,7 @@ def ledger_arguments(sub: Subparsers) -> None:
 def cmd_ledger(a: argparse.Namespace) -> None:
     """`ledger [--month YYYY-MM | --trip ID] [--json]`: the transaction lines (tier 3) of the window
     in context — each at the stay the owner was in, in its trip, per day, a shared expense's shares
-    per person — from one reading of the window through the index (`logbook.ledger`). The window
+    per person — from one reading of the window through the index (`logbook.core.ledger`). The window
     is the days the record has a transaction on, one month of them, or one trip's days (its first
     day to the return day). Amounts in the line's currency, nothing converted; nothing is written."""
     lb = Logbook.find()

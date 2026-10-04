@@ -49,12 +49,12 @@ def cmd_trip(a: argparse.Namespace) -> None:
     slept at with their nights and the legs between them, the days from the leaving day to the
     return day one line each, the flights in and out, the people confirmed and proposed, the
     nights aboard, the keepers per day, the health of the span and the spend — from one reading
-    of the days around it (`logbook.trip_page`). The trip is named by the id `trips` prints or by
+    of the days around it (`logbook.contrib.trip_page`). The trip is named by the id `trips` prints or by
     any day inside it. `--html` writes one self-contained page with an inline SVG map of the
     route. Nothing is written to the record."""
     lb = Logbook.find()
     try:
-        if a.print:  # the paper edition (`logbook.print_page`), written where --html says
+        if a.print:  # the paper edition (`logbook.contrib.print_page`), written where --html says
             out = _print_target(a, "trip")
             data = print_page.read_trip(lb, a.ref, _airports(a.airports))
             out.write_bytes(print_page.html(data).encode("utf-8"))

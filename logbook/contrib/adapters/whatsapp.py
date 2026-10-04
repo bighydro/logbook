@@ -25,7 +25,7 @@ ZPUSHNAME (the name the sender chose) on a store whose ZWAMESSAGE has that colum
 
 Media, v1 rule: the file is never copied here. When ZMEDIALOCALPATH names a file that exists under
 `<db folder>/Message/`, its SHA-256 and size are recorded under `extra.media` so the attach pass
-(`logbook attach import-backup --only whatsapp`, `logbook/attach.py`) finds the bytes in the backup
+(`logbook attach import-backup --only whatsapp`, `logbook/contrib/attach.py`) finds the bytes in the backup
 by the path and puts them in the §1.1 store under the digest, checked against it; when it does
 not, `extra.media_missing` is true. `payload.media` is never set. `LOGBOOK_WHATSAPP_HASH_MEDIA=0`
 skips the hashing (a decade of media is many gigabytes) and records only the local path.

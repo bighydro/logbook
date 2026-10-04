@@ -55,7 +55,7 @@ def cmd_people(a: argparse.Namespace) -> None:
     """`people [--year YYYY] [--json]`: every person the record's resolution lines name and has
     heard from in the window, never the owner — the channels, first and last contact, days
     together, nights under one roof, places shared, birthday and last real contact — read through
-    the index (`logbook.people`). The window is the whole record, or one year, clipped to the days
+    the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written."""
     lb = Logbook.find()
     if a.verb == "merge":
@@ -79,7 +79,7 @@ def cmd_people(a: argparse.Namespace) -> None:
 
 def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
     """`people merge [--propose | --apply ID... | --export-review FILE | --apply-review FILE] [--json]`:
-    the same person named twice or more by the resolution lines (`logbook.people_merge`), proposed
+    the same person named twice or more by the resolution lines (`logbook.contrib.people_merge`), proposed
     with the evidence and never merged on its own. `--apply` and `--apply-review` append the alias
     lines (RFC 0006) through `Logbook.append`; every id or row is checked before the first one."""
     from ..contrib import people_merge

@@ -166,7 +166,7 @@ def _append_with(
     correct a sample (`health_export.corrected`).
     One whose `run` takes `progress` gets a reporter that prints every report it makes with the
     bytes read and the rate; one whose `run` takes `cursor` gets the inbox manifest's cursor
-    (`logbook.inbox`), so an import that stopped resumes where the record holds the source up to,
+    (`logbook.contrib.inbox`), so an import that stopped resumes where the record holds the source up to,
     and `--restart` reads from the first byte again. With `dry_run` the adapter runs, the drafts
     are counted against the record and nothing is written: not a line, not an attachment, not the
     manifest."""
@@ -1177,7 +1177,7 @@ def attach_arguments(sub: Subparsers) -> None:
 
 def cmd_attach(a: argparse.Namespace) -> None:
     """`attach import-backup <folder> --only a,b [--since DAY] [--dry-run]`, `attach status`, `attach
-    verify`: the SPEC §1.1 store filled from an iOS backup, counted, checked (`logbook/attach.py`).
+    verify`: the SPEC §1.1 store filled from an iOS backup, counted, checked (`logbook/contrib/attach.py`).
     The pass appends nothing and holds no file whole; a file whose bytes are not the digest its line
     names is refused on one line and the command exits 1 at the end. `--only` is required: a run
     reads only the stores it was asked for, and a source disabled in `policy/import.json` is skipped

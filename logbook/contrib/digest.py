@@ -23,7 +23,7 @@ evening, in at most `LIMIT` lines, never a list of everything. In order:
    (retracted lines out, the sources folded as the Day folds them, `events.fold`; an all-day entry
    is not timed), with the attendees the record names: the first `TOMORROW_SHOWN` and `+N more`.
 6. One closing question the owner can answer in a word, from the record's own bank
-   (`logbook/questions.py`, RFC 0027): `policy/questions.json` lists the questions, each with the
+   (`logbook/contrib/questions.py`, RFC 0027): `policy/questions.json` lists the questions, each with the
    day's facts it asks on (`when`: travelled, aboard, night away, a reunion, no photos, long sleep,
    ...) and a weight; the digest reads the day's facts from the parts it already has (`questions.facts`),
    draws one of the questions whose conditions hold by weight (`questions.pick`), never the same id

@@ -23,7 +23,7 @@ index rebuild, with and without opening; bytes on disk.
 
 The sealed record is written by this script, not by `append_many`, because `append_many` hands a
 draft to `Logbook._line` as keyword arguments and knows no `payload_enc`; the writer here computes
-the same chain with `logbook.chain`, writes the same stored form (`store._dumps`) in the same
+the same chain with `logbook.core.chain`, writes the same stored form (`store._dumps`) in the same
 batches, fsyncs, saves `logbook.json` and extends the index the same way. Writing the plain record
 through both paths shows how close the two are.
 

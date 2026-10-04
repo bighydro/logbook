@@ -392,7 +392,7 @@ def test_size_text_large(n: int, text: str):
 
 
 def test_the_import_manifest_under_inbox_is_bookkeeping_never_listed(lb):
-    # inbox/manifest.json is where a long import's cursor lives (logbook.inbox.Cursor): not an input.
+    # inbox/manifest.json is where a long import's cursor lives (logbook.contrib.inbox.Cursor): not an input.
     (lb.root / "inbox").mkdir(exist_ok=True)
     (lb.root / "inbox" / "manifest.json").write_text('{"cursors": []}', encoding="utf-8")
     assert [f.relative for f in inbox.files(lb)] == []

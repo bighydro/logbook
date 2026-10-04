@@ -50,11 +50,21 @@ Several people and several agents build this project at once, and a shared worki
 - Commit after every step (`git commit -s -S`), so a crash or a context reset loses one step at most. Push the branch when the step is green.
 - When the PR merges, `git worktree remove ../logbook-<issue>` and delete the branch. A stale worktree is the next session's confusing diff.
 
+## Where does my code go
+
+One package, three tiers ([ARCHITECTURE.md](ARCHITECTURE.md); `logbook/layout.py` declares them, `tests/test_layout.py` holds the tree to it):
+
+- `logbook/core/` — the format and what SPEC.md freezes with it: the chain, the record, the index, the attachment store, the tiers, and a reader whose JSON a second implementation is compared on (§6.1). A change here is a spec change until proven otherwise.
+- `logbook/contrib/` — an adapter (`contrib/adapters/<source>.py`, one module per source, listed in `BUILT_IN` and as an entry point), an import or sync, an export, or a derived reader whose output is a reader's own. Imports core and contrib, never labs.
+- `logbook/labs/` — anything that runs a model, or is still an experiment. Imported only when its command runs.
+- `logbook/commands/` — the command itself: `<name>_arguments(sub)` and `cmd_<name>(a)` in the family's module, a line in `parser.py`; an adapter or a labs module imported inside the function, so `logbook --help` stays cheap.
+- A module that moves keeps its old import path for one minor version (`layout.MOVED`, `docs/migration-0.6.md`).
+
 ## Adapters
 
 The easiest and most useful thing to build is an adapter for the export you already have. The ones wanted, with their export formats, profiles and tiers, are in [docs/adapter-bounties.md](https://bighydro.github.io/logbook/adapter-bounties/).
 
-1. Copy `adapters/template/`.
+1. Copy `adapters/template/` into `logbook/contrib/adapters/<source>.py`, add it to `BUILT_IN` and to the `logbook.adapters` entry points in `pyproject.toml` (a test keeps the two lists equal).
 2. Put a small, **synthetic** export in `fixture/` — never real data, not even yours.
 3. Write `run(input_path, since)` yielding observations with a `payload.schema`.
 4. Run the tests; the expected output file is generated on first run and checked in.

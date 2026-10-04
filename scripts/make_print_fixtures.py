@@ -3,8 +3,8 @@
 --print` and `logbook trip trip:2026-06-15:2026-06-20 --html PATH --print` write for the demo
 record of thirty days with seed 7 (`logbook demo --days 30 --seed 7`), whose Oslo persona does
 not exist. `tests/test_print_page.py` holds the renderer to them byte for byte, so a change to
-`logbook/print_page.py` or `logbook/print_layout.py` that is meant runs this once and commits the
-new fixtures with it:
+`logbook/contrib/print_page.py` or `logbook/contrib/print_layout.py` that is meant runs this once and commits
+the new fixtures with it:
 
     uv run python scripts/make_print_fixtures.py
 

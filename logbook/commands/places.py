@@ -25,7 +25,7 @@ def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
     """`places import-takeout <path> [--write]`: Google Maps' saved and starred places (the Takeout
     `Maps (your places)/` and `Saved/` folders, or one file of them) proposed as entries of
     <root>/places.json — a setting of the record, outside the chain — and written only with
-    `--write`, never changing an entry already there (`logbook/adapters/takeout/places.py`)."""
+    `--write`, never changing an entry already there (`logbook/contrib/adapters/takeout/places.py`)."""
     from ..contrib.adapters.takeout import places as takeout_places
 
     try:

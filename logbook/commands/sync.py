@@ -111,7 +111,7 @@ def cmd_sync(a: argparse.Namespace) -> None:
     """`sync <source>`: pull from a live source since its stored watermark (or --since), append,
     advance the watermark. `sync --all`: every configured source in turn (`_sync_all`). `sync
     --install-schedule` / `--uninstall-schedule`: `sync --all` twice a day by the machine's own
-    scheduler (`_sync_schedule`, `logbook.schedule`)."""
+    scheduler (`_sync_schedule`, `logbook.contrib.schedule`)."""
     from ..contrib import adapters
 
     if a.install_schedule or a.uninstall_schedule:
@@ -689,7 +689,7 @@ def cmd_assets(a: argparse.Namespace) -> None:
     """`assets list`: one line per registered asset. `assets add`: register one (ADR 0018). The
     registry is <root>/assets.json, a setting of the record, outside the chain. `assets status`:
     per asset, its last known position (its latest standing location line, through the index,
-    `logbook/asset_status.py`) and the age of that fix; a table in local time, or JSON."""
+    `logbook/contrib/asset_status.py`) and the age of that fix; a table in local time, or JSON."""
     lb = Logbook.find()
     try:
         if a.verb == "add":

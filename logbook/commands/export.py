@@ -199,7 +199,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
     """vault FOLDER [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--tier 1|1,2]: the record as a folder
-    of Markdown pages with wikilinks (`logbook/vault.py`), tier-gated under the `vault` ceiling in
+    of Markdown pages with wikilinks (`logbook/contrib/vault.py`), tier-gated under the `vault` ceiling in
     policy/crossing.json (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1
     line (RFC 0011). Only the files whose content changed are rewritten."""
     generated_at = now_utc()
@@ -381,7 +381,7 @@ def share_arguments(sub: Subparsers) -> None:
 
 def cmd_share(a: argparse.Namespace) -> None:
     """`share day YYYY-MM-DD --to NAME [--tier 1|2|3] [--out FILE]`: one local day as a signed page
-    for a member of the circle (RFC 0025, `logbook.share`): the day's lines at or under the tier,
+    for a member of the circle (RFC 0025, `logbook.core.share`): the day's lines at or under the tier,
     verbatim, the attachments they point at, the day-package summary and a manifest signed with
     this record's sharing key (made on first use). The tier may not exceed the destination's ceiling
     in policy/crossing.json (ADR 0016); the page is recorded as a crossing/v1 line."""

@@ -294,7 +294,7 @@ def demo_arguments(sub: Subparsers) -> None:
 
 def cmd_demo(a: argparse.Namespace) -> None:
     """`demo [--days N | --years N] [--seed S] --out DIR`: a complete synthetic record of the Oslo
-    persona, invented in `logbook/demo.py` (a month) or `logbook/demo_life.py` (a life), written
+    persona, invented in `logbook/contrib/demo.py` (a month) or `logbook/labs/demo_life.py` (a life), written
     to a new folder; the same days or years and seed give the same head. Nothing in it is real
     and nothing outside the folder is read."""
     from ..labs import demo_life
@@ -387,8 +387,8 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + w)
 
 
-# The steps `setup --step` names in its help. `logbook.setup` owns the tuple and is imported only when
-# the command runs (it reaches the adapters); a test holds this copy to it.
+# The steps `setup --step` names in its help. `logbook.commands.setup` owns the tuple and is imported only
+# when the command runs (it reaches the adapters); a test holds this copy to it.
 SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
@@ -406,8 +406,8 @@ def setup_arguments(sub: Subparsers) -> None:
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
-    """The guided first run (`logbook/setup.py`): one question at a time, each with its default and why
-    it is asked; resumable through `state/setup.json`; `--yes` takes every default and asks nothing."""
+    """The guided first run (`logbook/commands/setup.py`): one question at a time, each with its default and
+    why it is asked; resumable through `state/setup.json`; `--yes` takes every default and asks nothing."""
     from . import setup
 
     status = setup.run(a, os.environ)
@@ -424,7 +424,7 @@ def doctor_arguments(sub: Subparsers) -> None:
 
 
 def cmd_doctor(a: argparse.Namespace) -> None:
-    """One line per check of the record and this machine (`logbook/doctor.py`); exit 1 when one fails.
+    """One line per check of the record and this machine (`logbook/contrib/doctor.py`); exit 1 when one fails.
     Reads only: a missing settings file is reported, never written."""
     from ..contrib import doctor as doctor_checks
 
@@ -466,7 +466,7 @@ def cmd_backup(a: argparse.Namespace) -> None:
     """`backup DEST [--keep N] [--verify]`: one snapshot of the record under `DEST/<owner_id>/`, hard
     links to the previous one for what did not change, verified there, its head the live head.
     `backup list DEST`: every snapshot with its lines, head and size. `backup restore SNAPSHOT
-    TARGET`: a copy back, verified (`logbook/backup.py`, docs/backup.md). A refusal exits 2; a copy
+    TARGET`: a copy back, verified (`logbook/contrib/backup.py`, docs/backup.md). A refusal exits 2; a copy
     that does not verify is removed and exits 1."""
     from ..contrib import backup
 

@@ -3,7 +3,7 @@
 `logbook sync weather [--since DAY] [--until DAY] [--dry-run]` and nothing else calls this: no
 reader does, and `sync --all` leaves it out unless the owner sets `LOGBOOK_WEATHER=1` (the
 `sync.env` the schedule reads). The command derives the clusters — one local day and one place to a
-tenth of a degree (`logbook.weather.clusters`) — and `pull` fetches the daily values for each from
+tenth of a degree (`logbook.core.weather.clusters`) — and `pull` fetches the daily values for each from
 Open-Meteo's free historical archive (`archive-api.open-meteo.com`, no key), or from the forecast
 API for the last `RECENT_DAYS` (the archive runs a few days behind). One request covers one cluster
 and a run of days: the days a cluster needs are sorted and split where a gap exceeds `GAP_DAYS` or

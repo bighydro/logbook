@@ -21,7 +21,7 @@ The matcher is a value, not the command. `propose(lb, matcher=RULES)` takes anyt
 a `version` and `__call__(task, candidate) -> Evidence | None`: the command owns the record, the
 tasks, the window and the candidates, and the matcher reads one task against one line and says
 whether the line is evidence, how (a `rule`), on which `shared` words, and how sure it is. The rules
-are the first such thing; the promises judge's engine (`logbook.judge`), a local instruct model that
+are the first such thing; the promises judge's engine (`logbook.labs.judge`), a local instruct model that
 answers one JSON object per candidate, can be the next, and the report, the ids and `done` stay the
 same."""
 

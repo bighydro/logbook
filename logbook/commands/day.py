@@ -92,7 +92,7 @@ def cmd_day(a: argparse.Namespace) -> None:
     """`day [YYYY-MM-DD] [--json]`: the Day — the nights either side, the country, the timeline of
     stays, moves, stops and flights with what attached to each and who was there, the health
     line, the sources — read through the index from one reading of the day and the day before
-    (`logbook.day`). Nothing is written, not even `policy/stays.json`."""
+    (`logbook.core.day`). Nothing is written, not even `policy/stays.json`."""
     lb = Logbook.find()
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     try:
@@ -130,7 +130,7 @@ def cmd_digest(a: argparse.Namespace) -> None:
     """`digest [YYYY-MM-DD] [--json | --markdown]`: the day in at most `digest.LIMIT` lines — its
     shape in three (where, with whom confirmed, what attached), the flights, the open promises due
     within the week, the usual sources with no line, tomorrow's timed calendar entries and one
-    closing question the owner answers in a word (`logbook.digest`, composed from the readers).
+    closing question the owner answers in a word (`logbook.contrib.digest`, composed from the readers).
     Nothing is written and nothing is sent: delivery is a later decision (ADR 0005)."""
     lb = Logbook.find()
     day = _today() if a.day in (None, "today") else a.day
@@ -243,7 +243,7 @@ def cmd_days(a: argparse.Namespace) -> None:
     """`days [--from DAY] [--to DAY] [--json]`: a window of the record one line per day — the
     night, the kilometres moved, the flights, the stays with what attached, the people confirmed,
     the health triple, and a gap marker for a usual source with no line that day — streamed from
-    readings of the window in chunks through the index (`logbook.days`), never one per day. The
+    readings of the window in chunks through the index (`logbook.core.days`), never one per day. The
     window defaults to the days the owner's track covers. `--json` is one object per line. Nothing
     is written."""
     lb = Logbook.find()
@@ -288,11 +288,11 @@ def cmd_year(a: argparse.Namespace) -> None:
     """`year YYYY [--html PATH] [--json]`: the Year — days per country, nights, the trips, the
     flights, the places by nights, the people by days together, health and keepers by month, and
     twelve picks, one day a month, rendered with the day reader — composed from one reading of
-    the year's days (`logbook.year`). `--html` writes one self-contained page. Nothing is written
+    the year's days (`logbook.core.year`). `--html` writes one self-contained page. Nothing is written
     to the record."""
     lb = Logbook.find()
     try:
-        if a.print:  # the paper edition (`logbook.print_page`), written where --html says
+        if a.print:  # the paper edition (`logbook.contrib.print_page`), written where --html says
             out = _print_target(a, "year")
             data = print_page.read_year(lb, a.year, _airports(a.airports))
             out.write_bytes(print_page.html(data).encode("utf-8"))
@@ -380,7 +380,7 @@ def search_arguments(sub: Subparsers) -> None:
 
 def cmd_search(a: argparse.Namespace) -> None:
     """`search TEXT [--since DAY] [--until DAY] [--kinds a,b] [--tier 1|2|3] [--limit N] [--json]`:
-    full-text search through the index's FTS5 table (`logbook/search.py`): words and quoted
+    full-text search through the index's FTS5 table (`logbook/core/search.py`): words and quoted
     phrases, literal (no stemming), case and accents aside; the hits ranked by bm25, grouped by
     local day, each as the row `show` prints with a snippet of the matching words under it. Tiers
     1 and 2 unless `--tier 3`. Nothing is written."""

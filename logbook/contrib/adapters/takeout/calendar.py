@@ -3,7 +3,7 @@
 Takeout writes `Takeout/Calendar/<calendar>.ics`, one plain iCalendar file per calendar (RFC 5545, with
 X-WR-CALNAME naming it), so there is nothing Google-specific to read: this sibling only knows where the
 files live. It is the calendar entry of the package's dispatch (`SUB_ADAPTERS`; the `walk(folder)` of the
-package docstring is not built yet) and hands the folder, or a file in it, to `logbook.adapters.ics`,
+package docstring is not built yet) and hands the folder, or a file in it, to `logbook.contrib.adapters.ics`,
 whose lines it yields unchanged — source `ics`, so a calendar reached through the Takeout folder and the
 same file added on its own are the same lines and dedupe. Not in the adapter registry: `ics` already
 sniffs every such file, and `logbook add Takeout/Calendar` reaches it that way today.

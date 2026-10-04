@@ -1,7 +1,7 @@
 """The typography of the paper edition, in one place.
 
 `logbook year YYYY --html PATH --print` and `logbook trip ID --html PATH --print` write a document
-designed for paper (`logbook.print_page`); every length, size, face and colour it is set in comes
+designed for paper (`logbook.contrib.print_page`); every length, size, face and colour it is set in comes
 from here and nowhere else, so a designer retheming the printed Logbook changes this file and
 touches no logic. The renderer names classes; `stylesheet()` says what they look like.
 

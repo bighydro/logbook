@@ -36,7 +36,7 @@ case-insensitive, counted `skipped_label`); `since` cuts on `at`.
 Built for a 20 GB export: the file is read in chunks and scanned for separators, one message is in
 memory at a time, the headers are parsed by hand, the MIME tree is walked by offsets, and no
 attachment is ever decoded or copied. `progress(messages, bytes_read, elapsed)` is called every
-`PROGRESS_EVERY` messages. A `cursor` (the inbox manifest's, `logbook.inbox`) says where to start
+`PROGRESS_EVERY` messages. A `cursor` (the inbox manifest's, `logbook.contrib.inbox`) says where to start
 in each file and is told, before every draft, how far the file is read, so an interrupted import
 resumes at the last message the record holds. Pure: no network, never writes the source.
 """
@@ -100,7 +100,7 @@ Progress = Callable[[int, int, float], None]
 
 
 class Cursor(Protocol):
-    """Where an import of each file got to, kept by the consumer (`logbook.inbox.Cursor`)."""
+    """Where an import of each file got to, kept by the consumer (`logbook.contrib.inbox.Cursor`)."""
 
     def start(self, file: Path) -> int:
         """The byte offset to begin reading `file` at: 0, or the end of the last message the

@@ -1,4 +1,4 @@
-"""`logbook.resolve.labels`: (ref.kind, ref.value) → label from the record's own resolution lines
+"""`logbook.core.resolve.labels`: (ref.kind, ref.value) → label from the record's own resolution lines
 (RFC 0006). Later seq wins, a retracted resolution counts for nothing, `supersedes` drops the
 superseded line, and a resolution without a label resolves to no name."""
 

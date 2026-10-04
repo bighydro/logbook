@@ -13,7 +13,7 @@ suffixed `:v2` (`:v3` … when corrected before; the suffix the correction pass 
 also uses, so the dedupe key never takes it for the old line) and `supersedes` the id of the line it
 replaces, the latest version standing. A draft equal to what stands is yielded as it is (and deduped by
 `append_many`); one the record has not seen is new. Nothing is ever rewritten: the old line stays, and
-a reader that follows `supersedes` (`logbook/health.py`) sees the correction only. Without `existing`
+a reader that follows `supersedes` (`logbook/core/health.py`) sees the correction only. Without `existing`
 (an adapter run by hand) every draft passes through. `counts["corrected"]` tallies the corrections."""
 
 from __future__ import annotations

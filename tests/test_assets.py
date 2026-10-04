@@ -1,4 +1,4 @@
-"""The asset registry (ADR 0018): `<root>/assets.json`, read and written by `logbook.assets`, and
+"""The asset registry (ADR 0018): `<root>/assets.json`, read and written by `logbook.core.assets`, and
 `logbook assets list|add`. Every identifier here is synthetic: MMSI under MID 999 (allocated to no
 country), icao24 in the unallocated 000000 block, registrations under the unassigned `ZZ` prefix."""
 

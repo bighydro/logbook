@@ -2,7 +2,7 @@
 
 Not lines. A saved place is not an observation (nothing happened at an instant); it is a name for
 coordinates, which is exactly what `<root>/places.json` holds for `derive stays`
-(`{"Home": {"lat": 59.91, "lon": 10.75, "radius_m": 120}}`, `logbook.places`). This module
+(`{"Home": {"lat": 59.91, "lon": 10.75, "radius_m": 120}}`, `logbook.core.places`). This module
 reads the two shapes Takeout writes and proposes entries; the command prints them, and writes
 them only with `--write`, adding to the file and never changing an entry already there.
 

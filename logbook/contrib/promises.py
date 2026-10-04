@@ -370,7 +370,7 @@ class Said:
 
 @dataclass(frozen=True)
 class Judgement:
-    """A local model's reading of one candidate (`logbook.judge`): whether it is a commitment, who
+    """A local model's reading of one candidate (`logbook.labs.judge`): whether it is a commitment, who
     made it (`owner`, a name, `unknown`), to whom, what in a line, when it is due (`YYYY-MM-DD` or
     None) and how sure the model was (0 to 1); with the engine and model that read it and when, since
     a judgement is never redone and the model may change."""

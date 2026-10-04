@@ -428,7 +428,7 @@ class Logbook:
         every PROGRESS_EVERY lines. `committed(taken)` is called after every checkpoint, the
         interrupted one included, with how many drafts have been taken from `drafts` so far, the
         deduped ones counted: everything up to that draft is on disk, so a caller that knows where
-        each draft came from can note how far the source is read (`logbook.inbox.Cursor`).
+        each draft came from can note how far the source is read (`logbook.contrib.inbox.Cursor`).
 
         Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
         and `at` is the event time. A batch is never sorted."""

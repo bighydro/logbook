@@ -17,7 +17,7 @@ Every adapter, built-in or not, is a module exposing three names:
 **Rationale.** The contract is what matters, not the packaging. Keeping the project's own adapters in-tree means one test suite, one `uv run pytest`, one release, and a working `add` on day one. The entry point keeps the door open for adapters the project does not want to own: proprietary sources, sources needing heavy dependencies, sources with a different release cadence. Both kinds are found the same way, so moving an adapter in or out of the package is a packaging change, not an API change.
 
 **Consequences.**
-- `logbook/adapters/<name>.py` + `tests/fixtures/<name>/` + tests is the whole cost of a built-in adapter. The rules of `adapters/README.md` still apply: synthetic fixtures only, no network on the default path, never write to the source.
+- `logbook/contrib/adapters/<name>.py` + `tests/fixtures/<name>/` + tests is the whole cost of a built-in adapter. The rules of `adapters/README.md` still apply: synthetic fixtures only, no network on the default path, never write to the source.
 - The template in `adapters/template/` gains `NAME` and `sniff` so a copy is registrable as-is.
 - The layer-2 row in ARCHITECTURE.md ("Repo: `logbook-adapter-<source>`") now describes third-party adapters; built-ins are in this repo.
 - Dedupe on `(source, raw_id)` is a property of `append_many`, not of any adapter; an adapter that wants idempotent re-adds gives every line a stable `raw_id`.

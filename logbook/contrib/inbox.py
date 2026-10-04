@@ -455,7 +455,7 @@ HEAD_BYTES = 4096
 
 
 class Cursor:
-    """One import's cursor over the files it reads; `logbook.adapters.mail.Cursor` is the half the
+    """One import's cursor over the files it reads; `logbook.contrib.adapters.mail.Cursor` is the half the
     adapter sees (`start`, `reached`), `commit` the half the consumer drives."""
 
     def __init__(

@@ -228,6 +228,8 @@ logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich receive
 logbook sync immich --dry-run                     # count and summarise, write nothing
 ```
 
+A Dawarich export, Takeout's `Records.json` and `Timeline.json`, its `My Activity` and YouTube histories and Spotify's streaming history can be gigabytes, so their adapters stream the JSON through `ijson`, the `stream` extra: `pip install "openlogbook[stream]"`. Without it the file is still recognised and `logbook add` says what to install, writing nothing; every other adapter needs no extra.
+
 `sync` remembers where it got to in `state/<source>.json` and re-runs append nothing that is already
 in the log. The watermark is the source's own clock, when it received or last changed an item, not the
 capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tomorrow's sync and still

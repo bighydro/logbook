@@ -209,7 +209,7 @@ def read_settings(root: Path) -> Settings:
 
 
 def read_places(root: Path, default_radius_m: float) -> list[Place]:
-    """`<root>/places.json` through `logbook.places` (`{"Home": {"lat": 59.91, "lon": 10.75,
+    """`<root>/places.json` through `logbook.core.places` (`{"Home": {"lat": 59.91, "lon": 10.75,
     "radius_m": 120, "kind": "home"}}`, the radius and kind optional). An absent file is no places."""
     try:
         return registry_of_places.read(root, default_radius_m)
@@ -218,7 +218,7 @@ def read_places(root: Path, default_radius_m: float) -> list[Place]:
 
 
 def read_assets(root: Path) -> dict[str, registry.Asset]:
-    """The asset registry (ADR 0018) by id, through `logbook.assets`; absent is no assets."""
+    """The asset registry (ADR 0018) by id, through `logbook.core.assets`; absent is no assets."""
     try:
         return {asset.id: asset for asset in registry.read(root)}
     except registry.AssetError as e:

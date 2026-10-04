@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..labs import judge
 
 
-# What `promises --judge` names in its help. `logbook.judge` owns both and is imported only when the
+# What `promises --judge` names in its help. `logbook.labs.judge` owns both and is imported only when the
 # command runs, so `--help` loads no model code; a test holds these copies to it.
 JUDGE_EXTRA = "openlogbook[judge]"
 JUDGE_DEFAULT_MODEL = "mlx-community/Qwen2.5-7B-Instruct-4bit"
@@ -66,8 +66,8 @@ def promises_arguments(sub: Subparsers) -> None:
 def cmd_promises(a: argparse.Namespace) -> None:
     """`promises [--since DAY] [--open] [--all] [--judge [--limit N] [--model NAME] [--fetch-model]]
     [--json]`: the commitments the transcript and note lines suggest, found by rules
-    (`logbook.promises`), printed as proposals and never as facts. By default the ones a local model
-    judged a commitment at confidence 0.6 or above (`logbook.judge`, the verdicts kept in
+    (`logbook.contrib.promises`), printed as proposals and never as facts. By default the ones a local model
+    judged a commitment at confidence 0.6 or above (`logbook.labs.judge`, the verdicts kept in
     `policy/promises-cache.json`); `--all` every candidate; `--judge` runs the model on the unjudged
     ones first, at most `--limit`. `promises done <id>` appends the `task/v1` line (RFC 0016) that
     marks one done, so `--open` hides it. Nothing else is written to the chain."""
@@ -191,7 +191,7 @@ def tasks_arguments(sub: Subparsers) -> None:
 
 def cmd_tasks(a: argparse.Namespace) -> None:
     """`tasks [--open] [--propose-done] [--json]`: the record's tasks (`task/v1`, RFC 0016), each as
-    its latest standing snapshot (`logbook.taskdone`); `--propose-done` adds, for every open task,
+    its latest standing snapshot (`logbook.contrib.taskdone`); `--propose-done` adds, for every open task,
     the mail, calendar entry or transaction of the fortnight after it that the rules read as evidence
     it was done, each with its line id, as proposals and never as facts. `tasks done <id> [--evidence
     LINE-ID]` appends the `task/v1` line that marks one done and nothing else."""

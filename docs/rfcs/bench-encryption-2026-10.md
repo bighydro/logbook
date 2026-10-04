@@ -19,7 +19,7 @@ payload     = {"schema": "sealed/v1", "digest": digest}      hashed, as any payl
 payload_enc = base64(seal(plain))                            standard base64 with padding, outside the hash
 ```
 
-`canonical_json` is `logbook.chain.canonical_json`, the product's RFC 8785 serialiser; nothing is reimplemented. `seal` is one of three:
+`canonical_json` is `logbook.core.chain.canonical_json`, the product's RFC 8785 serialiser; nothing is reimplemented. `seal` is one of three:
 
 - **age, 1 recipient** and **age, 2 recipients**: `pyrage.encrypt(plain, recipients)`, X25519 recipients, the identities generated fresh for the run. pyrage 1.4.0 (rage underneath). rage adds a random `-> …-grease` stanza to every header, so a ciphertext is about 100 bytes longer than the header arithmetic in the draft's §3 gives: a 171-byte plaintext seals to 466 bytes for one recipient and 564 for two, where §3 predicts 371 and 469. The second recipient costs 98 bytes, as §3 says.
 - **data key** (the draft's §9.1 variant): one 32-byte key for the record, each line ChaCha20-Poly1305 under it with a fresh 12-byte nonce (`cryptography` 50 has no XChaCha, so the nonce is 12 bytes, not the 24 the draft names; the cost is the same), `payload_enc = base64(nonce + ciphertext)`.

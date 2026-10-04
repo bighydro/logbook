@@ -24,7 +24,7 @@ that change the shape of the data:
 People drift in and out: Mia and Jens stop after school (one call, one last message), the
 grandmother Solveig is in the photos until Ines is 27, Hanna writes once more at 33, Ola is in the
 childhood photos, absent through the university years and back for good at 29. Everything is made
-up in this module and `logbook.demo`, nothing is read from anywhere, and the record is a function
+up in this module and `logbook.contrib.demo`, nothing is read from anywhere, and the record is a function
 of (`years`, `seed`): the same arguments give the same chain head on any machine."""
 
 from __future__ import annotations
