@@ -83,6 +83,9 @@ nav:
       - "Benchmark: per-line sealing (2026-10)": rfcs/bench-encryption-2026-10.md
       - "0025 shared-page/v1": rfcs/rfc-0025-shared-page-bundle.md
       - "0026 weather/v1": rfcs/0026-weather-v1.md
+      - "0031 Profile freeze for v1.0": rfcs/0031-profile-freeze.md
+  - Letters:
+      - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
   - In a browser: serve.md
   - The rollups: rollups.md
