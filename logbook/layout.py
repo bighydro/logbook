@@ -80,6 +80,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "questions",
         "schedule",
         "serve",
+        "stream",
         "taskdone",
         "trip_bundle",
         "trip_page",
@@ -98,7 +99,7 @@ ROOT: tuple[str, ...] = ("__init__", "cli", "layout", "_shim")
 COMMANDS = "commands"  # every module under logbook/commands/
 
 # 0.5 import path -> where it lives now; a package covers everything under it
-NEW_IN_0_6: frozenset[str] = frozenset({"transcripts"})  # born in a tier: no 0.5 path to keep
+NEW_IN_0_6: frozenset[str] = frozenset({"stream", "transcripts"})  # born in a tier: no 0.5 path to keep
 MOVED: dict[str, str] = {
     f"logbook.{name}": f"logbook.{tier}.{name}"
     for tier, names in TIERS.items()

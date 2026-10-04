@@ -22,7 +22,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import ijson
+from .. import stream
+from ..stream import ijson
 
 NAME = "dawarich"
 KIND = "location"
@@ -53,12 +54,20 @@ def sniff(path: Path) -> bool:
         return False
     try:
         doc_type, first = _head(path)
-    except (OSError, ValueError, ijson.JSONError):
+    except stream.MissingExtra:  # no ijson: the first bytes decide, and `add` then names the extra
+        return _looks_like_dawarich(path)
+    except stream.json_errors():
         return False
     if doc_type != "FeatureCollection" or not isinstance(first, dict):
         return False
     props = first.get("properties")
     return isinstance(props, dict) and "tracker_id" in props and "timestamp" in props
+
+
+def _looks_like_dawarich(path: Path) -> bool:
+    """Without `ijson`: a FeatureCollection with a tracker_id and a timestamp in its first bytes."""
+    head = stream.head(path)
+    return '"FeatureCollection"' in head and '"tracker_id"' in head and '"timestamp"' in head
 
 
 def _head(path: Path) -> tuple[object, object]:

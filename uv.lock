@@ -1423,7 +1423,6 @@ name = "openlogbook"
 version = "0.5.0"
 source = { editable = "." }
 dependencies = [
-    { name = "ijson" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
@@ -1447,6 +1446,9 @@ mcp = [
 share = [
     { name = "cryptography" },
 ]
+stream = [
+    { name = "ijson" },
+]
 transcribe = [
     { name = "faster-whisper", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
@@ -1456,6 +1458,7 @@ transcribe = [
 dev = [
     { name = "cryptography" },
     { name = "hypothesis" },
+    { name = "ijson" },
     { name = "jsonschema" },
     { name = "mcp" },
     { name = "mypy" },
@@ -1470,23 +1473,24 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", marker = "extra == 'encrypted'", specifier = ">=42" },
-    { name = "cryptography", marker = "extra == 'share'", specifier = ">=42" },
     { name = "faster-whisper", marker = "(platform_machine != 'arm64' and extra == 'transcribe') or (sys_platform != 'darwin' and extra == 'transcribe')", specifier = ">=1.0" },
-    { name = "ijson", specifier = ">=3.3" },
+    { name = "ijson", marker = "extra == 'stream'", specifier = ">=3.3" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'judge'", specifier = ">=0.20" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'describe'", specifier = ">=0.1.20" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'transcribe'", specifier = ">=0.4" },
+    { name = "openlogbook", extras = ["encrypted"], marker = "extra == 'share'" },
     { name = "pillow-heif", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'describe'", specifier = ">=0.18" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "websockets", marker = "extra == 'ais'", specifier = ">=13" },
 ]
-provides-extras = ["encrypted", "share", "ais", "transcribe", "judge", "describe", "mcp"]
+provides-extras = ["encrypted", "share", "stream", "ais", "transcribe", "judge", "describe", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "cryptography", specifier = ">=42" },
     { name = "hypothesis", specifier = ">=6.168.0" },
+    { name = "ijson", specifier = ">=3.3" },
     { name = "jsonschema", specifier = ">=4" },
     { name = "mcp", specifier = ">=2" },
     { name = "mypy", specifier = ">=1.11" },

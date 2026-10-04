@@ -30,7 +30,7 @@
             src = self;
             build-system = [ python.pkgs.hatchling ];
             dependencies = with python.pkgs; [
-              ijson
+              ijson # the `stream` extra, bundled: the Nix package reads every export
               tzdata
             ];
             pythonImportsCheck = [ "logbook" ];

@@ -34,7 +34,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-import ijson
+from ..stream import ijson
 
 NAME = "spotify"
 KIND = "listen"

@@ -42,8 +42,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-import ijson
-
+from ...stream import ijson
 from . import SOURCE, times
 
 NAME = "google-takeout-youtube"

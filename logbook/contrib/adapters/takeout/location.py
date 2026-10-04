@@ -24,8 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import ijson
-
+from ... import stream
+from ...stream import ijson
 from . import SOURCE
 
 NAME = "google-takeout-location"
@@ -56,7 +56,9 @@ def sniff(path: Path) -> bool:
         return False
     try:
         shape, first = _head(path)
-    except (OSError, ValueError, ijson.JSONError):
+    except stream.MissingExtra:  # no ijson: the first bytes decide, and `add` then names the extra
+        return _looks_like_location_history(path)
+    except stream.json_errors():
         return False
     if not isinstance(first, dict):
         return False
@@ -64,6 +66,17 @@ def sniff(path: Path) -> bool:
         return "latitudeE7" in first and "longitudeE7" in first
     if shape == TIMELINE:
         return any(k in first for k in ("timelinePath", "visit", "activity", "startTime"))
+    return False
+
+
+def _looks_like_location_history(path: Path) -> bool:
+    """Without `ijson`: `locations` with `latitudeE7`, or `semanticSegments` with a segment's key, in
+    the first bytes."""
+    head = stream.head(path)
+    if f'"{RECORDS}"' in head:
+        return '"latitudeE7"' in head and '"longitudeE7"' in head
+    if f'"{TIMELINE}"' in head:
+        return any(f'"{k}"' in head for k in ("timelinePath", "visit", "activity", "startTime"))
     return False
 
 

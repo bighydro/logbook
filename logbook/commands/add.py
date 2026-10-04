@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..contrib import attach, inbox, ios_backup, ios_backup_crypto
+from ..contrib import attach, inbox, ios_backup, ios_backup_crypto, stream
 from ..core import assets, attachments, flights, keepers, places, story
 from ..core.export import parse_day
 from ..core.resolve import Ref, identities_from, labels
@@ -238,19 +238,23 @@ def _append_with(
     if getattr(adapter, "KEEPERS", False):  # a photo library whose marks are keepers (RFC 0024)
         marked = []
         drafts = _noting_marks(drafts, marked, counts)
-    if dry_run:
-        _say_dry_run(lb, adapter.NAME, drafts)
-        _report_skipped(counts)
-        for text in report:
-            print(f"  {text}")
-        if marked is not None:
-            _keepers_of_import(lb, adapter.NAME, marked, counts, dry_run=True)
-        return 0
-    n = lb.append_many(
-        _counted(drafts, produced),
-        progress=_progress,
-        committed=cursor.commit if cursor is not None else None,
-    )
+    try:
+        if dry_run:
+            _say_dry_run(lb, adapter.NAME, drafts)
+            _report_skipped(counts)
+            for text in report:
+                print(f"  {text}")
+            if marked is not None:
+                _keepers_of_import(lb, adapter.NAME, marked, counts, dry_run=True)
+            return 0
+        n = lb.append_many(
+            _counted(drafts, produced),
+            progress=_progress,
+            committed=cursor.commit if cursor is not None else None,
+        )
+    except stream.MissingExtra as e:  # the export streams through ijson, which is not installed
+        print(f"add: {adapter.NAME}: {e}", file=sys.stderr)
+        sys.exit(2)
     print(f"added {n} lines from {adapter.NAME}")
     _report_skipped(counts)
     for text in report:

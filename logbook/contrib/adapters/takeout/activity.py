@@ -36,8 +36,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import ijson
-
+from ...stream import ijson
 from . import SOURCE, youtube
 
 NAME = "google-takeout-activity"
