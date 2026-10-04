@@ -13,22 +13,7 @@ from ..core.export import parse_day
 from ..core.index import Index, local_date
 from ..core.resolve import identities_from
 from ..core.store import Logbook
-from .common import Subparsers, _clock, _plural
-
-
-def keepers_arguments(sub: Subparsers) -> None:
-    """`logbook keepers`."""
-    s = sub.add_parser("keepers", help="the photos marked keepers (RFC 0024), by day")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="from this local day")
-    s.add_argument("--until", metavar="YYYY-MM-DD", help="up to this local day, inclusive")
-    s.add_argument("--lane", choices=keepers.LANES, help="only this lane")
-    s.add_argument(
-        "--people",
-        action="store_true",
-        help="who appears on the keepers, per month: the faces the library named, proposed only",
-    )
-    s.add_argument("--json", action="store_true", help="the keepers as one JSON object")
-    s.set_defaults(fn=cmd_keepers)
+from .common import _clock, _plural
 
 
 def cmd_keepers(a: argparse.Namespace) -> None:

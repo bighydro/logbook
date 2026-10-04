@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
-    cli.main(["trips", *args])
+    cli.main(["show", "trips", *args])
     return capsys.readouterr().out
 
 

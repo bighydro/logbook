@@ -197,11 +197,11 @@ def test_repair_is_idempotent(lb: Logbook, capsys: pytest.CaptureFixture[str]) -
 def test_stats_health_reads_the_corrected_resting_rate(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    cli.main(["stats", "--health", "--json"])
+    cli.main(["show", "stats", "--health", "--json"])
     before = json.loads(capsys.readouterr().out)["days"]
     assert [d["resting_hr"] for d in before] == [1709, 3600], "apple-health's 3360 averaged with withings' 58"
     _repair(capsys)
-    cli.main(["stats", "--health", "--json"])
+    cli.main(["show", "stats", "--health", "--json"])
     after = json.loads(capsys.readouterr().out)["days"]
     assert [d["resting_hr"] for d in after] == [57, 60]
 

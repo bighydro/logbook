@@ -9,39 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from ..contrib import print_page, trip_page
-from ..core import flights, reading, stays, trips
+from ..core import reading, stays, trips
 from ..core.store import Logbook
-from .common import Subparsers, _airports, _print_target
+from .common import _airports, _print_target
 from .rollup import _rollup_days
-
-
-def trip_arguments(sub: Subparsers) -> None:
-    """`logbook trip`."""
-    s = sub.add_parser(
-        "trip", help="one trip read back: the route with a map, days, flights, people, keepers, health, spend"
-    )
-    s.add_argument(
-        "ref",
-        metavar="ID-OR-DAY",
-        help="a trip id as `trips` prints it (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside the trip",
-    )
-    s.add_argument(
-        "--html",
-        metavar="PATH",
-        help="write one self-contained page (inline CSS and SVG map, no script) instead",
-    )
-    s.add_argument(
-        "--print",
-        action="store_true",
-        help="with --html: the paper edition — a cover, contents, one spread per day, for A4 and US Letter",
-    )
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--json", action="store_true", help="the Trip as one JSON object, the days' rows inside")
-    s.set_defaults(fn=cmd_trip)
 
 
 def cmd_trip(a: argparse.Namespace) -> None:
@@ -75,23 +46,6 @@ def cmd_trip(a: argparse.Namespace) -> None:
         return
     for text in trip_page.rows(data):
         print(text)
-
-
-def trips_arguments(sub: Subparsers) -> None:
-    """`logbook trips`."""
-    s = sub.add_parser(
-        "trips", help="runs of nights away from home: route, places, people, flights in and out"
-    )
-    s.add_argument("--year", metavar="YYYY", help="one calendar year (default: the whole record)")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
-    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range")
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--json", action="store_true", help="the trips as one JSON object, with line ids")
-    s.set_defaults(fn=cmd_trips)
 
 
 def cmd_trips(a: argparse.Namespace) -> None:

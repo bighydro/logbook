@@ -82,7 +82,7 @@ def test_the_demo_year_is_a_poster_on_a2_and_a3(
 ) -> None:
     for sheet in ("A2", "A3"):
         out = tmp_path / "poster" / f"2026-{sheet}.html"
-        text = _run(capsys, "year", "2026", "--poster", "--sheet", sheet, "--html", str(out))
+        text = _run(capsys, "show", "year", "2026", "--poster", "--sheet", sheet, "--html", str(out))
         assert text == f"year 2026: wrote {out}\n"
         page = out.read_bytes().decode("utf-8")
         counts = poster(page, sheet, 365)
@@ -102,7 +102,7 @@ def test_the_demo_year_is_a_poster_on_a2_and_a3(
 def test_the_poster_goes_to_stdout_without_html_and_a2_is_the_sheet(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    page = _run(capsys, "year", "2026", "--poster")
+    page = _run(capsys, "show", "year", "2026", "--poster")
     assert poster(page, "A2", 365)["aboard"] == 6
     assert page == year_poster.html(year_poster.read(lb, "2026"), "A2")
 
@@ -139,18 +139,18 @@ def test_a_year_outside_the_record_is_an_empty_grid_and_a_leap_year_has_366(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
-    page = _run(capsys, "year", "2025", "--poster")
+    page = _run(capsys, "show", "year", "2025", "--poster")
     assert poster(page, "A2", 365) == {"none": 365}
     assert "no days in this year" in page
-    page = _run(capsys, "year", "2028", "--poster", "--sheet", "A3")
+    page = _run(capsys, "show", "year", "2028", "--poster", "--sheet", "A3")
     assert poster(page, "A3", 366) == {"none": 366} and 'data-day="2028-02-29"' in page
-    page = _run(capsys, "year", "2026", "--poster")
+    page = _run(capsys, "show", "year", "2026", "--poster")
     counts = poster(page, "A2", 365)
     assert counts["aboard"] >= 1 and counts["away"] >= 3, "the persona's fjord weekend and Zürich"
     assert "Solvind" not in page and "Kari" not in page
     empty = Logbook.init(tmp_path / "empty", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(empty.root))
-    assert poster(_run(capsys, "year", "2026", "--poster"), "A2", 365) == {"none": 365}
+    assert poster(_run(capsys, "show", "year", "2026", "--poster"), "A2", 365) == {"none": 365}
 
 
 def test_the_flags_refuse_what_they_cannot_do(
@@ -158,16 +158,16 @@ def test_the_flags_refuse_what_they_cannot_do(
 ) -> None:
     persona_record(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as e:
-        cli.main(["year", "2026", "--poster", "--print", "--html", str(tmp_path / "x.html")])
+        cli.main(["show", "year", "2026", "--poster", "--print", "--html", str(tmp_path / "x.html")])
     assert e.value.code == 2 and "--poster" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["year", "20x6", "--poster"])
+        cli.main(["show", "year", "20x6", "--poster"])
     assert e.value.code == 2 and "not a year" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["year", "2026", "--poster", "--sheet", "A1"])
+        cli.main(["show", "year", "2026", "--poster", "--sheet", "A1"])
     assert e.value.code == 2
     with pytest.raises(SystemExit) as e:
-        cli.main(["year", "2026", "--sheet", "A3"])
+        cli.main(["show", "year", "2026", "--sheet", "A3"])
     assert e.value.code == 2 and "--poster" in capsys.readouterr().err
     with pytest.raises(KeyError):
         year_poster.html(year_poster.read(Logbook.find(), "2026"), "A1")

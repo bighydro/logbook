@@ -482,24 +482,24 @@ def test_day_year_and_trips_show_the_weather_without_the_network(
     status, out, _err = _run(capsys, "day", "2026-06-13")
     assert status == 0 and "· 2 places" in out, "the night at anchor and the morning at home"
 
-    status, out, _err = _run(capsys, "year", "2026", "--json")
+    status, out, _err = _run(capsys, "show", "year", "2026", "--json")
     assert status == 0
     span = json.loads(out)["weather"]
     assert span["of"] == 14 and span["days"] == 14 and span["t_min"]["day"] >= "2026-06-08"
-    status, out, _err = _run(capsys, "year", "2026")
+    status, out, _err = _run(capsys, "show", "year", "2026")
     assert status == 0
     [year_line] = [text for text in out.splitlines() if text.startswith("  weather")]
     assert "wet days" in year_line and "14 of 14 days" in year_line
 
-    status, out, _err = _run(capsys, "trips", "--year", "2026", "--json")
+    status, out, _err = _run(capsys, "show", "trips", "--year", "2026", "--json")
     assert status == 0
     boat, zurich = json.loads(out)["trips"]
     assert zurich["weather"]["of"] == 4 and zurich["weather"]["days"] == 4, "15 June to the return day"
     assert boat["weather"]["of"] == 2
-    status, out, _err = _run(capsys, "trips", "--year", "2026")
+    status, out, _err = _run(capsys, "show", "trips", "--year", "2026")
     assert status == 0 and out.count("weather ") == 2
 
-    status, out, _err = _run(capsys, "year", "2026", "--html", str(tmp_path / "year.html"))
+    status, out, _err = _run(capsys, "show", "year", "2026", "--html", str(tmp_path / "year.html"))
     assert status == 0 and "Weather" in (tmp_path / "year.html").read_text(encoding="utf-8")
 
 
@@ -511,7 +511,7 @@ def test_a_record_without_weather_lines_shows_none(
     assert status == 0 and json.loads(out)["weather"] is None
     status, out, _err = _run(capsys, "day", "2026-06-09")
     assert status == 0 and "weather" not in out
-    status, out, _err = _run(capsys, "year", "2026", "--json")
+    status, out, _err = _run(capsys, "show", "year", "2026", "--json")
     assert status == 0 and json.loads(out)["weather"] is None
-    status, out, _err = _run(capsys, "trips", "--year", "2026", "--json")
+    status, out, _err = _run(capsys, "show", "trips", "--year", "2026", "--json")
     assert status == 0 and all(t["weather"] is None for t in json.loads(out)["trips"])

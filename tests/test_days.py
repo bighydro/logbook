@@ -40,7 +40,7 @@ ARROW = "→"
 
 
 def _run(capsys: pytest.CaptureFixture[str], *args: str) -> str:
-    cli.main(["days", *args])
+    cli.main(["show", "days", *args])
     return capsys.readouterr().out
 
 
@@ -341,10 +341,10 @@ def test_the_window_defaults_to_the_record_and_rejects_nonsense(
     rows = _rows(capsys, "--to", "2026-06-09")
     assert [r["day"] for r in rows] == ["2026-06-08", "2026-06-09"]
     with pytest.raises(SystemExit) as e:
-        cli.main(["days", "--from", "2026-06-10", "--to", "2026-06-09"])
+        cli.main(["show", "days", "--from", "2026-06-10", "--to", "2026-06-09"])
     assert e.value.code == 2 and "backwards" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["days", "--from", "2026-13-01", "--to", "2026-06-09"])
+        cli.main(["show", "days", "--from", "2026-13-01", "--to", "2026-06-09"])
     assert e.value.code == 2 and "not a date" in capsys.readouterr().err
 
 
