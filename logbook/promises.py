@@ -27,7 +27,7 @@ from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
-from . import policy, present
+from . import policy, present, sealing
 from .adapters.transcript import SPEAKER, Turn, parse_text
 from .chain import Line
 from .index import local_date
@@ -740,8 +740,10 @@ def turns_of(lb: Logbook, line: Line) -> list[Turn] | None:
     if not path.is_file():
         return None
     try:
-        text = path.read_bytes().decode("utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+        in_store = path.parent == lb.root / "attachments"  # opened with the identity when sealed
+        data = lb.attachment_bytes(path.name) if in_store else path.read_bytes()
+        text = data.decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError, sealing.SealError):
         return None
     media = str(content.get("media_type") or "").split(";")[0].strip().casefold()
     if media == "text/vtt":

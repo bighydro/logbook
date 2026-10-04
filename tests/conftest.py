@@ -11,11 +11,30 @@ import importlib
 import os
 import socket
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _no_real_home_before_the_first_test(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """A module- or session-scoped fixture (the demo record of `tests/test_demo.py`) is set up before
+    the per-test fixture below runs, so without this it would see the shell's home, config and cache
+    directories: a demo record's index would land in the real `~/.cache/logbook/<owner_id>/`, and two
+    workers generating the same seed would write one index at once. One temporary home for the whole
+    session, under the worker's own base temp; the per-test fixture narrows it further."""
+    base = tmp_path_factory.mktemp("session-home")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("LOGBOOK_HOME", str(base / "logbook-home"))
+        mp.setenv("HOME", str(base))
+        mp.setenv("USERPROFILE", str(base))
+        mp.setenv("APPDATA", str(base / "AppData" / "Roaming"))
+        mp.setenv("LOCALAPPDATA", str(base / "AppData" / "Local"))
+        for variable in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "LOGBOOK_CACHE_HOME", "LOGBOOK_IDENTITY_FILE"):
+            mp.delenv(variable, raising=False)
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +46,12 @@ def _logbook_home_is_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "logbook-home"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
+    # The config and cache directories too (the identity file, the index; RFC 0029): Windows reads
+    # APPDATA and LOCALAPPDATA for them, not the home directory, and a shell may point XDG at a real one.
+    monkeypatch.setenv("APPDATA", str(tmp_path / "home" / "AppData" / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "home" / "AppData" / "Local"))
+    for variable in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "LOGBOOK_CACHE_HOME", "LOGBOOK_IDENTITY_FILE"):
+        monkeypatch.delenv(variable, raising=False)
     # The shell may hold the password of a real backup; a test that needs one sets its own.
     monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD", raising=False)
 

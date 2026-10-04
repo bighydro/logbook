@@ -139,12 +139,12 @@ def _search(capsys: pytest.CaptureFixture[str], *args: str) -> list[str]:
 
 
 def _rows(lb: Logbook, sql: str) -> list[tuple[Any, ...]]:
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         return list(db.execute(sql))
 
 
 def _tamper(lb: Logbook, *sql: str) -> None:
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         for statement in sql:
             db.execute(statement)
         db.commit()

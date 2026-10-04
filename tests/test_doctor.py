@@ -91,6 +91,7 @@ def test_no_record_is_one_failure_and_the_extras(tmp_path: Path) -> None:
     assert {n for n in checks if n.startswith("extra:")} == {
         "extra:ais",
         "extra:crypto",
+        "extra:sealed",
         "extra:transcribe",
     }
 
@@ -127,7 +128,7 @@ def test_a_record_of_another_format_fails_naming_migrate(lb: Logbook) -> None:
 def test_the_index_is_current_missing_or_stale(lb: Logbook) -> None:
     assert _run(lb)["index"].status == "pass"
     lb.append("2026-06-08T08:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "later"})
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     missing = _run(lb)["index"]
     assert missing.status == "warn"
     assert "logbook index" in missing.detail
@@ -135,7 +136,7 @@ def test_the_index_is_current_missing_or_stale(lb: Logbook) -> None:
     meta = lb.meta
     lb.append("2026-06-08T09:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "latest"})
     lb.index_rebuild()
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     with Logbook(lb.root).index() as idx:  # built at the head before the last line
         idx.rebuild()
         idx._set_meta(meta)
@@ -145,7 +146,7 @@ def test_the_index_is_current_missing_or_stale(lb: Logbook) -> None:
 
 
 def test_an_unreadable_index_is_a_warning_not_a_traceback(lb: Logbook) -> None:
-    (lb.root / "index.sqlite").write_bytes(b"not a database")
+    (lb.index_path).write_bytes(b"not a database")
     check = _run(lb)["index"]
     assert check.status == "warn"
     assert "logbook index" in check.detail
@@ -267,7 +268,7 @@ def test_a_variable_that_is_set_but_refused_names_the_sync_not_the_value(lb: Log
 
 
 def test_sources_are_read_from_the_index_only_when_it_is_current(lb: Logbook) -> None:
-    (lb.root / "index.sqlite").unlink()
+    (lb.index_path).unlink()
     assert "sync:dawarich" not in _run(lb), "no index: only the state files say which syncs ran"
 
 

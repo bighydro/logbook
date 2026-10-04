@@ -1,0 +1,4 @@
+# The conformance fixture's identity (SPEC §6, Level 2). Published on purpose: it opens
+# conformance/sample-logbook-sealed and nothing else. Never use it for a record.
+# public key: age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl
+AGE-SECRET-KEY-1DMW9FZQT3JJJDU63ESVRMZ730JURXZ055XJ8NJ0DQA7VC0UP0GWQ657S2N

@@ -11,22 +11,26 @@ Sunday, carry one payload of each profile added since (RFCs 0011 to 0024, and a 
 Nothing in it is real: the person, the boat, the flight, the book and the mail are made up."""
 
 import json
+import random
 import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook import FORMAT
+from logbook import FORMAT, PREVIOUS_FORMAT, sealing
 from logbook.store import Logbook
 
 HERE = Path(__file__).parent
 ROOT = HERE / "sample-logbook"
+SEALED = HERE / "sample-logbook-sealed"  # Level 2 (SPEC §6): the same week, tiers 2 and 3 sealed
+OWNER = "00000000-0000-4000-8000-000000000001"
 if ROOT.exists():
     shutil.rmtree(ROOT)
 lb = Logbook.init(ROOT, "Europe/Oslo")
 meta = lb.meta
-meta["owner_id"] = "00000000-0000-4000-8000-000000000001"
+meta["owner_id"] = OWNER
 meta["created_at"] = "2026-03-01T06:00:00Z"
+meta["format"] = PREVIOUS_FORMAT  # the Level 1 sample stays 0.2: a 0.3 implementation reads it as is
 lb._save_meta(meta)
 
 R = "2026-03-08T20:00:00Z"  # recorded_at for every line, so the head is reproducible
@@ -476,21 +480,53 @@ rows = [
 ]
 for at, end, src, kind, tier, payload in rows:
     lb.append(at=at, end=end, source=src, kind=kind, tier=tier, payload=payload, recorded_at=R)
-# fixed ids so the fixture is byte-stable across regenerations; bytes, so Windows writes no CRLF
-for f in sorted(ROOT.glob("logbook/*/*.jsonl")):
-    out = []
-    for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
-        row = json.loads(line)
-        row["id"] = f"00000000-0000-4000-8000-{i:012d}"
-        out.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
-    f.write_bytes(("\n".join(out) + "\n").encode("utf-8"))
-(ROOT / "notes" / "2026").mkdir(parents=True, exist_ok=True)
-(ROOT / "notes" / "2026" / "2026-03-07.md").write_bytes(b"A good week. The decision is made; now live it.\n")
-# the sample is the folder SPEC §1 names; the policies `init` writes are settings, not record
-shutil.rmtree(ROOT / "policy", ignore_errors=True)
-seq, head, errors = lb.verify()
-assert not errors, errors
-(HERE / "expected.json").write_bytes(
-    (json.dumps({"format": FORMAT, "seq": seq, "head": head}, indent=2) + "\n").encode("utf-8")
+
+
+def finish(root: Path, lb: Logbook, expected: str, fmt: str) -> None:
+    """Fixed ids so the fixture is byte-stable across regenerations (bytes, so Windows writes no
+    CRLF); the note; no `policy/` (the sample is the folder SPEC §1 names, and the policies `init`
+    writes are settings, not record); then verify and record the head."""
+    for f in sorted(root.glob("logbook/*/*.jsonl")):
+        out = []
+        for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            row = json.loads(line)
+            row["id"] = f"00000000-0000-4000-8000-{i:012d}"
+            out.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+        f.write_bytes(("\n".join(out) + "\n").encode("utf-8"))
+    (root / "notes" / "2026").mkdir(parents=True, exist_ok=True)
+    note = b"A good week. The decision is made; now live it.\n"
+    (root / "notes" / "2026" / "2026-03-07.md").write_bytes(note)
+    shutil.rmtree(root / "policy", ignore_errors=True)
+    seq, head, errors = lb.verify()
+    assert not errors, errors
+    (HERE / expected).write_bytes(
+        (json.dumps({"format": fmt, "seq": seq, "head": head}, indent=2) + "\n").encode("utf-8")
+    )
+    print(f"{root.name}:", seq, "lines, head", head)
+
+
+finish(ROOT, lb, "expected.json", PREVIOUS_FORMAT)
+
+# -- Level 2: the same lines sealed to the published fixture identity and a second recipient --------
+# The salts come from a seeded generator, so the digests, and with them the head, are reproducible by
+# anyone who runs this; the ciphertext is random on every run and is outside the hash (RFC 0029 §4.3).
+if SEALED.exists():
+    shutil.rmtree(SEALED)
+identity_file = HERE / "identity.txt"
+second = next(
+    line.strip()
+    for line in (HERE / "recovery-recipient.txt").read_text(encoding="utf-8").splitlines()
+    if line.strip() and not line.startswith("#")
 )
-print("sample logbook:", seq, "lines, head", head)
+Logbook.init(SEALED, "Europe/Oslo")
+slb = Logbook(SEALED, identity_file=identity_file)
+meta = slb.meta
+meta["owner_id"] = OWNER
+meta["created_at"] = "2026-03-01T06:00:00Z"
+meta["recipients"] = [sealing.recipient_of(str(slb.identities[0])), second]
+slb._save_meta(meta)
+salts = random.Random(25)
+sealing.new_salt = lambda: f"{salts.getrandbits(128):032x}"  # the fixture's salts: data, reproducible
+for at, end, src, kind, tier, payload in rows:
+    slb.append(at=at, end=end, source=src, kind=kind, tier=tier, payload=payload, recorded_at=R)
+finish(SEALED, slb, "expected-sealed.json", FORMAT)

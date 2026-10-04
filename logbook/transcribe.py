@@ -258,7 +258,8 @@ def _drafts(
 ) -> Iterator[dict[str, Any]]:
     for memo in memos:
         started = time.monotonic()
-        text, language, windows, segments = _hear(engine, memo.audio, chunk_s)
+        with lb.attachment(memo.audio.name) as audio:  # the plaintext, when the store holds it sealed
+            text, language, windows, segments = _hear(engine, audio, chunk_s)
         seconds = time.monotonic() - started
         if not segments:
             _count(report.counts, NO_SPEECH)
@@ -266,7 +267,7 @@ def _drafts(
                 progress(f"  {_clock(memo.at, zone)}  {memo.title}: no words heard ({seconds:.1f}s)")
             continue
         data = text.encode("utf-8")
-        lb.attach(data)
+        lb.attach(data)  # a transcript is tier 2 or higher: sealed when the record names recipients
         words = len(text.split())
         report.done.append(Done(memo, language, words, seconds))
         if progress is not None:

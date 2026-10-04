@@ -127,8 +127,8 @@ class GatedIndex(Index):
                 self.gate.withheld.add(place.seq)
         return kept
 
-    def read(self, places: Iterable[tuple[str, int]]) -> list[Line]:
-        return self._kept(super().read(places))
+    def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
+        return self._kept(super().read(places, opened))
 
     def by_seq(self, seq: int) -> Line | None:
         line = super().by_seq(seq)
@@ -137,8 +137,8 @@ class GatedIndex(Index):
     def retractions(self) -> list[Line]:
         return super().retractions()  # marks on other lines; `keep` lets them through regardless
 
-    def resolutions(self) -> list[Line]:
-        return self._kept(super().resolutions())
+    def resolutions(self, opened: bool = True) -> list[Line]:
+        return self._kept(super().resolutions(opened))
 
     def last_fix(self, subject: str) -> Line | None:
         line = super().last_fix(subject)

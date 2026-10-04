@@ -1,4 +1,6 @@
-"""index.sqlite — a disposable locator for the log (ADR 0001, ADR 0007).
+"""index.sqlite — a disposable locator for the log (ADR 0001, ADR 0007), kept in the user's cache
+directory, never in the record's folder (RFC 0029 §8: a copy of the folder, by any tool, carries no
+locator).
 
 The files are the record. This is a cache of where every line is (file, byte offset) and the few
 fields readers filter, count or cluster on, so `show`, `export --day`, `stats` and dedupe do not
@@ -8,7 +10,16 @@ and nothing else — `subject`, `lat`, `lon` of a location line, `end` of an eve
 `places propose` clusters two years of the owner's track without opening a month file
 (`locations`, `evidence`). It records the chain head, seq and timezone it was built at; a reader
 that finds it missing, unreadable, or built at another head, timezone or schema rebuilds it from
-the files. `verify` never opens it. Deleting it loses nothing."""
+the files. `verify` never opens it. Deleting it loses nothing.
+
+Sealed lines (RFC 0029): their payload columns (`raw_id`, `supersedes`, `entity`, `media`, `subject`,
+`lat`, `lon`) are read from the opened payload when the identity is here, and `raw_id`, the one of them
+that talks (a chat id is a phone number), is stored blinded: an HMAC under a 32-byte index key made
+when the index is built and kept in its `meta`, sealed to the record's recipients. Dedupe compares
+equals, so `(source, raw_id)` lookups cost what they did; an adversary with the file has HMACs under a
+key they cannot open. The search table never holds the words of a sealed line. Without the identity
+the sealed lines' payload columns are NULL and `meta` says `opened` is false; the first reader that has
+the identity rebuilds."""
 
 from __future__ import annotations
 
@@ -23,8 +34,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 from zoneinfo import ZoneInfo
 
+from . import sealing
 from . import search as _search
-from .chain import Line
+from .chain import Line, is_sealed
 
 if TYPE_CHECKING:
     from .store import Logbook
@@ -33,8 +45,9 @@ FILE_NAME = "index.sqlite"
 # 2: supersedes, entity and media columns, for `stats`; 3: media reads `content` too; 4: subject
 # (ADR 0018), for `assets status`; 5: lat, lon and end, the columns `places propose` clusters from,
 # and the (kind, day_local) index that cuts a window; 6: the `search` FTS5 table, the words of every
-# line that carries any, for `logbook search`
-SCHEMA_VERSION = "6"
+# line that carries any, for `logbook search`; 7: sealed lines (RFC 0029) — opened payload columns,
+# a blinded raw_id, the index key and `opened` in meta, the file in the cache directory
+SCHEMA_VERSION = "7"
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -78,6 +91,7 @@ SCHEMA = (
         else ()
     ),
 )
+INDEX_KEY = "index_key"  # meta: the blinding key, sealed to the recipients (RFC 0029 §8)
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 INSERT_TEXT = f"INSERT INTO {SEARCH} (rowid, body, kind, tier, day) VALUES (?, ?, ?, ?, ?)"
 
@@ -140,16 +154,28 @@ def local_date(at: str, tz: str) -> str:
     return instant.astimezone(ZoneInfo(tz)).date().isoformat()
 
 
-def row(line: Line, tz: str, file: str, offset: int) -> Row:
+def row(
+    line: Line,
+    tz: str,
+    file: str,
+    offset: int,
+    payload: dict[str, Any] | None = None,
+    blind: Callable[[str], str] | None = None,
+) -> Row:
     """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
     line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
     the one attachment a line points at (`payload.media`, else `payload.content`, else `extra.media`;
     SPEC §1.1). The columns a clustering reads are the payload's `subject` (RFC 0001, ADR 0018; absent, empty
     or not a string is the owner, NULL), its `lat` and `lon` when both are finite numbers (a bool
     or a string is not one, as `stays.derive` reads them, so a line without a point has NULL), and
-    the line's `end`."""
-    payload = line.get("payload") or {}
+    the line's `end`. For a sealed line `payload` is the opened payload (None when there is no
+    identity: every payload column NULL) and `raw_id` is stored through `blind`."""
+    sealed = is_sealed(line)
+    if payload is None:
+        payload = {} if sealed else (line.get("payload") or {})
     raw_id = payload.get("raw_id")
+    if raw_id is not None and sealed:
+        raw_id = None if blind is None else blind(str(raw_id))
     media = (
         _field(payload.get("media"), "sha256")
         or _field(payload.get("content"), "sha256")
@@ -212,9 +238,11 @@ class Index:
 
     def __init__(self, lb: Logbook):
         self.lb = lb
-        self.path = lb.root / FILE_NAME
+        self.path = lb.index_path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._db: sqlite3.Connection | None = sqlite3.connect(self.path, isolation_level=None)
         _open[self.path] += 1
+        self._key: bytes | None = None  # the blinding key, once read or made (`_blinder`)
 
     @classmethod
     def open(cls, lb: Logbook) -> Index:
@@ -261,25 +289,85 @@ class Index:
 
     # -- state -------------------------------------------------------------------------------
     def matches(self, meta: dict[str, Any]) -> bool:
-        """Built at this logbook.json's head and seq, in its timezone, by this schema."""
+        """Built at this logbook.json's head and seq, in its timezone, by this schema, for these
+        recipients, and opened when the identity is here now."""
         try:
             stored = dict(self.db.execute("SELECT key, value FROM meta"))
         except sqlite3.DatabaseError:  # no meta table yet, or nothing SQLite can read
             return False
-        return stored == self._meta_of(meta)
+        stored.pop(INDEX_KEY, None)
+        return stored == self._meta_of(meta, opened=bool(self.lb.identities))
 
     @staticmethod
-    def _meta_of(meta: dict[str, Any]) -> dict[str, str]:
-        return {
+    def _meta_of(meta: dict[str, Any], opened: bool | None = None) -> dict[str, str]:
+        """What the index records about the record it was built from. `opened` is whether the
+        sealed lines' payload columns were filled; None leaves it out (a read-only comparison of
+        the rest, as `doctor` makes it)."""
+        found = {
             "schema": SCHEMA_VERSION,
             "head": str(meta["head"]),
             "seq": str(meta["seq"]),
             "timezone": str(meta["timezone"]),
+            "recipients": ",".join(sorted(sealing.recipients_of(meta))),
         }
+        if opened is not None:
+            found["opened"] = "true" if opened else "false"
+        return found
 
     def _set_meta(self, meta: dict[str, Any]) -> None:
+        key = self._key_sealed(meta)
         self.db.execute("DELETE FROM meta")
-        self.db.executemany("INSERT INTO meta VALUES (?, ?)", self._meta_of(meta).items())
+        self.db.executemany(
+            "INSERT INTO meta VALUES (?, ?)", self._meta_of(meta, opened=bool(self.lb.identities)).items()
+        )
+        if key is not None:
+            self.db.execute("INSERT INTO meta VALUES (?, ?)", (INDEX_KEY, key))
+
+    # -- sealed lines (RFC 0029 §8) ----------------------------------------------------------------
+    def _key_sealed(self, meta: dict[str, Any]) -> str | None:
+        """The blinding key sealed to the record's recipients, for `meta`; None when the record
+        names no recipients or the identity is not here (nothing is blinded then)."""
+        recipients = sealing.recipients_of(meta)
+        if not recipients or not self.lb.identities:
+            return None
+        return sealing.seal_index_key(self._blinding_key(meta), recipients)
+
+    def _blinding_key(self, meta: dict[str, Any]) -> bytes:
+        """The index key: read from `meta` when this index has one that opens, else made now."""
+        if self._key is None:
+            try:
+                stored = self.db.execute("SELECT value FROM meta WHERE key = ?", (INDEX_KEY,)).fetchone()
+            except sqlite3.DatabaseError:
+                stored = None
+            if stored is not None:
+                with contextlib.suppress(sealing.SealError, ValueError):
+                    self._key = sealing.open_index_key(str(stored[0]), self.lb.identities)
+            if self._key is None:
+                self._key = sealing.new_index_key()
+        return self._key
+
+    def _blinder(self, meta: dict[str, Any]) -> Callable[[str], str] | None:
+        if not sealing.recipients_of(meta) or not self.lb.identities:
+            return None
+        key = self._blinding_key(meta)
+        return lambda raw_id: sealing.blind(key, raw_id)
+
+    def rows_of(self, line: Line, meta: dict[str, Any], file: str, offset: int) -> tuple[Row, TextRow | None]:
+        """The row of one line, and its search row when it carries words: a sealed line's payload
+        columns come from its opened payload when the identity is here, its `raw_id` blinded, and
+        it never has a search row (its words stay sealed)."""
+        tz = str(meta["timezone"])
+        if not is_sealed(line):
+            line_row = row(line, tz, file, offset)
+            return line_row, text_row(line, self.lb.root, line_row)
+        payload = self.lb.opened(line)["payload"] if self.lb.identities else None
+        return row(line, tz, file, offset, payload, self._blinder(meta)), None
+
+    def _forms(self, source: str, raw_id: str) -> tuple[str, str, str]:
+        """(source, raw_id, blinded raw_id): what the (source, raw_id) index may hold for a line of
+        this source — plain for a tier-1 or unsealed line, blinded for a sealed one."""
+        blind = self._blinder(self.lb.meta)
+        return source, raw_id, raw_id if blind is None else blind(raw_id)
 
     # -- building ----------------------------------------------------------------------------
     def rebuild(self, progress: Callable[[int, float], None] | None = None) -> int:
@@ -287,7 +375,6 @@ class Index:
         the number of lines. One transaction: a crash leaves the old index, which the head check
         then rejects. `progress(count, elapsed_seconds)` every BUILD_PROGRESS_EVERY lines."""
         meta = self.lb.meta  # read before the pass: a write during it leaves a head that no longer matches
-        tz = str(meta["timezone"])
         n, started = 0, time.monotonic()
         batch: list[Row] = []
         texts: list[TextRow] = []
@@ -301,9 +388,8 @@ class Index:
             ):
                 self.db.execute(statement)
             for file, offset, line in self.lb.located_lines():
-                line_row = row(line, tz, file, offset)
+                line_row, words = self.rows_of(line, meta, file, offset)
                 batch.append(line_row)
-                words = text_row(line, self.lb.root, line_row)
                 if words is not None:
                     texts.append(words)
                 n += 1
@@ -369,9 +455,10 @@ class Index:
             for seq, id_, at, kind, tier, file, offset in found
         ]
 
-    def read(self, places: Iterable[tuple[str, int]]) -> list[Line]:
-        """The lines at these (file, offset) places, in the order given."""
-        return self._read(list(places))
+    def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
+        """The lines at these (file, offset) places, in the order given; `opened` False gives a
+        sealed line as the file holds it (for a crossing package, which reseals it)."""
+        return self._read(list(places), opened)
 
     def by_seq(self, seq: int) -> Line | None:
         found = self.db.execute("SELECT file, offset FROM lines WHERE seq = ?", (seq,)).fetchall()
@@ -392,14 +479,14 @@ class Index:
         ).fetchall()
         return self._read(found)
 
-    def resolutions(self) -> list[Line]:
+    def resolutions(self, opened: bool = True) -> list[Line]:
         """Every resolution line (RFC 0006), in chain order (the (kind, at) index). Served by the
         `kind` column every index has had, so a record indexed before this method exists needs
-        no rebuild."""
+        no rebuild. `opened` as `read`."""
         found = self.db.execute(
             "SELECT file, offset FROM lines WHERE kind = 'resolution' ORDER BY seq"
         ).fetchall()
-        return self._read(found)
+        return self._read(found, opened)
 
     def last_fix(self, subject: str) -> Line | None:
         """The standing location line of this `subject` (RFC 0001, ADR 0018) with the latest `at`
@@ -521,7 +608,7 @@ class Index:
                     if handle is not None:
                         handle.close()
                     handle, current = (self.lb.root / file).open("rb"), file
-                yield read_line_at(handle, offset)
+                yield self.lb.opened(read_line_at(handle, offset))
         finally:
             if handle is not None:
                 handle.close()
@@ -547,7 +634,8 @@ class Index:
         """The id of the line with this (source, raw_id), or None; the first written when the log
         has more than one (an adapter that keys on raw_id never writes two)."""
         found = self.db.execute(
-            "SELECT id FROM lines WHERE source = ? AND raw_id = ? ORDER BY seq LIMIT 1", (source, raw_id)
+            "SELECT id FROM lines WHERE source = ? AND raw_id IN (?, ?) ORDER BY seq LIMIT 1",
+            self._forms(source, raw_id),
         ).fetchone()
         return None if found is None else str(found[0])
 
@@ -742,12 +830,13 @@ class Index:
     def existing(self, keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
         """Which of these (source, raw_id) keys the log already has: one SELECT for the batch,
         through a temp table so a batch of any size stays one statement."""
-        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS batch (source TEXT, raw_id TEXT)")
+        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS batch (source TEXT, raw_id TEXT, blinded TEXT)")
         self.db.execute("DELETE FROM batch")
-        self.db.executemany("INSERT INTO batch VALUES (?, ?)", keys)
+        self.db.executemany("INSERT INTO batch VALUES (?, ?, ?)", (self._forms(*key) for key in keys))
         found = self.db.execute(
             "SELECT b.source, b.raw_id FROM batch b"
-            " WHERE EXISTS (SELECT 1 FROM lines l WHERE l.source = b.source AND l.raw_id = b.raw_id)"
+            " WHERE EXISTS (SELECT 1 FROM lines l WHERE l.source = b.source"
+            " AND (l.raw_id = b.raw_id OR l.raw_id = b.blinded))"
         ).fetchall()
         self.db.execute("DELETE FROM batch")
         return {(str(source), str(raw_id)) for source, raw_id in found}
@@ -756,13 +845,15 @@ class Index:
         """The line with each of these (source, raw_id) keys, read from the files, for the keys the
         log has: the first written when it has more than one. One SELECT for the batch, through
         the temp table `existing` uses, so an adapter checking an export against the record asks
-        once per batch, never once per line."""
-        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS batch (source TEXT, raw_id TEXT)")
+        once per batch, never once per line. A sealed line's `raw_id` is stored blinded (RFC 0029
+        §8); the batch carries both forms and either matches."""
+        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS batch (source TEXT, raw_id TEXT, blinded TEXT)")
         self.db.execute("DELETE FROM batch")
-        self.db.executemany("INSERT INTO batch VALUES (?, ?)", keys)
+        self.db.executemany("INSERT INTO batch VALUES (?, ?, ?)", (self._forms(*key) for key in keys))
         found = self.db.execute(
-            "SELECT l.source, l.raw_id, l.file, l.offset FROM lines l"
-            " JOIN batch b ON b.source = l.source AND b.raw_id = l.raw_id ORDER BY l.seq"
+            "SELECT b.source, b.raw_id, l.file, l.offset FROM lines l"
+            " JOIN batch b ON b.source = l.source AND (l.raw_id = b.raw_id OR l.raw_id = b.blinded)"
+            " ORDER BY l.seq"
         ).fetchall()
         self.db.execute("DELETE FROM batch")
         places: dict[tuple[str, str], tuple[str, int]] = {}
@@ -775,20 +866,28 @@ class Index:
         """raw_id → the sources of the lines that carry it, for these raw_ids, whatever their
         source: what `import trip-bundle` asks before it writes a received line, so a line the
         record already holds as its own (the same calendar invite, the same shared photo) or
-        received before is skipped, never written twice (SPEC §3: nothing is rewritten)."""
+        received before is skipped, never written twice (SPEC §3: nothing is rewritten). A sealed
+        line's `raw_id` is stored blinded (RFC 0029 §8), so each raw_id is asked in both forms."""
         wanted = sorted(set(raw_ids))
+        blind = self._blinder(self.lb.meta)
+        forms = {raw_id: raw_id for raw_id in wanted}
+        if blind is not None:
+            forms.update({blind(raw_id): raw_id for raw_id in wanted})
+        keys = sorted(forms)
         found: dict[str, set[str]] = {}
-        for n in range(0, len(wanted), 500):
-            chunk = wanted[n : n + 500]
+        for n in range(0, len(keys), 500):
+            chunk = keys[n : n + 500]
             rows = self.db.execute(
                 f"SELECT raw_id, source FROM lines WHERE raw_id IN ({', '.join('?' * len(chunk))})", chunk
             ).fetchall()
-            for raw_id, source in rows:
-                found.setdefault(str(raw_id), set()).add(str(source))
+            for stored, source in rows:
+                found.setdefault(forms[str(stored)], set()).add(str(source))
         return found
 
-    def _read(self, where: list[tuple[str, int]]) -> list[Line]:
-        """The lines at these (file, offset) places, in the order given. Each file opened once."""
+    def _read(self, where: list[tuple[str, int]], opened: bool = True) -> list[Line]:
+        """The lines at these (file, offset) places, in the order given, opened when they are
+        sealed and the identity is here (`Logbook.opened`) unless `opened` is False. Each file
+        opened once."""
         from .store import read_line_at
 
         handles: dict[str, Any] = {}
@@ -798,7 +897,8 @@ class Index:
                 fh = handles.get(file)
                 if fh is None:
                     fh = handles[file] = (self.lb.root / file).open("rb")
-                lines.append(read_line_at(fh, offset))
+                line = read_line_at(fh, offset)
+                lines.append(self.lb.opened(line) if opened else line)
         finally:
             for fh in handles.values():
                 fh.close()

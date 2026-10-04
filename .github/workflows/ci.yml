@@ -33,6 +33,10 @@ jobs:
       - run: uv run pytest -n auto --durations=15 --cov=logbook --cov-report=xml
       - name: conformance
         run: uv run logbook verify --root conformance/sample-logbook --expect conformance/expected.json
+      - name: conformance, Level 2 (sealed, keyless and keyed)
+        run: |
+          uv run logbook verify --root conformance/sample-logbook-sealed --expect conformance/expected-sealed.json --keyless
+          uv run logbook --identity-file conformance/identity.txt verify --root conformance/sample-logbook-sealed --expect conformance/expected-sealed.json
       - uses: codecov/codecov-action@v7
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
   nix:

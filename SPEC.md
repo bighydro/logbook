@@ -1,4 +1,4 @@
-# Logbook format — specification v0.2
+# Logbook format — specification v0.3
 
 Status: draft. License: CC0. Anyone may implement this without asking.
 
@@ -13,20 +13,24 @@ The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described 
   notes/<YYYY>/<YYYY-MM-DD>.md   free text, optional
   attachments/<sha256>    optional; content-addressed files a line points at (§1.1)
   inbox/                  optional; not part of conformance
-  index.sqlite            optional; a derived locator, disposable (ADR 0007); not part of conformance
 ```
+
+A derived locator (`index.sqlite`, ADR 0007) is disposable and not part of conformance; the reference keeps it in the user's cache directory, outside this folder, so a copy of the folder carries no locator (RFC 0029 §8). An implementation MAY keep one inside the folder.
 
 `logbook.json`:
 
 ```json
-{"format": "logbook/0.2", "owner_id": "<uuid>", "created_at": "<RFC3339 UTC>",
+{"format": "logbook/0.3", "owner_id": "<uuid>", "created_at": "<RFC3339 UTC>",
  "timezone": "<IANA tz>", "seq": 4181, "head": "<hex sha256>",
- "lineage": [{"from_format": "logbook/0.1", "from_head": "<hex sha256>", "migrated_at": "<RFC3339 UTC>"}]}
+ "recipients": ["age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl", "age1…"],
+ "lineage": [{"from_format": "logbook/0.2", "from_head": "<hex sha256>", "migrated_at": "<RFC3339 UTC>"}]}
 ```
+
+`recipients` lists the age X25519 recipients (the public halves) that tiers 2–3 are sealed to (§4). It is present in a record that seals, with two entries at least; a record without it, or with an empty list, seals nothing. The private identity is never in this folder (RFC 0029 §6).
 
 `seq` and `head` are those of the last line in chain order (§3). A record with no lines has `seq` 0 and `head` GENESIS. **GENESIS** is the string of 64 ASCII `0` characters, `0000…0000`; it is a named constant, not the digest of anything, and it is also the `prev` of the first line (§3).
 
-`lineage` is present only in a record that was migrated from an earlier format (§3.1).
+`lineage` is present only in a record that was migrated from an earlier format, or that sealed its past (§3.1).
 
 Writers MUST preserve keys of `logbook.json` they do not know: read the file, change `seq` and `head`, write everything else back. An implementation that rewrites the file from a fixed set of keys drops `lineage`, and whatever a later version adds, the first time it appends.
 
@@ -48,6 +52,8 @@ The store is write-once: a digest is written once and never rewritten. Two lines
 
 The chain covers lines, not bytes. The digest is inside the line, so tampering with the file is detectable, but the file is not in the hash chain. `verify` MUST NOT fail because an attachment is missing; it MUST report missing attachments separately and exit 0 when the chain is intact. A verifier MAY check the digests of present files; a file whose bytes do not match its name **is** an error.
 
+**Sealed files.** In a record that seals (§4), a file a tier 2–3 line points at is stored under the same name, the digest of its plaintext, as an age file (RFC 0029 §7): its first 22 bytes are `age-encryption.org/v1\n`. The reference inside the line is unchanged and names the plaintext. A verifier without the key counts such a file as sealed and does not check it; one with the key opens it and requires the plaintext to hash to the name, else it is an error. A plain file may be replaced by its sealed form (the protection raised), never the reverse. A file both a tier-1 and a tier-2 line point at is sealed.
+
 A record with no `attachments/` directory is valid. Conformance (§6) does not require the store.
 
 ## 2. The line (the envelope)
@@ -68,18 +74,21 @@ The stored form of a line is any JSON text for the object on one line: UTF-8, no
 | `source` | string | who reported it: `manual`, `apple-health`, `google-takeout`, … |
 | `kind` | string | what it is: `location`, `photo`, `event`, `message`, `sleep`, `note`, … |
 | `tier` | 1, 2 or 3 | privacy tier, §4 |
-| `payload` | object | whatever the source said; MUST contain `schema`, e.g. `"location/v1"` |
+| `payload` | object | whatever the source said; MUST contain `schema`, e.g. `"location/v1"`; for a sealed line, the reference `{"schema": "sealed/v1", "of": "<the sealed payload's schema>", "digest": "<hex sha256>"}` |
 | `recorded_at` | RFC3339 UTC | when the line was written |
 | `prev` | hex sha256 | hash of the previous line; GENESIS (§1) for the first |
 | `hash` | hex sha256 | §3 |
+| `payload_enc` | string | **sealed lines only** (§4): the sealed content as an age file in standard base64; outside the hash, as `id` is |
 
-Every field in the table is present in every line. `end` is `null` when the observation has no duration or its end is unknown; it is never omitted. Absent and null are different inputs to the hash: an object without `end` and one with `"end":null` canonicalise to different bytes. Writers MUST emit `null`.
+Every field in the table but `payload_enc` is present in every line; `payload_enc` is present on a sealed line and on no other. `end` is `null` when the observation has no duration or its end is unknown; it is never omitted. Absent and null are different inputs to the hash: an object without `end` and one with `"end":null` canonicalise to different bytes. Writers MUST emit `null`.
 
 `at`, `end` and `recorded_at` are RFC 3339 date-times in UTC with the literal `Z` designator, as in `2026-03-01T07:30:00Z`; a numeric offset such as `+00:00` MUST NOT be used. Fractional seconds are permitted. The string is hashed verbatim, so `07:30:00Z` and `07:30:00.000Z` are different inputs. They are the same instant: timestamps compare as the instants they denote, never as text (`07:30:00.5Z` is after `07:30:00Z`, though it sorts before it as a string).
 
 `tz`, and `timezone` in `logbook.json`, are IANA zone names. This spec names no edition of the zone database, so a name may be known to one reader and not another (`Europe/Kyiv` and `Europe/Kiev` are the same zone under two editions). `verify` does not interpret `tz`, so no zone name makes a record invalid. A reader that must localise a time and does not know the zone MUST say so; it MUST NOT silently substitute another zone.
 
 Unknown fields MUST be preserved by readers and MUST NOT be added by writers at the top level; extensions go inside `payload`.
+
+**Sealed lines** (RFC 0029). A line whose `payload.schema` is `sealed/v1` is sealed: its `payload` is exactly `{"schema": "sealed/v1", "of": "<schema>", "digest": "<lowercase hex sha256>"}` and it carries `payload_enc`. The sealed bytes are `canonical_json({"payload": <the real payload>, "salt": "<32 lowercase hex, 16 random bytes>"})` in UTF-8; `digest` is their SHA-256; `of` is the real payload's `schema`; `payload_enc` is that text age-sealed (age-encryption.org/v1, X25519 recipients, the binary file, never the armor) to every recipient of `logbook.json`, as standard base64 with padding. A `sealed/v1` payload with other keys, or without a `payload_enc` that is base64 of bytes beginning with the age header, is invalid; so is a `payload_enc` on a line whose payload is not `sealed/v1`. The salt is inside the sealed bytes and inside the digest, so the digest confirms nothing to a reader without the key. Writers seal every tier 2 and 3 line of a record that names recipients, and never a tier-1 line.
 
 ## 3. The chain
 
@@ -94,7 +103,7 @@ In the pre-image, `prev` and `sha256(content)` are lowercase hex, `seq` is decim
 
 A logbook is **valid** when, taking every line from every file and ordering by `seq` (files partition by the month of `at`, so backfilled history lands in old files; file order is not chain order):
 
-- every line meets §2: `payload.schema` is present, `tier` is 1, 2 or 3, and `seq` ≥ 1;
+- every line meets §2: `payload.schema` is present, `tier` is 1, 2 or 3, `seq` ≥ 1, and a sealed line meets the sealed-line rule of §2;
 - no two lines share a `seq`; when they do, the verifier reports the second occurrence;
 - every line's `seq` is the previous plus one, the first being 1;
 - every `prev` equals the previous `hash`, the first being GENESIS;
@@ -102,6 +111,8 @@ A logbook is **valid** when, taking every line from every file and ordering by `
 - `logbook.json` `seq`/`head` match the last line, or are 0 and GENESIS when there is none.
 
 A verifier checks the envelope requirements of §2 as well as the chain: a line that chains correctly but has no `payload.schema` or a `tier` outside 1..3 makes the record invalid.
+
+**Sealed lines and the key.** `payload_enc` is outside the hash, so the rules above hold without any key: a verifier without the owner's identity checks the whole chain and the sealed-line rule of §2, reports how many lines it did not open, and exits 0 when the chain holds. It cannot tell a line's sealed bytes from bytes an adversary sealed to the owner's recipients; that is what the key adds. A verifier with the identity MUST open every sealed line, require the SHA-256 of the opened bytes to equal `payload.digest` and the opened payload's `schema` to equal `of`, and treat a mismatch as an error of the record, as a present attachment whose bytes do not match its name is (§1.1). Resealing `payload_enc` to other recipients changes no hash (RFC 0029 §6.4).
 
 **Write order.** A writer appends in this order: the line, or the batch of lines, to its month file, flushed and fsynced; then `logbook.json`, written to a temporary file and renamed into place so it is never half-written; then any index. A crash therefore leaves the files ahead of `logbook.json`, never behind: every line `logbook.json` names is on disk, and any lines past its `seq` are a complete, chained tail. Until `logbook.json` is brought forward, `verify` reports such a record invalid by the last rule above.
 
@@ -111,12 +122,17 @@ Corrections are new lines. A source that revises an earlier record writes a new 
 
 `logbook.json` `format` names the rule the record's hashes were computed with.
 
-| Format | Canonicalisation |
-|---|---|
-| `logbook/0.1` | Python's `json.dumps(sort_keys=True, separators=(",", ":"))`. It deviated from RFC 8785 in float layout (`0.0` and `120.0` instead of `0` and `120`; `1e-06` instead of `0.000001`; exponent form from 1e16, not 1e21) and in key order (Unicode code points, not UTF-16 code units). |
-| `logbook/0.2` | RFC 8785 exactly, as §3 says. |
+| Format | Canonicalisation | Envelope |
+|---|---|---|
+| `logbook/0.1` | Python's `json.dumps(sort_keys=True, separators=(",", ":"))`. It deviated from RFC 8785 in float layout (`0.0` and `120.0` instead of `0` and `120`; `1e-06` instead of `0.000001`; exponent form from 1e16, not 1e21) and in key order (Unicode code points, not UTF-16 code units). | §2 without `payload_enc` |
+| `logbook/0.2` | RFC 8785 exactly, as §3 says. | §2 without `payload_enc`; nothing sealed |
+| `logbook/0.3` | RFC 8785 exactly, the same rule. | §2 as written: sealed lines, `recipients` in `logbook.json` |
 
-Canonicalisation is fixed, not versioned (ADR 0014): a conformant implementation carries one rule and MUST refuse to verify or write a `logbook/0.1` record. Such a record MUST be migrated forward. A migration keeps every line's `id`, `seq`, content fields and `recorded_at` unchanged, recomputes `prev` and `hash` in `seq` order under the 0.2 rule, sets `format` to `logbook/0.2`, appends `{from_format, from_head, migrated_at}` to `lineage` in `logbook.json`, and then appends one line — `source` `manual`, `kind` `migration`, `tier` 1, payload `{"schema": "migration/v1", "from_format": "logbook/0.1", "from_head": "<old head>"}` — so that the fact of the migration, and the head it replaced, are inside the chain. The old head stays reproducible from the old files with the old rule; nothing else about the record changes.
+Canonicalisation is fixed, not versioned (ADR 0014): a conformant implementation carries one rule and MUST refuse to verify or write a `logbook/0.1` record. Such a record MUST be migrated forward. A migration keeps every line's `id`, `seq`, content fields and `recorded_at` unchanged, recomputes `prev` and `hash` in `seq` order under the current rule, sets `format` to the current format, appends `{from_format, from_head, migrated_at}` to `lineage` in `logbook.json`, and then appends one line — `source` `manual`, `kind` `migration`, `tier` 1, payload `{"schema": "migration/v1", "from_format": "logbook/0.1", "from_head": "<old head>"}` — so that the fact of the migration, and the head it replaced, are inside the chain. The old head stays reproducible from the old files with the old rule; nothing else about the record changes.
+
+`logbook/0.2` and `logbook/0.3` hash by the same rule, so a 0.3 implementation MUST read, verify and write a 0.2 record as it is, never migrating it (ADR 0020); a 0.2 record seals nothing, having no recipients, and becomes 0.3 the moment it is given them. A 0.2 implementation that meets a 0.3 record preserves `payload_enc` as an unknown field and verifies the chain correctly, but cannot open anything; the format name tells it that it needs another version of the code.
+
+**Sealing the past** (RFC 0029 §10.2). A record given recipients may seal the tier 2–3 lines written before it had them. That changes those lines' content hashes (the real payload leaves the pre-image and the reference enters it), so it takes the migration road: every line keeps `id`, `seq`, `at`, `end`, `tz`, `source`, `kind`, `tier` and `recorded_at`; a plain tier 2–3 payload becomes the sealed reference with its content in `payload_enc`; `prev` and `hash` are recomputed in `seq` order; every attachment such a line names is sealed under its name; `format` becomes `logbook/0.3`; `lineage` gains an entry; and one `migration/v1` line is appended, with `from_head` the head it replaced and the counts `sealed_lines` and `sealed_attachments`. The plain files are not kept beside the record. The old head stays reproducible, with the identity: open every sealed line, put its payload back, recompute.
 
 ### 3.2 Readers
 
@@ -135,6 +151,7 @@ Two words recur. A line is **standing** when it is not retracted (RFC 0003) and 
 - A `flight/v1` line with no `number` (RFC 0013 rule 1) is listed as its route alone.
 - A day's hero photos are its keeper lines standing, `memory` first (3.2.9, RFC 0024 rule 4); a day with none has no hero, and a reader does not pick one.
 - A payload whose shape predates its profile (§6) is shown however the reader chooses; reading a string `chat` as the chat's name and a string attendee as an `email` ref is reasonable, not required.
+- A sealed line a reader can open is listed as its opened payload; one it cannot open (no identity on this machine) is listed on its day, as its `kind` and `of`, and says it is sealed. A reader never drops it.
 - A read command MAY refuse a `logbook/0.1` record, so that every command answers a record it does not carry the same way; §3.1 requires refusal only of verify and write. A reader that does read one says nothing about its hashes.
 - What `show` prints for a line, a range of days, a filter by profile and a machine-readable form are a reader's own; the rules above fix which lines are on a day, their order, their marks and their folds, and nothing else. Two implementations that want to print the same text match each other on a fixture, as the reference and logbook-ts do (§6).
 
@@ -293,10 +310,10 @@ The commitments the record's own words suggest, proposed and never asserted (RFC
 | Tier | Typical content | At rest |
 |---|---|---|
 | 1 | location, photo metadata, calendar, public activity | plain |
-| 2 | notes, messages, decisions, confirmations, personal mail | encrypted with the owner's key (a later version) |
-| 3 | money, health | encrypted with the owner's key (a later version) |
+| 2 | notes, messages, decisions, confirmations, personal mail | sealed with age to the owner's recipients (§2, RFC 0029) |
+| 3 | money, health | sealed with age to the owner's recipients (§2, RFC 0029) |
 
-Derived data inherits the highest tier of its evidence. Conformance requires the field; a later version will define the encryption envelope for tiers 2–3 (`payload_enc` replacing `payload`, age/X25519 recipient = the owner's key).
+Derived data inherits the highest tier of its evidence. Conformance requires the field. In a record whose `logbook.json` names `recipients` (§1), every tier 2 and 3 line is sealed as §2 says and every file such a line points at is sealed as §1.1 says; a record that names none is written plain, as before, and a verifier reports how many tier 2–3 lines are plain so the owner sees them. The envelope stays plain: `at`, `end`, `tz`, `source`, `kind`, `tier` and `recorded_at` are readable without any key, so a reader lists a day, an index locates a line and `verify` checks the chain without one. What the envelope gives away, and what the key handling is, is RFC 0029.
 
 Each payload profile (§5) names the tier its producers write by default. The table repeats what the RFCs say, and the RFC is authoritative where the two differ:
 
@@ -314,7 +331,9 @@ The envelope is the standard. Payloads are versioned by `payload.schema` and pro
 
 ## 6. Conformance
 
-An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`; when appending one line to a copy of it yields a logbook that still verifies, with `seq` + 1; and when changing any hashed field of any line of the copy (a content field of §3, `seq`, `prev`, `recorded_at` or `hash`), or deleting any line of it, makes `verify` report invalid. `id` is outside the hash, and the stored form is not hashed (§2): a change to `id`, or a re-serialisation that leaves the canonical form unchanged, is not detected and is not required to be. `verify` checks the envelope requirements of §2 as well as the chain rules of §3. The sample tests the envelope and the chain, not the profiles: its payloads were written before the RFCs that now define `message/v1` and `event/v1`, and some do not have the shapes those RFCs give (a `chat` that is a string, an attendee that is a string). They are not profile examples; the RFCs are. Level 2 conformance (a later version) adds encryption. Two independent implementations must agree before v1.0 is frozen.
+An implementation is conformant when `verify` on `conformance/sample-logbook` reports valid and prints the head in `conformance/expected.json`; when appending one line to a copy of it yields a logbook that still verifies, with `seq` + 1; and when changing any hashed field of any line of the copy (a content field of §3, `seq`, `prev`, `recorded_at` or `hash`), or deleting any line of it, makes `verify` report invalid. `id` is outside the hash, and the stored form is not hashed (§2): a change to `id`, or a re-serialisation that leaves the canonical form unchanged, is not detected and is not required to be. `verify` checks the envelope requirements of §2 as well as the chain rules of §3. The sample tests the envelope and the chain, not the profiles: its payloads were written before the RFCs that now define `message/v1` and `event/v1`, and some do not have the shapes those RFCs give (a `chat` that is a string, an attendee that is a string). They are not profile examples; the RFCs are. The sample is a `logbook/0.2` record, which a conformant implementation reads as it is (§3.1). Two independent implementations must agree before v1.0 is frozen.
+
+**Level 2 (sealing).** `conformance/sample-logbook-sealed` is the same week sealed to two recipients, one of them the identity published in `conformance/identity.txt` (it opens the fixture and nothing else). An implementation is Level 2 conformant when, in addition: `verify` on it without the identity reports valid, prints the head in `conformance/expected-sealed.json` and counts its sealed lines; `verify` with the identity reports valid, the same head, and every sealed line opened and matching its digest; changing any byte of a `payload_enc` leaves the keyless `verify` valid and makes the keyed one report invalid; and appending one tier-2 line to a copy seals it, and the other implementation opens it. The fixture's salts are data, so its head is reproducible by anyone who regenerates it; its ciphertext is not, and is not hashed.
 
 *Status:* two independent implementations, [openlogbook](https://github.com/bighydro/logbook) (Python, reference) and [logbook-ts](https://github.com/bighydro/logbook-ts) (TypeScript), reproduce the head in `conformance/expected.json`; they agree on `verify` and `append`, and on `show` over the fixture records of logbook-ts's cross-implementation test (§6.1).
 

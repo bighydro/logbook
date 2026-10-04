@@ -79,7 +79,7 @@ def legacy_logbook(root: Path) -> tuple[Logbook, list[Line]]:
     meta = lb.meta
     meta.update(format="logbook/0.1", seq=len(lines), head=prev)
     (root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-    (root / "index.sqlite").write_bytes(b"a disposable index")
+    (Logbook(root).index_path).write_bytes(b"a disposable index")
     return lb, lines
 
 
@@ -147,7 +147,7 @@ def test_migrate_recomputes_the_chain_and_keeps_everything_else(legacy):
     assert new[2]["hash"] != old[2]["hash"]  # key order changed
 
     meta = lb.meta
-    assert meta["format"] == FORMAT == "logbook/0.2"
+    assert meta["format"] == FORMAT == "logbook/0.3"  # the same hash rule as 0.2, sealing allowed
     assert meta["head"] == head == new[-1]["hash"]
     (lineage,) = meta["lineage"]
     assert lineage["from_format"] == "logbook/0.1" and lineage["from_head"] == old_head
@@ -159,7 +159,7 @@ def test_migrate_recomputes_the_chain_and_keeps_everything_else(legacy):
     assert last["at"] == lineage["migrated_at"]
 
     assert result["lines"] == len(old) and result["from_head"] == old_head and result["head"] == head
-    assert not (lb.root / "index.sqlite").exists()
+    assert not (lb.index_path).exists()
     assert not (lb.root / "logbook.migrating").exists()
 
 
@@ -205,7 +205,7 @@ def test_migrate_refuses_a_broken_0_1_chain_and_touches_nothing(legacy):
     assert {f: f.read_bytes() for f in lb.files()} == before
     assert lb.meta["format"] == "logbook/0.1" and lb.meta["head"] == old[-1]["hash"]
     assert not (lb.root / "logbook.migrating").exists() and not (lb.root / "logbook-0.1").exists()
-    assert (lb.root / "index.sqlite").exists()
+    assert (lb.index_path).exists()
 
 
 def test_migrate_empty_0_1_record(tmp_path: Path):

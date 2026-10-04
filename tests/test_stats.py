@@ -168,7 +168,7 @@ def _json(capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
 
 def test_stats_json_holds_every_number(lb: Logbook, capsys):
     s = _json(capsys)
-    assert s["format"] == "logbook/0.2" and s["head"] == lb.meta["head"]
+    assert s["format"] == "logbook/0.3" and s["head"] == lb.meta["head"]
     assert s["lines"] == 15
     assert s["first"] == "2024-01-15T11:00:00Z" and s["last"] == "2026-02-05T00:00:00Z"
     assert s["kinds"] == [
@@ -216,7 +216,7 @@ def test_stats_json_holds_every_number(lb: Logbook, capsys):
 def test_stats_prints_the_same_numbers_on_one_screen(lb: Logbook, capsys):
     out = _stats(capsys)
     lines = out.splitlines()
-    assert lines[0] == f"logbook/0.2  head {lb.meta['head']}"
+    assert lines[0] == f"logbook/0.3  head {lb.meta['head']}"
     assert lines[1] == "15 lines  first 2024-01-15T11:00:00Z  last 2026-02-05T00:00:00Z"
     assert "  location        5   2024-06-01  2025-07-01   2 sources" in lines
     assert "  event           1   2025-05-05  2025-05-05   1 source" in lines
@@ -306,10 +306,10 @@ def test_stats_on_an_empty_record(tmp_path: Path, monkeypatch, capsys):
 def test_stats_rebuilds_an_index_built_by_an_earlier_schema(lb: Logbook, capsys):
     with lb.index():
         pass
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         db.execute("UPDATE meta SET value = '1' WHERE key = 'schema'")
         db.execute("ALTER TABLE lines DROP COLUMN media")
         db.commit()
     assert _json(capsys)["attachments"] == {"referenced": 2, "lines": 3, "present": 1}
-    with closing(sqlite3.connect(lb.root / "index.sqlite")) as db:
+    with closing(sqlite3.connect(lb.index_path)) as db:
         assert list(db.execute("SELECT value FROM meta WHERE key = 'schema'")) == [(index.SCHEMA_VERSION,)]

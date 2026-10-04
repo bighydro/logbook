@@ -4,9 +4,13 @@ title = "logbook"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "The shared-page fixture and its RFC carry Ed25519 public keys and signatures in `key` fields (RFC 0025). They are public halves of two synthetic keys that sign nothing but the fixture; the private seeds are derived in tests/shared_day.py from fixed strings and are not secrets either. The generic-api-key rule reads the field name and the hex as a leak."
 paths = [
   '''tests/fixtures/share/[^/]+/manifest\.json''',
   '''docs/rfcs/rfc-0025-shared-page-bundle\.md''',
 ]
+
+[[allowlists]]
+description = "The one age secret key in the repository is the conformance fixture's identity, published on purpose (SPEC §6, Level 2; RFC 0029): it opens conformance/sample-logbook-sealed and nothing else."
+paths = ['''conformance/identity\.txt''']

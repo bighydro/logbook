@@ -1,6 +1,6 @@
 # Benchmark — per-line sealing on a 3,000,000-line record
 
-Status: **measured, 2026-10-02** · answers open question 1 of the draft RFC on encryption at rest (`draft-encryption-at-rest.md`, on its own branch until it takes a number) · script: `scripts/bench_seal.py` · no code or spec change.
+Status: **measured, 2026-10-02** · answers open question 1 of RFC 0029, encryption at rest (`0029-encryption-at-rest.md`) · script: `scripts/bench_seal.py` · no code or spec change.
 
 ## Summary
 

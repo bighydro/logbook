@@ -86,7 +86,7 @@ logbook backup restore /Volumes/Backup/Logbook/<owner_id>/2026-06-02T071500Z ~/R
 `logbook doctor` checks that this machine is set up to keep the record, one line per check, `pass`, `warn` or
 `fail`, and exits 1 when anything fails: the record is found and `verify` is green with `logbook.json` at
 the head; `index.sqlite` is current; `policy/owner.json` names at least one alias; `places.json` has a
-home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `transcribe`) is installed,
+home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed,
 with its install line when not; the variables of every live source the record uses are set, by name only,
 never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
 Drive syncs, which is a fail with the reason. It reads and never writes, so it is safe to run any time.
@@ -100,12 +100,41 @@ pass  places             4 place(s), home: Home
 pass  assets             1 asset(s): nordlys
 pass  extra:ais          websockets is installed
 pass  extra:crypto       cryptography is installed
+pass  extra:sealed       pyrage is installed
 warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
 warn  sync:dawarich      set LOGBOOK_DAWARICH_KEY
 pass  disk               184.2 GiB free on the record's volume
 pass  folder             a plain local folder, no sync client
-11 checks: 8 pass, 3 warn, 0 fail
+12 checks: 9 pass, 3 warn, 0 fail
 ```
+
+## Sealing tiers 2 and 3
+
+The envelope of every line is plain: when, what kind, which source. What a tier 2 or 3 line *says*, a note, a
+message, a transaction, a health sample, can be sealed at rest with [age](https://age-encryption.org) to keys
+only you hold (SPEC §2 and §4, [RFC 0029](rfcs/0029-encryption-at-rest.md), [ADR 0020](adr/0020-tiers-2-3-sealed-with-age.md)).
+The chain is untouched: `verify` checks every hash without any key and says how many lines it did not open;
+with your identity it opens each one and checks it against its digest too. Tier 1 is never sealed.
+
+```bash
+pip install "openlogbook[sealed]"          # pyrage, age's Rust implementation; nothing else changes
+logbook key init --recovery                # this machine's identity, and a recovery identity printed once for paper
+logbook seal --all                         # seal the tier 2–3 lines written before the record had recipients
+logbook verify                             # valid — …; sealed: 4,100 lines, every one opened and checked
+logbook key show                           # the recipients, and whether this machine's identity opens the record
+logbook key add-recipient --recipient age1…   # a new laptop, a hardware key: resealed, no hash changes
+```
+
+Two recipients or none: `key init` refuses to seal until a recovery identity exists, because a record that can
+lose its only key is not sealed, it is lost. The identity lives at `~/.config/logbook/identities/<owner_id>.txt`
+(`%APPDATA%\logbook\identities\` on Windows), readable by you alone, never inside the record, never in a
+variable that is on disk; `--identity-file PATH` or `LOGBOOK_IDENTITY_FILE=PATH` name another file. A machine
+without it reads tier 1, lists every day, verifies the chain and refuses to write tiers 2–3 in one sentence.
+Attachments a sealed line points at are sealed under the same name. The index is a plaintext locator and lives in
+your cache directory (`~/.cache/logbook/<owner_id>/`), not in the record, with chat ids blinded; `logbook search`
+does not search sealed lines. `export` writes opened payloads unless `--sealed`; a crossing package reseals to the
+destination's recipient from `policy/crossing.json`, or ships opened under `--open`. `seal --all` replaces the
+plain files and shreds nothing: a backup from before still holds the plaintext.
 
 ## Upgrading
 
@@ -115,6 +144,8 @@ pass  folder             a plain local folder, no sync client
 cp -a ~/Logbook ~/Logbook.bak    # or wherever LOGBOOK_HOME points
 logbook migrate                  # same lines, new hashes; keeps the old files at logbook-0.1/
 ```
+
+Format `logbook/0.3` (sealing, SPEC §3.1) hashes by the same rule as 0.2, so a 0.2 record is read as it is and needs no migration; `logbook seal --all` is the one optional step, and it leaves a `migration/v1` line.
 
 0.5.0 corrects the units `apple-health` gave resting heart rate and HRV (RFC 0014). A record that imported a Health store with an earlier version carries those lines 60 and 1,000 times too large; put them right once:
 
