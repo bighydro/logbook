@@ -22,24 +22,6 @@ if TYPE_CHECKING:
     from ..labs import describe, transcribe
 
 
-def infer_arguments(sub: Subparsers) -> None:
-    """`logbook infer`."""
-    s = sub.add_parser(
-        "infer", help="flights: from the record's own calendar entries and location points (RFC 0013)"
-    )
-    s.add_argument("what", help="what to infer: flights, or keepers (favourites and the Art album, RFC 0024)")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="only calendar entries from this local day")
-    s.add_argument("--until", metavar="YYYY-MM-DD", help="… up to this local day, inclusive")
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help="a CSV (iata,icao,name,lat,lon,tz) added to the airports table"
-        f" (default ${flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--dry-run", action="store_true", help="say what would be written; write nothing")
-    s.set_defaults(fn=cmd_infer)
-
-
 def cmd_infer(a: argparse.Namespace) -> None:
     """`infer flights [--since DAY] [--until DAY] [--airports FILE] [--dry-run]`: flight/v1 lines
     (RFC 0013, evidence `inferred`) from the record's own calendar entries and location points,
@@ -90,38 +72,14 @@ TRANSCRIBE_DEFAULT_MODEL = "small"
 DESCRIBE_DEFAULT_MODEL = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
 
 
-def transcribe_arguments(sub: Subparsers) -> None:
-    """`logbook transcribe`."""
-    s = sub.add_parser(
-        "transcribe",
-        help="voice-memos: a transcript/v1 line per voice memo whose audio is in the store, by a local"
-        " engine (RFC 0004); nothing leaves the machine",
-    )
-    s.add_argument("what", help="what to transcribe: voice-memos")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="only memos from this local day on")
-    s.add_argument(
-        "--model",
-        default=TRANSCRIBE_DEFAULT_MODEL,
-        help="the Whisper model: a size (tiny, base, small, medium, large-v3) or a Hugging Face"
-        f" repository (default {TRANSCRIBE_DEFAULT_MODEL})",
-    )
-    s.add_argument("--dry-run", action="store_true", help="list what would be transcribed; write nothing")
-    s.add_argument(
-        "--fetch-model",
-        action="store_true",
-        help="download the model first when it is not on this machine (the only network use, ever)",
-    )
-    s.set_defaults(fn=cmd_transcribe)
-
-
 def cmd_transcribe(a: argparse.Namespace) -> None:
     """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]`: a
     transcript/v1 line per standing voice memo whose audio is in the store, heard by a local engine
     (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is needed for a dry run."""
     from ..labs import transcribe
 
-    if a.what != "voice-memos":
-        print(f"transcribe: voice-memos can be transcribed, not {a.what!r}", file=sys.stderr)
+    if a.source != "voice-memos":
+        print(f"transcribe: voice-memos can be transcribed, not {a.source!r}", file=sys.stderr)
         sys.exit(2)
     if a.since is not None:
         try:
@@ -147,39 +105,6 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
     print(transcribe.describe(report))
 
 
-def describe_arguments(sub: Subparsers) -> None:
-    """`logbook describe`."""
-    s = sub.add_parser(
-        "describe",
-        help="keepers: a derived note per keeper whose photo file is reachable — one sentence and the"
-        " visible things, by a local vision model (RFC 0024, RFC 0010); nothing leaves the machine",
-    )
-    s.add_argument("what", help="what to describe: keepers")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="only keepers from this local day on")
-    s.add_argument("--limit", type=int, metavar="N", help="describe at most N photos this run")
-    s.add_argument(
-        "--photos",
-        action="append",
-        metavar="DIR",
-        help="a folder holding the photo files: an Apple Photos library (.photoslibrary, by asset UUID) or"
-        " any folder (by file name); may repeat. The record's own attachment store is always searched",
-    )
-    s.add_argument(
-        "--model",
-        default=DESCRIBE_DEFAULT_MODEL,
-        metavar="NAME",
-        help=f"the MLX vision model's repository (default {DESCRIBE_DEFAULT_MODEL})",
-    )
-    s.add_argument("--dry-run", action="store_true", help="list what would be described; write nothing")
-    s.add_argument(
-        "--fetch-model",
-        action="store_true",
-        help="download the model first when it is not on this machine (the only network use, ever)",
-    )
-    s.add_argument("--json", action="store_true", help="the run as one JSON object, with line ids")
-    s.set_defaults(fn=cmd_describe)
-
-
 def cmd_describe(a: argparse.Namespace) -> None:
     """`describe keepers [--since DAY] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
     [--dry-run] [--json]`: a derived note/v1 line per standing keeper (RFC 0024) whose photo file is
@@ -189,8 +114,8 @@ def cmd_describe(a: argparse.Namespace) -> None:
     prints the install and fetch lines and exits 2."""
     from ..labs import describe
 
-    if a.what != "keepers":
-        print(f"describe: keepers can be described, not {a.what!r}", file=sys.stderr)
+    if a.source != "keepers":
+        print(f"describe: keepers can be described, not {a.source!r}", file=sys.stderr)
         sys.exit(2)
     if a.since is not None:
         try:
@@ -261,25 +186,99 @@ def _infer_keepers(a: argparse.Namespace) -> None:
 
 
 def derive_arguments(sub: Subparsers) -> None:
-    """`logbook derive`."""
+    """`logbook derive stays|flights|keepers|transcripts|descriptions`: what the record reads out of
+    itself. `flights` and `keepers` were `infer`, `transcripts` was `transcribe`, `descriptions`
+    was `describe`, until 0.6; each keeps its options."""
     s = sub.add_parser(
-        "derive", help="read the record into stays and moves (`derive stays`); nothing is appended"
+        "derive",
+        help="what the record reads out of itself: stays (nothing appended); flights and keepers"
+        " (inferred, RFC 0013, RFC 0024); transcripts of voice memos and descriptions of keepers, by a"
+        " local model, nothing leaving the machine",
     )
-    s.add_argument(
-        "what", choices=["stays"], help="stays: stays, stops and moves per subject, and each night"
+    verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")
+
+    v = verbs.add_parser(
+        "stays", help="stays, stops and moves per subject, and each night; nothing is appended"
     )
-    s.add_argument("--day", metavar="YYYY-MM-DD", help="one local day (default today)")
-    s.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
-    s.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range (default --since)")
-    s.add_argument("--subject", metavar="ID", help="only this asset's track (assets.json), or `owner`")
-    s.add_argument(
+    v.add_argument("--day", metavar="YYYY-MM-DD", help="one local day (default today)")
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="first day of a range")
+    v.add_argument("--until", metavar="YYYY-MM-DD", help="last day of a range (default --since)")
+    v.add_argument("--subject", metavar="ID", help="only this asset's track (assets.json), or `owner`")
+    v.add_argument(
         "--airports",
         metavar="FILE",
         help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
-    s.add_argument("--dry-run", action="store_true", help="never create policy/stays.json; say what applies")
-    s.add_argument("--json", action="store_true", help="the segments and nights as one JSON object")
-    s.set_defaults(fn=cmd_derive)
+    v.add_argument("--dry-run", action="store_true", help="never create policy/stays.json; say what applies")
+    v.add_argument("--json", action="store_true", help="the segments and nights as one JSON object")
+    v.set_defaults(fn=cmd_derive)
+
+    for what, text in (
+        ("flights", "flight lines from the record's own calendar entries and location points (RFC 0013)"),
+        ("keepers", "the photos to keep: favourites and the Art album (RFC 0024)"),
+    ):
+        v = verbs.add_parser(what, help=text)
+        v.add_argument("--since", metavar="YYYY-MM-DD", help="only calendar entries from this local day")
+        v.add_argument("--until", metavar="YYYY-MM-DD", help="… up to this local day, inclusive")
+        v.add_argument(
+            "--airports",
+            metavar="FILE",
+            help="a CSV (iata,icao,name,lat,lon,tz) added to the airports table"
+            f" (default ${flights.AIRPORTS_ENV})",
+        )
+        v.add_argument("--dry-run", action="store_true", help="say what would be written; write nothing")
+        v.set_defaults(fn=cmd_infer)
+
+    v = verbs.add_parser(
+        "transcripts",
+        help="a transcript/v1 line per voice memo whose audio is in the store, by a local engine"
+        " (RFC 0004); nothing leaves the machine",
+    )
+    v.add_argument("source", metavar="what", help="what to transcribe: voice-memos")
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only memos from this local day on")
+    v.add_argument(
+        "--model",
+        default=TRANSCRIBE_DEFAULT_MODEL,
+        help="the Whisper model: a size (tiny, base, small, medium, large-v3) or a Hugging Face"
+        f" repository (default {TRANSCRIBE_DEFAULT_MODEL})",
+    )
+    v.add_argument("--dry-run", action="store_true", help="list what would be transcribed; write nothing")
+    v.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the model first when it is not on this machine (the only network use, ever)",
+    )
+    v.set_defaults(fn=cmd_transcribe)
+
+    v = verbs.add_parser(
+        "descriptions",
+        help="a derived note per keeper whose photo file is reachable — one sentence and the visible"
+        " things, by a local vision model (RFC 0024, RFC 0010); nothing leaves the machine",
+    )
+    v.add_argument("source", metavar="what", help="what to describe: keepers")
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only keepers from this local day on")
+    v.add_argument("--limit", type=int, metavar="N", help="describe at most N photos this run")
+    v.add_argument(
+        "--photos",
+        action="append",
+        metavar="DIR",
+        help="a folder holding the photo files: an Apple Photos library (.photoslibrary, by asset UUID) or"
+        " any folder (by file name); may repeat. The record's own attachment store is always searched",
+    )
+    v.add_argument(
+        "--model",
+        default=DESCRIBE_DEFAULT_MODEL,
+        metavar="NAME",
+        help=f"the MLX vision model's repository (default {DESCRIBE_DEFAULT_MODEL})",
+    )
+    v.add_argument("--dry-run", action="store_true", help="list what would be described; write nothing")
+    v.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the model first when it is not on this machine (the only network use, ever)",
+    )
+    v.add_argument("--json", action="store_true", help="the run as one JSON object, with line ids")
+    v.set_defaults(fn=cmd_describe)
 
 
 def cmd_derive(a: argparse.Namespace) -> None:

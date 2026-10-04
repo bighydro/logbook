@@ -338,7 +338,7 @@ def test_describe_without_an_engine_prints_the_install_and_fetch_lines_and_exits
         describe, "detect", lambda model, **_k: (_ for _ in ()).throw(describe.EngineMissing("x"))
     )
     with pytest.raises(SystemExit) as stop:
-        cli.main(["describe", "keepers"])
+        cli.main(["derive", "descriptions", "keepers"])
     assert stop.value.code == 2
     err = capsys.readouterr().err
     assert "openlogbook[describe]" in err and "describe keepers --fetch-model" in err
@@ -353,7 +353,7 @@ def test_describe_with_the_model_missing_prints_the_fetch_line_and_exits_2(
     engine = FakeVision(ready=False)
     monkeypatch.setattr(describe, "detect", lambda model, **_k: engine)
     with pytest.raises(SystemExit) as stop:
-        cli.main(["describe", "keepers", "--photos", str(root / "pictures")])
+        cli.main(["derive", "descriptions", "keepers", "--photos", str(root / "pictures")])
     assert stop.value.code == 2
     err = capsys.readouterr().err
     assert "fake-vlm-4bit" in err and "--fetch-model" in err and engine.fetched == 0
@@ -395,7 +395,7 @@ def test_describe_keepers_writes_the_notes_and_show_prints_each_under_its_keeper
     described = [r for r in rows if r.startswith(" " * 20) or describe.SOURCE in r]
     assert described and not any("Kari" in r for r in described), "a face's name never reaches a description"
     # the rerun says so and writes nothing
-    out = _run(capsys, "describe", "keepers", "--photos", str(root / "pictures"), "--json")
+    out = _run(capsys, "derive", "descriptions", "keepers", "--photos", str(root / "pictures"), "--json")
     data = json.loads(out)
     assert data["written"] == 0 and data["already"] == 2 and data["engine"] == "fake-vision"
     assert data["model"] == "fake-vlm-4bit" and data["unparsed"] == 2
@@ -419,8 +419,8 @@ def test_describe_only_knows_keepers_and_a_bad_since_exits_2(
 ) -> None:
     _record(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as stop:
-        cli.main(["describe", "photos"])
+        cli.main(["derive", "descriptions", "photos"])
     assert stop.value.code == 2 and "keepers" in capsys.readouterr().err
     with pytest.raises(SystemExit) as stop:
-        cli.main(["describe", "keepers", "--since", "yesterday"])
+        cli.main(["derive", "descriptions", "keepers", "--since", "yesterday"])
     assert stop.value.code == 2
