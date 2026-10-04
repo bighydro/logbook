@@ -291,7 +291,7 @@ def test_receive_verifies_and_stores_the_page_outside_the_chain(
     _, ola = records
     _circle_add(monkeypatch, ola, "ines", INES_SEED)
     before = ola.meta
-    out = _run(capsys, "receive", str(ines_page))
+    out = _run(capsys, "import", "page", str(ines_page))
     assert "from ines" in out and DAY in out and "4 lines" in out
     page = ola.root / "circle" / "ines" / DAY
     assert (page / "manifest.json").read_bytes() == _members(ines_page)["manifest.json"]
@@ -320,12 +320,12 @@ def test_receive_with_from_names_the_key_to_check_against(
     _, ola = records
     _circle_add(monkeypatch, ola, "ines", INES_SEED)
     _circle_add(monkeypatch, ola, "kari", OLA_SEED)  # a key that is not Ines's, under another name
-    code, err = _failure(capsys, "receive", str(ines_page), "--from", "kari")
+    code, err = _failure(capsys, "import", "page", str(ines_page), "--from", "kari")
     assert code == 1 and "kari" in err and "signature" in err
     assert not (ola.root / "circle").exists()
-    _run(capsys, "receive", str(ines_page), "--from", "ines")
+    _run(capsys, "import", "page", str(ines_page), "--from", "ines")
     assert (ola.root / "circle" / "ines" / DAY / "manifest.json").is_file()
-    assert _failure(capsys, "receive", str(ines_page), "--from", "nils")[0] == 2
+    assert _failure(capsys, "import", "page", str(ines_page), "--from", "nils")[0] == 2
 
 
 def test_receive_refuses_an_unknown_sender(
@@ -336,7 +336,7 @@ def test_receive_refuses_an_unknown_sender(
 ):
     _, ola = records
     use(monkeypatch, ola)
-    code, err = _failure(capsys, "receive", str(ines_page))
+    code, err = _failure(capsys, "import", "page", str(ines_page))
     assert code == 1 and "circle add" in err and INES_ID in err
     assert not (ola.root / "circle").exists()
 
@@ -361,10 +361,10 @@ def test_receive_refuses_a_tampered_line(
     manifest["lines_sha256"] = hashlib.sha256(raw).hexdigest()
     altered = dict(members, **{"lines.jsonl": raw, "manifest.json": json.dumps(manifest).encode("utf-8")})
     # Changed and not re-signed: the signature no longer covers the manifest.
-    code, err = _failure(capsys, "receive", str(_rewrite(ines_page, dict(altered))))
+    code, err = _failure(capsys, "import", "page", str(_rewrite(ines_page, dict(altered))))
     assert code == 1 and "signature" in err
     # Re-signed by the sender's own key: the line still does not hash to what it claims.
-    code, err = _failure(capsys, "receive", str(_rewrite(ines_page, dict(altered), INES_SEED)))
+    code, err = _failure(capsys, "import", "page", str(_rewrite(ines_page, dict(altered), INES_SEED)))
     assert code == 1 and "line 3" in err and "hash" in err
     assert not (ola.root / "circle").exists()
 
@@ -380,7 +380,7 @@ def test_receive_checks_every_file_against_the_manifest(
     good = _members(ines_page)
 
     def refused(members: dict[str, bytes], *words: str, seed: bytes | None = INES_SEED) -> None:
-        code, err = _failure(capsys, "receive", str(_rewrite(ines_page, members, seed)))
+        code, err = _failure(capsys, "import", "page", str(_rewrite(ines_page, members, seed)))
         assert code == 1, err
         for word in words:
             assert word in err, (word, err)
@@ -432,7 +432,7 @@ def test_receive_checks_every_file_against_the_manifest(
     # Not a zip at all.
     bad = ines_page.with_name("not.zip")
     bad.write_bytes(b"hello")
-    code, err = _failure(capsys, "receive", str(bad))
+    code, err = _failure(capsys, "import", "page", str(bad))
     assert code == 1 and "not a zip" in err
 
 
@@ -445,18 +445,18 @@ def test_receive_the_same_page_again_and_a_newer_one(
     ines, ola = records
     ines_page = share.share_day(ines, DAY, "ola", 2, tmp_path / "first.zip", created=CREATED).out
     _circle_add(monkeypatch, ola, "ines", INES_SEED)
-    _run(capsys, "receive", str(ines_page))
-    assert "already" in _run(capsys, "receive", str(ines_page))
+    _run(capsys, "import", "page", str(ines_page))
+    assert "already" in _run(capsys, "import", "page", str(ines_page))
     # Ines shares the day again, later, at tier 1 this time: the newer page replaces the older whole.
     newer = share.share_day(ines, DAY, "ola", 1, tmp_path / "newer.zip", created="2026-06-20T08:00:00Z").out
-    out = _run(capsys, "receive", str(newer))
+    out = _run(capsys, "import", "page", str(newer))
     assert "replaced" in out
     page = ola.root / "circle" / "ines" / DAY
     assert json.loads((page / "manifest.json").read_text(encoding="utf-8"))["max_tier"] == 1
     assert (page / "attachments" / PHOTO_SHA).read_bytes() == PHOTO_BYTES  # the photo is tier 1: still there
     assert json.loads((page / "manifest.json").read_text(encoding="utf-8"))["lines"] == 3
     # An older page never replaces a newer one.
-    code, err = _failure(capsys, "receive", str(ines_page))
+    code, err = _failure(capsys, "import", "page", str(ines_page))
     assert code == 1 and "newer" in err
     assert json.loads((page / "manifest.json").read_text(encoding="utf-8"))["max_tier"] == 1
 
@@ -476,7 +476,7 @@ def test_day_shows_the_received_page_as_a_from_section(
     assert "from ines" not in text
     assert json.loads(_run(capsys, "day", DAY, "--json"))["received"] == []
     _circle_add(monkeypatch, ola, "ines", INES_SEED)
-    _run(capsys, "receive", str(ines_page))
+    _run(capsys, "import", "page", str(ines_page))
     text = _run(capsys, "day", DAY)
     assert "from ines" in text
     assert "4 lines" in text and "location 2" in text and "note 1" in text and "photo 1" in text
@@ -541,9 +541,9 @@ def test_both_ways_and_an_over_tier_line_is_omitted(
     ]  # the note and the transcript stay home
     assert manifest["held_back"] == 2 and manifest["attachments"] == []
     _circle_add(monkeypatch, ola, "ines", INES_SEED)
-    _run(capsys, "receive", str(to_ola))
+    _run(capsys, "import", "page", str(to_ola))
     _circle_add(monkeypatch, ines, "ola", OLA_SEED)
-    _run(capsys, "receive", str(to_ines))
+    _run(capsys, "import", "page", str(to_ines))
     text = _run(capsys, "day", DAY)
     assert "from ola" in text and "2 lines" in text and "Great weekend" not in text
     use(monkeypatch, ola)
@@ -587,7 +587,7 @@ def test_the_committed_fixture_is_received(
             for p in sorted((FIXTURES / name).rglob("*")):
                 if p.is_file():
                     zf.write(p, p.relative_to(FIXTURES / name).as_posix())
-        assert f"from {sender}" in _run(capsys, "receive", str(bundle))
+        assert f"from {sender}" in _run(capsys, "import", "page", str(bundle))
     text = _run(capsys, "day", DAY)
     assert "from ines" in text and "from ola" in text
 

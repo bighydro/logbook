@@ -53,14 +53,14 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 def imported(lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Path:
     """The fake backup, its three sources imported: the lines are in the record, the store is empty."""
     backup = _backup(tmp_path, sources=("whatsapp", "imessage", "apple-photos"))
-    cli.main(["import-backup", str(backup), "--only", "whatsapp,imessage,photos"])
+    cli.main(["import", "backup", str(backup), "--only", "whatsapp,imessage,photos"])
     capsys.readouterr()
     assert not (lb.root / "attachments").exists()
     return backup
 
 
 def _attach(*args: str) -> None:
-    cli.main(["attach", *args])
+    cli.main(["import", "attachments", *args])
 
 
 def _store(lb: Logbook) -> dict[str, bytes]:
@@ -213,7 +213,7 @@ def test_attach_import_backup_decrypts_an_encrypted_backups_media_on_the_way(
 ):
     built = _encrypted_backup(tmp_path)
     monkeypatch.setenv("LOGBOOK_BACKUP_PASSWORD", PASSWORD)
-    cli.main(["import-backup", str(built.folder), "--only", "imessage"])
+    cli.main(["import", "backup", str(built.folder), "--only", "imessage"])
     capsys.readouterr()
     before = _snapshot(built.folder)
     _attach("import-backup", str(built.folder), "--only", "imessage")

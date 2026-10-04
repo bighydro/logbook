@@ -229,7 +229,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 
 
 def _run(*args: str) -> None:
-    cli.main(["import-backup", *args])
+    cli.main(["import", "backup", *args])
 
 
 # -- round trip -----------------------------------------------------------------------------------
