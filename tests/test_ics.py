@@ -816,6 +816,7 @@ def test_takeout_dispatch_stub_lists_calendar_beside_location():
         "contacts",
         "maps",
         "home",
+        "fit",
     )
     assert takeout_calendar.NAME == ics.NAME == "ics"
 

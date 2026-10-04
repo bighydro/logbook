@@ -106,6 +106,7 @@ nav:
       - "Takeout: Tasks": adapters/takeout-tasks.md
       - "Takeout: Maps (your places)": adapters/takeout-maps.md
       - "Takeout: Home App": adapters/takeout-home.md
+      - "Takeout: Fit": adapters/takeout-fit.md
       - "Takeout: YouTube": adapters/takeout-youtube.md
       - Bounties: adapter-bounties.md
       - "Passages: a deck log as sea legs": adapters/passages.md

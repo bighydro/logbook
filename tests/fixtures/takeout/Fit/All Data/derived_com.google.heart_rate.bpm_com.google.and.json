@@ -1,0 +1,65 @@
+{
+  "Data Source": "derived:com.google.heart_rate.bpm:com.google.android.gms:merge_heart_rate_bpm",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 62.0
+          }
+        }
+      ],
+      "dataTypeName": "com.google.heart_rate.bpm",
+      "endTimeNanos": 1780893605000000000,
+      "startTimeNanos": 1780893605000000000,
+      "modifiedTimeMillis": 1780893606234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.heart_rate.bpm:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 64.0
+          }
+        }
+      ],
+      "dataTypeName": "com.google.heart_rate.bpm",
+      "endTimeNanos": 1780893640000000000,
+      "startTimeNanos": 1780893640000000000,
+      "modifiedTimeMillis": 1780893641234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.heart_rate.bpm:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 70.0
+          }
+        }
+      ],
+      "dataTypeName": "com.google.heart_rate.bpm",
+      "endTimeNanos": 1780893670000000000,
+      "startTimeNanos": 1780893670000000000,
+      "modifiedTimeMillis": 1780893671234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.heart_rate.bpm:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 118.0
+          }
+        }
+      ],
+      "dataTypeName": "com.google.heart_rate.bpm",
+      "endTimeNanos": 1780893960000000000,
+      "startTimeNanos": 1780893960000000000,
+      "modifiedTimeMillis": 1780893961234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.heart_rate.bpm:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    }
+  ]
+}

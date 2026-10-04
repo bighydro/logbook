@@ -1,0 +1,20 @@
+{
+  "Data Source": "derived:com.google.body.fat.percentage:com.google.android.gms:merge_body_fat_percentage",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "fpVal": 21.5
+          }
+        }
+      ],
+      "dataTypeName": "com.google.body.fat.percentage",
+      "endTimeNanos": 1780894920000000000,
+      "startTimeNanos": 1780894920000000000,
+      "modifiedTimeMillis": 1780894921234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.body.fat.percentage:com.google.android.apps.fitness:Withings:Body+:9e8d7c6b:"
+    }
+  ]
+}

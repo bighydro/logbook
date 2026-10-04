@@ -93,6 +93,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "takeout.contacts",
     "takeout.maps",
     "takeout.home",
+    "takeout.fit",
     "ios_contacts",
     "whatsapp",
     "whatsapp_contacts",
@@ -221,6 +222,7 @@ TAKEOUT = (
     "contacts",
     "maps",
     "home",
+    "fit",
 )
 ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as `import-backup --only`
     "flights": "flighty",

@@ -1,0 +1,10 @@
+{
+  "fitnessActivity": "sleep",
+  "startTime": "2026-06-07T23:15:00.000+02:00",
+  "endTime": "2026-06-08T06:35:00.000+02:00",
+  "duration": "26400.0s",
+  "application": {
+    "packageName": "com.google.android.wearable.app"
+  },
+  "aggregate": []
+}

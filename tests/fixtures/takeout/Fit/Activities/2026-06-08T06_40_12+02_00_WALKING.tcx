@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+  <Activities><Activity Sport="Walking"><Id>2026-06-08T04:40:12.000Z</Id></Activity></Activities>
+</TrainingCenterDatabase>

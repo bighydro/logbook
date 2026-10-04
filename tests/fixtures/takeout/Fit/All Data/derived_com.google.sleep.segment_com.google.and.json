@@ -1,0 +1,95 @@
+{
+  "Data Source": "derived:com.google.sleep.segment:com.google.android.gms:merged",
+  "Data Points": [
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 1
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780869600000000000,
+      "startTimeNanos": 1780867800000000000,
+      "modifiedTimeMillis": 1780869601234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 4
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780875000000000000,
+      "startTimeNanos": 1780869600000000000,
+      "modifiedTimeMillis": 1780875001234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 5
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780878600000000000,
+      "startTimeNanos": 1780875000000000000,
+      "modifiedTimeMillis": 1780878601234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 6
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780880400000000000,
+      "startTimeNanos": 1780878600000000000,
+      "modifiedTimeMillis": 1780880401234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 3
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780881000000000000,
+      "startTimeNanos": 1780880400000000000,
+      "modifiedTimeMillis": 1780881001234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    },
+    {
+      "fitValue": [
+        {
+          "value": {
+            "intVal": 4
+          }
+        }
+      ],
+      "dataTypeName": "com.google.sleep.segment",
+      "endTimeNanos": 1780893000000000000,
+      "startTimeNanos": 1780881000000000000,
+      "modifiedTimeMillis": 1780893001234,
+      "rawTimestampNanos": 0,
+      "originDataSourceId": "raw:com.google.sleep.segment:com.google.android.wearable.app:Fossil:Gen 6:0a1b2c3d:"
+    }
+  ]
+}
