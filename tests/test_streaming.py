@@ -4,6 +4,7 @@ locate through the index and never scan the files."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -80,12 +81,57 @@ def test_a_file_out_of_seq_order_is_refused_by_lines_and_still_verifies(lb: Logb
 
 
 def test_a_parse_error_is_still_reported_by_file_and_line(lb: Logbook):
+    """A line that is not one is named by file and line number; the file is read no further, and
+    every line read is still verified and counted: the lines before it, and every other file's
+    (the seqs the file held after it are then reported missing)."""
     path = lb.root / "logbook" / "2026" / "02.jsonl"
     rows = path.read_bytes().splitlines(keepends=True)
-    rows[4] = b'{"seq": 1, "seq": 2}\n'
+    rows[4] = b'{"seq": 1, "seq": 2}\n'  # seq 15; the file held 18, 21, 24, 27 and 30 after it
     path.write_bytes(b"".join(rows))
-    seq, _head, errors = lb.verify()
-    assert seq == 0 and errors == ["logbook/2026/02.jsonl line 5: duplicate key 'seq'"]
+    seq, head, errors = lb.verify()
+    assert "logbook/2026/02.jsonl line 5: duplicate key 'seq'" in errors
+    assert seq == 29 and head == lb.line_by_seq(29)["hash"]
+    assert any(e.startswith("line 15: seq 16 expected 15") for e in errors)
+
+
+def _cut_inside_the_last_line(lb: Logbook) -> tuple[Path, int, str]:
+    """The month file holding the last line (seq 30), cut in the middle of that line, and
+    `logbook.json` as a crash leaves it (SPEC §3, write order: behind the files, never ahead):
+    naming seq 29. Returns the file, the number of the cut line in it, and the head of seq 29."""
+    path = lb.root / "logbook" / "2026" / "02.jsonl"
+    rows = path.read_bytes().splitlines(keepends=True)
+    path.write_bytes(b"".join(rows[:-1]) + rows[-1][: len(rows[-1]) // 2])
+    head = str(lb.line_by_seq(29)["hash"])
+    meta = json.loads((lb.root / "logbook.json").read_text(encoding="utf-8"))
+    meta["seq"], meta["head"] = 29, head
+    (lb.root / "logbook.json").write_text(json.dumps(meta), encoding="utf-8")
+    return path, len(rows), head
+
+
+def test_a_file_cut_inside_its_last_line_reports_the_last_good_head(lb: Logbook):
+    """A crash can tear the last line of a month file. `verify` reports the lines before the cut
+    and their head, not seq 0 and GENESIS, and names the cut line by file and line number."""
+    path, n, head = _cut_inside_the_last_line(lb)
+    seq, got, errors = lb.verify()
+    assert (seq, got) == (29, head)
+    assert errors == [f"logbook/2026/02.jsonl line {n}: the file ends inside this line (cut short)"]
+    assert path.read_bytes().count(b"\n") == n - 1
+
+
+def test_cli_verify_on_a_cut_file_exits_one_with_one_plain_sentence(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`logbook verify` on the torn record: exit 1, the last good seq and head on the first line,
+    and one sentence naming the cut line, with no JSON decoder text and no traceback."""
+    _path, n, head = _cut_inside_the_last_line(lb)
+    with pytest.raises(SystemExit) as e:
+        cli.main(["verify"])
+    assert e.value.code == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out == [
+        f"INVALID — 1 problem(s); 29 lines read, head {head}:",
+        f"  logbook/2026/02.jsonl line {n}: the file ends inside this line (cut short)",
+    ]
 
 
 # -- verify --progress: one line per month file, stdout byte-identical ---------------------------

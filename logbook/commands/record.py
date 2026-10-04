@@ -369,7 +369,8 @@ def verify_arguments(sub: Subparsers) -> None:
 
 
 def cmd_verify(a: argparse.Namespace) -> None:
-    """Files only, never the index (ADR 0001)."""
+    """Files only, never the index (ADR 0001). An invalid record still prints the seq and head of
+    the lines read: a crash-torn month file reports the last line written whole (SPEC §3)."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
     counts: dict[str, int] = {}
@@ -386,7 +387,7 @@ def cmd_verify(a: argparse.Namespace) -> None:
                 f"expected seq={exp['seq']} head={exp['head'][:12]}…, got seq={seq} head={head[:12]}…"
             )
     if errors:
-        print(f"INVALID — {len(errors)} problem(s):")
+        print(f"INVALID — {len(errors)} problem(s); {seq} lines read, head {head}:")
         for e in errors:
             print("  " + e)
         sys.exit(1)
