@@ -20,13 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 READERS = [
     ["show", "2026-06-10"],
     ["day", "2026-06-10"],
-    ["days", "--from", "2026-06-08", "--to", "2026-06-21"],
-    ["trips", "--year", "2026"],
+    ["show", "days", "--from", "2026-06-08", "--to", "2026-06-21"],
+    ["show", "trips", "--year", "2026"],
     ["rollup", "nights", "--year", "2026"],
     ["rollup", "health", "--year", "2026"],
-    ["stats"],
-    ["stats", "--health"],
-    ["sources"],
+    ["show", "stats"],
+    ["show", "stats", "--health"],
+    ["doctor", "sources"],
     ["verify"],
 ]
 
@@ -80,7 +80,7 @@ def test_an_exit_status_survives_a_pipe_that_breaks_on_the_final_flush(
     pipe = _LatePipe()
     monkeypatch.setattr(sys, "stdout", pipe)
     with pytest.raises(SystemExit) as e:
-        cli.main(["sources", "--gaps", "--expect", "no-such-source"])
+        cli.main(["doctor", "sources", "--gaps", "--expect", "no-such-source"])
     assert e.value.code == 1 and pipe.asked
     assert capsys.readouterr().err == ""
 
@@ -134,6 +134,6 @@ def test_a_flagged_gap_report_keeps_its_status_when_the_reader_quit_already(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
-    r = _pipeline(lb.root, "sources --gaps --expect no-such-source | true")
+    r = _pipeline(lb.root, "doctor sources --gaps --expect no-such-source | true")
     assert r.returncode == 1, r.stderr
     assert r.stderr == ""

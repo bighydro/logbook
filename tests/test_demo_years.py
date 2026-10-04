@@ -84,7 +84,7 @@ def people_report(record: Logbook) -> people.Report:
 def test_the_life_verifies_and_holds_every_profile(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     out = _run(capsys, "verify")
     assert out.startswith("valid")
-    stats = _json(capsys, "stats")
+    stats = _json(capsys, "show", "stats")
     kinds = {k["kind"] for k in stats["kinds"]}
     assert kinds >= demo.KINDS, demo.KINDS - kinds
     schemas = {line["payload"]["schema"] for line in lb.lines()}
@@ -213,7 +213,7 @@ def test_health_only_from_the_year_the_watch_appears(
     first = min(local_date(line["at"], demo.TZ) for line in lb.lines() if line["kind"] == "health")
     assert first == demo_life.birthday(YEARS, demo_life.WATCH_AGE).isoformat()
     assert years[2019]["health"] == 0 and years[2021]["health"] > 300
-    days = _json(capsys, "stats", "--health")["days"]
+    days = _json(capsys, "show", "stats", "--health")["days"]
     assert days[0]["day"] >= first
     for d in days[1:30]:
         assert d["sleep_h"] is not None and 5.5 <= d["sleep_h"] <= 9.5, d
@@ -247,22 +247,22 @@ def test_the_move_between_cities(lb: Logbook) -> None:
 
 
 def test_trips_in_an_early_and_a_late_year(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    early = _json(capsys, "trips", "--year", "2001")["trips"]
+    early = _json(capsys, "show", "trips", "--year", "2001")["trips"]
     assert early, "the summer at the family cabin, the first year with a phone"
     assert any(demo_life.BG_CABIN.name in t["route"] for t in early), [t["route"] for t in early]
     assert all(t["nights"] < 60 for t in early), "a year without a track is not one long trip"
-    late = _json(capsys, "trips", "--year", "2025")["trips"]
+    late = _json(capsys, "show", "trips", "--year", "2025")["trips"]
     assert late
     assert any(t["flights_in"] for t in late), "a flight in"
     assert any(demo.CABIN.name in t["route"] for t in late)
     for year in ("2001", "2025"):
-        text = _run(capsys, "trips", "--year", year)
+        text = _run(capsys, "show", "trips", "--year", year)
         assert "night" in text, text
-    assert _json(capsys, "trips", "--year", "1990")["trips"] == [], "no phone, no track, no trips"
+    assert _json(capsys, "show", "trips", "--year", "1990")["trips"] == [], "no phone, no track, no trips"
 
 
 def test_the_long_trips(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    term = max(_json(capsys, "trips", "--year", "2008")["trips"], key=lambda t: t["nights"])
+    term = max(_json(capsys, "show", "trips", "--year", "2008")["trips"], key=lambda t: t["nights"])
     assert term["nights"] >= 100 and "Barcelona" in " ".join(term["route"]), term["route"]
     flights = _json(capsys, "rollup", "flights")
     by_year = {y["year"]: y for y in flights["years"]}

@@ -292,7 +292,7 @@ def test_evidence_is_read_in_the_fortnight_after_the_task_only() -> None:
 def test_tasks_lists_the_tasks_and_open_hides_the_done(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    out = _run(capsys, "tasks")
+    out = _run(capsys, "promises", "tasks")
     assert out.startswith("7 tasks, 6 open")
     row = next(line for line in out.splitlines() if "Book flights" in line)
     assert "2026-06-08" in row and "08:30" in row and "open" in row
@@ -301,12 +301,12 @@ def test_tasks_lists_the_tasks_and_open_hides_the_done(
     row = next(line for line in out.splitlines() if "long rope" in line)
     assert "done" in row and "2026-06-11" in row
     assert "Retract me" not in out
-    open_only = _run(capsys, "tasks", "--open")
+    open_only = _run(capsys, "promises", "tasks", "--open")
     assert open_only.startswith("6 open tasks") and "long rope" not in open_only
 
 
 def test_tasks_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = json.loads(_run(capsys, "tasks", "--json"))
+    out = json.loads(_run(capsys, "promises", "tasks", "--json"))
     assert set(out) == {"open_only", "propose_done", "window_days", "matcher", "tasks", "proposals"}
     assert out["open_only"] is False and out["propose_done"] is False and out["matcher"] is None
     assert out["proposals"] == [] and len(out["tasks"]) == 7
@@ -318,7 +318,7 @@ def test_tasks_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[str
 def test_propose_done_prints_proposals_with_the_evidence_line_id(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    out = _run(capsys, "tasks", "--propose-done")
+    out = _run(capsys, "promises", "tasks", "--propose-done")
     head = out.splitlines()[0]
     assert head.startswith("4 open tasks") and "rules" in head and "not facts" in head
     assert "logbook tasks done <id> --evidence <line>" in head
@@ -333,7 +333,7 @@ def test_propose_done_prints_proposals_with_the_evidence_line_id(
     assert "×2 sources" in call and "event" in call
     assert "Zürich newsletter" not in out and "Book club" not in out and "standup" not in out
     assert "2 open tasks with no evidence found" in out
-    out = json.loads(_run(capsys, "tasks", "--propose-done", "--json"))
+    out = json.loads(_run(capsys, "promises", "tasks", "--propose-done", "--json"))
     assert out["propose_done"] is True and out["matcher"]["name"] == "rules" and out["window_days"] == 14
     row = next(p for p in out["proposals"] if p["kind"] == "transaction")
     assert set(row) == {
@@ -350,7 +350,7 @@ def test_done_appends_the_closing_task_line_and_nothing_else(
     evidence = _line_id(lb, subject=FLIGHTS_MAIL)
     before = _line_id(lb, raw_id="Zmxp@2026-06-08T06:30:00Z")
     seq = lb.meta["seq"]
-    out = _run(capsys, "tasks", "done", flights, "--evidence", evidence)
+    out = _run(capsys, "promises", "tasks", "done", flights, "--evidence", evidence)
     assert f"#{seq + 1}" in out and "done" in out and "Book flights to Zürich" in out
     assert lb.meta["seq"] == seq + 1
     task = lb.line_by_seq(seq + 1)
@@ -370,12 +370,12 @@ def test_done_appends_the_closing_task_line_and_nothing_else(
         "extra": {"evidence": evidence},
     }
     assert lb.verify()[2] == []
-    listed = json.loads(_run(capsys, "tasks", "--json"))
+    listed = json.loads(_run(capsys, "promises", "tasks", "--json"))
     row = next(t for t in listed["tasks"] if t["id"] == flights)
     assert row["status"] == "done" and row["line"] == task["id"] and len(listed["tasks"]) == 7
-    open_only = json.loads(_run(capsys, "tasks", "--open", "--json"))
+    open_only = json.loads(_run(capsys, "promises", "tasks", "--open", "--json"))
     assert flights not in {t["id"] for t in open_only["tasks"]}
-    proposed = json.loads(_run(capsys, "tasks", "--propose-done", "--json"))
+    proposed = json.loads(_run(capsys, "promises", "tasks", "--propose-done", "--json"))
     assert flights not in {p["task"] for p in proposed["proposals"]}
 
 
@@ -383,7 +383,7 @@ def test_done_without_evidence_closes_too_and_the_payload_says_nothing_of_eviden
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     seq = lb.meta["seq"]
-    _run(capsys, "tasks", "done", taskdone.task_id("cGxh"))
+    _run(capsys, "promises", "tasks", "done", taskdone.task_id("cGxh"))
     task = lb.line_by_seq(seq + 1)
     assert task is not None and task["payload"]["title"] == "Water the plants"
     assert "extra" not in task["payload"] and "due" not in task["payload"] and "list" not in task["payload"]
@@ -394,13 +394,13 @@ def test_done_twice_appends_nothing_and_unknown_ids_are_refused(
 ) -> None:
     rope = taskdone.task_id("cm9w")
     seq = lb.meta["seq"]
-    out = _run(capsys, "tasks", "done", rope)
+    out = _run(capsys, "promises", "tasks", "done", rope)
     assert "already done" in out and lb.meta["seq"] == seq
     with pytest.raises(SystemExit) as e:
-        cli.main(["tasks", "done", "0123456789abcdef"])
+        cli.main(["promises", "tasks", "done", "0123456789abcdef"])
     assert e.value.code == 2 and "no task 0123456789abcdef" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["tasks", "done", taskdone.task_id("Zmxp"), "--evidence", "not-a-line"])
+        cli.main(["promises", "tasks", "done", taskdone.task_id("Zmxp"), "--evidence", "not-a-line"])
     assert e.value.code == 2 and "no line not-a-line" in capsys.readouterr().err
     assert lb.meta["seq"] == seq
 
@@ -411,10 +411,10 @@ def test_a_record_with_no_tasks_says_so(
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append("2026-06-01T10:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "Calm day."})
-    assert _run(capsys, "tasks").startswith("no tasks")
-    assert _run(capsys, "tasks", "--propose-done").startswith("no tasks")
-    assert _run(capsys, "tasks", "--open").startswith("no tasks")
-    assert json.loads(_run(capsys, "tasks", "--json"))["tasks"] == []
+    assert _run(capsys, "promises", "tasks").startswith("no tasks")
+    assert _run(capsys, "promises", "tasks", "--propose-done").startswith("no tasks")
+    assert _run(capsys, "promises", "tasks", "--open").startswith("no tasks")
+    assert json.loads(_run(capsys, "promises", "tasks", "--json"))["tasks"] == []
 
 
 # -- the matcher is a value ----------------------------------------------------------------------------

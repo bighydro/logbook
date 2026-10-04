@@ -14,7 +14,7 @@ pipx install openlogbook                # Linux; or anywhere Python is: uv tool 
 pipx install openlogbook                # Windows, in Terminal, once pipx is there; the steps: docs/install.md
 logbook demo --out ~/Demo/Logbook       # a month of a person who does not exist, every profile
 export LOGBOOK_HOME=~/Demo/Logbook
-logbook trips                           # a cabin weekend, Zürich, a week aboard, Copenhagen
+logbook show trips                      # a cabin weekend, Zürich, a week aboard, Copenhagen
 logbook day 2026-06-17                  # one day read back: nights, stays, who was there, health
 logbook verify                          # the chain is intact
 ```
@@ -27,9 +27,9 @@ Then your own: `logbook setup` asks one question at a time ([the first hour](doc
 
 **The record.** Everything that happened to you, written once, as JSON lines in files you own. One file per month, every line hash-chained to the one before, nothing ever edited or pruned. Fifty-odd adapters read the exports and app stores you already have: Google Takeout, an iPhone backup, Apple Health, Photos, WhatsApp, iMessage, mail, calendars, flights, music, money, boats and aircraft. Live sources (`sync`) write the same line for the same event, so backfill and live never duplicate. What a tier 2 or 3 line says can be sealed at rest with [age](https://age-encryption.org) to keys only you hold; the chain verifies without any key ([sealing](docs/tour.md#sealing-tiers-2-and-3), [RFC 0029](rfcs/0029-encryption-at-rest.md)).
 
-**The recount.** The record reads your life back to you without your effort. `day` is one calendar day: the night, the stays, who was there, health, weather, what you wrote. `trips` finds runs of nights away; `year` composes a year; `digest` is the day in 25 lines with one question you may ignore; `rollup`, `ledger`, `people`, `promises`, `tasks` and `search` each read one aspect. `serve` shows it in a browser on this machine, `year --print` lays it out for paper, `export vault` renders it for Obsidian or Logseq, `export site` renders it as static HTML with nothing fetched (the demo persona's forty years are browsable that way at [bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/)), and `mcp` serves it to an agent on this machine behind a tier gate. `lab` runs readers still finding their shape, read-only and with their blind spots written down ([docs/labs.md](docs/labs.md)).
+**The recount.** The record reads your life back to you without your effort. `day` is one calendar day: the night, the stays, who was there, health, weather, what you wrote. `show trips` finds runs of nights away; `show year` composes a year; `digest` is the day in 25 lines with one question you may ignore; `rollup`, `rollup ledger`, `people`, `promises`, `promises tasks` and `search` each read one aspect. `serve` shows it in a browser on this machine, `show year --print` lays it out for paper, `export vault` renders it for Obsidian or Logseq, `export site` renders it as static HTML with nothing fetched (the demo persona's forty years are browsable that way at [bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/)), and `serve mcp` serves it to an agent on this machine behind a tier gate. `lab` runs readers still finding their shape, read-only and with their blind spots written down ([docs/labs.md](docs/labs.md)).
 
-**The circle.** `share day` and `export trip-bundle` write a signed bundle of one day or one trip for a named person; `receive` checks the signature and keeps their side beside your record, never in its chain. Two logbooks, one shared moment, each side its own words and photos.
+**The circle.** `export share day` and `export trip-bundle` write a signed bundle of one day or one trip for a named person; `import page` checks the signature and keeps their side beside your record, never in its chain. Two logbooks, one shared moment, each side its own words and photos.
 
 Nothing here needs the app to make sense: open the files in any editor twenty years from now. The format is one page, [SPEC.md](SPEC.md), and a second implementation written from it alone, [logbook-ts](https://github.com/bighydro/logbook-ts), agrees with this one on every record either writes.
 
@@ -53,7 +53,7 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 | install it, one line on each platform | [Install](docs/install.md) |
 | try it in five minutes, nothing of yours | [Try it](docs/try-it.md) |
 | set up your own record, one question at a time | [The first hour](docs/first-hour.md) |
-| see every command on your own record | [The tour](docs/tour.md) |
+| see every command on your own record | [The tour](docs/tour.md), [the 22 commands](docs/commands.md) |
 | find every page | [The docs](docs/index.md), also at https://bighydro.github.io/logbook/ |
 | understand the format, or implement it | [SPEC.md](SPEC.md), [conformance/](conformance/README.md), [the RFCs](rfcs/README.md) |
 | know how the pieces fit | [ARCHITECTURE.md](ARCHITECTURE.md), [the decisions](docs/adr/README.md) |

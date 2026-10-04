@@ -136,7 +136,7 @@ def test_twelve_picks_one_day_each_rendered_with_the_day_reader(
     lb: Logbook, found: dict[str, Any], capsys: pytest.CaptureFixture[str]
 ) -> None:
     data = found
-    assert _json(capsys, "year", "2026") == data, "the command prints the Year"
+    assert _json(capsys, "show", "year", "2026") == data, "the command prints the Year"
     picks = data["picks"]
     assert [p["month"] for p in picks] == [f"2026-{m:02d}" for m in range(1, 13)]
     before = [(p["day"], p["evidence"], p["page"]) for p in picks[:5]]
@@ -295,7 +295,7 @@ def test_html_is_written_where_asked_and_escapes_what_the_record_says(
     lb.append_many([note(utc("2026-06-13", "19:30"), "<b>bold</b> & done")])
     head = lb.meta["head"]
     out = tmp_path / "pages" / "2026.html"
-    text = _run(capsys, "year", "2026", "--html", str(out))
+    text = _run(capsys, "show", "year", "2026", "--html", str(out))
     assert text == f"year 2026: wrote {out}\n"
     page = out.read_text(encoding="utf-8")
     assert page.startswith("<!doctype html>") and page == year.html(year.read(lb, "2026"))
@@ -310,20 +310,20 @@ def test_a_year_outside_the_record_and_an_empty_record_say_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
-    assert _run(capsys, "year", "2025") == "year 2025: the record has no days in it\n"
-    data = _json(capsys, "year", "2025")
+    assert _run(capsys, "show", "year", "2025") == "year 2025: the record has no days in it\n"
+    data = _json(capsys, "show", "year", "2025")
     assert data["window"] is None and data["trips"] == [] and data["people"] == []
     assert [p["day"] for p in data["picks"]] == [None] * 12
     out = tmp_path / "2025.html"
-    _run(capsys, "year", "2025", "--html", str(out))
+    _run(capsys, "show", "year", "2025", "--html", str(out))
     assert "no days" in out.read_text(encoding="utf-8")
     for bad in ("20x6", "2026-06", "26"):
         with pytest.raises(SystemExit) as e:
-            cli.main(["year", bad])
+            cli.main(["show", "year", bad])
         assert e.value.code == 2 and "not a year" in capsys.readouterr().err
     empty = Logbook.init(tmp_path / "empty", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(empty.root))
-    assert _run(capsys, "year", "2026") == "year 2026: the record has no days in it\n"
+    assert _run(capsys, "show", "year", "2026") == "year 2026: the record has no days in it\n"
 
 
 def test_the_decision_is_written_down() -> None:

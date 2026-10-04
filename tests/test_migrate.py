@@ -229,20 +229,20 @@ def test_cli_verify_and_add_refuse_then_migrate_then_verify(legacy):
     assert r.returncode == 2 and MIGRATE_MESSAGE in r.stderr
     assert lb.meta["seq"] == len(old)
 
-    r = _run(lb.root, "migrate")
+    r = _run(lb.root, "repair", "migrate")
     assert r.returncode == 0, r.stderr
     assert f"migrated {len(old)} lines" in r.stdout and "logbook-0.1" in r.stdout
 
     r = _run(lb.root, "verify")
     assert r.returncode == 0 and r.stdout.startswith(f"valid — {len(old) + 1} lines")
 
-    r = _run(lb.root, "migrate")
+    r = _run(lb.root, "repair", "migrate")
     assert r.returncode == 2 and "nothing to migrate" in r.stderr
 
 
 def test_cli_migrate_takes_root(legacy):
     lb, old = legacy
-    r = _run(Path("/nonexistent"), "migrate", "--root", str(lb.root))
+    r = _run(Path("/nonexistent"), "repair", "migrate", "--root", str(lb.root))
     assert r.returncode == 0, r.stderr
     assert lb.meta["format"] == FORMAT and lb.meta["seq"] == len(old) + 1
 

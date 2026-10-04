@@ -29,15 +29,21 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("day", "2026-06-08"),
     ("day", "2026-06-08", "--json"),
     ("day", "2026-06-17"),  # a night aboard the boat
-    ("days",),
-    ("days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
+    (
+        "show",
+        "days",
+    ),
+    ("show", "days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
     ("show", "2026-06-08", "--raw"),
-    ("trips",),
-    ("trips", "--year", "2026", "--json"),
-    ("trip", "2026-06-09"),
-    ("trip", "2026-06-09", "--json"),
-    ("trip", "2026-06-09", "--html", OUT),
+    (
+        "show",
+        "trips",
+    ),
+    ("show", "trips", "--year", "2026", "--json"),
+    ("show", "trip", "2026-06-09"),
+    ("show", "trip", "2026-06-09", "--json"),
+    ("show", "trip", "2026-06-09", "--html", OUT),
     ("rollup", "countries"),
     ("rollup", "flights"),
     ("rollup", "nights"),
@@ -53,20 +59,29 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("rollup", "flights", "--json"),
     ("derive", "stays", "--day", "2026-06-03", "--dry-run"),
     ("derive", "stays", "--since", "2026-06-01", "--until", "2026-06-30", "--dry-run", "--json"),
-    ("year", "2026"),
-    ("year", "2026", "--json"),
-    ("year", "2026", "--html", OUT),
+    ("show", "year", "2026"),
+    ("show", "year", "2026", "--json"),
+    ("show", "year", "2026", "--html", OUT),
     ("digest", "2026-06-08"),
     ("digest", "2026-06-08", "--json"),
     ("digest", "2026-06-08", "--markdown"),
-    ("stats",),
-    ("stats", "--health", "--json"),
-    ("ledger",),
-    ("keepers",),
-    ("places", "list"),
+    (
+        "show",
+        "stats",
+    ),
+    ("show", "stats", "--health", "--json"),
+    (
+        "rollup",
+        "ledger",
+    ),
+    (
+        "show",
+        "keepers",
+    ),
+    ("setup", "places", "list"),
     ("people",),
-    ("assets", "status"),
-    ("sources", "--gaps"),
+    ("setup", "assets", "status"),
+    ("doctor", "sources", "--gaps"),
     ("search", "cabin"),
     ("verify",),
 )
@@ -114,7 +129,7 @@ def test_a_served_page_opens_no_connection(path: str, lb: Logbook, no_network: l
 
 def test_mcp_inspect_opens_no_connection(no_network: list[str], capsys: pytest.CaptureFixture[str]) -> None:
     """`mcp --inspect` prints the tool table and a sample call; it serves nothing and needs no record."""
-    cli.main(["mcp", "--inspect"])
+    cli.main(["serve", "mcp", "--inspect"])
     out = capsys.readouterr().out
     assert "tools over stdio" in out and '"method": "tools/call"' in out
     assert no_network == [], f"mcp --inspect tried to connect: {no_network}"

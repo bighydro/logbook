@@ -104,7 +104,7 @@ def test_the_tools_are_listed_with_their_schemas(tmp_path: Path, monkeypatch: py
 
 
 def test_inspect_prints_the_tool_list_and_a_sample_call(capsys: pytest.CaptureFixture[str]):
-    cli.main(["mcp", "--inspect"])  # no record, no server: the table alone
+    cli.main(["serve", "mcp", "--inspect"])  # no record, no server: the table alone
     out = capsys.readouterr().out
     for name in mcp_server.TOOLS:
         assert f"\n{name}(" in out or out.startswith(f"{name}(")

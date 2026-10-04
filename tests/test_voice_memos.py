@@ -258,7 +258,7 @@ def test_add_stores_the_audio_only_with_attachments_and_show_prints_the_title(lb
     cli.main(["add", "voice-memos", str(store), "--attachments"])
     assert "added 0 lines" in capsys.readouterr().out  # the same lines: nothing appended …
     assert len(list((lb.root / "attachments").iterdir())) == STORED  # … but the store now has the audio
-    cli.main(["stats"])
+    cli.main(["show", "stats"])
     assert f"{STORED} present under attachments/" in capsys.readouterr().out
     cli.main(["show", "2026-03-02"])
     out = capsys.readouterr().out
@@ -274,5 +274,5 @@ def test_add_with_attachments_on_a_fresh_record_puts_every_file_in_the_store_onc
     assert files == sorted({_sha(data) for data in FILES.values()})
     for name in files:
         assert _sha((lb.root / "attachments" / name).read_bytes()) == name
-    cli.main(["stats"])
+    cli.main(["show", "stats"])
     assert f"{STORED} present under attachments/" in capsys.readouterr().out

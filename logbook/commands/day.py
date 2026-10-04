@@ -22,15 +22,123 @@ from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _csv, _print_target, _today, _under_home
 from .rows import _day_rows, _line_row, _line_text
 
+READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
+
 
 def show_arguments(sub: Subparsers) -> None:
-    """`logbook show`."""
-    s = sub.add_parser("show", help="one day (default today), or a page: person, asset or place")
-    s.add_argument("day", nargs="?", help="YYYY-MM-DD, or person|asset|place")
-    s.add_argument("name", nargs="?", help="with person|asset|place: the name, entity id or asset id")
+    """`logbook show`: one day's lines, a page, or one of the readers that were commands of their own
+    until 0.6 (`show year`, `show trip`, `show trips`, `show days`, `show keepers`, `show stats`)."""
+    s = sub.add_parser(
+        "show",
+        help="one day's lines, a page, or year, trip, trips, days, keepers, stats",
+        description="one day's lines (default today), a page (person, asset, place), or a reader: year, trip,"
+        " trips, days, keepers, stats",
+    )
+    s.add_argument(
+        "day",
+        nargs="?",
+        metavar="WHAT",
+        help="YYYY-MM-DD or today; person|asset|place NAME; year YYYY; trip ID-OR-DAY; trips; days;"
+        " keepers; stats",
+    )
+    s.add_argument(
+        "name",
+        nargs="?",
+        metavar="NAME",
+        help="with person|asset|place: the name, entity id or asset id; with year: the calendar year; with"
+        " trip: a trip id as `show trips` prints it (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
+    )
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
-    s.add_argument("--json", action="store_true", help="a page as one JSON object")
+    s.add_argument(
+        "--json",
+        action="store_true",
+        help="the page or the reader's answer as one JSON object (days: one object per line)",
+    )
+    s.add_argument("--year", metavar="YYYY", help="trips: one calendar year (default: the whole record)")
+    s.add_argument(
+        "--since",
+        "--from",
+        dest="since",
+        metavar="YYYY-MM-DD",
+        help="trips, days, keepers: the first day (default the record's)",
+    )
+    s.add_argument(
+        "--until",
+        "--to",
+        dest="until",
+        metavar="YYYY-MM-DD",
+        help="trips, days, keepers: the last day, inclusive (default the record's)",
+    )
+    s.add_argument(
+        "--airports",
+        metavar="FILE",
+        help=f"year, trip, trips, days: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--html",
+        metavar="PATH",
+        help="year, trip: write one self-contained page (inline CSS, no script; the trip's SVG map) instead",
+    )
+    s.add_argument(
+        "--print",
+        action="store_true",
+        help="year, trip, with --html: the paper edition — a cover, contents, one spread per month (year)"
+        " or per day (trip), for A4 and US Letter",
+    )
+    s.add_argument(
+        "--poster",
+        action="store_true",
+        help="year: one sheet: a square a day in the ink of its night (home, away, aboard, in transit), the"
+        " countries under it, no names; to --html PATH, else stdout",
+    )
+    s.add_argument(
+        "--sheet",
+        choices=sorted(print_layout.POSTER_SHEETS),
+        help=f"year, with --poster: the sheet (default {year_poster.SHEET})",
+    )
+    s.add_argument("--lane", choices=keepers.LANES, help="keepers: only this lane")
+    s.add_argument(
+        "--people",
+        action="store_true",
+        help="keepers: who appears on them, per month: the faces the library named, proposed only",
+    )
+    s.add_argument(
+        "--health",
+        action="store_true",
+        help="stats: one row per day of the health lines: sleep hours, steps, resting HR",
+    )
     s.set_defaults(fn=cmd_show)
+
+
+def _show_reader(a: argparse.Namespace) -> None:
+    """`show year YYYY`, `show trip ID-OR-DAY`, `show trips`, `show days`, `show keepers`, `show stats`:
+    the reader runs as it did under its own name, with the same options."""
+    from .keepers import cmd_keepers
+    from .record import cmd_stats
+    from .trips import cmd_trip, cmd_trips
+
+    if a.day in ("year", "trip"):
+        if a.name is None:
+            what = "the calendar year, YYYY" if a.day == "year" else "a trip id, or any day inside the trip"
+            print(f"show {a.day}: {what} is needed", file=sys.stderr)
+            sys.exit(2)
+    elif a.name is not None:
+        print(f"show {a.day}: takes no name", file=sys.stderr)
+        sys.exit(2)
+    if a.day == "year":
+        a.year = a.name
+        cmd_year(a)
+    elif a.day == "trip":
+        a.ref = a.name
+        cmd_trip(a)
+    elif a.day == "trips":
+        cmd_trips(a)
+    elif a.day == "days":
+        cmd_days(a)
+    elif a.day == "keepers":
+        cmd_keepers(a)
+    else:
+        cmd_stats(a)
 
 
 def cmd_show(a: argparse.Namespace) -> None:
@@ -40,6 +148,9 @@ def cmd_show(a: argparse.Namespace) -> None:
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
     from ..labs import describe
 
+    if a.day in READERS:
+        _show_reader(a)
+        return
     lb = Logbook.find()
     if a.day in pages.PAGES:
         _show_page(lb, a)
@@ -74,7 +185,9 @@ def cmd_show(a: argparse.Namespace) -> None:
 def day_arguments(sub: Subparsers) -> None:
     """`logbook day`."""
     s = sub.add_parser(
-        "day", help="one day read back: nights, country, stays and moves with who and what, flights, health"
+        "day",
+        help="one day read back: night, stays and moves, who was there, health",
+        description="one day read back: nights, country, stays and moves with who and what, flights, health",
     )
     s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
     s.add_argument(
@@ -111,7 +224,9 @@ def digest_arguments(sub: Subparsers) -> None:
     """`logbook digest`."""
     s = sub.add_parser(
         "digest",
-        help="one day in 25 lines at most: where, with whom, what attached, flights, promises due, gaps,"
+        help="one day in 25 lines at most, closing with one question",
+        description="one day in 25 lines at most: where, with whom, what attached, flights, promises due,"
+        " gaps,"
         " tomorrow, one question",
     )
     s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
@@ -199,7 +314,7 @@ def _digest_paper(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def questions_arguments(sub: Subparsers) -> None:
-    """`logbook questions`."""
+    """`logbook setup questions` (`logbook questions` until 0.6)."""
     s = sub.add_parser(
         "questions",
         help="the digest's closing questions (policy/questions.json): list, add one, disable one",
@@ -275,22 +390,6 @@ def _question_row(q: questions.Question) -> str:
     return row if q.enabled else f"{row} (disabled)"
 
 
-def days_arguments(sub: Subparsers) -> None:
-    """`logbook days`."""
-    s = sub.add_parser(
-        "days", help="a window of days one line each: night, km moved, flights, stays, people, health, gaps"
-    )
-    s.add_argument("--from", dest="since", metavar="YYYY-MM-DD", help="the first day (default the record's)")
-    s.add_argument("--to", dest="until", metavar="YYYY-MM-DD", help="the last day (default the record's)")
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--json", action="store_true", help="one JSON object per line (JSON Lines)")
-    s.set_defaults(fn=cmd_days)
-
-
 def cmd_days(a: argparse.Namespace) -> None:
     """`days [--from DAY] [--to DAY] [--json]`: a window of the record one line per day — the
     night, the kilometres moved, the flights, the stays with what attached, the people confirmed,
@@ -310,41 +409,6 @@ def cmd_days(a: argparse.Namespace) -> None:
     except (ValueError, stays.SettingsError) as e:
         print(f"days: {e}", file=sys.stderr)
         sys.exit(2)
-
-
-def year_arguments(sub: Subparsers) -> None:
-    """`logbook year`."""
-    s = sub.add_parser(
-        "year",
-        help="one year read back: countries, trips, flights, places, people, health, keepers, a day a month",
-    )
-    s.add_argument("year", metavar="YYYY", help="the calendar year")
-    s.add_argument(
-        "--html", metavar="PATH", help="write one self-contained page (inline CSS, no script) instead"
-    )
-    s.add_argument(
-        "--print",
-        action="store_true",
-        help="with --html: the paper edition — a cover, contents, one spread per month, for A4 and US Letter",
-    )
-    s.add_argument(
-        "--airports",
-        metavar="FILE",
-        help=f"a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
-    )
-    s.add_argument("--json", action="store_true", help="the Year as one JSON object, the picks' Days inside")
-    s.add_argument(
-        "--poster",
-        action="store_true",
-        help="one sheet: a square a day in the ink of its night (home, away, aboard, in transit), the"
-        " countries under it, no names; to --html PATH, else stdout",
-    )
-    s.add_argument(
-        "--sheet",
-        choices=sorted(print_layout.POSTER_SHEETS),
-        help=f"with --poster: the sheet (default {year_poster.SHEET})",
-    )
-    s.set_defaults(fn=cmd_year)
 
 
 def cmd_year(a: argparse.Namespace) -> None:
@@ -434,7 +498,9 @@ def search_arguments(sub: Subparsers) -> None:
     """`logbook search`."""
     s = sub.add_parser(
         "search",
-        help='full-text search: words, "a phrase", kar* — literal, ranked, grouped by day, through the index',
+        help='full-text search through the index: words, "a phrase", kar*',
+        description='full-text search: words, "a phrase", kar* — literal, ranked, grouped by day, through'
+        " the index",
     )
     s.add_argument("text", help='the words; "in quotes" a phrase; a word ending in * matches by prefix')
     s.add_argument("--since", metavar="YYYY-MM-DD", help="the first local day searched")

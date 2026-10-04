@@ -330,11 +330,11 @@ def test_the_command_prints_a_line_per_memo_and_show_lists_the_transcript(lb, mo
     _memo(lb, "7A1B2C3D-0000-4000-8000-000000000002", "2026-03-03T20:14:07Z", title="Rehearsal", audio=_wav())
     engine = FakeEngine()
     monkeypatch.setattr(transcribe, "detect", lambda model, **_k: engine)
-    cli.main(["transcribe", "voice-memos"])
+    cli.main(["derive", "transcripts", "voice-memos"])
     out = capsys.readouterr().out
     assert "transcribed 2 voice memos" in out
     assert "Idea for the talk" in out and "Rehearsal" in out and "nb" in out
-    cli.main(["transcribe", "voice-memos"])
+    cli.main(["derive", "transcripts", "voice-memos"])
     assert "transcribed 0 voice memos (2 already transcribed)" in capsys.readouterr().out
     cli.main(["show", "2026-03-02"])
     out = capsys.readouterr().out
@@ -351,16 +351,16 @@ def test_the_command_takes_the_model_and_since_and_a_dry_run_needs_no_engine(lb,
         return FakeEngine(model)
 
     monkeypatch.setattr(transcribe, "detect", detect)
-    cli.main(["transcribe", "voice-memos", "--dry-run"])
+    cli.main(["derive", "transcripts", "voice-memos", "--dry-run"])
     out = capsys.readouterr().out
     assert "dry run" in out and "2 voice memos" in out and seen == []
     assert _transcripts(lb) == []
-    cli.main(["transcribe", "voice-memos", "--since", "2026-03-05", "--model", "medium"])
+    cli.main(["derive", "transcripts", "voice-memos", "--since", "2026-03-05", "--model", "medium"])
     assert "transcribed 1 voice memo" in capsys.readouterr().out and seen == ["medium"]
     [line] = _transcripts(lb)
     assert line["payload"]["provenance"]["model"] == "medium"
     with pytest.raises(SystemExit) as e:
-        cli.main(["transcribe", "voice-memos", "--since", "yesterday"])
+        cli.main(["derive", "transcripts", "voice-memos", "--since", "yesterday"])
     assert e.value.code == 2
 
 
@@ -372,10 +372,10 @@ def test_the_command_says_when_no_engine_is_installed_and_refuses_other_kinds(lb
 
     monkeypatch.setattr(transcribe, "detect", detect)
     with pytest.raises(SystemExit) as e:
-        cli.main(["transcribe", "voice-memos"])
+        cli.main(["derive", "transcripts", "voice-memos"])
     assert e.value.code == 2 and "openlogbook[transcribe]" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["transcribe", "photos"])
+        cli.main(["derive", "transcripts", "photos"])
     assert e.value.code == 2
 
 

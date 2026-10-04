@@ -53,7 +53,7 @@ def test_the_yacht_week_is_its_anchorages_days_crew_keepers_health_and_spend(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     head = lb.meta["head"]
-    data = _json(capsys, "trip", YACHT_WEEK)
+    data = _json(capsys, "show", "trip", YACHT_WEEK)
     assert (data["id"], data["start"], data["end"], data["until"], data["nights"]) == (
         YACHT_WEEK,
         "2026-06-15",
@@ -112,7 +112,7 @@ def test_the_yacht_week_is_its_anchorages_days_crew_keepers_health_and_spend(
 
 
 def test_the_text_reads_the_same_trip(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    text = _run(capsys, "trip", YACHT_WEEK)
+    text = _run(capsys, "show", "trip", YACHT_WEEK)
     lines = text.splitlines()
     assert lines[0].startswith(f"{YACHT_WEEK}  2026-06-15 {EN_DASH} 2026-06-20")
     assert f"6 nights aboard {demo.BOAT_NAME}" in lines[0] and "until 2026-06-21" in lines[0]
@@ -137,13 +137,13 @@ def test_a_day_inside_the_trip_or_its_return_day_names_the_same_trip(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     for day in ("2026-06-15", "2026-06-18", "2026-06-21"):
-        assert _json(capsys, "trip", day)["id"] == YACHT_WEEK, day
+        assert _json(capsys, "show", "trip", day)["id"] == YACHT_WEEK, day
 
 
 def test_the_zurich_trip_has_its_flights_and_its_spend_in_francs(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    data = _json(capsys, "trip", "2026-06-09")
+    data = _json(capsys, "show", "trip", "2026-06-09")
     assert data["id"] == "trip:2026-06-08:2026-06-10" and data["asset"] is None
     assert [f["number"] for f in data["flights_in"]] == ["561"]
     assert [f["number"] for f in data["flights_out"]] == ["562"]
@@ -154,7 +154,7 @@ def test_the_zurich_trip_has_its_flights_and_its_spend_in_francs(
     [chf] = data["spend"]["by_currency"]
     assert (chf["currency"], chf["amount"], chf["count"]) == ("CHF", -94.5, 1)
     assert data["nights_aboard"] == []
-    text = _run(capsys, "trip", "trip:2026-06-08:2026-06-10")
+    text = _run(capsys, "show", "trip", "trip:2026-06-08:2026-06-10")
     assert f"in XY 561 OSL {ARROW} ZRH" in text and f"out XY 562 ZRH {ARROW} OSL" in text
     assert "\u221294.50 CHF (1 transaction)" in text
     assert "  aboard" not in text, "no night aboard: no row"
@@ -164,16 +164,16 @@ def test_a_day_at_home_a_wrong_id_and_nonsense_say_so(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "2026-06-02"])
+        cli.main(["show", "trip", "2026-06-02"])
     assert e.value.code == 2
     assert "no trip on 2026-06-02" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "trip:2026-06-15:2026-06-19"])
+        cli.main(["show", "trip", "trip:2026-06-15:2026-06-19"])
     assert e.value.code == 2
     err = capsys.readouterr().err
     assert "no trip trip:2026-06-15:2026-06-19" in err and YACHT_WEEK in err, "the trip on that day is named"
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "yacht"])
+        cli.main(["show", "trip", "yacht"])
     assert e.value.code == 2
     assert "not a trip id (trip:YYYY-MM-DD:YYYY-MM-DD) or a day" in capsys.readouterr().err
     with pytest.raises(ValueError):
@@ -181,7 +181,7 @@ def test_a_day_at_home_a_wrong_id_and_nonsense_say_so(
 
 
 def test_trips_prints_the_ids_a_trip_page_takes(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    text = _run(capsys, "trips", "--year", "2026")
+    text = _run(capsys, "show", "trips", "--year", "2026")
     assert YACHT_WEEK in text and "trip:2026-06-08:2026-06-10" in text
     row = next(line for line in text.splitlines() if YACHT_WEEK in line)
     assert row.rstrip().endswith(YACHT_WEEK), "the id is the row's last part"
@@ -194,13 +194,13 @@ def test_html_is_one_self_contained_page_with_an_svg_map_one_path_per_leg(
     lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     out = tmp_path / "pages" / "week.html"
-    assert _run(capsys, "trip", YACHT_WEEK, "--html", str(out)) == f"trip {YACHT_WEEK}: wrote {out}\n"
+    assert _run(capsys, "show", "trip", YACHT_WEEK, "--html", str(out)) == f"trip {YACHT_WEEK}: wrote {out}\n"
     page = out.read_bytes().decode("utf-8")
     assert page.startswith("<!doctype html>") and "<style>" in page
     assert "<script" not in page and "http://" not in page and "https://" not in page
     assert "src=" not in page and "<link" not in page and "@import" not in page
     assert page.count("<svg") == 1 and 'xmlns="http://' not in page
-    data = _json(capsys, "trip", YACHT_WEEK)
+    data = _json(capsys, "show", "trip", YACHT_WEEK)
     assert page.count('<path class="leg') == len(data["legs"]) == 4, "one path per leg"
     assert page.count('<circle class="stay"') == 4 and len(data["route"]) == 5, "one mark per point"
     assert ">1, 4</text>" in page, "the bay slept in on the way out and the way back is one mark"
@@ -219,7 +219,7 @@ def test_the_page_escapes_what_the_record_says_and_a_single_stay_still_draws(
     lb = persona_record(tmp_path, monkeypatch)
     lb.append_many([_transaction(utc("2026-06-16", "19:30"), "<b>Gasthaus</b>", -80, "CHF")])
     out = tmp_path / "zurich.html"
-    _run(capsys, "trip", "2026-06-16", "--html", str(out))
+    _run(capsys, "show", "trip", "2026-06-16", "--html", str(out))
     page = out.read_text(encoding="utf-8")
     assert "&lt;b&gt;Gasthaus&lt;/b&gt;" in page and "<b>Gasthaus</b>" not in page
     assert page.count('<circle class="stay"') == 1 and '<path class="leg' not in page
@@ -242,7 +242,7 @@ def test_a_tagged_face_is_proposed_and_a_dinner_guest_confirmed(
             _transaction(utc("2026-06-19", "09:00"), "After the trip", -99, "NOK"),
         ]
     )
-    data = _json(capsys, "trip", "2026-06-16")
+    data = _json(capsys, "show", "trip", "2026-06-16")
     assert data["id"] == "trip:2026-06-15:2026-06-17"
     assert [p["name"] for p in data["people"]["confirmed"]] == ["Ola Nordmann"]
     [kari] = data["people"]["proposed"]
@@ -253,7 +253,7 @@ def test_a_tagged_face_is_proposed_and_a_dinner_guest_confirmed(
         {"currency": "NOK", "amount": -45, "count": 1},
     ], "summed per currency, the day after the return day out"
     assert [t["merchant"] for t in data["spend"]["transactions"]] == ["Tram", "Dinner", "Kiosk"]
-    text = _run(capsys, "trip", "2026-06-16")
+    text = _run(capsys, "show", "trip", "2026-06-16")
     assert "  with          Ola Nordmann · proposed Kari Nordmann" in text
     assert "  spend         \u2212124.40 CHF (2 transactions) · \u221245 NOK (1 transaction)" in text
 
@@ -262,10 +262,10 @@ def test_a_trip_with_no_transactions_has_no_spend(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     persona_record(tmp_path, monkeypatch)
-    data = _json(capsys, "trip", "2026-06-13")
+    data = _json(capsys, "show", "trip", "2026-06-13")
     assert data["id"] == "trip:2026-06-13:2026-06-13" and data["spend"] is None
     assert data["nights_aboard"] == [{"asset": "solvind", "name": "Solvind", "nights": 1}]
-    text = _run(capsys, "trip", "2026-06-13")
+    text = _run(capsys, "show", "trip", "2026-06-13")
     assert "spend" not in text and "  aboard        1 night aboard Solvind" in text
     page = trip_page.html(data)
     assert '<section id="spend">' not in page
@@ -276,12 +276,12 @@ def test_without_a_home_place_or_days_the_command_says_why(
 ) -> None:
     persona_record(tmp_path, monkeypatch, places=None)
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "2026-06-16"])
+        cli.main(["show", "trip", "2026-06-16"])
     assert e.value.code == 2 and "no place of kind home" in capsys.readouterr().err
     empty = Logbook.init(tmp_path / "empty", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(empty.root))
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "2026-06-16"])
+        cli.main(["show", "trip", "2026-06-16"])
     assert e.value.code == 2 and "the record has no days" in capsys.readouterr().err
 
 

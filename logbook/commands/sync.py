@@ -64,7 +64,8 @@ def sync_arguments(sub: Subparsers) -> None:
     """`logbook sync`."""
     s = sub.add_parser(
         "sync",
-        help="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
+        help="pull new items from a live source; --all for every configured one",
+        description="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
         " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day",
     )
     s.add_argument(
@@ -588,7 +589,7 @@ def _report_listening(status: Mapping[str, Any]) -> None:
 
 
 def sources_arguments(sub: Subparsers) -> None:
-    """`logbook sources`."""
+    """`logbook doctor sources` (`logbook sources` until 0.6)."""
     s = sub.add_parser(
         "sources",
         help="every adapter, file and live, and whether policy/import.json has disabled it;"
@@ -665,7 +666,7 @@ def cmd_sources(a: argparse.Namespace) -> None:
 
 
 def assets_arguments(sub: Subparsers) -> None:
-    """`logbook assets`."""
+    """`logbook setup assets` (`logbook assets` until 0.6)."""
     s = sub.add_parser("assets", help="the boats, aircraft and cars the record tracks (assets.json)")
     verbs = s.add_subparsers(dest="verb", required=True)
     v = verbs.add_parser("list", help="one line per registered asset")

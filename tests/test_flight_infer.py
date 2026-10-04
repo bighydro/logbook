@@ -255,14 +255,14 @@ def _cli(lb: Logbook, *args: str) -> subprocess.CompletedProcess[str]:
 
 def test_cli_infer_flights_writes_once_and_reports(lb: Logbook):
     _flight_day(lb)
-    r = _cli(lb, "infer", "flights", "--dry-run")
+    r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.returncode == 0, r.stderr
     assert "1 flight" in r.stdout and "dry run" in r.stdout and lb.meta["seq"] == 16
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert r.returncode == 0, r.stderr
     assert "inferred 1 new flight from 1 calendar entry" in r.stdout
     assert lb.meta["seq"] == 17
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert "inferred 0 new flights from 1 calendar entry (1 already in the record)" in r.stdout
     assert lb.meta["seq"] == 17
     assert "XY 561 OSL → ZRH, arrives 09:18, inferred" in _cli(lb, "show", "2026-09-27").stdout
@@ -286,24 +286,24 @@ def test_cli_infer_counts_one_flight_however_many_entries_name_it(lb: Logbook):
             *_track("2026-09-27T07:18:00Z", ZRH, 20),
         ]
     )
-    r = _cli(lb, "infer", "flights", "--dry-run")
+    r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.returncode == 0, r.stderr
     assert r.stdout.startswith("dry run: 1 flight from 4 calendar entries would be written")
     assert "merged" not in r.stdout
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert r.stdout.startswith("inferred 1 new flight from 4 calendar entries\n")
-    r = _cli(lb, "infer", "flights", "--dry-run")
+    r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.stdout.startswith(
         "dry run: 0 flights from 4 calendar entries would be written (1 already in the record)"
     )
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert r.stdout.startswith("inferred 0 new flights from 4 calendar entries (1 already in the record)")
 
 
 def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
     _flight_day(lb)
     lb.append_many(flighty.run(FLIGHTY))
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert r.returncode == 0, r.stderr
     assert "1 merged into a flight already in the record" in r.stdout
     with lb.index() as idx:
@@ -315,7 +315,7 @@ def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
 
 
 def test_cli_infer_rejects_anything_but_flights(lb: Logbook):
-    r = _cli(lb, "infer", "trips")
+    r = _cli(lb, "derive", "trips")
     assert r.returncode == 2 and "flights" in r.stderr
 
 
@@ -348,7 +348,7 @@ def test_infer_a_leg_that_is_not_the_tracked_flight_the_entry_names_carries_no_n
     assert "number" not in p and "carrier" not in p and "carrier_icao" not in p
     assert flights.key(p) == ("2026-09-28", "", "ZRH>IST")
     assert p["raw_id"].startswith("2026-09-28::ZRH>IST@")
-    r = _cli(lb, "infer", "flights")
+    r = _cli(lb, "derive", "flights")
     assert r.returncode == 0 and r.stdout.startswith("inferred 1 new flight"), r.stdout + r.stderr
     assert "flight-inference ZRH → IST, arrives 12:10, inferred" in _cli(lb, "show", "2026-09-28").stdout
 

@@ -174,13 +174,13 @@ def test_days_names_the_night_aboard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     passage_record(tmp_path, monkeypatch)
-    out = _run(capsys, "days", "--from", FRI, "--to", SAT, "--json")
+    out = _run(capsys, "show", "days", "--from", FRI, "--to", SAT, "--json")
     friday, saturday = (json.loads(line) for line in out.splitlines() if line)
     assert friday["night"]["where"] == f"aboard {REDUCE_NAME}" and friday["night"]["aboard"] == REDUCE
     assert friday["moved_m"] > 60_000, "the drive out and the passage, which started on the Friday"
     assert friday["stays"]["count"] == 2, "home and the run aboard"
     assert saturday["night"]["where"] == "Home"
-    text = _run(capsys, "days", "--from", FRI, "--to", SAT)
+    text = _run(capsys, "show", "days", "--from", FRI, "--to", SAT)
     assert f"aboard {REDUCE_NAME} NO" in text
 
 
@@ -191,14 +191,14 @@ def test_trips_shows_aboard_as_a_route_element_and_counts_the_nights_aboard_per_
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     passage_record(tmp_path, monkeypatch)
-    data = _json(capsys, "trips", "--since", FRI, "--until", SAT)
+    data = _json(capsys, "show", "trips", "--since", FRI, "--until", SAT)
     [trip] = data["trips"]
     assert (trip["start"], trip["end"], trip["nights"]) == (FRI, FRI, 1)
     assert trip["asset"] == REDUCE
     assert trip["route"] == [f"aboard {REDUCE_NAME}"]
     assert trip["nights_aboard"] == {REDUCE: 1}
     assert [p["id"] for p in trip["people"]] == [OLA_ID]
-    text = _run(capsys, "trips", "--since", FRI, "--until", SAT)
+    text = _run(capsys, "show", "trips", "--since", FRI, "--until", SAT)
     assert f"1 night aboard {REDUCE_NAME}" in text and f"route aboard {REDUCE_NAME}" in text
 
 
@@ -256,7 +256,7 @@ def test_ashore_three_km_away_the_night_is_at_the_cabin_and_the_boat_moves_alone
     assert day["nights"]["after"]["aboard"] is None
     assert str(day["nights"]["after"]["where"]).startswith("59.7000,10.6034")
     assert "aboard" not in _run(capsys, "day", FRI)
-    trips = _json(capsys, "trips", "--since", FRI, "--until", SAT)
+    trips = _json(capsys, "show", "trips", "--since", FRI, "--until", SAT)
     [trip] = trips["trips"]
     assert (
         trip["asset"] is None

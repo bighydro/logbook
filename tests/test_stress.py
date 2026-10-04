@@ -385,7 +385,7 @@ def test_places_propose_over_two_years_reads_the_index_and_not_the_files(tmp_pat
     report.append(f"indexed in {time.perf_counter() - started:.0f}s")
     opened = _jsonl_opens(monkeypatch)
     started = time.perf_counter()
-    cli.main(["places", "propose", "--since", TWO_YEARS_FIRST, "--until", TWO_YEARS_LAST, "--json"])
+    cli.main(["setup", "places", "propose", "--since", TWO_YEARS_FIRST, "--until", TWO_YEARS_LAST, "--json"])
     elapsed = time.perf_counter() - started
     data = json.loads(capsys.readouterr().out)
     proposals = data["proposals"]
@@ -404,7 +404,7 @@ def test_places_propose_over_two_years_reads_the_index_and_not_the_files(tmp_pat
     assert all(p["nearest"] is not None for p in proposals)
     assert elapsed < PROPOSE_CEILING_S
     started = time.perf_counter()
-    cli.main(["places", "propose", "--since", "2025-03-01", "--until", "2025-03-31", "--json"])
+    cli.main(["setup", "places", "propose", "--since", "2025-03-01", "--until", "2025-03-31", "--json"])
     elapsed = time.perf_counter() - started
     month = json.loads(capsys.readouterr().out)["proposals"]
     report.append(f"places propose, one month: {len(month)} proposals in {elapsed:.1f}s")

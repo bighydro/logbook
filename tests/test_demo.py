@@ -54,7 +54,7 @@ def lb(record: Logbook, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 def test_the_record_verifies_and_holds_every_profile(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     out = _run(capsys, "verify")
     assert out.startswith("valid")
-    stats = _json(capsys, "stats")
+    stats = _json(capsys, "show", "stats")
     kinds = {k["kind"] for k in stats["kinds"]}
     assert kinds >= demo.KINDS, demo.KINDS - kinds
     schemas = {line["payload"]["schema"] for line in lb.lines()}
@@ -111,7 +111,7 @@ def test_refuses_an_existing_record(tmp_path: Path, capsys: pytest.CaptureFixtur
 
 
 def test_stats_health_has_a_row_per_day(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    days = _json(capsys, "stats", "--health")["days"]
+    days = _json(capsys, "show", "stats", "--health")["days"]
     assert len(days) >= 30
     for d in days[1:30]:
         assert d["sleep_h"] is not None and 5.5 <= d["sleep_h"] <= 9.5, d
@@ -134,7 +134,7 @@ def test_derive_stays_finds_the_nights(lb: Logbook, capsys: pytest.CaptureFixtur
 
 
 def test_infer_flights_finds_the_calendar_flights(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    out = _run(capsys, "infer", "flights", "--dry-run")
+    out = _run(capsys, "derive", "flights", "--dry-run")
     assert "from 4 calendar entries" in out and "1 already in the record" in out, out
     assert "3 flights" in out
 
@@ -142,7 +142,7 @@ def test_infer_flights_finds_the_calendar_flights(lb: Logbook, capsys: pytest.Ca
 def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    data = _json(capsys, "trips", "--year", "2026")
+    data = _json(capsys, "show", "trips", "--year", "2026")
     cabin, zurich, boat, copenhagen = data["trips"]
     assert (cabin["id"], cabin["nights"], cabin["route"]) == ("trip:2026-06-06:2026-06-06", 1, ["Cabin"])
     assert (zurich["start"], zurich["until"], zurich["nights"]) == ("2026-06-08", "2026-06-11", 3)
@@ -159,7 +159,7 @@ def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(
     assert (copenhagen["start"], copenhagen["until"], copenhagen["nights"]) == ("2026-06-25", "2026-06-27", 2)
     assert [f["number"] for f in copenhagen["flights_in"]] == ["571"]
     assert [f["number"] for f in copenhagen["flights_out"]] == ["572"]
-    text = _run(capsys, "trips")
+    text = _run(capsys, "show", "trips")
     assert "Cabin" in text and "route 47.3769,8.5417 (Zurich)" in text
 
 
@@ -178,12 +178,12 @@ def test_rollup_countries_and_flights(lb: Logbook, capsys: pytest.CaptureFixture
 
 
 def test_places_propose_ranks_the_unnamed_stays(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
-    data = _json(capsys, "places", "propose")
+    data = _json(capsys, "setup", "places", "propose")
     proposals = data["proposals"]
     assert len(proposals) >= 3
     assert proposals[0]["hours"] >= proposals[-1]["hours"]
     assert any(p["aboard"] == demo.BOAT for p in proposals), "the anchorages are aboard"
-    text = _run(capsys, "places", "propose", "--top", "3")
+    text = _run(capsys, "setup", "places", "propose", "--top", "3")
     assert "unnamed place" in text
 
 
@@ -196,14 +196,14 @@ def test_places_propose_reads_the_same_from_the_index_as_it_did_from_the_files(
     the earlier code on this same record (thirty days, seed 7)."""
     fixtures = Path(__file__).parent / "fixtures" / "demo"
     expected = json.loads((fixtures / "places_propose.json").read_text(encoding="utf-8"))
-    assert _json(capsys, "places", "propose") == expected
+    assert _json(capsys, "setup", "places", "propose") == expected
     text = (fixtures / "places_propose.txt").read_text(encoding="utf-8")
-    assert _run(capsys, "places", "propose").splitlines() == text.splitlines()
+    assert _run(capsys, "setup", "places", "propose").splitlines() == text.splitlines()
 
 
 def test_show_prints_a_day_and_the_keepers(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     text = _run(capsys, "show", "2026-06-08")
     assert "XY 561" in text or "561" in text
-    keepers = _json(capsys, "keepers")
+    keepers = _json(capsys, "show", "keepers")
     assert len(keepers["keepers"]) >= 3
     assert {k["lane"] for k in keepers["keepers"]} == {"memory", "art"}

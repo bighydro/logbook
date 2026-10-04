@@ -100,7 +100,7 @@ def _file_progress(n_files: int) -> Callable[[str, int, int, float], None]:
 
 
 def retract_arguments(sub: Subparsers) -> None:
-    """`logbook retract`."""
+    """`logbook repair retract SEQ REASON` (`logbook retract` until 0.6)."""
     s = sub.add_parser("retract", help="take back line SEQ with a new line; nothing is rewritten")
     s.add_argument("seq", type=int)
     s.add_argument("reason")
@@ -118,9 +118,20 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def repair_arguments(sub: Subparsers) -> None:
-    """`logbook repair`."""
-    s = sub.add_parser("repair", help="append the lines that put a known mistake right; nothing is rewritten")
-    verbs = s.add_subparsers(dest="verb", required=True)
+    """`logbook repair retract|migrate|index|health-units`: what puts the record right, never by
+    rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
+    s = sub.add_parser(
+        "repair",
+        help="put the record right, rewriting nothing: retract, migrate, index…",
+        description="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`),"
+        " bring a"
+        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), or append the lines that"
+        " correct a known mistake (`health-units`)",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True, metavar="<what>")
+    retract_arguments(verbs)
+    migrate_arguments(verbs)
+    index_arguments(verbs)
     v = verbs.add_parser(
         "health-units",
         help="retract apple-health resting_hr and hrv lines written 60 and 1,000 times too large and"
@@ -148,18 +159,6 @@ BAR = "\u2588"  # one full block per ~1% of the busiest year
 
 
 BAR_WIDTH = 100
-
-
-def stats_arguments(sub: Subparsers) -> None:
-    """`logbook stats`."""
-    s = sub.add_parser("stats", help="what the record holds: counts by kind, source and year, never its text")
-    s.add_argument("--json", action="store_true", help="the same numbers as one JSON object")
-    s.add_argument(
-        "--health",
-        action="store_true",
-        help="one row per day of the health lines: sleep hours, steps, resting HR",
-    )
-    s.set_defaults(fn=cmd_stats)
 
 
 def cmd_stats(a: argparse.Namespace) -> None:
@@ -280,7 +279,11 @@ def _stats_rows(s: dict[str, Any]) -> Iterator[str]:
 
 def demo_arguments(sub: Subparsers) -> None:
     """`logbook demo`."""
-    s = sub.add_parser("demo", help="write a synthetic record to try the commands on; nothing in it is real")
+    s = sub.add_parser(
+        "demo",
+        help="a synthetic record to try the commands on; nothing in it is real",
+        description="write a synthetic record to try the commands on; nothing in it is real",
+    )
     s.add_argument("--days", type=int, metavar="N", help="local days from 2026-06-01 (default 30)")
     s.add_argument(
         "--years",
@@ -338,7 +341,7 @@ def cmd_demo(a: argparse.Namespace) -> None:
 
 
 def index_arguments(sub: Subparsers) -> None:
-    """`logbook index`."""
+    """`logbook repair index` (`logbook index` until 0.6)."""
     s = sub.add_parser("index", help="rebuild index.sqlite from the files (readers do it when needed)")
     s.set_defaults(fn=cmd_index)
 
@@ -424,16 +427,30 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup`."""
+    """`logbook setup [places|assets|questions]`: the guided first run, and the settings of the record
+    that it asks about or that live beside its policy — the named places (`places.json`), the
+    assets it tracks (`assets.json`) and the digest's questions (`policy/questions.json`). Each
+    was a command of its own until 0.6 and is declared beside the code that reads its file."""
+    from .day import questions_arguments
+    from .places import places_arguments
+    from .sync import assets_arguments
+
     s = sub.add_parser(
         "setup",
-        help="the guided first run: where the record lives, your timezone, who you are, your home, what is"
-        " on this machine to import; one question at a time, resumable; --yes takes every default",
+        help="the guided first run; places, assets, questions: its settings",
+        description="the guided first run: where the record lives, your timezone, who you are, your home,"
+        " what is"
+        " on this machine to import; one question at a time, resumable; --yes takes every default."
+        " The record's settings: places, assets, questions",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
     s.add_argument("--again", action="store_true", help="run every step again (the record is kept)")
     s.set_defaults(fn=cmd_setup)
+    settings = s.add_subparsers(dest="setting", required=False, metavar="<setting>")
+    places_arguments(settings)
+    assets_arguments(settings)
+    questions_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
@@ -447,11 +464,20 @@ def cmd_setup(a: argparse.Namespace) -> None:
 
 
 def doctor_arguments(sub: Subparsers) -> None:
-    """`logbook doctor`."""
+    """`logbook doctor [sources]`: the check-up, and where each source went quiet (`sources`, a command
+    of its own until 0.6, declared beside `sync`)."""
+    from .sync import sources_arguments
+
     s = sub.add_parser(
-        "doctor", help="is this machine set up to keep the record? one line per check; exit 1 on a fail"
+        "doctor",
+        help="the check-up, one line each; sources: where each source went quiet",
+        description="is this machine set up to keep the record? one line per check; exit 1 on a fail."
+        " `sources`:"
+        " every adapter, and with --gaps where each went quiet",
     )
     s.set_defaults(fn=cmd_doctor)
+    checks = s.add_subparsers(dest="check", required=False, metavar="<check>")
+    sources_arguments(checks)
 
 
 def cmd_doctor(a: argparse.Namespace) -> None:
@@ -472,7 +498,8 @@ def backup_arguments(sub: Subparsers) -> None:
     """`logbook backup`."""
     s = sub.add_parser(
         "backup",
-        help="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
+        help="a verified snapshot on another disk; backup list; backup restore",
+        description="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
         " previous one where nothing changed; `backup list DEST`; `backup restore SNAPSHOT TARGET`",
     )
     s.add_argument(
@@ -571,7 +598,7 @@ def _backup_restore(source: Path, target: Path) -> None:
 
 
 def migrate_arguments(sub: Subparsers) -> None:
-    """`logbook migrate`."""
+    """`logbook repair migrate` (`logbook migrate` until 0.6)."""
     s = sub.add_parser("migrate", help="bring a logbook/0.1 record forward (same lines, new hashes)")
     s.add_argument("--root", help="logbook folder (default: find)")
     s.set_defaults(fn=cmd_migrate)
@@ -593,20 +620,35 @@ def cmd_migrate(a: argparse.Namespace) -> None:
 
 
 def key_arguments(sub: Subparsers) -> None:
-    """`logbook key <verb>`."""
+    """`logbook key init|show|add-recipient|remove-recipient|seal|circle`: the keys of the record.
+    `seal` and `circle` were commands of their own until 0.6; `circle` is declared beside `share`."""
+    from .export import circle_arguments
+
     s = sub.add_parser(
         "key",
-        help="the record's recipients and this machine's identity: init, show, add- and remove-recipient",
+        help="the recipients and this machine's identity; seal; circle",
+        description="the record's recipients and this machine's identity: init, show, add- and"
+        " remove-recipient;"
+        " seal: the lines written before the record had recipients; circle: the sharing keys",
     )
-    s.add_argument("verb", choices=("init", "show", "add-recipient", "remove-recipient"))
-    s.add_argument("--recipient", action="append", metavar="age1…", help="a recipient (repeatable)")
-    s.add_argument(
-        "--recovery",
-        action="store_true",
-        help="init: make a recovery identity, print it once for paper, add its recipient",
-    )
-    s.add_argument("--root", help="logbook folder (default: find)")
-    s.set_defaults(fn=cmd_key)
+    verbs = s.add_subparsers(dest="verb", required=True, metavar="<verb>")
+    for verb, text in (
+        ("init", "make this machine's identity and the record's first recipients"),
+        ("show", "the recipients, and whether this machine's identity opens the record"),
+        ("add-recipient", "one more recipient (--recipient) for every line sealed from now on"),
+        ("remove-recipient", "a recipient (--recipient) the lines sealed from now on are not for"),
+    ):
+        v = verbs.add_parser(verb, help=text)
+        v.add_argument("--recipient", action="append", metavar="age1…", help="a recipient (repeatable)")
+        v.add_argument(
+            "--recovery",
+            action="store_true",
+            help="init: make a recovery identity, print it once for paper, add its recipient",
+        )
+        v.add_argument("--root", help="logbook folder (default: find)")
+        v.set_defaults(fn=cmd_key)
+    seal_arguments(verbs)
+    circle_arguments(verbs)
 
 
 def cmd_key(a: argparse.Namespace) -> None:
@@ -717,7 +759,7 @@ def _sealed_what(result: Mapping[str, Any]) -> str:
 
 
 def seal_arguments(sub: Subparsers) -> None:
-    """`logbook seal --all`."""
+    """`logbook key seal --all` (`logbook seal` until 0.6)."""
     s = sub.add_parser("seal", help="seal the tier 2 and 3 lines written before the record had recipients")
     s.add_argument("--all", action="store_true", help="every plain tier 2 or 3 line and the files they name")
     s.add_argument("--root", help="logbook folder (default: find)")

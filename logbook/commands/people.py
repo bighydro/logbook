@@ -1,4 +1,4 @@
-"""The people: `people` (with `people merge`) and `person`."""
+"""The people: `people`, `people NAME` (the command `person` until 0.6) and `people merge`."""
 
 from __future__ import annotations
 
@@ -17,38 +17,49 @@ if TYPE_CHECKING:
     from ..contrib import people_merge
 
 
+MERGE = "merge"  # `people merge`: never a person's name
+
+
 def people_arguments(sub: Subparsers) -> None:
-    """`logbook people`."""
+    """`logbook people [NAME|merge]`."""
     s = sub.add_parser(
         "people",
-        help="everyone the record names, never the owner: channels, days together, last real contact",
+        help="everyone the record names; NAME: one person's page; merge",
+        description="everyone the record names, never the owner: channels, days together, last real contact;"
+        " NAME: one person's page; merge: the same person named twice",
+    )
+    s.add_argument(
+        "name",
+        nargs="?",
+        metavar="NAME|merge",
+        help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
+        " `merge`: the same person named twice or more, proposals with the evidence, merged only when told",
     )
     s.add_argument("--year", metavar="YYYY", help="one year (default the whole record)")
-    s.add_argument("--json", action="store_true", help="the report as one JSON object")
-    s.set_defaults(fn=cmd_people, verb=None)
-    verbs = s.add_subparsers(dest="verb", required=False)
-    v = verbs.add_parser(
-        "merge",
-        help="the same person named twice or more: proposals with the evidence; merged only when told",
+    s.add_argument(
+        "--json",
+        action="store_true",
+        help="the report, the page, or merge's proposals or lines written, as one JSON object",
     )
-    g = v.add_mutually_exclusive_group()
+    g = s.add_mutually_exclusive_group()
     g.add_argument(
-        "--propose", action="store_true", help="list the proposals with their evidence (the default)"
+        "--propose", action="store_true", help="merge: list the proposals with their evidence (the default)"
     )
     g.add_argument(
         "--apply",
         nargs="+",
         metavar="ID",
-        help="merge these proposals: one alias line per ref of a secondary",
+        help="merge: merge these proposals: one alias line per ref of a secondary",
     )
     g.add_argument(
-        "--export-review", metavar="FILE", help="write the proposals as a CSV to mark, one row per secondary"
+        "--export-review",
+        metavar="FILE",
+        help="merge: write the proposals as a CSV to mark, one row per secondary",
     )
-    g.add_argument("--apply-review", metavar="FILE", help="merge the rows marked `yes` in a review file")
-    v.add_argument(
-        "--json", action="store_true", help="the proposals, or the lines written, as one JSON object"
+    g.add_argument(
+        "--apply-review", metavar="FILE", help="merge: merge the rows marked `yes` in a review file"
     )
-    v.set_defaults(fn=cmd_people)
+    s.set_defaults(fn=cmd_people)
 
 
 def cmd_people(a: argparse.Namespace) -> None:
@@ -56,11 +67,21 @@ def cmd_people(a: argparse.Namespace) -> None:
     heard from in the window, never the owner — the channels, first and last contact, days
     together, nights under one roof, places shared, birthday and last real contact — read through
     the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
-    the record has a line on. Nothing is written."""
-    lb = Logbook.find()
-    if a.verb == "merge":
-        _people_merge(lb, a)
+    the record has a line on. Nothing is written. `people NAME` is one person's page (`cmd_person`);
+    `people merge` the duplicates (`_people_merge`)."""
+    if a.name == MERGE:
+        _people_merge(Logbook.find(), a)
         return
+    if a.name is not None:
+        cmd_person(a)
+        return
+    if a.propose or a.apply or a.export_review or a.apply_review:
+        print(
+            "people: --propose, --apply, --export-review and --apply-review go with `people merge`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    lb = Logbook.find()
     try:
         window = _people_window(lb, a.year)
         if window is None:
@@ -124,21 +145,11 @@ def _say_merged(applied: list[people_merge.Applied], as_json: bool) -> None:
         print(text)
 
 
-def person_arguments(sub: Subparsers) -> None:
-    """`logbook person`."""
-    s = sub.add_parser(
-        "person", help="one person's page: the numbers, then the shared days, most recent first"
-    )
-    s.add_argument("name", help="a name, an entity id, an email address, a phone number or kind:value")
-    s.add_argument("--year", metavar="YYYY", help="one year (default the whole record)")
-    s.add_argument("--json", action="store_true", help="the page as one JSON object")
-    s.set_defaults(fn=cmd_person)
-
-
 def cmd_person(a: argparse.Namespace) -> None:
-    """`person <name-or-ref> [--year YYYY] [--json]`: one person's page — the same numbers as
-    `people`, then the shared days, most recent first. The name is a label, a unique first or last
-    name, an entity id, an email address, a phone number or `kind:value`. Nothing is written."""
+    """`people <name-or-ref> [--year YYYY] [--json]` (`person` until 0.6): one person's page — the
+    same numbers as `people`, then the shared days, most recent first. The name is a label, a unique
+    first or last name, an entity id, an email address, a phone number or `kind:value`. Nothing is
+    written."""
     lb = Logbook.find()
     try:
         window = _people_window(lb, a.year)

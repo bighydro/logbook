@@ -59,7 +59,7 @@ def test_a_record_without_the_file_gets_the_default_one_on_first_read(lb: Logboo
 
 
 def test_the_other_takeout_products_are_enabled_by_default(lb: Logbook, capsys):
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     for short in ("pay", "chat", "meet", "contacts"):
         row = next(line for line in out.splitlines() if line.startswith(f"google-takeout-{short} "))
@@ -98,7 +98,7 @@ def test_a_malformed_policy_is_refused_naming_the_file(lb: Logbook, text: str):
 
 
 def test_sources_lists_every_adapter_as_enabled_by_default_but_the_noisy_two(lb: Logbook, capsys):
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     rows = {line.split()[0]: line for line in out.splitlines() if line and not line.startswith(" ")}
     names = {a.NAME for a in adapters.all_adapters()}
@@ -116,7 +116,7 @@ def test_sources_lists_every_adapter_as_enabled_by_default_but_the_noisy_two(lb:
 
 def test_sources_shows_a_disabled_adapter_with_its_reason(lb: Logbook, capsys):
     _disable(lb, ("pocket", "someone else's reading list"))
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     row = next(line for line in out.splitlines() if line.startswith("pocket "))
     assert "disabled" in row and "someone else's reading list" in row
@@ -125,7 +125,7 @@ def test_sources_shows_a_disabled_adapter_with_its_reason(lb: Logbook, capsys):
 
 def test_sources_resolves_an_alias_and_names_an_unknown_source(lb: Logbook, capsys):
     _disable(lb, ("books", "the library is not mine"), ("kindle", "no adapter yet"))
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     row = next(line for line in out.splitlines() if line.startswith("apple-books "))
     assert "disabled" in row and "the library is not mine" in row
@@ -135,7 +135,7 @@ def test_sources_resolves_an_alias_and_names_an_unknown_source(lb: Logbook, caps
 def test_sources_writes_the_file_when_missing(lb: Logbook, capsys):
     path = lb.root / "policy" / "import.json"
     path.unlink()
-    cli.main(["sources"])
+    cli.main(["doctor", "sources"])
     assert json.loads(path.read_text(encoding="utf-8")) == policy.DEFAULT_IMPORT
 
 
@@ -143,7 +143,7 @@ def test_sources_exits_2_on_a_malformed_policy(lb: Logbook, capsys):
     path = lb.root / "policy" / "import.json"
     path.write_text('{"disabled": 1}', encoding="utf-8")
     with pytest.raises(SystemExit) as e:
-        cli.main(["sources"])
+        cli.main(["doctor", "sources"])
     assert e.value.code == 2
     assert str(path) in capsys.readouterr().err
 

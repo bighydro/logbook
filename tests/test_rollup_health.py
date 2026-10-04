@@ -221,7 +221,7 @@ def test_hrv_is_reported_in_ms(
     assert second["hrv"] == {"mean_ms": 45, "days": 1, "lines": second["hrv"]["lines"]}
     text = _run(capsys, "--since", "2026-06-01", "--until", "2026-06-14", "--by", "week")
     assert text.count("hrv 45 ms (1 day)") == 2
-    cli.main(["stats", "--health", "--json"])
+    cli.main(["show", "stats", "--health", "--json"])
     rows = json.loads(capsys.readouterr().out)["days"]
     assert [row["hrv"] for row in rows] == [45, 45]
 

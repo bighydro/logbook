@@ -12,9 +12,14 @@ from .common import Subparsers, _airports
 
 
 def serve_arguments(sub: Subparsers) -> None:
-    """`logbook serve`."""
+    """`logbook serve [mcp]`: the record read in a browser, or served to an agent (`mcp`, a command of
+    its own until 0.6)."""
     s = sub.add_parser(
-        "serve", help="read the record in a browser, from this machine only (http://127.0.0.1:8765/)"
+        "serve",
+        help="the record in a browser, from this machine only; mcp: to an agent",
+        description="read the record in a browser, from this machine only (http://127.0.0.1:8765/); `mcp`:"
+        " serve it"
+        " to an MCP host over stdin and stdout",
     )
     s.add_argument(
         "--port", type=int, default=serve.PORT, metavar="N", help=f"the port (default {serve.PORT})"
@@ -24,6 +29,8 @@ def serve_arguments(sub: Subparsers) -> None:
     )
     s.add_argument("--airports", metavar="FILE", help="an airports table that overrides the built-in one")
     s.set_defaults(fn=cmd_serve)
+    hosts = s.add_subparsers(dest="host_kind", required=False, metavar="<to>")
+    mcp_arguments(hosts)
 
 
 def cmd_serve(a: argparse.Namespace) -> None:
@@ -50,7 +57,7 @@ def cmd_serve(a: argparse.Namespace) -> None:
 
 
 def mcp_arguments(sub: Subparsers) -> None:
-    """`logbook mcp`."""
+    """`logbook serve mcp` (`logbook mcp` until 0.6)."""
     s = sub.add_parser(
         "mcp",
         help="serve the record to an MCP host over stdin and stdout; every tool behind the mcp ceiling of"

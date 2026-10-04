@@ -121,7 +121,7 @@ def test_the_year_on_paper_is_the_fixture_and_lays_out(
     lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     out = tmp_path / "paper" / "2026.html"
-    assert _run(capsys, "year", "2026", "--html", str(out), "--print") == f"year 2026: wrote {out}\n"
+    assert _run(capsys, "show", "year", "2026", "--html", str(out), "--print") == f"year 2026: wrote {out}\n"
     page = out.read_bytes().decode("utf-8")
     expected = (FIXTURES / "print_year_2026.html").read_text(encoding="utf-8")
     assert page.splitlines() == expected.splitlines(), REGENERATE
@@ -152,7 +152,7 @@ def test_the_trip_on_paper_is_the_fixture_a_spread_a_day(
     lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     out = tmp_path / "week.html"
-    text = _run(capsys, "trip", YACHT_WEEK, "--html", str(out), "--print")
+    text = _run(capsys, "show", "trip", YACHT_WEEK, "--html", str(out), "--print")
     assert text == f"trip {YACHT_WEEK}: wrote {out}\n"
     page = out.read_bytes().decode("utf-8")
     expected = (FIXTURES / "print_trip_2026-06-15.html").read_text(encoding="utf-8")
@@ -224,7 +224,7 @@ def test_photos_are_referenced_where_they_are_never_copied_and_escaped(
     head = lb.meta["head"]
     files_before = sorted(p.name for p in (lb.root / "attachments").iterdir())
     out = tmp_path / "paper" / "2026.html"
-    _run(capsys, "year", "2026", "--html", str(out), "--print")
+    _run(capsys, "show", "year", "2026", "--html", str(out), "--print")
     page = out.read_text(encoding="utf-8")
     s = structure(page)
     srcs = [str(attrs["src"]) for tag, attrs in s.elements if tag == "img"]
@@ -252,20 +252,20 @@ def test_print_needs_html_and_a_year_outside_the_record_still_has_a_cover(
         err = capsys.readouterr().err
         assert e.value.code == 2 and "--print" in err and "--html" in err
     out = tmp_path / "2025.html"
-    assert _run(capsys, "year", "2025", "--html", str(out), "--print") == f"year 2025: wrote {out}\n"
+    assert _run(capsys, "show", "year", "2025", "--html", str(out), "--print") == f"year 2025: wrote {out}\n"
     page = out.read_text(encoding="utf-8")
     structure(page)
     assert "<h1>2025</h1>" in page and "no days in this year" in page
     assert '<section class="spread' not in page and "No days." in page
     with pytest.raises(SystemExit) as e:
-        cli.main(["trip", "2026-06-09", "--html", str(tmp_path / "x.html"), "--print"])
+        cli.main(["show", "trip", "2026-06-09", "--html", str(tmp_path / "x.html"), "--print"])
     assert e.value.code == 2 and "at home" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["year", "20x6", "--html", str(tmp_path / "x.html"), "--print"])
+        cli.main(["show", "year", "20x6", "--html", str(tmp_path / "x.html"), "--print"])
     assert e.value.code == 2 and "not a year" in capsys.readouterr().err
     empty = Logbook.init(tmp_path / "empty", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(empty.root))
-    _run(capsys, "year", "2026", "--html", str(out), "--print")
+    _run(capsys, "show", "year", "2026", "--html", str(out), "--print")
     structure(out.read_text(encoding="utf-8"))
 
 

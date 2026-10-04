@@ -4,6 +4,9 @@ command shares one exit status. Nothing but the standard library is imported unt
 so `import logbook.cli` is cheap and `logbook --help` loads no adapter and no model code
 (`tests/test_cli_lazy.py` holds it to that).
 
+An old command name (`logbook/commands/aliases.py`) is rewritten to its new words before parsing,
+after one line on stderr; the parser never sees it, so `--help` never lists it.
+
 A name that lived here before the split (`cmd_show`, `record_stats`, `SKIP_PHRASES`, ...) is still
 reachable as `logbook.cli.<name>`, found in its family's module with a DeprecationWarning; it is a
 copy of the binding, so patching it here changes nothing. Import it from `logbook.commands.<family>`
@@ -50,8 +53,12 @@ def main(argv: list[str] | None = None) -> None:
     for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; the CLI speaks UTF-8
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
+    from .commands.aliases import rewrite  # an old command name, said once and run under its new one
     from .commands.parser import build_parser  # every family's arguments, and nothing that runs one
 
+    argv, said = rewrite(list(sys.argv[1:] if argv is None else argv))
+    if said:
+        print(said, file=sys.stderr)
     a = build_parser().parse_args(argv)
     from .core import sealing  # the command just chosen has imported the store by now
     from .core.store import FormatError
