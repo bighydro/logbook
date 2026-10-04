@@ -55,9 +55,12 @@ not the event's: `logbook sync` stores the largest watermark of a completed pull
 as `since`, so an old photo uploaded tomorrow is picked up by tomorrow's sync. A line's `at` is the
 event time regardless.
 
-Built-in adapters live in this package. Third-party ones are separate packages that register the
-`logbook.adapters` entry point. `all_adapters()` returns both kinds; `find(path)` asks only file
-adapters; `named(name)` resolves a file adapter by NAME (or an alias: `flights` is `flighty`) and
+Built-in adapters live in this package, listed in `BUILT_IN` in the order they answer a file;
+pyproject lists the same modules as `logbook.adapters` entry points (a test holds the two lists
+equal), so a tool that reads the distribution's metadata sees what `logbook sources` prints.
+Third-party adapters are separate packages that register under that entry-point group.
+`all_adapters()` returns both kinds; `find(path)` asks only file adapters; `named(name)` resolves a
+file adapter by NAME (or an alias: `flights` is `flighty`) and
 `live(name)` a live one. No file adapter makes a network call, and a live adapter makes them only
 inside `pull`.
 """
