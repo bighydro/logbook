@@ -29,6 +29,7 @@ SAMPLE: dict[str, tuple[str, ...]] = {
     "import-backup": ("no-such-backup", "--dry-run"),
     "inbox": ("list",),
     "keepers": (),
+    "person": ("Ola Nordmann",),
     "receive": ("no-such-page.zip",),
     "stats": (),
     "trip": ("trip:2026-06-08:2026-06-10",),

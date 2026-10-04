@@ -33,7 +33,7 @@ COMMANDS: dict[str, tuple[str, ...]] = {
     "trip_json": ("show", "trip", "2026-06-16", "--json"),
     "year": ("show", "year", "2026"),
     "people": ("people",),
-    "person": ("person", "Ola Nordmann"),
+    "person": ("people", "Ola Nordmann"),
     "show_person": ("show", "person", "Ola Nordmann"),
     "places_list": ("places", "list"),
     "keepers": ("show", "keepers"),

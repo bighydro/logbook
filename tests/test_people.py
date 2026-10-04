@@ -205,7 +205,7 @@ def test_people_reads_through_the_index_and_never_sweeps_the_files(
     monkeypatch.setattr(Index, "between", scan)
     monkeypatch.setattr(Index, "day", scan)
     assert len(_json(capsys, "people")["people"]) == 11
-    assert _json(capsys, "person", "Ola")["name"] == "Ola Nordmann"
+    assert _json(capsys, "people", "Ola")["name"] == "Ola Nordmann"
 
 
 def test_an_empty_record_has_no_people(
@@ -216,7 +216,7 @@ def test_an_empty_record_has_no_people(
     assert _json(capsys, "people") == {"window": None, "tier": None, "people": []}
     assert "no people" in _run(capsys, "people")
     with pytest.raises(SystemExit) as e:
-        cli.main(["person", "Ola"])
+        cli.main(["people", "Ola"])
     assert e.value.code == 2
 
 
@@ -242,10 +242,10 @@ def test_a_person_page_is_found_by_name_first_name_ref_or_id_and_lists_the_share
 ) -> None:
     lb = circle_record(tmp_path, monkeypatch)
     head = lb.meta["head"]
-    by_name = _json(capsys, "person", "Ola Nordmann")
+    by_name = _json(capsys, "people", "Ola Nordmann")
     assert by_name["page"] == "person" and by_name["id"] == OLA_ID and by_name["name"] == "Ola Nordmann"
     for how in ("ola", OLA_ID, OLA["email"], OLA["phone"], f"email:{OLA['email']}", f"phone:{OLA['phone']}"):
-        assert _json(capsys, "person", how)["id"] == OLA_ID, how
+        assert _json(capsys, "people", how)["id"] == OLA_ID, how
     assert by_name["birthday"] == OLA_BIRTHDAY and by_name["tier"] == 2
     assert by_name["channels"]["messages"]["lines"] == 5 and by_name["days"] == 3 and by_name["nights"] == 2
     assert by_name["last_real_contact"]["day"] == "2026-06-16"
@@ -256,7 +256,7 @@ def test_a_person_page_is_found_by_name_first_name_ref_or_id_and_lists_the_share
     assert all(s["night"] is not None for s in shared[:2]) and shared[2]["night"] is None
     assert all(len(id_) == 36 for s in shared for id_ in s["lines"]) and all(s["stay"] for s in shared)
     assert lb.meta["head"] == head
-    text = _run(capsys, "person", "Ola Nordmann")
+    text = _run(capsys, "people", "Ola Nordmann")
     rows = text.splitlines()
     assert rows[0].startswith("Ola Nordmann") and OLA["email"] in rows[0] and "tier 2" in rows[0]
     assert OLA_BIRTHDAY in text and "messages 5" in text and "3 days together" in text and "2 nights" in text
@@ -270,10 +270,10 @@ def test_a_person_with_no_evidence_has_a_page_that_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     circle_record(tmp_path, monkeypatch)
-    data = _json(capsys, "person", "Tore Dahl")
+    data = _json(capsys, "people", "Tore Dahl")
     assert data["id"] == TORE["id"] and data["channels"] == {} and data["shared_days"] == []
     assert data["first_contact"] is None and data["last_real_contact"] is None and data["tier"] == 2
-    text = _run(capsys, "person", "Tore")
+    text = _run(capsys, "people", "Tore")
     assert "no contact" in text and "Tore Dahl" in text
 
 
@@ -282,18 +282,18 @@ def test_a_person_the_record_does_not_know_several_or_the_owner_is_refused(
 ) -> None:
     circle_record(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as e:
-        cli.main(["person", "Nordmann"])
+        cli.main(["people", "Nordmann"])
     assert e.value.code == 2 and "several" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["person", "Trude"])
+        cli.main(["people", "Trude"])
     assert e.value.code == 2 and "nobody" in capsys.readouterr().err
     with pytest.raises(SystemExit) as e:
-        cli.main(["person", "trude@example.org"])
+        cli.main(["people", "trude@example.org"])
     assert e.value.code == 2
     for how in (OWNER["name"], OWNER["email"], OWNER["phone"]):
         with pytest.raises(SystemExit) as e:
-            cli.main(["person", how])
+            cli.main(["people", how])
         assert e.value.code == 2 and "owner" in capsys.readouterr().err, how
     with pytest.raises(SystemExit) as e:
-        cli.main(["person", "Ola", "--year", "2025"])
+        cli.main(["people", "Ola", "--year", "2025"])
     assert e.value.code == 2 and "2025" in capsys.readouterr().err
