@@ -9,7 +9,8 @@ clocks are in (empty: the record's zone), the keeper's remark, and a `check` val
 transcriber doubts. Times are `YYYY-MM-DD HH:MM` (a `T` and seconds are fine; an offset is kept);
 a bare date is a leg whose clocks were not noted. The arrival may be empty: the leg is still open.
 
-Each row is one trip/v1 line (RFC 0020), mode `passage`, provider `deck-log`, `subject` the asset,
+Each row is one journey/v1 line (RFC 0020; `trip/v1` renamed by RFC 0031), mode `passage`, provider
+`deck-log`, `subject` the asset,
 `evidence` `declared`, named `<dep_place> → <arr_place>`, `at` the departure and `end` the arrival
 (null while open). The places are the log's own words under `from` and `to` (rule 2), with a
 position when one can be found, in this order: an ECDIS route file in `--routes` (RTZ 1.0 XML, as
@@ -52,8 +53,8 @@ from ...core.flights import distance_km
 from ...core.places import Place
 
 NAME = "passages"
-KIND = "trip"
-SCHEMA = "trip/v1"
+KIND = "journey"  # RFC 0031: the written form of RFC 0020 since 2026-10-05; readers accept `trip` too
+SCHEMA = "journey/v1"
 LOCATION_SCHEMA = "location/v1"
 TIER = 1
 MODE = "passage"
@@ -347,7 +348,7 @@ def run(
     report: list[str] | None = None,
     places: Sequence[Place] | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """One trip/v1 draft per row and a location/v1 draft per positioned end with a time, oldest
+    """One journey/v1 draft per row and a location/v1 draft per positioned end with a time, oldest
     first. `asset` is the registered asset the log belongs to (required; ValueError names the
     flag, or the asset when `assets` does not list it). `routes` is a folder of RTZ files, `places`
     the record's named places. `since` is RFC3339 UTC: legs that left before it are not yielded.

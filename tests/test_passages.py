@@ -56,7 +56,7 @@ def _run(
 
 
 def _legs(drafts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [d for d in drafts if d["kind"] == "trip"]
+    return [d for d in drafts if d["kind"] == "journey"]
 
 
 def _positions(drafts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -195,7 +195,7 @@ def test_a_leg_matched_to_a_route_takes_its_ends_and_its_waypoints():
         "2026-06-14T15:10:00Z",
         "Europe/Paris",
     )
-    assert p["schema"] == "trip/v1"
+    assert p["schema"] == "journey/v1"
     assert p["mode"] == "passage" and p["provider"] == "deck-log"
     assert p["subject"] == "nordlys" and p["evidence"] == "declared"
     assert p["name"] == "Cannes → Genoa Molo Vecchio"
@@ -369,7 +369,7 @@ def test_add_passages_writes_the_legs_and_reports_them(lb, capsys):
     assert f"added {LEGS + POSITIONS} lines from passages" in out
     assert "  6 legs: 2 matched to a route, 1 open (no arrival yet)" in out
     assert "places unresolved: Cala Nordlys" in out
-    assert sum(1 for line in lb.lines() if line["kind"] == "trip") == LEGS
+    assert sum(1 for line in lb.lines() if line["kind"] == "journey") == LEGS
 
 
 def test_add_passages_again_appends_nothing(lb, capsys):

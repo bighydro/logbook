@@ -58,8 +58,11 @@ KINDS = (
     "watch",
     "listen",
     "trip",
+    "journey",  # RFC 0031: `trip/v1` renamed for new lines; either kind asked for searches both
     "story",
 )
+# One profile under two kinds (RFC 0031): asking for either searches both.
+ALIASES = {"trip": ("trip", "journey"), "journey": ("trip", "journey")}
 # Payload keys whose string is an id, a digest, a stamp, a type or a path, never words a person
 # searches for: left out of the body so a snippet never shows one and a digest never matches.
 SKIP_KEYS = frozenset(
@@ -222,6 +225,8 @@ def query(
         raise QueryError("--tier is 1, 2 or 3")
     if limit < 1:
         raise QueryError("--limit is at least 1")
+    if kinds is not None:
+        kinds = tuple(dict.fromkeys(k for kind in kinds for k in ALIASES.get(kind, (kind,))))
     return Query(text, built, since, until, None if kinds is None else tuple(kinds), max_tier, limit)
 
 

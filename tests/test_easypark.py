@@ -119,11 +119,11 @@ def test_each_recent_area_is_one_parking_trip_with_no_end(folder):
         None,
         "Europe/Oslo",
         "easypark",
-        "trip",
+        "journey",
         1,
     )
     p = d["payload"]
-    assert p["schema"] == "trip/v1" and p["mode"] == "parking" and p["provider"] == "easypark"
+    assert p["schema"] == "journey/v1" and p["mode"] == "parking" and p["provider"] == "easypark"
     assert p["raw_id"] == "easypark:114681@2026-09-16T14:05:08Z"
     assert p["from"] == {
         "name": "Storgata 1-36",

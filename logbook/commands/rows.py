@@ -124,7 +124,10 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
         text = _voice_memo_text(p)
-    elif line["kind"] == "trip" and p.get("schema") == "trip/v1":
+    elif line["kind"] in ("trip", "journey") and p.get("schema") in (
+        "trip/v1",
+        "journey/v1",
+    ):  # RFC 0031: one profile, two spellings
         text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)

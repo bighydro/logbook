@@ -1,4 +1,4 @@
-"""The SBB Mobile app's stores → trip/v1 (RFC 0020), mode `transit`, provider `sbb`.
+"""The SBB Mobile app's stores → journey/v1 (RFC 0020; `trip/v1` renamed by RFC 0031), mode `transit`, `sbb`.
 
 Two stores from an iPhone backup carry what the owner bought and travelled:
 
@@ -47,8 +47,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 NAME = "sbb"
-KIND = "trip"
-SCHEMA = "trip/v1"
+KIND = "journey"  # RFC 0031: the written form of RFC 0020 since 2026-10-05; readers accept `trip` too
+SCHEMA = "journey/v1"
 MODE = "transit"
 PROVIDER = "sbb"
 TIER = 1
@@ -135,7 +135,7 @@ def run(
     counts: dict[str, int] | None = None,
     tier: int | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """One trip/v1 line per ticket group and per past journey, in `at` order.
+    """One journey/v1 line per ticket group and per past journey, in `at` order.
 
     `since` is RFC3339 UTC; lines with `at` before it are not yielded. `counts` tallies
     `skipped_no_start` and `skipped_unreadable_json`. `tier` overrides the profile's (1, or 3 with a
