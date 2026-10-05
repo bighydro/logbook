@@ -58,6 +58,7 @@ Nothing here needs the app to make sense: open the files in any editor twenty ye
 | understand the format, or implement it | [SPEC.md](SPEC.md), [conformance/](conformance/README.md), [the RFCs](rfcs/README.md) |
 | know how the pieces fit | [ARCHITECTURE.md](ARCHITECTURE.md), [the decisions](docs/adr/README.md) |
 | know why, and what it refuses to have | [VISION.md](VISION.md), [LORE.md](LORE.md) |
+| know who decides, what is still unsolved, and read the letters | [GOVERNANCE.md](GOVERNANCE.md), [PROBLEMS.md](PROBLEMS.md), [the letters](docs/letters/2026-10-04-the-freeze.md) |
 | know what shipped and what is next | [Release notes](docs/release-notes.md), [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md) |
 | write an adapter for the export you already have | [CONTRIBUTING.md](CONTRIBUTING.md), [the bounties](docs/adapter-bounties.md) |
 | report a vulnerability, or read the threat model | [SECURITY.md](SECURITY.md) |
