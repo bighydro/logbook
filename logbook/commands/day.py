@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -141,6 +141,13 @@ def _show_reader(a: argparse.Namespace) -> None:
         cmd_stats(a)
 
 
+def instant_of(stamp: str) -> datetime:
+    """An RFC 3339 stamp as an aware UTC datetime, for ordering: `10:00:00.5Z` after `10:00:00Z`,
+    which the text of `at` gets wrong (SPEC §3.2: a day is ordered by the instant, then `seq`)."""
+    parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
 def cmd_show(a: argparse.Namespace) -> None:
     """One local day (the owner's timezone), located through the index, read from the files,
     in time order (then chain order for the same instant). Senders, organizers and attendees
@@ -169,7 +176,9 @@ def cmd_show(a: argparse.Namespace) -> None:
     if not rows:
         print(f"{day}: nothing logged")
         return
-    rows.sort(key=lambda line: (line["at"], line["seq"]))
+    rows.sort(
+        key=lambda line: (instant_of(line["at"]), line["seq"])
+    )  # by the instant, then seq (SPEC §3.2, #123)
     print(day)
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
