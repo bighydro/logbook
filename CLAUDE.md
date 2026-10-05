@@ -19,6 +19,10 @@ Hard rules — a change that needs to break one is wrong; stop and say so:
 Conventions: `uv` for everything (`uv sync --group dev`, `uv run pytest`, `uv run ruff check --fix .`, `uv run mypy logbook`). Conventional commits (`feat:`, `fix:`, `spec:`, `docs:`, `adapter:`). Plain English names inside the code: Logbook, Line, Day, Note — no metaphors.
 - Paths: never match or split them as strings; use `pathlib` parts. Windows runs the tests too.
 
+## Merge rules
+
+- A pull request that renames a command or changes a reader's output gets one run of `LOGBOOK_SLOW=1 uv run pytest tests/test_fuzz_readers.py` before it merges, and says so in its checklist. The fuzz readers are slow-tier: the pull-request CI tier skips them, so a regression there only shows on the push to `main` after the merge. #215 (the 22-command rename) turned `main` red that way on 4 October 2026; #217 fixed it forward.
+
 ## Commit routine
 
 - Commits are authored as `bighydro <122497530+bighydro@users.noreply.github.com>` only. A cloud or new checkout sets `user.name` and `user.email` before its first commit:
