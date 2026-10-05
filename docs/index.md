@@ -17,6 +17,8 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Vision](VISION.md): the record, the recount, the circle, and the list of things the product refuses to have.
 - [Lore](LORE.md): where the logbook comes from, ships, pilots, diaries, and the log in computing.
 - [Roadmap](ROADMAP.md): what is done, what is next, what 1.0 means.
+- [Open problems](PROBLEMS.md): what the format cannot do yet, stated so a collaborator can pick one.
+- [Letters](letters/2026-10-04-the-freeze.md): the captain to the builders; the first one is about the freeze.
 - [Release notes](release-notes.md): what each version changed for you, five bullets each.
 - [Changelog](CHANGELOG.md): every change, in full.
 
