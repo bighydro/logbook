@@ -1,0 +1,12 @@
+{
+  "profile": "task/v1",
+  "rfc": "0016",
+  "kind": "task",
+  "tier": 2,
+  "day": "2026-03-04",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-04T12:10:00Z\",\"end\":null,\"kind\":\"task\",\"payload\":{\"completed_at\":\"2026-03-04T12:10:00Z\",\"due\":\"2026-03-05\",\"extra\":{\"hidden\":true,\"links\":[{\"description\":\"the quote\",\"type\":\"email\",\"url\":\"https://mail.example.org/u/0/#inbox/abc\"}]},\"list\":\"My Tasks\",\"modified_at\":\"2026-03-04T12:10:00Z\",\"notes\":\"30 m, 12 mm. Ask at the chandlery on Storgata 1.\",\"raw_id\":\"aGVsbG8tcm9wZQ@2026-03-04T12:10:00Z\",\"schema\":\"task/v1\",\"status\":\"done\",\"title\":\"Buy the long rope\"},\"source\":\"google-takeout\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "d9469b0be2ee0f93b18aa953c1a25197674d5350c6e1b22d0dd1fa62f53298dd",
+  "hash": "c61bf8b76f558b5e000e2ad18c25da5e4d12979522ce72bd419fc07122c2b4ba",
+  "head": "c61bf8b76f558b5e000e2ad18c25da5e4d12979522ce72bd419fc07122c2b4ba"
+}

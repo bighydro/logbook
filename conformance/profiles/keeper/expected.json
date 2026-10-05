@@ -1,0 +1,12 @@
+{
+  "profile": "keeper/v1",
+  "rfc": "0024",
+  "kind": "keeper",
+  "tier": 1,
+  "day": "2026-06-10",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-06-10T10:30:00Z\",\"end\":null,\"kind\":\"keeper\",\"payload\":{\"at\":\"2026-06-10T10:30:00Z\",\"lane\":\"memory\",\"photo\":{\"asset_id\":\"p-2026-06-10T10:30:00Z\",\"file_name\":\"IMG_101030.HEIC\",\"library\":\"immich\",\"line\":\"01a0f6a2-068b-7572-94ea-f492e749c3d6\"},\"raw_id\":\"01a0f6a2-068b-7572-94ea-f492e749c3d6:memory\",\"schema\":\"keeper/v1\",\"source\":\"immich\"},\"source\":\"keeper-inference\",\"tier\":1,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "1745cdae064758afd968751a1d01303cadf69cd1e2f9fcc8f99714c7b00cfa6f",
+  "hash": "74be7a5c4366b5f7d7f15b4c0dab0a9f8dcc0543b7280f76312dc2384cd8fc5d",
+  "head": "74be7a5c4366b5f7d7f15b4c0dab0a9f8dcc0543b7280f76312dc2384cd8fc5d"
+}

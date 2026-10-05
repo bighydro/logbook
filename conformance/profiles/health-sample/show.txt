@@ -1,0 +1,2 @@
+2026-03-02
+  08:00  health     apple-health   device=Watch7,1, extra={'samples': 3}, raw_id=steps:2026-03-02T07:00:00Z:Watch7,1, source_name=Apple Watch, type=steps, unit=count, value=250

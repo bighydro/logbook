@@ -1,6 +1,6 @@
 # RFC 0019 — payload profile `listen/v1`
 
-Status: draft · 2026-10-01 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 · comment period: two weeks
 
 Something the owner heard: a song Shazam identified, a podcast episode Apple Podcasts played, later a Spotify or Apple Music history. One profile for tracks and episodes, so that "what was I listening to that week" is one query, with `media` telling a song from a show.
 

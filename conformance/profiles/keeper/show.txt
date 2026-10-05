@@ -1,0 +1,3 @@
+2026-06-10
+  hero  IMG_101030.HEIC
+  12:30  keeper     keeper-inference hero photo (memory): IMG_101030.HEIC

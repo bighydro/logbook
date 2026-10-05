@@ -1,0 +1,12 @@
+{
+  "profile": "retraction/v1",
+  "rfc": "0003",
+  "kind": "retraction",
+  "tier": 2,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T21:14:00Z\",\"end\":null,\"kind\":\"retraction\",\"payload\":{\"reason\":\"two file paths pasted as a note by mistake\",\"schema\":\"retraction/v1\",\"seq\":312,\"supersedes\":\"0195d1c2-7e40-7d3a-9b1e-4a2f1c8e0b77\"},\"source\":\"manual\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "4cc3078bf3805993dcbe03ba9898ab5c89e445d6df7c14875bc8c94ee4ea5087",
+  "hash": "6c62c728f8bd5221e783a9f8f28f771af5d60bc8bbb53ca2f8b8187897207d38",
+  "head": "6c62c728f8bd5221e783a9f8f28f771af5d60bc8bbb53ca2f8b8187897207d38"
+}

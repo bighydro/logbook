@@ -1,6 +1,6 @@
 # RFC 0003 — payload profile `retraction/v1`
 
-Status: draft · 2026-09-15 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-15 · comment period: two weeks
 
 One line saying that an earlier line should be hidden. Nothing is rewritten or removed (SPEC §3); the retracted line stays in the chain, and every reader treats it as hidden. Produced by `logbook retract`, by adapters that learn a source has withdrawn something, and by engines that find a line was wrong.
 

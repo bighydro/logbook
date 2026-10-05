@@ -1,0 +1,58 @@
+{
+  "day": "2026-03-02",
+  "weekday": "Monday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-03-01",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    },
+    "after": {
+      "day": "2026-03-02",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    }
+  },
+  "country": {
+    "code": null,
+    "method": null,
+    "by": null,
+    "from": null
+  },
+  "all_day": [],
+  "timeline": [],
+  "flights": [],
+  "unplaced": [
+    {
+      "kind": "mail",
+      "at": "2026-03-02T10:15:00Z",
+      "end": null,
+      "title": "Re: Mooring for the weekend",
+      "line": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "stories": [],
+  "health": null,
+  "spend": null,
+  "weather": null,
+  "sources": [
+    {
+      "source": "mail",
+      "lines": 1,
+      "first": "2026-03-02T10:15:00Z",
+      "newest": "2026-03-02T10:15:00Z"
+    }
+  ],
+  "received": []
+}

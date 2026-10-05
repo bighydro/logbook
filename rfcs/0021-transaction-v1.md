@@ -1,6 +1,6 @@
 # RFC 0021 — payload profile `transaction/v1`
 
-Status: draft · 2026-10-01 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 · comment period: two weeks
 
 One movement of money as a financial app recorded it: a card payment, a transfer, a salary, a
 shared expense on a trip. The line records what the app stored — how much, in what currency, with

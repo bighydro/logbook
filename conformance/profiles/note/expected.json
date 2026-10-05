@@ -1,0 +1,12 @@
+{
+  "profile": "note/v1",
+  "rfc": "0010",
+  "kind": "note",
+  "tier": 2,
+  "day": "2026-03-04",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-04T21:10:00Z\",\"end\":null,\"kind\":\"note\",\"payload\":{\"schema\":\"note/v1\",\"text\":\"Decided: keep the boat one more season.\"},\"source\":\"manual\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "3edb8351f339cbfeb7a2a05d90a7b60d0dc2894362b88ea2238b3578e2f28067",
+  "hash": "d9acceb29881b0c4863495e242fc477b01b4c2d0996a2e7146efc9be8d1a5f92",
+  "head": "d9acceb29881b0c4863495e242fc477b01b4c2d0996a2e7146efc9be8d1a5f92"
+}

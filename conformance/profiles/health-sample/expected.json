@@ -1,0 +1,12 @@
+{
+  "profile": "health-sample/v1",
+  "rfc": "0014",
+  "kind": "health",
+  "tier": 3,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T07:00:00Z\",\"end\":\"2026-03-02T07:15:00Z\",\"kind\":\"health\",\"payload\":{\"device\":\"Watch7,1\",\"extra\":{\"samples\":3},\"raw_id\":\"steps:2026-03-02T07:00:00Z:Watch7,1\",\"schema\":\"health-sample/v1\",\"source_name\":\"Apple Watch\",\"type\":\"steps\",\"unit\":\"count\",\"value\":250},\"source\":\"apple-health\",\"tier\":3,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "70614e3768430fca9eb1beb82127ef82b6f5fff355c5eafa481f9dcde269c131",
+  "hash": "caee5c9ae27ed25474e6a430151dbaeb50079677e8ae6422b69074674cbf1c78",
+  "head": "caee5c9ae27ed25474e6a430151dbaeb50079677e8ae6422b69074674cbf1c78"
+}

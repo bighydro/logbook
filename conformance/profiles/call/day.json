@@ -1,0 +1,58 @@
+{
+  "day": "2026-03-02",
+  "weekday": "Monday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-03-01",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    },
+    "after": {
+      "day": "2026-03-02",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    }
+  },
+  "country": {
+    "code": null,
+    "method": null,
+    "by": null,
+    "from": null
+  },
+  "all_day": [],
+  "timeline": [],
+  "flights": [],
+  "unplaced": [
+    {
+      "kind": "call",
+      "at": "2026-03-02T15:04:10Z",
+      "end": "2026-03-02T15:11:35Z",
+      "title": "+447700900001",
+      "line": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "stories": [],
+  "health": null,
+  "spend": null,
+  "weather": null,
+  "sources": [
+    {
+      "source": "ios-calls",
+      "lines": 1,
+      "first": "2026-03-02T15:04:10Z",
+      "newest": "2026-03-02T15:04:10Z"
+    }
+  ],
+  "received": []
+}

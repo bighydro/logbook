@@ -1,0 +1,12 @@
+{
+  "profile": "weather/v1",
+  "rfc": "0026",
+  "kind": "weather",
+  "tier": 1,
+  "day": "2026-06-16",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-06-15T22:00:00Z\",\"end\":\"2026-06-16T22:00:00Z\",\"kind\":\"weather\",\"payload\":{\"dataset\":\"archive\",\"day\":\"2026-06-16\",\"evidence\":\"external\",\"lat\":47.4,\"lon\":8.5,\"precipitation_mm\":0.3,\"provider\":\"open-meteo\",\"raw_id\":\"2026-06-16@47.4,8.5\",\"schema\":\"weather/v1\",\"sunrise\":\"2026-06-16T03:30:00Z\",\"sunset\":\"2026-06-16T19:25:00Z\",\"t_max_c\":26.8,\"t_min_c\":14.1,\"weather_code\":2,\"wind_max_kmh\":18.7},\"source\":\"weather\",\"tier\":1,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "651377ff081b498e5c6a48f34c4962f7bedac18cf9e0dc45ad47129c85ac3a33",
+  "hash": "3ebfc9fe11fa6cb2ad782526e00af182d5cb92130edb0a69d60def2b8cf04f84",
+  "head": "3ebfc9fe11fa6cb2ad782526e00af182d5cb92130edb0a69d60def2b8cf04f84"
+}

@@ -1,6 +1,6 @@
 # RFC 0002 — payload profile `photo/v1`
 
-Status: draft · 2026-09-14 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-14 · comment period: two weeks
 
 One image or video asset the owner holds, described by its metadata. The pixels are never in the log; the line points at them.
 

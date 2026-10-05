@@ -1,0 +1,12 @@
+{
+  "profile": "call/v1",
+  "rfc": "0012",
+  "kind": "call",
+  "tier": 1,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T15:04:10Z\",\"end\":\"2026-03-02T15:11:35Z\",\"kind\":\"call\",\"payload\":{\"answered\":true,\"counterparty\":{\"kind\":\"phone\",\"value\":\"+447700900001\"},\"direction\":\"incoming\",\"duration_s\":445,\"raw_id\":\"3B1F8E2A-6C4D-4F7B-9A0E-2D5C8B1F4A7E\",\"schema\":\"call/v1\",\"service\":\"cellular\"},\"source\":\"ios-calls\",\"tier\":1,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "1beb1213dd32e0e7aa2326f1b1acad64beaec76317862a029f921ddef42cd362",
+  "hash": "0004bbc59a785becb84b51e59d82b640d84ae36e4ec563befa5665a88674ea00",
+  "head": "0004bbc59a785becb84b51e59d82b640d84ae36e4ec563befa5665a88674ea00"
+}

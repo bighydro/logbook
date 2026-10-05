@@ -1,6 +1,6 @@
 # RFC 0013 — payload profile `flight/v1`
 
-Status: draft · 2026-09-30 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-30 · comment period: two weeks
 
 One flight the owner was on: a carrier and a number, from one airport to another on one date, with the times that were planned and the times that happened, the aircraft when known, and whether the owner sat in the cabin or at the controls. The same flight reaches the record from up to four places — a flight tracker's export, a boarding pass in the owner's Wallet, the record's own calendar and location lines, the owner's word — and the profile says how they meet.
 

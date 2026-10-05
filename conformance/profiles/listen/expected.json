@@ -1,0 +1,12 @@
+{
+  "profile": "listen/v1",
+  "rfc": "0019",
+  "kind": "listen",
+  "tier": 2,
+  "day": "2026-03-04",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-04T20:15:30Z\",\"end\":null,\"kind\":\"listen\",\"payload\":{\"artist\":\"Kari Nordmann\",\"media\":\"track\",\"raw_id\":\"shazam:100000001:2026-03-04 21:15:30\",\"schema\":\"listen/v1\",\"service\":\"shazam\",\"title\":\"Fjordsang\",\"url\":\"https://www.shazam.com/track/100000001/fjordsang\"},\"source\":\"shazam\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "0ceccd76ee19a0ea1622f55f9c320981d5f48b1245726aabbf199766026756dd",
+  "hash": "00c02ae1c60ad7a07deb6b0271d0e494b214a65edf06f80e763ed831e629f9e5",
+  "head": "00c02ae1c60ad7a07deb6b0271d0e494b214a65edf06f80e763ed831e629f9e5"
+}

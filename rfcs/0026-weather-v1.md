@@ -1,6 +1,6 @@
 # RFC 0026 — payload profile `weather/v1`
 
-Status: draft · 2026-10-02 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-02 · comment period: two weeks
 
 One statement of the weather of one local day at one place the owner spent it: the lowest and highest temperature, the precipitation, the strongest wind, the WMO weather code, sunrise and sunset. The place is where the owner's own track says they were — the overnight stay, or a stay of three hours or more — rounded to a tenth of a degree, about 10 km, before anyone is asked about it. The values are a weather provider's, not an observation of the owner's: `evidence` is `external`, and a reader shows them as the day's weather, never as a presence or an act. A day the owner spent in two such places has two lines.
 

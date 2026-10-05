@@ -1,6 +1,6 @@
 # RFC 0001 — payload profile `location/v1`
 
-Status: draft · 2026-09-14 · comment period: two weeks · amended 2026-09-30 (`subject`, ADR 0018)
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-14 · comment period: two weeks · amended 2026-09-30 (`subject`, ADR 0018)
 
 One observed position of one subject at one instant. The subject is the owner unless the line says otherwise: a position of something the owner keeps track of — a boat, an aircraft, a car (ADR 0018) — is the same profile with `subject` set. Produced by phone trackers (Dawarich, OwnTracks, Overland), Google Timeline exports, GPX tracks, camera EXIF; for an asset, by AIS and ADS-B receivers.
 

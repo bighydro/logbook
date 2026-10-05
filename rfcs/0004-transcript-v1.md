@@ -1,6 +1,6 @@
 # RFC 0004 — payload profile `transcript/v1`
 
-Status: draft · 2026-09-16 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks
 
 ## Summary
 

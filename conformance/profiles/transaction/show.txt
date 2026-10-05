@@ -1,0 +1,2 @@
+2026-03-02
+  00:00  transaction copilot        account=acct_0000000000000001, amount=-42.5, category=restaurants, currency=USD, date=2026-03-02, extra={'original_name': 'HARBOUR CAFE OSLO', 'recurring': False, 'type': 'regular'}, merchant=Harbour Cafe, provider=copilot, raw_id=6f1c2a9e-0000-4000-8000-000000000001, status=posted
