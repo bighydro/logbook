@@ -50,6 +50,7 @@ nav:
   - Roadmap: ROADMAP.md
   - Release notes: release-notes.md
   - Audit — October 2026: audit-2026-10.md
+  - Open problems: PROBLEMS.md
   - Decisions:
       - About ADRs: adr/README.md
       - "0001 Files are the truth": adr/0001-files-are-the-truth.md
