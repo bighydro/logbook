@@ -1,6 +1,6 @@
 # RFC 0007 — payload profile `commitment/v1`
 
-Status: draft · 2026-09-16 · comment period: two weeks
+Status: withdrawn by RFC 0031 · 2026-10-05 (drafted 2026-09-16; nothing ever wrote or read these lines; the file stays as the project's record)
 
 Something the owner said they would do, or someone said they would do for the owner. A commitment is open until evidence closes it. This is the profile behind "nothing falls through the cracks": the log holds the promise, and the log holds the proof it was kept.
 

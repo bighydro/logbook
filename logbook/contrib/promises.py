@@ -6,7 +6,7 @@ obligation ("I need to", "ich muss") or an offer ("let me"), in English and Germ
 alone. No model runs and no socket opens. Each proposal carries the day, the line it was read in,
 the speaker when the transcript resolves one (RFC 0006), the sentence as written and a due hint when
 a date phrase is in it ("by Friday", "bis Montag", "next week"), resolved against the day it was
-said. Everything here is a draft (ADR 0013.7, RFC 0007 rule 3): the command prints proposals, and
+said. Everything here is a draft (ADR 0013.7; `docs/promises.md`): the command prints proposals, and
 the owner closes one with `promises done <id>`, which appends a `task/v1` line (RFC 0016) marked
 done; nothing is ever rewritten.
 
@@ -39,7 +39,7 @@ TASK_SCHEMA = "task/v1"
 TASK_TIER = 2
 TASK_LIST = "promises"
 RAW_PREFIX = "promise:"
-CERTAINTY = "inferred"  # RFC 0007: the words were read into a commitment, never stated as one
+CERTAINTY = "inferred"  # the words were read into a promise, never stated as one (docs/promises.md)
 OWED_BY_OWNER, OWED_TO_OWNER = "owed_by_owner", "owed_to_owner"
 FUTURE, OBLIGATION, OFFER = "future", "obligation", "offer"
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
