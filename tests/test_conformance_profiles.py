@@ -73,11 +73,17 @@ def test_regenerating_reproduces_every_byte(tmp_path: Path) -> None:
     keeps no empty folder, and the generator leaves none)."""
     fresh_root = tmp_path / "profiles"
     _script().main(fresh_root)
+    # `.gitattributes` keeps the folder free of CRLF conversion; `logbook.json` is written in text mode
+    # by the store, so on Windows a fresh one carries CRLF: compared with line endings folded.
     committed = {
-        p.relative_to(PROFILES).as_posix(): p.read_bytes() for p in PROFILES.rglob("*") if p.is_file()
+        p.relative_to(PROFILES).as_posix(): p.read_bytes().replace(b"\r\n", b"\n")
+        for p in PROFILES.rglob("*")
+        if p.is_file()
     }
     fresh = {
-        p.relative_to(fresh_root).as_posix(): p.read_bytes() for p in fresh_root.rglob("*") if p.is_file()
+        p.relative_to(fresh_root).as_posix(): p.read_bytes().replace(b"\r\n", b"\n")
+        for p in fresh_root.rglob("*")
+        if p.is_file()
     }
     assert sorted(committed) == sorted(fresh)
     assert [name for name in committed if committed[name] != fresh[name]] == []
