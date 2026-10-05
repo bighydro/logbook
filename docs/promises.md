@@ -83,10 +83,10 @@ proposal carries `id`, `status` (`open` or `done`), `closed_by` (the task line's
 `line` (the origin), `seq`, `kind` (`transcript` or `note`), `source`, `title`, `speaker` (`label`,
 `spoken`, `person`, `owner`, or null), `direction` (`owed_by_owner` when you said it,
 `owed_to_owner` when a resolved person did, null when nobody is behind the label), `certainty`
-(always `inferred`, RFC 0007's word for a commitment read into the words), `language`, `cue` (the
+(always `inferred`: the words were read into a promise, never stated as one), `language`, `cue` (the
 words that made it a promise, as written), `class`, `quote`, `due` (`phrase` and `date`, or null)
-and `judgement` (below, or null). The fields are RFC 0007's where the two overlap, so a later
-`commitment/v1` writer has nothing to translate.
+and `judgement` (below, or null). The fields are this reader's own; `commitment/v1` (RFC 0007), which
+they once mirrored, was withdrawn by RFC 0031.
 
 ## The judge
 
@@ -185,13 +185,14 @@ the close is a line beside them.
 `--open` hides a proposal whose latest standing task line (by `extra.promise`) has status `done`
 or `cancelled`. `done` on a proposal already closed writes nothing and says so; an id the record
 does not propose is refused with status 2. A proposal is yours to close only: the command never
-closes one on its own, and nothing it reads can close another (RFC 0007 rule 3).
+closes one on its own, and nothing it reads can close another: a proposal is never asserted, and
+only the owner closes one.
 
-Why `task/v1` and not `commitment/v1`? A promise you confirm is, by RFC 0007, a `commitment/v1`
-line, and a kept one a `commitment-close/v1`. That is two lines and a counterparty, and it is where
-this command leads once a confirmation step exists; for now the one act the owner takes is "that
-was done", and RFC 0016's task is the line that says exactly that with a title and a status. The
-`extra` fields keep what a commitment writer would need.
+Why `task/v1`? `commitment/v1` and `commitment-close/v1` (RFC 0007) were the lines a confirmed
+promise and its keeping would have become: two lines and a counterparty. Nothing ever wrote or read
+them, and RFC 0031 withdrew them. The one act the owner takes is "that was done", and RFC 0016's
+task is the line that says exactly that with a title and a status. The `extra` fields keep what a
+counterparty's writer would need.
 
 ## Replacing the rules with a model
 

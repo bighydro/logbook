@@ -290,7 +290,7 @@ Every rollup is one object with `kind`, `window` and `years` (`health`: `by` and
 
 #### 3.2.10 Promises (`promises`)
 
-The commitments the record's own words suggest, proposed and never asserted (RFC 0007 rule 3). **Inputs.** The `transcript/v1` lines standing whose text is in the attachment store (read by its media type: WebVTT, SRT, JSON segments, `Speaker: text` prose, plain text; a transcript whose text is not there is counted under `skipped` and passed over) and the `note/v1` lines standing, from `--since` on; the `task/v1` lines; the resolution lines; the owner's identities.
+The commitments the record's own words suggest, proposed and never asserted: only the owner closes one, and nothing the reader reads can close another. **Inputs.** The `transcript/v1` lines standing whose text is in the attachment store (read by its media type: WebVTT, SRT, JSON segments, `Speaker: text` prose, plain text; a transcript whose text is not there is counted under `skipped` and passed over) and the `note/v1` lines standing, from `--since` on; the `task/v1` lines; the resolution lines; the owner's identities.
 
 **Rules.**
 
@@ -322,7 +322,7 @@ Each payload profile (§5) names the tier its producers write by default. The ta
 | Default tier | Profiles (RFC) |
 |---|---|
 | 1 | `location/v1` (0001), `photo/v1` (0002), `event/v1` (0009; a source MAY set 2 on entries with attendees), `crossing/v1` (0011, MUST), `call/v1` (0012), `flight/v1` (0013), `trip/v1` (0020; 3 when it carries a `price`), `keeper/v1` (0024), `weather/v1` (0026), `migration/v1` (§3.1) |
-| 2 | `retraction/v1` (0003), `transcript/v1` (0004), `resolution/v1` (0006; the highest tier of its evidence, 2 in practice), `commitment/v1` and `commitment-close/v1` (0007; the highest tier of their evidence, 2 when written by hand), `message/v1` (0008, MUST), `note/v1` (0010, MUST), `mail/v1` (0015), `task/v1` (0016, MUST), `browse/v1` (0017, MUST), `watch/v1` (0018, MUST), `listen/v1` (0019, MUST), `highlight/v1` (0022), `voice-memo/v1` (0023) |
+| 2 | `retraction/v1` (0003), `transcript/v1` (0004), `resolution/v1` (0006; the highest tier of its evidence, 2 in practice), `message/v1` (0008, MUST), `note/v1` (0010, MUST), `mail/v1` (0015), `task/v1` (0016, MUST), `browse/v1` (0017, MUST), `watch/v1` (0018, MUST), `listen/v1` (0019, MUST), `highlight/v1` (0022), `voice-memo/v1` (0023) |
 | 3 | `health-sample/v1` (0014), `transaction/v1` (0021, MUST; an import option MUST NOT lower it) |
 
 A default marked MUST is the profile's tier; the others are SHOULD: a producer MAY write a higher tier for a reason it states (the reference `transcript`, `granola` and `wispr-flow` adapters write `transcript/v1` at 3), and an import option (`logbook add --tier`) MAY set another tier for a whole run where the RFC allows it, never per line.
