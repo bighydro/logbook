@@ -1,0 +1,50 @@
+{
+  "day": "2026-06-10",
+  "weekday": "Wednesday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-06-09",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    },
+    "after": {
+      "day": "2026-06-10",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    }
+  },
+  "country": {
+    "code": null,
+    "method": null,
+    "by": null,
+    "from": null
+  },
+  "all_day": [],
+  "timeline": [],
+  "flights": [],
+  "unplaced": [],
+  "stories": [],
+  "health": null,
+  "spend": null,
+  "weather": null,
+  "sources": [
+    {
+      "source": "manual",
+      "lines": 1,
+      "first": "2026-06-10T18:30:00Z",
+      "newest": "2026-06-10T18:30:00Z"
+    }
+  ],
+  "received": []
+}

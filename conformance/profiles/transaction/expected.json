@@ -1,0 +1,12 @@
+{
+  "profile": "transaction/v1",
+  "rfc": "0021",
+  "kind": "transaction",
+  "tier": 3,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-01T23:00:00Z\",\"end\":null,\"kind\":\"transaction\",\"payload\":{\"account\":\"acct_0000000000000001\",\"amount\":-42.5,\"category\":\"restaurants\",\"currency\":\"USD\",\"date\":\"2026-03-02\",\"extra\":{\"original_name\":\"HARBOUR CAFE OSLO\",\"recurring\":false,\"type\":\"regular\"},\"merchant\":\"Harbour Cafe\",\"provider\":\"copilot\",\"raw_id\":\"6f1c2a9e-0000-4000-8000-000000000001\",\"schema\":\"transaction/v1\",\"status\":\"posted\"},\"source\":\"copilot\",\"tier\":3,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "3d45b3accc6c027120f8d114153b7e6862a2b08a45090f8f8f7f63dd6ee8677b",
+  "hash": "d47b130f8e92328df94634feedf1404b6248107e4097b8b6c81bd55ed85d7ddd",
+  "head": "d47b130f8e92328df94634feedf1404b6248107e4097b8b6c81bd55ed85d7ddd"
+}

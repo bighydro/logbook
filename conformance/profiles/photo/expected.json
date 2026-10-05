@@ -1,0 +1,12 @@
+{
+  "profile": "photo/v1",
+  "rfc": "0002",
+  "kind": "photo",
+  "tier": 1,
+  "day": "2026-03-01",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-01T09:12:00Z\",\"end\":null,\"kind\":\"photo\",\"payload\":{\"asset_id\":\"p-2026-03-01T09:12:00Z\",\"camera\":\"SimPhone 3\",\"faces\":2,\"file_name\":\"IMG_0001.HEIC\",\"height\":3024,\"lat\":59.913,\"library\":\"immich\",\"live_photo\":true,\"lon\":10.742,\"media\":\"image\",\"people\":[\"p_17\",\"p_42\"],\"provenance\":\"camera\",\"schema\":\"photo/v1\",\"width\":4032},\"source\":\"immich\",\"tier\":1,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "baa12a013dd11a59da831415f441734da32f9b7f1a18e33abd5cf9c50c4e93f6",
+  "hash": "4fca805acfdd8cc6ea04d8302078f6bbb252090023bd4332dd50aa331dc2084d",
+  "head": "4fca805acfdd8cc6ea04d8302078f6bbb252090023bd4332dd50aa331dc2084d"
+}

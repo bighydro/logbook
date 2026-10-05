@@ -1,6 +1,6 @@
 # RFC 0014 — payload profile `health-sample/v1`
 
-Status: draft · 2026-10-01 (body composition, energy intake and relayed readings added the same day) · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 (body composition, energy intake and relayed readings added the same day) · comment period: two weeks
 
 One measurement the body made and a device recorded: a count of steps in a quarter of an hour, one
 heart-rate reading, a stage of one night's sleep, a weight, a workout. The line records what the

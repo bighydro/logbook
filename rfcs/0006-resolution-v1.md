@@ -1,6 +1,6 @@
 # RFC 0006 — payload profile `resolution/v1`
 
-Status: draft · 2026-09-16 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks
 
 One statement that a source-native identifier refers to a known entity. Raw lines carry what their source gave — an email address, a phone number, a provider's participant name, a lat/lon. Turning those into an entity ("this is the same person as in that other line") is a *derived* judgement, and it belongs in its own line, never inside the raw one.
 

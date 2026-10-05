@@ -1,0 +1,84 @@
+{
+  "day": "2026-09-27",
+  "weekday": "Sunday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-09-26",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    },
+    "after": {
+      "day": "2026-09-27",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    }
+  },
+  "country": {
+    "code": null,
+    "method": null,
+    "by": null,
+    "from": null
+  },
+  "all_day": [],
+  "timeline": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "kind": "flight",
+      "start": "2026-09-27T05:12:00Z",
+      "end": "2026-09-27T06:21:00Z",
+      "start_local": "2026-09-27T07:12:00+02:00",
+      "end_local": "2026-09-27T08:21:00+02:00",
+      "carrier": "XY",
+      "number": "561",
+      "from": "OSL",
+      "to": "ZRH",
+      "evidence": "declared",
+      "role": "pilot",
+      "aircraft": null,
+      "line": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "flights": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "kind": "flight",
+      "start": "2026-09-27T05:12:00Z",
+      "end": "2026-09-27T06:21:00Z",
+      "start_local": "2026-09-27T07:12:00+02:00",
+      "end_local": "2026-09-27T08:21:00+02:00",
+      "carrier": "XY",
+      "number": "561",
+      "from": "OSL",
+      "to": "ZRH",
+      "evidence": "declared",
+      "role": "pilot",
+      "aircraft": null,
+      "line": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "unplaced": [],
+  "stories": [],
+  "health": null,
+  "spend": null,
+  "weather": null,
+  "sources": [
+    {
+      "source": "manual",
+      "lines": 1,
+      "first": "2026-09-27T05:12:00Z",
+      "newest": "2026-09-27T05:12:00Z"
+    }
+  ],
+  "received": []
+}

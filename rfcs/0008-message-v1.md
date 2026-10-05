@@ -1,6 +1,6 @@
 # RFC 0008 — payload profile `message/v1`
 
-Status: draft · 2026-09-18 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-18 · comment period: two weeks
 
 One message in a conversation — sent or received — from any messaging source: WhatsApp, iMessage/SMS, Signal, Telegram, email is *not* this profile (it has threads, subjects and many recipients; `mail/v1`, to be proposed). The line records what the source stored, nothing more: no sentiment, no extracted tasks, no resolved names.
 

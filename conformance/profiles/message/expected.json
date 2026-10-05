@@ -1,0 +1,12 @@
+{
+  "profile": "message/v1",
+  "rfc": "0008",
+  "kind": "message",
+  "tier": 2,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T17:42:10Z\",\"end\":null,\"kind\":\"message\",\"payload\":{\"chat\":{\"id\":\"447700900000@s.whatsapp.net\",\"name\":\"Ola\",\"type\":\"direct\"},\"from_me\":false,\"raw_id\":\"3EB0A1F5C2D4E6B7\",\"schema\":\"message/v1\",\"sender\":{\"kind\":\"phone\",\"value\":\"+447700900000\"},\"text\":\"mooring photos sent, check your mail\"},\"source\":\"whatsapp\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "c1bf4006009ad0273d522b0d5dbfd45e16f8867e4456338d6eddfc73cd9d489d",
+  "hash": "6f9f96ea5577ef38b41a9ab1394a70e2cf9a216516f8d4a7aa1ce53e24260786",
+  "head": "6f9f96ea5577ef38b41a9ab1394a70e2cf9a216516f8d4a7aa1ce53e24260786"
+}

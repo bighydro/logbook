@@ -1,6 +1,6 @@
 # RFC 0028 — payload profile `story/v1`
 
-Status: **draft, unfinished** · 2026-10-03 · comment period: two weeks once the author has closed the open questions at the end
+Status: frozen for v1.0 as to the fields the Day reads · 2026-10-05 (RFC 0031 question 5; fixture `conformance/profiles/story/`) · **draft, unfinished** · 2026-10-03 · comment period: two weeks once the author has closed the open questions at the end
 
 A *told* story, as distinct from an observed event. "In 1961 we moved to the house by the lake" is not something the record saw happen; it is something one person said to another, on a day the record did see, about a time it did not. Every other profile so far records an observation — a fix, a photo, a calendar entry, a transcript of a meeting — made at the instant the line's `at` names. This profile records testimony: the thing told, the time it is about at the precision the teller gave it, who told it, who heard it, how sure the teller said they were, where it came from, and the transcript it was lifted from when there is one.
 

@@ -1,0 +1,12 @@
+{
+  "profile": "transcript/v1",
+  "rfc": "0004",
+  "kind": "transcript",
+  "tier": 2,
+  "day": "2026-03-01",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-01T13:00:00Z\",\"end\":\"2026-03-01T13:35:00Z\",\"kind\":\"transcript\",\"payload\":{\"content\":{\"bytes\":48213,\"media_type\":\"text/markdown\",\"path\":\"attachments/7ed527057371e8656f8754fe8e7492c4bc2355234ec458c19d22f4f6ba060354\",\"sha256\":\"7ed527057371e8656f8754fe8e7492c4bc2355234ec458c19d22f4f6ba060354\"},\"language\":\"en\",\"participants\":[{\"email\":\"ines@example.org\",\"name\":\"Ines\"},{\"name\":\"Ola Nordmann\"}],\"provider\":\"granola\",\"raw_id\":\"note_7f3a2b\",\"schema\":\"transcript/v1\",\"source_uri\":\"https://granola.example/notes/7f3a2b\",\"summary\":\"Ines is moving to Tromsø in May; talked over a northern-lights trip.\",\"title\":\"Catch-up with Ines\"},\"source\":\"granola\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "768c3dbb66bed18b1eb439d5c9f63126d63803dbb9954fc6e2b9e44778bbe587",
+  "hash": "a2002c2e2814636f3ef7aaba004c2eefaf4902a4f9b2e0cfb9a911269db03509",
+  "head": "a2002c2e2814636f3ef7aaba004c2eefaf4902a4f9b2e0cfb9a911269db03509"
+}

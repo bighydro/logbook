@@ -1,6 +1,6 @@
 # RFC 0024 — payload profile `keeper/v1`
 
-Status: draft · 2026-10-01 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 · comment period: two weeks
 
 One statement that the captain marked a photo a keeper: a photo worth coming back to, in one of two lanes — a *memory* (the day's hero photo, the one a Day page shows first) or *art* (a picture kept for itself, not for the day). A `photo/v1` line (RFC 0002) says a photo exists and what the library knows about it; this line says the owner chose it. The choice is an observation of the owner's own act, made in a photo library (a favourite, an album) or at the command line, and it is recorded as such: never inferred from faces, views or any model.
 

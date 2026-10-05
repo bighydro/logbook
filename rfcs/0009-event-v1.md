@@ -1,6 +1,6 @@
 # RFC 0009 — payload profile `event/v1`
 
-Status: draft · 2026-09-18 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-18 · comment period: two weeks
 
 One calendar entry as the calendar stored it: a planned thing with a title, a span, maybe a place and people. It is the *planned* layer of a day — what was meant to happen — and the log keeps it beside what did (location, photos, messages), so a Day can show both without confusing them.
 

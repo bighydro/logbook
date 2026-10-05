@@ -1,0 +1,12 @@
+{
+  "profile": "location/v1",
+  "rfc": "0001",
+  "kind": "location",
+  "tier": 1,
+  "day": "2026-03-01",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-01T07:30:00Z\",\"end\":null,\"kind\":\"location\",\"payload\":{\"accuracy_m\":12,\"lat\":59.911,\"lon\":10.75,\"provider\":\"fused\",\"raw_id\":\"184223\",\"schema\":\"location/v1\",\"tracker\":\"iphone\"},\"source\":\"dawarich\",\"tier\":1,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "0f7a4b8e94edcc9840a071f062f394a31ec55f721a386dfe57e6f50b3f6271db",
+  "hash": "0109bced43704c1ea81c9df15504978d0a0ffc5de3ffb5f7452a13bf65cd43ad",
+  "head": "0109bced43704c1ea81c9df15504978d0a0ffc5de3ffb5f7452a13bf65cd43ad"
+}

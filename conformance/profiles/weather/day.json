@@ -1,0 +1,79 @@
+{
+  "day": "2026-06-16",
+  "weekday": "Tuesday",
+  "tz": "Europe/Oslo",
+  "nights": {
+    "before": {
+      "day": "2026-06-15",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    },
+    "after": {
+      "day": "2026-06-16",
+      "where": null,
+      "home": false,
+      "aboard": null,
+      "in_transit": true,
+      "stay": null,
+      "position": null,
+      "lines": []
+    }
+  },
+  "country": {
+    "code": null,
+    "method": null,
+    "by": null,
+    "from": null
+  },
+  "all_day": [],
+  "timeline": [],
+  "flights": [],
+  "unplaced": [],
+  "stories": [],
+  "health": null,
+  "spend": null,
+  "weather": {
+    "day": "2026-06-16",
+    "lat": 47.4,
+    "lon": 8.5,
+    "line": "00000000-0000-4000-8000-000000000001",
+    "t_min_c": 14.1,
+    "t_max_c": 26.8,
+    "precipitation_mm": 0.3,
+    "wind_max_kmh": 18.7,
+    "weather_code": 2,
+    "sunrise": "2026-06-16T03:30:00Z",
+    "sunset": "2026-06-16T19:25:00Z",
+    "description": "partly cloudy",
+    "places": [
+      {
+        "day": "2026-06-16",
+        "lat": 47.4,
+        "lon": 8.5,
+        "line": "00000000-0000-4000-8000-000000000001",
+        "t_min_c": 14.1,
+        "t_max_c": 26.8,
+        "precipitation_mm": 0.3,
+        "wind_max_kmh": 18.7,
+        "weather_code": 2,
+        "sunrise": "2026-06-16T03:30:00Z",
+        "sunset": "2026-06-16T19:25:00Z",
+        "description": "partly cloudy"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "source": "weather",
+      "lines": 1,
+      "first": "2026-06-15T22:00:00Z",
+      "newest": "2026-06-15T22:00:00Z"
+    }
+  ],
+  "received": []
+}

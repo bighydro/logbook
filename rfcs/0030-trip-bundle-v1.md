@@ -1,6 +1,6 @@
 # RFC 0030 — bundle profile `trip-bundle/v1`, page `trip-share/v1`, line `received/v1`
 
-Status: draft · 2026-10-03 · comment period: two weeks
+Status: `received/v1` frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/received/`); the bundle format and `trip-share/v1` draft · 2026-10-03 · comment period: two weeks
 
 The shared trip: how one member of the circle (ADR 0009) hands another their record of a trip they took together, and how the recipient's record keeps it without ever mistaking it for its own. Three things are defined here, and they are all this version builds of the circle's shared page (ARCHITECTURE): a **bundle profile** on top of the crossing package (RFC 0005), the **page** of derived rows it carries, and the **received line** the recipient's `import` writes. `logbook export trip-bundle <trip> --to <member>` produces the first two; `logbook import trip-bundle <folder>` produces the third; `logbook trip <id>` reads the pages back beside the recipient's own trip.
 

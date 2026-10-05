@@ -1,0 +1,12 @@
+{
+  "profile": "resolution/v1",
+  "rfc": "0006",
+  "kind": "resolution",
+  "tier": 2,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T09:14:00Z\",\"end\":null,\"kind\":\"resolution\",\"payload\":{\"entity\":{\"id\":\"019cadd3-6bc0-7dcd-9133-043f5aabf2a9\",\"registry\":\"logbook\",\"type\":\"person\"},\"label\":\"Ola Nordmann\",\"method\":\"owner\",\"ref\":{\"kind\":\"email\",\"value\":\"ola@example.org\"},\"schema\":\"resolution/v1\"},\"source\":\"manual\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "ebfed0abd91dedaaa7ae87384636ce63a0f8f2c18e7045b53a1e748508b0f3c9",
+  "hash": "4321350ea6d7c11c985b04991955dcddd49dd44dc72f3fa875e93c8aad56ff3d",
+  "head": "4321350ea6d7c11c985b04991955dcddd49dd44dc72f3fa875e93c8aad56ff3d"
+}

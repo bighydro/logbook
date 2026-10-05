@@ -1,0 +1,12 @@
+{
+  "profile": "mail/v1",
+  "rfc": "0015",
+  "kind": "mail",
+  "tier": 2,
+  "day": "2026-03-02",
+  "seq": 1,
+  "canonical": "{\"at\":\"2026-03-02T10:15:00Z\",\"end\":null,\"kind\":\"mail\",\"payload\":{\"account\":\"kari.nordmann@example.org\",\"attachments\":[{\"bytes\":41002,\"filename\":\"berth.jpg\",\"media_type\":\"image/jpeg\"}],\"body\":\"Photos attached. The east berth is free from Friday.\\n\",\"date\":\"2026-03-02T11:15:00+01:00\",\"direction\":\"received\",\"extra\":{\"gmail_thread_id\":\"1795123456789012345\",\"in_reply_to\":\"9f8e7d@mail.example.org\",\"references\":[\"9f8e7d@mail.example.org\"]},\"from\":{\"email\":\"ola@example.org\",\"name\":\"Ola Nordmann\"},\"labels\":[\"Inbox\",\"Important\"],\"message_id\":\"a1b2c3@mail.example.org\",\"raw_id\":\"kari.nordmann@example.org:a1b2c3@mail.example.org\",\"schema\":\"mail/v1\",\"size\":48213,\"subject\":\"Re: Mooring for the weekend\",\"thread\":\"9f8e7d@mail.example.org\",\"to\":[{\"email\":\"kari.nordmann@example.org\",\"name\":\"Kari Nordmann\"}]},\"source\":\"mail\",\"tier\":2,\"tz\":\"Europe/Oslo\"}",
+  "content_hash": "b1d8b1fa864d1349fa4dc5fcab31558567319f3d8da6ac2be67d33c6bc7b5bfb",
+  "hash": "09ec7d4f129706b718c50d667d4bd09b4cce6a1a9d655938347ebc33c0ba1988",
+  "head": "09ec7d4f129706b718c50d667d4bd09b4cce6a1a9d655938347ebc33c0ba1988"
+}
