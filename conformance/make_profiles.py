@@ -596,9 +596,10 @@ def build(profile: str, out: Path) -> None:
     _write(out / "days.json", _run(record, ["show", "days", "--from", day, "--to", day, "--json"]))
     for stale in list(record.rglob("index.sqlite*")) + list(record.rglob("*.sqlite-journal")):
         stale.unlink()  # the index is a cache, never part of a fixture (ADR 0007)
-    shutil.rmtree(
-        record / "policy", ignore_errors=True
-    )  # settings `init` and the readers write, not record (SPEC §1)
+    shutil.rmtree(record / "policy", ignore_errors=True)  # settings, not record (SPEC §1)
+    for folder in sorted((d for d in record.rglob("*") if d.is_dir()), reverse=True):
+        if not any(folder.iterdir()):
+            folder.rmdir()  # `init` makes inbox/ and notes/ empty; git keeps no empty folder, nor does this
 
 
 def main(out: Path = OUT) -> None:

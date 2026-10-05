@@ -5,7 +5,6 @@ and `show`, `day --json` and `show days --json` print the files beside it."""
 
 from __future__ import annotations
 
-import filecmp
 import importlib.util
 import json
 import shutil
@@ -70,15 +69,16 @@ def test_show_day_and_days_print_the_fixture(folder: Path, tmp_path: Path) -> No
 
 
 def test_regenerating_reproduces_every_byte(tmp_path: Path) -> None:
-    """`make_profiles.py` into a temp folder is the committed folder, file for file."""
-    _script().main(tmp_path / "profiles")
-    diff = filecmp.dircmp(PROFILES, tmp_path / "profiles")
-    stale: list[str] = []
-
-    def walk(d: filecmp.dircmp, prefix: str) -> None:
-        stale.extend(f"{prefix}{name}" for name in d.left_only + d.right_only + d.diff_files + d.funny_files)
-        for name, sub in d.subdirs.items():
-            walk(sub, f"{prefix}{name}/")
-
-    walk(diff, "")
-    assert not stale, stale
+    """`make_profiles.py` into a temp folder is the committed folder, file for file (files only: git
+    keeps no empty folder, and the generator leaves none)."""
+    fresh_root = tmp_path / "profiles"
+    _script().main(fresh_root)
+    committed = {
+        p.relative_to(PROFILES).as_posix(): p.read_bytes() for p in PROFILES.rglob("*") if p.is_file()
+    }
+    fresh = {
+        p.relative_to(fresh_root).as_posix(): p.read_bytes() for p in fresh_root.rglob("*") if p.is_file()
+    }
+    assert sorted(committed) == sorted(fresh)
+    assert [name for name in committed if committed[name] != fresh[name]] == []
+    assert not [d for d in fresh_root.rglob("*") if d.is_dir() and not any(d.iterdir())]
