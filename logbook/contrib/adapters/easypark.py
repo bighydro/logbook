@@ -1,4 +1,4 @@
-"""EasyPark's recent parkings → trip/v1 (RFC 0020), mode `parking`.
+"""EasyPark's recent parkings → journey/v1 (RFC 0020; `trip/v1` renamed by RFC 0031), mode `parking`.
 
 The EasyPark app keeps no parking sessions on the phone; what it keeps, under its container's
 `Documents/`, is `recentparkings_<user>.json`: the areas the owner parked in most recently, one
@@ -33,8 +33,8 @@ from pathlib import Path
 from typing import Any
 
 NAME = "easypark"
-KIND = "trip"
-SCHEMA = "trip/v1"
+KIND = "journey"  # RFC 0031: the written form of RFC 0020 since 2026-10-05; readers accept `trip` too
+SCHEMA = "journey/v1"
 TIER = 1
 MODE = "parking"
 FILES = "recentparkings_*.json"
@@ -56,7 +56,7 @@ def run(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """One trip/v1 draft per recently used area, oldest first. `since` is RFC3339 UTC; drafts whose
+    """One journey/v1 draft per recently used area, oldest first. `since` is RFC3339 UTC; drafts whose
     `at` is before it are not yielded. `counts` tallies `skipped_no_timestamp` and
     `skipped_bad_coordinates`. `timezone` is the record's zone (the file names none)."""
     counts = counts if counts is not None else {}

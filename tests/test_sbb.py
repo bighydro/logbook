@@ -263,9 +263,9 @@ def test_every_line_is_a_trip_line_in_the_rfc_shape_and_names_nobody(tmp_path):
     assert len(lines) == LINES
     for line in lines:
         assert set(line) == {"at", "end", "tz", "source", "kind", "tier", "payload"}
-        assert (line["source"], line["kind"], line["tz"]) == ("sbb", "trip", "Europe/Zurich")
+        assert (line["source"], line["kind"], line["tz"]) == ("sbb", "journey", "Europe/Zurich")
         p = line["payload"]
-        assert p["schema"] == "trip/v1" and p["mode"] == "transit" and p["provider"] == "sbb"
+        assert p["schema"] == "journey/v1" and p["mode"] == "transit" and p["provider"] == "sbb"
         assert set(p["from"]) <= {"name", "latitude", "longitude"} and p["from"]["name"]
         assert set(p["to"]) <= {"name", "latitude", "longitude"} and p["to"]["name"]
         text = json.dumps(line)
@@ -278,7 +278,7 @@ def test_a_ticket_group_is_one_trip_with_its_validity_price_and_class(tmp_path):
     line = _by_raw_id(_lines(tmp_path))["ticket:G-1"]
     assert (line["at"], line["end"], line["tier"]) == ("2026-03-01T23:00:00Z", "2026-03-03T04:00:00Z", 3)
     assert line["payload"] == {
-        "schema": "trip/v1",
+        "schema": "journey/v1",
         "raw_id": "ticket:G-1",
         "mode": "transit",
         "provider": "sbb",
@@ -393,7 +393,7 @@ def test_add_sbb_appends_once_and_show_prints_the_route(lb, tmp_path, capsys):
     assert "added 0 lines" in capsys.readouterr().out
     cli.main(["show", "2026-03-02"])
     out = capsys.readouterr().out
-    assert "trip" in out and "Zürich HB → Bern" in out and "58.00 CHF" in out and "1 change" in out
+    assert "journey" in out and "Zürich HB → Bern" in out and "58.00 CHF" in out and "1 change" in out
     assert PERSON not in out
     seq, _head, errors = lb.verify()
     assert (seq, errors) == (LINES, [])

@@ -65,7 +65,8 @@ part of the `show` row.
 ## What is searched
 
 The index holds the words of every line of a kind that carries any: `note`, `transcript`, `message`,
-`mail`, `event`, `task`, `highlight`, `voice-memo`, `browse`, `watch`, `listen` and `trip`. A location
+`mail`, `event`, `task`, `highlight`, `voice-memo`, `browse`, `watch`, `listen`, `trip` and `journey`
+(one profile under two spellings, RFC 0031: asking for either kind searches both). A location
 point, a photo, a health sample, a call, a flight or a crossing has no words and no row — searching
 `Oslo` finds the notes and mails that say it, never the ten thousand points whose reverse geocode
 does. `--kinds` narrows to some of the twelve; any other kind is refused with the list.
