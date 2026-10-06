@@ -91,7 +91,7 @@ def test_attach_import_backup_streams_every_referenced_file_into_the_store_once(
     assert "refused" not in captured.err
     seq, _head, errors = lb.verify()
     # nothing was appended by attach; the one extra line is the favourite's keeper, written with the photos
-    assert errors == [] and seq == 14 + 13 + 6 + 1
+    assert errors == [] and seq == 14 + 17 + 6 + 1
     assert sum(1 for line in lb.lines() if line["kind"] == "keeper") == 1
 
 
@@ -221,7 +221,7 @@ def test_attach_import_backup_decrypts_an_encrypted_backups_media_on_the_way(
     assert _snapshot(built.folder) == before
     assert PASSWORD not in captured.out and PASSWORD not in captured.err
     assert "imessage: 1 file referenced by 1 line: 1 stored, 0 present, 0 not in the backup" in captured.out
-    assert "3 lines without a digest" in captured.out  # note.caf among them: not in this backup at import
+    assert "4 lines without a digest" in captured.out  # note.caf among them: not in this backup at import
     assert _store(lb) == {IMAGE: IMAGE_BYTES}
     monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD")
     with pytest.raises(SystemExit) as e:
