@@ -2,9 +2,7 @@
 
 What each version changed for you, in five bullets. [CHANGELOG.md](CHANGELOG.md) has every change in full; [Upgrading](tour.md#upgrading) has the two migrations a record may need.
 
-## 0.6, unreleased
-
-The next release is on `main` now. If you run from a checkout, this is what you already have.
+## 0.6.0, 6 October 2026
 
 - **Starting is a conversation, and the record reads back as days.** `logbook setup` asks one question at a time, each with its default and the reason it is asked, and `logbook doctor` says whether this machine is set up to keep the record. `logbook day` is one calendar day: the night, the stays, who was there, health, weather, what you wrote. `days` is a window of them one line each, `year` composes a year, and `digest` is the day in 25 lines ending in one question that now comes from your own record and a policy file you can edit.
 - **The record comes off the screen.** `logbook serve` shows every page in a browser on this machine only. `year --html FILE --print` and `trip --html FILE --print` lay a year or a trip out for A4 or Letter with a cover and page numbers. `export vault` renders the record as a folder of Markdown with wikilinks for Obsidian or Logseq. `logbook mcp` serves it to an agent on this machine behind a tier gate that defaults to tier 1.
