@@ -8,8 +8,8 @@ class Logbook < Formula
 
   desc "Diary that writes itself: your life, in one folder you hold"
   homepage "https://github.com/bighydro/logbook"
-  url "https://files.pythonhosted.org/packages/ae/a8/af5ded23e9c5e0b9d4897d04834f3e5baa9c8693bc41b634452abf896550/openlogbook-0.5.0.tar.gz"
-  sha256 "d2fd8dcccf48a20e75a752818ae82d47c9870ec0d69fb212f77e6f229333e9e7"
+  url "https://files.pythonhosted.org/packages/a8/fe/d8700d09ebe1d850e72b1dc088e65c1513fcadc1f78a1ea5161c5b225c89/openlogbook-0.6.0.tar.gz"
+  sha256 "39a0aed9b51cd2000de6915f9603f98dbaf7e716bc4a00f88685ed29d3329c2b"
   license "Apache-2.0"
   head "https://github.com/bighydro/logbook.git", branch: "main"
 
