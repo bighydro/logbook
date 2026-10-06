@@ -247,15 +247,24 @@ def _append_with(
             if marked is not None:
                 _keepers_of_import(lb, adapter.NAME, marked, counts, dry_run=True)
             return 0
+        already = 0
+
+        def skipped(_draft: dict[str, Any]) -> None:  # the store's own dedupe: same source and raw_id (#79)
+            nonlocal already
+            already += 1
+
         n = lb.append_many(
             _counted(drafts, produced),
             progress=_progress,
             committed=cursor.commit if cursor is not None else None,
+            skipped=skipped,
         )
     except stream.MissingExtra as e:  # the export streams through ijson, which is not installed
         print(f"add: {adapter.NAME}: {e}", file=sys.stderr)
         sys.exit(2)
     print(f"added {n} lines from {adapter.NAME}")
+    if already:
+        print(f"  {already:,} already in the record (same source and raw_id), nothing written twice")
     _report_skipped(counts)
     for text in report:
         print(f"  {text}")
