@@ -74,6 +74,6 @@ Both reproduce the conformance head in `conformance/expected.json` (Level 1), an
 
 ## Status
 
-Format `logbook/0.3`, package 0.5.0, status alpha. The record, the readers, sharing by file and sealing of tiers 2 and 3 at rest all ship; a transport for the circle is the next format work ([ROADMAP.md](ROADMAP.md)).
+Format `logbook/0.3`, package 0.6.0, status alpha. The record, the readers, sharing by file and sealing of tiers 2 and 3 at rest all ship; a transport for the circle is the next format work ([ROADMAP.md](ROADMAP.md)).
 
 Apache-2.0 for code. The specification is CC0.

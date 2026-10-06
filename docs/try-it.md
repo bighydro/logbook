@@ -43,7 +43,7 @@ says so. The head is the same every time you run `logbook demo` with the same da
 ## What is in it
 
 ```bash
-logbook stats
+logbook show stats
 ```
 
 Counts by kind, source and year, never what a line says: ten thousand location points from the
@@ -54,7 +54,7 @@ memos (metadata and a digest; no audio), transactions, four flights, and the res
 that name the circle.
 
 ```bash
-logbook stats --health
+logbook show stats --health
 ```
 
 One row per day: hours asleep (the union of the night's stages, never in bed or awake), steps
@@ -122,7 +122,7 @@ range: `--since 2026-06-15 --until 2026-06-21`; one subject: `--subject nordlys`
 the numbers.
 
 ```bash
-logbook places propose --top 4
+logbook setup places propose --top 4
 ```
 
 ```
@@ -134,13 +134,13 @@ logbook places propose --top 4
 ```
 
 `places.json` names Home, Office, Marina and Cabin; the hotels, the anchorages, the cafe and the
-airports are yours to name. `logbook places name <stay id> "Hotel by the river"` adds one and puts the naming in the
+airports are yours to name. `logbook setup places name <stay id> "Hotel by the river"` adds one and puts the naming in the
 record as a note; `--write` asks for each in turn.
 
 ## Trips, flights, countries
 
 ```bash
-logbook trips
+logbook show trips
 ```
 
 ```
@@ -162,8 +162,8 @@ flights, the crew confirmed and proposed, the keepers, the health of the span, t
 writes one page with an inline SVG map of the route, no tiles:
 
 ```bash
-logbook trip trip:2026-06-15:2026-06-20
-logbook trip 2026-06-17 --html ~/Demo/yacht-week.html
+logbook show trip trip:2026-06-15:2026-06-20
+logbook show trip 2026-06-17 --html ~/Demo/yacht-week.html
 ```
 
 ```bash
@@ -184,7 +184,7 @@ calendar entry and location points (`inferred`), the owner's word (`declared`). 
 infer the rest:
 
 ```bash
-logbook infer flights
+logbook derive flights
 ```
 
 ```
@@ -222,14 +222,14 @@ days together, health and keepers by month, and one day a month read back with t
 the day with the most evidence ([docs/year.md](year.md)):
 
 ```bash
-logbook year 2026                        # as text
-logbook year 2026 --html ~/Demo/2026.html  # one self-contained page that prints
+logbook show year 2026                   # as text
+logbook show year 2026 --html ~/Demo/2026.html  # one self-contained page that prints
 ```
 
 ## Keepers and pages
 
 ```bash
-logbook keepers                     # the photos she marked favourites, and the one in the Art album
+logbook show keepers                # the photos she marked favourites, and the one in the Art album
 logbook show person "Ola Nordmann"  # a page: when they were together, by the evidence
 logbook show asset nordlys          # the boat's page
 logbook show place Cabin

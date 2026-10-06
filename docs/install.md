@@ -91,13 +91,13 @@ The first time, Homebrew fetches the *tap* (the small repository that holds the 
 then
 
     ==> Fetching bighydro/logbook/logbook
-    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-0.5.0.tar.gz
+    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-0.6.0.tar.gz
     ==> Installing logbook from bighydro/logbook
 
 and a minute or two of lines about Python and a package called `ijson`, which it builds for your
 machine. The last line is the beer glass:
 
-    🍺  /opt/homebrew/Cellar/logbook/0.5.0: 180 files, 2.1MB, built in 45 seconds
+    🍺  /opt/homebrew/Cellar/logbook/0.6.0: 180 files, 2.1MB, built in 45 seconds
 
 The numbers differ; the glass is what matters. Jump to [Did it work?](#did-it-work).
 
@@ -170,7 +170,7 @@ pipx install openlogbook
 
 It takes half a minute and prints
 
-      installed package openlogbook 0.5.0, installed using Python 3.13.2
+      installed package openlogbook 0.6.0, installed using Python 3.13.2
       These apps are now globally available
         - logbook.exe
     done! ✨ 🌟 ✨
@@ -207,7 +207,7 @@ with `pipx` from your distribution: `sudo apt install pipx` on Debian and Ubuntu
 pipx` on Fedora, `sudo pacman -S python-pipx` on Arch. Then `pipx ensurepath` once, a new terminal,
 and the line above, which ends with
 
-      installed package openlogbook 0.5.0, installed using Python 3.12.3
+      installed package openlogbook 0.6.0, installed using Python 3.12.3
       These apps are now globally available
         - logbook
     done! ✨ 🌟 ✨
@@ -242,7 +242,7 @@ logbook --version
 
 and press Enter. It prints one short line, the version:
 
-    0.5.0
+    0.6.0
 
 That is the whole check. From here, [The first hour](first-hour.md) sets up your own record one
 question at a time, and [Try it](try-it.md) gives you a month of someone who does not exist to
