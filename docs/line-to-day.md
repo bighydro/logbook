@@ -110,6 +110,9 @@ record, not a constant in the code:
 - Every real export appends one `crossing/v1` line: the destination, the window, the counts per
   tier, the policy in force and the digest of the package. The record holds, under the hash chain,
   every time anything left it and under what ceiling. A dry run appends nothing.
+- Beside the tier, a second gate (RFC 0034, [the signed day](signed-day.md)): only the lines of
+  days the owner has signed cross, unless the export says `--unsigned`. Agents draft; the owner
+  signs; only signed days cross.
 - The resolution lines a package ships so a reader can name people are lines like any other: one
   above the requested tiers stays home and is counted as held back.
 

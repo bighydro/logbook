@@ -32,11 +32,13 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [RFCs](rfcs/README.md): the payload profiles and spec changes, each with a schema and one synthetic example.
 - [RFC 0025, the shared bundle](rfcs/rfc-0025-shared-page-bundle.md): the signed page one logbook hands another.
 - [RFC 0027, reflection](rfcs/0027-reflection.md): the digest's closing question comes from the record.
+- [RFC 0034, the signed day](rfcs/0034-the-signed-day.md): agents draft, the owner signs, only signed days cross.
 - [Benchmark, per-line sealing](rfcs/bench-encryption-2026-10.md): what encryption at rest would cost on a three-million-line record.
 
 ## Reading the record
 
 - [The Day](day.md): one calendar day read back, and `days` for a window of them.
+- [The signed day](signed-day.md): `day sign`, the readiness row, and the gate on the crossing.
 - [The Year](year.md): one year composed from every reader, and one trip read back on its own.
 - [The rollups](rollups.md): countries, flights, nights, places, people, health, listening, attention, summed over a range.
 - [The digest](digest.md): the day in 25 lines at most, ending in one question you may ignore.

@@ -201,7 +201,7 @@ def test_show_a_collapsed_event_does_not_break_a_run_of_location_points(tmp_path
 
 def test_show_orders_a_day_by_time_then_seq(lb: Logbook, capsys):
     out = _show(capsys)
-    assert out[0] == DAY
+    assert out[0] == f"{DAY}  unsigned"
     assert [line.split()[0] for line in out[1:]] == ["09:00", "09:00", "10:30", "12:00", f"18:18{DASH}23:59"]
     assert "breakfast" in out[1] and "Standup" in out[2]  # same instant: seq 5 before seq 7
 
@@ -221,7 +221,7 @@ def test_show_summarizes_a_crossing_without_raw_payload_fields(tmp_path: Path, m
         },
     )
     assert _show(capsys) == [
-        DAY,
+        f"{DAY}  unsigned",
         "  10:00  crossing   logbook        crossed to hermes: 6 lines (tier 1: 4, tier 2: 2)",
     ]
 
@@ -359,7 +359,7 @@ def test_show_piped_into_head_exits_0_with_nothing_on_stderr(tmp_path: Path):
         encoding="utf-8",
     )
     assert r.returncode == 0, r.stderr
-    assert r.stdout == f"{DAY}\n" and r.stderr == ""
+    assert r.stdout == f"{DAY}  unsigned\n" and r.stderr == ""
 
 
 # -- names: refs rendered through the record's own resolution lines (RFC 0006) ----------------
@@ -820,7 +820,7 @@ def test_show_reads_the_conformance_samples_first_day_as_spec_3_2_says(tmp_path:
     fixture is."""
     _sample(tmp_path, monkeypatch)
     assert _show(capsys, "2026-03-01") == [
-        "2026-03-01",
+        "2026-03-01  signed 2026-03-08 20:30",  # the sample's signed-day line (RFC 0034), written on the 8th
         "  hero  IMG_0001.jpg",
         f"  08:30{DASH}09:40  location   sim-phone      2 points",
         "  10:00  event      sim-calendar   Coffee with Ines · with ines@example.org",
@@ -837,11 +837,11 @@ def test_show_reads_the_conformance_samples_string_chat_day(tmp_path: Path, monk
     """2026-03-06 of `conformance/sample-logbook`: one message whose `chat` is the string `Ines`."""
     _sample(tmp_path, monkeypatch)
     assert _show(capsys, "2026-03-06") == [
-        "2026-03-06",
+        "2026-03-06  unsigned",
         "  20:30  message    sim-messages   Ines: Landed? Dinner Sunday?",
     ]
     cli.main(["show", "2026-03-06", "--raw"])
     assert capsys.readouterr().out.splitlines() == [
-        "2026-03-06",
+        "2026-03-06  unsigned",
         "  20:30  message    sim-messages   : Landed? Dinner Sunday?",
     ]

@@ -39,5 +39,6 @@
   "spend": null,
   "weather": null,
   "sources": [],
+  "signed": null,
   "received": []
 }

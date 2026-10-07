@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from logbook import cli
+from logbook.core import signing
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
@@ -23,6 +24,7 @@ EMAIL_B = "kari@example.org"
 SHA_PRESENT = hashlib.sha256(b"three").hexdigest()
 SHA_MISSING = "b" * 64
 SINCE, UNTIL = "2026-03-01T00:00:00Z", "2026-03-02T00:00:00Z"
+SIGNED_AT = "2026-03-03T08:00:00Z"  # the two signatures (seq 13 and 14), written on the 3rd
 
 
 def _location(at: str) -> dict[str, Any]:
@@ -100,7 +102,8 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     a tier-3 note, a tier-2 message from a lid whose alias resolves through a phone to Ola, a tier-2
     message with a present attachment and one with a missing attachment. Before the window: the
     resolutions (Ola's phone, the lid alias, and Kari, whom nothing in the window mentions) and a
-    location. At exactly UNTIL: a location that must not cross."""
+    location. At exactly UNTIL: a location that must not cross. Both days are signed (RFC 0034), on
+    the 3rd, so the crossing's default gate lets them through."""
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     store = lb.root / "attachments"
@@ -124,6 +127,8 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
             _location(UNTIL),  # seq 12: open at the end
         ]
     )
+    signing.sign(lb, "2026-03-01", at=SIGNED_AT)  # seq 13
+    signing.sign(lb, "2026-03-02", at=SIGNED_AT)  # seq 14
     return lb
 
 
@@ -174,7 +179,7 @@ def test_request_above_the_ceiling_is_refused_naming_the_file(lb: Logbook, tmp_p
     err = capsys.readouterr().err
     assert str(path) in err and "max_tier" in err
     assert not (tmp_path / "out").exists()
-    assert lb.meta["seq"] == 12
+    assert lb.meta["seq"] == 14
 
 
 def test_unknown_destination_is_refused_naming_the_file(lb: Logbook, tmp_path: Path, capsys):
@@ -236,6 +241,8 @@ def test_tier_1_crosses_by_default_and_the_window_is_half_open(lb: Logbook, tmp_
     assert m["tiers"] == [1]
     assert m["entries_file"] == "entries.jsonl"
     assert m["counts"]["logged"] == 7 and m["counts"]["crossed"] == 2 and m["counts"]["held_back"] == 5
+    assert m["counts"]["held_back_unsigned"] == 0
+    assert m["policy"]["signed_days"] == "only"
     assert m["counts"]["by_tier"] == {"1": 2, "2": 0, "3": 0}
     assert m["counts"]["by_kind"] == {"location": 2}
     assert m["tool"]["version"] == cli.__version__
@@ -383,7 +390,7 @@ def test_a_real_export_appends_one_crossing_line_and_the_chain_stays_valid(lb: L
     _seq, _head, errors = lb.verify()
     assert errors == []
     line = list(lb.lines())[-1]
-    assert (line["kind"], line["tier"], line["source"], line["seq"]) == ("crossing", 1, "logbook", 13)
+    assert (line["kind"], line["tier"], line["source"], line["seq"]) == ("crossing", 1, "logbook", 15)
     m = _manifest(out)
     p = line["payload"]
     assert p["schema"] == "crossing/v1"
@@ -392,7 +399,7 @@ def test_a_real_export_appends_one_crossing_line_and_the_chain_stays_valid(lb: L
     assert p["window"] == {"from": SINCE, "to": UNTIL}
     assert p["tiers"] == [1, 2]
     assert p["counts"] == m["counts"]
-    assert p["policy"] == {"file": "policy/crossing.json", "max_tier": 2}
+    assert p["policy"] == {"file": "policy/crossing.json", "max_tier": 2, "signed_only": True}
     assert p["logbook_head"] == head
     assert p["package_sha256"] == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
     assert line["at"] == m["generated_at"]
@@ -429,7 +436,7 @@ def test_watermark_round_trip(lb: Logbook, tmp_path: Path):
     assert m["covers"] == {"from": UNTIL, "to": "2026-03-03T00:00:00Z"}
     assert [e["seq"] for e in _jsonl(tmp_path / "b" / "entries.jsonl")] == [
         12
-    ]  # seq 13, the crossing line, is at now
+    ]  # the signatures are on the 3rd; seq 15, the crossing line, is at now
     mark = json.loads((lb.root / "exports" / "crossing.json").read_text(encoding="utf-8"))
     assert mark["hermes"]["until"] == "2026-03-03T00:00:00Z"
 
@@ -445,7 +452,7 @@ def test_until_defaults_to_now_and_a_backwards_window_is_refused(lb: Logbook, tm
     _run("--to", "hermes", "--since", SINCE, "--out", str(tmp_path / "out"))
     m = _manifest(tmp_path / "out")
     assert m["covers"]["to"] == m["generated_at"]
-    assert [e["seq"] for e in _jsonl(tmp_path / "out" / "entries.jsonl")] == [5, 11, 12]
+    assert [e["seq"] for e in _jsonl(tmp_path / "out" / "entries.jsonl")] == [5, 11, 12, 13, 14]
 
 
 def test_out_defaults_under_the_record(lb: Logbook):
@@ -463,3 +470,91 @@ def test_an_empty_window_is_a_quiet_no_op(lb: Logbook, tmp_path: Path, capsys):
     assert not (tmp_path / "out").exists()
     assert lb.meta["seq"] == seq
     assert not (lb.root / "exports").exists()
+
+
+# -- the signed-day gate (RFC 0034 rule 5) -----------------------------------------------------------
+
+
+def _quiet_day(lb: Logbook) -> None:
+    """2026-03-05, unsigned: a location and a note; and a location on the 3rd, the signing day,
+    which is unsigned too."""
+    lb.append_many(
+        [
+            _location("2026-03-03T10:00:00Z"),  # seq 15
+            _location("2026-03-05T10:00:00Z"),  # seq 16
+            _note("2026-03-05T11:00:00Z", "an unread day"),  # seq 17
+        ]
+    )
+
+
+def test_only_the_lines_of_signed_days_cross_by_default(lb: Logbook, tmp_path: Path, capsys):
+    _quiet_day(lb)
+    out = tmp_path / "out"
+    _run(
+        "--to",
+        "hermes",
+        "--since",
+        SINCE,
+        "--until",
+        "2026-03-06T00:00:00Z",
+        "--tier",
+        "1,2",
+        "--out",
+        str(out),
+    )
+    seqs = [e["seq"] for e in _jsonl(out / "entries.jsonl")]
+    assert seqs == [5, 6, 8, 9, 10, 11, 12, 13, 14], (
+        "the 1st and the 2nd, and their signatures; never the 3rd or the 5th"
+    )
+    m = _manifest(out)
+    assert m["policy"]["signed_days"] == "only"
+    assert m["counts"]["logged"] == 13 and m["counts"]["crossed"] == 9 and m["counts"]["held_back"] == 4
+    assert m["counts"]["held_back_unsigned"] == 3, "seq 15, 16 and 17; seq 7 is tier 3"
+    text = capsys.readouterr().out
+    assert "3 held back on unsigned days" in text and "--unsigned" in text
+    line = list(lb.lines())[-1]
+    assert line["payload"]["policy"]["signed_only"] is True
+    assert line["payload"]["counts"]["held_back_unsigned"] == 3
+
+
+def test_unsigned_lifts_the_gate(lb: Logbook, tmp_path: Path, capsys):
+    _quiet_day(lb)
+    out = tmp_path / "out"
+    _run(
+        "--to",
+        "hermes",
+        "--since",
+        SINCE,
+        "--until",
+        "2026-03-06T00:00:00Z",
+        "--tier",
+        "1,2",
+        "--unsigned",
+        "--out",
+        str(out),
+    )
+    seqs = [e["seq"] for e in _jsonl(out / "entries.jsonl")]
+    assert seqs == [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    m = _manifest(out)
+    assert m["policy"]["signed_days"] == "any" and m["counts"]["held_back_unsigned"] == 0
+    assert list(lb.lines())[-1]["payload"]["policy"]["signed_only"] is False
+    assert "unsigned days" not in capsys.readouterr().out
+
+
+def test_a_retracted_signature_closes_the_gate_again(lb: Logbook, tmp_path: Path):
+    lb.retract(14, "not read after all")  # the 2nd is unsigned again
+    out = tmp_path / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", "2026-03-04T00:00:00Z", "--out", str(out))
+    seqs = [e["seq"] for e in _jsonl(out / "entries.jsonl")]
+    assert seqs == [5, 11, 13], "seq 12 is on the 2nd; seq 14 is retracted"
+    assert _manifest(out)["counts"]["held_back_unsigned"] == 1, (
+        "seq 12; the retracted signature is held as retracted"
+    )
+
+
+def test_dry_run_counts_the_unsigned_days(lb: Logbook, tmp_path: Path, capsys):
+    _quiet_day(lb)
+    _run("--to", "hermes", "--since", SINCE, "--until", "2026-03-06T00:00:00Z", "--dry-run")
+    text = capsys.readouterr().out
+    assert "2 held back on unsigned days" in text and "--unsigned" in text
+    assert not (lb.root / "export").exists()

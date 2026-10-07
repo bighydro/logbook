@@ -44,7 +44,7 @@
   April         no days
   May           no days
   June          2026-06-03 · 10 attachments, 1 person, a new place
-    2026-06-03  Wednesday
+    2026-06-03  Wednesday · unsigned
       night before  Home · home
       night after   Home · home
       country       NO (place Home)

@@ -87,7 +87,7 @@ def test_an_office_day_at_home(
     assert dawarich["newest"].startswith("2026-06-09T21:5"), "the tracker's last word of the day"
     assert lb.meta["head"] == head and _files(lb.root) == before, "a Day writes nothing, not even settings"
     text = _run(capsys, "2026-06-09")
-    assert text.splitlines()[0] == "2026-06-09  Tuesday"
+    assert text.splitlines()[0] == "2026-06-09  Tuesday · unsigned"
     assert "night before  Home · home" in text and "night after   Home · home" in text
     assert "country       NO" in text
     assert f"00:00{EN_DASH}07:30" in text or f"00:00{EN_DASH}08:00" in text

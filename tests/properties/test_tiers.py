@@ -37,7 +37,9 @@ def record(root: Path, lines: list[dict[str, Any]]) -> Logbook:
 
 def exported(lb: Logbook, t: int) -> list[Line]:
     """The lines a crossing to the destination at tier t selects (RFC 0005), the whole window."""
-    req = crossing.request(lb, DESTINATION, SINCE, UNTIL, TIER_SETS[t])
+    req = crossing.request(
+        lb, DESTINATION, SINCE, UNTIL, TIER_SETS[t], signed_only=False
+    )  # tiers, not the gate
     return crossing.select(lb, req).lines
 
 

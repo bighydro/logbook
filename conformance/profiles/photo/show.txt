@@ -1,2 +1,2 @@
-2026-03-01
+2026-03-01  unsigned
   10:12  photo      immich         asset_id=p-2026-03-01T09:12:00Z, camera=SimPhone 3, faces=2, file_name=IMG_0001.HEIC, height=3024, lat=59.913, library=immich, live_photo=True, lon=10.742, media=image, people=['p_17', 'p_42'], provenance=camera, width=4032

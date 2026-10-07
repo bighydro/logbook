@@ -57,7 +57,9 @@ v1). The bundle is regenerable from the log at `logbook_head`.
 `entries.jsonl` is the crossed log lines **verbatim** — the same envelope as the log
 (`at, end, tz, source, kind, tier, payload, …`), a subset chosen by `policy`. No line is rewritten on
 crossing; a held-back line is simply absent. Lines keep their source-native ids — identity is resolved
-separately (Resolution).
+separately (Resolution). Since RFC 0034 the subset is, by default, the lines of the days the owner has
+signed (`policy.signed_days` is `only`; `any` when the owner asked for `--unsigned`), and `counts`
+carries `held_back_unsigned`.
 
 ## Blobs
 

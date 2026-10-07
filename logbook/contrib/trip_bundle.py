@@ -109,7 +109,9 @@ def prepare(
     ceiling or for a destination the file does not name), and select what crosses. Reads only."""
     rd, trip = trip_page.locate(lb, trip_page.parse_ref(ref_text), airports)
     since, until = window_of(rd, trip)
-    req = crossing.request(lb, destination, since, until, tiers, KINDS)
+    req = crossing.request(
+        lb, destination, since, until, tiers, KINDS, signed_only=False
+    )  # its own selection
     people = people_of(rd, trip)
     sel = select(lb, rd, trip, req, people, attachments)
     sender = sender_of(lb, req.tiers)

@@ -44,6 +44,9 @@ What a Day shows, in order:
    the first, every cluster of the day under `places`; a day without them has no row.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent at 14:02 is seen to have.
+   The header says whether the owner has signed the day (`signing`, RFC 0034: the latest
+   `signed-day` line naming it, not retracted), and the JSON carries the signature under `signed`
+   with whether the page still digests to what was signed.
 6. From the circle: for every page another record shared for this day and `logbook receive`
    verified (`share.pages`, RFC 0025), a `from <name>` section — how many lines, by kind, the tier
    it was shared at and when, and the titles of its events, transcripts, notes, mail and calls.
@@ -61,7 +64,20 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import countries as country_table
-from . import events, health, keepers, ledger, present, reading, share, stays, story, trips, weather
+from . import (
+    events,
+    health,
+    keepers,
+    ledger,
+    present,
+    reading,
+    share,
+    signing,
+    stays,
+    story,
+    trips,
+    weather,
+)
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -95,11 +111,15 @@ def read(
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
     rd = reading.read(lb, before, day, airports, tiers)
+    owner, tz = str(lb.meta["owner_id"]), str(rd.tz)
     with lb.index() as idx:
         found = reading.crossing(idx.by_kind(health.KIND, before, day), tiers)
         # every story: a story is about a day it was not told on
         told = reading.crossing(idx.by_kind(story.KIND), tiers)
+        signature = signing.signature_of(idx, day, owner)
+        page = signing.page(idx, day, reading.crossing(idx.day(day), tiers)) if tiers is None else None
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
+    data["signed"] = signing.signed_json(signature, tz, page, day)
     data["received"] = received(lb, day)
     return data
 
@@ -684,7 +704,8 @@ def _instant(stamp: str) -> datetime:
 def rows(data: dict[str, Any]) -> Iterator[str]:
     """The Day as text: the header, the timeline, what is unplaced, the health line, the sources."""
     tz = ZoneInfo(data["tz"])
-    yield f"{data['day']}  {data['weekday']}"
+    head = f"{data['day']}  {data['weekday']}"
+    yield f"{head}{DOT}{signing.state_text(data['signed'])}" if "signed" in data else head
     yield _row("night before", night_text(data["nights"]["before"]))
     yield _row("night after", night_text(data["nights"]["after"]))
     yield _row("country", country_text(data["country"]))

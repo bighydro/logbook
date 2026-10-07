@@ -7,8 +7,9 @@ cannot reproduce the head.
 
 The first sixteen lines are the v0.2 sample and never change. The lines after them, all on the
 Sunday, carry one payload of each profile added since (RFCs 0011 to 0024, and a location with a
-`subject`), shaped as their RFCs describe, so a verifier meets every schema the reference writes.
-Nothing in it is real: the person, the boat, the flight, the book and the mail are made up."""
+`subject`), shaped as their RFCs describe, so a verifier meets every schema the reference writes;
+the last signs the first day (RFC 0034). Nothing in it is real: the person, the boat, the flight,
+the book and the mail are made up."""
 
 import json
 import random
@@ -18,7 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import FORMAT, PREVIOUS_FORMAT
-from logbook.core import sealing
+from logbook.core import sealing, signing
+from logbook.core.index import Index
 from logbook.core.store import Logbook
 
 HERE = Path(__file__).parent
@@ -479,8 +481,39 @@ rows = [
         },
     ),
 ]
+
+
+def sign_first_day(lb: Logbook) -> None:
+    """RFC 0034, `signed-day/v1`: the first day of the week signed on the last evening, after every
+    other line. The page of the 1st is seven lines (the two points, the coffee, the photo, its
+    keeper, the note, the night's sleep), and the digest is over their hashes, so each sample's line
+    carries its own (a sealed line's hash is of its reference). `confirmed` names the fixed ids
+    `finish` assigns, which are the lines' seqs, so the ids written here are the ids in the file."""
+    with lb.index() as idx:
+        page = signing.page(idx, "2026-03-01")
+    assert [line["seq"] for line in page] == [1, 2, 3, 4, 31, 5, 6], [line["seq"] for line in page]
+    lb.append(
+        at="2026-03-08T19:30:00Z",
+        end=None,
+        source=signing.SOURCE,
+        kind=signing.KIND,
+        tier=signing.TIER,
+        payload={
+            "schema": signing.SCHEMA,
+            "day": "2026-03-01",
+            "subject": OWNER,
+            "confirmed": [f"00000000-0000-4000-8000-{line['seq']:012d}" for line in page],
+            "page": {"sha256": signing.page_digest("2026-03-01", "Europe/Oslo", page), "lines": len(page)},
+            "note": "A quiet Sunday. Ines came for coffee.",
+        },
+        recorded_at=R,
+    )
+    Index.open(lb).discard()  # the sample never carries an index
+
+
 for at, end, src, kind, tier, payload in rows:
     lb.append(at=at, end=end, source=src, kind=kind, tier=tier, payload=payload, recorded_at=R)
+sign_first_day(lb)
 
 
 def finish(root: Path, lb: Logbook, expected: str, fmt: str) -> None:
@@ -530,4 +563,5 @@ salts = random.Random(25)
 sealing.new_salt = lambda: f"{salts.getrandbits(128):032x}"  # the fixture's salts: data, reproducible
 for at, end, src, kind, tier, payload in rows:
     slb.append(at=at, end=end, source=src, kind=kind, tier=tier, payload=payload, recorded_at=R)
+sign_first_day(slb)
 finish(SEALED, slb, "expected-sealed.json", FORMAT)
