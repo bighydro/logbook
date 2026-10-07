@@ -46,6 +46,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "places",
         "policy",
         "present",
+        "readiness",
         "reading",
         "repair",
         "resolve",
@@ -110,6 +111,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
     {
         "chapters",
         "introductions",
+        "readiness",
         "signing",
         "site",
         "stream",

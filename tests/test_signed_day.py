@@ -1,7 +1,8 @@
 """`logbook day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` (RFC 0034, `signed-day/v1`): the owner's
 reading of a day's page, appended as one tier-1 line and rewriting nothing; `show` and `day` say in
-their header whether a day is signed; a later signature supersedes; and the page digest binds which
-lines were on the page. Synthetic Oslo persona, who does not exist."""
+their header whether a day is signed; a later signature supersedes; the page digest binds which lines
+were on the page; and the Day's `readiness` block says per class of source whether the day is in.
+Synthetic Oslo persona, who does not exist."""
 
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from hypothesis import strategies as st
 
 from logbook import cli
 from logbook.contrib import mcp_server
-from logbook.core import signing
+from logbook.core import readiness, signing
 from logbook.core.chain import canonical_json
 from logbook.core.store import Logbook
 
@@ -289,3 +290,119 @@ def test_re_signing_never_changes_the_chain_head_of_earlier_days(signings: list[
                 standing = signing.standing(idx)
             assert standing[day]["id"] == line["id"]
             assert lb.verify()[2] == []
+
+
+# -- readiness --------------------------------------------------------------------------------------------
+
+
+def _ten_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    """Ten days with a point from the tracker, two messages and a note each; the eleventh with a
+    note and a photo only: the tracker and the messages went quiet."""
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    drafts: list[dict[str, Any]] = []
+    for n in range(1, 11):
+        day = f"2026-03-{n:02d}"
+        drafts.append(_location(f"{day}T07:30:00Z"))
+        drafts.append(_note(f"{day}T10:00:00Z", "a note"))
+        for clock in ("11:00", "12:00"):
+            drafts.append(
+                {
+                    "at": f"{day}T{clock}:00Z",
+                    "source": "whatsapp",
+                    "kind": "message",
+                    "tier": 2,
+                    "payload": {
+                        "schema": "message/v1",
+                        "raw_id": f"wa:{day}:{clock}",
+                        "chat": {"id": "g@g.us", "type": "group", "name": "Boat club"},
+                        "from_me": False,
+                        "sender": {"kind": "phone", "value": "+4790000001"},
+                        "text": "hi",
+                    },
+                }
+            )
+    drafts.append(_note("2026-03-11T10:00:00Z", "quiet"))
+    drafts.append(
+        {
+            "at": "2026-03-11T11:00:00Z",
+            "source": "immich",
+            "kind": "photo",
+            "tier": 1,
+            "payload": {"schema": "photo/v1", "raw_id": "p1", "asset_id": "p1", "library": "immich"},
+        }
+    )
+    lb.append_many(drafts)
+    return lb
+
+
+def test_readiness_names_the_usual_sources_that_did_not_deliver(tmp_path: Path, monkeypatch, capsys):
+    _ten_days(tmp_path, monkeypatch)
+    data = json.loads(_run(capsys, "day", "2026-03-11", "--json"))
+    r = data["readiness"]
+    assert [c["name"] for c in r["classes"]] == [
+        "mail",
+        "message",
+        "meeting",
+        "location",
+        "photo",
+        "calendar",
+    ]
+    classes = {c["name"]: c for c in r["classes"]}
+    assert classes["location"] == {
+        "name": "location",
+        "kinds": ["location"],
+        "present": False,
+        "lines": 0,
+        "sources": [],
+        "usual": ["dawarich"],
+        "missing": ["dawarich"],
+    }
+    assert classes["message"]["missing"] == ["whatsapp"] and classes["message"]["present"] is False
+    assert classes["photo"] == {
+        "name": "photo",
+        "kinds": ["photo"],
+        "present": True,
+        "lines": 1,
+        "sources": ["immich"],
+        "usual": [],
+        "missing": [],
+    }
+    assert classes["mail"]["present"] is False and classes["mail"]["usual"] == []
+    assert r["missing"] == ["message", "location"] and r["ready"] is False
+    assert r["window"] == {"since": "2026-02-12", "until": "2026-03-11", "logged_days": 11}
+    text = _run(capsys, "day", "2026-03-11")
+    assert (
+        "  readiness     mail none · message missing whatsapp · meeting none · location missing dawarich"
+        " · photo present · calendar none"
+    ) in text
+    ready = json.loads(_run(capsys, "day", "2026-03-10", "--json"))["readiness"]
+    assert ready["ready"] is True and ready["missing"] == []
+    assert {c["name"]: c["present"] for c in ready["classes"]} == {
+        "mail": False,
+        "message": True,
+        "meeting": False,
+        "location": True,
+        "photo": False,
+        "calendar": False,
+    }
+
+
+def test_a_disabled_source_is_not_expected(tmp_path: Path, monkeypatch, capsys):
+    lb = _ten_days(tmp_path, monkeypatch)
+    policy = lb.root / "policy" / "import.json"
+    policy.write_text(json.dumps({"disabled": [{"source": "whatsapp", "reason": "off"}]}), encoding="utf-8")
+    r = json.loads(_run(capsys, "day", "2026-03-11", "--json"))["readiness"]
+    classes = {c["name"]: c for c in r["classes"]}
+    assert classes["message"]["usual"] == [] and classes["message"]["missing"] == []
+    assert r["missing"] == ["location"]
+
+
+def test_readiness_reads_the_record_and_the_policy_only(tmp_path: Path, monkeypatch, no_network: list[str]):
+    lb = _ten_days(tmp_path, monkeypatch)
+    (lb.root / "policy" / "import.json").unlink()  # a record made before the import policy
+    before = _files(lb.root)
+    block = readiness.read(lb, "2026-03-11")
+    assert block["missing"] == ["message", "location"]
+    assert no_network == []
+    assert _files(lb.root) == before, "a reader writes nothing, not even the default policy"

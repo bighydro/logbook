@@ -16,3 +16,4 @@
 
   health        sleep 6.6 h · 8,115 steps · resting 53 bpm
   sources       dawarich 253 lines, last 23:55 · apple-health 84 lines, last 22:26 · ais 24 lines, last 23:00 · whatsapp 4 lines, last 16:45 · safari 2 lines, last 21:32 · apple-podcasts 1 line, last 07:40 · flighty 1 line, last 07:12 · google-takeout 1 line, last 20:44 · ios-calendar 1 line, last 07:05 · manual 1 line, last 22:00 · taxi 1 line, last 10:00
+  readiness     mail none · message present · meeting none · location present · photo none · calendar present

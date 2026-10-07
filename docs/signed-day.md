@@ -10,7 +10,7 @@ record.
 
 ```bash
 logbook show 2026-06-09                 # read the page; the header says `unsigned`
-logbook day 2026-06-09                  # the Day, with the same header
+logbook day 2026-06-09                  # the Day: the readiness row says whether every usual source is in
 logbook day sign 2026-06-09             # sign it: every line on the page is confirmed
 logbook day sign 2026-06-09 --note "Quiet day. The call with Kari was the thing."
 logbook day sign 2026-06-09 --confirm 4181,4183   # only these lines, by seq or id as `show` lists them
@@ -45,6 +45,23 @@ asks you.
 prints the same after the weekday, with `, the page has changed since` when a line was added to
 the day after you signed, and carries it in `--json` under `signed`: when, which line, how many
 lines were confirmed and on the page, the page digest, whether the page still matches, the note.
+
+## Readiness: is the day all in?
+
+Before signing you want to know whether everything that usually arrives has arrived. The Day's
+`readiness` row says, for six classes of source, whether the day has lines of it and which usual
+sources have not delivered:
+
+```
+  readiness     mail none · message present · meeting none · location present, missing dawarich · photo present · calendar present
+```
+
+The classes are mail, message, meeting (a transcript), location, photo and calendar. A source is
+*usual* for a class when it delivered that class on four in five of the logged days of the last
+four weeks and `policy/import.json` has not disabled it. `none` means nothing is in and nothing
+usually is; `missing <source>` names what has not come. It is computed from the record and the
+policy alone: no connection is opened, nothing is written. It is advice, not a gate: sign a day
+with the tracker missing when you know the phone was off.
 
 ## The gate on the crossing
 

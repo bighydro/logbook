@@ -55,5 +55,86 @@
     }
   ],
   "signed": null,
+  "readiness": {
+    "window": {
+      "since": "2026-02-03",
+      "until": "2026-03-02",
+      "logged_days": 1
+    },
+    "classes": [
+      {
+        "name": "mail",
+        "kinds": [
+          "mail"
+        ],
+        "present": true,
+        "lines": 1,
+        "sources": [
+          "mail"
+        ],
+        "usual": [
+          "mail"
+        ],
+        "missing": []
+      },
+      {
+        "name": "message",
+        "kinds": [
+          "message"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "meeting",
+        "kinds": [
+          "transcript"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "location",
+        "kinds": [
+          "location"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "photo",
+        "kinds": [
+          "photo"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "calendar",
+        "kinds": [
+          "event"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      }
+    ],
+    "missing": [],
+    "ready": true
+  },
   "received": []
 }

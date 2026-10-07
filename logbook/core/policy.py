@@ -168,12 +168,22 @@ def disabled(root: Path) -> dict[str, str]:
     """The disabled sources as `{source: reason}`, as the file spells them (aliases are the
     caller's). A record without the file gets the empty one, so the owner finds it; a file that is
     not the documented shape raises PolicyError naming it, and the caller writes nothing."""
-    path = write_default_import(root)
+    write_default_import(root)
+    return read_disabled(root)
+
+
+def read_disabled(root: Path) -> dict[str, str]:
+    """The disabled sources as `disabled` gives them, without writing the default: a record without
+    the file reads as the default (`DEFAULT_IMPORT`), for a reader that writes nothing."""
+    path = import_path(root)
     shape = f'{path} must be {{"disabled": [{{"source": "<adapter>", "reason": "<why>"}}, ...]}}'
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except ValueError as e:
-        raise PolicyError(f"{path} is not JSON: {e}") from e
+    if not path.exists():
+        data: Any = json.loads(json.dumps(DEFAULT_IMPORT))
+    else:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as e:
+            raise PolicyError(f"{path} is not JSON: {e}") from e
     if not isinstance(data, dict) or not isinstance(data.get("disabled"), list):
         raise PolicyError(shape)
     out: dict[str, str] = {}

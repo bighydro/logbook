@@ -43,7 +43,9 @@ What a Day shows, in order:
    weather line (`weather.day_row`): the cluster of the night after when the day has one, else
    the first, every cluster of the day under `places`; a day without them has no row.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
-   tracker that fell silent at 14:02 is seen to have.
+   tracker that fell silent at 14:02 is seen to have. Then readiness (`readiness`, RFC 0034): per
+   class of source — mail, message, meeting, location, photo, calendar — whether the day has lines
+   of it and which usual sources have not delivered, from the record and the policy alone.
    The header says whether the owner has signed the day (`signing`, RFC 0034: the latest
    `signed-day` line naming it, not retracted), and the JSON carries the signature under `signed`
    with whether the page still digests to what was signed.
@@ -69,7 +71,9 @@ from . import (
     health,
     keepers,
     ledger,
+    policy,
     present,
+    readiness,
     reading,
     share,
     signing,
@@ -116,10 +120,18 @@ def read(
         found = reading.crossing(idx.by_kind(health.KIND, before, day), tiers)
         # every story: a story is about a day it was not told on
         told = reading.crossing(idx.by_kind(story.KIND), tiers)
+        on_day = reading.crossing(idx.day(day), tiers)  # the day's lines once: the page, and readiness
         signature = signing.signature_of(idx, day, owner)
-        page = signing.page(idx, day, reading.crossing(idx.day(day), tiers)) if tiers is None else None
+        disabled = policy.read_disabled(lb.root)
+        logged, days_of = idx.kind_source_days(
+            (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), day, readiness.KINDS, tiers
+        )
+        page = signing.page(idx, day, on_day) if tiers is None else None
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["signed"] = signing.signed_json(signature, tz, page, day)
+    data["readiness"] = readiness.of_lines(
+        day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
+    )
     data["received"] = received(lb, day)
     return data
 
@@ -732,6 +744,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row("sources", DOT.join(_source_text(s, tz) for s in data["sources"]))
     else:
         yield _row("sources", "none")
+    if data.get("readiness"):
+        yield _row("readiness", readiness.text(data["readiness"]))
     for page in data.get("received") or []:
         yield ""
         yield _row(f"from {page['from']}", received_text(page))

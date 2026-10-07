@@ -13,9 +13,11 @@ logbook day                     # today
 logbook day sign 2026-06-13     # sign it: you read the page and these are the day's facts (RFC 0034)
 ```
 
-The header says whether you have signed the day (`· unsigned`, or `· signed 2026-06-14 08:15`):
-[the signed day](signed-day.md). `day sign` is the one thing under `day` that writes, and it
-writes one line.
+The header says whether you have signed the day (`· unsigned`, or `· signed 2026-06-14 08:15`),
+and the last row, `readiness`, says for each class of source — mail, message, meeting, location,
+photo, calendar — whether the day has lines of it and which usual sources have not delivered.
+Both are [the signed day](signed-day.md); `day sign` is the one thing under `day` that writes, and
+it writes one line.
 
 ## What a Day is
 

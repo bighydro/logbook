@@ -66,6 +66,58 @@ def test_the_record_verifies_and_holds_every_profile(lb: Logbook, capsys: pytest
     assert (lb.root / "places.json").is_file() and (lb.root / "assets.json").is_file()
 
 
+def test_the_day_says_which_classes_of_source_are_in(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    """RFC 0034: the Day's `readiness` block, from the record and the policy alone. The persona's
+    tracker and the boat's AIS speak every day and her chats most days; her photos and her
+    calendar come some days, her mail and her meetings rarely: present when they are, never
+    missing when nothing usually delivers them."""
+    data = _json(capsys, "day", "2026-06-10")
+    r = data["readiness"]
+    assert [c["name"] for c in r["classes"]] == [
+        "mail",
+        "message",
+        "meeting",
+        "location",
+        "photo",
+        "calendar",
+    ]
+    classes = {c["name"]: c for c in r["classes"]}
+    assert classes["location"]["present"] and classes["location"]["sources"] == ["ais", "dawarich"]
+    assert classes["location"]["usual"] == ["ais", "dawarich"] and classes["location"]["missing"] == []
+    assert classes["location"]["lines"] == sum(
+        s["lines"] for s in data["sources"] if s["source"] in ("ais", "dawarich")
+    )
+    assert classes["message"]["present"] and classes["message"]["sources"] == ["whatsapp"]
+    assert (
+        classes["photo"]["present"]
+        and classes["photo"]["sources"] == ["immich"]
+        and classes["photo"]["missing"] == []
+    )
+    assert classes["mail"] == {
+        "name": "mail",
+        "kinds": ["mail"],
+        "present": False,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": [],
+    }
+    assert classes["meeting"]["present"] is False and classes["meeting"]["kinds"] == ["transcript"]
+    assert classes["calendar"]["kinds"] == ["event"]
+    assert r["window"] == {"since": "2026-05-14", "until": "2026-06-10", "logged_days": 11}
+    assert r["ready"] is True and r["missing"] == []
+    assert data["signed"] is None, "the demo signs nothing: a signature is the owner's act"
+    text = _run(capsys, "day", "2026-06-10")
+    assert text.splitlines()[0] == "2026-06-10  Wednesday · unsigned"
+    [row] = [line for line in text.splitlines() if line.startswith("  readiness")]
+    assert (
+        "location present" in row
+        and "message present" in row
+        and "photo present" in row
+        and "mail none" in row
+    )
+
+
 def test_nothing_in_it_is_real(lb: Logbook) -> None:
     text = "\n".join(p.read_text(encoding="utf-8") for p in lb.files())
     for phone in re.findall(r"\+\d{8,}", text):
