@@ -298,12 +298,12 @@ def test_with_mlx_lm_the_engine_is_mlx_lm_on_the_default_model_or_the_one_named(
 # -- through the CLI ---------------------------------------------------------------------------------
 
 
-def test_promises_shows_judged_commitments_by_default_and_all_shows_every_candidate(
+def test_promises_shows_the_rules_by_default_and_the_judge_sets_candidates_aside(
     lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    out = _run(capsys, "promises")
-    assert out.startswith("no judged promises") and "10 candidates" in out and "--judge" in out
-    assert "--all" in out and "mooring photos" not in out
+    out = _run(capsys, "promises")  # the rules alone: the owner's six, nothing judged yet
+    assert out.startswith("6 promises proposed: 6 you made, 0 asked of you") and "judged" not in out
+    assert "crane" in out and "forecast" in out and "mooring photos" not in out and "We will see" not in out
     engine = FakeJudge()
     monkeypatch.setattr(judge, "detect", lambda model, **_k: engine)
     lines = list(lb.lines())
@@ -313,21 +313,23 @@ def test_promises_shows_judged_commitments_by_default_and_all_shows_every_candid
     assert list(lb.lines()) == lines
     first, head, *rows = captured.out.splitlines()
     assert first.startswith("judged 9 candidates with fake-judge (fake-instruct-4bit)")
-    assert head.startswith("2 judged promises") and "0.6" in head and "fake-judge" in head
+    assert head.startswith("2 promises proposed: 2 you made, 0 asked of you") and "9 judged" in head
+    assert "0.6" in head and "1 unjudged" in head
     assert "1 candidate could not be judged" in captured.out
-    assert [r for r in rows if "“" in r] == [r for r in rows if "mooring photos" in r or "crane" in r]
-    photos = next(r for r in rows if "mooring photos" in r)
-    assert (
-        "Ola Nordmann" in photos and "0.92" in photos and "to you" in photos and "due 2026-06-12?" in photos
-    )
+    assert [r for r in rows if "“" in r] == [r for r in rows if "crane" in r or "Rechnung" in r]
     crane = next(r for r in rows if "crane" in r)
     assert "0.8" in crane and "to Ola Nordmann" in crane
     assert "forecast" not in captured.out and "We will see" not in captured.out
+    assert "mooring photos" not in captured.out  # Ola's commitment, judged or not, is not the owner's
     out = _run(capsys, "promises", "--all")
-    assert out.startswith("10 proposed promises") and "forecast" in out and "We will see" in out
+    assert out.startswith("6 promises proposed") and "forecast" in out and "We will see" in out
     assert "0.4" in out and "no 0.95" in out
+    photos = next(r for r in out.splitlines() if "mooring photos" in r)
+    assert (
+        "Ola Nordmann" in photos and "0.92" in photos and "to you" in photos and "due 2026-06-12?" in photos
+    )
     out = _run(capsys, "promises", "--since", "2026-06-12")
-    assert out.startswith("no judged promises") and "7 candidates, 1 unjudged" in out
+    assert out.startswith("1 promise proposed since 2026-06-12: 1 you made") and "1 unjudged" in out
 
 
 def test_promises_json_carries_the_judgement_or_null(
@@ -336,14 +338,17 @@ def test_promises_json_carries_the_judgement_or_null(
     monkeypatch.setattr(judge, "detect", lambda model, **_k: FakeJudge())
     cli.main(["promises", "--judge", "--limit", "2", "--json"])
     out = json.loads(capsys.readouterr().out)
-    assert out["judged_only"] is True and out["threshold"] == 0.6 and out["judge"] == {
+    assert out["all"] is False and out["threshold"] == 0.6 and out["judge"] == {
         "engine": "fake-judge", "model": "fake-instruct-4bit", "candidates": 10, "judged": 2, "unparsed": 0,
     }  # fmt: skip
-    photos, crane = out["proposals"]
-    assert photos["quote"] == PHOTOS and photos["judgement"]["confidence"] == 0.92
-    assert crane["quote"] == CRANE and out["unjudged"] == 8
+    assert [p["role"] for p in out["proposals"]] == ["promise"] * 6 and out["unjudged"] == 8
+    crane = next(p for p in out["proposals"] if p["quote"] == CRANE)
+    assert crane["judgement"]["confidence"] == 0.8
+    assert PHOTOS not in {p["quote"] for p in out["proposals"]}
     everything = json.loads(_run(capsys, "promises", "--all", "--json"))
-    assert everything["judged_only"] is False and len(everything["proposals"]) == 10
+    assert everything["all"] is True and len(everything["proposals"]) == 10
+    photos = next(p for p in everything["proposals"] if p["quote"] == PHOTOS)
+    assert photos["judgement"]["confidence"] == 0.92 and photos["role"] == "theirs"
     crane = next(p for p in everything["proposals"] if p["quote"] == CRANE)
     assert crane["judgement"]["to"] == "Ola Nordmann" and crane["judgement"]["model"] == "fake-instruct-4bit"
     assert next(p for p in everything["proposals"] if p["quote"] == SEE)["judgement"] is None
@@ -362,8 +367,8 @@ def test_done_still_closes_a_candidate_and_is_the_only_write(
     after = list(lb.lines())
     assert len(after) == len(before) + 1 and after[-1]["kind"] == "task"
     assert after[-1]["payload"]["extra"]["promise"] == photos.id
-    assert "done" in next(r for r in _run(capsys, "promises").splitlines() if "mooring photos" in r)
-    assert "mooring photos" not in _run(capsys, "promises", "--open")
+    assert "done" in next(r for r in _run(capsys, "promises", "--all").splitlines() if "mooring photos" in r)
+    assert "mooring photos" not in _run(capsys, "promises", "--all", "--open")
 
 
 def test_judge_without_an_engine_fails_with_the_message_and_status_2(

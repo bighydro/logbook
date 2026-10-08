@@ -1,0 +1,1147 @@
+{
+ "about": "Synthetic: the Oslo persona's fortnight, for the promises reader's recall test. Nobody here exists.",
+ "owner": {
+  "id": "019cadd3-6bc0-7dcd-9133-000000000099",
+  "emails": [
+   "ines@example.org"
+  ],
+  "policy": {
+   "names": [
+    "Ines",
+    "Ines Nordmann"
+   ],
+   "emails": [
+    "ines.nordmann@example.org"
+   ],
+   "phones": [
+    "+4790000009"
+   ]
+  }
+ },
+ "people": {
+  "owner": {
+   "name": "Ines Nordmann",
+   "email": "ines@example.org",
+   "phone": "+4790000009"
+  },
+  "owner-alias": {
+   "name": "Ines Nordmann",
+   "email": "ines.nordmann@example.org",
+   "phone": "+4790000009"
+  },
+  "ola": {
+   "name": "Ola Nordmann",
+   "email": "ola@example.org",
+   "phone": "+4790000001",
+   "id": "019cadd3-6bc0-7dcd-9133-000000000002"
+  },
+  "kari": {
+   "name": "Kari Nordmann",
+   "email": "kari.nordmann@example.org",
+   "phone": "+4790000002",
+   "id": "019cadd3-6bc0-7dcd-9133-000000000001"
+  },
+  "mia": {
+   "name": "Mia Hansen",
+   "email": "mia.hansen@example.org",
+   "phone": "+4790000004",
+   "id": "019cadd3-6bc0-7dcd-9133-000000000004"
+  },
+  "marina": {
+   "name": "Oslo Marina",
+   "email": "post@marina.example.org"
+  },
+  "news": {
+   "name": "Fjord Weekly",
+   "email": "news@example.org"
+  }
+ },
+ "planted": {
+  "promises": 24,
+  "requests": 12,
+  "distractors": 60
+ },
+ "lines": [
+  {
+   "kind": "mail",
+   "at": "2026-06-08T07:10:00Z",
+   "from": "owner",
+   "to": [
+    "ola"
+   ],
+   "subject": "Re: Berth",
+   "body": "Hi Ola, thanks for the berth. I'll send the mooring photos by Friday.\n\nInes",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I'll send the mooring photos by Friday."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-08T08:30:00Z",
+   "from": "owner",
+   "to": [
+    "marina"
+   ],
+   "subject": "Crane",
+   "body": "Good morning. I will book the crane for the 20th. Regards, Ines",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I will book the crane for the 20th."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-09T06:45:00Z",
+   "from": "owner",
+   "to": [
+    "kari"
+   ],
+   "subject": "Liste",
+   "body": "Hei Kari, ich schicke dir die Liste morgen. Ines",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Hei Kari, ich schicke dir die Liste morgen."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-09T18:20:00Z",
+   "from": "owner",
+   "to": [
+    "kari"
+   ],
+   "subject": "Tromsø",
+   "body": "Ich melde mich bis Freitag wegen Tromsø. Liebe Grüße",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Ich melde mich bis Freitag wegen Tromsø."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-10T09:05:00Z",
+   "from": "owner",
+   "to": [
+    "mia"
+   ],
+   "subject": "Re: Quote",
+   "body": "Thanks Mia. Let me get back to you on the price next week.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Let me get back to you on the price next week."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-10T15:40:00Z",
+   "from": "owner",
+   "to": [
+    "marina"
+   ],
+   "subject": "Invoice 2026-118",
+   "body": "Invoice goes out Monday, count on it.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Invoice goes out Monday, count on it."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-11T07:55:00Z",
+   "from": "owner",
+   "to": [
+    "kari"
+   ],
+   "subject": "Unterlagen",
+   "body": "Mach ich, bis Donnerstag hast du die Unterlagen.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Mach ich, bis Donnerstag hast du die Unterlagen."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-12T16:10:00Z",
+   "from": "owner-alias",
+   "to": [
+    "ola"
+   ],
+   "subject": "Anchor",
+   "body": "We'll bring the spare anchor on Saturday.\n\nInes",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "We'll bring the spare anchor on Saturday."
+    }
+   ],
+   "direction": "received"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-08T12:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "I'll call the yard tomorrow.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I'll call the yard tomorrow."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-08T17:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Will do, by Friday.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Will do, by Friday."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-09T08:15:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Ich kümmere mich um den Kran.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Ich kümmere mich um den Kran."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-09T19:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "I'm going to order the bilge pump this week.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I'm going to order the bilge pump this week."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-10T11:20:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Let me check the forecast and I'll text you tonight.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Let me check the forecast and I'll text you tonight."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-10T20:05:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Schick ich dir heute Abend.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Schick ich dir heute Abend."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-11T07:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "I promise I'll be there at nine.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I promise I'll be there at nine."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-11T13:45:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Erledige ich am Montag.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Erledige ich am Montag."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-12T09:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "I need to renew the insurance before the 15th.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "I need to renew the insurance before the 15th."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-12T21:10:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Expect the draft tomorrow morning.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Expect the draft tomorrow morning."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-13T10:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Ich bringe die Karten am Samstag mit.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Ich bringe die Karten am Samstag mit."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-13T18:40:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Bis Freitag, versprochen.",
+   "planted": [
+    {
+     "role": "promise",
+     "quote": "Bis Freitag, versprochen."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-08T10:00:00Z",
+   "from": "ola",
+   "to": [
+    "owner"
+   ],
+   "subject": "Berth",
+   "body": "Hi Ines. Can you send me the berth number before Friday?\n\nOla",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Can you send me the berth number before Friday?"
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-09T12:30:00Z",
+   "from": "marina",
+   "to": [
+    "owner"
+   ],
+   "subject": "Crane booking",
+   "body": "Dear Ms Nordmann,\n\nPlease confirm your crane booking by 18 June.\n\nOslo Marina",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Please confirm your crane booking by 18 June."
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-10T07:20:00Z",
+   "from": "kari",
+   "to": [
+    "owner"
+   ],
+   "subject": "Flug",
+   "body": "Hei! Kannst du mir die Flugnummer schicken?\n\nKari",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Kannst du mir die Flugnummer schicken?"
+    }
+   ]
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-11T14:00:00Z",
+   "from": "mia",
+   "to": [
+    "owner"
+   ],
+   "subject": "Re: Quote",
+   "body": "Would you mind forwarding the quote to Ola?\n\nMia",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Would you mind forwarding the quote to Ola?"
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-08T13:10:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Schick mir die Fotos vom Anleger.",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Schick mir die Fotos vom Anleger."
+    }
+   ],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-09T09:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Could you pick up the chart on your way?",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Could you pick up the chart on your way?"
+    }
+   ],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-10T12:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "Let me know by Thursday if nine works.",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Let me know by Thursday if nine works."
+    }
+   ],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-11T08:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Don't forget to bring the spare key.",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Don't forget to bring the spare key."
+    }
+   ],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-12T10:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Sag mir Bescheid, wenn du die Liste hast.",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Sag mir Bescheid, wenn du die Liste hast."
+    }
+   ],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-13T11:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "The Monday shift is still open, if you're free.",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "The Monday shift is still open, if you're free."
+    }
+   ],
+   "sender": "mia"
+  },
+  {
+   "kind": "transcript",
+   "at": "2026-06-15T09:00:00Z",
+   "end": "2026-06-15T09:30:00Z",
+   "title": "Budget call",
+   "participants": [
+    "ola",
+    "owner"
+   ],
+   "text": "# Budget call\n\nOla Nordmann: Thanks for joining. Could you send the slides to Kari after this?\nInes: Sure. I'll write up the minutes tonight.\nOla Nordmann: The yard quoted two prices.\nInes: I will book the meeting room for next Tuesday.\nOla Nordmann: Kannst du die Zahlen bis Mittwoch nachreichen?\nInes: Ich schicke die Zahlen bis Mittwoch. Let me get back to you on the budget by Friday.\nOla Nordmann: Perfect, I'll call the yard then.\nInes: Will you be in Oslo next week?\n",
+   "planted": [
+    {
+     "role": "request",
+     "quote": "Could you send the slides to Kari after this?"
+    },
+    {
+     "role": "promise",
+     "quote": "I'll write up the minutes tonight."
+    },
+    {
+     "role": "promise",
+     "quote": "I will book the meeting room for next Tuesday."
+    },
+    {
+     "role": "request",
+     "quote": "Kannst du die Zahlen bis Mittwoch nachreichen?"
+    },
+    {
+     "role": "promise",
+     "quote": "Ich schicke die Zahlen bis Mittwoch."
+    },
+    {
+     "role": "promise",
+     "quote": "Let me get back to you on the budget by Friday."
+    }
+   ]
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T08:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "I'll send you the photos tonight.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T08:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Ich melde mich morgen.",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-14T09:00:00Z",
+   "from": "ola",
+   "to": [
+    "owner"
+   ],
+   "subject": "Engine",
+   "body": "I'll have a look at the engine on Sunday.\n\nOla",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T09:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "We will see about the weather.",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T10:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Can you send me the invoice?",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T10:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Kannst du mir die Adresse schicken?",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-14T11:00:00Z",
+   "from": "owner",
+   "to": [
+    "mia"
+   ],
+   "subject": "Friday",
+   "body": "Let me know if Friday works for you.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T11:30:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Schick mir bitte den Link.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T12:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "I will not be at the marina on Saturday.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T12:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "I'll bring the chart, right?",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T13:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Ola will bring the anchor.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T13:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Ich werde nicht kommen.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-14T14:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Can you believe we got the berth?",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-14T14:30:00Z",
+   "from": "owner",
+   "to": [
+    "ola"
+   ],
+   "subject": "Re: Berth",
+   "body": "Sure.\n\n> Can you send me the berth number before Friday?\n",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-14T15:00:00Z",
+   "from": "owner",
+   "to": [
+    "kari"
+   ],
+   "subject": "Re: Liste",
+   "body": "Done, the invoice is paid.\n\nOn Tue, 9 Jun 2026, Kari wrote:\n> Kannst du mir die Flugnummer schicken?\n",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-15T08:00:00Z",
+   "from": "ola",
+   "to": [
+    "owner"
+   ],
+   "subject": "Re: Berth",
+   "body": "Great!\n\n> I'll send the mooring photos by Friday.\n",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-15T08:30:00Z",
+   "from": "kari",
+   "to": [
+    "owner"
+   ],
+   "subject": "Re: Liste",
+   "body": "Danke!\n\nAm 09.06.2026 schrieb Ines Nordmann:\n> Hei Kari, ich schicke dir die Liste morgen.\n",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-15T09:00:00Z",
+   "from": "mia",
+   "to": [
+    "owner"
+   ],
+   "subject": "Re: Quote",
+   "body": "Thanks.\n\n-----Original Message-----\nFrom: Ines\n\nLet me get back to you on the price next week.\n",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T10:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Will you be at the marina on Saturday?",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T10:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Did you get the photos?",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T11:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "Could it rain tomorrow?",
+   "planted": [],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T11:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "You should see the sunset here.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T12:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "I can't make it on Friday.",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T12:30:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "Can you believe the weather?",
+   "planted": [],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T13:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Kannst du dir vorstellen, wie kalt es war?",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T13:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Wie war der Törn?",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T14:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Ich bin um neun da.",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T14:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Wir sehen uns Samstag.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T15:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "The meeting is on Friday at ten.",
+   "planted": [],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-15T15:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Der Kran kommt am Montag.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-16T06:00:00Z",
+   "from": "news",
+   "to": [
+    "owner"
+   ],
+   "subject": "Fjord Weekly",
+   "body": "The tide tables for June are out. Please find attached the calendar.\n\nFjord Weekly",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-16T06:30:00Z",
+   "from": "marina",
+   "to": [
+    "owner"
+   ],
+   "subject": "Office hours",
+   "body": "Please note the office is closed on Monday.\n\nOslo Marina",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-16T07:00:00Z",
+   "from": "news",
+   "to": [
+    "owner"
+   ],
+   "subject": "Fjord Weekly",
+   "body": "Ten anchorages for a long weekend. Read more on our site.",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-16T07:30:00Z",
+   "from": "marina",
+   "to": [
+    "owner"
+   ],
+   "subject": "Invoice 2026-118",
+   "body": "Please find attached the invoice for berth 12.\n\nOslo Marina",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-16T08:00:00Z",
+   "from": "news",
+   "to": [
+    "owner"
+   ],
+   "subject": "Fjord Weekly",
+   "body": "The regatta results are in. Congratulations to all crews.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T09:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Lovely evening on the fjord.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T09:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Thanks!",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T10:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "See you at nine.",
+   "planted": [],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T10:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Nice photos.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T11:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Haha ok",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T11:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Takk!",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T12:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "Bis später!",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T12:30:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": false,
+   "text": "Guten Morgen!",
+   "planted": [],
+   "sender": "mia"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T13:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": false,
+   "text": "Das Wetter wird gut.",
+   "planted": [],
+   "sender": "kari"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-16T13:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": false,
+   "text": "The yard called back, all fine.",
+   "planted": [],
+   "sender": "ola"
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T08:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Great, see you there.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T08:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Thanks, got it.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T09:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Ja, passt.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T09:30:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Super, danke!",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T10:00:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "The forecast looks fine.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T10:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "We had a lovely sail.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T11:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Ich bin müde.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T11:30:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Wir waren am Fjord.",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-17T12:00:00Z",
+   "from": "owner",
+   "to": [
+    "ola"
+   ],
+   "subject": "Photos",
+   "body": "Here are the photos from Saturday.\n\nInes",
+   "planted": []
+  },
+  {
+   "kind": "mail",
+   "at": "2026-06-17T12:30:00Z",
+   "from": "owner",
+   "to": [
+    "kari"
+   ],
+   "subject": "Rechnung",
+   "body": "Die Rechnung ist bezahlt.\n\nInes",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T13:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Bis Freitag dann!",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T13:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Ok",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T14:00:00Z",
+   "source": "whatsapp",
+   "chat": "mia",
+   "from_me": true,
+   "text": "Haha, yes.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T14:30:00Z",
+   "source": "imessage",
+   "chat": "ola",
+   "from_me": true,
+   "text": "Same here.",
+   "planted": []
+  },
+  {
+   "kind": "message",
+   "at": "2026-06-17T15:00:00Z",
+   "source": "whatsapp",
+   "chat": "kari",
+   "from_me": true,
+   "text": "Gute Nacht!",
+   "planted": []
+  }
+ ]
+}

@@ -1,1 +1,18 @@
-no promises proposed
+8 promises proposed: 8 you made, 0 asked of you; read by rules, not facts; 5 other candidates below; confirm one with `logbook promises done <id>` or `logbook day sign DAY --confirm <line>`
+I promised
+  2026-06-02  16:17  to Ola Nordmann  “I'll check the outboard.”  5770c05cc5c7ca71  line 019e88b1-e360-702b-ac0a-8ec95361dba4
+  2026-06-04  16:40  to Ola Nordmann  “I'll cook.”  28e85c33609f8070  line 019e9313-aa00-72bf-bc1a-e0603d677fbb
+  2026-06-08  16:45  to Ola Nordmann  “I'll keep the food warm.”  87facd1a098f144b  line 019ea7b1-ade0-7ee7-b3dd-7034f0596a47
+  2026-06-10  14:23  to Ola Nordmann  “I'll check the outboard.”  336c14135d921509  line 019eb17c-64a0-7fb2-89fd-9f8b18c3dbb5
+  2026-06-12  17:37  to Ola Nordmann  “I'll cook.”  dd4e6fc098dec977  line 019ebc7a-b960-7b82-97d4-95bb3e5fb0a1
+  2026-06-24  13:18  to Ola Nordmann  “I'll keep the food warm.”  59ad83a07d73b2c9  line 019ef959-ea40-7a6f-820f-c95cab27ed41
+  2026-06-26  16:27  to Ola Nordmann  “I'll check the outboard.”  a3b1343377239ed3  line 019f0453-ab20-7076-879f-20a9140fa71b
+  2026-06-28  17:08  to Ola Nordmann  “I'll cook.”  6785abdaf294d31a  line 019f0ec5-ec80-7765-b324-4ebdb3b19dfb
+I was asked
+  none
+Others said they would, or nobody resolved, or the judge set aside
+  2026-06-01  15:32  with Liv Berg      “Comments by Friday.”  due 2026-06-05? (by Friday)  0d21ad83ec837a02  line 019e8362-5480-7041-b2b9-6a1ca3a6a0a9
+  2026-06-13  17:17  with Sigrid Moen   “I'll bring the charts and the good coffee.”  4934947da5061cbe  line 019ec18e-c5e0-7120-bb12-80c4defe3163
+  2026-06-20  08:15  with Sigrid Moen   “I'll bring the charts and the good coffee.”  187cca738c51863b  line 019ee3ab-12a0-7651-88a2-1b86f28dbe1f
+  2026-06-23  13:51  with Freja Lund    “I'll meet you at the flat, bring a jumper, it's windy.”  d1c94dbc1f7b1932  line 019ef451-c4a0-7ac2-bbe7-c3db145e2eb4
+  2026-06-29  16:22  with Liv Berg      “Comments by Friday.”  due 2026-07-03? (by Friday)  9c2714beea91853b  line 019f13c2-2b40-7a68-b3a3-347dde4cd5af
