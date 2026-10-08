@@ -31,7 +31,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, BinaryIO, NamedTuple
 from zoneinfo import ZoneInfo
 
 from . import sealing
@@ -915,20 +915,14 @@ class Index:
 
     def _read(self, where: list[tuple[str, int]], opened: bool = True) -> list[Line]:
         """The lines at these (file, offset) places, in the order given, opened when they are
-        sealed and the identity is here (`Logbook.opened`) unless `opened` is False. Each file
-        opened once."""
-        from .store import read_line_at
+        sealed and the identity is here (`Logbook.opened`) unless `opened` is False. At most
+        `store.OPEN_FILES` files open at once, however many months the places span."""
+        from .store import OpenFiles, read_line_at
 
-        handles: dict[str, Any] = {}
         lines: list[Line] = []
-        try:
+        handles: OpenFiles[str, BinaryIO] = OpenFiles(lambda file: (self.lb.root / file).open("rb"))
+        with handles:
             for file, offset in where:
-                fh = handles.get(file)
-                if fh is None:
-                    fh = handles[file] = (self.lb.root / file).open("rb")
-                line = read_line_at(fh, offset)
+                line = read_line_at(handles.get(file), offset)
                 lines.append(self.lb.opened(line) if opened else line)
-        finally:
-            for fh in handles.values():
-                fh.close()
         return lines

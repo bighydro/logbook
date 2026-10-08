@@ -13,10 +13,11 @@ import time
 import uuid
 import zoneinfo
 from array import array
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, BinaryIO, TextIO
+from typing import IO, Any, BinaryIO, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
 from . import attachments, policy, sealing
@@ -90,6 +91,54 @@ class UnsortedFile(Exception):
 
 # progress(file, lines_in_file, lines_so_far, elapsed_seconds): once per month file, as it is finished
 FileProgress = Callable[[str, int, int, float], None]
+OPEN_FILES = 8  # month files a reader or writer holds open at once, however many the record has
+
+
+class OpenFiles[K, F: IO[Any]]:
+    """At most `limit` files open at once, the least recently used closed to make room. A record
+    of a few decades has hundreds of month files and macOS gives a process 256 open files by
+    default, so a reader or writer over every month file holds a handful of handles and reopens
+    one when it comes round again (`get(key)` opens with `opener(key)` when `key` is not open;
+    the opener seeks where the reader left off). `closing(key, fh)` is told of each file before
+    it is closed, so a writer can flush and fsync. Use as a context manager: leaving closes all."""
+
+    def __init__(
+        self,
+        opener: Callable[[K], F],
+        limit: int = OPEN_FILES,
+        closing: Callable[[K, F], None] | None = None,
+    ):
+        self._opener = opener
+        self._limit = max(1, limit)
+        self._closing = closing
+        self._open: OrderedDict[K, F] = OrderedDict()
+
+    def get(self, key: K) -> F:
+        fh = self._open.get(key)
+        if fh is not None:
+            self._open.move_to_end(key)
+            return fh
+        while len(self._open) >= self._limit:
+            self._close(*self._open.popitem(last=False))
+        fh = self._open[key] = self._opener(key)
+        return fh
+
+    def close(self) -> None:
+        while self._open:
+            self._close(*self._open.popitem(last=False))
+
+    def _close(self, key: K, fh: F) -> None:
+        try:
+            if self._closing is not None:
+                self._closing(key, fh)
+        finally:
+            fh.close()
+
+    def __enter__(self) -> OpenFiles[K, F]:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
 
 
 def code_checkout_marker(root: Path) -> str | None:
@@ -281,9 +330,11 @@ class Logbook:
     ) -> Iterator[Line]:
         """All lines in chain order (by seq), streamed. Files partition by month of `at`;
         backfilled history lands in old files, so file order is not chain order, but the writer
-        appends each file in chain order, so this is a merge: every month file open at once, one
-        parsed line from each in a heap keyed by seq, the smallest yielded and its file read on.
-        Memory is one line per month file, whatever the size of the log. `progress` is told of
+        appends each file in chain order, so this is a merge: one parsed line from each file in a
+        heap keyed by seq, the smallest yielded and its file read on. Memory is one line per month
+        file, whatever the size of the log; open files are at most OPEN_FILES, whatever the number
+        of month files: each file's byte offset is kept, a file is reopened and sought there when
+        its turn comes round after the least recently used were closed. `progress` is told of
         each file in path order: a file that finishes early is held until every earlier path
         has finished, so `--progress` reads as file 1, 2, … N. A file whose lines are not in seq order raises
         UnsortedFile after some lines have been yielded; `verify` then reads again, sorted
@@ -294,8 +345,15 @@ class Logbook:
         read no further, every line before it in that file and every other file's still merged,
         so `verify` reports the lines a crash left whole (SPEC §3, truncation)."""
         files = self.files()
-        handles = [f.open("rb") for f in files]
-        try:
+        offsets = [0] * len(files)  # where the reader is in each file, for reopening it there
+
+        def reopen(file_no: int) -> BinaryIO:
+            fh = files[file_no].open("rb")
+            if offsets[file_no]:
+                fh.seek(offsets[file_no])
+            return fh
+
+        with OpenFiles(reopen) as handles:
             counts = [0] * len(files)  # raw lines read from each file, for messages
             held = [0] * len(files)  # lines each file holds, blank ones aside, for progress
             heap: list[tuple[int, int, Line]] = []
@@ -320,9 +378,10 @@ class Logbook:
 
             def advance(file_no: int, after: int) -> None:
                 """Push the next line of a file, or report the file finished."""
-                fh, f = handles[file_no], files[file_no]
+                fh, f = handles.get(file_no), files[file_no]
                 while raw := fh.readline():
                     counts[file_no] += 1
+                    offsets[file_no] += len(raw)
                     if raw.strip():
                         try:
                             line = self._parse(f, counts[file_no], raw)
@@ -350,9 +409,6 @@ class Logbook:
                 total += 1
                 yield line
                 advance(file_no, seq)
-        finally:
-            for fh in handles:
-                fh.close()
 
     def lines_unsorted(self) -> Iterator[Line]:
         """Every line, streamed file by file, in file order — not chain order. For a pass that
@@ -544,9 +600,9 @@ class Logbook:
         gets one here. `id` is outside the hash (SPEC §2).
 
         Built for millions of drafts: drafts are taken META_EVERY at a time, each batch is deduped
-        with one SELECT against the index, the chain is computed in memory, month files stay open,
-        and at the end of every batch the lines are written and flushed, then logbook.json is
-        saved, then the index is extended (a checkpoint). Lines never reach disk ahead of a
+        with one SELECT against the index, the chain is computed in memory, and at the end of
+        every batch the lines are written and flushed, one month file open at a time, then
+        logbook.json is saved, then the index is extended (a checkpoint). Lines never reach disk ahead of a
         checkpoint, so an interruption leaves the log exactly as it was at the last checkpoint —
         a valid chain — and re-adding the same export finishes the job. On a Python-level
         interruption (Ctrl-C, an exception in an adapter) the drafts already taken are still
@@ -562,7 +618,6 @@ class Logbook:
         self._check_format(meta)
         idx = self.index()
         seq, head = meta["seq"], meta["head"]
-        handles: dict[Path, BinaryIO] = {}
         n, taken, started = 0, 0, time.monotonic()
         it = iter(drafts)
 
@@ -573,22 +628,20 @@ class Logbook:
             rows: list[Row] = []
             texts: list[TextRow] = []
             for path, batch in pending.items():
-                fh = handles.get(path)
-                if fh is None:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    fh = handles[path] = path.open("ab")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with path.open("ab") as fh:  # one month file open at a time, however many a batch spans
                     fh.seek(0, os.SEEK_END)
-                rel, offset = self._relative(path), fh.tell()
-                encoded = [_dumps(line).encode("utf-8") for line in batch]
-                for line, raw in zip(batch, encoded, strict=True):
-                    line_row, words = idx.rows_of(line, meta, rel, offset)
-                    rows.append(line_row)
-                    if words is not None:
-                        texts.append(words)
-                    offset += len(raw)
-                fh.write(b"".join(encoded))
-                fh.flush()
-                os.fsync(fh.fileno())  # SPEC §3 write order: every line is on disk before logbook.json
+                    rel, offset = self._relative(path), fh.tell()
+                    encoded = [_dumps(line).encode("utf-8") for line in batch]
+                    for line, raw in zip(batch, encoded, strict=True):
+                        line_row, words = idx.rows_of(line, meta, rel, offset)
+                        rows.append(line_row)
+                        if words is not None:
+                            texts.append(words)
+                        offset += len(raw)
+                    fh.write(b"".join(encoded))
+                    fh.flush()
+                    os.fsync(fh.fileno())  # SPEC §3 write order: every line is on disk before logbook.json
             if (meta["seq"], meta["head"]) != (seq, head):
                 meta["seq"], meta["head"] = seq, head
                 self._save_meta(meta)
@@ -624,8 +677,6 @@ class Logbook:
                 if len(batch) < META_EVERY:
                     break
         finally:
-            for fh in handles.values():
-                fh.close()
             idx.close()
         return n
 
@@ -652,7 +703,16 @@ class Logbook:
         if tmp.exists():
             shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
         tmp.mkdir()
-        handles: dict[Path, TextIO] = {}
+
+        def reopen(path: Path) -> TextIO:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return path.open("a", encoding="utf-8")
+
+        def synced(_path: Path, fh: TextIO) -> None:
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        handles: OpenFiles[Path, TextIO] = OpenFiles(reopen, closing=synced)
         n, prev, old_prev, started = 0, GENESIS, GENESIS, time.monotonic()
         try:
             for line in self._lines_by_seq():
@@ -664,12 +724,7 @@ class Logbook:
                 old_prev = line["hash"]
                 line["prev"] = prev
                 line["hash"] = prev = compute_hash(line)
-                path = tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl"
-                fh = handles.get(path)
-                if fh is None:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    fh = handles[path] = path.open("a", encoding="utf-8")
-                fh.write(_dumps(line))
+                handles.get(tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl").write(_dumps(line))
                 if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
                     progress(n, time.monotonic() - started)
             if (n, old_prev) != (meta["seq"], old_head):
@@ -677,13 +732,10 @@ class Logbook:
                     f"logbook.json says seq={meta['seq']} head={old_head[:12]}…, files say seq={n} "
                     f"head={old_prev[:12]}…; {NOT_INTACT}"
                 )
-            for fh in handles.values():
-                fh.flush()
-                os.fsync(fh.fileno())
-                fh.close()
+            handles.close()  # each file flushed and fsynced as it closes
         except BaseException:
-            for fh in handles.values():
-                fh.close()
+            with contextlib.suppress(OSError):  # the files are about to go; their fsync may not matter
+                handles.close()
             shutil.rmtree(tmp, ignore_errors=True)
             raise
         if self.log_dir.exists():
@@ -853,7 +905,16 @@ class Logbook:
         if tmp.exists():
             shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
         tmp.mkdir()
-        handles: dict[Path, TextIO] = {}
+
+        def reopen(path: Path) -> TextIO:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return path.open("a", encoding="utf-8", newline="\n")
+
+        def synced(_path: Path, fh: TextIO) -> None:
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        handles: OpenFiles[Path, TextIO] = OpenFiles(reopen, closing=synced)
         n, changed, prev, old_prev, started = 0, 0, GENESIS, GENESIS, time.monotonic()
         try:
             for line in self._lines_by_seq():
@@ -871,12 +932,7 @@ class Logbook:
                 elif line["hash"] != compute_hash(line):
                     raise ValueError(f"line {n}: hash does not recompute; nothing was changed")
                 prev = line["hash"]
-                path = tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl"
-                fh = handles.get(path)
-                if fh is None:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    fh = handles[path] = path.open("a", encoding="utf-8", newline="\n")
-                fh.write(_dumps(line))
+                handles.get(tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl").write(_dumps(line))
                 if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
                     progress(n, time.monotonic() - started)
             if (n, old_prev) != (meta["seq"], meta["head"]):
@@ -884,13 +940,10 @@ class Logbook:
                     f"logbook.json says seq={meta['seq']} head={str(meta['head'])[:12]}…, files say seq={n} "
                     f"head={old_prev[:12]}…; nothing was changed"
                 )
-            for fh in handles.values():
-                fh.flush()
-                os.fsync(fh.fileno())
-                fh.close()
+            handles.close()  # each file flushed and fsynced as it closes
         except BaseException:
-            for fh in handles.values():
-                fh.close()
+            with contextlib.suppress(OSError):  # the files are about to go; their fsync may not matter
+                handles.close()
             shutil.rmtree(tmp, ignore_errors=True)
             raise
         old = self.root / f"{tmp_name}.old"
@@ -907,9 +960,10 @@ class Logbook:
     ) -> Iterator[Line]:
         """Every line in chain order with one line in memory at a time, whatever order the files
         are in: a first pass notes where each seq lives (two integers per line), a second reads
-        them back in seq order. `lines()` is the one-pass merge for files the writer kept in seq
-        order; this is for `migrate` and for `verify`'s fallback. `unreadable` is as `lines()`
-        takes it: a line that is not one ends its file for the reader."""
+        them back in seq order through at most OPEN_FILES open files. `lines()` is the one-pass
+        merge for files the writer kept in seq order; this is for `migrate` and for `verify`'s
+        fallback. `unreadable` is as `lines()` takes it: a line that is not one ends its file for
+        the reader."""
         files = self.files()
         seqs: array[int] = array("q")
         places: array[int] = array("q")  # file number << 40 | byte offset
@@ -932,15 +986,10 @@ class Logbook:
             if progress is not None:
                 progress(self._relative(f), len(seqs) - before, len(seqs), time.monotonic() - started)
         order = sorted(range(len(seqs)), key=seqs.__getitem__)
-        handles = [f.open("rb") for f in files]
-        try:
+        handles: OpenFiles[int, BinaryIO] = OpenFiles(lambda file_no: files[file_no].open("rb"))
+        with handles:
             for i in order:
-                fh = handles[places[i] >> 40]
-                fh.seek(places[i] & ((1 << 40) - 1))
-                yield parse_line(fh.readline())
-        finally:
-            for fh in handles:
-                fh.close()
+                yield read_line_at(handles.get(places[i] >> 40), places[i] & ((1 << 40) - 1))
 
     def _line(
         self,
