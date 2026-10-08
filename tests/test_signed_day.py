@@ -90,8 +90,8 @@ def _page_sha256(lb: Logbook, day: str, seqs: tuple[int, ...]) -> str:
     return hashlib.sha256(canonical_json(page).encode("utf-8")).hexdigest()
 
 
-def _files(root: Path) -> dict[str, bytes]:
-    return {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+def _files(root: Path) -> dict[Path, bytes]:
+    return {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
 # -- signing ---------------------------------------------------------------------------------------------
@@ -115,13 +115,12 @@ def test_signing_appends_one_tier_1_line_and_rewrites_nothing(
     assert lb.verify()[2] == []
     after = _files(lb.root)
     changed = {name for name in set(before) | set(after) if before.get(name) != after.get(name)}
-    [month_file] = sorted(changed - {"logbook.json"})  # the month of now, the signing moment
-    assert month_file.startswith("logbook/") and month_file not in before, (
+    [month_file] = sorted(changed - {Path("logbook.json")})  # the month of now, the signing moment
+    assert month_file.parts[0] == "logbook" and month_file not in before, (
         "one line appended; nothing else touched"
     )
-    assert before["logbook/2026/03.jsonl"] == after["logbook/2026/03.jsonl"], (
-        "the day's own file is untouched"
-    )
+    march = Path("logbook", "2026", "03.jsonl")
+    assert before[march] == after[march], "the day's own file is untouched"
     assert (
         f"{DAY}: signed" in out
         and "#6" in out
