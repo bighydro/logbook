@@ -47,7 +47,7 @@ table at the end, generated from the code by `scripts/command_aliases.py`).
 | `verify` | check the chain |
 | `backup` | a verified snapshot of the record on another disk; `backup list DEST`; `backup restore SNAPSHOT TARGET` |
 | `key` | the record's recipients and this machine's identity: `init`, `show`, `add-recipient`, `remove-recipient`; `key seal --all` seals what was written before the record had recipients; `key circle` the sharing keys |
-| `repair` | put the record right, rewriting nothing: `repair retract SEQ REASON`, `repair migrate`, `repair index`, `repair health-units` |
+| `repair` | put the record right, rewriting nothing: `repair retract SEQ REASON`, `repair migrate`, `repair index`, `repair fork [--apply]` (two chains forked at one head: diagnose, and move the orphan chain out into `repair/`), `repair health-units` |
 
 ## Share
 

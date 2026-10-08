@@ -71,6 +71,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 ## Keeping it
 
 - [Backup](backup.md): copy the record to another disk, verify it there, restore it.
+- [When verify fails](recovery.md): what each failure means and the one command that answers it; `repair fork` for two chains forked at one head.
 - [The attachment store](attachments.md): the content-addressed bytes a line points at.
 - [Shared trips](trips-shared.md): two people on one trip exchange their records of it.
 

@@ -5,7 +5,7 @@
 | `record.py`    | `init`, `setup` (the wizard; `places`, `assets`, `questions` are declared in     |
 |                | their own families), `doctor` (`sources` in `sync.py`), `verify`, `backup`,      |
 |                | `key` (`seal`; `circle` in `export.py`), `repair` (`retract`, `migrate`,         |
-|                | `index`, `health-units`), `demo`, and `show stats`                               |
+|                | `index`, `fork`, `health-units`), `demo`, and `show stats`                       |
 | `add.py`       | `add`; `import backup`, `import inbox`, `import attachments`                     |
 | `sync.py`      | `sync`; `doctor sources`; `setup assets`                                         |
 | `derive.py`    | `derive`: `stays`, `flights`, `keepers`, `transcripts`, `descriptions`           |

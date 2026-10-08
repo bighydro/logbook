@@ -36,6 +36,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "events",
         "export",
         "flights",
+        "fork",
         "health",
         "index",
         "keepers",
@@ -110,6 +111,7 @@ COMMANDS = "commands"  # every module under logbook/commands/
 NEW_IN_0_6: frozenset[str] = frozenset(
     {
         "chapters",
+        "fork",
         "introductions",
         "readiness",
         "signing",
