@@ -74,12 +74,18 @@ One sentence, with where it was read and who said it:
   aside: sixteen hex characters. The same sentence in the same line has the same id however often
   the command runs, and whichever extractor found it (below).
 - **`done`** after the due hint marks a proposal you closed; `--open` leaves those out.
+- **`kept`, `missed on 2026-06-14`, `dropped`, `carried`** is what the signed day of the line the
+  promise was read in says became of it ([the signed day](signed-day.md), RFC 0034 amendment 1):
+  kept and dropped close the promise, missed closes and flags it, carried leaves it open; `--open`
+  leaves the first three out.
 
 Under `--json` the report is one object: `since`, `open_only`, `judged_only` (false under
 `--all`), `threshold` (0.6), `extractor` (`name`, `version`, and `languages` for the rules), `judge`
 (what a `--judge` run just did: `engine`, `model`, `candidates`, `judged`, `unparsed`; null when
 none ran), `unjudged` (how many candidates have no verdict yet), `proposals` and `skipped`. Each
-proposal carries `id`, `status` (`open` or `done`), `closed_by` (the task line's id), `day`, `at`,
+proposal carries `id`, `status` (`open` or `done`), `closed_by` (the task line's id), `disposition`
+(`value`, `day` and `line`, the signed-day line's, when the standing signature of its day disposed
+of the line it was read in; null otherwise), `day`, `at`,
 `line` (the origin), `seq`, `kind` (`transcript` or `note`), `source`, `title`, `speaker` (`label`,
 `spoken`, `person`, `owner`, or null), `direction` (`owed_by_owner` when you said it,
 `owed_to_owner` when a resolved person did, null when nobody is behind the label), `certainty`
@@ -183,7 +189,9 @@ form the profile asks for. Nothing is edited: the transcript and the note stay a
 the close is a line beside them.
 
 `--open` hides a proposal whose latest standing task line (by `extra.promise`) has status `done`
-or `cancelled`. `done` on a proposal already closed writes nothing and says so; an id the record
+or `cancelled`, and one whose day's standing signature kept, missed or dropped the line it was read
+in (a carried one is still open, and `done` closes it as any other). `done` on a proposal already
+closed, by a task line or by the signed day, writes nothing and says so; an id the record
 does not propose is refused with status 2. A proposal is yours to close only: the command never
 closes one on its own, and nothing it reads can close another: a proposal is never asserted, and
 only the owner closes one.

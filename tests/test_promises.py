@@ -14,7 +14,7 @@ from persona import KARI, KARI_ID, OLA, OLA_ID, resolution
 
 from logbook import cli
 from logbook.contrib import promises
-from logbook.core import attachments
+from logbook.core import attachments, signing
 from logbook.core.store import Logbook
 
 OWNER_ID = "019cadd3-6bc0-7dcd-9133-000000000099"
@@ -379,8 +379,9 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
         "quote",
         "due",
         "judgement",
+        "disposition",
     }
-    assert row["judgement"] is None
+    assert row["judgement"] is None and row["disposition"] is None
     assert row["speaker"] == {
         "label": "Ola Nordmann",
         "spoken": "Ola Nordmann",
@@ -600,3 +601,98 @@ def test_a_proposal_carries_the_two_sentences_either_side_with_their_speakers_an
     pump = found["I need to order the new bilge pump next week."]  # a note: its own sentences, the owner
     assert [(s.speaker, s.text) for s in pump.before] == [("you", "Anchored in the bay.")]
     assert pump.after == () and pump.names == ("Ines Nordmann",)
+
+
+# -- dispositions on the signed day (RFC 0034, amendment 1) --------------------------------------------------
+
+
+def _signed_with(lb: Logbook, day: str, value: str, line: str, at: str) -> dict[str, Any]:
+    return signing.sign(lb, day, at=at, dispositions={value: [line]})
+
+
+def _listed(capsys: pytest.CaptureFixture[str], proposal_id: str, *flags: str) -> dict[str, Any]:
+    """The proposal's object in `promises --all --json`."""
+    out = json.loads(_run(capsys, "promises", "--all", *flags, "--json"))
+    return next(p for p in out["proposals"] if p["id"] == proposal_id)
+
+
+def test_kept_and_dropped_close_a_promise_missed_closes_and_flags_it_and_carried_leaves_it_open(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    found = _by_quote(promises.extract(lb))
+    pump = found["I need to order the new bilge pump next week."]  # a note on the 13th
+    bill = found["Ich muss die Rechnung bis 20. Juni bezahlen."]  # a note on the 14th
+    hull = found["I'll paint the hull in August."]  # a note on the 15th
+    mooring = found["I'll send you the mooring photos by Friday."]  # the Boat plans transcript, the 11th
+    crane = found["I will book the crane for next week."]  # the same transcript
+    kept = _signed_with(lb, "2026-06-13", "kept", pump.line, "2026-06-20T08:00:00Z")
+    missed = _signed_with(lb, "2026-06-14", "missed", bill.line, "2026-06-20T08:01:00Z")
+    dropped = _signed_with(lb, "2026-06-15", "dropped", hull.line, "2026-06-20T08:02:00Z")
+    carried = _signed_with(lb, "2026-06-11", "carried", mooring.line, "2026-06-20T08:03:00Z")
+    out = json.loads(_run(capsys, "promises", "--all", "--json"))
+    by_id = {p["id"]: p for p in out["proposals"]}
+    assert len(by_id) == 10, "a disposition closes a proposal; it never hides one from --all"
+    assert by_id[pump.id]["status"] == "done"
+    assert by_id[pump.id]["disposition"] == {"value": "kept", "day": "2026-06-13", "line": kept["id"]}
+    assert by_id[pump.id]["closed_by"] is None, "no task line was written"
+    assert by_id[bill.id]["status"] == "done"
+    assert by_id[bill.id]["disposition"] == {"value": "missed", "day": "2026-06-14", "line": missed["id"]}
+    assert by_id[hull.id]["status"] == "done"
+    assert by_id[hull.id]["disposition"] == {"value": "dropped", "day": "2026-06-15", "line": dropped["id"]}
+    assert by_id[mooring.id]["status"] == "open"
+    assert by_id[mooring.id]["disposition"] == {
+        "value": "carried",
+        "day": "2026-06-11",
+        "line": carried["id"],
+    }
+    assert by_id[crane.id]["disposition"]["value"] == "carried", "a disposition is the line's: every promise"
+    listed = json.loads(_run(capsys, "promises", "--all", "--open", "--json"))["proposals"]
+    open_ids = {p["id"] for p in listed}
+    assert pump.id not in open_ids and bill.id not in open_ids and hull.id not in open_ids
+    assert mooring.id in open_ids and crane.id in open_ids
+    text = _run(capsys, "promises", "--all")
+    rows = {p.id: next(row for row in text.splitlines() if p.id in row) for p in (pump, bill, hull, mooring)}
+    assert rows[pump.id].rstrip().endswith(f"kept  {pump.id}")
+    assert "missed on 2026-06-14" in rows[bill.id]
+    assert rows[hull.id].rstrip().endswith(f"dropped  {hull.id}")
+    assert rows[mooring.id].rstrip().endswith(f"carried  {mooring.id}")
+    assert "done" not in rows[pump.id], "kept is the word; `done` is a task line's"
+    open_text = _run(capsys, "promises", "--all", "--open")
+    assert open_text.startswith("7 proposed promises") and "bilge pump" not in open_text
+    assert "mooring photos" in open_text and "carried" in open_text
+
+
+def test_done_on_a_promise_the_signature_disposed_writes_nothing_and_says_so(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    found = _by_quote(promises.extract(lb))
+    pump = found["I need to order the new bilge pump next week."]
+    mooring = found["I'll send you the mooring photos by Friday."]
+    _signed_with(lb, "2026-06-13", "kept", pump.line, "2026-06-20T08:00:00Z")
+    _signed_with(lb, "2026-06-11", "carried", mooring.line, "2026-06-20T08:01:00Z")
+    seq = lb.meta["seq"]
+    out = _run(capsys, "promises", "done", pump.id)
+    assert "already kept" in out and "2026-06-13" in out and lb.meta["seq"] == seq
+    out = _run(capsys, "promises", "done", mooring.id)
+    assert "done" in out and lb.meta["seq"] == seq + 1, "a carried promise is still open: done closes it"
+    row = _listed(capsys, mooring.id)
+    assert row["status"] == "done" and row["closed_by"] is not None
+    assert row["disposition"]["value"] == "carried"
+
+
+def test_a_signature_by_another_subject_or_retracted_or_superseded_disposes_nothing(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    found = _by_quote(promises.extract(lb))
+    pump = found["I need to order the new bilge pump next week."]
+    first = _signed_with(lb, "2026-06-13", "kept", pump.line, "2026-06-20T08:00:00Z")
+    signing.sign(lb, "2026-06-13", at="2026-06-21T08:00:00Z")  # signed again, without dispositions
+    row = _listed(capsys, pump.id)
+    assert row["status"] == "open" and row["disposition"] is None, "the standing signature has none"
+    lb.retract(int(lb.meta["seq"]), "the first reading stands")
+    row = _listed(capsys, pump.id)
+    assert row["status"] == "done" and row["disposition"]["line"] == first["id"]
+    payload = {**first["payload"], "subject": OLA_ID, "dispositions": {pump.line: "dropped"}}
+    lb.append(at="2026-06-22T08:00:00Z", source="manual", kind="signed-day", tier=1, payload=payload)
+    row = _listed(capsys, pump.id)
+    assert row["disposition"]["value"] == "kept", "a line whose subject is not the owner is not a signature"

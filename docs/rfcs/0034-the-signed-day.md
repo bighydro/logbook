@@ -1,6 +1,6 @@
 # RFC 0034 — The signed day: `signed-day/v1`, and the gate on the crossing
 
-Status: draft · 2026-10-07 · comment period: two weeks
+Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08
 
 Agents draft; the owner signs; only signed days cross. This RFC adds one payload profile, `signed-day/v1`, the line the owner appends when they have read a day's page and confirm it as the day's facts; one default for the crossing package (RFC 0005, ADR 0016), which now crosses the lines of signed days unless the owner asks for the rest; one header for `show`; and one block in the Day reader, `readiness`, which says per class of source whether the day's lines are in and which usual sources have not delivered. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and no agent can sign.
 
@@ -27,6 +27,7 @@ The signed day is the owner's reading of the page, recorded in the chain: *I hav
 | `page` | object | MUST | `{ sha256, lines }`: the digest of the page as shown (below) and how many lines were on it |
 | `note` | string | MAY | one line in the owner's words, tier 1; a newline is refused by the writer |
 | `supersedes` | string | MAY | the id of the earlier `signed-day` line for the same day this one replaces (SPEC §3) |
+| `dispositions` | object | MAY | what became of the commitment on a confirmed line: line id → `kept`, `missed`, `dropped` or `carried` (amendment 1, below) |
 
 Anything else MAY be kept under `extra`.
 
@@ -82,9 +83,34 @@ Readiness is advice, never a gate: an owner signs a day with a source missing wh
  "note":"A quiet Sunday. Ines came for coffee."}}
 ```
 
+## Amendment 1 — dispositions
+
+Dated 2026-10-08. The owner reads the page and confirms its lines; on a page with a commitment on it, "I'll send the mooring photos by Friday", they also know what became of it, and the evening the day is signed is when they know. Amendment 1 adds one OPTIONAL field so that the signature can say so, without a second line and without a second reader:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `dispositions` | object | MAY | a map from a line id to one of exactly four strings. Every key MUST be an id in `confirmed` (a line given a disposition is confirmed by that; the writer adds it); a key that is not in `confirmed`, or a value outside the four, makes the line invalid. The object MAY be empty. A line has one disposition: an object has one value per key by nature, and the writer refuses a line named twice |
+
+The four values and their meaning:
+
+| Value | Meaning |
+|---|---|
+| `kept` | the commitment was done: the promise is closed |
+| `missed` | it was not done and the owner says so: the promise is closed, and a reader flags it |
+| `dropped` | the owner let it go on purpose: the promise is closed, with nothing to flag |
+| `carried` | still open, taken to a later day: the promise stays open, and the owner disposes of it on a later day's signature |
+
+What the field is about is the line, not the reading: a disposition names a line of the page by id (RFC 0003's rule, SPEC §3), and the commitment is what that line said. A note that reads "I'll send the photos" is the line; `promises` (`docs/promises.md`) reads the sentence out of it and asks the standing signature of the line's day what became of it. A transcript with three promises in it has one disposition, the line's.
+
+What does not change: the page digest is defined as above, over the hashes of the page's lines, and a signature's own content is never in it. The field is optional, so every `signed-day/v1` line written before this amendment is valid as it is and its hash does not move: the 32nd line of both conformance samples, and their heads, are what `conformance/README.md` records. A reader that meets a disposition it does not expect keeps the valid entries and never fails on the rest (SPEC §5).
+
+The writer: `logbook day sign DAY --kept ID,ID --missed ID,ID --dropped ID,ID --carried ID,ID`, each entry a `seq` or an id as `--confirm` takes them; an entry that is not a line on the page, a retracted line, a line given twice (in one flag or two, by seq or by id) and a flag that names no line are each refused in a sentence, and nothing is written. The readers: `day` prints a symbol before each line the standing signature disposed of, a tick (✓) for `kept`, a cross (✗) for `missed`, a dash (–) for `dropped` and an arrow (→) for `carried`, on the row of the line, and carries the map under `signed.dispositions` in its JSON; an unsigned day, and a line given none, print as before. `show` lists the counts on the signature's row (`kept 2, missed 1`). `promises` treats `kept` and `dropped` as closed, `missed` as closed and flagged, `missed on <day>` in its row, and `carried` as still open; `--open` hides the first three; `promises done` on a kept, missed or dropped one writes nothing and says so. `export crossing` carries the field as it carries the line: a signature crosses with the day it signs, dispositions and all, and nothing in the crossing reads them.
+
+`signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its schema may change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a reader, a fixture in both implementations, a schema pass and one dated amendment to that RFC. This amendment is one of the changes that process is for.
+
 ## Conformance
 
-`conformance/sample-logbook` carries one `signed-day/v1` line, the first day of the week signed on its last evening, as its 32nd line; the sealed sample carries the same, with the page digest the sealed lines give (a sealed line's hash is of its reference, so the two samples' digests differ, as their heads do). An implementation that reproduces the head reproduces the line; one that carries `show` prints `signed` in the first day's header.
+`conformance/sample-logbook` carries one `signed-day/v1` line, the first day of the week signed on its last evening, as its 32nd line; the sealed sample carries the same, with the page digest the sealed lines give (a sealed line's hash is of its reference, so the two samples' digests differ, as their heads do). An implementation that reproduces the head reproduces the line; one that carries `show` prints `signed` in the first day's header. Neither sample carries `dispositions`: the field is optional, and the heads recorded before amendment 1 stand.
 
 ## What this changes in SPEC §3.2, when adopted
 
@@ -97,3 +123,5 @@ Nothing in §2–3. In §3.2.1 (`show`), one sentence: the header says whether t
 - **Why `at` is the signing moment.** The line records an act; the act happened when it happened (SPEC §2: `at` is when the thing happened). The day it names is in the payload, where the index and the readers look.
 - **Why a gate on the crossing and not a tier.** Tier says how private; signed says whether read. A tier-3 line on a signed day still never crosses without the policy and `--tier 1,2,3`. The two gates are independent and both are the owner's.
 - **Why readiness has no network.** Whether a source *should* have delivered is a question about the record's habit, not about the source's server. A source that is reachable and silent and one that is down look the same from the record, and the record is what is signed.
+- **Why a disposition is on the signature and not a line of its own (amendment 1).** The owner learns what became of a commitment while reading the day it was made, and that reading is the signature. A `task/v1` line (RFC 0016) says a task was done; a disposition says what the owner saw on the page, four words, by line id, in the one line that is already about the page. `promises done` remains for a promise closed on any other day, and the two never contradict: a task line closes a carried promise as it closes any other.
+- **Why exactly four values.** Kept and missed are the two outcomes; dropped is the owner's decision that there is no outcome to wait for; carried is the one that keeps the promise open. A fifth word would be a comment, and the note is for that.

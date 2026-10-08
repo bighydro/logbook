@@ -33,7 +33,11 @@ def promises_arguments(sub: Subparsers) -> None:
         " `tasks`: the tasks (task/v1), each as it stands",
     )
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only lines from this local day on")
-    s.add_argument("--open", action="store_true", help="hide the ones a `promises done` closed")
+    s.add_argument(
+        "--open",
+        action="store_true",
+        help="hide the ones a `promises done` or a signed day (kept, missed, dropped) closed",
+    )
     s.add_argument(
         "--all",
         action="store_true",
@@ -74,7 +78,9 @@ def cmd_promises(a: argparse.Namespace) -> None:
     judged a commitment at confidence 0.6 or above (`logbook.labs.judge`, the verdicts kept in
     `policy/promises-cache.json`); `--all` every candidate; `--judge` runs the model on the unjudged
     ones first, at most `--limit`. `promises done <id>` appends the `task/v1` line (RFC 0016) that
-    marks one done, so `--open` hides it. Nothing else is written to the chain."""
+    marks one done, so `--open` hides it; so does the signed day of the line it was read in, when the
+    signature kept, missed or dropped it (RFC 0034 amendment 1; a carried one stays open). Nothing
+    else is written to the chain."""
     from ..labs import judge
 
     since = a.since
@@ -150,6 +156,13 @@ def _promises_done(lb: Logbook, a: argparse.Namespace) -> None:
         sys.exit(2)
     if found.closed_by:
         print(f"already done: \u201c{found.match.quote}\u201d (task line {found.closed_by})")
+        return
+    if found.status != "open" and found.disposition is not None:  # the signed day kept, missed or dropped it
+        d = found.disposition
+        print(
+            f"already {d.value} on {d.day}: \u201c{found.match.quote}\u201d (signed-day line {d.line});"
+            " a task line would add nothing"
+        )
         return
     at = utc(now_utc())
     line = lb.append(

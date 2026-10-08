@@ -199,7 +199,8 @@ def day_arguments(sub: Subparsers) -> None:
         help="one day read back: night, stays, company, health; or sign it",
         description="one day read back: nights, country, stays and moves with who and what, flights, health,"
         " whether every usual source is in, and whether you have signed it; `day sign YYYY-MM-DD` signs"
-        " it: one tier-1 line saying you read the page and these are the day's facts (RFC 0034)",
+        " it: one tier-1 line saying you read the page and these are the day's facts (RFC 0034), and"
+        " what became of each commitment on it: --kept, --missed, --dropped, --carried (amendment 1)",
     )
     s.add_argument(
         "day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today); or `sign`, then the day"
@@ -212,6 +213,12 @@ def day_arguments(sub: Subparsers) -> None:
         help="sign: the lines you confirm as the day's facts, by seq or id as `show` lists them"
         " (default: every line on the page)",
     )
+    for value, meaning in DISPOSITION_HELP.items():
+        s.add_argument(
+            f"--{value}",
+            metavar="ID,ID",
+            help=f"sign: the commitments {meaning}, by seq or id; each is confirmed by that",
+        )
     s.add_argument(
         "--airports",
         metavar="FILE",
@@ -221,6 +228,15 @@ def day_arguments(sub: Subparsers) -> None:
         "--json", action="store_true", help="the Day as one JSON object, every row with its line ids"
     )
     s.set_defaults(fn=cmd_day)
+
+
+DISPOSITION_HELP = {
+    signing.KEPT: "you kept",
+    signing.MISSED: "you missed",
+    signing.DROPPED: "you let go of, on purpose",
+    signing.CARRIED: "still open, carried to a later day",
+}
+SIGN_FLAGS = ("--note", "--confirm", *(f"--{value}" for value in signing.DISPOSITIONS))
 
 
 def cmd_day(a: argparse.Namespace) -> None:
@@ -235,8 +251,9 @@ def cmd_day(a: argparse.Namespace) -> None:
     if a.signed_day is not None:
         print(f"day: {a.day!r} takes no second argument; `day sign YYYY-MM-DD` signs a day", file=sys.stderr)
         sys.exit(2)
-    if a.note is not None or a.confirm is not None:
-        print("day: --note and --confirm belong to `day sign YYYY-MM-DD`", file=sys.stderr)
+    if a.note is not None or a.confirm is not None or _dispositions(a):
+        flags = f"{', '.join(SIGN_FLAGS[:-1])} and {SIGN_FLAGS[-1]}"
+        print(f"day: {flags} belong to `day sign YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     try:
@@ -254,18 +271,30 @@ def cmd_day(a: argparse.Namespace) -> None:
 signing_verb = "sign"
 
 
+def _dispositions(a: argparse.Namespace) -> dict[str, list[str]]:
+    """`--kept ID,ID --missed ID,ID --dropped ID,ID --carried ID,ID` as `signing.sign` takes them:
+    word → the entries typed, the flags given only, in the four words' order."""
+    return {
+        value: str(getattr(a, value)).split(",")
+        for value in signing.DISPOSITIONS
+        if getattr(a, value, None) is not None
+    }
+
+
 def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
-    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` (RFC 0034, `logbook.core.signing`): the
-    owner's reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual —
-    the day, the ids confirmed (every line on the page by default), the digest of the page as shown
-    and the note — and nothing else touched. A day signed before is signed again: the new line
-    supersedes the standing one. Only the owner signs: no agent and no MCP tool runs this."""
+    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID] [--kept ID,ID] [--missed ID,ID] [--dropped
+    ID,ID] [--carried ID,ID]` (RFC 0034 and its amendment 1, `logbook.core.signing`): the owner's
+    reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual — the day,
+    the ids confirmed (every line on the page by default; a line given a disposition is confirmed by
+    that), what became of each commitment named, the digest of the page as shown and the note — and
+    nothing else touched. A day signed before is signed again: the new line supersedes the standing
+    one. Only the owner signs: no agent and no MCP tool runs this."""
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
     confirm = None if a.confirm is None else a.confirm.split(",")
     try:
-        line = signing.sign(lb, a.signed_day, confirm=confirm, note=a.note)
+        line = signing.sign(lb, a.signed_day, confirm=confirm, note=a.note, dispositions=_dispositions(a))
     except ValueError as e:  # SignError, a day that is not one
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
@@ -274,6 +303,9 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     print(f"{p['day']}: signed {line['at']} as #{line['seq']} {signing.SCHEMA}")
     lines = f"{n} line{'s' if n != 1 else ''} confirmed of {on_page} on the page"
     print(f"  {lines} · page sha256 {p['page']['sha256'][:12]}…")
+    counts = signing.counts_text(signing.dispositions_of(p))
+    if counts:
+        print(f"  dispositions: {counts}")
     if p.get("note"):
         print(f"  note: {p['note']}")
     if p.get("supersedes"):

@@ -503,12 +503,14 @@ def tool_promise_done(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
         raise ToolError(
             f"no proposal {id_!r} within the ceiling; the promises tool lists them with their ids"
         )
-    if found.closed_by:
+    if found.status != "open":  # a task line closed it, or the owner's day kept, missed or dropped it
+        d = found.disposition
         return {
             "already_done": True,
             "promise": found.id,
             "quote": found.match.quote,
             "task": found.closed_by,
+            "disposition": None if d is None else {"value": d.value, "day": d.day, "line": d.line},
         }
     at = utc(now_utc())
     line = lb.append(
