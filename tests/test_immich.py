@@ -43,10 +43,19 @@ class FakeServer:
         return _page(self.pages[body.get("cursor")])
 
 
+def _statistics(config: immich.Config, path: str) -> dict[str, Any]:
+    """`GET /api/assets/statistics` for the six fixture assets; the server's own endpoint is for admins."""
+    assert config == CONFIG
+    if path == "/api/assets/statistics":
+        return {"images": 5, "videos": 1, "total": 6}
+    raise OSError(f"403 Forbidden: {path}")
+
+
 @pytest.fixture
 def server(monkeypatch: pytest.MonkeyPatch) -> FakeServer:
     fake = FakeServer({None: "page1.json", "cursor-page-2": "page2.json"})
     monkeypatch.setattr(immich, "_post", fake)
+    monkeypatch.setattr(immich, "_get", _statistics)
     return fake
 
 
@@ -455,7 +464,9 @@ def test_sync_server_error_exits_1_after_keeping_what_was_pulled(lb, monkeypatch
     assert "500" in capsys.readouterr().err
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == 3  # page 1 landed at the checkpoint; the watermark did not move
-    assert not (lb.root / "state" / "immich.json").exists()
+    state = json.loads((lb.root / "state" / "immich.json").read_text(encoding="utf-8"))
+    assert "since" not in state and state["walk"]["checkpoint"]["cursor"] == "cursor-page-2"
+    assert state["walk"]["checkpoint"]["fetched"] == 3  # the next run resumes at page 2
 
 
 # -- assets the server has not extracted metadata for yet -------------------
@@ -572,5 +583,9 @@ def test_pull_reports_the_running_asset_count_after_each_page(server):
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_sync_prints_a_progress_line_per_page_to_stderr(lb, server, capsys, dry_run):
     _sync("immich", *(["--dry-run"] if dry_run else []))()
-    err = capsys.readouterr().err.splitlines()
-    assert [line for line in err if "assets in" in line] == ["  3 assets in 0s", "  6 assets in 0s"]
+    out, err = capsys.readouterr()
+    assert out.splitlines()[0] == "immich: 6 assets on the server, 0 already in the record"
+    assert [line for line in err.splitlines() if "assets in" in line] == [
+        "  3 of 6 assets in 0s",
+        "  6 of 6 assets in 0s",
+    ]

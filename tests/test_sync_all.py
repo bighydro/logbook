@@ -227,3 +227,77 @@ def test_all_stops_at_a_ctrl_c_and_exits_130(
         ["ais", "interrupted"],
         ["beta", "not", "run"],
     ]
+
+
+# -- order: the quick sources first, a photo library walk last --------------------------------
+
+
+def test_all_runs_the_quick_sources_first_and_immich_last_and_says_so_first(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An `immich` walk over a big library takes hours; `--all` never lets it hold up the others."""
+    order: list[str] = []
+
+    class Noting(Fake):
+        def pull(self, *args: Any, **kwargs: Any) -> Iterator[dict[str, Any]]:
+            order.append(self.NAME)
+            yield from super().pull(*args, **kwargs)
+
+    immich = Noting("immich", ("LOGBOOK_IMMICH_URL", "LOGBOOK_IMMICH_KEY"), drafts=1)
+    dawarich = Noting("dawarich", ("LOGBOOK_DAWARICH_URL", "LOGBOOK_DAWARICH_KEY"), drafts=1)
+    imessage = Noting("imessage", ("LOGBOOK_IMESSAGE_DB",), drafts=1)
+    zeta = Noting("zeta", ("LOGBOOK_ZETA_KEY",), drafts=1)  # a third-party source: after the built-ins
+    _fakes(monkeypatch, immich, dawarich, imessage, zeta)
+    for name in (
+        "LOGBOOK_IMMICH_URL",
+        "LOGBOOK_IMMICH_KEY",
+        "LOGBOOK_DAWARICH_URL",
+        "LOGBOOK_DAWARICH_KEY",
+        "LOGBOOK_IMESSAGE_DB",
+        "LOGBOOK_ZETA_KEY",
+    ):
+        monkeypatch.setenv(name, "k")
+    status, out, _err = _all(capsys)
+    assert status == 0
+    assert order == ["dawarich", "imessage", "zeta", "immich"]
+    assert out.splitlines()[0] == (
+        "running dawarich, imessage, zeta, then immich last"
+        " (a photo library walk can take hours and never holds up the others)"
+    )
+    summary = out[out.index("sync --all:") :].splitlines()
+    assert [line.split()[0] for line in summary[1:]] == ["dawarich", "imessage", "zeta", "immich"]
+
+
+def test_the_real_adapters_run_immich_last_under_all() -> None:
+    from logbook.commands import sync
+
+    assert [a.NAME for a in sync._all_order(adapters.live_adapters())] == [
+        "dawarich",
+        "imessage",
+        "granola",
+        "gcal",
+        "ais",
+        "adsb",
+        "apple-podcasts",
+        "weather",
+        "immich",
+    ]
+
+
+def test_all_without_immich_configured_says_the_order_without_a_last(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    alpha = Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1)
+    beta = Fake("beta", ("LOGBOOK_BETA_KEY",), drafts=1)
+    _fakes(monkeypatch, alpha, beta)
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    _status, out, _err = _all(capsys)
+    assert out.splitlines()[0] == "running alpha, beta"
+
+
+def test_all_takes_no_restart(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    status, _out, err = _all(capsys, "--restart")
+    assert status == 2 and "--all takes no --restart" in err
