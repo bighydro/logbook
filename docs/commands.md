@@ -26,7 +26,7 @@ table at the end, generated from the code by `scripts/command_aliases.py`).
 | Command | What it does |
 |---|---|
 | `show` | one day's lines (default today); a page: `show person\|asset\|place NAME`; a reader: `show year YYYY`, `show trip ID-OR-DAY`, `show trips`, `show days`, `show keepers`, `show stats` |
-| `day` | one day read back: the night, country, stays and moves with who and what, flights, health, whether every usual source is in, and whether you signed it; `day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` signs it ([the signed day](signed-day.md)) |
+| `day` | one day read back: the night, country, stays and moves with who and what, flights, health, whether every usual source is in, and whether you signed it; `day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID] [--kept ID,ID] [--missed ID,ID] [--dropped ID,ID] [--carried ID,ID]` signs it, and says what became of the commitments on it ([the signed day](signed-day.md)) |
 | `digest` | one day in 25 lines at most, closing with one question |
 | `search` | full-text search through the index: words, `"a phrase"`, `kar*` |
 | `people` | everyone the record names, never the owner; `people NAME` is one person's page; `people merge` the same person named twice |
