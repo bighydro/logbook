@@ -651,18 +651,6 @@ class Report:
         """The commitments no judgement has read; a request is never judged."""
         return [p for p in self.proposals if p.judgement is None and p.match.phrase_class != REQUEST]
 
-    @property
-    def promised(self) -> list[Proposal]:
-        return [p for p in self.proposals if p.role == PROMISE]
-
-    @property
-    def asked(self) -> list[Proposal]:
-        return [p for p in self.proposals if p.role == ASKED]
-
-    @property
-    def others(self) -> list[Proposal]:
-        return [p for p in self.proposals if p.role not in (PROMISE, ASKED)]
-
 
 def with_judgements(report: Report, judgements: Mapping[str, Judgement]) -> Report:
     """The report with each proposal carrying the judgement kept for its id, when there is one."""
