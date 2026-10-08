@@ -239,9 +239,12 @@ two implementations print the same day, not only compute the same head.
 
 The record is never in memory. Two decisions carry that.
 
-**Verify streams.** `Logbook.lines()` opens every month file at once, parses one line from each,
-and keeps those in a heap keyed by `seq`; the smallest is yielded and its file read on. Memory is
-one line per month file however long the record. On a synthetic record of three million lines
+**Verify streams.** `Logbook.lines()` parses one line from each month file and keeps those in a
+heap keyed by `seq`; the smallest is yielded and its file read on. Memory is one line per month
+file however long the record, and open files are a handful however many month files there are:
+each file's byte offset is kept, the least recently read files are closed, and a file is reopened
+where it left off when its turn comes round (a record of decades has hundreds of month files, and
+macOS gives a process 256 open files by default). On a synthetic record of three million lines
 over 120 month files:
 
 | | before | after |
