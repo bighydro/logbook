@@ -27,7 +27,7 @@ def promises_arguments(sub: Subparsers) -> None:
     """`logbook promises [done ID | tasks ...]`: the proposals, and the tasks they become."""
     s = sub.add_parser(
         "promises",
-        help="what you promised and were asked, from mail, messages, transcripts, notes; done ID; tasks",
+        help="promises you made and requests to you; done ID; tasks",
         description="what you promised (in mail and messages you sent, your turns of a transcript, your"
         " notes) and what you were asked (in mail and messages you received, others' turns), by rules,"
         " as proposals; `done <id>` closes one; `tasks`: the tasks (task/v1), each as it stands",
