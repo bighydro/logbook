@@ -216,5 +216,5 @@ def test_show_with_a_current_index_does_not_scan_the_files(
         monkeypatch.setattr(Logbook, name, counting)
     cli.main(["show", "2026-02-10"])
     out = capsys.readouterr().out.splitlines()
-    assert out[0] == "2026-02-10" and len(out) == 11
+    assert out[0] == "2026-02-10  unsigned" and len(out) == 11
     assert calls == []

@@ -44,7 +44,7 @@
   April         no days
   May           no days
   June          2026-06-03 · 10 attachments, 1 person, a new place
-    2026-06-03  Wednesday
+    2026-06-03  Wednesday · unsigned
       night before  Home · home
       night after   Home · home
       country       NO (place Home)
@@ -71,6 +71,7 @@
       health        sleep 6.5 h · 7,830 steps · resting 58 bpm
       spend         NOK -168.00 · 1 transaction · Kafé Måken
       sources       dawarich 288 lines, last 23:55 · apple-health 85 lines, last 22:39 · ais 24 lines, last 23:00 · safari 3 lines, last 09:11 · ios-calendar 2 lines, last 12:00 · whatsapp 2 lines, last 13:23 · copilot 1 line, last 12:48 · immich 1 line, last 12:30 · ios-calls 1 line, last 18:50 · keeper-inference 1 line, last 12:30 · mail 1 line, last 13:56 · manual 1 line, last 13:05 · shazam 1 line, last 16:50
+      readiness     mail present · message present · meeting none · location present · photo present · calendar present
   July          no days
   August        no days
   September     no days

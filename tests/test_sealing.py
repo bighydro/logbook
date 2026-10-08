@@ -736,7 +736,9 @@ def test_a_crossing_reseals_sealed_lines_and_files_to_the_destination(
     _crossing_policy(sealed_lb, hermes)
     out = tmp_path / "out"
     window = ["--since", "2026-03-01T00:00:00Z", "--until", "2026-03-02T00:00:00Z"]
-    cli.main(["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--out", str(out)])
+    cli.main(
+        ["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--unsigned", "--out", str(out)]
+    )
     entries = [json.loads(s) for s in (out / "entries.jsonl").read_text().splitlines()]
     stored = {line["seq"]: line for line in _stored(sealed_lb)}
     hermes_id = [sealing.parse_identity(hermes_secret)]
@@ -764,11 +766,36 @@ def test_a_crossing_to_a_destination_without_a_recipient_needs_open_and_then_shi
     _sealed_day(sealed_lb)
     _crossing_policy(sealed_lb, None)
     window = ["--since", "2026-03-01T00:00:00Z", "--until", "2026-03-02T00:00:00Z"]
-    args = ["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--out", str(tmp_path / "no")]
+    args = [
+        "export",
+        "crossing",
+        "--to",
+        "hermes",
+        *window,
+        "--tier",
+        "1,2",
+        "--unsigned",
+        "--out",
+        str(tmp_path / "no"),
+    ]
     code, err = _cli_fails(capsys, *args)
     assert code == 2 and "--open" in err and not (tmp_path / "no").exists()
     out = tmp_path / "out"
-    cli.main(["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--open", "--out", str(out)])
+    cli.main(
+        [
+            "export",
+            "crossing",
+            "--to",
+            "hermes",
+            *window,
+            "--tier",
+            "1,2",
+            "--unsigned",
+            "--open",
+            "--out",
+            str(out),
+        ]
+    )
     entries = [json.loads(s) for s in (out / "entries.jsonl").read_text().splitlines()]
     note = next(e for e in entries if e["kind"] == "note")
     assert "payload_enc" not in note and note["payload_open"]["payload"] == NOTE
@@ -784,6 +811,8 @@ def test_a_crossing_of_a_plain_record_is_unchanged(tmp_path: Path, monkeypatch):
     lb.append(at="2026-03-01T09:00:00Z", source="manual", kind="note", tier=2, payload=NOTE)
     out = tmp_path / "out"
     window = ["--since", "2026-03-01T00:00:00Z", "--until", "2026-03-02T00:00:00Z"]
-    cli.main(["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--out", str(out)])
+    cli.main(
+        ["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--unsigned", "--out", str(out)]
+    )
     entry = json.loads((out / "entries.jsonl").read_text())
     assert entry["payload"] == NOTE and "sealing" not in json.loads((out / "manifest.json").read_text())

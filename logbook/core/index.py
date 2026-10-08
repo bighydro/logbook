@@ -676,6 +676,29 @@ class Index:
         ).fetchall()
         return int(logged), {str(source): int(n) for source, n in found}
 
+    def kind_source_days(
+        self, first: str, last: str, kinds: Sequence[str], tiers: Sequence[int] | None = None
+    ) -> tuple[int, dict[tuple[str, str], int]]:
+        """For `readiness`: how many local days in [first, last] have a line, and per (kind, source)
+        for the given kinds on how many of them it has one; retractions aside, and with `tiers` only
+        the lines of those tiers, as `source_days`. Two aggregates on the `day_local` index."""
+        where = "day_local BETWEEN ? AND ? AND kind != 'retraction'"
+        params: list[object] = [first, last]
+        if tiers is not None:
+            where += f" AND tier IN ({','.join('?' * len(tiers))})"
+            params += [int(t) for t in tiers]
+        (logged,) = self.db.execute(
+            f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", params
+        ).fetchone()
+        if not kinds:
+            return int(logged), {}
+        found = self.db.execute(
+            f"SELECT kind, source, count(DISTINCT day_local) FROM lines WHERE {where}"
+            f" AND kind IN ({','.join('?' * len(kinds))}) GROUP BY kind, source",
+            [*params, *kinds],
+        ).fetchall()
+        return int(logged), {(str(kind), str(source)): int(n) for kind, source, n in found}
+
     # -- counting: `stats`; one SELECT per table, nothing read from the files ----------------------
     def totals(self) -> tuple[int, str | None, str | None]:
         """(lines, first `at`, last `at`); the stamps are None on an empty record."""

@@ -8,7 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..contrib import trip_bundle
-from ..core import apps, events, flights, keepers, story
+from ..core import apps, events, flights, keepers, signing, story
 from ..core.chain import Line, is_sealed, number_text
 from ..core.resolve import Ref
 from .common import ARROW, EM_DASH, EN_DASH, _clock, _plural
@@ -131,6 +131,8 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = _trip_text(p)
     elif line["kind"] == "crossing" and p.get("schema") == "crossing/v1":
         text = _crossing_text(p)
+    elif line["kind"] == signing.KIND and p.get("schema") == signing.SCHEMA:
+        text = signing.row_text(p)
     elif line["kind"] == trip_bundle.RECEIVED:
         text = trip_bundle.text(line, lambda inner: _line_text(inner, tz, names))
     elif line["kind"] == apps.KIND and p.get("schema") == apps.SCHEMA:

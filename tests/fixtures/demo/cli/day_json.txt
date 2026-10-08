@@ -613,5 +613,95 @@
       "newest": "2026-06-08T08:00:00Z"
     }
   ],
+  "signed": null,
+  "readiness": {
+    "window": {
+      "since": "2026-05-12",
+      "until": "2026-06-08",
+      "logged_days": 9
+    },
+    "classes": [
+      {
+        "name": "mail",
+        "kinds": [
+          "mail"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "message",
+        "kinds": [
+          "message"
+        ],
+        "present": true,
+        "lines": 4,
+        "sources": [
+          "whatsapp"
+        ],
+        "usual": [
+          "whatsapp"
+        ],
+        "missing": []
+      },
+      {
+        "name": "meeting",
+        "kinds": [
+          "transcript"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "location",
+        "kinds": [
+          "location"
+        ],
+        "present": true,
+        "lines": 277,
+        "sources": [
+          "ais",
+          "dawarich"
+        ],
+        "usual": [
+          "ais",
+          "dawarich"
+        ],
+        "missing": []
+      },
+      {
+        "name": "photo",
+        "kinds": [
+          "photo"
+        ],
+        "present": false,
+        "lines": 0,
+        "sources": [],
+        "usual": [],
+        "missing": []
+      },
+      {
+        "name": "calendar",
+        "kinds": [
+          "event"
+        ],
+        "present": true,
+        "lines": 1,
+        "sources": [
+          "ios-calendar"
+        ],
+        "usual": [],
+        "missing": []
+      }
+    ],
+    "missing": [],
+    "ready": true
+  },
   "received": []
 }

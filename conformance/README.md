@@ -1,6 +1,6 @@
 # Conformance
 
-`sample-logbook/` is one week of a fictional person (Oslo, March 2026). Nothing in it is real. Its first sixteen lines are the v0.2 sample; the fifteen after them carry one payload of each profile added since (RFCs 0011–0024, and a location with a `subject`), fourteen on the Sunday and a keeper on the first photo's day, shaped as their RFCs describe, so a verifier meets every schema the reference implementation writes. Two of them reference an attachment by digest without a `path`, so there is nothing for `verify` to report missing.
+`sample-logbook/` is one week of a fictional person (Oslo, March 2026). Nothing in it is real. Its first sixteen lines are the v0.2 sample; the fifteen after them carry one payload of each profile added since (RFCs 0011–0024, and a location with a `subject`), fourteen on the Sunday and a keeper on the first photo's day, shaped as their RFCs describe, so a verifier meets every schema the reference implementation writes. Two of them reference an attachment by digest without a `path`, so there is nothing for `verify` to report missing. The 32nd line signs the first day on the last evening (RFC 0034, `signed-day/v1`): the ids of the seven lines on its page and the digest of the page as shown, so `show 2026-03-01` prints `signed` in its header.
 
 Your implementation is conformant with format v0.3, Level 1, when (the sample is a `logbook/0.2` record, read as it is):
 
@@ -12,10 +12,11 @@ Heads, as `expected.json` recorded them:
 
 | Release | Lines | Head |
 |---|---|---|
-| v0.5.0 | 31 | `035a74e0027faa6872580c3c7b5f7a0efec92f15bb29cee400a6593814fd345c` |
+| unreleased (RFC 0034) | 32 | `58bfa9e704e3388d44d74e63f1d84765d24df79e92fce3b522fbef53b765d3df` |
+| v0.5.0 – v0.6.0 | 31 | `035a74e0027faa6872580c3c7b5f7a0efec92f15bb29cee400a6593814fd345c` |
 | v0.2 – v0.4.1 | 16 | `53d39fdad121ce8e448221bbdaa9c86396c16347d050bf630035d6f1d37088e6` |
 
-The first sixteen lines did not change between the two, so an implementation that reproduced the v0.2 head reproduces every hash of those lines still; only the tail is new.
+The first sixteen lines did not change between the three, so an implementation that reproduced the v0.2 head reproduces every hash of those lines still; only the tail is new, and the 0.6.0 head is the `prev` of the 32nd line.
 
 ## Level 2: the sealed sample
 
@@ -30,6 +31,7 @@ Your implementation is Level 2 conformant when, in addition to the three rules a
 
 | Release | Lines | Head (sealed sample) |
 |---|---|---|
+| unreleased (RFC 0034) | 32 | `0ab4c3e79bacc9a7c19d074094e81d1674fdf6967ceaf0d1711679e3c11481db` |
 | v0.6.0 | 31 | `c625fd32d553d6f2f64f04dd50858f63a894575f09d6d0d5063d74680e0b43e3` |
 
 Regenerate with `python conformance/make_sample.py` (when the spec changes, or a profile is added; it changes the head, and this table gets a row).

@@ -26,7 +26,7 @@ table at the end, generated from the code by `scripts/command_aliases.py`).
 | Command | What it does |
 |---|---|
 | `show` | one day's lines (default today); a page: `show person\|asset\|place NAME`; a reader: `show year YYYY`, `show trip ID-OR-DAY`, `show trips`, `show days`, `show keepers`, `show stats` |
-| `day` | one day read back: the night, country, stays and moves with who and what, flights, health |
+| `day` | one day read back: the night, country, stays and moves with who and what, flights, health, whether every usual source is in, and whether you signed it; `day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` signs it ([the signed day](signed-day.md)) |
 | `digest` | one day in 25 lines at most, closing with one question |
 | `search` | full-text search through the index: words, `"a phrase"`, `kar*` |
 | `people` | everyone the record names, never the owner; `people NAME` is one person's page; `people merge` the same person named twice |
@@ -53,7 +53,7 @@ table at the end, generated from the code by `scripts/command_aliases.py`).
 
 | Command | What it does |
 |---|---|
-| `export` | the whole log as one `.jsonl`, day packages, `crossing`, `vault FOLDER`, `site FOLDER`, `trip-bundle TRIP`, or `share day YYYY-MM-DD --to NAME` |
+| `export` | the whole log as one `.jsonl`, day packages, `crossing` (signed days only unless `--unsigned`), `vault FOLDER`, `site FOLDER`, `trip-bundle TRIP`, or `share day YYYY-MM-DD --to NAME` |
 
 ## Try
 

@@ -14,7 +14,7 @@ from ..contrib import digest as digest_reader
 from ..contrib import gaps, print_layout, print_page, questions, week_paper, year_poster
 from ..core import day as day_reader
 from ..core import days as days_reader
-from ..core import flights, keepers, pages, policy, reading, search, stays
+from ..core import flights, keepers, pages, policy, reading, search, signing, stays
 from ..core import year as year_reader
 from ..core.export import parse_day
 from ..core.resolve import Ref, labels
@@ -173,13 +173,14 @@ def cmd_show(a: argparse.Namespace) -> None:
         retracted = retractions(idx.retractions())
         superseded = idx.superseded(flights.KIND)  # a flight another flight line replaced (RFC 0013 rule 4)
         names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
+        signature = signing.signature_of(idx, day, str(lb.meta["owner_id"]))  # RFC 0034: the header
     if not rows:
         print(f"{day}: nothing logged")
         return
     rows.sort(
         key=lambda line: (instant_of(line["at"]), line["seq"])
     )  # by the instant, then seq (SPEC §3.2, #123)
-    print(day)
+    print(f"{day}  {signing.state_text(signing.signed_json(signature, str(tz), None))}")
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
         print(f"  {hero}")
@@ -195,10 +196,22 @@ def day_arguments(sub: Subparsers) -> None:
     """`logbook day`."""
     s = sub.add_parser(
         "day",
-        help="one day read back: night, stays and moves, who was there, health",
-        description="one day read back: nights, country, stays and moves with who and what, flights, health",
+        help="one day read back: night, stays, company, health; or sign it",
+        description="one day read back: nights, country, stays and moves with who and what, flights, health,"
+        " whether every usual source is in, and whether you have signed it; `day sign YYYY-MM-DD` signs"
+        " it: one tier-1 line saying you read the page and these are the day's facts (RFC 0034)",
     )
-    s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today)")
+    s.add_argument(
+        "day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today); or `sign`, then the day"
+    )
+    s.add_argument("signed_day", nargs="?", metavar="YYYY-MM-DD", help="with sign: the local day to sign")
+    s.add_argument("--note", metavar="TEXT", help="sign: one line in your words; it is tier 1 and crosses")
+    s.add_argument(
+        "--confirm",
+        metavar="ID,ID",
+        help="sign: the lines you confirm as the day's facts, by seq or id as `show` lists them"
+        " (default: every line on the page)",
+    )
     s.add_argument(
         "--airports",
         metavar="FILE",
@@ -216,6 +229,15 @@ def cmd_day(a: argparse.Namespace) -> None:
     line, the sources — read through the index from one reading of the day and the day before
     (`logbook.core.day`). Nothing is written, not even `policy/stays.json`."""
     lb = Logbook.find()
+    if a.day == signing_verb:
+        _day_sign(lb, a)
+        return
+    if a.signed_day is not None:
+        print(f"day: {a.day!r} takes no second argument; `day sign YYYY-MM-DD` signs a day", file=sys.stderr)
+        sys.exit(2)
+    if a.note is not None or a.confirm is not None:
+        print("day: --note and --confirm belong to `day sign YYYY-MM-DD`", file=sys.stderr)
+        sys.exit(2)
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     try:
         data = day_reader.read(lb, day, _airports(a.airports))
@@ -227,6 +249,36 @@ def cmd_day(a: argparse.Namespace) -> None:
         return
     for text in day_reader.rows(data):
         print(text)
+
+
+signing_verb = "sign"
+
+
+def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
+    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` (RFC 0034, `logbook.core.signing`): the
+    owner's reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual —
+    the day, the ids confirmed (every line on the page by default), the digest of the page as shown
+    and the note — and nothing else touched. A day signed before is signed again: the new line
+    supersedes the standing one. Only the owner signs: no agent and no MCP tool runs this."""
+    if a.signed_day is None or a.signed_day == signing_verb:
+        print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
+        sys.exit(2)
+    confirm = None if a.confirm is None else a.confirm.split(",")
+    try:
+        line = signing.sign(lb, a.signed_day, confirm=confirm, note=a.note)
+    except ValueError as e:  # SignError, a day that is not one
+        print(f"day sign: {e}", file=sys.stderr)
+        sys.exit(2)
+    p = line["payload"]
+    n, on_page = len(p["confirmed"]), p["page"]["lines"]
+    print(f"{p['day']}: signed {line['at']} as #{line['seq']} {signing.SCHEMA}")
+    lines = f"{n} line{'s' if n != 1 else ''} confirmed of {on_page} on the page"
+    print(f"  {lines} · page sha256 {p['page']['sha256'][:12]}…")
+    if p.get("note"):
+        print(f"  note: {p['note']}")
+    if p.get("supersedes"):
+        print(f"  signed again: supersedes {p['supersedes']}")
+    print("  only signed days cross by default (`export crossing`); re-sign after the day changes")
 
 
 def digest_arguments(sub: Subparsers) -> None:

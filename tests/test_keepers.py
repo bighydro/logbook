@@ -139,7 +139,7 @@ def test_a_days_hero_photos_are_its_keepers(
     assert "hero" not in text
     _run(capsys, "derive", "keepers")
     lines = _run(capsys, "show", "2026-06-10").splitlines()
-    assert lines[0] == "2026-06-10"
+    assert lines[0] == "2026-06-10  unsigned"
     assert lines[1].strip().startswith("hero") and "IMG_101030.HEIC" in lines[1]
     assert any("keeper" in line and "memory" in line and "IMG_101030.HEIC" in line for line in lines[2:])
     lines = _run(capsys, "show", "2026-06-11").splitlines()

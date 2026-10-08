@@ -99,6 +99,11 @@ def export_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="whole log: write sealed lines verbatim (default: opened, the form a line re-enters by)",
     )
+    s.add_argument(
+        "--unsigned",
+        action="store_true",
+        help="crossing: cross the lines of unsigned days too (default: signed days only; RFC 0034)",
+    )
     s.set_defaults(fn=cmd_export)
 
 
@@ -216,8 +221,9 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     """crossing --to DEST --since RFC3339|last [--until RFC3339] [--tier 1|1,2|1,2,3] [--kinds a,b]
-    [--out DIR] [--dry-run]: one crossing-package/v1 (RFC 0005) under the destination's ceiling
-    in policy/crossing.json (ADR 0016), recorded as a crossing/v1 line (RFC 0011)."""
+    [--unsigned] [--out DIR] [--dry-run]: one crossing-package/v1 (RFC 0005) under the destination's
+    ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless `--unsigned` (RFC
+    0034), recorded as a crossing/v1 line (RFC 0011)."""
     generated_at = now_utc()  # also the default window end, and the crossing line's `at`
     try:
         if not a.to or not a.since:
@@ -232,6 +238,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             crossing.parse_tiers("1" if a.tier is None else a.tier),
             crossing.parse_kinds(a.kinds),
             open_sealed=a.open,
+            signed_only=not a.unsigned,
         )
     except crossing.EmptyWindow as e:
         print(f"{a.to}: {e}; nothing written")
@@ -476,6 +483,11 @@ def cmd_import(a: argparse.Namespace) -> None:
 def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
     c = sel.counts()
     yield f"  {c['logged']} lines in the window, {c['crossed']} cross, {c['held_back']} held back"
+    if c["held_back_unsigned"]:
+        yield (
+            f"  {c['held_back_unsigned']} held back on unsigned days"
+            " (`logbook day sign YYYY-MM-DD` signs one; --unsigned crosses them anyway)"
+        )
     yield "  " + "   ".join(f"tier {t}: {n}" for t, n in c["by_tier"].items())
     if c["by_kind"]:
         yield "  " + "   ".join(f"{k}: {n}" for k, n in c["by_kind"].items())

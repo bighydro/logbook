@@ -6,8 +6,9 @@ the tier policy lets cross, verbatim; copies of the attachments they point at th
 people without the whole registry; and a manifest a JSON parser can read. The ceiling per
 destination is a setting in the record, `policy/crossing.json` (ADR 0016), never a constant here.
 Every real export is itself a line in the chain, `crossing/v1` (RFC 0011), and moves a watermark
-per destination in `exports/crossing.json`. Nothing here rewrites a line; the only write to the
-log is that one `Logbook.append`."""
+per destination in `exports/crossing.json`. A second gate beside the tier (RFC 0034): only the
+lines of days the owner has signed cross, unless the request says `--unsigned`. Nothing here
+rewrites a line; the only write to the log is that one `Logbook.append`."""
 
 from __future__ import annotations
 
@@ -24,8 +25,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, policy, sealing
+from . import attachments, policy, sealing, signing
 from .chain import Line, is_sealed
+from .index import local_date
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
 
@@ -97,6 +99,7 @@ class Request:
     max_tier: int
     recipient: str | None = None  # the destination's age recipient (policy), to reseal sealed lines to
     open_sealed: bool = False  # `--open`: ship sealed lines and files opened, when there is no recipient
+    signed_only: bool = True  # RFC 0034: only the lines of signed days cross; `--unsigned` lifts it
 
     @property
     def tier3(self) -> bool:
@@ -111,11 +114,13 @@ def request(
     tiers: tuple[int, ...],
     kinds: frozenset[str] | None = None,
     open_sealed: bool = False,
+    signed_only: bool = True,
 ) -> Request:
     """Resolve `--since last`, check the window, and hold the request against the policy: a tier
     above the destination's ceiling is refused naming the policy file. Tier 3 is in `tiers` only
     when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016). The
-    destination's recipient, when the policy names one, is what sealed lines are resealed to."""
+    destination's recipient, when the policy names one, is what sealed lines are resealed to.
+    `signed_only` is the gate of RFC 0034: the lines of signed days, unless the owner lifts it."""
     if since == LAST:
         since = last_until(lb, destination)
     since, until = utc(_checked(since)), utc(_checked(until))
@@ -134,7 +139,7 @@ def request(
             f"{policy.policy_path(lb.root)} allows max_tier {max_tier}; "
             "raise it there if that is what you want"
         )
-    return Request(destination, since, until, tiers, kinds, max_tier, recipient, open_sealed)
+    return Request(destination, since, until, tiers, kinds, max_tier, recipient, open_sealed, signed_only)
 
 
 def _checked(stamp: str) -> str:
@@ -180,6 +185,7 @@ class Selection:
     blobs: list[dict[str, Any]]  # SPEC §1.1 references whose file the store holds
     missing: int  # distinct digests referenced whose file the store does not hold
     sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
+    held_back_unsigned: int = 0  # lines in the tiers and kinds asked for whose day is not signed (RFC 0034)
 
     @property
     def held_back(self) -> int:
@@ -203,6 +209,7 @@ class Selection:
             "logged": self.logged,
             "crossed": len(self.lines),
             "held_back": self.held_back,
+            "held_back_unsigned": self.held_back_unsigned,
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": len(self.resolutions),
@@ -216,10 +223,13 @@ class Selection:
 
 
 def select(lb: Logbook, req: Request) -> Selection:
-    """The lines of `[since, until)` in the requested tiers and kinds, not retracted, in chain
-    order; the resolution lines their refs walk through; the attachments they reference. The
-    index says where; only the lines that cross are read from the files."""
+    """The lines of `[since, until)` in the requested tiers and kinds, not retracted, on a signed
+    day unless the request lifts that gate (RFC 0034 rule 5: a line's day is the local day of its
+    `at` in the record's zone; a `signed-day` line's day is the day it signs), in chain order; the
+    resolution lines their refs walk through; the attachments they reference. The index says
+    where; only the lines that cross are read from the files."""
     since, until = instant(req.since), instant(req.until)
+    unsigned_held = 0
     with lb.index() as idx:
         inside = [p for p in idx.window(req.since, req.until) if since <= instant(p.at) < until]
         retraction_lines = idx.retractions()
@@ -229,6 +239,17 @@ def select(lb: Logbook, req: Request) -> Selection:
             for p in inside
             if p.tier in req.tiers and (req.kinds is None or p.kind in req.kinds) and p.id not in retracted
         ]
+        if req.signed_only:
+            meta = lb.meta
+            signed, signs = signing.gate(idx, str(meta["owner_id"]))
+            tz = str(meta["timezone"])
+            kept = [
+                p
+                for p in wanted
+                if (signs.get(p.id) if p.kind == signing.KIND else local_date(p.at, tz)) in signed
+            ]
+            unsigned_held = len(wanted) - len(kept)
+            wanted = kept
         raw = idx.read(((p.file, p.offset) for p in wanted), opened=False)
         raw_resolutions = idx.resolutions(opened=False)
     sealed = {str(line["id"]): line for line in [*raw, *raw_resolutions] if is_sealed(line)}
@@ -249,7 +270,7 @@ def select(lb: Logbook, req: Request) -> Selection:
     found, missing = blobs(lb, lines)
     crossed = {str(line["id"]) for line in [*lines, *overlay]}
     carried = {k: v for k, v in sealed.items() if k in crossed}
-    return Selection(lines, len(inside), overlay, held, found, missing, carried)
+    return Selection(lines, len(inside), overlay, held, found, missing, carried, unsigned_held)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
@@ -366,7 +387,11 @@ def record(
         "window": {"from": req.since, "to": req.until},
         "tiers": list(req.tiers),
         "counts": sel.counts(),
-        "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": req.max_tier},
+        "policy": {
+            "file": policy.POLICY_FILE.as_posix(),
+            "max_tier": req.max_tier,
+            "signed_only": req.signed_only,  # RFC 0034: whether the signed-day gate was in force
+        },
         "logbook_head": head,
         "package_sha256": package_sha256,
     }
@@ -401,6 +426,7 @@ def build_manifest(
                 "3": "explicit" if req.tier3 else "never",
             },
             "carve_outs": [],
+            "signed_days": "only" if req.signed_only else "any",  # RFC 0034 rule 5
         },
         "tiers": list(req.tiers),
         "counts": sel.counts(),

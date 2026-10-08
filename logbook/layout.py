@@ -46,6 +46,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "places",
         "policy",
         "present",
+        "readiness",
         "reading",
         "repair",
         "resolve",
@@ -53,6 +54,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "sealing",
         "search",
         "share",
+        "signing",
         "stays",
         "store",
         "story",
@@ -106,7 +108,17 @@ COMMANDS = "commands"  # every module under logbook/commands/
 
 # 0.5 import path -> where it lives now; a package covers everything under it
 NEW_IN_0_6: frozenset[str] = frozenset(
-    {"chapters", "introductions", "site", "stream", "transcripts", "week_paper", "year_poster"}
+    {
+        "chapters",
+        "introductions",
+        "readiness",
+        "signing",
+        "site",
+        "stream",
+        "transcripts",
+        "week_paper",
+        "year_poster",
+    }
 )  # born in a tier: no 0.5 path to keep
 MOVED: dict[str, str] = {
     f"logbook.{name}": f"logbook.{tier}.{name}"
