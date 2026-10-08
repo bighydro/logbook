@@ -4,6 +4,8 @@ Status: draft · 2026-10-07 · comment period: two weeks
 
 Agents draft; the owner signs; only signed days cross. This RFC adds one payload profile, `signed-day/v1`, the line the owner appends when they have read a day's page and confirm it as the day's facts; one default for the crossing package (RFC 0005, ADR 0016), which now crosses the lines of signed days unless the owner asks for the rest; one header for `show`; and one block in the Day reader, `readiness`, which says per class of source whether the day's lines are in and which usual sources have not delivered. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and no agent can sign.
 
+`signed-day/v1` is a new profile, not one of the nineteen RFC 0031 freezes: its schema may change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a reader, a fixture in both implementations, a schema pass and one dated amendment to that RFC.
+
 ## Why
 
 Adapters and agents fill the record: a tracker writes the points, a mail import the threads, an agent with MCP may run `add` and draft a note the owner then writes (ARCHITECTURE, layer 5: agents are operators, never authors). What crosses to a member of the circle is gated by tier (ADR 0016), which says how private a line is, not whether the owner has looked at it. A day whose photos came in overnight and whose calendar entry was a draft nobody read can cross at tier 1 on a nightly job before the owner has seen the page.
