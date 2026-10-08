@@ -531,6 +531,15 @@ def add_arguments(sub: Subparsers) -> None:
 
 
 def cmd_add(a: argparse.Namespace) -> None:
+    """`add`, under the record's writer lock for the whole command (#234); a dry run takes none."""
+    if a.dry_run:
+        _add(a)
+        return
+    with Logbook.find().writer():
+        _add(a)
+
+
+def _add(a: argparse.Namespace) -> None:
     from ..contrib import adapters
     from ..contrib.adapters import screentime
 
@@ -867,7 +876,16 @@ def cmd_import_backup(a: argparse.Namespace) -> None:
     encrypted backup carries (`ios_backup.EXTRAS`) run too: the call log through `ios-calls`, Health
     through `apple-health` (its `healthdb.sqlite` copied first, so the store finds the source names
     beside it), Safari's history through `safari` (RFC 0017). A source the owner disabled in
-    `policy/import.json` is skipped and said so before anything is copied, `--only` or not."""
+    `policy/import.json` is skipped and said so before anything is copied, `--only` or not.
+    The whole run is under the record's writer lock (#234); a dry run takes none."""
+    if a.dry_run:
+        _import_backup(a)
+        return
+    with Logbook.find().writer():
+        _import_backup(a)
+
+
+def _import_backup(a: argparse.Namespace) -> None:
     from ..contrib import adapters
     from ..contrib.adapters import ios_contacts
 

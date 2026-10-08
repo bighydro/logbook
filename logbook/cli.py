@@ -60,15 +60,20 @@ def main(argv: list[str] | None = None) -> None:
     if said:
         print(said, file=sys.stderr)
     a = build_parser().parse_args(argv)
-    from .core import sealing  # the command just chosen has imported the store by now
+    from .core import sealing, store  # the command just chosen has imported the store by now
     from .core.store import FormatError
 
     if a.identity_file:  # a path, in this process's environment only; a key is never in a variable
         os.environ[sealing.IDENTITY_ENV] = str(Path(a.identity_file).expanduser())
+    store.COMMAND = _command_words(a)  # what the writer lock names; never an argument's path
+    store.WAIT = not a.no_wait
     try:
         a.fn(a)
         sys.stdout.flush()  # a short listing sits in the buffer until exit: meet the closed pipe here
     except FormatError as e:  # verify and every writer refuse a record hashed by another rule
+        print(f"{a.cmd}: {e}", file=sys.stderr)
+        sys.exit(2)
+    except (store.Locked, store.HeadMoved) as e:  # one writer at a time (#234): one sentence, exit 2
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(2)
     except (sealing.IdentityRequired, sealing.MissingExtra) as e:  # RFC 0029: one sentence, exit 2
@@ -86,6 +91,20 @@ def main(argv: list[str] | None = None) -> None:
     except SystemExit:  # a command's own status (`sources --gaps` exits 1) stands; the pipe is still quiet
         _flush_quietly()
         raise
+
+
+def _command_words(a: Any) -> str:
+    """`sync immich`, `repair index`, `add`: the command and its verb, and for `sync` its source, for
+    the writer lock's file and the line a waiting writer prints; never a file path, a sentence or a
+    person's name (`people NAME`)."""
+    words = [str(a.cmd)]
+    verb = getattr(a, "verb", None)
+    if isinstance(verb, str) and verb:
+        words.append(verb)
+    source = getattr(a, "name", None) if a.cmd == "sync" else None
+    if isinstance(source, str) and source:
+        words.append(source)
+    return " ".join(words)
 
 
 def _flush_quietly() -> None:

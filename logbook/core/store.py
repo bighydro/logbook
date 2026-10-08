@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import shutil
+import sys
 import time
 import uuid
 import zoneinfo
@@ -16,7 +17,7 @@ from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import IO, Any, BinaryIO, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
@@ -73,6 +74,30 @@ MIGRATION = "migration"  # kind of the one line a migration appends (SPEC §3.1)
 REKEY = "rekey"  # kind of the one line a reseal to other recipients appends (RFC 0029 §6.4)
 NOT_INTACT = "the 0.1 record is not intact; nothing was changed"
 CUT_SHORT = "the file ends inside this line (cut short)"  # a month file a crash tore (SPEC §3)
+
+
+# -- one writer at a time (#234) ----------------------------------------------------------------------
+LOCK_FILE = PurePath("state") / "writer.lock"  # in the record folder, beside the sync watermarks
+LOCK_POLL_S = 0.5  # how often a waiting writer looks again
+COMMAND = "logbook"  # the words this process was run with, for the lock file; `cli.main` sets it
+WAIT = True  # a second writer waits; `--no-wait` makes it refuse
+WRITING = "another logbook command is writing to this record ({command}, since {since})"
+STALE = "a stale lock from {command} (pid {pid}, since {since}) whose process is gone; taking it over"
+HEAD_MOVED = (
+    "the record's head moved from seq {was} to seq {now} while this command ran, so the batch it computed"
+    " would not chain; the batch was not written"
+)
+_held: dict[Path, int] = {}  # lock file -> how many `writer` blocks of this process hold it
+
+
+class Locked(Exception):
+    """Another process is writing to this record and `--no-wait` said not to wait."""
+
+
+class HeadMoved(Exception):
+    """`logbook.json` changed under a writer between the head it read and the batch it would
+    write: the batch would not chain, and nothing of it was written. Cannot happen while every
+    writer holds the lock; this is the guard, the lock is the courtesy."""
 
 
 class CodeCheckoutError(Exception):
@@ -510,6 +535,46 @@ class Logbook:
         return seq, head, errors
 
     # -- writing -------------------------------------------------------------
+    @contextlib.contextmanager
+    def writer(
+        self,
+        command: str | None = None,
+        wait: bool | None = None,
+        notice: Callable[[str], None] | None = None,
+    ) -> Iterator[None]:
+        """Hold the record's writer lock, `state/writer.lock`, for the block (#234): `append` and
+        `append_many` take it themselves, and a command that will append takes it around its whole
+        run, so a `sync`'s walk is inside it. One process, one holder: a block inside a block of
+        the same process re-enters. Another process's lock is waited for, polled every
+        LOCK_POLL_S, after one line on stderr (`notice`) naming its command and start; with `wait`
+        False (`--no-wait`) `Locked` is raised instead. A lock whose pid is gone is taken over,
+        said in one line. A reader never calls this. The lock is a courtesy between writers; what
+        keeps the chain whole is the head re-check before every batch (`append_many`)."""
+        path = self._lock_path()
+        if _held.get(path, 0):
+            _held[path] += 1
+            try:
+                yield
+            finally:
+                _held[path] -= 1
+            return
+        say = notice if notice is not None else (lambda text: print(text, file=sys.stderr))
+        _take_lock(path, command or COMMAND, WAIT if wait is None else wait, say)
+        _held[path] = 1
+        try:
+            yield
+        finally:
+            _held[path] -= 1
+            if not _held[path]:
+                del _held[path]
+                _release_lock(path)
+
+    def _lock_path(self) -> Path:
+        root = self.root
+        with contextlib.suppress(OSError):
+            root = root.resolve()
+        return root / LOCK_FILE
+
     def append(
         self,
         at: str,
@@ -521,7 +586,21 @@ class Logbook:
         tz: str | None = None,
         recorded_at: str | None = None,
     ) -> Line:
-        meta = self.meta
+        with self.writer():
+            return self._append(at, source, kind, tier, payload, end, tz, recorded_at)
+
+    def _append(
+        self,
+        at: str,
+        source: str,
+        kind: str,
+        tier: int,
+        payload: dict[str, Any],
+        end: str | None,
+        tz: str | None,
+        recorded_at: str | None,
+    ) -> Line:
+        meta = self.meta  # read under the lock: the head is current until the lock is released
         self._check_format(meta)
         self._require_identity((tier,))
         line = self._line(
@@ -613,7 +692,23 @@ class Logbook:
         each draft came from can note how far the source is read (`logbook.contrib.inbox.Cursor`).
 
         Chain order is import order: `seq` and `prev` follow the order the drafts arrive in,
-        and `at` is the event time. A batch is never sorted."""
+        and `at` is the event time. A batch is never sorted.
+
+        The writer lock (`writer`) is held from before the first draft is asked for until the
+        last checkpoint, so the walk that produces the drafts is inside it. Before every batch is
+        written, `logbook.json` is read again and must still name the head the batch was computed
+        from; when it does not (a writer that did not hold the lock moved it), HeadMoved is raised
+        and nothing of the batch reaches the files (#234)."""
+        with self.writer():
+            return self._append_many(drafts, progress, skipped, committed)
+
+    def _append_many(
+        self,
+        drafts: Iterable[dict[str, Any]],
+        progress: Callable[[int, float], None] | None,
+        skipped: Callable[[dict[str, Any]], None] | None,
+        committed: Callable[[int], None] | None,
+    ) -> int:
         meta = self.meta
         self._check_format(meta)
         idx = self.index()
@@ -622,6 +717,9 @@ class Logbook:
         it = iter(drafts)
 
         def checkpoint(lines: list[tuple[Path, Line]]) -> None:
+            current = self.meta  # the guard: the head this batch chains from must still be the head
+            if (current.get("seq"), current.get("head")) != (meta["seq"], meta["head"]):
+                raise HeadMoved(HEAD_MOVED.format(was=meta["seq"], now=current.get("seq")))
             pending: dict[Path, list[Line]] = {}
             for path, line in lines:
                 pending.setdefault(path, []).append(line)
@@ -1056,6 +1154,86 @@ class Logbook:
 
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
+
+
+def _take_lock(path: Path, command: str, wait: bool, notice: Callable[[str], None]) -> None:
+    """Create the lock file, exclusively, with this process's pid, the command and the time; or
+    wait for, refuse, or take over the one that is there (`Logbook.writer`)."""
+    said = False
+    while True:
+        path.parent.mkdir(parents=True, exist_ok=True)  # each time: a release may have removed it
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            holder = _read_lock(path)
+            if holder is None:  # being written this instant, or a crash between create and write
+                time.sleep(LOCK_POLL_S)
+                if _read_lock(path) is None:
+                    path.unlink(missing_ok=True)
+                continue
+            pid, since = holder.get("pid"), str(holder.get("since", "?"))
+            who = str(holder.get("command", "?"))
+            if not isinstance(pid, int) or pid == os.getpid() or not _alive(pid):
+                # gone, or this very process's from a block that never released (`_held` says so)
+                notice(STALE.format(command=who, pid=pid, since=since))
+                path.unlink(missing_ok=True)
+                continue
+            if not wait:
+                raise Locked(
+                    WRITING.format(command=who, since=since) + "; --no-wait, so not waiting"
+                ) from None
+            if not said:
+                notice(WRITING.format(command=who, since=since) + "; waiting")
+                said = True
+            time.sleep(LOCK_POLL_S)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"pid": os.getpid(), "command": command, "since": now_utc()}, fh)
+            fh.flush()
+        return
+
+
+def _release_lock(path: Path) -> None:
+    """Remove the lock when it is still this process's; one another process took over stays. The
+    folder goes too when the lock was the only thing in it: a record that has synced nothing has
+    no `state/`, lock or no lock."""
+    holder = _read_lock(path)
+    if holder is None or holder.get("pid") == os.getpid():
+        path.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):  # not empty, or already gone: either is fine
+            path.parent.rmdir()
+
+
+def _read_lock(path: Path) -> dict[str, Any] | None:
+    """The lock file's object, or None when it is not there yet, empty, or not JSON."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _alive(pid: int) -> bool:
+    """Whether a process with this pid exists (not whether it is a logbook command: a reused pid
+    holds a stale lock as a live one would, and `--no-wait`, or removing the file, answers that)."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return kernel32.GetLastError() == 5  # ERROR_ACCESS_DENIED: there, not ours
+        kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def retractions(lines: Iterable[Line]) -> dict[str, Line]:

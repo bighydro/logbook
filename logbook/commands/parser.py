@@ -68,6 +68,7 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
 )
 
 DESCRIPTION = "A diary that writes itself. `logbook <command> --help` explains one command."
+USAGE = "logbook [--version] [--identity-file PATH] [--no-wait] <command> ..."  # one line, never wrapped
 WIDTH = 80  # one screen: no line of the root help is wider
 
 
@@ -108,12 +109,17 @@ class _RootParser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = _RootParser(prog="logbook", description=DESCRIPTION)
+    ap = _RootParser(prog="logbook", usage=USAGE, description=DESCRIPTION)
     ap.add_argument("--version", action="version", version=__version__)
     ap.add_argument(
         "--identity-file",
         metavar="PATH",
-        help="the age identity that opens the record (default $LOGBOOK_IDENTITY_FILE, else the config dir)",
+        help="the age identity that opens the record, from `key init`",
+    )
+    ap.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="refuse, exit 2, while another command is writing",
     )
     sub = ap.add_subparsers(
         dest="cmd", required=True, metavar="<command>", parser_class=argparse.ArgumentParser
