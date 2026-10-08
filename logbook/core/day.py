@@ -48,7 +48,12 @@ What a Day shows, in order:
    of it and which usual sources have not delivered, from the record and the policy alone.
    The header says whether the owner has signed the day (`signing`, RFC 0034: the latest
    `signed-day` line naming it, not retracted), and the JSON carries the signature under `signed`
-   with whether the page still digests to what was signed.
+   with whether the page still digests to what was signed and the dispositions it gives. On a
+   signed day the text prints the disposition's symbol before each commitment the signature named
+   (amendment 1): a tick for kept, a cross for missed, a dash for dropped, an arrow for carried
+   (`signing.SYMBOLS`), on the row of the line — an attached
+   event, transcript, note, mail thread, call or keeper, an unplaced item, an all-day entry, a
+   flight; an unsigned day, and a line given none, print as before.
 6. From the circle: for every page another record shared for this day and `logbook receive`
    verified (`share.pages`, RFC 0025), a `from <name>` section — how many lines, by kind, the tier
    it was shared at and when, and the titles of its events, transcripts, notes, mail and calls.
@@ -714,25 +719,31 @@ def _instant(stamp: str) -> datetime:
 
 
 def rows(data: dict[str, Any]) -> Iterator[str]:
-    """The Day as text: the header, the timeline, what is unplaced, the health line, the sources."""
+    """The Day as text: the header, the timeline, what is unplaced, the health line, the sources.
+    On a signed day, the disposition's symbol before each line the signature gave one."""
     tz = ZoneInfo(data["tz"])
     head = f"{data['day']}  {data['weekday']}"
     yield f"{head}{DOT}{signing.state_text(data['signed'])}" if "signed" in data else head
+    marks = _marks(data)
     yield _row("night before", night_text(data["nights"]["before"]))
     yield _row("night after", night_text(data["nights"]["after"]))
     yield _row("country", country_text(data["country"]))
     if data["all_day"]:
-        yield _row("all day", ", ".join(a["title"] + sources_text(a) for a in data["all_day"]))
+        yield _row(
+            "all day",
+            ", ".join(signing.mark(marks, a["line"]) + a["title"] + sources_text(a) for a in data["all_day"]),
+        )
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
     for entry in data["timeline"]:
-        yield from _entry_rows(entry, tz, indent="  ")
+        yield from _entry_rows(entry, tz, indent="  ", marks=marks)
     if data["unplaced"]:
         yield ""
         for item in data["unplaced"]:
             span = span_text(item["at"], item["end"], tz)
-            yield _row("unplaced", f"{span}  {item['kind']:<6} {item['title']}{sources_text(item)}")
+            mark = signing.mark(marks, item["line"])
+            yield _row("unplaced", f"{span}  {item['kind']:<6} {mark}{item['title']}{sources_text(item)}")
     yield from story.rows(data.get("stories") or (), tz)
     yield ""
     yield _row("health", health_text(data["health"]))
@@ -751,6 +762,13 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row(f"from {page['from']}", received_text(page))
         for item in page["named"]:
             yield f"      {item['kind']:<10} {item['title']}"
+
+
+def _marks(data: Mapping[str, Any]) -> dict[str, str]:
+    """The dispositions of the day's standing signature, line id → word; empty on an unsigned day."""
+    signed = data.get("signed")
+    found = signed.get("dispositions") if isinstance(signed, dict) else None
+    return dict(found) if isinstance(found, dict) else {}
 
 
 def received_text(page: dict[str, Any]) -> str:
@@ -790,14 +808,22 @@ def country_text(country: dict[str, Any]) -> str:
     return text if country["from"] == "night" else f"{text}{DOT}from the {country['from']}"
 
 
-def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool = False) -> Iterator[str]:
+def _entry_rows(
+    entry: dict[str, Any],
+    tz: ZoneInfo,
+    indent: str,
+    inside: bool = False,
+    marks: Mapping[str, str] | None = None,
+) -> Iterator[str]:
     """One row for the entry, then its inner rows (an `aboard` entry's), then one row per named
     attachment and one for its company. `inside` rows are an asset's own grammar and do not repeat
-    the asset's name."""
+    the asset's name. `marks` are the signed day's dispositions by line id: a named line that has
+    one prints its symbol first."""
     if entry["kind"] == FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = span_text(entry["start"], entry["end"], tz)
-        yield f"{indent}{clock:<12} {FLIGHT:<6} {route}{DOT}{entry['evidence']}"
+        mark = signing.mark(marks, entry.get("line"))
+        yield f"{indent}{clock:<12} {FLIGHT:<6} {mark}{route}{DOT}{entry['evidence']}"
         return
     clock = span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
     kind = GAP if entry["gap"] else entry["kind"]
@@ -830,22 +856,23 @@ def _entry_rows(entry: dict[str, Any], tz: ZoneInfo, indent: str, inside: bool =
     yield f"{indent}{clock:<12} {kind:<6} {DOT.join(parts)}"
     inner = indent + "    "
     for s in entry.get("inside", []):
-        yield from _entry_rows({**s, "attached": None, "with": None}, tz, inner, inside=True)
+        yield from _entry_rows({**s, "attached": None, "with": None}, tz, inner, inside=True, marks=marks)
     attached = entry.get("attached")
     if attached:
         for e in attached["events"]:
             span = span_text(e["start"], e["end"], tz)
-            yield f"{inner}{'event':<12} {e['title']} {span}{sources_text(e)}"
+            yield f"{inner}{'event':<12} {signing.mark(marks, e['line'])}{e['title']} {span}{sources_text(e)}"
         for t in attached["transcripts"]:
-            yield f"{inner}{'transcript':<12} {t['title']}"
+            yield f"{inner}{'transcript':<12} {signing.mark(marks, t['line'])}{t['title']}"
         for n in attached["notes"]:
-            yield f"{inner}{'note':<12} {n['text']}"
+            yield f"{inner}{'note':<12} {signing.mark(marks, n['line'])}{n['text']}"
         for m in attached["mail"]:
-            yield f"{inner}{'mail':<12} {m['subject']} ({_plural(m['messages'], 'message')})"
+            mark = signing.mark(marks, *m["lines"])
+            yield f"{inner}{'mail':<12} {mark}{m['subject']} ({_plural(m['messages'], 'message')})"
         for c in attached["calls"]:
-            yield f"{inner}{'call':<12} {call_text(c)}"
+            yield f"{inner}{'call':<12} {signing.mark(marks, c['line'])}{call_text(c)}"
         for k in attached["keepers"]:
-            yield f"{inner}{'keeper':<12} {k['name']} ({k['lane']})"
+            yield f"{inner}{'keeper':<12} {signing.mark(marks, k['line'])}{k['name']} ({k['lane']})"
     company = entry.get("with")
     if company and (company["confirmed"] or company["proposed"]):
         confirmed = ", ".join(companion_text(c) for c in company["confirmed"])

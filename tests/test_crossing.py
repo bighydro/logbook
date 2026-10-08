@@ -558,3 +558,24 @@ def test_dry_run_counts_the_unsigned_days(lb: Logbook, tmp_path: Path, capsys):
     text = capsys.readouterr().out
     assert "2 held back on unsigned days" in text and "--unsigned" in text
     assert not (lb.root / "export").exists()
+
+
+def test_dispositions_cross_with_the_signature_unchanged(lb: Logbook, tmp_path: Path):
+    """RFC 0034 amendment 1: a signature's `dispositions` cross as written, with the day they sign."""
+    by_seq = {int(line["seq"]): line for line in lb.lines()}
+    again = signing.sign(
+        lb,
+        "2026-03-01",
+        at="2026-03-03T09:00:00Z",
+        dispositions={"kept": [by_seq[6]["id"]], "missed": [by_seq[8]["id"]], "carried": ["11"]},
+    )  # seq 15: supersedes seq 13
+    expected = {by_seq[6]["id"]: "kept", by_seq[8]["id"]: "missed", by_seq[11]["id"]: "carried"}
+    assert again["payload"]["dispositions"] == expected
+    out = tmp_path / "out"
+    until = "2026-03-04T00:00:00Z"  # the signing day inside the window
+    _run("--to", "hermes", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
+    entries = {int(e["seq"]): e for e in _jsonl(out / "entries.jsonl")}
+    assert 15 in entries and 13 in entries, "both signatures of the day cross with it"
+    assert entries[15] == again, "the line crosses byte for byte: the dispositions untouched"
+    assert entries[15]["payload"]["dispositions"] == again["payload"]["dispositions"]
+    assert signing.validate(entries[15]["payload"]) == []

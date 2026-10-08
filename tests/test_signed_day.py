@@ -150,6 +150,7 @@ def test_show_and_day_say_in_their_header_whether_the_day_is_signed(
         "page_matches": True,
         "note": None,
         "supersedes": None,
+        "dispositions": {},
     }
     assert _run(capsys, "show", "2026-03-02").splitlines()[0] == "2026-03-02  unsigned", (
         "the signing day itself"
@@ -250,16 +251,25 @@ def test_the_mcp_server_cannot_sign():
 # -- property: re-signing never changes the chain head of earlier days -----------------------------------
 
 
+Disposed = dict[str, str]  # which of a day's two lines (`location`, `note`) gets which disposition
+_DISPOSED = st.dictionaries(st.sampled_from(["location", "note"]), st.sampled_from(signing.DISPOSITIONS))
+
+
 @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(
     signings=st.lists(
-        st.tuples(st.sampled_from(["2026-03-01", "2026-03-02", "2026-03-03"]), st.booleans()), max_size=8
+        st.tuples(st.sampled_from(["2026-03-01", "2026-03-02", "2026-03-03"]), st.booleans(), _DISPOSED),
+        max_size=8,
     )
 )
-def test_re_signing_never_changes_the_chain_head_of_earlier_days(signings: list[tuple[str, bool]]) -> None:
+def test_re_signing_never_changes_the_chain_head_of_earlier_days(
+    signings: list[tuple[str, bool, Disposed]],
+) -> None:
     """Three days of lines; any sequence of signings and re-signings, each written later than all
-    three days: every line of those days keeps its hash, each day's last line (its head in the chain)
-    stays what it was, every page digest stays what it was, and the record verifies after each."""
+    three days, with or without a note and with any dispositions on the day's lines (amendment 1):
+    every line of those days keeps its hash, each day's last line (its head in the chain) stays what
+    it was, every page digest stays what it was, the signature written is valid and reads back the
+    dispositions given, and the record verifies after each."""
     with tempfile.TemporaryDirectory() as tmp:
         lb = Logbook.init(Path(tmp) / "lb", TZ)
         drafts = []
@@ -271,13 +281,29 @@ def test_re_signing_never_changes_the_chain_head_of_earlier_days(signings: list[
             day: max(s for s, line in before.items() if line["at"].startswith(day))
             for day in ("2026-03-01", "2026-03-02", "2026-03-03")
         }
+        on_day = {
+            day: {str(ln["kind"]): str(ln["id"]) for ln in before.values() if ln["at"].startswith(day)}
+            for day in heads
+        }
         with lb.index() as idx:
             pages = {day: signing.page_digest(day, TZ, signing.page(idx, day)) for day in heads}
-        for n, (day, with_note) in enumerate(signings):
+        for n, (day, with_note, disposed) in enumerate(signings):
+            by_value: dict[str, list[str]] = {}
+            for kind, value in disposed.items():
+                by_value.setdefault(value, []).append(on_day[day][kind])
             line = signing.sign(
-                lb, day, at=f"2026-03-10T{8 + n:02d}:00:00Z", note="again" if with_note else None
+                lb,
+                day,
+                at=f"2026-03-10T{8 + n:02d}:00:00Z",
+                note="again" if with_note else None,
+                dispositions=by_value or None,
             )
             assert line["payload"]["day"] == day
+            assert signing.validate(line["payload"]) == []
+            expected = {on_day[day][kind]: value for kind, value in disposed.items()}
+            assert signing.dispositions_of(line["payload"]) == expected
+            assert ("dispositions" in line["payload"]) == bool(disposed), "optional: absent when none"
+            assert set(expected) <= set(line["payload"]["confirmed"]), "a disposed line is confirmed"
             after = _by_seq(lb)
             for seq, old in before.items():
                 assert after[seq]["hash"] == old["hash"] and after[seq]["prev"] == old["prev"]
@@ -405,3 +431,133 @@ def test_readiness_reads_the_record_and_the_policy_only(tmp_path: Path, monkeypa
     assert block["missing"] == ["message", "location"]
     assert no_network == []
     assert _files(lb.root) == before, "a reader writes nothing, not even the default policy"
+
+
+# -- dispositions (RFC 0034, amendment 1) ------------------------------------------------------------------
+
+
+def _payload(confirmed: list[str], dispositions: Any = None) -> dict[str, Any]:
+    """A `signed-day/v1` payload with `confirmed` and, unless None, `dispositions` as given."""
+    payload: dict[str, Any] = {
+        "schema": "signed-day/v1",
+        "day": DAY,
+        "subject": "00000000-0000-4000-8000-000000000001",
+        "confirmed": confirmed,
+        "page": {"sha256": "0" * 64, "lines": len(confirmed)},
+    }
+    if dispositions is not None:
+        payload["dispositions"] = dispositions
+    return payload
+
+
+@pytest.mark.parametrize("value", signing.DISPOSITIONS)
+def test_each_of_the_four_dispositions_is_valid(value: str) -> None:
+    payload = _payload(["a", "b"], {"a": value})
+    assert signing.validate(payload) == []
+    assert signing.dispositions_of(payload) == {"a": value}
+
+
+def test_dispositions_are_optional_and_an_empty_object_is_valid() -> None:
+    assert signing.validate(_payload(["a"])) == []
+    assert signing.dispositions_of(_payload(["a"])) == {}
+    assert signing.validate(_payload(["a"], {})) == []
+    assert signing.DISPOSITIONS == ("kept", "missed", "dropped", "carried")
+
+
+def test_a_value_outside_the_four_an_id_not_confirmed_and_a_wrong_shape_are_invalid() -> None:
+    [problem] = signing.validate(_payload(["a"], {"a": "done"}))
+    assert "'done'" in problem and "kept, missed, dropped or carried" in problem
+    [problem] = signing.validate(_payload(["a"], {"b": "kept"}))
+    assert "b" in problem and "not in confirmed" in problem
+    [problem] = signing.validate(_payload(["a"], ["a"]))
+    assert "an object" in problem
+    [problem] = signing.validate(_payload(["a"], {"a": 1}))
+    assert "kept, missed, dropped or carried" in problem
+    assert len(signing.validate(_payload(["a"], {"a": "done", "b": "kept"}))) == 2
+    assert signing.dispositions_of(_payload(["a", "b"], {"a": "kept", "b": "done", "c": "missed"})) == {
+        "a": "kept"
+    }, "a reader keeps the valid entries and never fails on the rest"
+    assert signing.dispositions_of(_payload(["a"], "kept")) == {}
+    assert signing.dispositions_of(_payload(["a"], {"a": "kept", "a2": None})) == {"a": "kept"}
+
+
+def test_the_four_flags_write_dispositions_and_add_their_lines_to_confirmed(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    ids = {s: _by_seq(lb)[s]["id"] for s in range(1, 6)}
+    out = _run(
+        capsys, "day", "sign", DAY, "--confirm", "1", "--kept", "2", "--missed", ids[5], "--dropped", "3"
+    )
+    p = _by_seq(lb)[6]["payload"]
+    assert p["confirmed"] == [ids[1], ids[5], ids[2], ids[3]], "the disposed lines join confirmed, page order"
+    assert p["dispositions"] == {ids[2]: "kept", ids[5]: "missed", ids[3]: "dropped"}
+    assert signing.validate(p) == []
+    assert "4 lines confirmed of 4" in out and "kept 1, missed 1, dropped 1" in out
+    out = _run(capsys, "day", "sign", DAY, "--kept", "1", "--missed", "5", "--dropped", "2", "--carried", "3")
+    p = _by_seq(lb)[7]["payload"]
+    assert p["confirmed"] == [ids[s] for s in PAGE], "without --confirm, every line on the page"
+    assert p["dispositions"] == {ids[1]: "kept", ids[5]: "missed", ids[2]: "dropped", ids[3]: "carried"}
+    assert "kept 1, missed 1, dropped 1, carried 1" in out
+    _run(capsys, "day", "sign", DAY, "--kept", " 2 , 5 ")
+    p = _by_seq(lb)[8]["payload"]
+    assert p["dispositions"] == {ids[5]: "kept", ids[2]: "kept"}
+    _run(capsys, "day", "sign", DAY)
+    assert "dispositions" not in _by_seq(lb)[9]["payload"], "the field is optional: absent when none is given"
+    assert lb.verify()[2] == []
+    signed = json.loads(_run(capsys, "day", DAY, "--json"))["signed"]
+    assert signed["dispositions"] == {} and signed["seq"] == 9
+    signing.sign(lb, DAY, at=SIGNED_AT, dispositions={"kept": ["1", "5"], "missed": ["2"]}, note="read")
+    rows = _run(capsys, "show", "2026-03-02").splitlines()
+    assert rows[-1].endswith("signed 2026-03-01: 4 lines confirmed of 4 · kept 2, missed 1 · read"), rows[-1]
+
+
+def test_an_unknown_id_or_one_given_twice_is_refused_in_plain_english(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    ids = {s: _by_seq(lb)[s]["id"] for s in range(1, 6)}
+    seq = lb.meta["seq"]
+    assert _fails("day", "sign", DAY, "--kept", "99") == 2
+    assert f"'99' is not a line on the page of {DAY}" in capsys.readouterr().err
+    assert _fails("day", "sign", DAY, "--missed", "4") == 2, "on the 2nd, not on this page"
+    assert "'4' is not a line on the page" in capsys.readouterr().err
+    assert _fails("day", "sign", DAY, "--kept", "2", "--missed", "2") == 2
+    assert "#2 is given twice (kept and missed); a line has one disposition" in capsys.readouterr().err
+    assert _fails("day", "sign", DAY, "--kept", "2,2") == 2
+    assert "#2 is given twice (kept and kept)" in capsys.readouterr().err
+    assert _fails("day", "sign", DAY, "--carried", "2", "--dropped", ids[2]) == 2, "by seq and by id"
+    assert "#2 is given twice (dropped and carried)" in capsys.readouterr().err
+    assert _fails("day", "sign", DAY, "--kept", "") == 2
+    assert "--kept names no line" in capsys.readouterr().err
+    lb.retract(2, "not true")
+    assert _fails("day", "sign", DAY, "--kept", "2") == 2
+    assert "retracted" in capsys.readouterr().err
+    assert _fails("day", DAY, "--kept", "1") == 2, "--kept belongs to sign"
+    assert "belong to `day sign" in capsys.readouterr().err
+    assert lb.meta["seq"] == seq + 1, "the retraction; no signature was written"
+
+
+SYMBOLS = signing.SYMBOLS  # a tick, a cross, a dash, an arrow
+
+
+@pytest.mark.parametrize("value", signing.DISPOSITIONS)
+def test_day_prints_the_symbol_next_to_a_commitment_on_a_signed_day(
+    value: str, lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    before = _run(capsys, "day", DAY)
+    assert "breakfast" in before and f"{SYMBOLS[value]} breakfast" not in before
+    signing.sign(lb, DAY, at=SIGNED_AT, dispositions={value: ["5"]})
+    text = _run(capsys, "day", DAY)
+    assert f"{SYMBOLS[value]} breakfast" in text, text
+    assert all(f"{symbol} coffee" not in text for symbol in SYMBOLS.values()), "a line without one"
+    ids = {s: _by_seq(lb)[s]["id"] for s in range(1, 6)}
+    assert json.loads(_run(capsys, "day", DAY, "--json"))["signed"]["dispositions"] == {ids[5]: value}
+
+
+def test_an_unsigned_day_and_a_signature_without_dispositions_print_nothing_new(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    unsigned = _run(capsys, "day", DAY)
+    signing.sign(lb, DAY, at=SIGNED_AT)
+    signed = _run(capsys, "day", DAY)
+    assert unsigned.splitlines()[1:] == signed.splitlines()[1:], "only the header differs"
+    assert not any(symbol in signed for symbol in ("✓", "✗"))

@@ -8,7 +8,10 @@ the speaker when the transcript resolves one (RFC 0006), the sentence as written
 a date phrase is in it ("by Friday", "bis Montag", "next week"), resolved against the day it was
 said. Everything here is a draft (ADR 0013.7; `docs/promises.md`): the command prints proposals, and
 the owner closes one with `promises done <id>`, which appends a `task/v1` line (RFC 0016) marked
-done; nothing is ever rewritten.
+done; nothing is ever rewritten. The signed day closes one too (RFC 0034, amendment 1): when the
+standing signature of the day gives the line a promise was read in a disposition, `kept` and
+`dropped` close it, `missed` closes it and the row says `missed on <day>`, and `carried` leaves it
+open; the proposal carries the disposition, the day and the signature line under `disposition`.
 
 The extractor is a value, not the command. `extract(lb, since, extractor=RULES)` takes anything
 with a `name`, a `version` and `__call__(text) -> list[Match]`; the rules are the first such thing
@@ -25,7 +28,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import policy, present
+from ..core import policy, present, signing
 from ..core.chain import Line
 from ..core.index import local_date
 from ..core.resolve import Identity, Ref, identities_from
@@ -425,16 +428,23 @@ class Proposal:
     after: tuple[Said, ...] = ()
     names: tuple[str, ...] = ()
     judgement: Judgement | None = None
+    disposition: signing.Disposition | None = None  # what the signed day says became of its line
 
     @property
     def status(self) -> str:
-        return "done" if self.closed_by else "open"
+        """`done` when a task line closed it or the signed day kept, missed or dropped it; else
+        `open` (a carried promise is still open)."""
+        if self.closed_by or (self.disposition is not None and self.disposition.value in signing.CLOSING):
+            return "done"
+        return "open"
 
     def to_json(self) -> dict[str, Any]:
+        d = self.disposition
         return {
             "id": self.id,
             "status": self.status,
             "closed_by": self.closed_by,
+            "disposition": None if d is None else {"value": d.value, "day": d.day, "line": d.line},
             "day": self.day,
             "at": self.at,
             "line": self.line,
@@ -511,6 +521,7 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
             if str(line["id"]) not in retracted and str(line["id"]) not in superseded
         ]
         closed = closes(idx.by_kind(TASK), retracted)
+        disposed = signing.disposed_lines(idx, str(lb.meta.get("owner_id") or "") or None)
     owner = present.owner_of(
         str(lb.meta.get("owner_id") or ""),
         [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
@@ -589,6 +600,7 @@ def extract(lb: Logbook, since: str | None = None, extractor: Extractor = RULES)
                         before,
                         after,
                         names,
+                        disposition=disposed.get(str(line["id"])),
                     )
                 )
             at_sentence += len(own)
@@ -842,7 +854,8 @@ def rows(
 
 def _tail(p: Proposal) -> str:
     """After the quote: the due hint (the judgement's day when it gave one, else the rules' with the
-    phrase), the judgement, `done`."""
+    phrase), the judgement, the signed day's word (`kept`, `missed on <day>`, `dropped`, `carried`),
+    `done`."""
     tail = ""
     verdict = p.judgement
     if verdict is not None and verdict.due:
@@ -864,9 +877,16 @@ def _tail(p: Proposal) -> str:
                 tail += f" by {by}"
             if verdict.to != UNKNOWN:
                 tail += f" to {'you' if verdict.to == OWNER else verdict.to}"
+    if p.disposition is not None:
+        tail += disposition_text(p.disposition)
     if p.closed_by:
         tail += "  done"
     return tail
+
+
+def disposition_text(d: signing.Disposition) -> str:
+    """`  kept`, `  missed on 2026-06-14`, `  dropped`, `  carried`: what the signed day said."""
+    return f"  missed on {d.day}" if d.value == signing.MISSED else f"  {d.value}"
 
 
 def _plural(n: int, noun: str) -> str:
