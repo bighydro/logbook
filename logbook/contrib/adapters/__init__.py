@@ -37,11 +37,19 @@ and optionally:
     group(draft) -> str                         # `sync` then reports seen and new per group (a calendar)
     GROUP_MARKS: bool                           # with `group`: `sync` also keeps a watermark per group
                                                 # in the state file (`groups`), one per tracked asset
+    total(config) -> int | None                 # how many items the source holds, asked once before the
+                                                # walk so `sync` says `N on the server` and `x of N`;
+                                                # None when the source cannot say (`total unknown`)
 
 `pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may), `assets`
 (the registry, as `run` may) and `failed: list[str]`: a source made of several feeds appends one line per
 feed it could not read and still yields the others' drafts; `sync` prints each, keeps the watermark and
-exits 1.
+exits 1. A source whose first pull walks a whole library (`immich`) may take `walk: Walk`, the checkpoint
+keeper `sync` drives (`logbook.commands.sync.WalkState`): `walk.start()` is the checkpoint the adapter
+saved last time — a JSON object of its own making, with `fetched`, the count progress continues from —
+or None, and `walk.reached(ordinal, checkpoint)` after a page says: once draft `ordinal` is in the
+record, `checkpoint` is where to resume. An interrupted run then carries on where it stopped; the
+record's dedupe by (source, raw_id) stays the safety net.
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
 reads a phone backup's sms.db and the Mac's own chat.db); they write the same lines, so either
@@ -147,6 +155,14 @@ class Adapter(Protocol):
     def sniff(self, path: Path) -> bool: ...
 
     def run(self, path: Path, since: str | None = None) -> Iterator[dict[str, Any]]: ...
+
+
+class Walk(Protocol):
+    """A live adapter's view of the checkpoint keeper `sync` drives for a library walk."""
+
+    def start(self) -> dict[str, Any] | None: ...
+
+    def reached(self, ordinal: int, checkpoint: dict[str, Any]) -> None: ...
 
 
 @runtime_checkable

@@ -11,9 +11,20 @@ the orderable fields in 3.2.1, so pages are ordered by `fileCreatedAt` and the w
 largest `updatedAt` of the whole pull; `sync` stores it only once the pull has completed. A line's
 `at` stays the capture time.
 
+`fileCreatedAt` is not unique — a burst, a live-photo pair, a batch of scans or received files
+stamped by the importing device share a second — and the cursor names a stamp, not an asset: the
+page after a boundary that falls inside such a run begins at that stamp again and serves the run's
+earlier members a second time. `pull` keeps the ids of the previous page's last-stamp run and drops
+them when they come again, so every asset is counted and yielded once; the count under
+`repeated_at_page_boundary` says how many the server served again. A run longer than a page would
+leave the cursor where it is; the page then grows, up to MAX_PAGE_SIZE, and beyond that the walk
+stops with one clear error rather than looping. `total` asks the server how many assets there are
+before the walk, so `sync` can say `x of N`. A `walk` (the consumer's checkpoint keeper, `sync`'s
+`WalkState`) is told after every page where the walk could resume; `pull` starts from what it saved.
+
 One line per asset. The pixels stay in Immich; the line points at them by asset id. Names of people
-are never logged, only Immich's person ids. Network happens only inside `pull`, which only
-`logbook sync immich` calls (ADR 0012: no network on a file adapter's default path; a live adapter
+are never logged, only Immich's person ids. Network happens only inside `total` and `pull`, which
+only `logbook sync immich` calls (ADR 0012: no network on a file adapter's default path; a live adapter
 has no default path).
 """
 
@@ -25,8 +36,11 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.request import Request, urlopen
+
+if TYPE_CHECKING:
+    from . import Walk
 
 NAME = "immich"
 ENV = ("LOGBOOK_IMMICH_URL", "LOGBOOK_IMMICH_KEY")
@@ -34,7 +48,9 @@ KIND = "photo"
 TIER = 1
 SCHEMA = "photo/v1"
 PAGE_SIZE = 250
+MAX_PAGE_SIZE = 1000  # Immich's ceiling on `size`; a run of equal stamps longer than this cannot be walked
 TIMEOUT_S = 60
+STATISTICS = ("/api/assets/statistics", "/api/server/statistics")  # the key's own count, then the server's
 
 # -- provenance rule (RFC 0002, ADR 0011): data, so it can be reconsidered ----------------------
 # A camera file: HEIC/RAW/JPEG stills, or a video, with make/model and an original capture time.
@@ -133,27 +149,63 @@ def configure(env: Mapping[str, str]) -> Config | None:
     return Config(url=url.rstrip("/"), key=key)
 
 
+def total(config: Config) -> int | None:
+    """How many assets the server holds for this key: the key's own count (`GET
+    /api/assets/statistics`, permission `asset.statistics`), else the whole server's (`GET
+    /api/server/statistics`, an admin key); None when neither answers, and `sync` says `total
+    unknown`. Asked once before the walk so progress can say `x of N`; network only under `sync`."""
+    for path in STATISTICS:
+        try:
+            doc = _get(config, path)
+        except (OSError, ValueError):
+            continue
+        n = _count(doc)
+        if n is not None:
+            return n
+    return None
+
+
+def _count(doc: Mapping[str, Any]) -> int | None:
+    """`total` of the assets statistics; `photos` + `videos` of the server's (`images` + `videos`
+    on an older assets endpoint)."""
+    whole = doc.get("total")
+    if isinstance(whole, int) and not isinstance(whole, bool):
+        return whole
+    parts = [doc.get(k) for k in ("images", "photos", "videos")]
+    counted = [p for p in parts if isinstance(p, int) and not isinstance(p, bool)]
+    return sum(counted) if counted else None
+
+
 def pull(
     config: Config,
     since: str | None = None,
     progress: Callable[[int, float], None] | None = None,
     counts: dict[str, int] | None = None,
+    walk: Walk | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Every asset Immich created or changed at or after `since` (RFC3339 UTC; None means all),
     oldest capture first, one photo/v1 line draft each. Trashed and hidden assets are never read
     (ADR 0011: the source's own junk judgement stands; hidden assets are the motion halves of live
     photos). Assets whose metadata is still pending are deferred to a later sync (see the module
     docstring) and tallied in `counts["pending"]`. `progress(assets_so_far, elapsed_seconds)` is
-    called after every page."""
+    called after every page with the assets counted once (the module docstring: the server serves
+    the ones sharing a stamp at a page boundary again). With `walk`, the walk starts from the
+    checkpoint it saved — `cursor`, `fetched`, `repeats` (the ids of the last-stamp run the cursor
+    serves again), `watermark` — and `walk.reached(ordinal, checkpoint)` is told after every page
+    but the last where the walk could resume once draft `ordinal` is in the record."""
     post: Callable[[Config, dict[str, Any]], dict[str, Any]] = _post
-    cursor: str | None = None
-    count, started = 0, time.monotonic()
+    saved = walk.start() if walk is not None else None
+    cursor: str | None = str(saved["cursor"]) if saved and saved.get("cursor") else None
+    count = int(saved.get("fetched") or 0) if saved else 0
+    boundary: set[str] = set(saved.get("repeats") or []) if saved else set()
+    mark: str | None = str(saved["watermark"]) if saved and saved.get("watermark") else None
+    ordinal, size, started = 0, PAGE_SIZE, time.monotonic()
     if counts is not None:
         counts["pending"] = 0
     while True:
         body: dict[str, Any] = {
             "orderBy": {"field": "fileCreatedAt", "direction": "asc"},
-            "size": PAGE_SIZE,
+            "size": size,
             "withExif": True,
             "withPeople": True,
         }
@@ -162,20 +214,47 @@ def pull(
         if cursor:
             body["cursor"] = cursor
         page = post(config, body)["assets"]
-        for asset in page.get("items", []):
+        items: list[dict[str, Any]] = list(page.get("items", []))
+        fresh = [asset for asset in items if asset["id"] not in boundary]
+        if len(fresh) < len(items) and counts is not None:
+            counts["repeated_at_page_boundary"] = counts.get("repeated_at_page_boundary", 0) + (
+                len(items) - len(fresh)
+            )
+        for asset in fresh:
             if asset.get("isTrashed") or asset.get("visibility") == "hidden":
                 continue
             if _metadata_pending(asset):
                 if counts is not None:
                     counts["pending"] += 1
                 continue
-            yield _line(asset)
-        count += len(page.get("items", []))
+            draft = _line(asset)
+            updated = watermark(draft)
+            if updated is not None and (mark is None or updated > mark):
+                mark = updated
+            ordinal += 1
+            yield draft
+        count += len(fresh)
         if progress is not None:
             progress(count, time.monotonic() - started)
-        cursor = page.get("nextCursor")
-        if not cursor or not page.get("items"):
+        next_cursor = page.get("nextCursor")
+        if not next_cursor or not items:
             return
+        last = items[-1]["fileCreatedAt"]
+        boundary = {asset["id"] for asset in items if asset["fileCreatedAt"] == last}
+        if not fresh and next_cursor == cursor:  # the whole page was the run again: it is longer than a page
+            if size >= MAX_PAGE_SIZE:
+                raise ValueError(
+                    f"immich: more than {MAX_PAGE_SIZE:,} assets share fileCreatedAt {last}; the walk cannot"
+                    " pass them (the cursor names a stamp, not an asset)"
+                )
+            size = min(size * 2, MAX_PAGE_SIZE)
+            continue
+        cursor = next_cursor
+        if walk is not None:
+            walk.reached(
+                ordinal,
+                {"cursor": cursor, "fetched": count, "repeats": sorted(boundary), "watermark": mark},
+            )
 
 
 def _metadata_pending(asset: dict[str, Any]) -> bool:
@@ -195,12 +274,24 @@ def watermark(draft: dict[str, Any]) -> str | None:
 
 
 def _post(config: Config, body: dict[str, Any]) -> dict[str, Any]:
-    """One POST /api/search/metadata. The only network call in this module."""
+    """One POST /api/search/metadata. With `_get`, the only network calls in this module."""
     req = Request(
         f"{config.url.rstrip('/')}/api/search/metadata",
         data=json.dumps(body).encode("utf-8"),
         headers={"x-api-key": config.key, "Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
+    )
+    with urlopen(req, timeout=TIMEOUT_S) as response:
+        doc: dict[str, Any] = json.loads(response.read().decode("utf-8"))
+    return doc
+
+
+def _get(config: Config, path: str) -> dict[str, Any]:
+    """One GET of a statistics endpoint (`total`)."""
+    req = Request(
+        f"{config.url.rstrip('/')}{path}",
+        headers={"x-api-key": config.key, "Accept": "application/json"},
+        method="GET",
     )
     with urlopen(req, timeout=TIMEOUT_S) as response:
         doc: dict[str, Any] = json.loads(response.read().decode("utf-8"))

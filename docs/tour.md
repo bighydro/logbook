@@ -212,6 +212,7 @@ logbook add screentime --backup ~/backup          # the phone's Screen Time stor
 logbook sync immich                               # everything since the last run; safe to repeat
 logbook sync immich --since 2026-01-01T00:00:00Z  # or everything Immich received or changed since then
 logbook sync immich --dry-run                     # count and summarise, write nothing
+logbook sync immich --restart                     # the whole library again, whatever the watermark says
 ```
 
 `sync` remembers where it got to in `state/<source>.json` and re-runs append nothing that is already
@@ -220,9 +221,22 @@ capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tom
 lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
 and the command exits 2.
 
+The first `sync immich` walks the whole library, which takes hours for hundreds of thousands of
+assets. It says what it is walking before it starts — `immich: 426,121 assets on the server, 0
+already in the record` (the count the server gives; `total unknown` when it will not say) — and then
+counts every page as `x of N assets`, so a long walk is told from a loop. An interrupted walk (Ctrl-C,
+a lost connection, a server error) is checkpointed in `state/immich.json` as the lines land, and the
+next run says `resuming where the last run stopped, at x of N assets` and asks the server for nothing
+before that point; `--restart` walks the library from the beginning instead. Each asset is fetched
+once: the pages are ordered by capture time, which a burst or a batch of scans shares to the second,
+and the server serves such a run again at a page boundary; the adapter sees through that and the
+record's own refusal of a line it already holds stays the safety net.
+
 `logbook sync --all` runs every configured live source in turn — configured: at least one of its
 `LOGBOOK_*` variables set, and all it needs present — each from its own watermark; a disabled source
-or one with no variable set is skipped and said so, and a failure in one never stops the next. Each
+or one with no variable set is skipped and said so, and a failure in one never stops the next. The
+quick sources go first and `immich` last, and the first line says the order, so a photo walk of hours
+never holds up the messages, the calendar, the positions or the weather. Each
 source prints its own summary as it runs, then one line per source closes the run (`ok`, `failed
 (status 1)`, `skipped (LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed.
 `logbook sync --install-schedule` makes the machine run `sync --all` at 07:00 and 19:00 local: a

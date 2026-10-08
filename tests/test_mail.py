@@ -412,3 +412,58 @@ def test_show_raw_prints_refs_as_given_and_the_body(lb, capsys):
     assert _text(rows)[0] == "✉ Re: Mooring for the weekend — " + OLA + " → " + OWNER + ", havn@example.org"
     assert "    Photos attached. The east berth is free from Friday." in rows
     assert "    From the east berth you can see the lighthouse." in rows
+
+
+# -- a message twice in one mbox ----------------------------------------------------------------
+
+REPEATED = """\
+From ola.nordmann@example.org Mon Mar  2 09:00:00 2026
+From: Ola Nordmann <ola.nordmann@example.org>
+To: Ines Nordmann <ines.nordmann@example.org>
+Subject: Rope for Saturday
+Date: Mon, 2 Mar 2026 09:00:00 +0100
+Message-ID: <rope-2026-03-02@example.org>
+
+Bring the long one.
+
+From ines.nordmann@example.org Mon Mar  2 09:30:00 2026
+From: Ines Nordmann <ines.nordmann@example.org>
+To: Ola Nordmann <ola.nordmann@example.org>
+Subject: Re: Rope for Saturday
+Date: Mon, 2 Mar 2026 09:30:00 +0100
+Message-ID: <rope-reply-2026-03-02@example.org>
+In-Reply-To: <rope-2026-03-02@example.org>
+
+Will do.
+
+From ola.nordmann@example.org Mon Mar  2 09:00:00 2026
+From: Ola Nordmann <ola.nordmann@example.org>
+To: Ines Nordmann <ines.nordmann@example.org>
+Subject: Rope for Saturday
+Date: Mon, 2 Mar 2026 09:00:00 +0100
+Message-ID: <rope-2026-03-02@example.org>
+
+Bring the long one.
+
+"""
+
+
+def test_add_dry_run_counts_a_message_repeated_in_the_mbox_as_the_real_run_does(lb, tmp_path, capsys):
+    """Takeout writes a message under every label it carries, so one mbox can hold it twice. The
+    real run writes it once and refuses the repeat; the dry run says the same numbers."""
+    mbox = tmp_path / "repeated.mbox"
+    mbox.write_bytes(REPEATED.encode("utf-8"))
+    cli.main(["add", "mail", str(mbox), "--dry-run"])
+    out = capsys.readouterr().out
+    assert (
+        "mail: 2 lines would be added, 0 already in the record, 1 repeated in the input"
+        " (dry run, nothing written)" in out
+    )
+    assert lb.meta["seq"] == 0
+    cli.main(["add", "mail", str(mbox)])
+    out = capsys.readouterr().out
+    assert "added 2 lines from mail" in out
+    assert "  1 already in the record (same source and raw_id), nothing written twice" in out
+    cli.main(["add", "mail", str(mbox), "--dry-run", "--restart"])  # past the cursor: the file again
+    out = capsys.readouterr().out
+    assert "mail: 0 lines would be added, 3 already in the record (dry run, nothing written)" in out

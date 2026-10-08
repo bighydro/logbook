@@ -107,6 +107,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_identifier": "without an identifier, keyed by row id",
     "no_unique_identifier": "without a unique identifier, keyed by row id",
     "live_photo_pairs": "live-photo pairs",
+    "repeated_at_page_boundary": "served again by the server at a page boundary, counted once",
     "no_sidecar": "without a sidecar",
     "at_from_creation_time": "timed by creation time",
     "at_from_file_time": "timed by the file",

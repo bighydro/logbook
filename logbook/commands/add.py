@@ -330,17 +330,27 @@ def _keepers_of_import(
 
 def _say_dry_run(lb: Logbook, name: str, drafts: Iterable[dict[str, Any]]) -> None:
     """`add --dry-run`: run the drafts out, count those the record already holds by (source,
-    raw_id) through the index, say both, write nothing."""
-    n = already = 0
+    raw_id) through the index and those the input itself repeats (a Takeout mbox holds a message
+    once per label; the real run writes it once and refuses the repeat), say all three, write
+    nothing."""
+    n = already = repeated = 0
+    keys: set[tuple[str, str]] = set()
     with lb.index() as idx:
         for draft in drafts:
             n += 1
             raw_id = (draft.get("payload") or {}).get("raw_id")
-            if raw_id is not None and idx.line_id(str(draft.get("source")), str(raw_id)) is not None:
+            if raw_id is None:
+                continue
+            key = (str(draft.get("source")), str(raw_id))
+            if idx.line_id(*key) is not None:
                 already += 1
+            elif key in keys:
+                repeated += 1
+            keys.add(key)
     print(
-        f"{name}: {n - already} lines would be added, {already} already in the record"
-        " (dry run, nothing written)"
+        f"{name}: {n - already - repeated} lines would be added, {already} already in the record"
+        + (f", {repeated} repeated in the input" if repeated else "")
+        + " (dry run, nothing written)"
     )
 
 

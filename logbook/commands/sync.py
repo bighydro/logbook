@@ -35,17 +35,45 @@ if TYPE_CHECKING:
     from ..contrib import adapters
 
 
-def _page_progress(unit: str, status: Mapping[str, Any] | None = None) -> Callable[[int, float], None]:
+def _page_progress(
+    unit: str,
+    status: Mapping[str, Any] | None = None,
+    total: int | None = None,
+    since: str | None = None,
+    walks: bool = False,
+) -> Callable[[int, float], None]:
     """One line per page pulled from a live source, dry runs included, counting `unit`. A source
     that listens (`ais`) calls it once a minute and keeps a tally per asset in `status["heard"]`,
-    which the line carries in parentheses."""
+    which the line carries in parentheses. A source that `walks` a library says `x of N` against
+    the total it asked the server for, `x since <since>` on an incremental pull, and `x so far
+    (total unknown)` when the server would not say: never a number that reads as the total."""
 
     def report(n: int, elapsed: float) -> None:
         heard = status.get("heard") if status is not None else None
         per_asset = f" ({', '.join(f'{k} {v:,}' for k, v in sorted(heard.items()))})" if heard else ""
-        print(f"  {n:,} {unit} in {elapsed:,.0f}s{per_asset}", file=sys.stderr)
+        if walks and since is not None:
+            head, tail = f"{n:,} {unit} since {since}", ""
+        elif walks and total is None:
+            head, tail = f"{n:,} {unit} so far", " (total unknown)"
+        elif walks:
+            head, tail = f"{n:,} of {total:,} {unit}", ""
+        else:
+            head, tail = f"{n:,} {unit}", ""
+        print(f"  {head} in {elapsed:,.0f}s{tail}{per_asset}", file=sys.stderr)
 
     return report
+
+
+SLOW_LAST = ("immich",)  # a walk over a photo library takes hours: `--all` runs it after the rest
+
+
+def _all_order(live: Iterable[adapters.LiveAdapter]) -> list[adapters.LiveAdapter]:
+    """The order `sync --all` runs the sources in: the quick ones as registered, the slow ones
+    (`SLOW_LAST`) after them, so a photo walk never holds up the messages, the calendar, the
+    positions or the weather."""
+    quick = [a for a in live if a.NAME not in SLOW_LAST]
+    slow = [a for a in live if a.NAME in SLOW_LAST]
+    return quick + slow
 
 
 def _window_text(seconds: float) -> str:
@@ -66,7 +94,11 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
-        " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day",
+        " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day."
+        " immich: the first run walks the whole library and says how many assets the server holds before it"
+        " starts, then counts `x of N`; a walk interrupted (Ctrl-C, a lost connection, a server error) is"
+        " checkpointed in state/immich.json and the next run resumes where it stopped instead of walking"
+        " the library again; --restart walks it from the beginning",
     )
     s.add_argument(
         "name",
@@ -105,6 +137,12 @@ def sync_arguments(sub: Subparsers) -> None:
         " weather: the last local day to cover, YYYY-MM-DD (default yesterday)",
     )
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
+    s.add_argument(
+        "--restart",
+        action="store_true",
+        help="immich: walk the whole library from the beginning, whatever the watermark and the checkpoint"
+        " of an interrupted walk say (the record still refuses what it already holds)",
+    )
     s.set_defaults(fn=cmd_sync)
 
 
@@ -136,8 +174,9 @@ def _sync_all(a: argparse.Namespace) -> None:
     single run says it, and the run goes on. At the end one summary line per source — `ok`,
     `failed (status N)`, `skipped (why)` — and exit 1 when any failed. A Ctrl-C while a source
     listens to a stream (ais, status 130) ends the run there: the sources not reached are listed as
-    `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen` and `--until`
-    are a single source's and refused."""
+    `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen`, `--until` and
+    `--restart` are a single source's and refused. The quick sources run first and the slow ones
+    (`SLOW_LAST`: a photo library walk) last, and the first line says the order."""
     from ..contrib import adapters
 
     if a.name is not None:
@@ -146,13 +185,19 @@ def _sync_all(a: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(2)
-    for flag, value in (("--since", a.since), ("--listen", a.listen), ("--until", a.until)):
+    for flag, value in (
+        ("--since", a.since),
+        ("--listen", a.listen),
+        ("--until", a.until),
+        ("--restart", a.restart or None),
+    ):
         if value is not None:
             print(f"sync: --all takes no {flag}: each source starts from its own watermark", file=sys.stderr)
             sys.exit(2)
     lb = Logbook.find()
     disabled = _disabled(lb)
-    live = adapters.live_adapters()
+    live = _all_order(adapters.live_adapters())
+    print(_all_order_text(live))
     results: list[tuple[str, str]] = []
     interrupted = False
     for adapter in live:
@@ -198,6 +243,18 @@ def _sync_all(a: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _all_order_text(live: list[adapters.LiveAdapter]) -> str:
+    """`sync --all`'s first line: the order, and why the slow source comes last."""
+    quick = [a.NAME for a in live if a.NAME not in SLOW_LAST]
+    slow = [a.NAME for a in live if a.NAME in SLOW_LAST]
+    if not slow:
+        return f"running {', '.join(quick)}"
+    return (
+        f"running {', '.join(quick)}, then {', '.join(slow)} last"
+        " (a photo library walk can take hours and never holds up the others)"
+    )
+
+
 def _unconfigured(adapter: adapters.LiveAdapter) -> str | None:
     """Why `sync --all` leaves a source out, or None when it is configured: none of its variables
     set (`LOGBOOK_IMMICH_URL, LOGBOOK_IMMICH_KEY not set`), one still missing (`set
@@ -227,7 +284,7 @@ def _sync_schedule(a: argparse.Namespace) -> None:
         print("sync: --install-schedule or --uninstall-schedule, not both", file=sys.stderr)
         sys.exit(2)
     flag = "--install-schedule" if a.install_schedule else "--uninstall-schedule"
-    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until)
+    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
     if any(x is not None for x in others):
         print(f"sync: {flag} takes no source and no other option", file=sys.stderr)
         sys.exit(2)
@@ -298,6 +355,16 @@ def _sync_source(a: argparse.Namespace) -> None:
     state_path = lb.root / "state" / f"{a.name}.json"
     stored = _read_state(state_path).get("since")
     since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
+    walks = _takes(adapter, "walk", live=True)
+    restart = bool(getattr(a, "restart", False))  # `setup` builds its own namespace without the flag
+    if restart and not walks:
+        print(f"sync: --restart is for a source that walks a library (immich), not {a.name}", file=sys.stderr)
+        sys.exit(2)
+    if restart and a.since is not None:
+        print("sync: give --restart (the whole library again) or --since, not both", file=sys.stderr)
+        sys.exit(2)
+    if restart:  # the whole library again, whatever the watermark says; the checkpoint goes too
+        since, resumed_from_record = None, None
     seen: dict[str, Any] = {
         "count": 0,
         "first": None,
@@ -310,6 +377,20 @@ def _sync_source(a: argparse.Namespace) -> None:
     unit = str(getattr(adapter, "UNIT", "assets"))
     item = unit.removesuffix("s")  # one of them: a point, a message, an asset
     options: dict[str, Any] = {}
+    total: int | None = None
+    walk: WalkState | None = None
+    if walks:  # before the walk: how many there are, how many are here, and where it resumes
+        total = _total(adapter, config)
+        with lb.index() as idx:
+            in_record = next((int(s["lines"]) for s in idx.sources() if s["source"] == adapter.NAME), 0)
+        on_server = "total unknown" if total is None else f"{total:,} {unit} on the server"
+        print(f"{a.name}: {on_server}, {in_record:,} already in the record")
+        walk = WalkState(state_path, since, restart=restart)
+        options["walk"] = walk
+        for text in walk.notices(unit, total):
+            print(f"  {text}", file=sys.stderr)
+        if walk.checkpoint is not None and walk.checkpoint.get("watermark"):
+            seen["watermark"] = str(walk.checkpoint["watermark"])
     if _takes(adapter, "store", live=True) and not a.dry_run:
         options["store"] = lb.attach
     if _takes(adapter, "lookup", live=True):
@@ -343,8 +424,9 @@ def _sync_source(a: argparse.Namespace) -> None:
     seen["groups"] = Counter()
     seen["group_marks"] = {}  # the largest watermark per group, kept in the state when GROUP_MARKS
     already_in_group: Counter[str] = Counter()
+    progress = _page_progress(unit, status, total=total, since=since, walks=walks)
     drafts = _watch(
-        adapter.pull(config, since, progress=_page_progress(unit, status), counts=counts, **options),
+        adapter.pull(config, since, progress=progress, counts=counts, **options),
         adapter.watermark,
         seen,
         group,
@@ -355,11 +437,15 @@ def _sync_source(a: argparse.Namespace) -> None:
                 pass
         else:
             n = lb.append_many(  # the page lines above are the progress; one stream, not two
-                drafts, skipped=(lambda d: already_in_group.update([group(d)])) if group else None
+                drafts,
+                skipped=(lambda d: already_in_group.update([group(d)])) if group else None,
+                committed=walk.commit if walk is not None else None,
             )
     except (OSError, ValueError) as e:  # urllib's errors are OSErrors, a malformed page a ValueError;
         print(f"sync: {a.name}: {e}", file=sys.stderr)  # what was pulled before is checkpointed
         sys.exit(1)
+    if walk is not None and not a.dry_run:
+        walk.finish()  # the walk completed: the checkpoint goes, the watermark below takes over
     for problem in failed:
         print(f"sync: {a.name}: {problem}", file=sys.stderr)
     where = f"since {since}" if since else "from the beginning"
@@ -370,7 +456,7 @@ def _sync_source(a: argparse.Namespace) -> None:
             f"  starting from the record's newest {a.name} {item}, {resumed_from_record}, less the lookback"
         )
     if a.dry_run:
-        print(f"{a.name}: {seen['count']} lines {where} (dry run, nothing written)")
+        print(f"{a.name}: {seen['count']:,} lines {where} (dry run, nothing written)")
         if seen["count"]:
             print(f"  first {seen['first']}  last {seen['last']}  watermark {seen['watermark'] or '-'}")
             for provenance, count in sorted(seen["provenance"].items()):
@@ -390,22 +476,21 @@ def _sync_source(a: argparse.Namespace) -> None:
             sys.exit(130)
         return
     mark = seen["watermark"]
+    if walk is not None and mark is not None and mark > walk.started:
+        mark = walk.started  # never past the moment the walk began: what changed since is pulled next time
     if failed:  # a feed that was not read may hold changes older than the lookback: try again from here
         kept = f" (kept: {len(failed)} {'feed' if len(failed) == 1 else 'feeds'} failed)"
         mark = stored
     elif mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
         kept = ""
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(
-            json.dumps(_state(state_path, adapter, mark, seen), indent=2) + "\n", encoding="utf-8"
-        )
+        _write_state(state_path, _state(state_path, adapter, mark, seen))
     else:
         kept = ""
         mark = stored
     already = seen["count"] - n
     print(
-        f"{a.name}: {n} new lines of {seen['count']} seen {where}"
-        + (f" ({already} already in the record)" if already else "")
+        f"{a.name}: {n:,} new lines of {seen['count']:,} seen {where}"
+        + (f" ({already:,} already in the record)" if already else "")
         + f"; watermark {mark or since or '-'}{kept}"
     )
     for name, count in seen["groups"].items():
@@ -436,6 +521,9 @@ def _sync_weather(a: argparse.Namespace) -> None:
 
     if a.listen is not None:
         print("sync: --listen is for a source that listens to a stream (ais), not weather", file=sys.stderr)
+        sys.exit(2)
+    if getattr(a, "restart", False):
+        print("sync: --restart is for a source that walks a library (immich), not weather", file=sys.stderr)
         sys.exit(2)
     lb = Logbook.find()
     if _say_disabled(lb, weather_adapter.NAME):
@@ -516,12 +604,7 @@ def _sync_weather(a: argparse.Namespace) -> None:
     if failed:
         sys.exit(1)
     if stored is None or last > str(stored):
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(
-            json.dumps({"source": weather_adapter.NAME, "since": last, "updated_at": now_utc()}, indent=2)
-            + "\n",
-            encoding="utf-8",
-        )
+        _write_state(state_path, {"source": weather_adapter.NAME, "since": last, "updated_at": now_utc()})
 
 
 def _weather_window(
@@ -836,3 +919,107 @@ def _read_state(path: Path) -> dict[str, Any]:
         return {}
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return data
+
+
+def _write_state(path: Path, state: dict[str, Any]) -> None:
+    """The state file, whole, never half-written: a temporary beside it, then one rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _total(adapter: adapters.LiveAdapter, config: object) -> int | None:
+    """What the source says it holds, or None when it cannot say (the adapter's `total` raised, or
+    there is none): `sync` then says `total unknown` rather than a number that is not the total."""
+    ask = getattr(adapter, "total", None)
+    if ask is None:
+        return None
+    try:
+        n = ask(config)
+    except (OSError, ValueError):
+        return None
+    return int(n) if isinstance(n, int) and not isinstance(n, bool) else None
+
+
+class WalkState:
+    """A live source's walk through its whole library, checkpointed under `walk` in
+    `state/<name>.json`, so a run interrupted after hours (Ctrl-C, a lost connection, a server
+    error) carries on where it stopped instead of walking the library again (`immich`). The
+    adapter's half (`adapters.Walk`): `start()` is the checkpoint it saved last time, a JSON object
+    of its own (`cursor`, `fetched`, ...), or None; `reached(ordinal, checkpoint)` after a page
+    says: once draft `ordinal` is in the record, `checkpoint` is where to resume. The consumer's
+    half: `commit(taken)`, `append_many`'s `committed`, writes the latest checkpoint reached by
+    then, so a checkpoint never runs ahead of the lines on disk; `finish()` removes it once the
+    walk completed. A saved walk is for one `since`: a run with another, or `--restart`, drops it
+    and begins again. `started` is when the walk began (the first run's clock), the latest the
+    walk's watermark may be. Bookkeeping, not the record: nothing here is in the chain."""
+
+    def __init__(self, path: Path, since: str | None, restart: bool = False) -> None:
+        self.path = path
+        self.since = since
+        self.started = now_utc()
+        self.pending: list[tuple[int, dict[str, Any]]] = []
+        self.checkpoint: dict[str, Any] | None = None
+        self.dropped: tuple[str, dict[str, Any]] | None = None  # (why, the walk) when one is left behind
+        saved = _read_state(path).get("walk")
+        if isinstance(saved, dict) and isinstance(saved.get("checkpoint"), dict):
+            if restart:
+                self.dropped = ("--restart", saved)
+            elif saved.get("since") != since:
+                self.dropped = ("since", saved)
+            else:
+                self.checkpoint = dict(saved["checkpoint"])
+                self.started = str(saved.get("started") or self.started)
+
+    def notices(self, unit: str, total: int | None) -> list[str]:
+        """What to say before the walk: that it resumes, or that a saved walk is dropped and why."""
+        if self.checkpoint is not None:
+            fetched = int(self.checkpoint.get("fetched") or 0)
+            of = f"{fetched:,} {unit}" if total is None else f"{fetched:,} of {total:,} {unit}"
+            return [
+                f"resuming where the last run stopped, at {of} ({self.path.parent.name}/{self.path.name};"
+                " --restart walks from the beginning)"
+            ]
+        if self.dropped is not None:
+            why, walk = self.dropped
+            fetched = int((walk.get("checkpoint") or {}).get("fetched") or 0)
+            left = f"the walk interrupted at {fetched:,} {unit}"
+            if why == "--restart":
+                return [f"--restart: {left} is dropped; starting from the beginning"]
+            return [f"{left} was for another --since; starting from the beginning"]
+        return []
+
+    # -- the adapter's half ----------------------------------------------------
+
+    def start(self) -> dict[str, Any] | None:
+        return dict(self.checkpoint) if self.checkpoint is not None else None
+
+    def reached(self, ordinal: int, checkpoint: dict[str, Any]) -> None:
+        self.pending.append((ordinal, dict(checkpoint)))
+
+    # -- the consumer's half ---------------------------------------------------
+
+    def commit(self, taken: int) -> None:
+        """Every draft up to `taken` is in the record: the latest checkpoint reached by then is
+        written; the ones after it wait for the next commit."""
+        reached = [checkpoint for ordinal, checkpoint in self.pending if ordinal <= taken]
+        self.pending = [(ordinal, checkpoint) for ordinal, checkpoint in self.pending if ordinal > taken]
+        if not reached:
+            return
+        state = _read_state(self.path)
+        state["walk"] = {
+            "since": self.since,
+            "started": self.started,
+            "saved": now_utc(),
+            "checkpoint": reached[-1],
+        }
+        _write_state(self.path, state)
+
+    def finish(self) -> None:
+        """The walk completed: no checkpoint to resume from."""
+        self.pending = []
+        state = _read_state(self.path)
+        if "walk" in state:
+            del state["walk"]
+            _write_state(self.path, state)
