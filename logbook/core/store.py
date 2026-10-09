@@ -1221,10 +1221,10 @@ def _alive(pid: int) -> bool:
     if sys.platform == "win32":
         import ctypes
 
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
         if not handle:
-            return kernel32.GetLastError() == 5  # ERROR_ACCESS_DENIED: there, not ours
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED: there, not ours
         kernel32.CloseHandle(handle)
         return True
     try:
