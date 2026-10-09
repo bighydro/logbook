@@ -282,3 +282,39 @@ def test_a_promise_in_a_message_closes_like_any_other(
     assert found.id not in {
         p["id"] for p in json.loads(_run(capsys, "promises", "--open", "--json"))["proposals"]
     }
+
+
+# -- the signed day's dispositions (RFC 0034, amendment 1) hold on both sections ------------------------
+
+
+def test_a_signed_day_closes_a_request_or_a_promise_by_its_line_and_the_row_says_so(
+    record: tuple[Logbook, dict[str, Any], list[Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    from logbook.core import signing
+
+    lb, _doc, _lines = record
+    by_quote = {p.match.quote: p for p in promises.extract(lb).proposals}
+    asked = by_quote["Kannst du mir die Flugnummer schicken?"]  # a mail received on the 10th
+    mine = by_quote["Ich kümmere mich um den Kran."]  # a message sent on the 9th
+    kept = signing.sign(lb, asked.day, at="2026-06-20T08:00:00Z", dispositions={"kept": [asked.line]})
+    signing.sign(lb, mine.day, at="2026-06-20T08:01:00Z", dispositions={"carried": [mine.line]})
+    out = json.loads(_run(capsys, "promises", "--all", "--json"))
+    by_id = {p["id"]: p for p in out["proposals"]}
+    assert by_id[asked.id]["role"] == "request" and by_id[asked.id]["status"] == "done"
+    assert by_id[asked.id]["disposition"] == {"value": "kept", "day": asked.day, "line": kept["id"]}
+    assert by_id[asked.id]["counterpart"] == "Kari Nordmann" and by_id[asked.id]["closed_by"] is None
+    assert by_id[mine.id]["role"] == "promise" and by_id[mine.id]["status"] == "open"
+    assert by_id[mine.id]["disposition"]["value"] == "carried"
+    text = _run(capsys, "promises")
+    rows = text.splitlines()
+    row = next(r for r in rows if asked.id in r)
+    assert rows.index(row) > rows.index("I was asked") and row.rstrip().endswith(
+        f"kept  {asked.id}  line {asked.line}"
+    )
+    row = next(r for r in rows if mine.id in r)
+    assert rows.index("I promised") < rows.index(row) < rows.index("I was asked") and "carried" in row
+    open_text = _run(capsys, "promises", "--open")
+    assert "Flugnummer" not in open_text and "Kran" in open_text
+    seq = lb.meta["seq"]
+    out_text = _run(capsys, "promises", "done", asked.id)
+    assert "already kept" in out_text and lb.meta["seq"] == seq
