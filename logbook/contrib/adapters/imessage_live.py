@@ -13,8 +13,8 @@ adapter's, unchanged. Attachments are looked up by the paths the attachment tabl
 (`~/Library/Messages/Attachments/ab/12/<guid>/<name>`): the part after `Attachments` under the
 `Attachments` folder beside the database when there is one, else under the Mac's own
 `~/Library/Messages/Attachments` (a copy of chat.db elsewhere still finds them). A file that is there
-is hashed into `extra.media` (`LOGBOOK_IMESSAGE_HASH_MEDIA=0` skips the hashing); one that is not is
-`extra.media_missing`.
+is hashed into `extra.media` (`LOGBOOK_IMESSAGE_HASH_MEDIA=0` skips the hashing); one that is not
+stays on the line as `extra.media` with no digest, and the row is counted as a skipped attachment.
 
 The watermark is the newest message date seen. A message can land in the store after newer ones (a
 device that was offline syncs its half of a conversation late; a row still in the -wal file is seen

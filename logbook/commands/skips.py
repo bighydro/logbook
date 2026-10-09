@@ -83,6 +83,10 @@ SKIP_PHRASES = {
     "skipped_no_data": "days the provider had no values for (asked again next run)",
     "skipped_unreadable_csv": "CSV files without the columns this reader needs",
     "skipped_unreadable_row": "rows that would not parse",
+    "skipped_attachment_no_row": "attachments whose join finds no attachment row",
+    "skipped_attachment_no_filename": "attachments with no filename",
+    "skipped_attachment_unsupported_kind": "attachments of an unsupported kind",
+    "skipped_attachment_missing_file": "attachments whose file is not in the backup",
 }
 
 

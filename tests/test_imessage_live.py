@@ -25,7 +25,7 @@ DB_ENV = "LOGBOOK_IMESSAGE_DB"
 LOOKBACK_ENV = "LOGBOOK_IMESSAGE_LOOKBACK_H"
 HASH_ENV = "LOGBOOK_IMESSAGE_HASH_MEDIA"
 NEWEST = "2026-03-02T18:01:10Z"  # T0 + 1140, the store's last message (row 20)
-LINES = 13  # what the synthetic store yields; see test_imessage
+LINES = 17  # what the synthetic store yields; see test_imessage
 
 
 def _stamp(base: str, **delta: float) -> str:
@@ -143,11 +143,15 @@ def test_pull_counts_chat_types_skips_and_media(db):
     counts: dict[str, int] = {}
     lines = list(imessage_live.pull(config, counts=counts))
     direct = sum(1 for line in lines if line["payload"]["chat"]["type"] == "direct")
-    assert counts["direct_chat"] == direct == 8 and counts["group_chat"] == LINES - direct == 5
+    assert counts["direct_chat"] == direct == 12 and counts["group_chat"] == LINES - direct == 5
     assert counts["skipped_reaction"] == 2 and counts["skipped_system_event"] == 1
     assert counts["skipped_bad_date"] == 1 and counts["skipped_no_chat"] == 1
     assert counts["skipped_no_body"] == 2
-    assert counts["media_hashed"] == 2 and counts["media_missing"] == 3 and counts["no_guid"] == 1
+    assert counts["skipped_attachment_no_row"] == 1
+    assert counts["skipped_attachment_no_filename"] == 1
+    assert counts["skipped_attachment_unsupported_kind"] == 1
+    assert counts["skipped_attachment_missing_file"] == 4
+    assert counts["media_hashed"] == 2 and counts["no_guid"] == 1
 
 
 def test_pull_hashes_attachments_from_the_configured_folder(db):
@@ -245,8 +249,10 @@ def test_sync_appends_every_message_and_stores_the_newest_message_time(lb, capsy
     _sync()
     out = capsys.readouterr().out
     assert f"imessage: {LINES} new lines of {LINES} seen from the beginning" in out
-    assert "also 8 in direct chats, 5 in group chats, 2 with media hashed, 3 with media missing" in out
-    assert "skipped 2 reactions, 1 group system events, 1 with an unusable date, 1 without a chat" in out
+    assert "also 12 in direct chats, 5 in group chats, 2 with media hashed" in out
+    skipped = "skipped 2 reactions, 1 group system events, 1 with an unusable date, 1 without a chat"
+    skipped += ", 4 attachments whose file is not in the backup, 2 without a body"
+    assert skipped in out
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == LINES
     assert _state(lb) == {"since": NEWEST}
