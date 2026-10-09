@@ -142,7 +142,8 @@ def request(lb: Logbook, since: str | None, until: str | None, tiers: tuple[int,
     if max(tiers) > max_tier:
         raise VaultError(
             f"--tier {','.join(map(str, tiers))} is above the ceiling for {DESTINATION!r}: "
-            f"{policy.policy_path(lb.root)} allows max_tier {max_tier}; "
+            f"{policy.policy_path(lb.root)} allows max_tier {max_tier}"
+            f"{policy.expiry_note(lb.root, DESTINATION)}; "
             f'add {{"{DESTINATION}": {{"max_tier": {max(tiers)}}}}} to it if that is what you want'
         )
     return Request(first, last, tiers, max_tier)

@@ -136,7 +136,8 @@ def request(
     if max(tiers) > max_tier:
         raise CrossingError(
             f"--tier {','.join(map(str, tiers))} is above the ceiling for {destination!r}: "
-            f"{policy.policy_path(lb.root)} allows max_tier {max_tier}; "
+            f"{policy.policy_path(lb.root)} allows max_tier {max_tier}"
+            f"{policy.expiry_note(lb.root, destination)}; "
             "raise it there if that is what you want"
         )
     return Request(destination, since, until, tiers, kinds, max_tier, recipient, open_sealed, signed_only)
