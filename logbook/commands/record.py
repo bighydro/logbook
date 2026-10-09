@@ -145,8 +145,9 @@ def repair_arguments(sub: Subparsers) -> None:
 
 
 def fork_arguments(verbs: Subparsers) -> None:
-    """`logbook repair fork [--apply]`: two chains forked at one head (#234), diagnosed; with `--apply`
-    the orphan chain is moved out of the record into `repair/`, nothing deleted."""
+    """`logbook repair fork [--apply] [--keep-head HASH]`: two chains forked at one head (#234),
+    diagnosed; with `--apply` the orphan chain is moved out of the record into `repair/`, nothing
+    deleted; `--keep-head` names the chain the owner keeps."""
     v = verbs.add_parser(
         "fork",
         help="two chains forked at one head: say which is the record, and with --apply move the other out",
@@ -158,6 +159,12 @@ def fork_arguments(verbs: Subparsers) -> None:
         " and run verify.",
     )
     v.add_argument("--apply", action="store_true", help="repair; without it, diagnose and write nothing")
+    v.add_argument(
+        "--keep-head",
+        metavar="HASH",
+        help="the head of the chain to keep, as the dry run prints it (or a unique prefix, 8 characters at"
+        " least); overrides the index and the length rule; refused when no chain ends in it",
+    )
     v.set_defaults(fn=cmd_repair_fork)
 
 
@@ -171,7 +178,7 @@ def cmd_repair_fork(a: argparse.Namespace) -> None:
 
     lb = Logbook.find()
     try:
-        report = fork.diagnose(lb)
+        report = fork.diagnose(lb, a.keep_head)
     except (FormatError, ValueError) as e:
         print(f"repair fork: {e}", file=sys.stderr)
         sys.exit(2)

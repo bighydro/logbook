@@ -16,7 +16,9 @@ with no child is a leaf, and the path from GENESIS to a leaf is a *candidate* fo
 record's chain is, in order: (a) the candidate the index agrees with (the index records the head it
 was built at, SPEC §1; the candidate that head is on, when it is on exactly one); (b) with the index
 absent, or behind the fork, the longest candidate; (c) when two candidates are equally long, no one:
-the diagnosis says so and `--apply` refuses. Every segment off the record's chain is an *orphan chain*.
+the diagnosis says so and `--apply` refuses. `--keep-head <hash>` (the full head of a chain, or a unique
+prefix of it, as the dry run prints every chain's full head) names the record's chain and overrides (a)
+and (b); a head no chain ends in is refused. Every segment off the record's chain is an *orphan chain*.
 
 `--apply` copies every orphan line, in seq order, to `repair/<UTC stamp>-removed.jsonl` inside the
 record folder, writes `repair/<UTC stamp>-report.json` with what the diagnosis found, then writes each
@@ -49,6 +51,11 @@ REPAIR_DIR = "repair"  # inside the record folder: what a repair moved out, and 
 SCHEMA = "repair-fork/v1"  # the report's schema
 DRY_RUN = "nothing written — run with --apply to repair"
 NOTHING = "nothing to repair"
+KEEP_HEAD_MIN = 8  # characters of a head `--keep-head` takes at least: fewer would match by accident
+SAFER = (
+    "{why}, so the longer chain is a guess: `--keep-head <head>` with the head of the chain you know"
+    " to be the record is the safer choice"
+)
 CHANGED = "the record changed since the diagnosis; run `logbook repair fork` again"
 PLACE_BITS = 40  # `places`: file number << 40 | byte offset, as `Logbook._lines_by_seq` packs it
 OFFSET_MASK = (1 << PLACE_BITS) - 1
@@ -100,7 +107,7 @@ class Report:
 
     segments: list[Segment]
     main: list[int] | None  # the record's chain as segment ids, root first; None when it cannot be told
-    chosen_by: str  # "only", "index", "length", or "" when `main` is None
+    chosen_by: str  # "only", "owner" (--keep-head), "index", "length", or "" when `main` is None
     candidates: list[list[int]]  # every leaf path, root first
     orphans: list[int]  # the segments off the record's chain, by fork then first seq
     detached: list[int]
@@ -112,6 +119,7 @@ class Report:
     refusals: list[str]
     orphan_lines: list[OrphanLine]  # every orphan line, in seq order, for `apply`
     files: list[str]  # month files relative to the root, by file number
+    keep_head: str | None = None  # what --keep-head said, lowercased
 
     @property
     def forks(self) -> list[tuple[int, str]]:
@@ -165,6 +173,7 @@ class Report:
                 "head": None if self.index_head is None else self.index_head[1],
             },
             "manifest": {"seq": self.manifest[0], "head": self.manifest[1]},
+            "keep_head": self.keep_head,
             "refusals": list(self.refusals),
         }
 
@@ -186,11 +195,13 @@ class Applied:
 # -- the diagnosis --------------------------------------------------------------------------------------
 
 
-def diagnose(lb: Logbook) -> Report:
+def diagnose(lb: Logbook, keep_head: str | None = None) -> Report:
     """Walk every line of every month file and link the lines into chains by `prev`; pick the
-    record's chain by the rule in the module docstring. Reads the files and the index's recorded
-    head; writes nothing. Memory is two integers per line and one per line for its segment,
-    whatever the size of the record, as `Logbook._lines_by_seq` keeps it."""
+    record's chain by the rule in the module docstring, or by `keep_head`, the full head of the
+    chain the owner keeps or a unique prefix of it (KEEP_HEAD_MIN characters at least). Reads the
+    files and the index's recorded head; writes nothing. Memory is two integers per line and one
+    per line for its segment, whatever the size of the record, as `Logbook._lines_by_seq` keeps it."""
+    keep_head = check_keep_head(keep_head)
     meta = lb.meta
     lb._check_format(meta)
     files = lb.files()
@@ -256,7 +267,9 @@ def diagnose(lb: Logbook) -> Report:
     detached = [s.id for s in segments if s.detached]
     leaves = [s for s in segments if not s.children and not s.detached]
     candidates = [_path(segments, leaf.id) for leaf in leaves]
-    main, chosen_by, index_state, refusals = _choose(segments, candidates, index_head, index_segment)
+    main, chosen_by, index_state, refusals = _choose(
+        segments, candidates, index_head, index_segment, keep_head
+    )
     on_main = set(main or ())
     orphans = sorted(  # nothing is an orphan until the record's chain is known
         (s.id for s in segments if main is not None and s.id not in on_main and not s.detached and s.id != 0),
@@ -301,7 +314,22 @@ def diagnose(lb: Logbook) -> Report:
         refusals=refusals,
         orphan_lines=orphan_lines,
         files=relative,
+        keep_head=keep_head,
     )
+
+
+def check_keep_head(keep_head: str | None) -> str | None:
+    """`--keep-head` as given, lowercased: hex, KEEP_HEAD_MIN to 64 characters; None for none.
+    Anything else is a ValueError naming the flag."""
+    if keep_head is None:
+        return None
+    head = keep_head.strip().lower()
+    if not (KEEP_HEAD_MIN <= len(head) <= 64) or any(c not in "0123456789abcdef" for c in head):
+        raise ValueError(
+            f"--keep-head takes a chain's head, the 64 hex characters the dry run prints, or at least"
+            f" {KEEP_HEAD_MIN} of them from the start; not {keep_head!r}"
+        )
+    return head
 
 
 def _scan(lb: Logbook, files: list[Path]) -> tuple[array[int], array[int], list[str]]:
@@ -365,9 +393,32 @@ def _choose(
     candidates: list[list[int]],
     index_head: tuple[int, str] | None,
     index_segment: int | None,
+    keep_head: str | None = None,
 ) -> tuple[list[int] | None, str, str, list[str]]:
-    """The record's chain among the candidates: (main, chosen_by, index_state, refusals)."""
+    """The record's chain among the candidates: (main, chosen_by, index_state, refusals). The
+    owner's `keep_head` decides before any rule; a head no chain ends in is a refusal."""
     index_state = "absent" if index_head is None else "unknown" if index_segment is None else "behind"
+    if index_segment is not None and any(index_segment in path for path in candidates):
+        index_state = "agrees" if len(candidates) == 1 else index_state
+    if keep_head is not None:
+        named = [path for path in candidates if segments[path[-1]].head.startswith(keep_head)]
+        if len(named) == 1:
+            if index_segment is not None and index_segment in named[0]:
+                index_state = "agrees"
+            return named[0], "owner", index_state, []
+        if not named:
+            return (
+                None,
+                "",
+                index_state,
+                [f"no chain ends in a head beginning {keep_head}"],
+            )
+        return (
+            None,
+            "",
+            index_state,
+            [f"{len(named)} chains end in a head beginning {keep_head}; give more of it to --keep-head"],
+        )
     if len(candidates) == 1:
         if index_segment is not None:
             index_state = "agrees"
@@ -450,7 +501,7 @@ def describe(report: Report) -> Iterator[str]:
         if not end["lines"]:
             yield f"no lines; {NOTHING}"
             return
-        yield f"one chain: {_run(end)}, head {_short(end['head'])}; {NOTHING}"
+        yield f"one chain: {_run(end)}, head {end['head']}; {NOTHING}"
         yield from _manifest_line(report)
         return
     for seq, head in report.forks:
@@ -462,19 +513,22 @@ def describe(report: Report) -> Iterator[str]:
         end = report.path_summary(report.main)
         why = {
             "only": "the only chain",
+            "owner": "the owner named it (--keep-head)",
             "index": "the index agrees (its head is on it)",
             "length": f"the longer chain ({_index_words(report)})",
         }[report.chosen_by]
-        yield f"  main chain: {_run(end)}, head {_short(end['head'])}; {why}"
+        yield f"  main chain: {_run(end)}, head {end['head']}; {why}"
+        if report.chosen_by == "length":
+            yield f"  {SAFER.format(why=_index_words(report))}"
     else:
         for path in report.candidates:
             end = report.path_summary(path)
-            yield f"  candidate chain: {_run(end)}, head {_short(end['head'])}"
+            yield f"  candidate chain: {_run(end)}, head {end['head']}"
     for i in report.orphans:
         s = segments[i]
         sources = ", ".join(f"{name} {n:,}" for name, n in sorted(s.sources.items()))
         yield (
-            f"  orphan chain: {_run(s.summary())}, head {_short(s.head)}, forked at seq {s.fork_seq};"
+            f"  orphan chain: {_run(s.summary())}, head {s.head}, forked at seq {s.fork_seq};"
             f" sources: {sources}; files: {', '.join(sorted(s.files))}"
         )
     for i in report.detached:

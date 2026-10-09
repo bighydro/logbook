@@ -30,8 +30,8 @@ what it found, counts and hashes only, never a line's contents:
 
 ```
 fork at seq 4803133, head da9813c3cf40…: 2 chains continue from it
-  main chain: 4,804,871 lines, seq 1–4804871, head 4dc18fde900d…; the index agrees (its head is on it)
-  orphan chain: 4,309 lines, seq 4803134–4807442, head e4b3b64c294d…, forked at seq 4803133; sources: immich 4,309; files: logbook/2026/09.jsonl, logbook/2026/10.jsonl
+  main chain: 4,804,871 lines, seq 1–4804871, head 4dc18fde900da55538fbd134e48652282d044bc2ec8c28ac0573fee15506b599; the index agrees (its head is on it)
+  orphan chain: 4,309 lines, seq 4803134–4807442, head e4b3b64c294d1f0a7c3e9b2d8f6a4c1e0b5d7f9a3c2e8d6b4f1a0c9e7d5b3a2f, forked at seq 4803133; sources: immich 4,309; files: logbook/2026/09.jsonl, logbook/2026/10.jsonl
 logbook.json says seq=4807442 head=e4b3b64c294d…; the main chain ends at seq=4804871 head=4dc18fde900d…
 nothing written — run with --apply to repair
 ```
@@ -41,6 +41,17 @@ the head it was built at; the chain that head is on); with no index, or one buil
 longer chain; and when two chains are equally long and the index cannot say, no one: the diagnosis says
 `cannot tell which chain is the record` and `--apply` refuses. Every other chain is an orphan. Look at
 the orphan's sources and seq range before applying: it should be the batch you know went wrong.
+
+When you know which chain is the record, say so: `--keep-head <head>` takes the full head of the chain
+to keep, as the dry run prints it for every chain, or a unique prefix of eight characters at least, and
+overrides both rules; a head no chain ends in is refused. Without an index the longer chain is only a
+guess, and the dry run says in one sentence that `--keep-head` is the safer choice: in the incident
+above the stray batch was the longer chain, and only the index knew better.
+
+```bash
+logbook repair fork --keep-head 4dc18fde900da55538fbd134e48652282d044bc2ec8c28ac0573fee15506b599
+logbook repair fork --keep-head 4dc18fde900d --apply
+```
 
 `--apply` does, in this order:
 

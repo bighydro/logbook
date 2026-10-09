@@ -269,3 +269,72 @@ def test_doctor_names_repair_when_verify_fails(root: Path):
     lb, _after_a = _forked(root, a=5, b=4)
     check = doctor.record_check(lb)
     assert check.status == "fail" and "logbook repair fork" in check.detail
+
+
+# -- --keep-head: the owner names the chain -----------------------------------------------------------
+
+
+def test_the_dry_run_prints_full_heads(root: Path, capsys: pytest.CaptureFixture[str]):
+    lb, after_a = _forked(root, a=5, b=4)
+    report = fork.diagnose(lb)
+    orphan_head = report.segments[report.orphans[0]].head
+    code, out, _err = _cli(capsys)
+    assert code == 0
+    assert f"head {after_a['head']};" in out and f"head {orphan_head}," in out  # the full 64 characters
+    assert len(after_a["head"]) == 64
+
+
+def test_equal_chains_without_an_index_succeed_with_keep_head(root: Path, capsys: pytest.CaptureFixture[str]):
+    lb, after_a = _forked(root, a=4, b=4)
+    lb.index_path.unlink()
+    code, out, _err = _cli(capsys, "--keep-head", after_a["head"][:12])  # a unique prefix is enough
+    assert code == 0 and "the owner named it (--keep-head)" in out and "nothing written" in out
+    code, out, _err = _cli(capsys, "--apply", "--keep-head", after_a["head"])
+    assert code == 0, out
+    moved = next((root / "repair").glob("*-removed.jsonl")).read_bytes().splitlines(keepends=True)
+    assert _raw_ids(moved) == [f"b:{i}" for i in range(4)]
+    assert (lb.meta["seq"], lb.meta["head"]) == (after_a["seq"], after_a["head"])
+    assert lb.verify()[2] == []
+    report = json.loads(next((root / "repair").glob("*-report.json")).read_text(encoding="utf-8"))
+    assert report["main"]["chosen_by"] == "owner" and report["keep_head"] == after_a["head"]
+
+
+def test_a_head_no_chain_ends_in_refuses(root: Path, capsys: pytest.CaptureFixture[str]):
+    lb, _after_a = _forked(root, a=5, b=4)
+    before = {f: f.read_bytes() for f in lb.files()}
+    code, out, _err = _cli(capsys, "--keep-head", "0123456789abcdef")
+    assert code == 0 and "nothing written" in out
+    assert "no chain ends in a head beginning 0123456789abcdef" in out
+    code, _out, err = _cli(capsys, "--apply", "--keep-head", "0123456789abcdef")
+    assert code == 2 and "no chain ends in a head beginning 0123456789abcdef" in err
+    assert {f: f.read_bytes() for f in lb.files()} == before and not (root / "repair").exists()
+    code, _out, err = _cli(capsys, "--apply", "--keep-head", "xyz")  # not a hash at all
+    assert code == 2 and "--keep-head" in err and not (root / "repair").exists()
+
+
+def test_without_an_index_a_longer_stray_batch_is_kept_unless_told(root: Path, capsys):
+    lb, after_a = _forked(root, a=3, b=6)  # the stray batch is the longer chain, as in life
+    lb.index_path.unlink()
+    code, out, _err = _cli(capsys)
+    assert code == 0 and "main chain: 9 lines" in out  # rule (b) proposes the stray batch
+    assert "--keep-head" in out and "safer" in out
+    code, out, _err = _cli(capsys, "--apply", "--keep-head", after_a["head"])
+    assert code == 0, out
+    moved = next((root / "repair").glob("*-removed.jsonl")).read_bytes().splitlines(keepends=True)
+    assert _raw_ids(moved) == [f"b:{i}" for i in range(6)]
+    assert (lb.meta["seq"], lb.meta["head"]) == (after_a["seq"], after_a["head"])
+    assert lb.verify()[2] == []
+    for day in DAYS:
+        assert not any(line["payload"]["raw_id"].startswith("b:") for line in lb.day_lines(day))
+
+
+def test_keep_head_overrides_the_index(root: Path, capsys: pytest.CaptureFixture[str]):
+    """Rule (a) would keep A; the owner says B, and B it is."""
+    lb, _after_a = _forked(root, a=5, b=4)
+    report = fork.diagnose(lb)
+    b_head = report.segments[report.orphans[0]].head
+    code, out, _err = _cli(capsys, "--apply", "--keep-head", b_head)
+    assert code == 0, out
+    moved = next((root / "repair").glob("*-removed.jsonl")).read_bytes().splitlines(keepends=True)
+    assert _raw_ids(moved) == [f"a:{i}" for i in range(5)]
+    assert lb.meta["head"] == b_head and lb.verify()[2] == []
