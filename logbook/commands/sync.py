@@ -318,6 +318,17 @@ def _sync_schedule(a: argparse.Namespace) -> None:
 
 
 def _sync_source(a: argparse.Namespace) -> None:
+    """One source's pull, under the record's writer lock for the whole of it, the walk included
+    (#234): a second writer waits or, with --no-wait, refuses. A dry run appends nothing and takes
+    no lock."""
+    if a.dry_run:
+        _sync_one(a)
+        return
+    with Logbook.find().writer():
+        _sync_one(a)
+
+
+def _sync_one(a: argparse.Namespace) -> None:
     """Pull from a live source since its stored watermark (or --since), append, advance the watermark.
     The watermark is the source's own clock (adapter.watermark), not the event time, so late uploads of
     old items are still picked up. It lives in <root>/state/<name>.json — bookkeeping, not the record."""

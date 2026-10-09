@@ -45,21 +45,33 @@ def _forked(root: Path, a: int, b: int, b_source: str = "immich") -> tuple[Logbo
     Returns the record and logbook.json as it was right after A."""
     lb = Logbook.init(root, "Europe/Oslo")
     lb.append_many(_batch("seed", 3, "manual"))
+    return lb, _written_from_a_stale_head(lb, _batch("a", a), _batch("b", b, b_source))
+
+
+def _written_from_a_stale_head(
+    lb: Logbook, fast: list[dict[str, Any]], slow: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """The broken state, produced on purpose: `slow` written through the real `append_many` chained
+    from the head `lb` holds now, after another writer has appended `fast` from that same head.
+    The single-writer guard (#237) re-reads logbook.json before a batch is written and would stop
+    this, so the guard is bypassed deliberately: once the fast writer is done, logbook.json is put
+    back to the head the slow writer read, which is exactly what the guard checks. The index then
+    refuses the slow batch's seqs (the IntegrityError of #234) after the files have taken it, as
+    the bug did. These are tests of the repair, not of the guard; `tests/test_writer_lock.py` holds
+    the guard. Returns logbook.json as it was right after the fast writer."""
     stale = lb.meta  # the head the slow writer reads when it starts
-    after_a: dict[str, Any] = {}
+    after_fast: dict[str, Any] = {}
 
     def slow_writer_drafts() -> Iterator[dict[str, Any]]:
-        other = Logbook(root)  # the fast command, while the slow one walks
-        other.append_many(_batch("a", a))
-        after_a.update(other.meta)
-        # logbook.json back to the head the slow writer read: the single-writer guard re-checks the
-        # head before it writes a batch, and this is a test of the repair, not of the guard
-        other._save_meta(stale)
-        yield from _batch("b", b, b_source)
+        other = Logbook(lb.root)  # the fast command, while the slow one walks
+        other.append_many(fast)
+        after_fast.update(other.meta)
+        other._save_meta(stale)  # the deliberate bypass of the head re-check, see above
+        yield from slow
 
     with pytest.raises(sqlite3.IntegrityError):
         lb.append_many(slow_writer_drafts())
-    return lb, after_a
+    return after_fast
 
 
 def _raw_lines(lb: Logbook) -> dict[Path, list[bytes]]:
@@ -243,19 +255,16 @@ def test_apply_refuses_a_sealed_orphan_line_it_cannot_open(root: Path, monkeypat
     monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(key_file))
     lb = Logbook(root)
     lb.append_many(_batch("seed", 3, "manual"))
-
-    def slow_writer_drafts() -> Iterator[dict[str, Any]]:
-        Logbook(root).append_many(_batch("a", 5))
-        for d in _batch("b", 2, "manual"):
-            yield {
-                **d,
-                "tier": 2,
-                "kind": "note",
-                "payload": {"schema": "note/v1", "text": "x", "raw_id": d["payload"]["raw_id"]},
-            }
-
-    with pytest.raises(sqlite3.IntegrityError):
-        lb.append_many(slow_writer_drafts())
+    notes = [
+        {
+            **d,
+            "tier": 2,
+            "kind": "note",
+            "payload": {"schema": "note/v1", "text": "x", "raw_id": d["payload"]["raw_id"]},
+        }
+        for d in _batch("b", 2, "manual")
+    ]
+    _written_from_a_stale_head(lb, _batch("a", 5), notes)
     monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(root.parent / "keys" / "missing.txt"))
     code, _out, err = _cli(capsys, "--apply")
     assert code == 2 and "sealed" in err and not (root / "repair").exists()

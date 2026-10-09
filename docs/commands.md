@@ -5,6 +5,14 @@ screen; `logbook <command> --help` has a command's arguments. Everything that wa
 own before 0.6 still answers to its old name: it prints one line saying the new one and runs it (the
 table at the end, generated from the code by `scripts/command_aliases.py`).
 
+One writer at a time: a command that appends (`add`, `sync`, `import backup`, and every other through
+`append`) holds `state/writer.lock` in the record folder for its whole run, a `sync`'s walk included.
+A second writer says `another logbook command is writing to this record (sync immich, since
+2026-09-10T06:00:00Z); waiting` and waits; with the global `--no-wait` it refuses and exits 2. A lock
+whose process is gone is taken over with one line saying so. Readers (`show`, `day`, `verify`, every
+reader) never take it. The lock is the courtesy between writers; what keeps the chain whole is that a
+writer reads `logbook.json` again before every batch and writes nothing when the head has moved.
+
 ## Start
 
 | Command | What it does |
