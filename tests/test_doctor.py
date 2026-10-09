@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import json
 import shutil
+from datetime import date
 from pathlib import Path
 
 import pytest
 
 from logbook import cli
-from logbook.contrib import adapters, doctor
+from logbook.contrib import adapters, doctor, home
+from logbook.core import policy
 from logbook.core.store import Logbook
 
 GIB = 1024**3
@@ -386,3 +388,106 @@ def test_the_report_never_prints_an_environment_value(
     _status, out = _cli(capsys)
     assert "sentinel-key-value" not in out
     assert "LOGBOOK_DAWARICH_URL" in out
+
+
+# -- the home (ADR 0022) ----------------------------------------------------------------------------------
+
+
+def _set_home(lb: Logbook, host: str) -> None:
+    _write(lb.root / "state" / "home.json", {"host": host, "since": "2026-10-09"})
+
+
+def test_no_home_set_passes_and_says_how_to_set_one(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(home, "hostname", lambda: "laptop-of-ines")
+    check = _run(lb)["home"]
+    assert check.status == "pass"
+    assert "no home" in check.detail and "--install-schedule" in check.detail
+
+
+def test_the_home_machine_passes(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_home(lb, "nordlys-home")
+    monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
+    check = _run(lb)["home"]
+    assert check.status == "pass"
+    assert "nordlys-home" in check.detail and "2026-10-09" in check.detail
+
+
+def test_the_home_matches_by_short_name_and_case(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_home(lb, "Nordlys-Home.local")
+    monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
+    assert _run(lb)["home"].status == "pass"
+
+
+def test_another_machine_warns_that_writers_belong_on_the_home(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _set_home(lb, "nordlys-home")
+    monkeypatch.setattr(home, "hostname", lambda: "laptop-of-ines")
+    check = _run(lb)["home"]
+    assert check.status == "warn"
+    assert check.detail == "this machine is not the record's home (nordlys-home); writers belong on the home"
+
+
+def test_a_home_file_that_is_not_the_shape_fails_naming_it(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
+    path = lb.root / "state" / "home.json"
+    _write(path, {"machine": "nordlys-home"})
+    check = _run(lb)["home"]
+    assert check.status == "fail" and "home.json" in check.detail
+    path.write_text("{", encoding="utf-8")
+    assert _run(lb)["home"].status == "fail"
+
+
+# -- the crossing ceilings (ADR 0016, ADR 0022) ----------------------------------------------------------
+
+
+@pytest.fixture
+def today(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(policy, "today", lambda: date(2026, 10, 9))
+
+
+def test_the_default_policy_passes_listing_each_ceiling(lb: Logbook, today: None) -> None:
+    check = _run(lb)["crossing"]
+    assert check.status == "pass"
+    assert "hermes 2" in check.detail and "mcp 1" in check.detail
+
+
+def test_no_policy_file_passes_with_the_defaults(lb: Logbook, today: None) -> None:
+    policy.policy_path(lb.root).unlink()
+    check = _run(lb)["crossing"]
+    assert check.status == "pass"
+    assert "no policy/crossing.json" in check.detail and "hermes 2" in check.detail
+
+
+def test_an_entry_with_a_date_passes_showing_the_date(lb: Logbook, today: None) -> None:
+    _write(
+        policy.policy_path(lb.root),
+        {"mcp": {"max_tier": 1}, "cloud-model": {"max_tier": 2, "until": "2026-12-31"}},
+    )
+    check = _run(lb)["crossing"]
+    assert check.status == "pass"
+    assert "cloud-model 2 until 2026-12-31" in check.detail
+
+
+def test_an_expired_entry_warns_naming_it(lb: Logbook, today: None) -> None:
+    _write(
+        policy.policy_path(lb.root),
+        {"hermes": {"max_tier": 2}, "cloud-model": {"max_tier": 2, "until": "2026-09-30"}},
+    )
+    check = _run(lb)["crossing"]
+    assert check.status == "warn"
+    assert "cloud-model expired on 2026-09-30" in check.detail
+    assert "tier 0" in check.detail and "hermes 2" in check.detail
+
+
+def test_a_policy_that_is_not_the_shape_fails_naming_the_file(lb: Logbook, today: None) -> None:
+    path = policy.policy_path(lb.root)
+    _write(path, {"cloud-model": {"max_tier": 2, "until": "soon"}})
+    check = _run(lb)["crossing"]
+    assert check.status == "fail" and "crossing.json" in check.detail
+    _write(path, {"cloud-model": {"max_tier": 7}})
+    assert _run(lb)["crossing"].status == "fail"
+    path.write_text("[", encoding="utf-8")
+    assert _run(lb)["crossing"].status == "fail"

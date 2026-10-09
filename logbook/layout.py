@@ -73,6 +73,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "digest",
         "doctor",
         "gaps",
+        "home",
         "inbox",
         "ios_backup",
         "ios_backup_crypto",
@@ -111,6 +112,7 @@ COMMANDS = "commands"  # every module under logbook/commands/
 # 0.5 import path -> where it lives now; a package covers everything under it
 NEW_IN_0_6: frozenset[str] = frozenset(
     {
+        "home",
         "chapters",
         "fork",
         "introductions",

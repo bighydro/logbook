@@ -20,6 +20,12 @@ The checks, in the order they print:
   that source when the index is current — the variables its adapter reads are set. Names only,
   never a value: a missing one is a warn naming it, a set one the adapter refuses says to run
   `logbook sync <name>`. A source `policy/import.json` disables needs nothing.
+- `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
+  as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
+  it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
+- `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
+  names this machine, or no home is set (a pass either way); another machine is a warn: writers
+  belong on the home.
 - `disk`: free space on the volume the record is on (under 5 GiB a warn, under 512 MiB a fail).
 - `folder`: the record is not under a folder a sync client owns — iCloud Drive, Dropbox, OneDrive,
   Google Drive — by any part of its path, its resolved path, or the `OneDrive` variable Windows
@@ -41,7 +47,7 @@ from typing import Literal, TextIO
 
 from ..core import assets, index, places, policy
 from ..core.store import FormatError, Logbook
-from . import adapters
+from . import adapters, home
 
 Status = Literal["pass", "warn", "fail"]
 Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, as shutil.disk_usage
@@ -255,6 +261,51 @@ def disk_check(root: Path, usage: Usage = shutil.disk_usage) -> Check:
     return Check("disk", "pass", detail)
 
 
+def crossing_check(root: Path) -> Check:
+    name = policy.POLICY_FILE.as_posix()
+    try:
+        found = policy.ceilings(root)
+    except policy.PolicyError as e:
+        return Check("crossing", "fail", str(e))
+    listed = ", ".join(_ceiling_text(c) for c in found)
+    if not policy.policy_path(root).exists():
+        detail = f"no {name}; the defaults apply until the first export writes it: {listed}"
+        return Check("crossing", "pass", detail)
+    expired = [c for c in found if c.expired and c.until is not None]
+    if expired:
+        named = ", ".join(f"{c.destination} expired on {c.until.isoformat()}" for c in expired if c.until)
+        return Check(
+            "crossing",
+            "warn",
+            f"{listed}; {named} and counts as tier 0: write a new until in {name} or remove the entry",
+        )
+    return Check("crossing", "pass", listed)
+
+
+def _ceiling_text(c: policy.Ceiling) -> str:
+    """`hermes 2`, `cloud-model 2 until 2026-12-31`: the ceiling as it counts today."""
+    when = f" until {c.until.isoformat()}" if c.until is not None and not c.expired else ""
+    return f"{c.destination} {c.max_tier}{when}"
+
+
+NO_HOME = (
+    "no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)"
+)
+NOT_HOME = "this machine is not the record's home ({host}); writers belong on the home"
+
+
+def home_check(root: Path) -> Check:
+    try:
+        found = home.read(root)
+    except home.HomeError as e:
+        return Check("home", "fail", str(e))
+    if found is None:
+        return Check("home", "pass", NO_HOME)
+    if home.same_machine(found.host, home.hostname()):
+        return Check("home", "pass", f"this machine ({found.host}) is the record's home since {found.since}")
+    return Check("home", "warn", NOT_HOME.format(host=found.host))
+
+
 def cloud_folder(root: Path, env: Mapping[str, str]) -> str | None:
     """The sync service whose folder holds `root`, by a part of its path (as given and resolved,
     so a symlink into the folder is seen) or the OneDrive variable; None for a plain folder."""
@@ -319,6 +370,8 @@ def run(
     checks.append(assets_check(lb.root))
     checks.extend(extras_checks(installed))
     checks.extend(env_checks(lb, env, sources))
+    checks.append(crossing_check(lb.root))
+    checks.append(home_check(lb.root))
     checks.append(disk_check(lb.root, usage))
     checks.append(folder_check(lb.root, env))
     return checks

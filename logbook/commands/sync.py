@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..contrib import asset_status, gaps, schedule
+from ..contrib import asset_status, gaps, home, schedule
 from ..core import assets, places, policy, reading, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
@@ -279,7 +279,9 @@ def _sync_schedule(a: argparse.Namespace) -> None:
     `logbook sync --all` at 07:00 and 19:00 local, the plist or units printed before they are
     written, nothing written outside that one directory, then handed to the scheduler (or, when it
     is not on PATH, the command to run said). `--uninstall-schedule`: the reverse. The record found
-    now is the one the agent is pointed at (`LOGBOOK_HOME`)."""
+    now is the one the agent is pointed at (`LOGBOOK_HOME`). Installing names this machine the
+    record's home in `state/home.json` (ADR 0022: the one machine that writes; `doctor` reads it);
+    uninstalling leaves that as it is, since home moves by copying the record, not by a flag."""
     if a.install_schedule and a.uninstall_schedule:
         print("sync: --install-schedule or --uninstall-schedule, not both", file=sys.stderr)
         sys.exit(2)
@@ -311,6 +313,13 @@ def _sync_schedule(a: argparse.Namespace) -> None:
     schedule.install(plan, print)
     for text in schedule.summary(plan):
         print(text)
+    now, before = home.write(lb.root)
+    moved = (
+        f" (it was {before.host})"
+        if before is not None and not home.same_machine(before.host, now.host)
+        else ""
+    )
+    print(f"home: this machine ({now.host}) is the record's home since {now.since}{moved}; state/home.json")
     problem = schedule.run(plan.activate, plan.tool, print)
     if problem is not None:
         print(f"sync: {flag}: {problem}", file=sys.stderr)
