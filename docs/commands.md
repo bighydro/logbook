@@ -27,7 +27,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `add` | a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH …"` |
 | `import` | `import backup DIR` reads every phone source of an iOS backup; `import trip-bundle FOLDER` a trip another record exported; `import page FILE` a day someone shared; `import inbox` what is in `inbox/`; `import attachments` the attachment store |
-| `sync` | pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb, weather); `--all` for every configured one, immich last; an interrupted immich walk resumes, `--restart` walks the library again; `--install-schedule` runs `sync --scheduled` (`sync --all`, then `doctor`, the outcome to `state/last-run.json`, one message when something is wrong) twice a day |
+| `sync` | pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola, ais, adsb, weather); `--all` for every configured one, immich last; beeper: `--networks` chooses the bridged networks; an interrupted immich walk resumes, `--restart` walks the library again; `--install-schedule` runs `sync --scheduled` (`sync --all`, then `doctor`, the outcome to `state/last-run.json`, one message when something is wrong) twice a day |
 
 ## Read
 
