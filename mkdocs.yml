@@ -107,6 +107,7 @@ nav:
   - Search: search.md
   - The MCP server: mcp.md
   - Backup: backup.md
+  - When verify fails: recovery.md
   - The attachment store: attachments.md
   - Adapters:
       - Overview: adapters/README.md

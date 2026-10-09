@@ -118,20 +118,21 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def repair_arguments(sub: Subparsers) -> None:
-    """`logbook repair retract|migrate|index|health-units`: what puts the record right, never by
+    """`logbook repair retract|migrate|index|fork|health-units`: what puts the record right, never by
     rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
     s = sub.add_parser(
         "repair",
         help="put the record right, rewriting nothing: retract, migrate, index…",
         description="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`),"
         " bring a"
-        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), or append the lines that"
-        " correct a known mistake (`health-units`)",
+        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), move a forked chain out of"
+        " the record (`fork`), or append the lines that correct a known mistake (`health-units`)",
     )
     verbs = s.add_subparsers(dest="verb", required=True, metavar="<what>")
     retract_arguments(verbs)
     migrate_arguments(verbs)
     index_arguments(verbs)
+    fork_arguments(verbs)
     v = verbs.add_parser(
         "health-units",
         help="retract apple-health resting_hr and hrv lines written 60 and 1,000 times too large and"
@@ -141,6 +142,75 @@ def repair_arguments(sub: Subparsers) -> None:
         "--dry-run", action="store_true", help="print how many lines would be appended; write nothing"
     )
     v.set_defaults(fn=cmd_repair)
+
+
+def fork_arguments(verbs: Subparsers) -> None:
+    """`logbook repair fork [--apply] [--keep-head HASH]`: two chains forked at one head (#234),
+    diagnosed; with `--apply` the orphan chain is moved out of the record into `repair/`, nothing
+    deleted; `--keep-head` names the chain the owner keeps."""
+    v = verbs.add_parser(
+        "fork",
+        help="two chains forked at one head: say which is the record, and with --apply move the other out",
+        description="walk every line of every month file and link the lines into chains by prev hash."
+        " Without --apply: print the fork, each orphan chain's counts, seq range, sources and files, and"
+        " logbook.json against the record's chain; nothing is written. With --apply: copy every orphan"
+        " line to repair/<stamp>-removed.jsonl, write repair/<stamp>-report.json, write each touched month"
+        " file again without them (the kept lines byte for byte), set logbook.json, rebuild the index"
+        " and run verify.",
+    )
+    v.add_argument("--apply", action="store_true", help="repair; without it, diagnose and write nothing")
+    v.add_argument(
+        "--keep-head",
+        metavar="HASH",
+        help="the head of the chain to keep, as the dry run prints it (or a unique prefix, 8 characters at"
+        " least); overrides the index and the length rule; refused when no chain ends in it",
+    )
+    v.set_defaults(fn=cmd_repair_fork)
+
+
+def cmd_repair_fork(a: argparse.Namespace) -> None:
+    """The diagnosis always runs and exits 0. `--apply` refuses (exit 2) when the record's chain cannot
+    be told, a line chains from no line, a file is torn, an orphan line is sealed and cannot be opened,
+    or the folder is under a sync client (`doctor`'s folder check); a repair after which `verify` is
+    not clean says so and exits 1, and is not tried twice."""
+    from ..contrib.doctor import CLOUD_REASON, cloud_folder
+    from ..core import fork
+
+    lb = Logbook.find()
+    try:
+        report = fork.diagnose(lb, a.keep_head)
+    except (FormatError, ValueError) as e:
+        print(f"repair fork: {e}", file=sys.stderr)
+        sys.exit(2)
+    for text in fork.describe(report):
+        print(text)
+    if not report.orphans and not report.refusals:
+        return
+    if not a.apply:
+        print(fork.DRY_RUN)
+        return
+    service = cloud_folder(lb.root, os.environ)
+    if service is not None:
+        print(f"repair fork: {lb.root} is under {service}: {CLOUD_REASON}; nothing written", file=sys.stderr)
+        sys.exit(2)
+    try:
+        done = fork.apply(lb, report)
+    except fork.Refused as e:
+        print(f"repair fork: {e}; nothing written", file=sys.stderr)
+        sys.exit(2)
+    print(
+        f"moved {_plural(done.removed, 'line')} to {lb._relative(done.removed_path)}"
+        f" (report: {lb._relative(done.report_path)}); {_plural(len(done.files), 'month file')} written again"
+    )
+    print(f"logbook.json: seq {done.seq}, head {done.head[:12]}…; index rebuilt, {done.indexed:,} lines")
+    if done.errors:
+        n = len(done.errors)
+        print(f"INVALID — {n} problem(s) after the repair; {done.seq} lines read, head {done.head}:")
+        for problem in done.errors:
+            print("  " + problem)
+        print("not tried again: run `logbook verify` and look at the report")
+        sys.exit(1)
+    print(f"valid — {done.seq} lines, head {done.head}")
 
 
 def cmd_repair(a: argparse.Namespace) -> None:

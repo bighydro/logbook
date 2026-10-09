@@ -198,4 +198,4 @@ the record's own disk has (FileVault, LUKS, a drive in a drawer). It does not go
 sync folder, and refuses the last. It does not keep `state/`, so a restored record's next `sync` reads each
 live source from its start; `append_many` skips what is already in the log, so nothing doubles. And it does
 not replace `logbook verify` on the live record: a backup of a broken record is refused, not repaired, and
-the command says to run `logbook verify`.
+the command says to run `logbook verify` ([When verify fails](recovery.md) says what each failure means).

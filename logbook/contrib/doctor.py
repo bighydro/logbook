@@ -97,7 +97,12 @@ def record_check(lb: Logbook) -> Check:
         return Check("record", "fail", f"{lb.meta_path}: {e}")
     if errors:
         more = "" if len(errors) == 1 else f" and {len(errors) - 1} more"
-        return Check("record", "fail", f"{lb.root}: {errors[0]}{more}; run `logbook verify`")
+        return Check(
+            "record",
+            "fail",
+            f"{lb.root}: {errors[0]}{more}; run `logbook verify`, and `logbook repair fork` when it"
+            " reports two chains",
+        )
     detail = f"{seq:,} lines, head {head[:12]}…, verified; {lb.root}"
     if warnings:
         n = len(warnings)
