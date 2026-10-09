@@ -27,10 +27,10 @@ def promises_arguments(sub: Subparsers) -> None:
     """`logbook promises [done ID | tasks ...]`: the proposals, and the tasks they become."""
     s = sub.add_parser(
         "promises",
-        help="commitments the transcripts and notes suggest; done ID; tasks",
-        description="commitments the transcripts and notes suggest, by rules, as proposals; `done <id>`"
-        " closes one;"
-        " `tasks`: the tasks (task/v1), each as it stands",
+        help="promises you made and requests to you; done ID; tasks",
+        description="what you promised (in mail and messages you sent, your turns of a transcript, your"
+        " notes) and what you were asked (in mail and messages you received, others' turns), by rules,"
+        " as proposals; `done <id>` closes one; `tasks`: the tasks (task/v1), each as it stands",
     )
     s.add_argument("--since", metavar="YYYY-MM-DD", help="only lines from this local day on")
     s.add_argument(
@@ -38,11 +38,19 @@ def promises_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="hide the ones a `promises done` or a signed day (kept, missed, dropped) closed",
     )
+    s.add_argument("--mine", action="store_true", help="only `I promised`")
+    s.add_argument("--theirs", action="store_true", help="only `I was asked`")
+    s.add_argument(
+        "--source",
+        action="append",
+        metavar="KIND",
+        help="read only these kinds: mail, message, transcript, note (repeat, or comma-separate)",
+    )
     s.add_argument(
         "--all",
         action="store_true",
-        help="every candidate the rules found, not only the judged commitments"
-        f" (confidence {promises.THRESHOLD:g} or above)",
+        help="every candidate the rules found: others' commitments, unresolved speakers, and what the"
+        f" judge set aside (below confidence {promises.THRESHOLD:g})",
     )
     s.add_argument(
         "--judge",
@@ -72,15 +80,16 @@ def promises_arguments(sub: Subparsers) -> None:
 
 
 def cmd_promises(a: argparse.Namespace) -> None:
-    """`promises [--since DAY] [--open] [--all] [--judge [--limit N] [--model NAME] [--fetch-model]]
-    [--json]`: the commitments the transcript and note lines suggest, found by rules
-    (`logbook.contrib.promises`), printed as proposals and never as facts. By default the ones a local model
-    judged a commitment at confidence 0.6 or above (`logbook.labs.judge`, the verdicts kept in
-    `policy/promises-cache.json`); `--all` every candidate; `--judge` runs the model on the unjudged
-    ones first, at most `--limit`. `promises done <id>` appends the `task/v1` line (RFC 0016) that
-    marks one done, so `--open` hides it; so does the signed day of the line it was read in, when the
-    signature kept, missed or dropped it (RFC 0034 amendment 1; a carried one stays open). Nothing
-    else is written to the chain."""
+    """`promises [--since DAY] [--open] [--mine | --theirs] [--source KIND] [--all] [--judge [--limit N]
+    [--model NAME] [--fetch-model]] [--json]`: what the owner promised and what they were asked, read
+    from the mail, message, transcript and note lines by rules (`logbook.contrib.promises`), printed
+    in two sections as proposals and never as facts. The rules alone by default; `--judge` runs a
+    local model on the commitments it has not read yet (`logbook.labs.judge`, the verdicts kept in
+    `policy/promises-cache.json`), and a judged non-commitment, or one below confidence 0.6, then
+    leaves the sections; `--all` shows every candidate. `promises done <id>` appends the `task/v1`
+    line (RFC 0016) that marks one done, so `--open` hides it; so does the signed day of the line it
+    was read in, when the signature kept, missed or dropped it (RFC 0034 amendment 1; a carried one
+    stays open). Nothing else is written to the chain."""
     from ..labs import judge
 
     since = a.since
@@ -90,11 +99,15 @@ def cmd_promises(a: argparse.Namespace) -> None:
         except ValueError as e:
             print(f"promises: {e}", file=sys.stderr)
             sys.exit(2)
+    if a.mine and a.theirs:
+        print("promises: --mine and --theirs are one or the other", file=sys.stderr)
+        sys.exit(2)
+    sources = _sources(a.source)
     lb = Logbook.find()
     if a.verb == "done":
         _promises_done(lb, a)
         return
-    report = promises.extract(lb, since)
+    report = promises.extract(lb, since, sources=sources)
     judged: judge.Judged | None = None
     try:
         if a.judge:
@@ -115,18 +128,22 @@ def cmd_promises(a: argparse.Namespace) -> None:
     except (judge.ModelMissing, judge.CacheError) as e:
         print(f"promises: {e}", file=sys.stderr)
         sys.exit(2)
-    judged_only = not a.all
     found = [
         p
         for p in report.proposals
         if (not a.open or p.status == "open")
-        and (not judged_only or (p.judgement is not None and p.judgement.shows()))
+        and (a.all or (p.shows and p.role in (promises.PROMISE, promises.ASKED)))
+        and (not a.mine or p.role == promises.PROMISE)
+        and (not a.theirs or p.role == promises.ASKED)
     ]
     if a.json:
         out = {
             "since": report.since,
             "open_only": bool(a.open),
-            "judged_only": judged_only,
+            "mine_only": bool(a.mine),
+            "theirs_only": bool(a.theirs),
+            "sources": list(report.sources),
+            "all": bool(a.all),
             "threshold": promises.THRESHOLD,
             "extractor": report.extractor,
             "judge": None if judged is None else judged.to_json(),
@@ -142,10 +159,28 @@ def cmd_promises(a: argparse.Namespace) -> None:
         found,
         lambda at: _clock(at, zone),
         open_only=bool(a.open),
-        judged_only=judged_only,
+        every=bool(a.all),
         judge=None if judged is None else judged.to_json(),
+        mine=bool(a.mine),
+        theirs=bool(a.theirs),
     ):
         print(text)
+
+
+def _sources(given: list[str] | None) -> list[str] | None:
+    """`--source` as the kinds to read, in `promises.SOURCES` order; None when none was given; a
+    kind that is not one the reader knows stops the command naming it."""
+    if not given:
+        return None
+    wanted = [k.strip().casefold() for value in given for k in value.split(",") if k.strip()]
+    unknown = [k for k in wanted if k not in promises.SOURCES]
+    if unknown:
+        print(
+            f"promises: --source takes {', '.join(promises.SOURCES)}, not {', '.join(unknown)}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return [k for k in promises.SOURCES if k in set(wanted)]
 
 
 def _promises_done(lb: Logbook, a: argparse.Namespace) -> None:

@@ -38,7 +38,7 @@ table at the end, generated from the code by `scripts/command_aliases.py`).
 | Command | What it does |
 |---|---|
 | `derive` | `derive stays` reads the record into stays and moves, appending nothing; `derive flights` and `derive keepers` infer lines; `derive transcripts voice-memos` and `derive descriptions keepers` run a local model, nothing leaving the machine |
-| `promises` | commitments the transcripts and notes suggest, by rules, as proposals; `promises done ID` closes one; `promises tasks` the tasks, each as it stands |
+| `promises` | what you promised and what you were asked, from mail, messages, transcripts and notes, by rules, as proposals, in two sections with the line id a signed day confirms; `promises done ID` closes one; `promises tasks` the tasks, each as it stands |
 
 ## Keep
 

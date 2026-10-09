@@ -42,11 +42,13 @@ EXTRA = "openlogbook[judge]"
 CACHE_FILE = PurePosixPath("policy/promises-cache.json")  # record-relative, beside the other policy files
 CACHE_VERSION = 1
 MAX_TOKENS = 240
+KIND_WORDS = {"transcript": "Transcript", "note": "Note", "mail": "Mail", "message": "Message"}
 MARK = "> "  # the candidate's line in the prompt; every other context line starts with two spaces
 KEYS = ("is_commitment", "by", "to", "what", "due", "confidence")
 
 SYSTEM = (
-    "You read one sentence from a personal record (a meeting transcript or a note) and judge whether "
+    "You read one sentence from a personal record (a meeting transcript, a note, an email or a chat "
+    "message the owner sent) and judge whether "
     "it is a real commitment: a specific thing a specific person said they will do, or must do, for "
     'someone. Conversational phrases are not commitments: "we\'ll see", "I\'ll have a look", '
     '"let me think", "I\'ll be honest", filler, hypotheticals, questions, and a sentence whose '
@@ -115,8 +117,9 @@ def messages_of(p: Proposal, owner: str | None) -> list[dict[str, str]]:
     head = [
         f'Owner of the record: {owner or "unknown"} ("you" below).',
         "Names resolved in this conversation: " + (", ".join(p.names) if p.names else "none") + ".",
-        f"{'Transcript' if p.kind == 'transcript' else 'Note'}"
+        KIND_WORDS.get(p.kind, "Note")
         + (f" “{p.title}”" if p.title else "")
+        + (f", with {p.counterpart}" if p.counterpart else "")
         + f", said on {p.day}.",
         "",
         "Context, the candidate sentence marked with `>`:",

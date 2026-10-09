@@ -328,13 +328,21 @@ def test_ids_are_stable_across_extractors_that_quote_the_same_sentence(lb: Logbo
 def test_promises_prints_proposals_never_facts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     out = _run(capsys, "promises", "--all")
     head = out.splitlines()[0]
-    assert head.startswith("10 proposed promises") and "rules" in head and "not facts" in head
-    row = next(line for line in out.splitlines() if "mooring photos" in line)
+    assert head.startswith("6 promises proposed: 6 you made, 0 asked of you") and "rules" in head
+    assert "not facts" in head and "4 other candidates" in head and "day sign" in head
+    rows = out.splitlines()
+    assert "I promised" in rows and "I was asked" in rows and rows[rows.index("I was asked") + 1] == "  none"
+    row = next(line for line in rows if "mooring photos" in line)  # Ola's own commitment: the third section
+    assert rows.index(row) > rows.index("Others said they would, or nobody resolved, or the judge set aside")
     assert "2026-06-11" in row and "14:00" in row and "Ola Nordmann" in row and "due 2026-06-12?" in row
     found = _by_quote(promises.extract(lb))
     assert found["I'll send you the mooring photos by Friday."].id in row
-    row = next(line for line in out.splitlines() if "bilge pump" in line)
-    assert "you" in row and "2026-06-13" in row
+    assert found["I'll send you the mooring photos by Friday."].line in row
+    row = next(line for line in rows if "crane" in line)  # the owner's turn: with the other participant
+    assert rows.index("I promised") < rows.index(row) < rows.index("I was asked") and "to Ola Nordmann" in row
+    row = next(line for line in rows if "bilge pump" in line)
+    assert "(note)" in row and "2026-06-13" in row
+    assert "mooring photos" not in _run(capsys, "promises")  # the sections alone, without --all
     row = next(line for line in out.splitlines() if "We will see" in line)
     assert "Speaker A" in row
     assert "1 transcript" in out and "not in the attachment store" in out
@@ -347,7 +355,10 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
     assert set(out) == {
         "since",
         "open_only",
-        "judged_only",
+        "mine_only",
+        "theirs_only",
+        "sources",
+        "all",
         "threshold",
         "extractor",
         "judge",
@@ -355,8 +366,9 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
         "proposals",
         "skipped",
     }
-    assert out["judged_only"] is False and out["judge"] is None and out["unjudged"] == 10
-    assert out["since"] is None and out["open_only"] is False
+    assert out["all"] is True and out["judge"] is None and out["unjudged"] == 10
+    assert out["since"] is None and out["open_only"] is False and out["mine_only"] is False
+    assert out["sources"] == ["mail", "message", "transcript", "note"]
     assert out["extractor"]["name"] == "rules" and out["skipped"] == {"transcripts_without_text": 1}
     row = next(p for p in out["proposals"] if "mooring" in p["quote"])
     assert set(row) == {
@@ -372,6 +384,8 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
         "title",
         "speaker",
         "direction",
+        "role",
+        "counterpart",
         "certainty",
         "language",
         "cue",
@@ -391,6 +405,9 @@ def test_promises_json_is_the_report(lb: Logbook, capsys: pytest.CaptureFixture[
     assert row["due"] == {"phrase": "by Friday", "date": "2026-06-12"}
     assert row["certainty"] == "inferred" and row["status"] == "open" and row["closed_by"] is None
     assert row["title"] == "Boat plans" and row["source"] == "granola" and row["cue"] == "I'll"
+    assert row["role"] == "theirs" and row["counterpart"] == "Ola Nordmann"
+    crane = next(p for p in out["proposals"] if "crane" in p["quote"])
+    assert crane["role"] == "promise" and crane["counterpart"] == "Ola Nordmann"
     note = next(p for p in out["proposals"] if "bilge" in p["quote"])
     assert note["speaker"]["owner"] is True and note["title"] is None and note["due"]["phrase"] == "next week"
     assert (
@@ -439,7 +456,8 @@ def test_done_writes_a_task_line_and_open_hides_it(lb: Logbook, capsys: pytest.C
     assert open_only["open_only"] is True
     assert ola.id not in {p["id"] for p in open_only["proposals"]} and len(open_only["proposals"]) == 9
     text = _run(capsys, "promises", "--all", "--open")
-    assert text.startswith("9 proposed promises") and "mooring photos" not in text
+    assert text.startswith("6 promises proposed") and "3 other candidates" in text
+    assert "mooring photos" not in text
     text = _run(capsys, "promises", "--all")
     assert "done" in next(line for line in text.splitlines() if "mooring photos" in line)
 
@@ -466,7 +484,7 @@ def test_a_record_with_nothing_to_propose_says_so(
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append("2026-06-01T10:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "Calm day."})
-    assert _run(capsys, "promises").startswith("no promises proposed")
+    assert _run(capsys, "promises").startswith("no promises or requests proposed")
     assert json.loads(_run(capsys, "promises", "--all", "--json"))["proposals"] == []
 
 
@@ -652,13 +670,17 @@ def test_kept_and_dropped_close_a_promise_missed_closes_and_flags_it_and_carried
     assert mooring.id in open_ids and crane.id in open_ids
     text = _run(capsys, "promises", "--all")
     rows = {p.id: next(row for row in text.splitlines() if p.id in row) for p in (pump, bill, hull, mooring)}
-    assert rows[pump.id].rstrip().endswith(f"kept  {pump.id}")
+    assert rows[pump.id].rstrip().endswith(f"kept  {pump.id}  line {pump.line}")
     assert "missed on 2026-06-14" in rows[bill.id]
-    assert rows[hull.id].rstrip().endswith(f"dropped  {hull.id}")
-    assert rows[mooring.id].rstrip().endswith(f"carried  {mooring.id}")
+    assert rows[hull.id].rstrip().endswith(f"dropped  {hull.id}  line {hull.line}")
+    assert rows[mooring.id].rstrip().endswith(f"carried  {mooring.id}  line {mooring.line}")
     assert "done" not in rows[pump.id], "kept is the word; `done` is a task line's"
     open_text = _run(capsys, "promises", "--all", "--open")
-    assert open_text.startswith("7 proposed promises") and "bilge pump" not in open_text
+    assert (
+        open_text.startswith("3 promises proposed: 3 you made, 0 asked of you")
+        and "bilge pump" not in open_text
+    )
+    assert "4 other candidates" in open_text  # Ola's carried promise and the yard among them
     assert "mooring photos" in open_text and "carried" in open_text
 
 
