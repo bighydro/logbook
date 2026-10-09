@@ -670,13 +670,17 @@ def test_kept_and_dropped_close_a_promise_missed_closes_and_flags_it_and_carried
     assert mooring.id in open_ids and crane.id in open_ids
     text = _run(capsys, "promises", "--all")
     rows = {p.id: next(row for row in text.splitlines() if p.id in row) for p in (pump, bill, hull, mooring)}
-    assert rows[pump.id].rstrip().endswith(f"kept  {pump.id}")
+    assert rows[pump.id].rstrip().endswith(f"kept  {pump.id}  line {pump.line}")
     assert "missed on 2026-06-14" in rows[bill.id]
-    assert rows[hull.id].rstrip().endswith(f"dropped  {hull.id}")
-    assert rows[mooring.id].rstrip().endswith(f"carried  {mooring.id}")
+    assert rows[hull.id].rstrip().endswith(f"dropped  {hull.id}  line {hull.line}")
+    assert rows[mooring.id].rstrip().endswith(f"carried  {mooring.id}  line {mooring.line}")
     assert "done" not in rows[pump.id], "kept is the word; `done` is a task line's"
     open_text = _run(capsys, "promises", "--all", "--open")
-    assert open_text.startswith("7 proposed promises") and "bilge pump" not in open_text
+    assert (
+        open_text.startswith("3 promises proposed: 3 you made, 0 asked of you")
+        and "bilge pump" not in open_text
+    )
+    assert "4 other candidates" in open_text  # Ola's carried promise and the yard among them
     assert "mooring photos" in open_text and "carried" in open_text
 
 
