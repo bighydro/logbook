@@ -7,7 +7,7 @@ apple-photos         file       enabled
 apple-podcasts       file+live  enabled
 apple-reminders      file       enabled
 apple-wallet         file       enabled
-beeper               file       enabled
+beeper               file+live  enabled
 copilot              file       enabled
 dawarich             file+live  enabled
 easypark             file       enabled

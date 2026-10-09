@@ -93,8 +93,9 @@ def sync_arguments(sub: Subparsers) -> None:
     s = sub.add_parser(
         "sync",
         help="pull new items from a live source; --all for every configured one",
-        description="pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb,"
-        " weather); safe to re-run; --all for every configured source, --install-schedule for twice a day."
+        description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola,"
+        " ais, adsb, weather); safe to re-run; --all for every configured source, --install-schedule for"
+        " twice a day."
         " immich: the first run walks the whole library and says how many assets the server holds before it"
         " starts, then counts `x of N`; a walk interrupted (Ctrl-C, a lost connection, a server error) is"
         " checkpointed in state/immich.json and the next run resumes where it stopped instead of walking"
@@ -103,9 +104,10 @@ def sync_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "name",
         nargs="?",
-        help="the source: immich, dawarich, imessage (this Mac's Messages), gcal (Google Calendar), granola,"
-        " ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky), weather (the places of your"
-        " days, one decimal of latitude, from Open-Meteo)",
+        help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
+        " bridges, through its local API), gcal (Google Calendar), granola, ais (your vessels via"
+        " aisstream.io), adsb (your aircraft via OpenSky), weather (the places of your days, one decimal of"
+        " latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",
@@ -143,6 +145,12 @@ def sync_arguments(sub: Subparsers) -> None:
         metavar="HH:MM",
         help="ais: listen until the record's local clock next shows this time, then write;"
         " weather: the last local day to cover, YYYY-MM-DD (default yesterday)",
+    )
+    s.add_argument(
+        "--networks",
+        metavar="NAMES",
+        help="beeper: the networks to pull, comma-separated (whatsapp,signal,telegram,…; default: every one"
+        " but imessage, which `sync imessage` reads from this Mac's own database)",
     )
     s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
     s.add_argument(
@@ -186,8 +194,8 @@ def _sync_all(a: argparse.Namespace) -> None:
     `failed (status N)`, `skipped (why)` — and exit 1 when any failed. A Ctrl-C while a source
     listens to a stream (ais, status 130) ends the run there: the sources not reached are listed as
     `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen`, `--until` and
-    `--restart` are a single source's and refused. The quick sources run first and the slow ones
-    (`SLOW_LAST`: a photo library walk) last, and the first line says the order."""
+    `--restart` and `--networks` are a single source's and refused. The quick sources run first and the
+    slow ones (`SLOW_LAST`: a photo library walk) last, and the first line says the order."""
     runs, interrupted = _run_all(a)
     _say_all(runs, interrupted)
     if interrupted:
@@ -213,6 +221,7 @@ def _run_all(a: argparse.Namespace) -> tuple[list[last_run.Source], bool]:
         ("--listen", a.listen),
         ("--until", a.until),
         ("--restart", a.restart or None),
+        ("--networks", getattr(a, "networks", None)),
     ):
         if value is not None:
             print(f"sync: --all takes no {flag}: each source starts from its own watermark", file=sys.stderr)
@@ -468,6 +477,13 @@ def _sync_one(a: argparse.Namespace) -> None:
         return
     listens = _takes(adapter, "listen_s", live=True)  # a source that listens to a stream for a window (ais)
     listen_s = _listen_flag(a, listens)
+    networks = getattr(a, "networks", None)  # `setup` builds its own namespace without the flag
+    if networks is not None and not _takes(adapter, "networks", live=True):
+        print(
+            f"sync: --networks is for a source that bridges several networks (beeper), not {a.name}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     lb = Logbook.find()
     if _say_disabled(lb, adapter.NAME):  # before the variables: a switched-off source needs none
         return
@@ -535,6 +551,16 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["failed"] = failed
     if _takes(adapter, "assets", live=True):
         options["assets"] = _registry(lb, "sync")
+    if networks is not None:
+        try:
+            options["networks"] = adapter.networks(networks)
+        except ValueError as e:
+            print(f"sync: {a.name}: {e}", file=sys.stderr)
+            sys.exit(2)
+    marks: dict[str, str] | None = None  # a watermark per conversation, the adapter's to raise
+    if _takes(adapter, "marks", live=True):
+        marks = _marks(state_path) if a.since is None else {}  # --since: every conversation starts there
+        options["marks"] = marks
     status: dict[str, Any] = {}  # what a listening source reports: messages per asset, reconnects, Ctrl-C
     if listens:
         zone = ZoneInfo(str(lb.meta["timezone"]))
@@ -614,9 +640,10 @@ def _sync_one(a: argparse.Namespace) -> None:
     if failed:  # a feed that was not read may hold changes older than the lookback: try again from here
         kept = f" (kept: {len(failed)} {'feed' if len(failed) == 1 else 'feeds'} failed)"
         mark = stored
-    elif mark is not None and (stored is None or mark > stored):  # a watermark never moves backwards
-        kept = ""
-        _write_state(state_path, _state(state_path, adapter, mark, seen))
+    elif mark is not None and (stored is None or mark > stored or _marks_moved(state_path, marks)):
+        kept = ""  # a watermark never moves backwards; one per conversation that did is written too
+        _write_state(state_path, _state(state_path, adapter, mark, seen, marks))
+        mark = max(mark, stored) if stored is not None else mark
     else:
         kept = ""
         mark = stored
@@ -965,10 +992,24 @@ def _asset_row(asset: assets.Asset) -> str:
     return f"{asset.id:<16} {asset.kind:<9} {asset.name}" + (f"  ({', '.join(ids)})" if ids else "")
 
 
-def _state(path: Path, adapter: adapters.LiveAdapter, mark: str, seen: dict[str, Any]) -> dict[str, Any]:
+def _state(
+    path: Path,
+    adapter: adapters.LiveAdapter,
+    mark: str,
+    seen: dict[str, Any],
+    marks: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """The state to store: the watermark and, for an adapter with GROUP_MARKS, one per group (per
-    tracked asset), each merged with the stored one and never moved backwards."""
-    state: dict[str, Any] = {"since": mark}
+    tracked asset), each merged with the stored one and never moved backwards; and, for a pull that
+    took `marks`, the watermark per conversation it raised, merged the same way."""
+    stored = _read_state(path).get("since")
+    state: dict[str, Any] = {"since": mark if not isinstance(stored, str) else max(mark, stored)}
+    if marks is not None:
+        kept = _marks(path)
+        for key, conversation_mark in marks.items():
+            if key not in kept or conversation_mark > kept[key]:
+                kept[key] = conversation_mark
+        state["marks"] = dict(sorted(kept.items()))
     if getattr(adapter, "GROUP_MARKS", False):
         groups: dict[str, str] = dict(_read_state(path).get("groups") or {})
         for name, group_mark in seen["group_marks"].items():
@@ -976,6 +1017,20 @@ def _state(path: Path, adapter: adapters.LiveAdapter, mark: str, seen: dict[str,
                 groups[name] = group_mark
         state["groups"] = dict(sorted(groups.items()))
     return state
+
+
+def _marks(path: Path) -> dict[str, str]:
+    """The stored watermark per conversation (`marks` in the state file), for a pull that takes it."""
+    stored = _read_state(path).get("marks")
+    return {str(k): str(v) for k, v in stored.items()} if isinstance(stored, dict) else {}
+
+
+def _marks_moved(path: Path, marks: dict[str, str] | None) -> bool:
+    """Whether a pull raised the watermark of any conversation past the stored one."""
+    if not marks:
+        return False
+    kept = _marks(path)
+    return any(key not in kept or mark > kept[key] for key, mark in marks.items())
 
 
 def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:

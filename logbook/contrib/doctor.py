@@ -223,25 +223,31 @@ def extras_checks(installed: Callable[[str], bool] = module_installed) -> Iterat
             yield Check(f"extra:{extra}", "warn", f"{wanted} not installed: {PIP.format(extra=extra)}")
 
 
-def syncs_used(lb: Logbook, sources: set[str]) -> list[adapters.LiveAdapter]:
-    """The live adapters the record uses: a watermark under `state/`, or lines of that source;
-    never one `policy/import.json` disables (`sync` would not run it, so it needs no variables)."""
+def syncs_used(
+    lb: Logbook, sources: set[str], env: Mapping[str, str] | None = None
+) -> list[adapters.LiveAdapter]:
+    """The live adapters the record uses: a watermark under `state/`, lines of that source, or one
+    of its variables set in `env`; never one `policy/import.json` disables (`sync` would not run
+    it, so it needs no variables)."""
     listed: dict[str, str] = {}
     if policy.import_path(lb.root).exists():  # `disabled` would write the empty file; doctor never writes
         with contextlib.suppress(policy.PolicyError):
             listed = policy.disabled(lb.root)
     disabled = {adapters.ALIASES.get(name, name) for name in listed}
     marks = {p.stem for p in (lb.root / "state").glob("*.json")}
+    given = env if env is not None else {}
     return [
         a
         for a in adapters.live_adapters()
-        if (a.NAME in marks or a.NAME in sources) and a.NAME not in disabled
+        if (a.NAME in marks or a.NAME in sources or any(given.get(v, "").strip() for v in a.ENV))
+        and a.NAME not in disabled
     ]
 
 
 def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterator[Check]:
-    """Names only, never a value: a missing variable is named; one the adapter refuses is not echoed."""
-    for adapter in syncs_used(lb, sources):
+    """Names only, never a value: a missing variable is named; one the adapter refuses is not echoed.
+    An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers."""
+    for adapter in syncs_used(lb, sources, env):
         name = f"sync:{adapter.NAME}"
         try:
             config = adapter.configure(env)
@@ -253,8 +259,16 @@ def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterat
         if config is None:
             missing = [v for v in adapter.ENV if not env.get(v, "").strip()]
             yield Check(name, "warn", "set " + " and ".join(missing))
-        else:
-            yield Check(name, "pass", "configured (" + ", ".join(adapter.ENV) + ")")
+            continue
+        detail = "configured (" + ", ".join(adapter.ENV) + ")"
+        ask = getattr(adapter, "check", None)
+        if ask is None:
+            yield Check(name, "pass", detail)
+            continue
+        try:
+            yield Check(name, "pass", f"{detail}; {ask(config)}")
+        except (OSError, ValueError) as e:
+            yield Check(name, "warn", f"{detail}; {e}")
 
 
 def disk_check(root: Path, usage: Usage = shutil.disk_usage) -> Check:

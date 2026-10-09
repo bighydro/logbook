@@ -130,6 +130,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "copilot",
     "splitwise",
     "beeper",
+    "beeper_live",
     "line",
     "twitter",
     "apple_books",

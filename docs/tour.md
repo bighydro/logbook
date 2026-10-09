@@ -385,6 +385,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `immich` | `LOGBOOK_IMMICH_URL`, `LOGBOOK_IMMICH_KEY` | one `photo/v1` line per asset: capture time, camera, place, size, faces as person ids, never the pixels |
 | `dawarich` | `LOGBOOK_DAWARICH_URL`, `LOGBOOK_DAWARICH_KEY` (`LOGBOOK_DAWARICH_LOOKBACK_H`, default 24) | one `location/v1` line per point, identical to the line its export gives |
 | `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
+| `beeper` | `LOGBOOK_BEEPER_TOKEN` (`LOGBOOK_BEEPER_URL`, default `http://localhost:23373`; `LOGBOOK_BEEPER_ALLOW_REMOTE=1` to read a Beeper on another machine, which the design says not to) | one `message/v1` line per message of every chat Beeper Desktop bridges, `source` `beeper-<network>`; attachments referenced by asset id, never fetched; `--networks` chooses, default every one but imessage |
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 
@@ -427,6 +428,46 @@ each looking back 24 hours (`LOGBOOK_IMESSAGE_LOOKBACK_H`) for a conversation an
 Attachments stay where Messages keeps them; a file that is there is hashed into the line, one that is
 not is flagged. The terminal needs **Full Disk Access** (System Settings → Privacy & Security) to read
 the database; without it the sync says so on one line and exits 1.
+
+### Beeper
+
+Beeper Desktop bridges WhatsApp, Signal, Telegram, Instagram, Messenger, LinkedIn, X and more into one app,
+and while it runs it serves a small HTTP API on this machine only. `logbook sync beeper` reads every chat of
+every network through it, read-only, and writes one `message/v1` line per message under `source`
+`beeper-<network>` (`beeper-whatsapp`, `beeper-signal`, …), so readers can tell the networks apart.
+
+```bash
+export LOGBOOK_BEEPER_TOKEN=...                             # Beeper Desktop → Settings → Developers → Approved connections, +
+logbook sync beeper --dry-run                               # count per network, write nothing
+logbook sync beeper                                         # every network but imessage, each chat from its own watermark
+logbook sync beeper --networks whatsapp,signal              # only these
+logbook sync beeper --networks telegram --since 2020-01-01T00:00:00Z   # a network added later: its history, once
+```
+
+Enable the API under *Settings → Developers* (the switch *Beeper Desktop API*; it listens on
+`http://localhost:23373` while the app runs), then create a token with the *+* next to *Approved
+connections*. **The token is a password**: it can read every chat and send as you. Keep it in the variable
+in your shell profile, never in a file of the record, and revoke it there when you stop using it. Leave
+*Remote Access* off: the API is meant to be read from this machine only, and `sync beeper` refuses a
+`LOGBOOK_BEEPER_URL` that is not localhost unless `LOGBOOK_BEEPER_ALLOW_REMOTE=1` says you know what you are
+doing. The sync only ever issues GET requests (listing accounts, chats and messages); nothing here sends,
+reacts, marks read, archives or changes a thing, and a test holds it to that. `logbook doctor` says whether
+`sync:beeper` is configured and, when it is, whether the app answers — the one other call, `GET /v1/info`.
+
+Each chat keeps its own watermark (`marks` in `state/beeper.json`): a run reads a chat back to its newest
+message seen, less 24 hours for a message a bridge delivers late, and the record refuses what it already
+holds. A chat with no watermark yet — every chat on the first run, a new chat later — starts at the
+source's watermark, or at `--since`; to pull the history of a network you add to `--networks` later, give
+`--since` once. Reactions, hidden messages and events with neither text nor attachment (joins, calls,
+bridge state) are skipped and counted. An attachment is referenced by its Beeper asset id, size, media
+type and file name under `extra.media`, never downloaded: the bytes stay in Beeper. When the app is not
+running the sync says so on one line and exits 1, and `sync --all` goes on to the next source.
+
+**Known overlap.** Beeper is a second view of chats other sources already read: an iMessage from this Mac's
+own database (`sync imessage`), a WhatsApp message from a chat export or the phone's backup, the Beeper
+cache in an iPhone backup (the `beeper` file adapter). Those lines carry other sources and raw ids, so the
+record does not deduplicate them against the Beeper lines. `--networks` is how you choose; the default
+pulls every network but imessage, which the local source has.
 
 Granola works the same way (ADR 0017: backfill and live share one mapping). Create the key under *Settings →
 Connectors → API keys* (Business and Enterprise plans; scope it to your personal notes), export it as

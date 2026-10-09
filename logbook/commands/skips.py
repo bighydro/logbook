@@ -83,6 +83,9 @@ SKIP_PHRASES = {
     "skipped_no_data": "days the provider had no values for (asked again next run)",
     "skipped_unreadable_csv": "CSV files without the columns this reader needs",
     "skipped_unreadable_row": "rows that would not parse",
+    "skipped_hidden": "hidden in the app",
+    "skipped_no_id": "without a message id",
+    "skipped_merged_chat": "merged chats, whose member chats carry the messages",
 }
 
 
@@ -99,6 +102,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_counterparty": "without a counterparty",
     "media_hashed": "with media hashed",
     "media_missing": "with media missing",
+    "media_referenced": "with media referenced by Beeper asset id, not fetched",
     "no_name": "without an app name",
     "deleted": "marked for deletion",
     "load_failed": "that did not load",

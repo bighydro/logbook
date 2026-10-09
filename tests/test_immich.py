@@ -80,6 +80,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "ais",
         "adsb",
         "apple-podcasts",
+        "beeper",
         "weather",
     ]
     assert adapters.live("immich") is immich
