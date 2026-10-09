@@ -579,3 +579,19 @@ def test_dispositions_cross_with_the_signature_unchanged(lb: Logbook, tmp_path: 
     assert entries[15] == again, "the line crosses byte for byte: the dispositions untouched"
     assert entries[15]["payload"]["dispositions"] == again["payload"]["dispositions"]
     assert signing.validate(entries[15]["payload"]) == []
+
+
+def test_a_signature_that_confirms_nothing_still_opens_the_gate_and_crosses(lb: Logbook, tmp_path: Path):
+    """RFC 0034 amendment 2: `--confirm none` signs the day with an empty `confirmed`; the day is
+    signed, so its lines cross, and the signature crosses with them, the empty list as written."""
+    again = signing.sign(lb, "2026-03-01", at="2026-03-03T09:00:00Z", confirm=[])  # seq 15: supersedes 13
+    assert again["payload"]["confirmed"] == []
+    out = tmp_path / "out"
+    until = "2026-03-04T00:00:00Z"  # the signing day inside the window
+    _run("--to", "hermes", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
+    entries = {int(e["seq"]): e for e in _jsonl(out / "entries.jsonl")}
+    assert [s for s in entries if s < 13] == [5, 6, 8, 9, 10, 11, 12], "the day's lines cross: it is signed"
+    assert 15 in entries and entries[15] == again, "the signature crosses byte for byte"
+    assert entries[15]["payload"]["confirmed"] == []
+    assert signing.validate(entries[15]["payload"]) == []
+    assert _manifest(out)["counts"]["held_back_unsigned"] == 0

@@ -1,6 +1,6 @@
 # RFC 0034 — The signed day: `signed-day/v1`, and the gate on the crossing
 
-Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08
+Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08 · amendment 2 (an empty confirmation and the owner's clock) 2026-10-09
 
 Agents draft; the owner signs; only signed days cross. This RFC adds one payload profile, `signed-day/v1`, the line the owner appends when they have read a day's page and confirm it as the day's facts; one default for the crossing package (RFC 0005, ADR 0016), which now crosses the lines of signed days unless the owner asks for the rest; one header for `show`; and one block in the Day reader, `readiness`, which says per class of source whether the day's lines are in and which usual sources have not delivered. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and no agent can sign.
 
@@ -108,6 +108,42 @@ The writer: `logbook day sign DAY --kept ID,ID --missed ID,ID --dropped ID,ID --
 
 `signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its schema may change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a reader, a fixture in both implementations, a schema pass and one dated amendment to that RFC. This amendment is one of the changes that process is for.
 
+## Amendment 2 — an empty confirmation and the owner's clock
+
+Dated 2026-10-09. Two things the agent layer met when a day is signed from a phone: the owner
+unticks every proposed fact and still wants the day signed, and the owner clicks hours before the
+command runs. Neither changes a field; both change what the writer accepts.
+
+**An empty confirmation.** The payload table above has allowed an empty `confirmed` from the
+first draft (the owner signs that nothing on the page is a fact of the day, or that an empty day was
+empty), and the reader has read one; only the writer refused it, by the rule that `--confirm` must
+name a line. The writer now takes `--confirm none`: the line carries `"confirmed": []`, `page` is
+the digest of the page as shown and its count as it is for any signature, `signed` shows in the
+day's header as usual, and the day's lines cross as the lines of any signed day do (rule 5: the
+gate is the standing signature, not the confirmed set). `none` goes alone: `--confirm none,ID`, and
+`--confirm none` beside `--kept`, `--missed`, `--dropped` or `--carried`, are each refused in one
+sentence, since a line given a disposition is confirmed by that and none is. Without `--confirm`,
+every line of the page not retracted is confirmed, as before; `--confirm` with ids that name no
+line is still refused.
+
+**The owner's clock.** The line's `at` is when the owner signed (above), and on a phone that is
+the moment they clicked, not the moment the command ran. The writer takes `--at RFC3339`, a moment
+with a numeric offset or `Z`, and stores it in UTC as every `at` of the record is stored (SPEC
+§2). Three checks, each refused in one sentence and nothing written: a moment that is not RFC 3339
+with an offset or `Z` (the message carries an example); a moment more than five minutes ahead of
+the writer's clock, five minutes being clock skew between two devices and no more; and a moment
+before the day signed starts in the record's zone, since a day is signed on it or after it, never
+before it was lived. A signature written the morning after is on the morning after, as before; a
+signature written at 19:30 local on the day itself is listed by `show` on that day. Without
+`--at`, `at` is now, unchanged. The readers print the moment in the record's local time (`signed
+2026-06-09 19:30`), as they do for any signature. The readiness block and the crossing are
+untouched.
+
+What does not change: the page digest, the payload's fields, the hash of every line written
+before. `signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its
+schema may change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a
+reader, a fixture in both implementations, a schema pass and one dated amendment to that RFC.
+
 ## Conformance
 
 `conformance/sample-logbook` carries one `signed-day/v1` line, the first day of the week signed on its last evening, as its 32nd line; the sealed sample carries the same, with the page digest the sealed lines give (a sealed line's hash is of its reference, so the two samples' digests differ, as their heads do). An implementation that reproduces the head reproduces the line; one that carries `show` prints `signed` in the first day's header. Neither sample carries `dispositions`: the field is optional, and the heads recorded before amendment 1 stand.
@@ -123,5 +159,13 @@ Nothing in §2–3. In §3.2.1 (`show`), one sentence: the header says whether t
 - **Why `at` is the signing moment.** The line records an act; the act happened when it happened (SPEC §2: `at` is when the thing happened). The day it names is in the payload, where the index and the readers look.
 - **Why a gate on the crossing and not a tier.** Tier says how private; signed says whether read. A tier-3 line on a signed day still never crosses without the policy and `--tier 1,2,3`. The two gates are independent and both are the owner's.
 - **Why readiness has no network.** Whether a source *should* have delivered is a question about the record's habit, not about the source's server. A source that is reachable and silent and one that is down look the same from the record, and the record is what is signed.
+- **Why `none` is a word and not an empty flag (amendment 2).** `--confirm ""` is what a shell
+  produces from an empty variable, and a signature that confirms nothing by accident is worse than
+  one refused; the owner types the word. And it goes alone because a disposition confirms its
+  line: `--confirm none --kept 4181` would confirm one line and say it confirms none.
+- **Why five minutes and why not before the day (amendment 2).** A phone and a laptop disagree by
+  seconds, not hours; a moment further ahead is a wrong clock or a wrong zone, and a signature
+  from the future would stand ahead of the page it signs. A moment before the day starts is a
+  moment at which the page was empty by definition.
 - **Why a disposition is on the signature and not a line of its own (amendment 1).** The owner learns what became of a commitment while reading the day it was made, and that reading is the signature. A `task/v1` line (RFC 0016) says a task was done; a disposition says what the owner saw on the page, four words, by line id, in the one line that is already about the page. `promises done` remains for a promise closed on any other day, and the two never contradict: a task line closes a carried promise as it closes any other.
 - **Why exactly four values.** Kept and missed are the two outcomes; dropped is the owner's decision that there is no outcome to wait for; carried is the one that keeps the promise open. A fifth word would be a comment, and the note is for that.

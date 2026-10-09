@@ -23,13 +23,22 @@ invalid, and a reader keeps the valid entries and never fails on the rest (`disp
 field is optional, so a signature without it is what it was and its hash does not move; the page
 digest does not change. `day` prints a symbol next to each disposed line, `promises` closes a kept
 or dropped promise and flags a missed one, and the crossing carries the field as it carries the
-line."""
+line.
+
+Amendment 2, an empty confirmation and the owner's clock: `confirm=[]` (`--confirm none`) signs
+the day with nothing confirmed, an empty `confirmed` over the page digest as shown, so that a day
+whose every proposed fact the owner unticked is still signed; it goes alone, with no disposition.
+And `at` is the moment the owner clicked, which on a phone is hours before the command runs:
+given as an RFC 3339 moment with an offset or Z, checked by `moment` (not beyond five minutes in
+the future, for clock skew; not before the day signed starts in the record's zone) and stored in
+UTC as every `at` is. Without `at` the signing moment is now, as before."""
 
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -48,6 +57,10 @@ CLOSING = (KEPT, MISSED, DROPPED)  # the dispositions that close a promise; `car
 SYMBOLS = {KEPT: "\u2713", MISSED: "\u2717", DROPPED: "\u2013", CARRIED: "\u2192"}  # tick, cross, dash, arrow
 DISPOSITION_WORDS = "kept, missed, dropped or carried"
 SHA256_HEX = 64
+NOTHING = "none"  # `--confirm none`: nothing on the page is a fact of the day (amendment 2)
+SKEW = timedelta(minutes=5)  # how far ahead of this clock the owner's clock may be (amendment 2)
+AT_EXAMPLE = "2026-06-09T19:30:00+02:00"
+_MOMENT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\Z")
 
 
 class SignError(ValueError):
@@ -149,11 +162,14 @@ def sign(
     """Sign `day`: one `signed-day/v1` line appended, nothing else touched. `confirm` names the
     lines confirmed, each a `seq` or an id of a line on the page (a line not on the page, or a
     retracted one, is refused and nothing is written); None confirms every line of the page not
-    retracted. `dispositions` maps each of `kept`, `missed`, `dropped`, `carried` to the entries
-    (seqs or ids, as `confirm` takes them) of the lines that became so (amendment 1): every such line
-    is confirmed, whatever `confirm` says, and a line given two dispositions is refused. `note` is
-    one line. `at` is when the owner signed (now by default). When the day has a standing signature
-    the new line supersedes it. `SignError` says why a signature is refused."""
+    retracted; an empty sequence confirms nothing (amendment 2, `--confirm none`), and then no
+    disposition may be given. `dispositions` maps each of `kept`, `missed`, `dropped`, `carried` to
+    the entries (seqs or ids, as `confirm` takes them) of the lines that became so (amendment 1):
+    every such line is confirmed, whatever `confirm` says, and a line given two dispositions is
+    refused. `note` is one line. `at` is when the owner signed, an RFC 3339 moment with an offset
+    or Z, stored in UTC (amendment 2: not beyond five minutes ahead of this clock, not before the
+    day starts in the record's zone); now by default. When the day has a standing signature the new
+    line supersedes it. `SignError` says why a signature is refused."""
     day = parse_day(day).isoformat()
     if note is not None:
         note = note.strip()
@@ -163,6 +179,7 @@ def sign(
             note = None
     meta = lb.meta
     owner, tz = str(meta["owner_id"]), str(meta["timezone"])
+    signed_at = moment(at, day, tz) if at is not None else now_utc()
     with lb.index() as idx:
         lines = page(idx, day)
         retracted = retractions(idx.retractions())
@@ -182,13 +199,38 @@ def sign(
     if earlier is not None:
         payload["supersedes"] = str(earlier["id"])
     return lb.append(
-        at=utc(at) if at else now_utc(),
+        at=signed_at,
         source=SOURCE,
         kind=KIND,
         tier=TIER,
         payload=payload,
         recorded_at=recorded_at,
     )
+
+
+def moment(at: str, day: str, tz: str, now: datetime | None = None) -> str:
+    """`at` as the owner's clock gave it, checked and returned in UTC (amendment 2): an RFC 3339
+    moment with a numeric offset or Z (anything else is refused with the example), not beyond
+    `SKEW` ahead of `now` (this clock; a phone's clock runs a few minutes fast, a signature from
+    the future is not one), and not before `day` starts in the record's zone `tz` (a day is signed
+    on it or after it, never before it was lived). A Z stamp is kept as given; an offset is
+    converted, as every `at` of the record is."""
+    text = at.strip()
+    parsed: datetime | None = None
+    if _MOMENT.match(text):
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+    if parsed is None:
+        raise SignError(f"--at {text!r} is not an RFC 3339 moment with an offset or Z, e.g. {AT_EXAMPLE}")
+    clock = now if now is not None else datetime.now(UTC)
+    if parsed > clock + SKEW:
+        raise SignError(f"--at {text} is in the future; a signature is when you signed, not later")
+    start = datetime.combine(parse_day(day), time(), tzinfo=ZoneInfo(tz))
+    if parsed < start:
+        raise SignError(f"--at {text} is before {day} starts in {tz}; a day is signed on it or after it")
+    return utc(text)
 
 
 def _confirmed(
@@ -199,9 +241,16 @@ def _confirmed(
     also: Collection[str] = (),
 ) -> list[str]:
     """The ids confirmed, in the page's order: every line not retracted, or the ones `confirm`
-    names by `seq` or id, and `also` (the lines given a disposition) either way."""
+    names by `seq` or id, and `also` (the lines given a disposition) either way; nothing at all
+    for an empty `confirm` (amendment 2), which then takes no disposition."""
     if confirm is None:
         return [str(line["id"]) for line in lines if str(line["id"]) not in retracted]
+    if len(confirm) == 0:
+        if also:
+            raise SignError(
+                f"--confirm {NOTHING} goes alone: a line given a disposition is confirmed, and none is"
+            )
+        return []
     chosen: set[str] = set(also)
     for entry in confirm:
         line = _on_page(day, lines, retracted, entry)
