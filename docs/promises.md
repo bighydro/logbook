@@ -41,53 +41,6 @@ I was asked
   2026-06-10  09:20  by Kari Nordmann  “Kannst du mir die Flugnummer schicken?”  08c4…  line 019e…-…
 ```
 
-<<<<<<< HEAD
-- **The day and time** are the line's: a transcript's start, a note's writing time, in the record's
-  zone. A transcript's turns carry no time of their own here, so every promise in a meeting is on
-  the meeting's hour.
-- **Who** is the speaker when the transcript resolves one. The source's label for the turn
-  (`Ola Nordmann:` in Markdown, `<v Ola Nordmann>` in WebVTT, Granola's `speaker.name`) is matched
-  to the line's `participants`, and their email, phone or provider id to a person through the
-  record's resolution lines (RFC 0006), the same way the with module places a transcript's
-  participants at a stay. A bare name the record labels one person by resolves too. `me` and your
-  own names are `you`; so is a note, since a note is yours. A diarizer's `Speaker A`, or a name
-  nobody has resolved, stays as spoken, with no person behind it. Text that carries its own labels
-  belongs to them: a line of a note or of a turn that begins `Speaker 2:` (or with the name of a
-  participant, of a person the record resolves, or of you) is that speaker's, whatever label the
-  source put on the turn and whoever's note it is in; you are `you` only when the label resolves to
-  one of your identities. A word before a colon that names nobody (`Plan:`) is text.
-- **The sentence** is quoted as written, whitespace collapsed, never paraphrased.
-- **The due hint** is there when the sentence carries a date phrase, with a `?` because it is a
-  reading of the words, not a deadline anyone agreed. It is resolved against the day the sentence
-  was said: a weekday is the next one strictly after that day (`by Friday` on a Thursday is
-  tomorrow; on a Friday it is next week's); `next week` is its Monday; `this week` and `by the end of
-  the week` the Friday on or after the day; `tomorrow`, `morgen`, `übermorgen`, `tonight`, `heute
-  Abend`, `in two weeks`, `in drei Tagen`, `next month`; a month and a day (`by June 20`, `20 June`,
-  `bis 20. Juni`, `bis zum 20.6.`) the next such date; `the 5th` and `am 5.` the next fifth.
-- **The id** is a digest of the origin line's id and the quoted sentence, case and whitespace
-  aside: sixteen hex characters. The same sentence in the same line has the same id however often
-  the command runs, and whichever extractor found it (below).
-- **`done`** after the due hint marks a proposal you closed; `--open` leaves those out.
-- **`kept`, `missed on 2026-06-14`, `dropped`, `carried`** is what the signed day of the line the
-  promise was read in says became of it ([the signed day](signed-day.md), RFC 0034 amendment 1):
-  kept and dropped close the promise, missed closes and flags it, carried leaves it open; `--open`
-  leaves the first three out.
-
-Under `--json` the report is one object: `since`, `open_only`, `judged_only` (false under
-`--all`), `threshold` (0.6), `extractor` (`name`, `version`, and `languages` for the rules), `judge`
-(what a `--judge` run just did: `engine`, `model`, `candidates`, `judged`, `unparsed`; null when
-none ran), `unjudged` (how many candidates have no verdict yet), `proposals` and `skipped`. Each
-proposal carries `id`, `status` (`open` or `done`), `closed_by` (the task line's id), `disposition`
-(`value`, `day` and `line`, the signed-day line's, when the standing signature of its day disposed
-of the line it was read in; null otherwise), `day`, `at`,
-`line` (the origin), `seq`, `kind` (`transcript` or `note`), `source`, `title`, `speaker` (`label`,
-`spoken`, `person`, `owner`, or null), `direction` (`owed_by_owner` when you said it,
-`owed_to_owner` when a resolved person did, null when nobody is behind the label), `certainty`
-(always `inferred`: the words were read into a promise, never stated as one), `language`, `cue` (the
-words that made it a promise, as written), `class`, `quote`, `due` (`phrase` and `date`, or null)
-and `judgement` (below, or null). The fields are this reader's own; `commitment/v1` (RFC 0007), which
-they once mirrored, was withdrawn by RFC 0031.
-=======
 **I promised** is every commitment cue in a line you wrote: a mail whose sender is one of your
 addresses, a message with `from_me`, your turn of a transcript, a note. **I was asked** is every
 request cue in a line you received: a mail from someone else, a message not from you, another's
@@ -118,6 +71,10 @@ Each row is:
   20. Juni`, `bis zum 20.6.`) the next such date; `the 5th` and `am 5.` the next fifth.
 - **The judgement**, when the judge has read it (below).
 - **`done`** when you closed it; `--open` leaves those out.
+- **`kept`, `missed on 2026-06-14`, `dropped`, `carried`** is what the signed day of the line the
+  promise was read in says became of it ([the signed day](signed-day.md), RFC 0034 amendment 1):
+  kept and dropped close the promise, missed closes and flags it, carried leaves it open; `--open`
+  leaves the first three out. A request is a line's too: a kept request is one you did.
 - **The proposal's id**: a digest of the origin line's id and the quoted sentence, case and
   whitespace aside, sixteen hex characters. The same sentence in the same line has the same id
   however often the command runs, and whichever extractor found it. `promises done` takes it.
@@ -185,7 +142,9 @@ Under `--json` the report is one object: `since`, `open_only`, `mine_only`, `the
 (0.6), `extractor` (`name`, `version`, and `languages` for the rules), `judge` (what a `--judge`
 run just did; null when none ran), `unjudged` (how many commitments have no verdict yet),
 `proposals` and `skipped`. Each proposal carries `id`, `status` (`open` or `done`), `closed_by` (the
-task line's id), `day`, `at`, `line` (the origin, for `day sign --confirm`), `seq`, `kind` (`mail`,
+task line's id), `disposition` (`value`, `day` and `line`, the signed-day line's, when the standing
+signature of its day disposed of the line it was read in; null otherwise), `day`, `at`, `line` (the
+origin, for `day sign --confirm`), `seq`, `kind` (`mail`,
 `message`, `transcript` or `note`), `source` (the adapter), `title` (a transcript's or a note's
 title, a mail's subject), `speaker` (`label`, `spoken`, `person`, `owner`, or null), `role`
 (`promise` when you made it, `request` when you were asked, `theirs` when a resolved person made
@@ -195,7 +154,6 @@ promise and a request, `owed_to_owner` for theirs, null otherwise), `certainty` 
 `judgement` (below, or null). The fields are this reader's own; `commitment/v1` (RFC 0007), which
 they once mirrored, was withdrawn by RFC 0031. The MCP tool `promises` returns the same proposals
 ([mcp](mcp.md)).
->>>>>>> 3bc9dd7 (docs: promises reads mail and messages; the two sections, the cues, the recall numbers)
 
 ## The judge
 
