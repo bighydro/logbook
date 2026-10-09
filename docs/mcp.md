@@ -124,6 +124,14 @@ ceiling of 1 as well: the one destination with a default, since the client is an
 and tier 1 is what crosses on its own. Raise it by editing the file; the server reads it on every call and
 never writes it, so the change takes effect at the next call and nothing needs restarting.
 
+Who may read, and from where, is [ADR 0022](adr/0022-the-records-home.md): the server runs on the record's
+home, the one machine that holds the writable copy, and an agent anywhere else (a VPS, a cron, a phone)
+reaches the record only through this ceiling and the few write tools you allow by name. A cloud model or
+service that may see record content gets its own entry in the file, and a temporary one an `until` date:
+`{"cloud-model": {"max_tier": 2, "until": "2026-12-31"}}` holds through that day and counts as tier 0 from
+the next, so nothing crosses until you write a new date or remove the line; `logbook doctor` names an
+entry that has expired.
+
 What the ceiling means in practice:
 
 - **At 1** the agent sees locations, calendar entries, photos, calls, flights, trips and crossing lines: the

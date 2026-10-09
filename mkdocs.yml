@@ -73,6 +73,8 @@ nav:
       - "0018 Assets are subjects, not places": adr/0018-assets-are-subjects.md
       - "0019 Trips are derived, never written": adr/0019-trips-are-derived.md
       - "0020 Tiers 2–3 are sealed with age": adr/0020-tiers-2-3-sealed-with-age.md
+      - "0021 journey/v1 is the written form": adr/0021-journey-is-the-written-form.md
+      - "0022 The record's home": adr/0022-the-records-home.md
   - RFCs:
       # The RFCs live in the repository under rfcs/, not under docs/; the site links there.
       - About RFCs: https://github.com/bighydro/logbook/blob/main/rfcs/README.md
