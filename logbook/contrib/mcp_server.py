@@ -5,10 +5,12 @@ as a child process and call its tools over the process's own stdin and stdout. T
 transport here: no TCP, no socket, nothing listening. The host runs on the owner's machine under
 the owner's command, and the record stays where it is.
 
-Nine read tools answer from the index and the readers every command already uses — `day`, `days`,
-`trips`, `places`, `people`, `person`, `promises`, `gaps` and `search` — and two write tools go
-through `Logbook.append` and nothing else: `add_note` is `logbook add "<sentence>"`, and
-`promise_done` is `logbook promises done <id>`.
+Twelve read tools answer from the index and the readers every command already uses — `day`, `days`,
+`trips`, `places`, `people`, `person`, `promises`, `gaps`, `search`, and the three that read the lines
+themselves, `day_lines` (`logbook show DAY`, one object per line), `line` (one line in full, a
+transcript's text from the attachment store included) and `digest` (`logbook digest`, the text as the
+command prints it) — and two write tools go through `Logbook.append` and nothing else: `add_note` is
+`logbook add "<sentence>"`, and `promise_done` is `logbook promises done <id>`.
 
 Every tool's output passes the crossing gate of ADR 0016. `policy/crossing.json` names the `mcp`
 destination and the highest tier that may cross to it, 1 unless the owner raises it (`policy.mcp_ceiling`);
@@ -18,15 +20,20 @@ the line were not there), and the response says how many lines were withheld, so
 answer is a partial one. Tier 3 crosses only when the policy allows it and the server was started with
 `--allow-tier-3`: a policy edit alone never lets it through, as it never does for an export. A read
 appends no `crossing/v1` line: nothing leaves the machine, and the record is not the place to log
-an agent's every question."""
+an agent's every question. What the server does log, one line per call on the `logbook.mcp`
+logger (stderr when serving; stdout is the transport), is the tool's name, the day or id it was asked
+about and counts — never a line's content, never a search's words, never a name."""
 
 from __future__ import annotations
 
 import json
+import logging
+import re
+import sys
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -34,13 +41,16 @@ from zoneinfo import ZoneInfo
 from .. import __version__
 from ..core import day as day_reader
 from ..core import days as days_reader
-from ..core import pages, policy, reading, rollup, stays, trips
-from ..core.chain import Line
+from ..core import flights, pages, policy, reading, rollup, stays, transcripts, trips
+from ..core.chain import Line, is_sealed
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.index import RETRACTED, EvidenceRow, Index, LocationRow, Place
-from ..core.store import RETRACTION, FormatError, Logbook, now_utc, utc
+from ..core.resolve import Ref, labels
+from ..core.store import RETRACTION, FormatError, Logbook, now_utc, retractions, utc
+from . import digest as digest_reader
 from . import gaps, promises
+from .rows import _attendee, _clock, _line_text, _mail_person, _name, _ref_value
 
 SERVER_NAME = "logbook"
 DESTINATION = policy.MCP_DESTINATION
@@ -50,6 +60,24 @@ SEARCH_LIMIT_MAX = 500
 READ_CHUNK = 200  # search: lines read from the files between checks of the hit count
 EXTRA_MESSAGE = 'the mcp extra is not installed: pip install "openlogbook[mcp]"'
 DAY = {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "a local day, YYYY-MM-DD"}
+LOG = logging.getLogger("logbook.mcp")
+QUOTED = re.compile(
+    r"'[^']*'|\"[^\"]*\""
+)  # what a refusal quotes back (a name, a day as typed): elided in the log
+ELIDED = "'\u2026'"
+# the arguments a log line may carry: a day, an id, a window, a switch; never `text`, never `name`
+LOGGED = ("day", "date", "id", "from", "to", "since", "until", "year", "period", "kinds", "open", "limit")
+PERIODS = ("day", "week")
+# `day_lines(kinds)`: a profile family -> the kinds in it (`calendar` is the `event/v1` lines)
+FAMILIES: dict[str, tuple[str, ...]] = {
+    "mail": ("mail",),
+    "message": ("message",),
+    "transcript": ("transcript",),
+    "note": ("note",),
+    "location": ("location",),
+    "photo": ("photo",),
+    "calendar": ("event",),
+}
 
 
 class ToolError(ValueError):
@@ -135,6 +163,27 @@ class GatedIndex(Index):
     def by_seq(self, seq: int) -> Line | None:
         line = super().by_seq(seq)
         return line if line is not None and self.gate.keep(line) else None
+
+    def by_id(self, line_id: str) -> Line | None:
+        line = super().by_id(line_id)
+        return line if line is not None and self.gate.keep(line) else None
+
+    def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
+        return {id_: line for id_, line in super().by_ids(ids).items() if self.gate.keep(line)}
+
+    def day_above(self, day_local: str, kinds: Sequence[str] | None = None) -> int:
+        """How many standing lines of one local day (of these kinds, when given) sit above the
+        ceiling: counted and held back, nothing else of them read."""
+        where = f"day_local = ? AND kind != 'retraction' AND id NOT IN ({RETRACTED})"
+        args: list[object] = [day_local]
+        if kinds is not None:
+            where += f" AND kind IN ({', '.join('?' * len(kinds))})"
+            args.extend(kinds)
+        self._count_above(where, args)
+        (n,) = self.db.execute(
+            f"SELECT count(*) FROM lines WHERE {where} AND tier > ?", (*args, self.gate.max_tier)
+        ).fetchone()
+        return int(n)
 
     def retractions(self) -> list[Line]:
         return super().retractions()  # marks on other lines; `keep` lets them through regardless
@@ -476,6 +525,257 @@ def _mentions(obj: object, needle: str) -> bool:
     return False
 
 
+# -- the lines themselves: day_lines, line, digest -----------------------------------------------
+
+
+def _instant(stamp: str) -> datetime:
+    """An RFC 3339 stamp as an aware instant, for ordering a day (SPEC §3.2: by the instant, then seq)."""
+    parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _families(a: Arguments) -> list[str] | None:
+    """`kinds`: profile families, each once, in the order given; None when not given."""
+    kinds = a.get("kinds")
+    if kinds is None:
+        return None
+    if (
+        not isinstance(kinds, list)
+        or not kinds
+        or not all(isinstance(k, str) and k in FAMILIES for k in kinds)
+    ):
+        raise ToolError(f"kinds must be a list of profile families: {', '.join(FAMILIES)}")
+    return list(dict.fromkeys(kinds))
+
+
+def _profile(line: Line) -> str | None:
+    payload = line.get("payload")
+    schema = payload.get("schema") if isinstance(payload, dict) else None
+    return schema if isinstance(schema, str) else None
+
+
+def _message_counterpart(p: Mapping[str, Any], names: Mapping[Ref, str]) -> str:
+    """The other side of a message: the chat for one the owner sent; else the sender, by its label,
+    the name the source showed, the direct chat's own name, or the ref as given."""
+    chat = p.get("chat")
+    if isinstance(chat, str):
+        chat = {"type": "direct", "name": chat}
+    elif not isinstance(chat, dict):
+        chat = {}
+    chat_name = str(chat.get("name") or chat.get("id") or "")
+    if p.get("from_me"):
+        return chat_name
+    sender = p.get("sender")
+    own = sender.get("name") if isinstance(sender, dict) else None
+    return (
+        _name(sender, names)
+        or (own if isinstance(own, str) else "")
+        or (chat_name if chat.get("type") == "direct" else "")
+        or _ref_value(sender)
+    )
+
+
+def _counterpart(line: Line, names: Mapping[Ref, str]) -> str | None:
+    """Whom the line is with, as the record names them (the resolution lines under the ceiling,
+    else the name the source gave, else the ref): a mail's sender, or its recipients when the owner
+    sent it; a message's sender or chat; a transcript's participants; a calendar entry's attendees;
+    a call's counterparty. None for a line with nobody in it, and for one still sealed."""
+    if is_sealed(line):
+        return None
+    p: Mapping[str, Any] = line["payload"]
+    kind = line["kind"]
+    if kind == "mail":
+        if p.get("direction") == "sent":
+            people = [_mail_person(r, names) for r in [*(p.get("to") or []), *(p.get("cc") or [])]]
+        else:
+            people = [_mail_person(p.get("from"), names)]
+    elif kind == "message":
+        people = [_message_counterpart(p, names)]
+    elif kind == "transcript":
+        people = [
+            _name({"kind": "email", "value": q.get("email")}, names)
+            or str(q.get("name") or q.get("email") or "")
+            for q in p.get("participants") or []
+            if isinstance(q, dict)
+        ]
+    elif kind == "event":
+        people = [_attendee(who, names) for who in p.get("attendees") or []]
+    elif kind == "call":
+        ref = p.get("counterparty")
+        people = [_name(ref, names) or _ref_value(ref)]
+    else:
+        return None
+    return ", ".join(who for who in people if who) or None
+
+
+def _row_json(
+    line: Line, tz: ZoneInfo, names: Mapping[Ref, str], superseded: Mapping[str, int]
+) -> dict[str, Any]:
+    """One line as `day_lines` lists it: its envelope, the local clock, the counterpart and the text
+    part of the row `show` prints (a flight another flight line replaced says so instead)."""
+    by = superseded.get(str(line["id"]))
+    return {
+        "id": line["id"],
+        "seq": line["seq"],
+        "at": line["at"],
+        "end": line.get("end"),
+        "time": _clock(str(line["at"]), tz),
+        "kind": line["kind"],
+        "profile": _profile(line),
+        "source": line["source"],
+        "tier": int(line["tier"]),
+        "counterpart": _counterpart(line, names),
+        "text": f"superseded by #{by}" if by is not None else _line_text(line, tz, names),
+    }
+
+
+def tool_day_lines(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """`logbook show DAY`, one object per standing line, through the gate: the index serves the day's
+    lines at or below the ceiling only, and the ones above it are counted (`above_ceiling`) by a query
+    that reads nothing of them. A retracted line is left out and counted; a retraction is never a
+    row. The names are the resolution lines under the ceiling, as every reader has them."""
+    day = _day(a, "day") or _today(lb)
+    families = _families(a)
+    kinds = None if families is None else [kind for family in families for kind in FAMILIES[family]]
+    tz = ZoneInfo(str(lb.meta["timezone"]))
+    with lb.index() as idx:
+        assert isinstance(idx, GatedIndex)
+        on_day = idx.day(day)
+        marks = retractions(idx.retractions())
+        superseded = idx.superseded(flights.KIND)
+        names = labels(lb, idx)
+        above = idx.day_above(day, kinds)
+    rows: list[dict[str, Any]] = []
+    retracted = 0
+    for line in sorted(on_day, key=lambda found: (_instant(str(found["at"])), int(found["seq"]))):
+        if line["kind"] == RETRACTION or (kinds is not None and line["kind"] not in kinds):
+            continue
+        if line["id"] in marks:
+            retracted += 1
+            continue
+        rows.append(_row_json(line, tz, names, superseded))
+    return {
+        "day": day,
+        "tz": str(tz),
+        "kinds": families,
+        "lines": rows,
+        "count": len(rows),
+        "above_ceiling": above,
+        "retracted": retracted,
+    }
+
+
+def _full_text(lb: Logbook, line: Line) -> str | None:
+    """The whole text of a line, where it has one: a note's, a mail's body, a message's, and a
+    transcript's turns from the attachment store as `promises` and the search index read them, one
+    `Speaker: text` per turn. None for a line without one, a transcript whose text is not in the
+    store, and a line still sealed."""
+    if is_sealed(line):
+        return None
+    p: Mapping[str, Any] = line["payload"]
+    kind = line["kind"]
+    if kind == "transcript":
+        turns = transcripts.turns_of(lb, line)
+        if turns is None:
+            return None
+        return "\n".join(f"{t.speaker}: {t.text}" if t.speaker else t.text for t in turns)
+    value = p.get("body") if kind == "mail" else p.get("text") if kind in ("note", "message") else None
+    return value if isinstance(value, str) else None
+
+
+def tool_line(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """One line by id, in full. The index is asked the line's tier first, by a query that reads
+    nothing else of it: above the ceiling, the answer is a refusal that names the tier and the
+    ceiling and nothing more, and the line counts as withheld; at or below it, the line is read
+    through the gate and returned whole, a transcript's text from the store included."""
+    id_ = (_string(a, "id", required=True) or "").strip()
+    if not id_:
+        raise ToolError("id is empty; day_lines and search list lines with their ids")
+    tz = ZoneInfo(str(lb.meta["timezone"]))
+    with lb.index() as idx:
+        assert isinstance(idx, GatedIndex)
+        found = idx.db.execute(
+            "SELECT seq, tier, kind FROM lines WHERE id = ? ORDER BY seq LIMIT 1", (id_,)
+        ).fetchone()
+        if found is None:
+            raise ToolError(f"no line {id_!r}")
+        seq, tier, kind = int(found[0]), int(found[1]), str(found[2])
+        if kind == RETRACTION:
+            raise ToolError(f"line {id_!r} is a retraction, a mark on another line; no tool returns one")
+        if tier > lb.gate.max_tier:
+            lb.gate.withheld.add(seq)
+            raise ToolError(
+                f"line {id_!r} is tier {tier}, above the mcp ceiling of {lb.gate.max_tier};"
+                " nothing of it crosses"
+            )
+        line = idx.by_id(id_)
+        assert line is not None  # the tier is at or below the ceiling: the gate lets it through
+        marks = retractions(idx.retractions())
+        superseded = idx.superseded(flights.KIND)
+        names = labels(lb, idx)
+    mark = marks.get(str(line["id"]))
+    if mark is not None:  # `show` prints the marker and nothing of the line
+        reason = str(mark["payload"].get("reason", ""))
+        return {
+            "id": line["id"],
+            "seq": line["seq"],
+            "at": line["at"],
+            "time": _clock(str(line["at"]), tz),
+            "retracted": {"seq": mark["seq"], "reason": reason},
+            "row": f"retracted #{line['seq']}: {reason}",
+        }
+    row = _row_json(line, tz, names, superseded)
+    text = row.pop("text")
+    return {
+        **row,
+        "tz": line.get("tz"),
+        "row": text,
+        "payload": line["payload"],
+        "text": _full_text(lb, line),
+    }
+
+
+def tool_digest(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """`logbook digest DATE` through the gate: the reader composes the digest from the Day, the
+    promises and the gaps, every one of them read through the gated index, so a line above the
+    ceiling is in no part of it. `week` is the seven days of the ISO week that holds `date`, Monday
+    to Sunday, each as the command prints it, a blank line between; a day that has not come is left
+    out of a week and refused for a day, as the command refuses it. The digest's question bank and
+    its state are files beside the record, written as the command writes them; the record itself is
+    untouched."""
+    period = _string(a, "period") or "day"
+    if period not in PERIODS:
+        raise ToolError(f"period must be one of {', '.join(PERIODS)}")
+    day = _day(a, "date") or _today(lb)
+    if period == "day":
+        week = None
+        days = [day]
+    else:
+        d = parse_day(day)
+        monday = d - timedelta(days=d.weekday())
+        year, number, _weekday = d.isocalendar()
+        week = f"{year}-W{number:02d}"
+        tz = ZoneInfo(str(lb.meta["timezone"]))
+        today = gaps.now().astimezone(tz).date()
+        days = [
+            (monday + timedelta(days=n)).isoformat() for n in range(7) if monday + timedelta(days=n) <= today
+        ]
+    airports = _airports()
+    texts = ["\n".join(digest_reader.rows(digest_reader.read(lb, one, airports))) for one in days]
+    text = "\n\n".join(texts)
+    return {
+        "period": period,
+        "day": day,
+        "week": week,
+        "days": days,
+        "text": text,
+        "lines": len(text.splitlines()),
+    }
+
+
+# -- the write tools -------------------------------------------------------------------------------
+
+
 def tool_add_note(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     """`logbook add "<sentence>"`: one note/v1 line, source manual, tier 2, through `Logbook.append`."""
     text = (_string(a, "text", required=True) or "").strip()
@@ -643,6 +943,48 @@ TOOLS: dict[str, Tool] = {
             {"text": "mooring", "kinds": ["note"], "since": "2026-06-01"},
         ),
         Tool(
+            "day_lines",
+            "Every standing line of one local day (`logbook show DAY`), in time order: id, kind, profile,"
+            " local time, counterpart and the row's text as `show` prints it; `kinds` keeps only these"
+            " profile families. Lines above the mcp ceiling are left out and counted in `above_ceiling`, and"
+            " nothing of them crosses, not even an id. Default: today.",
+            {
+                "day": DAY,
+                "kinds": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": list(FAMILIES)},
+                    "description": 'profile families, e.g. ["mail", "message"]',
+                },
+            },
+            (),
+            tool_day_lines,
+            {"day": "2026-06-10", "kinds": ["note", "transcript"]},
+        ),
+        Tool(
+            "line",
+            "One line by id, in full: its envelope, the row `show` prints, its payload and its text (a"
+            " note's, a mail's body, a message's, a transcript's turns from the attachment store). A line"
+            " above the mcp ceiling is refused naming its tier, and nothing else of it crosses.",
+            {"id": {"type": "string", "description": "a line id, as day_lines and search list them"}},
+            ("id",),
+            tool_line,
+            {"id": "019cadd3-6bc0-7dcd-9133-000000000010"},
+        ),
+        Tool(
+            "digest",
+            "The digest as `logbook digest DATE` prints it (`period` day), or the seven digests of the ISO"
+            " week that holds `date`, Monday to Sunday, each as the command prints it (`period` week)."
+            " Read under the mcp ceiling: a line above it is in no part of the digest, as if it were not"
+            " in the record.",
+            {
+                "period": {"type": "string", "enum": list(PERIODS), "default": "day"},
+                "date": DAY,
+            },
+            (),
+            tool_digest,
+            {"period": "day", "date": "2026-06-10"},
+        ),
+        Tool(
             "add_note",
             'Append one note in the owner\'s words (`logbook add "<sentence>"`): a note/v1 line, source'
             " manual, tier 2, at `at` (RFC 3339 with a zone) or now. The one way to write a note.",
@@ -685,13 +1027,48 @@ def call(root: Path, name: str, arguments: Arguments, allow_tier_3: bool = False
     for key in arguments:
         if key not in tool.properties:
             raise ToolError(f"{name} takes no argument {key!r}")
-    gate = Gate(ceiling(root, allow_tier_3), set())
-    lb = GatedLogbook(root, gate)
     try:
-        data = tool.fn(lb, arguments)
-    except (stays.SettingsError, pages.PageError, policy.PolicyError, FormatError) as e:
-        raise ToolError(str(e)) from e
+        gate = Gate(ceiling(root, allow_tier_3), set())
+        lb = GatedLogbook(root, gate)
+        try:
+            data = tool.fn(lb, arguments)
+        except (stays.SettingsError, pages.PageError, policy.PolicyError, FormatError) as e:
+            raise ToolError(str(e)) from e
+    except (ToolError, ValueError, FileNotFoundError) as e:
+        _log(name, arguments, f"refused: {QUOTED.sub(ELIDED, str(e))}")  # a quoted argument is not logged
+        raise
+    _log(name, arguments, f"{_counts(data)} withheld={len(gate.withheld)}".strip())
     return {"data": data, "gate": gate.to_json()}
+
+
+def _log(name: str, arguments: Arguments, outcome: str) -> None:
+    """One line per call: the tool, the arguments that are a day, an id, a window or a switch
+    (`LOGGED`; never `text`, never `name`), and the outcome as counts or the refusal's reason."""
+    parts = [name]
+    for key in LOGGED:
+        if key in arguments:
+            value = arguments[key]
+            parts.append(f"{key}={','.join(map(str, value)) if isinstance(value, list) else value}")
+    parts.append(outcome)
+    LOG.info("%s", " ".join(parts))
+
+
+def _counts(data: object) -> str:
+    """The counts of an answer and nothing else: each integer field as `key=n`, each list field as
+    its length; a list answer as `n=<length>`."""
+    if isinstance(data, list):
+        return f"n={len(data)}"
+    if not isinstance(data, dict):
+        return ""
+    found = []
+    for key, value in data.items():
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            found.append(f"{key}={value}")
+        elif isinstance(value, list):
+            found.append(f"{key}={len(value)}")
+    return " ".join(found)
 
 
 def inspect_text() -> str:
@@ -778,6 +1155,11 @@ def serve(root: Path, allow_tier_3: bool = False) -> None:
     import anyio
 
     server = build_server(root, allow_tier_3)
+    if not LOG.handlers:  # one line per call on stderr; stdout is the transport
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(message)s"))
+        LOG.addHandler(handler)
+        LOG.setLevel(logging.INFO)
 
     async def run() -> None:
         from mcp.server.stdio import stdio_server

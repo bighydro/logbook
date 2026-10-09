@@ -46,12 +46,20 @@ from platform import machine
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
+from ..contrib.rows import (  # noqa: F401  (re-exported: `describe.is_description` and friends)
+    DESCRIPTION_SOURCE,
+    by_photo,
+    is_description,
+    row_text,
+    sentence_of,
+    under_keeper,
+)
 from ..core import attachments, keepers
 from ..core.chain import Line
 from ..core.store import Logbook
 from . import transcribe
 
-SOURCE = "description"  # the `source` of every line this command writes, whatever the engine
+SOURCE = DESCRIPTION_SOURCE  # the `source` of every line this command writes, whatever the engine
 KIND = "note"
 SCHEMA = "note/v1"
 TIER = 2  # RFC 0010: a note is tier 2, MUST
@@ -399,54 +407,9 @@ def draft(photo: Photo, found: Description, engine: Engine) -> dict[str, Any]:
     }
 
 
-def is_description(line: Mapping[str, Any]) -> bool:
-    """A note/v1 line this command wrote: `source` `description`, `extra.derived` true, a photo id."""
-    if line.get("kind") != KIND or line.get("source") != SOURCE:
-        return False
-    payload = line.get("payload") or {}
-    extra = payload.get("extra")
-    return (
-        isinstance(extra, dict)
-        and extra.get("derived") is True
-        and isinstance(extra.get("photo"), dict)
-        and isinstance(extra["photo"].get("line"), str)
-    )
-
-
-def by_photo(lines: Iterable[Line]) -> dict[str, Line]:
-    """photo line id → its description line, the latest by `seq` when there are two (a photo
-    described once has one)."""
-    found: dict[str, Line] = {}
-    for line in sorted((line for line in lines if is_description(line)), key=lambda line: int(line["seq"])):
-        found[str(line["payload"]["extra"]["photo"]["line"])] = line
-    return found
-
-
-def sentence_of(line: Line) -> tuple[str, list[str]]:
-    """(the sentence, the things) of a description line, from `extra.things` and the text."""
-    payload = line.get("payload") or {}
-    text = str(payload.get("text") or "")
-    first = next((s for s in text.splitlines() if s.strip()), "").strip()
-    extra = payload.get("extra")
-    listed = extra.get("things") if isinstance(extra, dict) else None
-    things = [str(t) for t in listed if isinstance(t, str)] if isinstance(listed, list) else []
-    return first, things
-
-
-def under_keeper(line: Line) -> str:
-    """The description as `show` prints it under its keeper: the sentence, then the things."""
-    sentence, things = sentence_of(line)
-    return f"{sentence} · {', '.join(things)}" if things else sentence
-
-
-def row_text(line: Line) -> str:
-    """The description as its own row, when its keeper is not shown: `IMG_0001.HEIC: <sentence> · …`."""
-    extra = (line.get("payload") or {}).get("extra") or {}
-    ref = extra.get("photo") if isinstance(extra, dict) else None
-    name = (
-        str(ref.get("file_name") or ref.get("asset_id") or ref.get("line")) if isinstance(ref, dict) else "?"
-    )
-    return f"{name}: {under_keeper(line)}"
+# `is_description`, `by_photo`, `sentence_of`, `under_keeper` and `row_text` live in
+# `logbook.contrib.rows` (imported above), where `show` and the MCP tools print a description with no
+# model code loaded.
 
 
 # -- the run ---------------------------------------------------------------------------------------

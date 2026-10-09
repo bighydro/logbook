@@ -20,7 +20,7 @@ from ..core.export import parse_day
 from ..core.resolve import Ref, labels
 from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _csv, _print_target, _today, _under_home
-from .rows import _day_rows, _line_row, _line_text
+from .rows import _day_rows, _line_row, _line_text, by_photo
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 
@@ -153,8 +153,6 @@ def cmd_show(a: argparse.Namespace) -> None:
     in time order (then chain order for the same instant). Senders, organizers and attendees
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
-    from ..labs import describe
-
     if a.day in READERS:
         _show_reader(a)
         return
@@ -184,7 +182,7 @@ def cmd_show(a: argparse.Namespace) -> None:
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
         print(f"  {hero}")
-    descriptions = describe.by_photo(line for line in rows if line["id"] not in retracted)
+    descriptions = by_photo(line for line in rows if line["id"] not in retracted)
     for text in _day_rows(rows, retracted, tz, names, superseded, descriptions):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
