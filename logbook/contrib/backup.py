@@ -560,13 +560,15 @@ def _compare(lb: Logbook, recorded: dict[str, Any] | None, latest: Path, seq: in
     """Why the restored copy is not the backup the record made, or None: what the live record said
     when the backup was taken (`state/last-backup.json`, when it names this snapshot), and the live
     chain itself, whose line `seq` must be the copy's head."""
-    if recorded is not None and str(recorded.get("snapshot")) == str(latest):
+    if recorded is not None and Path(str(recorded.get("snapshot"))) == latest:  # as paths, never strings
         said_seq, said_head = recorded.get("seq"), recorded.get("head")
         if said_seq != seq or said_head != head:
             return (
                 f"{latest.name} restores to {seq:,} lines, head {head[:12]}…, but the record said"
                 f" {said_seq} lines, head {str(said_head)[:12]}… when the backup was taken"
             )
+    if seq == 0:  # an empty record: no line to find, the head is the genesis hash either way
+        return None
     live = lb.line_by_seq(seq)
     if live is None:
         return f"{latest.name} holds {seq:,} lines; the live record has only {lb.meta['seq']:,}"
