@@ -37,7 +37,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 | `day` | one day read back: the night, country, stays and moves with who and what, flights, health, whether every usual source is in, and whether you signed it; `day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID\|none] [--at RFC3339] [--kept ID,ID] [--missed ID,ID] [--dropped ID,ID] [--carried ID,ID]` signs it, says what became of the commitments on it, with `--confirm none` confirms nothing and still signs, and with `--at` carries the moment you clicked, not the moment it ran ([the signed day](signed-day.md)) |
 | `digest` | one day in 25 lines at most, closing with one question |
 | `search` | full-text search through the index: words, `"a phrase"`, `kar*` |
-| `people` | everyone the record names, never the owner; `people NAME` is one person's page; `people merge` the same person named twice |
+| `people` | everyone the record names, never the owner; `people --priority` ranks them by a plain score; `people NAME` is one person's page; `people merge` the same person named twice; `people review` who the sources saw that the record has not placed, proposed against the people it names, accepted or rejected only when told ([people](people.md)) |
 | `rollup` | the record per year: countries, flights, nights, places, people, listen, attention, money; per month or week: health, attention; `rollup ledger` the transactions in context |
 | `serve` | the record in a browser, from this machine only; `serve mcp` serves it to an MCP host |
 
