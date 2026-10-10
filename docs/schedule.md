@@ -113,7 +113,7 @@ the point: the earlier set-up had weekly dumps and monitors that spoke up when s
 record has had the pieces without anything running them or saying so.
 
 **Who authorised the call.** No `logbook` command talks to a third party unless you ask it to by name
-(CLAUDE.md: never a network call on an adapter's default path). Installing the schedule is that ask:
+(the project's rule: never a network call on a default path). Installing the schedule is that ask:
 `sync --install-schedule`, run by you, is the explicit command that authorises the scheduled run's one
 request to the Telegram Bot API when the variables are set. `sync --all` by hand sends nothing, `doctor`
 sends nothing, and `--uninstall-schedule` ends it. A test points the request at a local server through

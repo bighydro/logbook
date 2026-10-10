@@ -297,7 +297,7 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     run = last_run.Run(started, tuple(runs), None, first)
     last_run.write(lb.root, last_run.State(run, week, weekly_sent))
     if last_run.is_first_sunday(local):
-        tested = backup.read_restore_test(lb.root)
+        tested = _restore_test_state(lb)
         if tested is None or tested.at.astimezone(zone).date() != local.date():
             _restore_test_lines(lb, backup.restore_test(lb, env=os.environ, at=started))
     checks = doctor.run(lb, os.environ)
@@ -312,7 +312,7 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     run = last_run.Run(started, tuple(runs), report, first)
     week = last_run.roll(week, run)
     weekly = last_run.is_week_end(local) and weekly_sent != local.date()
-    text = notify.compose(run, week, local, backup.read_restore_test(lb.root), weekly=weekly)
+    text = notify.compose(run, week, local, _restore_test_state(lb), weekly=weekly)
     if weekly:
         weekly_sent = local.date()
     path = last_run.write(lb.root, last_run.State(run, week, weekly_sent))
@@ -337,6 +337,16 @@ def _under_root(lb: Logbook, path: Path) -> str:
         return path.relative_to(lb.root).as_posix()
     except ValueError:
         return str(path)
+
+
+def _restore_test_state(lb: Logbook) -> Any:
+    """The last restore test, or None: none yet, or a file that is not the shape (doctor names it)."""
+    from ..contrib import backup
+
+    try:
+        return backup.read_restore_test(lb.root)
+    except ValueError:
+        return None
 
 
 def _restore_test_lines(lb: Logbook, result: Any) -> None:
