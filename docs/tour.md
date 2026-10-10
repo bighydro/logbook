@@ -89,7 +89,9 @@ the head; `index.sqlite` is current; `policy/owner.json` names at least one alia
 home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed,
 with its install line when not; the variables of every live source the record uses are set, by name only,
 never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
-Drive syncs, which is a fail with the reason. It reads and never writes, so it is safe to run any time.
+Drive syncs, which is a fail with the reason; the last scheduled run was recent and clean, and a restore
+test of the backup passed within 35 days ([the schedule](schedule.md)). It reads and never writes, so
+it is safe to run any time.
 
 ```bash
 logbook doctor
@@ -239,7 +241,7 @@ quick sources go first and `immich` last, and the first line says the order, so 
 never holds up the messages, the calendar, the positions or the weather. Each
 source prints its own summary as it runs, then one line per source closes the run (`ok`, `failed
 (status 1)`, `skipped (LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed.
-`logbook sync --install-schedule` makes the machine run `sync --all` at 07:00 and 19:00 local: a
+`logbook sync --install-schedule` makes the machine run `sync --scheduled` at 07:00 and 19:00 local: a
 launchd agent on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer on
 Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printed before it is
 written, nothing is written outside that directory, and `--uninstall-schedule` removes it again.
@@ -248,7 +250,10 @@ Installing also names this machine the record's home in `state/home.json` ([ADR
 every machine and warns about on any other. The
 agent runs the Python that installed it and points at the record found at install time; the keys your
 sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
-and the command never does. `sync weather` is the one source that asks a third party about your days:
+and the command never does. The scheduled run is `sync --all`, then `doctor`, with the outcome in
+`state/last-run.json`, the restore test on the first Sunday of the month, and, with
+`LOGBOOK_NOTIFY_TELEGRAM_TOKEN` and `LOGBOOK_NOTIFY_TELEGRAM_CHAT` in that file, one Telegram message
+when something is wrong or on Sunday evening ([the schedule](schedule.md)). `sync weather` is the one source that asks a third party about your days:
 it is left out of `--all` unless that file (or the environment) says `LOGBOOK_WEATHER=1`.
 
 ```bash
@@ -256,6 +261,7 @@ logbook sync --all                                # every configured source, one
 logbook sync --all --dry-run                      # count per source, write nothing
 logbook sync weather --since 2026-06-01           # the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)
 logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
+logbook sync --scheduled                          # what the schedule runs: sync --all, then doctor
 logbook sync --uninstall-schedule
 ```
 

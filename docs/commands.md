@@ -19,7 +19,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `init` | create a logbook (default `~/Logbook`) |
 | `setup` | the guided first run, one question at a time, resumable; and the record's settings: `setup places`, `setup assets`, `setup questions` |
-| `doctor` | the check-up, one line per check, exit 1 on a fail, the crossing ceilings and the record's home among them (ADR 0022); `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
+| `doctor` | the check-up, one line per check, exit 1 on a fail, the crossing ceilings, the record's home (ADR 0022), the last scheduled run and the last restore test among them; `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
 
 ## Write
 
@@ -27,7 +27,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `add` | a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH …"` |
 | `import` | `import backup DIR` reads every phone source of an iOS backup; `import trip-bundle FOLDER` a trip another record exported; `import page FILE` a day someone shared; `import inbox` what is in `inbox/`; `import attachments` the attachment store |
-| `sync` | pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb, weather); `--all` for every configured one, immich last; an interrupted immich walk resumes, `--restart` walks the library again |
+| `sync` | pull new items from a live source (immich, dawarich, imessage, gcal, granola, ais, adsb, weather); `--all` for every configured one, immich last; an interrupted immich walk resumes, `--restart` walks the library again; `--install-schedule` runs `sync --scheduled` (`sync --all`, then `doctor`, the outcome to `state/last-run.json`, one message when something is wrong) twice a day |
 
 ## Read
 
@@ -53,7 +53,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 | Command | What it does |
 |---|---|
 | `verify` | check the chain |
-| `backup` | a verified snapshot of the record on another disk; `backup list DEST`; `backup restore SNAPSHOT TARGET` |
+| `backup` | a verified snapshot of the record on another disk; `backup list DEST`; `backup restore SNAPSHOT TARGET`; `backup --restore-test` restores the latest snapshot into a temporary folder and verifies it, monthly on the schedule |
 | `key` | the record's recipients and this machine's identity: `init`, `show`, `add-recipient`, `remove-recipient`; `key seal --all` seals what was written before the record had recipients; `key circle` the sharing keys |
 | `repair` | put the record right, rewriting nothing: `repair retract SEQ REASON`, `repair migrate`, `repair index`, `repair fork [--apply]` (two chains forked at one head: diagnose, and move the orphan chain out into `repair/`), `repair health-units` |
 

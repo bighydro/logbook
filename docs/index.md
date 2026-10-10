@@ -70,7 +70,8 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 
 ## Keeping it
 
-- [Backup](backup.md): copy the record to another disk, verify it there, restore it.
+- [Backup](backup.md): copy the record to another disk, verify it there, restore it; the monthly restore test.
+- [The schedule](schedule.md): `sync --all` and `doctor` twice a day, the outcome in `state/last-run.json`, one message when something is wrong.
 - [When verify fails](recovery.md): what each failure means and the one command that answers it; `repair fork` for two chains forked at one head.
 - [The attachment store](attachments.md): the content-addressed bytes a line points at.
 - [Shared trips](trips-shared.md): two people on one trip exchange their records of it.
