@@ -757,7 +757,14 @@ def accept(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
     as the line wrote it, one alias line to the canonical person's own ref — what `people merge`
     writes — appended through `Logbook.append`. Every proposal is checked before the first line."""
     plans = []
+    keys: dict[Ref, Proposal] = {}
     for p in proposals:
+        other = keys.setdefault(p.observed.key, p)
+        if other is not p:
+            raise ReviewError(
+                f"proposals {other.number} and {p.number} place {p.observed.name} with two people;"
+                " accept one, and reject the other or leave it"
+            )
         candidate = p.canonical.candidate
         if candidate is None:
             raise ReviewError(f"{p.canonical.label} ({p.canonical.entity}) has no resolution line of its own")

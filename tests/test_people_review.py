@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from circle import circle_record
+from duplicates import resolution
 from review_people import (
     PEOPLE,
     SPELLED,
@@ -343,7 +344,16 @@ def test_review_refuses_what_it_cannot_act_on_and_writes_nothing(
         assert e.value.code == 2, args
         err = capsys.readouterr().err
         assert "people review" in err, args
-    assert lb.meta["seq"] == seq
+    maren, mona = PEOPLE[19], "019cadd3-6bc0-7dcd-9133-000000000199"
+    lb.append_many([resolution("ios-contacts", ("email", "mona.eide@example.org"), mona, "Mona Eide")])
+    proposals = _proposals(capsys)
+    first = _number_of(proposals, ("name", "eide m"), maren["id"])
+    second = _number_of(proposals, ("name", "eide m"), mona)
+    seq = lb.meta["seq"]
+    with pytest.raises(SystemExit) as e:
+        cli.main(["people", "review", "--accept", f"{first},{second}"])
+    assert e.value.code == 2 and "two people" in capsys.readouterr().err
+    assert lb.meta["seq"] == seq, "one observed person is never placed with two people in one run"
     with pytest.raises(SystemExit) as e:
         cli.main(["people", "--accept", "1"])
     assert e.value.code == 2 and "people review" in capsys.readouterr().err
