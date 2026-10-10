@@ -19,7 +19,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `init` | create a logbook (default `~/Logbook`) |
 | `setup` | the guided first run, one question at a time, resumable; and the record's settings: `setup places`, `setup assets`, `setup questions` |
-| `doctor` | the check-up, one line per check, exit 1 on a fail; `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
+| `doctor` | the check-up, one line per check, exit 1 on a fail, the crossing ceilings and the record's home among them (ADR 0022); `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
 
 ## Write
 

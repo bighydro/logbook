@@ -2,7 +2,10 @@
 
 `crossing.json` (ADR 0016) maps a destination to the highest tier that may cross to it. The owner's
 circumstances change, so the ceiling is theirs to raise. `logbook init` and the first export write the
-default; nothing else writes it. Read-only from here on.
+default; nothing else writes it. Read-only from here on. An entry may carry an `until` date (ADR 0022:
+a ceiling lent to a cloud model or service for a while, `{"max_tier": 2, "until": "2026-12-31"}`); it
+holds through that day and from the next counts as `max_tier` 0, so nothing crosses until the owner
+writes a new date or removes the line. `doctor` names an expired entry.
 
 `import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
@@ -26,6 +29,8 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -42,6 +47,8 @@ DEFAULT_POLICY: dict[str, Any] = {
     MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
 }
 TIERS = (1, 2, 3)
+UNTIL = "until"  # the last day an entry holds, `YYYY-MM-DD`; absent: for good
+EXPIRED_TIER = 0  # what an entry past its `until` day counts as: nothing crosses
 KEY = re.compile(r"[0-9a-fA-F]{64}")  # an Ed25519 public key as the circle file spells it
 IMPORT_FILE = PurePosixPath("policy/import.json")
 # Switched off until the owner says otherwise: the two Takeout products that record every sign-in
@@ -92,9 +99,68 @@ def read(root: Path) -> dict[str, Any]:
     return data
 
 
+def today() -> date:
+    """The calendar day an `until` date is held against: the machine's local date, as the owner
+    who wrote the date meant it. Tests replace it."""
+    return datetime.now().date()
+
+
+@dataclass(frozen=True)
+class Ceiling:
+    """One entry of the policy as it counts today: `max_tier` is 0 when the entry has expired,
+    `written` what the file says either way."""
+
+    destination: str
+    written: int
+    until: date | None
+    expired: bool
+
+    @property
+    def max_tier(self) -> int:
+        return EXPIRED_TIER if self.expired else self.written
+
+
+def _until(path: Path, destination: str, entry: dict[str, Any]) -> date | None:
+    found = entry.get(UNTIL)
+    if found is None:
+        return None
+    try:
+        if not isinstance(found, str):
+            raise ValueError
+        return date.fromisoformat(found)
+    except ValueError:
+        raise PolicyError(
+            f"{path}: {destination!r} has an until that is not a date; "
+            "write it as YYYY-MM-DD, the last day the entry holds"
+        ) from None
+
+
+def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
+    """`entry` as a Ceiling held against the day `on`; the shape is the caller's to have checked."""
+    until = _until(path, destination, entry)
+    return Ceiling(destination, int(entry["max_tier"]), until, until is not None and on > until)
+
+
+def ceilings(root: Path) -> list[Ceiling]:
+    """Every destination the policy names, in the file's order, each held against today: what the
+    file says, its `until` day and whether it has expired. An entry that is not the documented shape
+    is refused naming the file, as `ceiling` would refuse it."""
+    path = policy_path(root)
+    on = today()
+    out: list[Ceiling] = []
+    for destination, entry in read(root).items():
+        if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+            raise PolicyError(
+                f'{path}: {destination!r} must be {{"max_tier": 1, 2 or 3}}, with an optional "until" date'
+            )
+        out.append(_entry(path, destination, entry, on))
+    return out
+
+
 def ceiling(root: Path, destination: str) -> int:
     """The highest tier the policy lets cross to `destination`; a destination the file does not
-    name is refused, naming the file, so a crossing never goes to an unnamed reader."""
+    name is refused, naming the file, so a crossing never goes to an unnamed reader. An entry past
+    its `until` day is 0: nothing crosses (ADR 0022)."""
     path = policy_path(root)
     entry = read(root).get(destination)
     if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
@@ -102,7 +168,23 @@ def ceiling(root: Path, destination: str) -> int:
             f"{path} names no destination {destination!r} with a max_tier of 1, 2 or 3; "
             f'add {{"{destination}": {{"max_tier": 1}}}} to it to allow a crossing'
         )
-    return int(entry["max_tier"])
+    return _entry(path, destination, entry, today()).max_tier
+
+
+def expired_on(root: Path, destination: str) -> date | None:
+    """The `until` day of `destination`'s entry when that day has passed, else None: for a refusal
+    that says why the ceiling is 0. A destination the file does not name is None too."""
+    entry = read(root).get(destination)
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        return None
+    found = _entry(policy_path(root), destination, entry, today())
+    return found.until if found.expired else None
+
+
+def expiry_note(root: Path, destination: str) -> str:
+    """`; its entry expired on <day> and counts as max_tier 0` when it has, else the empty string."""
+    day = expired_on(root, destination)
+    return f"; its entry expired on {day.isoformat()} and counts as max_tier 0" if day is not None else ""
 
 
 def recipient(root: Path, destination: str) -> str | None:
@@ -148,7 +230,7 @@ def _ceiling_or_default(root: Path, destination: str, default: int) -> int:
         raise PolicyError(
             f'{path} names {destination!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": {default}}}'
         )
-    return int(entry["max_tier"])
+    return _entry(path, destination, entry, today()).max_tier
 
 
 def import_path(root: Path) -> Path:

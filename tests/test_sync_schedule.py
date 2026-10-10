@@ -6,14 +6,17 @@ command never writes. Nothing here talks to launchd or systemd: the calls are re
 
 from __future__ import annotations
 
+import json
 import plistlib
 import subprocess
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from logbook import cli
+from logbook.contrib import home as record_home
 from logbook.contrib import schedule
 from logbook.core.store import Logbook
 
@@ -142,6 +145,8 @@ def test_install_prints_each_unit_writes_it_in_the_systemd_user_dir_only_and_ena
         Path(".config/systemd/user"),
         service.relative_to(home),
         timer.relative_to(home),
+        Path("Logbook/state"),
+        Path("Logbook/state/home.json"),  # this machine is now the record's home (ADR 0022)
     }, "nothing else under the home directory"
     assert f"Environment=LOGBOOK_HOME={home / 'Logbook'}" in service.read_text(encoding="utf-8")
     assert calls == [
@@ -205,7 +210,13 @@ def test_install_on_macos_writes_the_agent_under_launch_agents(
     before = _tree(home)
     cli.main(["sync", "--install-schedule"])
     plist = home / "Library" / "LaunchAgents" / "org.logbook.sync.plist"
-    assert _tree(home) - before == {Path("Library"), Path("Library/LaunchAgents"), plist.relative_to(home)}
+    assert _tree(home) - before == {
+        Path("Library"),
+        Path("Library/LaunchAgents"),
+        plist.relative_to(home),
+        Path("Logbook/state"),
+        Path("Logbook/state/home.json"),  # this machine is now the record's home (ADR 0022)
+    }
     data = plistlib.loads(plist.read_bytes())
     assert data["EnvironmentVariables"] == {"LOGBOOK_HOME": str(home / "Logbook")}
     assert [c[:2] for c in calls] == [("launchctl", "bootout"), ("launchctl", "bootstrap")]
@@ -236,3 +247,75 @@ def test_install_on_an_unsupported_platform_exits_2(
     with pytest.raises(SystemExit) as e:
         cli.main(["sync", "--install-schedule"])
     assert e.value.code == 2 and "win32" in capsys.readouterr().err
+
+
+# -- the record's home (ADR 0022) ------------------------------------------------------------------------
+
+
+def test_install_records_this_machine_as_the_records_home(
+    home: Path,
+    calls: list[tuple[str, ...]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(record_home, "hostname", lambda: "nordlys-home")
+    monkeypatch.setattr(record_home, "today", lambda: date(2026, 10, 9))
+    cli.main(["sync", "--install-schedule"])
+    out = capsys.readouterr().out
+    path = home / "Logbook" / "state" / "home.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"host": "nordlys-home", "since": "2026-10-09"}
+    assert "nordlys-home" in out and "home" in out
+    found = record_home.read(home / "Logbook")
+    assert found is not None and found.host == "nordlys-home" and found.since == date(2026, 10, 9)
+
+
+def test_install_again_on_the_same_machine_keeps_the_date(
+    home: Path, calls: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(record_home, "hostname", lambda: "nordlys-home")
+    monkeypatch.setattr(record_home, "today", lambda: date(2026, 10, 9))
+    cli.main(["sync", "--install-schedule"])
+    monkeypatch.setattr(record_home, "today", lambda: date(2026, 11, 1))
+    cli.main(["sync", "--install-schedule"])
+    found = record_home.read(home / "Logbook")
+    assert found is not None and found.since == date(2026, 10, 9)
+
+
+def test_install_on_another_machine_moves_the_home_and_says_so(
+    home: Path,
+    calls: list[tuple[str, ...]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(record_home, "hostname", lambda: "laptop-of-ines")
+    monkeypatch.setattr(record_home, "today", lambda: date(2026, 10, 9))
+    cli.main(["sync", "--install-schedule"])
+    capsys.readouterr()
+    monkeypatch.setattr(record_home, "hostname", lambda: "nordlys-home")
+    monkeypatch.setattr(record_home, "today", lambda: date(2026, 11, 1))
+    cli.main(["sync", "--install-schedule"])
+    out = capsys.readouterr().out
+    assert "laptop-of-ines" in out and "nordlys-home" in out
+    found = record_home.read(home / "Logbook")
+    assert found is not None and found.host == "nordlys-home" and found.since == date(2026, 11, 1)
+
+
+def test_uninstall_leaves_the_home_as_it_is(
+    home: Path, calls: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(record_home, "hostname", lambda: "nordlys-home")
+    cli.main(["sync", "--install-schedule"])
+    cli.main(["sync", "--uninstall-schedule"])
+    assert (home / "Logbook" / "state" / "home.json").exists()
+
+
+def test_install_writes_over_a_home_file_that_is_not_the_shape(
+    home: Path, calls: list[tuple[str, ...]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(record_home, "hostname", lambda: "nordlys-home")
+    path = home / "Logbook" / "state" / "home.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{", encoding="utf-8")
+    cli.main(["sync", "--install-schedule"])
+    found = record_home.read(home / "Logbook")
+    assert found is not None and found.host == "nordlys-home"

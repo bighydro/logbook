@@ -242,7 +242,10 @@ source prints its own summary as it runs, then one line per source closes the ru
 `logbook sync --install-schedule` makes the machine run `sync --all` at 07:00 and 19:00 local: a
 launchd agent on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer on
 Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printed before it is
-written, nothing is written outside that directory, and `--uninstall-schedule` removes it again. The
+written, nothing is written outside that directory, and `--uninstall-schedule` removes it again.
+Installing also names this machine the record's home in `state/home.json` ([ADR
+0022](adr/0022-the-records-home.md)): the one machine that writes, which `logbook doctor` checks on
+every machine and warns about on any other. The
 agent runs the Python that installed it and points at the record found at install time; the keys your
 sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
 and the command never does. `sync weather` is the one source that asks a third party about your days:
