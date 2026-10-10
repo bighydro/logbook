@@ -551,9 +551,10 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["failed"] = failed
     if _takes(adapter, "assets", live=True):
         options["assets"] = _registry(lb, "sync")
-    if networks is not None:
+    parse_networks = getattr(adapter, "networks", None)  # the adapter's own parser of the flag's value
+    if networks is not None and parse_networks is not None:
         try:
-            options["networks"] = adapter.networks(networks)
+            options["networks"] = parse_networks(networks)
         except ValueError as e:
             print(f"sync: {a.name}: {e}", file=sys.stderr)
             sys.exit(2)
