@@ -26,6 +26,13 @@ The checks, in the order they print:
 - `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
   names this machine, or no home is set (a pass either way); another machine is a warn: writers
   belong on the home.
+- `last-run`: when the schedule (`sync --install-schedule`) last ran `sync --scheduled`, from
+  `state/last-run.json`, and whether it was clean: a run older than 26 hours, or one in which a source
+  failed or a check failed, is a warn. No file: a pass when no schedule is installed here, a warn when
+  one is and has not run yet.
+- `restore-test`: the last `backup --restore-test` (`state/last-restore-test.json`) passed within 35
+  days (the schedule runs it on the first Sunday of the month); none, older, or skipped is a warn saying
+  what to do; failed is a fail with the reason.
 - `disk`: free space on the volume the record is on (under 5 GiB a warn, under 512 MiB a fail).
 - `folder`: the record is not under a folder a sync client owns — iCloud Drive, Dropbox, OneDrive,
   Google Drive — by any part of its path, its resolved path, or the `OneDrive` variable Windows
@@ -42,12 +49,14 @@ import sqlite3
 import sys
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Literal, TextIO
+from zoneinfo import ZoneInfo
 
 from ..core import assets, index, places, policy
 from ..core.store import FormatError, Logbook
-from . import adapters, home
+from . import adapters, home, last_run, schedule
 
 Status = Literal["pass", "warn", "fail"]
 Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, as shutil.disk_usage
@@ -306,6 +315,83 @@ def home_check(root: Path) -> Check:
     return Check("home", "warn", NOT_HOME.format(host=found.host))
 
 
+RESTORE_TEST_WITHIN = timedelta(days=35)  # the first Sundays of two months are at most five weeks apart
+INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` twice a day and writes it"
+RESTORE_TEST = (
+    "`logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it;"
+    " the schedule runs it on the first Sunday of the month"
+)
+
+
+def schedule_installed(env: Mapping[str, str]) -> bool:
+    """Whether this machine has the agent or timer `sync --install-schedule` writes."""
+    xdg = env.get("XDG_CONFIG_HOME", "").strip()
+    try:
+        plan = schedule.plan(
+            schedule.system(), Path.home(), sys.executable, None, Path(xdg).expanduser() if xdg else None
+        )
+    except schedule.ScheduleError:
+        return False
+    return schedule.installed(plan)
+
+
+def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
+    """`state/last-run.json`: the last scheduled run, when, and whether it was clean."""
+    try:
+        state = last_run.read(lb.root)
+    except last_run.LastRunError as e:
+        return Check("last-run", "warn", str(e))
+    if state is None:
+        if schedule_installed(env):
+            return Check(
+                "last-run", "warn", "the schedule is installed but has not run yet; wait for 07:00 or 19:00"
+            )
+        return Check("last-run", "pass", f"no schedule on this machine; {INSTALL}")
+    run = state.run
+    now = last_run.now()
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    age = now - run.at
+    when = f"{run.at.astimezone(zone):%Y-%m-%d %H:%M} ({last_run.age_text(age)})"
+    detail = f"{when}: {last_run.sources_text(run)}; {last_run.doctor_text(run.doctor)}"
+    if age > last_run.STALE_AFTER:
+        hours = round(last_run.STALE_AFTER.total_seconds() / 3600)
+        return Check(
+            "last-run", "warn", f"{detail}; more than {hours} h ago: is the schedule still installed?"
+        )
+    if run.doctor is None and age > timedelta(hours=3):
+        return Check("last-run", "warn", f"{detail}; the run did not finish")
+    if run.failed:
+        return Check("last-run", "warn", f"{detail}; first failing line: {run.first_failing}")
+    return Check("last-run", "pass", detail)
+
+
+def restore_test_check(lb: Logbook) -> Check:
+    """`state/last-restore-test.json`: the last restore test passed, within 35 days."""
+    from . import backup  # here, not at the top: backup imports this module
+
+    try:
+        test = backup.read_restore_test(lb.root)
+    except ValueError as e:
+        return Check("restore-test", "warn", str(e))
+    if test is None:
+        return Check("restore-test", "warn", f"no restore test yet: {RESTORE_TEST}")
+    when = f"{test.at:%Y-%m-%d}"
+    name = test.snapshot.name if test.snapshot is not None else "no snapshot"
+    if test.status == "failed":
+        return Check("restore-test", "fail", f"failed {when} ({name}): {test.reason}")
+    if test.status == "skipped":
+        return Check("restore-test", "warn", f"skipped {when}: {test.reason}")
+    age = last_run.now() - test.at
+    if age > RESTORE_TEST_WITHIN:
+        return Check(
+            "restore-test",
+            "warn",
+            f"last passed {when} ({name}), {last_run.age_text(age)}, more than"
+            f" {RESTORE_TEST_WITHIN.days} days; {RESTORE_TEST}",
+        )
+    return Check("restore-test", "pass", f"passed {when} ({name}, {test.seq or 0:,} lines)")
+
+
 def cloud_folder(root: Path, env: Mapping[str, str]) -> str | None:
     """The sync service whose folder holds `root`, by a part of its path (as given and resolved,
     so a symlink into the folder is seen) or the OneDrive variable; None for a plain folder."""
@@ -372,6 +458,8 @@ def run(
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
     checks.append(home_check(lb.root))
+    checks.append(last_run_check(lb, env))
+    checks.append(restore_test_check(lb))
     checks.append(disk_check(lb.root, usage))
     checks.append(folder_check(lb.root, env))
     return checks

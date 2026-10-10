@@ -570,14 +570,27 @@ def backup_arguments(sub: Subparsers) -> None:
         "backup",
         help="a verified snapshot on another disk; backup list; backup restore",
         description="a verified snapshot of the record under DEST/<owner_id>/<timestamp>/, hard-linked to the"
-        " previous one where nothing changed; `backup list DEST`; `backup restore SNAPSHOT TARGET`",
+        " previous one where nothing changed; `backup list DEST`; `backup restore SNAPSHOT TARGET`;"
+        " `backup --restore-test [DEST] [--to DIR]`: the monthly restore test",
     )
     s.add_argument(
         "paths",
-        nargs="+",
+        nargs="*",
         metavar="DEST",
         help="where the snapshots go (another disk; never inside the record, never a sync client's"
-        " folder); or `list DEST`; or `restore SNAPSHOT TARGET`",
+        " folder); or `list DEST`; or `restore SNAPSHOT TARGET`; with --restore-test, optional: where the"
+        " last backup went",
+    )
+    s.add_argument(
+        "--restore-test",
+        action="store_true",
+        help="restore the latest snapshot into a temporary folder, verify it there (every sealed line"
+        " opened), compare it with what the record said when the backup was taken, delete the restore,"
+        " and write state/last-restore-test.json, which `doctor` reads; the schedule runs it on the first"
+        " Sunday of the month",
+    )
+    s.add_argument(
+        "--to", metavar="DIR", help="--restore-test: restore into DIR (new or empty) and keep it there"
     )
     s.add_argument(
         "--keep", type=int, metavar="N", help="after the new snapshot verifies, prune the oldest so N remain"
@@ -598,6 +611,18 @@ def cmd_backup(a: argparse.Namespace) -> None:
     that does not verify is removed and exits 1."""
     from ..contrib import backup
 
+    if a.restore_test:
+        _backup_restore_test(a)
+        return
+    if a.to is not None:
+        print("backup: --to belongs to `logbook backup --restore-test`", file=sys.stderr)
+        sys.exit(2)
+    if not a.paths:
+        print(
+            "backup: usage: logbook backup DEST | list DEST | restore SNAPSHOT TARGET | --restore-test",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     verb, paths = (a.paths[0], a.paths[1:]) if a.paths[0] in ("list", "restore") else (None, a.paths)
     usage = {None: "backup DEST", "list": "backup list DEST", "restore": "backup restore SNAPSHOT TARGET"}
     if len(paths) != (2 if verb == "restore" else 1):
@@ -638,6 +663,48 @@ def _backup_snapshot(lb: Logbook, dest: Path, a: argparse.Namespace) -> None:
         kept = len(backup.snapshots(result.path.parent))
         pruned = ", ".join(p.name for p in removed) if removed else "nothing"
         print(f"  kept {_plural(kept, 'snapshot')}; pruned {pruned}")
+
+
+def _backup_restore_test(a: argparse.Namespace) -> None:
+    """`backup --restore-test [DEST] [--to DIR]` (`logbook/contrib/backup.py`, docs/backup.md "The monthly
+    restore test"). Exit 0 when it passed, 1 when it failed, 2 when it was skipped (nothing to test, or
+    no identity to open a sealed record with) or DIR is refused; the outcome is written either way."""
+    from ..contrib import backup
+
+    if a.keep is not None or a.verify:
+        print("backup --restore-test: --keep and --verify belong to `logbook backup DEST`", file=sys.stderr)
+        sys.exit(2)
+    if len(a.paths) > 1:
+        print("backup: usage: logbook backup --restore-test [DEST] [--to DIR]", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    dest = Path(a.paths[0]).expanduser() if a.paths else None
+    to = Path(a.to).expanduser() if a.to is not None else None
+    try:
+        result = backup.restore_test(lb, dest, to)
+    except backup.Refused as e:
+        print(f"backup: {e}", file=sys.stderr)
+        sys.exit(2)
+    _say_restore_test(lb, result)
+    if result.status == "failed":
+        sys.exit(1)
+    if result.status == "skipped":
+        sys.exit(2)
+
+
+def _say_restore_test(lb: Logbook, result: Any) -> None:
+    """The lines `backup --restore-test` prints; `sync --scheduled` prints the same."""
+    from ..contrib import backup
+
+    name = result.snapshot.name if result.snapshot is not None else "no snapshot"
+    where = f" → {result.kept} (kept; delete it when done)" if result.kept is not None else ""
+    print(f"restore test: {name}{where}")
+    if result.status == "passed":
+        print(f"  valid — {result.seq:,} lines, head {result.head}; line {result.seq:,} of the live chain")
+        print(f"  passed; {backup.LAST_RESTORE_TEST_FILE.as_posix()}")
+    else:
+        print(f"  {result.status}: {result.reason}")
+        print(f"  {backup.LAST_RESTORE_TEST_FILE.as_posix()}")
 
 
 def _backup_list(dest: Path) -> None:

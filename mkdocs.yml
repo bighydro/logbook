@@ -109,6 +109,7 @@ nav:
   - Search: search.md
   - The MCP server: mcp.md
   - Backup: backup.md
+  - The schedule: schedule.md
   - When verify fails: recovery.md
   - The attachment store: attachments.md
   - Adapters:

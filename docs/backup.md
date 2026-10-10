@@ -108,10 +108,57 @@ earlier snapshot in the list. The last number is what deleting the snapshot woul
 `logbook.json` cannot be read is listed as not readable, with the reason, and the listing goes on. `list`
 needs no record and can run on the backup disk from any machine.
 
+## The monthly restore test
+
+A backup that was never restored is a hope. `logbook backup --restore-test` takes the latest snapshot
+of the last backup, restores it into a temporary folder, verifies it there, compares it with what the
+record said when the backup was taken, deletes the restore, and writes `state/last-restore-test.json`,
+which `logbook doctor` reads. [The schedule](schedule.md) runs it on the first Sunday of every month,
+after the sync, once that day; by hand it runs any time.
+
+```bash
+logbook backup --restore-test                          # the last backup's latest snapshot
+logbook backup --restore-test /Volumes/Backup/Logbook  # a destination by name
+logbook backup --restore-test --to ~/Restored          # restore into DIR and keep it there
+```
+
+```
+restore test: 2026-10-04T030000Z
+  valid — 12,772 lines, head 53d39fda0b2c9e1f…; line 12,772 of the live chain
+  passed; state/last-restore-test.json
+```
+
+What is tested, in order:
+
+1. **The copy restores**: `backup restore` into the temporary folder, so the same code path a real
+   restore takes is the one tested, refusals included.
+2. **The copy verifies**, by the files alone: every hash recomputes and its `logbook.json` names the
+   last line. A snapshot whose month file was changed by a byte fails here. A record that seals tiers 2
+   and 3 is verified with the identity (`--identity-file`, `LOGBOOK_IDENTITY_FILE`, or the default path),
+   so every sealed line is opened and checked against its digest: a backup you could not read is a
+   backup you do not have.
+3. **It is the backup the record made**: `logbook backup DEST` writes `state/last-backup.json`
+   (where the snapshot went, and the live record's line count and head at that moment); the restored
+   copy must have that count and that head, and that head must be the hash of that line in the live
+   chain. A snapshot of another record, or one whose files were replaced, fails here.
+
+The outcome is `passed`, `failed` with the reason, or `skipped`: no backup recorded yet (run
+`logbook backup DEST` once), or a sealed record whose identity the run cannot see. The scheduled run
+never prompts, so the identity has to be in the agent's environment: `LOGBOOK_IDENTITY_FILE=<path>` in
+`~/.config/logbook/sync.env`, or the restore test is skipped and `doctor` warns with that line until it
+is. The exit status is 0, 1 and 2 for the three outcomes. `--to DIR` keeps the restore (DIR must be
+new or empty, and never under a sync client's folder) for you to look at with `logbook verify --root
+DIR` or `LOGBOOK_HOME=DIR logbook day …`; delete it when done.
+
+`doctor` has a `restore-test` line: a pass when a test passed within 35 days, a warn when there has
+been none, the last is older, or it was skipped, saying what to do, and a fail when the last test
+failed, with its reason. `state/last-restore-test.json` is bookkeeping: a snapshot leaves `state/`
+out, so a backup never carries it or `last-backup.json`.
+
 ## A schedule
 
 `logbook backup` is a one-shot command, so the machine's own scheduler runs it the way `logbook sync
---install-schedule` runs `sync --all` (README, "Two ways in"). Once a day at 03:00, after the evening sync,
+--install-schedule` runs `sync --scheduled` ([the schedule](schedule.md)). Once a day at 03:00, after the evening sync,
 keeping two weeks:
 
 **macOS, launchd.** `~/Library/LaunchAgents/org.logbook.backup.plist`, with the Python that has `logbook`
