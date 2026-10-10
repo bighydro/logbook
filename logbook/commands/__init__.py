@@ -14,7 +14,7 @@
 | `trips.py`     | `show trips`, `show trip`                                                        |
 | `keepers.py`   | `show keepers`                                                                   |
 | `rollup.py`    | `rollup`, with `rollup ledger`                                                   |
-| `people.py`    | `people`, `people NAME`, `people merge`                                          |
+| `people.py`    | `people`, `people --priority`, `people NAME`, `people merge`, `people review`    |
 | `places.py`    | `setup places`                                                                   |
 | `promises.py`  | `promises`, with `promises tasks`                                                |
 | `export.py`    | `export` (with `export share day`), `import` (with `import trip-bundle`,         |

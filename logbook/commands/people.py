@@ -1,4 +1,5 @@
-"""The people: `people`, `people NAME` (the command `person` until 0.6) and `people merge`."""
+"""The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`
+and `people review`."""
 
 from __future__ import annotations
 
@@ -18,30 +19,58 @@ if TYPE_CHECKING:
 
 
 MERGE = "merge"  # `people merge`: never a person's name
+REVIEW = "review"  # `people review`: nor this
+MERGE_FLAGS = ("propose", "apply", "export_review", "apply_review")
+REVIEW_FLAGS = ("accept", "reject", "all_above")
 
 
 def people_arguments(sub: Subparsers) -> None:
-    """`logbook people [NAME|merge]`."""
+    """`logbook people [NAME|merge|review]`."""
     s = sub.add_parser(
         "people",
-        help="everyone the record names; NAME: one person's page; merge",
+        help="everyone the record names; NAME: one person's page; merge; review",
         description="everyone the record names, never the owner: channels, days together, last real contact;"
-        " NAME: one person's page; merge: the same person named twice",
+        " --priority: ranked by a plain score; NAME: one person's page; merge: the same person named twice;"
+        " review: who the sources saw that the record has not placed, proposed against the people it names",
     )
     s.add_argument(
         "name",
         nargs="?",
-        metavar="NAME|merge",
+        metavar="NAME|merge|review",
         help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
-        " `merge`: the same person named twice or more, proposals with the evidence, merged only when told",
+        " `merge`: the same person named twice or more, proposals with the evidence, merged only when told;"
+        " `review`: the observed people not yet placed, proposed against the canonical ones, numbered,"
+        " accepted or rejected only when told",
     )
-    s.add_argument("--year", metavar="YYYY", help="one year (default the whole record)")
+    s.add_argument(
+        "--year", metavar="YYYY", help="one year (default the whole record; --priority: the last year)"
+    )
     s.add_argument(
         "--json",
         action="store_true",
-        help="the report, the page, or merge's proposals or lines written, as one JSON object",
+        help="the report, the page, the ranking, or merge's and review's proposals or lines written, as JSON",
+    )
+    s.add_argument(
+        "--accept",
+        action="append",
+        metavar="N[,N]",
+        help="review: accept these proposals: the alias lines `people merge` writes, one per identifier seen",
+    )
+    s.add_argument(
+        "--reject",
+        action="append",
+        metavar="N[,N]",
+        help="review: reject these proposals: one line each saying the two are not the same person",
+    )
+    s.add_argument(
+        "--all-above", metavar="SCORE", help="review: accept every proposal at or above this score"
     )
     g = s.add_mutually_exclusive_group()
+    g.add_argument(
+        "--priority",
+        action="store_true",
+        help="rank the people by a plain score: days together, messages both ways, meetings, recency",
+    )
     g.add_argument(
         "--propose", action="store_true", help="merge: list the proposals with their evidence (the default)"
     )
@@ -72,16 +101,28 @@ def cmd_people(a: argparse.Namespace) -> None:
     if a.name == MERGE:
         _people_merge(Logbook.find(), a)
         return
-    if a.name is not None:
-        cmd_person(a)
+    if a.name == REVIEW:
+        _people_review(Logbook.find(), a)
         return
-    if a.propose or a.apply or a.export_review or a.apply_review:
+    if any(getattr(a, flag) for flag in MERGE_FLAGS):
         print(
             "people: --propose, --apply, --export-review and --apply-review go with `people merge`",
             file=sys.stderr,
         )
         sys.exit(2)
+    if any(getattr(a, flag) for flag in REVIEW_FLAGS):
+        print("people: --accept, --reject and --all-above go with `people review`", file=sys.stderr)
+        sys.exit(2)
+    if a.name is not None:
+        if a.priority:
+            print("people: --priority ranks everyone; it takes no NAME", file=sys.stderr)
+            sys.exit(2)
+        cmd_person(a)
+        return
     lb = Logbook.find()
+    if a.priority:
+        _people_priority(lb, a)
+        return
     try:
         window = _people_window(lb, a.year)
         if window is None:
@@ -105,6 +146,9 @@ def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
     lines (RFC 0006) through `Logbook.append`; every id or row is checked before the first one."""
     from ..contrib import people_merge
 
+    if any(getattr(a, flag) for flag in REVIEW_FLAGS):
+        print("people merge: --accept, --reject and --all-above go with `people review`", file=sys.stderr)
+        sys.exit(2)
     try:
         report = people_merge.read(lb)
         if a.apply:
@@ -142,6 +186,83 @@ def _say_merged(applied: list[people_merge.Applied], as_json: bool) -> None:
         print(json.dumps({"applied": [a.to_json() for a in applied]}, indent=2, ensure_ascii=False))
         return
     for text in people_merge.applied_rows(applied):
+        print(text)
+
+
+def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people review [--accept N[,N]] [--reject N[,N]] [--all-above SCORE] [--json]`: the observed
+    people the record has not placed, proposed against the canonical ones, ranked by the evidence
+    and numbered (`logbook.contrib.people_review`); nothing is written unless told. `--accept` and
+    `--all-above` append the alias lines `people merge` writes, `--reject` one `people-review/v1`
+    line per pair, all through `Logbook.append`; every number is checked before the first line."""
+    from ..contrib import people_review
+
+    if any(getattr(a, flag) for flag in MERGE_FLAGS):
+        print(
+            "people review: --propose, --apply, --export-review and --apply-review go with `people merge`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        report = people_review.read(lb)
+        accepted = people_review.numbers(a.accept)
+        rejected = people_review.numbers(a.reject)
+        both = sorted(set(accepted) & set(rejected))
+        if both:
+            raise people_review.ReviewError(
+                f"proposal {', '.join(map(str, both))} is both accepted and rejected; say one"
+            )
+        if a.all_above is not None:
+            accepted = [
+                *accepted,
+                *(p.number for p in people_review.above(report, a.all_above) if p.number not in accepted),
+            ]
+        if accepted or rejected:
+            to_accept = people_review.pick(report, accepted)
+            to_reject = people_review.pick(report, rejected)
+            written = [
+                *people_review.accept(lb, report, to_accept),
+                *people_review.reject(lb, report, to_reject),
+            ]
+            if a.json:
+                print(json.dumps({"written": [w.to_json() for w in written]}, indent=2, ensure_ascii=False))
+                return
+            if not written:
+                print("nothing to write: no proposal at or above that score")
+            for text in people_review.written_rows(written):
+                print(text)
+            return
+        if a.all_above is not None:
+            print("nothing to write: no proposal at or above that score")
+            return
+    except (people_review.ReviewError, ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people review: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in people_review.rows(report):
+        print(text)
+
+
+def _people_priority(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people --priority [--year YYYY] [--json]`: the canonical people heard in the last year (or
+    the year), ranked by the plain score `logbook.contrib.people_review.score` documents. Nothing
+    is written."""
+    from ..contrib import people_review
+
+    try:
+        ranked = people_review.priority(lb, a.year)
+    except (ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people: {e}", file=sys.stderr)
+        sys.exit(2)
+    if ranked is None:
+        print(json.dumps({"window": None, "people": []}) if a.json else f"no people: {_no_days(a.year)}")
+        return
+    if a.json:
+        print(json.dumps(ranked.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in people_review.priority_rows(ranked):
         print(text)
 
 
