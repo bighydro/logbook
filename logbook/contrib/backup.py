@@ -34,10 +34,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from ..core import attachments
 from ..core.store import Logbook
@@ -52,6 +54,9 @@ FILES = ("places.json", "assets.json")
 PARTIAL = ".{name}.partial"
 STAMP = "%Y-%m-%dT%H%M%SZ"  # a snapshot's name: UTC, sortable, no colon (Windows refuses one)
 CHUNK = 1 << 20
+LAST_BACKUP_FILE = PurePosixPath("state/last-backup.json")  # record-relative: the live record at backup time
+LAST_RESTORE_TEST_FILE = PurePosixPath("state/last-restore-test.json")
+RUN_STAMP = "%Y-%m-%dT%H:%M:%SZ"
 CLOUD_REASON = (
     "a sync client keeps the backup on someone else's server and may evict it; back up to a plain"
     " local disk or a drive you plug in"
@@ -84,6 +89,20 @@ class Result:
     linked: int
     linked_to: Path | None  # the previous snapshot, when there was one to link against
     attachments_checked: int | None = None  # with `verify_attachments`: how many hashed to their name
+
+
+@dataclass(frozen=True)
+class RestoreTest:
+    """One restore test (`backup --restore-test`): the latest snapshot restored into a temporary
+    folder, verified there, compared with what the record said when the backup was taken."""
+
+    at: datetime  # UTC, aware
+    status: str  # `passed`, `failed` or `skipped`
+    snapshot: Path | None
+    seq: int | None
+    head: str | None
+    reason: str | None  # why it failed or was skipped; None when it passed
+    kept: Path | None = None  # the restore left in place (`--to DIR`); None when it was deleted
 
 
 @dataclass(frozen=True)
@@ -258,7 +277,8 @@ def snapshot(
     owner_dir.mkdir(parents=True, exist_ok=True)
     earlier = snapshots(owner_dir)
     previous = earlier[-1] if earlier else None
-    name = _snapshot_name(owner_dir, now())
+    stamp = now()
+    name = _snapshot_name(owner_dir, stamp)
     partial, final = owner_dir / PARTIAL.format(name=name), owner_dir / name
     files = record_files(lb.root)
     try:
@@ -269,6 +289,7 @@ def snapshot(
     except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
         raise
+    record_backup(lb.root, dest, final, seq, head, stamp)
     return Result(
         final,
         seq,
@@ -379,6 +400,186 @@ def restore(source: Path, target: Path, *, env: Mapping[str, str] | None = None)
     return Result(target, seq, head, len(files), total, copied, copied_bytes, 0, None)
 
 
+# -- the restore test ----------------------------------------------------------------------------------------
+
+
+def _stamp(at: datetime) -> str:
+    return at.astimezone(UTC).strftime(RUN_STAMP)
+
+
+def _parse_stamp(text: str) -> datetime:
+    return datetime.strptime(text, RUN_STAMP).replace(tzinfo=UTC)
+
+
+def _write_json(path: Path, data: dict[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
+def record_backup(root: Path, dest: Path, snapshot_path: Path, seq: int, head: str, at: datetime) -> Path:
+    """`state/last-backup.json`: where the last backup went and what the live record said at the
+    time (lines and head), for the restore test to compare against. Bookkeeping, never in the
+    chain; a snapshot leaves `state/` out, so it never carries this file."""
+    data = {
+        "at": _stamp(at),
+        "dest": str(dest),
+        "snapshot": str(snapshot_path),
+        "seq": seq,
+        "head": head,
+    }
+    return _write_json(root.joinpath(*LAST_BACKUP_FILE.parts), data)
+
+
+def last_backup(root: Path) -> dict[str, Any] | None:
+    """What `record_backup` wrote, or None: no backup recorded, or a file that is not the shape
+    (bookkeeping; the restore test then compares with the snapshot alone and says so)."""
+    path = root.joinpath(*LAST_BACKUP_FILE.parts)
+    if not path.exists():
+        return None
+    try:
+        data: Any = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("dest"), str):
+        return None
+    return data
+
+
+def read_restore_test(root: Path) -> RestoreTest | None:
+    """The last restore test as written, or None when there has been none. A file that is not the
+    shape raises ValueError naming it."""
+    path = root.joinpath(*LAST_RESTORE_TEST_FILE.parts)
+    if not path.exists():
+        return None
+    shape = f"{path} is not the shape `logbook backup --restore-test` writes"
+    try:
+        data: Any = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or data["status"] not in ("passed", "failed", "skipped"):
+            raise ValueError(shape)
+        snapshot = data.get("snapshot")
+        kept = data.get("kept")
+        return RestoreTest(
+            _parse_stamp(str(data["at"])),
+            str(data["status"]),
+            Path(snapshot) if isinstance(snapshot, str) else None,
+            int(data["seq"]) if data.get("seq") is not None else None,
+            str(data["head"]) if data.get("head") is not None else None,
+            str(data["reason"]) if data.get("reason") is not None else None,
+            Path(kept) if isinstance(kept, str) else None,
+        )
+    except (KeyError, TypeError, ValueError):
+        raise ValueError(shape) from None
+
+
+def write_restore_test(root: Path, test: RestoreTest) -> Path:
+    data = {
+        "at": _stamp(test.at),
+        "status": test.status,
+        "snapshot": str(test.snapshot) if test.snapshot is not None else None,
+        "seq": test.seq,
+        "head": test.head,
+        "reason": test.reason,
+        "kept": str(test.kept) if test.kept is not None else None,
+    }
+    return _write_json(root.joinpath(*LAST_RESTORE_TEST_FILE.parts), data)
+
+
+NO_BACKUP = (
+    "no backup recorded in state/last-backup.json: run `logbook backup DEST` once and the schedule tests"
+    " it on the first Sunday of the month, or name DEST: `logbook backup --restore-test DEST`"
+)
+NO_IDENTITY = (
+    "the record seals tiers 2 and 3 and opening them needs the identity; none at {path}: put"
+    " LOGBOOK_IDENTITY_FILE=<path to the identity file> in ~/.config/logbook/sync.env (the schedule reads"
+    " it) or pass --identity-file, and the restore test opens every sealed line"
+)
+
+
+def restore_test(
+    lb: Logbook,
+    dest: Path | None = None,
+    to: Path | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+    at: datetime | None = None,
+) -> RestoreTest:
+    """The latest snapshot of this record under `dest` (default: where the last backup went,
+    `state/last-backup.json`) restored into a temporary folder (or `to`, which is then kept),
+    verified there — every sealed line opened, when the record seals — and compared with what the
+    record said when the backup was taken; the temporary restore deleted; the outcome written to
+    `state/last-restore-test.json` and returned. Skipped, with the reason, when there is no backup
+    to test or no identity to open a sealed record with; failed when the copy does not verify or
+    is not the backup the record made. Never a prompt, never an exception for what the outcome
+    can say: only `to` being refused (not empty, under a sync client) raises `Refused`."""
+    environ = os.environ if env is None else env
+    at = now() if at is None else at
+    recorded = last_backup(lb.root)
+    if dest is None:
+        if recorded is None:
+            return _outcome(lb, RestoreTest(at, "skipped", None, None, None, NO_BACKUP))
+        dest = Path(str(recorded["dest"]))
+    meta = lb.meta
+    found = snapshots(dest / str(meta["owner_id"]))
+    if not found:
+        reason = (
+            f"no snapshot of this record under {dest}: is the backup disk there? run `logbook backup {dest}`"
+        )
+        return _outcome(lb, RestoreTest(at, "failed", None, None, None, reason))
+    latest = found[-1]
+    sealed = bool(lb.recipients)
+    if sealed and not lb.identities:
+        reason = NO_IDENTITY.format(path=lb.identity_file)
+        return _outcome(lb, RestoreTest(at, "skipped", latest, None, None, reason))
+    if to is not None:
+        check_target(to, environ)
+    target = to if to is not None else Path(tempfile.mkdtemp(prefix="logbook-restore-test-"))
+    try:
+        try:
+            result = restore(latest, target, env=environ)
+        except BackupError as e:
+            return _outcome(lb, RestoreTest(at, "failed", latest, None, None, f"{latest.name}: {e}"))
+        seq, head = result.seq, result.head
+        if sealed:
+            seq, head, errors = Logbook(target).verify(keyed=True)
+            if errors:
+                reason = f"{latest.name}: a sealed line does not open or verify: " + "; ".join(errors[:3])
+                return _outcome(lb, RestoreTest(at, "failed", latest, seq, head, reason))
+        problem = _compare(lb, recorded, latest, seq, head)
+        if problem is not None:
+            return _outcome(lb, RestoreTest(at, "failed", latest, seq, head, problem))
+        return _outcome(lb, RestoreTest(at, "passed", latest, seq, head, None, to))
+    finally:
+        if to is None:
+            shutil.rmtree(target, ignore_errors=True)
+
+
+def _compare(lb: Logbook, recorded: dict[str, Any] | None, latest: Path, seq: int, head: str) -> str | None:
+    """Why the restored copy is not the backup the record made, or None: what the live record said
+    when the backup was taken (`state/last-backup.json`, when it names this snapshot), and the live
+    chain itself, whose line `seq` must be the copy's head."""
+    if recorded is not None and str(recorded.get("snapshot")) == str(latest):
+        said_seq, said_head = recorded.get("seq"), recorded.get("head")
+        if said_seq != seq or said_head != head:
+            return (
+                f"{latest.name} restores to {seq:,} lines, head {head[:12]}…, but the record said"
+                f" {said_seq} lines, head {str(said_head)[:12]}… when the backup was taken"
+            )
+    live = lb.line_by_seq(seq)
+    if live is None:
+        return f"{latest.name} holds {seq:,} lines; the live record has only {lb.meta['seq']:,}"
+    if str(live.get("hash")) != head:
+        return f"{latest.name} is not a backup of this record: its head is not line {seq:,} of the live chain"
+    return None
+
+
+def _outcome(lb: Logbook, test: RestoreTest) -> RestoreTest:
+    write_restore_test(lb.root, test)
+    return test
+
+
 # -- text ----------------------------------------------------------------------------------------------------
 
 
@@ -408,6 +609,7 @@ __all__ = [
     "Entry",
     "Invalid",
     "Refused",
+    "RestoreTest",
     "Result",
     "check_destination",
     "check_target",

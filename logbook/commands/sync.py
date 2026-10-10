@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..contrib import asset_status, gaps, home, schedule
+from ..contrib import asset_status, gaps, home, last_run, schedule
 from ..core import assets, places, policy, reading, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
@@ -116,10 +116,18 @@ def sync_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--install-schedule",
         action="store_true",
-        help="run `sync --all` at 07:00 and 19:00 local: a launchd agent (macOS) or a systemd user timer"
-        " (Linux), printed before it is written under your LaunchAgents or systemd user directory",
+        help="run `sync --scheduled` at 07:00 and 19:00 local: a launchd agent (macOS) or a systemd user"
+        " timer (Linux), printed before it is written under your LaunchAgents or systemd user directory",
     )
     s.add_argument("--uninstall-schedule", action="store_true", help="remove that agent or timer")
+    s.add_argument(
+        "--scheduled",
+        action="store_true",
+        help="what the schedule runs: `sync --all`, then `doctor`; the outcome to state/last-run.json; the"
+        " restore test on the first Sunday of the month; one Telegram message when something is wrong or"
+        " on Sunday evening, with LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT set"
+        " (never prompts)",
+    )
     s.add_argument(
         "--since",
         metavar="RFC3339",
@@ -156,6 +164,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
     if a.install_schedule or a.uninstall_schedule:
         _sync_schedule(a)
         return
+    if getattr(a, "scheduled", False):  # `setup` builds its own namespace without the flag
+        _sync_scheduled(a)
+        return
     if a.all:
         _sync_all(a)
         return
@@ -177,6 +188,18 @@ def _sync_all(a: argparse.Namespace) -> None:
     `not run` and the status is 130. `--dry-run` passes through; `--since`, `--listen`, `--until` and
     `--restart` are a single source's and refused. The quick sources run first and the slow ones
     (`SLOW_LAST`: a photo library walk) last, and the first line says the order."""
+    runs, interrupted = _run_all(a)
+    _say_all(runs, interrupted)
+    if interrupted:
+        sys.exit(130)
+    if any(r.failed for r in runs):
+        sys.exit(1)
+
+
+def _run_all(a: argparse.Namespace) -> tuple[list[last_run.Source], bool]:
+    """`sync --all`'s run: every source in order, each printing as a single run prints, and one
+    `Source` per source with its result and the lines it appended (the record's `seq` before and
+    after it). The second value is whether a Ctrl-C ended the run."""
     from ..contrib import adapters
 
     if a.name is not None:
@@ -198,49 +221,129 @@ def _sync_all(a: argparse.Namespace) -> None:
     disabled = _disabled(lb)
     live = _all_order(adapters.live_adapters())
     print(_all_order_text(live))
-    results: list[tuple[str, str]] = []
+    results: list[last_run.Source] = []
     interrupted = False
     for adapter in live:
         name = adapter.NAME
         if interrupted:
-            results.append((name, "not run"))
+            results.append(last_run.Source(name, "not run", 0))
             continue
         if name in disabled:
             _say_disabled(lb, name)
-            results.append((name, "skipped (disabled)"))
+            results.append(last_run.Source(name, "skipped (disabled)", 0))
             continue
         reason = _unconfigured(adapter)
         if reason is not None:
             print(f"{name}: {reason}; skipped")
-            results.append((name, f"skipped ({reason})"))
+            results.append(last_run.Source(name, f"skipped ({reason})", 0))
             continue
         status = 0
+        before = int(lb.meta["seq"])
         try:
-            _sync_source(argparse.Namespace(**{**vars(a), "name": name, "all": False}))
+            _sync_source(argparse.Namespace(**{**vars(a), "name": name, "all": False, "scheduled": False}))
         except SystemExit as e:
             status = e.code if isinstance(e.code, int) else 1
         except Exception as e:
             print(f"sync: {name}: {type(e).__name__}: {e}", file=sys.stderr)
             status = 1
+        lines = max(0, int(lb.meta["seq"]) - before)
         if status == 130:  # Ctrl-C while the source listened: the owner wants out, not the next source
             interrupted = True
-            results.append((name, "interrupted"))
+            results.append(last_run.Source(name, "interrupted", lines))
             continue
-        results.append((name, "ok" if status == 0 else f"failed (status {status})"))
-    ok = sum(1 for _, r in results if r == "ok")
-    failed = sum(1 for _, r in results if r.startswith("failed"))
-    skipped = sum(1 for _, r in results if r.startswith("skipped"))
+        results.append(last_run.Source(name, "ok" if status == 0 else f"failed (status {status})", lines))
+    return results, interrupted
+
+
+def _say_all(runs: list[last_run.Source], interrupted: bool) -> None:
+    """The summary that closes `sync --all`: one line, then one per source."""
+    ok = sum(1 for r in runs if r.result == "ok")
+    failed = sum(1 for r in runs if r.failed)
+    skipped = sum(1 for r in runs if r.result.startswith("skipped"))
     print(
-        f"sync --all: {_plural(len(results), 'source')}: {ok} ok, {failed} failed, {skipped} skipped"
+        f"sync --all: {_plural(len(runs), 'source')}: {ok} ok, {failed} failed, {skipped} skipped"
         + (", interrupted" if interrupted else "")
     )
-    width = max((len(name) for name, _ in results), default=0)
-    for name, result in results:
-        print(f"  {name:<{width}}  {result}")
+    width = max((len(r.name) for r in runs), default=0)
+    for r in runs:
+        print(f"  {r.name:<{width}}  {r.result}")
+
+
+def _sync_scheduled(a: argparse.Namespace) -> None:
+    """`sync --scheduled`: what the schedule runs (docs/schedule.md). `sync --all` as by hand; on
+    the first Sunday of the month, once that day, the restore test (`backup --restore-test`, on the
+    backup `state/last-backup.json` names); then `doctor`, printed as by hand. The outcome goes to
+    `state/last-run.json` (`logbook.contrib.last_run`), written once after the sync so the doctor's
+    own `last-run` line reads this run, and once at the end with the doctor's counts. Then one
+    message when something is wrong or on Sunday evening, if the notifier is configured
+    (`logbook.contrib.notify`); nothing is sent and nothing said about it when it is not. Exit 1
+    when a source failed or a check failed, as `sync --all` and `doctor` would. It never prompts."""
+    from ..contrib import backup, doctor, notify
+
+    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
+    if any(x is not None for x in others):
+        print("sync: --scheduled takes no source and no other option", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    started = last_run.now()
+    local = started.astimezone(zone)
+    before = last_run.previous(lb.root)
+    week = before.week if before is not None else ()
+    weekly_sent = before.weekly_sent if before is not None else None
+    runs, interrupted = _run_all(a)
+    _say_all(runs, interrupted)
+    first = next((f"{r.name}  {r.result}" for r in runs if r.failed), None)
+    run = last_run.Run(started, tuple(runs), None, first)
+    last_run.write(lb.root, last_run.State(run, week, weekly_sent))
+    if last_run.is_first_sunday(local):
+        tested = backup.read_restore_test(lb.root)
+        if tested is None or tested.at.astimezone(zone).date() != local.date():
+            _restore_test_lines(lb, backup.restore_test(lb, env=os.environ, at=started))
+    checks = doctor.run(lb, os.environ)
+    doctor.report(checks, sys.stdout)
+    report = last_run.Doctor(
+        sum(c.status == "pass" for c in checks),
+        tuple(c.name for c in checks if c.status == "warn"),
+        tuple(c.name for c in checks if c.status == "fail"),
+    )
+    if first is None:
+        first = next((f"{c.status}  {c.name}  {c.detail}" for c in checks if c.status != "pass"), None)
+    run = last_run.Run(started, tuple(runs), report, first)
+    week = last_run.roll(week, run)
+    weekly = last_run.is_week_end(local) and weekly_sent != local.date()
+    text = notify.compose(run, week, local, backup.read_restore_test(lb.root), weekly=weekly)
+    if weekly:
+        weekly_sent = local.date()
+    path = last_run.write(lb.root, last_run.State(run, week, weekly_sent))
+    print(f"scheduled run: {'clean' if run.clean else 'not clean'}; {_under_root(lb, path)}")
+    config = notify.configure(os.environ, say=lambda line: print(line, file=sys.stderr))
+    if config is not None and text is not None:
+        try:
+            notify.send(config, text)
+        except (OSError, ValueError) as e:
+            print(f"notify: telegram: {e}", file=sys.stderr)
+        else:
+            print(f"notify: telegram: sent ({'something is wrong' if notify.is_wrong(run) else 'the week'})")
     if interrupted:
         sys.exit(130)
-    if failed:
+    if run.failed:
         sys.exit(1)
+
+
+def _under_root(lb: Logbook, path: Path) -> str:
+    """`state/last-run.json`: a path inside the record said relative to it, never the owner's home."""
+    try:
+        return path.relative_to(lb.root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _restore_test_lines(lb: Logbook, result: Any) -> None:
+    """What `backup --restore-test` prints, printed here too (`logbook.commands.record`)."""
+    from .record import _say_restore_test
+
+    _say_restore_test(lb, result)
 
 
 def _all_order_text(live: list[adapters.LiveAdapter]) -> str:
@@ -276,7 +379,7 @@ def _unconfigured(adapter: adapters.LiveAdapter) -> str | None:
 
 def _sync_schedule(a: argparse.Namespace) -> None:
     """`sync --install-schedule`: a launchd agent (macOS) or a systemd user timer (Linux) running
-    `logbook sync --all` at 07:00 and 19:00 local, the plist or units printed before they are
+    `logbook sync --scheduled` at 07:00 and 19:00 local, the plist or units printed before they are
     written, nothing written outside that one directory, then handed to the scheduler (or, when it
     is not on PATH, the command to run said). `--uninstall-schedule`: the reverse. The record found
     now is the one the agent is pointed at (`LOGBOOK_HOME`). Installing names this machine the
@@ -287,7 +390,7 @@ def _sync_schedule(a: argparse.Namespace) -> None:
         sys.exit(2)
     flag = "--install-schedule" if a.install_schedule else "--uninstall-schedule"
     others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
-    if any(x is not None for x in others):
+    if any(x is not None for x in others) or getattr(a, "scheduled", False):
         print(f"sync: {flag} takes no source and no other option", file=sys.stderr)
         sys.exit(2)
     lb = Logbook.find()

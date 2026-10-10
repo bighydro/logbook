@@ -1,8 +1,9 @@
 """`logbook sync --install-schedule` and `--uninstall-schedule`: a launchd agent on macOS, a
-systemd user timer on Linux, running `logbook sync --all` at 07:00 and 19:00 local. The plist or
-unit is printed before it is written; nothing is written outside the user's LaunchAgents or systemd
-user directory; the secrets stay in `~/.config/logbook/sync.env`, which the agent sources and this
-command never writes. Nothing here talks to launchd or systemd: the calls are recorded."""
+systemd user timer on Linux, running `logbook sync --scheduled` (`sync --all`, then `doctor`) at 07:00
+and 19:00 local. The plist or unit is printed before it is written; nothing is written outside the
+user's LaunchAgents or systemd user directory; the secrets stay in `~/.config/logbook/sync.env`,
+which the agent sources and this command never writes. Nothing here talks to launchd or systemd:
+the calls are recorded."""
 
 from __future__ import annotations
 
@@ -40,7 +41,7 @@ def test_the_macos_plan_is_a_launchd_agent_at_7_and_19(tmp_path: Path) -> None:
     assert data["Label"] == "org.logbook.sync"
     shell, flag, script = data["ProgramArguments"]
     assert (shell, flag) == ("/bin/sh", "-c")
-    assert script.endswith(f"exec {PYTHON} -m logbook.cli sync --all")
+    assert script.endswith(f"exec {PYTHON} -m logbook.cli sync --scheduled")
     assert '"$HOME/.config/logbook/sync.env"' in script and "set -a" in script, "the secrets are sourced"
     assert data["StartCalendarInterval"] == [{"Hour": 7, "Minute": 0}, {"Hour": 19, "Minute": 0}]
     assert data["EnvironmentVariables"] == {"LOGBOOK_HOME": str(tmp_path / "Logbook")}
@@ -60,7 +61,7 @@ def test_the_linux_plan_is_a_systemd_user_timer_at_7_and_19(tmp_path: Path) -> N
     assert plan.directory == unit_dir
     assert set(plan.files) == {unit_dir / "logbook-sync.service", unit_dir / "logbook-sync.timer"}
     service = plan.files[unit_dir / "logbook-sync.service"]
-    assert f"ExecStart={PYTHON} -m logbook.cli sync --all\n" in service
+    assert f"ExecStart={PYTHON} -m logbook.cli sync --scheduled\n" in service
     assert "EnvironmentFile=-%h/.config/logbook/sync.env\n" in service, "optional: no file, no secrets"
     assert f"Environment=LOGBOOK_HOME={tmp_path / 'Logbook'}\n" in service
     assert "Type=oneshot\n" in service
@@ -87,10 +88,10 @@ def test_a_path_with_a_space_is_quoted_for_both_schedulers(tmp_path: Path) -> No
     mac = schedule.plan("darwin", tmp_path / "home", python)
     [plist] = mac.files.values()
     script = plistlib.loads(plist.encode("utf-8"))["ProgramArguments"][2]
-    assert "exec '/Users/kari/My Tools/venv/bin/python3' -m logbook.cli sync --all" in script
+    assert "exec '/Users/kari/My Tools/venv/bin/python3' -m logbook.cli sync --scheduled" in script
     linux = schedule.plan("linux", tmp_path / "home", python)
     service = linux.files[linux.directory / "logbook-sync.service"]
-    assert 'ExecStart="/Users/kari/My Tools/venv/bin/python3" -m logbook.cli sync --all\n' in service
+    assert 'ExecStart="/Users/kari/My Tools/venv/bin/python3" -m logbook.cli sync --scheduled\n' in service
 
 
 def test_another_platform_has_no_scheduler_here(tmp_path: Path) -> None:

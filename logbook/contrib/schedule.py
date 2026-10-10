@@ -1,5 +1,6 @@
-"""`logbook sync --install-schedule` / `--uninstall-schedule`: `logbook sync --all` twice a day,
-07:00 and 19:00 local, by the scheduler the machine already has — a launchd agent on macOS
+"""`logbook sync --install-schedule` / `--uninstall-schedule`: `logbook sync --scheduled` (`sync --all`,
+then `doctor`, the outcome to `state/last-run.json`, one message when something is wrong: docs/schedule.md)
+twice a day, 07:00 and 19:00 local, by the scheduler the machine already has — a launchd agent on macOS
 (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer on Linux
 (`~/.config/systemd/user/logbook-sync.{service,timer}`, or under `$XDG_CONFIG_HOME`).
 
@@ -34,7 +35,7 @@ UNIT = "logbook-sync"  # systemd
 HOURS = (7, 19)  # local
 ENV_FILE = ".config/logbook/sync.env"  # relative to the home directory; the owner's, never written here
 LOG = ("Library", "Logs", "logbook-sync.log")  # launchd's stdout and stderr; launchd creates it, not we
-ARGS = ("-m", "logbook.cli", "sync", "--all")
+ARGS = ("-m", "logbook.cli", "sync", "--scheduled")
 
 
 class ScheduleError(ValueError):
@@ -124,7 +125,7 @@ def _systemd(home: Path, python: str, logbook_home: Path | None, config_home: Pa
     environment = f"Environment=LOGBOOK_HOME={logbook_home}\n" if logbook_home is not None else ""
     service = (
         "[Unit]\n"
-        "Description=logbook sync --all: every configured live source, twice a day\n"
+        "Description=logbook sync --scheduled: every configured live source, then doctor, twice a day\n"
         "\n"
         "[Service]\n"
         "Type=oneshot\n"
@@ -134,7 +135,7 @@ def _systemd(home: Path, python: str, logbook_home: Path | None, config_home: Pa
     )
     timer = (
         "[Unit]\n"
-        f"Description=logbook sync --all at {' and '.join(f'{h:02d}:00' for h in HOURS)} local\n"
+        f"Description=logbook sync --scheduled at {' and '.join(f'{h:02d}:00' for h in HOURS)} local\n"
         "\n"
         "[Timer]\n"
         f"OnCalendar=*-*-* {','.join(f'{h:02d}' for h in HOURS)}:00:00\n"
@@ -199,12 +200,21 @@ def run(commands: tuple[Command, ...], tool: str, say: Callable[[str], None]) ->
     return None
 
 
+def installed(plan: Plan) -> bool:
+    """Whether every file `plan` names is there: the schedule is installed on this machine."""
+    return all(path.exists() for path in plan.files)
+
+
 def summary(plan: Plan) -> list[str]:
     """What was installed and where the secrets go, after the files."""
     when = " and ".join(f"{h:02d}:00" for h in HOURS)
     log = " (launchd; its output goes to ~/Library/Logs/logbook-sync.log)" if plan.system == "darwin" else ""
     return [
-        f"installed: `logbook sync --all` runs at {when} local{log}",
+        f"installed: `logbook sync --scheduled` (`sync --all`, then `doctor`) runs at {when} local{log};"
+        " the outcome goes to state/last-run.json and `logbook doctor` reads it",
+        "to be told when something is wrong, put LOGBOOK_NOTIFY_TELEGRAM_TOKEN and"
+        " LOGBOOK_NOTIFY_TELEGRAM_CHAT in the same file: one Telegram message when a source fails or doctor"
+        " warns, and the week's counts on Sunday evening (docs/schedule.md)",
         f"the variables your live sources need go in ~/{ENV_FILE}, one KEY=value per line, mode 600;"
         " a source whose variables are not set is skipped",
     ]

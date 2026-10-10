@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from logbook import cli
-from logbook.contrib import adapters, doctor, home
+from logbook.contrib import adapters, backup, doctor, home, last_run, schedule
 from logbook.core import policy
 from logbook.core.store import Logbook
 
@@ -49,7 +49,23 @@ def _make(root: Path) -> Logbook:
     _write(root / "places.json", HOME)
     _write(root / "assets.json", ASSETS)
     lb.index_rebuild()
+    _restore_test(lb, "passed", datetime.now(UTC) - timedelta(days=3))
     return lb
+
+
+def _restore_test(lb: Logbook, status: str, at: datetime, reason: str | None = None) -> None:
+    snapshot = lb.root.parent / "Backups" / "owner" / "2026-10-03T030000Z"
+    backup.write_restore_test(lb.root, backup.RestoreTest(at, status, snapshot, 2, "a" * 64, reason))
+
+
+def _ran(lb: Logbook, at: datetime, *, failed: bool = False, doctor_ran: bool = True) -> None:
+    """A scheduled run at `at`: `alpha` appended two lines, `gamma` failed when `failed`."""
+    sources = (last_run.Source("alpha", "ok", 2),)
+    if failed:
+        sources += (last_run.Source("gamma", "failed (status 1)", 0),)
+    report = last_run.Doctor(12, (), ()) if doctor_ran else None
+    first = "gamma  failed (status 1)" if failed else None
+    last_run.write(lb.root, last_run.State(last_run.Run(at, sources, report, first), (), None))
 
 
 @pytest.fixture
@@ -273,6 +289,130 @@ def test_a_variable_that_is_set_but_refused_names_the_sync_not_the_value(lb: Log
 def test_sources_are_read_from_the_index_only_when_it_is_current(lb: Logbook) -> None:
     (lb.index_path).unlink()
     assert "sync:dawarich" not in _run(lb), "no index: only the state files say which syncs ran"
+
+
+# -- the last scheduled run ---------------------------------------------------------------------------
+
+
+NOW = datetime(2026, 10, 8, 17, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> datetime:
+    monkeypatch.setattr(last_run, "now", lambda: NOW)
+    return NOW
+
+
+def test_a_fresh_clean_run_passes_with_its_counts(lb: Logbook, clock: datetime) -> None:
+    _ran(lb, NOW - timedelta(hours=2))
+    check = _run(lb)["last-run"]
+    assert check.status == "pass"
+    assert check.detail.startswith(
+        "2026-10-08 17:00 (2 h ago): alpha 2 lines; doctor 12 pass, 0 warn, 0 fail"
+    )
+
+
+def test_a_run_older_than_26_hours_is_stale(lb: Logbook, clock: datetime) -> None:
+    _ran(lb, NOW - timedelta(hours=27))
+    check = _run(lb)["last-run"]
+    assert (
+        check.status == "warn" and "more than 26 h ago" in check.detail and "1 days ago" not in check.detail
+    )
+    _ran(lb, NOW - timedelta(hours=25))
+    assert _run(lb)["last-run"].status == "pass"
+
+
+def test_a_run_in_which_a_source_failed_warns_with_the_first_failing_line(
+    lb: Logbook, clock: datetime
+) -> None:
+    _ran(lb, NOW - timedelta(hours=1), failed=True)
+    check = _run(lb)["last-run"]
+    assert check.status == "warn"
+    assert "gamma failed" in check.detail and "first failing line: gamma  failed (status 1)" in check.detail
+
+
+def test_a_run_that_never_reached_doctor_warns_once_it_is_old(lb: Logbook, clock: datetime) -> None:
+    _ran(lb, NOW - timedelta(minutes=20), doctor_ran=False)
+    check = _run(lb)["last-run"]
+    assert check.status == "pass" and "doctor not yet run" in check.detail, "a run in progress"
+    _ran(lb, NOW - timedelta(hours=5), doctor_ran=False)
+    check = _run(lb)["last-run"]
+    assert check.status == "warn" and "did not finish" in check.detail
+
+
+def test_no_run_and_no_schedule_passes_and_says_how_to_install_one(
+    lb: Logbook, clock: datetime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(schedule, "system", lambda: "linux")
+    check = _run(lb)["last-run"]
+    assert check.status == "pass" and "no schedule on this machine" in check.detail
+    assert "logbook sync --install-schedule" in check.detail
+
+
+def test_a_schedule_that_is_installed_but_has_not_run_warns(
+    lb: Logbook, clock: datetime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(schedule, "system", lambda: "linux")
+    plan = schedule.plan("linux", Path.home(), "/opt/py")
+    schedule.install(plan, lambda _text: None)
+    check = _run(lb)["last-run"]
+    assert check.status == "warn" and "has not run yet" in check.detail
+
+
+def test_a_last_run_file_that_is_not_the_shape_is_a_warning_naming_it(lb: Logbook, clock: datetime) -> None:
+    path = lb.root / "state" / "last-run.json"
+    path.write_text("{", encoding="utf-8")
+    check = _run(lb)["last-run"]
+    assert check.status == "warn" and str(path) in check.detail
+
+
+# -- the restore test ----------------------------------------------------------------------------------
+
+
+def test_a_restore_test_that_passed_within_35_days_passes(lb: Logbook, clock: datetime) -> None:
+    _restore_test(lb, "passed", NOW - timedelta(days=34))
+    check = _run(lb)["restore-test"]
+    assert check.status == "pass" and check.detail == "passed 2026-09-04 (2026-10-03T030000Z, 2 lines)"
+
+
+def test_a_restore_test_older_than_35_days_warns(lb: Logbook, clock: datetime) -> None:
+    _restore_test(lb, "passed", NOW - timedelta(days=36))
+    check = _run(lb)["restore-test"]
+    assert check.status == "warn" and "more than 35 days" in check.detail
+    assert "logbook backup --restore-test" in check.detail and "first Sunday" in check.detail
+
+
+def test_no_restore_test_yet_warns_and_says_what_to_run(lb: Logbook, clock: datetime) -> None:
+    (lb.root / "state" / "last-restore-test.json").unlink()
+    check = _run(lb)["restore-test"]
+    assert check.status == "warn" and check.detail.startswith(
+        "no restore test yet: `logbook backup --restore-test`"
+    )
+
+
+def test_a_failed_restore_test_fails_with_the_reason(lb: Logbook, clock: datetime) -> None:
+    _restore_test(lb, "failed", NOW - timedelta(days=1), "the copy does not verify: line 2 hash mismatch")
+    check = _run(lb)["restore-test"]
+    assert check.status == "fail"
+    assert (
+        check.detail
+        == "failed 2026-10-07 (2026-10-03T030000Z): the copy does not verify: line 2 hash mismatch"
+    )
+
+
+def test_a_skipped_restore_test_warns_with_how_to_enable_it(lb: Logbook, clock: datetime) -> None:
+    _restore_test(lb, "skipped", NOW - timedelta(days=1), backup.NO_IDENTITY.format(path="/keys/owner.txt"))
+    check = _run(lb)["restore-test"]
+    assert check.status == "warn" and "LOGBOOK_IDENTITY_FILE" in check.detail and "sync.env" in check.detail
+
+
+def test_a_restore_test_file_that_is_not_the_shape_is_a_warning_naming_it(
+    lb: Logbook, clock: datetime
+) -> None:
+    path = lb.root / "state" / "last-restore-test.json"
+    path.write_text('{"status": "maybe"}', encoding="utf-8")
+    check = _run(lb)["restore-test"]
+    assert check.status == "warn" and str(path) in check.detail
 
 
 # -- disk and folder ------------------------------------------------------------------------------------
