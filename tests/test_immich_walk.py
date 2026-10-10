@@ -237,8 +237,14 @@ def _state(lb: Logbook) -> dict[str, Any]:
 
 
 def _progress(err: str) -> list[str]:
-    """The page lines: two spaces, a count, `assets`; never a notice."""
-    return [line for line in err.splitlines() if re.match(r"  [\d,]+ (of [\d,]+ )?assets", line)]
+    """The page lines: two spaces, a count, `assets`; never a notice. The seconds elapsed are the
+    runner's clock, not the walk's (a loaded Windows runner takes a second over 2,500 assets), so
+    they read `0s` whatever they were."""
+    return [
+        re.sub(r" in \d+s", " in 0s", line)
+        for line in err.splitlines()
+        if re.match(r"  [\d,]+ (of [\d,]+ )?assets", line)
+    ]
 
 
 def _watermark(assets: list[dict[str, Any]]) -> str:
