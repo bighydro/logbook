@@ -253,8 +253,9 @@ sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode
 and the command never does. The scheduled run is `sync --all`, then `doctor`, with the outcome in
 `state/last-run.json`, the restore test on the first Sunday of the month, and, with
 `LOGBOOK_NOTIFY_TELEGRAM_TOKEN` and `LOGBOOK_NOTIFY_TELEGRAM_CHAT` in that file, one Telegram message
-when something is wrong or on Sunday evening ([the schedule](schedule.md)). `sync weather` is the one source that asks a third party about your days:
-it is left out of `--all` unless that file (or the environment) says `LOGBOOK_WEATHER=1`.
+when something is wrong or on Sunday evening ([the schedule](schedule.md)). `sync weather` is the one
+source that asks a third party about your days: it is left out of `--all` unless that file (or the
+environment) says `LOGBOOK_WEATHER=1`.
 
 ```bash
 logbook sync --all                                # every configured source, one after the other
