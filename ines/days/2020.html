@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>days 2020-01-01 – 2020-12-31 · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain{list-style:none;padding:0;margin:0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+</style>
+</head>
+<body>
+<header><nav><a href="../index.html">Logbook</a><a href="../trips.html">trips</a><a href="../places.html">places</a><a href="../people.html">people</a><a href="../years/2020.html">2020</a></nav></header>
+<main>
+<h1>Days <small>2020-01-01 – 2020-12-31</small></h1>
+<table>
+<thead><tr><th>day</th><th></th><th>night</th><th class="num">moved</th><th>flights</th><th>stays</th><th>with</th><th>health</th><th>gaps</th></tr></thead>
+<tbody>
+<tr id="2020-01-01"><td class="day">2020-01-01</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-02"><td class="day">2020-01-02</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-03"><td class="day">2020-01-03</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-04"><td class="day">2020-01-04</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-05"><td class="day">2020-01-05</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-06"><td class="day">2020-01-06</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-07"><td class="day">2020-01-07</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-08"><td class="day">2020-01-08</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-09"><td class="day">2020-01-09</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-10"><td class="day">2020-01-10</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-11"><td class="day">2020-01-11</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-12"><td class="day">2020-01-12</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-13"><td class="day">2020-01-13</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-14"><td class="day">2020-01-14</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-15"><td class="day">2020-01-15</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-16"><td class="day">2020-01-16</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-17"><td class="day">2020-01-17</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-18"><td class="day">2020-01-18</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-19"><td class="day">2020-01-19</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-20"><td class="day">2020-01-20</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-21"><td class="day">2020-01-21</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-22"><td class="day">2020-01-22</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-23"><td class="day">2020-01-23</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (2 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-24"><td class="day">2020-01-24</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-25"><td class="day">2020-01-25</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-26"><td class="day">2020-01-26</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-27"><td class="day">2020-01-27</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-28"><td class="day">2020-01-28</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-29"><td class="day">2020-01-29</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-01-30"><td class="day">2020-01-30</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-01-31"><td class="day">2020-01-31</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-01"><td class="day">2020-02-01</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-02"><td class="day">2020-02-02</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-03"><td class="day">2020-02-03</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-04"><td class="day">2020-02-04</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (3 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-05"><td class="day">2020-02-05</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-06"><td class="day">2020-02-06</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-07"><td class="day">2020-02-07</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-08"><td class="day">2020-02-08</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-09"><td class="day">2020-02-09</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-10"><td class="day">2020-02-10</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-11"><td class="day">2020-02-11</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-12"><td class="day">2020-02-12</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-13"><td class="day">2020-02-13</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-14"><td class="day">2020-02-14</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-15"><td class="day">2020-02-15</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-16"><td class="day">2020-02-16</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-17"><td class="day">2020-02-17</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-18"><td class="day">2020-02-18</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-19"><td class="day">2020-02-19</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-20"><td class="day">2020-02-20</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-21"><td class="day">2020-02-21</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-22"><td class="day">2020-02-22</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-23"><td class="day">2020-02-23</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-24"><td class="day">2020-02-24</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-25"><td class="day">2020-02-25</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-26"><td class="day">2020-02-26</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-27"><td class="day">2020-02-27</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-02-28"><td class="day">2020-02-28</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-02-29"><td class="day">2020-02-29</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-01"><td class="day">2020-03-01</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-02"><td class="day">2020-03-02</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-03"><td class="day">2020-03-03</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-04"><td class="day">2020-03-04</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-05"><td class="day">2020-03-05</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-06"><td class="day">2020-03-06</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-07"><td class="day">2020-03-07</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-08"><td class="day">2020-03-08</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-09"><td class="day">2020-03-09</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-10"><td class="day">2020-03-10</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-11"><td class="day">2020-03-11</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-12"><td class="day">2020-03-12</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-13"><td class="day">2020-03-13</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-14"><td class="day">2020-03-14</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-15"><td class="day">2020-03-15</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-16"><td class="day">2020-03-16</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-17"><td class="day">2020-03-17</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-18"><td class="day">2020-03-18</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-19"><td class="day">2020-03-19</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-20"><td class="day">2020-03-20</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-21"><td class="day">2020-03-21</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-22"><td class="day">2020-03-22</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-23"><td class="day">2020-03-23</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-24"><td class="day">2020-03-24</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-25"><td class="day">2020-03-25</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-26"><td class="day">2020-03-26</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-03-27"><td class="day">2020-03-27</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-28"><td class="day">2020-03-28</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-29"><td class="day">2020-03-29</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-30"><td class="day">2020-03-30</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-03-31"><td class="day">2020-03-31</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-01"><td class="day">2020-04-01</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-02"><td class="day">2020-04-02</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-03"><td class="day">2020-04-03</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-04"><td class="day">2020-04-04</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-05"><td class="day">2020-04-05</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-06"><td class="day">2020-04-06</td><td>Mon</td><td>47.3769,8.5418 (Zurich) CH</td><td class="num">1,471 km</td><td>XY 561 OSL→ZRH</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-07"><td class="day">2020-04-07</td><td>Tue</td><td>47.3769,8.5417 (Zurich) CH</td><td class="num">2.4 km</td><td></td><td>3 stays (2 attached)</td><td>Marta Keller</td><td></td><td></td></tr>
+<tr id="2020-04-08"><td class="day">2020-04-08</td><td>Wed</td><td>47.3769,8.5416 (Zurich) CH</td><td class="num">3.9 km</td><td></td><td>3 stays (4 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-09"><td class="day">2020-04-09</td><td>Thu</td><td>Home</td><td class="num">1,471 km</td><td>XY 562 ZRH→OSL</td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-10"><td class="day">2020-04-10</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-11"><td class="day">2020-04-11</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-12"><td class="day">2020-04-12</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-13"><td class="day">2020-04-13</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-14"><td class="day">2020-04-14</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-15"><td class="day">2020-04-15</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-16"><td class="day">2020-04-16</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-17"><td class="day">2020-04-17</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-18"><td class="day">2020-04-18</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-19"><td class="day">2020-04-19</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-20"><td class="day">2020-04-20</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-21"><td class="day">2020-04-21</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-22"><td class="day">2020-04-22</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-23"><td class="day">2020-04-23</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-04-24"><td class="day">2020-04-24</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-25"><td class="day">2020-04-25</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-26"><td class="day">2020-04-26</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-27"><td class="day">2020-04-27</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-28"><td class="day">2020-04-28</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-29"><td class="day">2020-04-29</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-04-30"><td class="day">2020-04-30</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-01"><td class="day">2020-05-01</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-02"><td class="day">2020-05-02</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-05-03"><td class="day">2020-05-03</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-04"><td class="day">2020-05-04</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-05"><td class="day">2020-05-05</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-06"><td class="day">2020-05-06</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-07"><td class="day">2020-05-07</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-08"><td class="day">2020-05-08</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-09"><td class="day">2020-05-09</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-05-10"><td class="day">2020-05-10</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-11"><td class="day">2020-05-11</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-12"><td class="day">2020-05-12</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-13"><td class="day">2020-05-13</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-14"><td class="day">2020-05-14</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-15"><td class="day">2020-05-15</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-16"><td class="day">2020-05-16</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-17"><td class="day">2020-05-17</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-18"><td class="day">2020-05-18</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-19"><td class="day">2020-05-19</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-20"><td class="day">2020-05-20</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-21"><td class="day">2020-05-21</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-22"><td class="day">2020-05-22</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-23"><td class="day">2020-05-23</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-24"><td class="day">2020-05-24</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-25"><td class="day">2020-05-25</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-26"><td class="day">2020-05-26</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-05-27"><td class="day">2020-05-27</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-28"><td class="day">2020-05-28</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-29"><td class="day">2020-05-29</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-05-30"><td class="day">2020-05-30</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-05-31"><td class="day">2020-05-31</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-01"><td class="day">2020-06-01</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-02"><td class="day">2020-06-02</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-03"><td class="day">2020-06-03</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-04"><td class="day">2020-06-04</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-05"><td class="day">2020-06-05</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-06"><td class="day">2020-06-06</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-07"><td class="day">2020-06-07</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-08"><td class="day">2020-06-08</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-09"><td class="day">2020-06-09</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-10"><td class="day">2020-06-10</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-11"><td class="day">2020-06-11</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-12"><td class="day">2020-06-12</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-13"><td class="day">2020-06-13</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-06-14"><td class="day">2020-06-14</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-15"><td class="day">2020-06-15</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-16"><td class="day">2020-06-16</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-17"><td class="day">2020-06-17</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-18"><td class="day">2020-06-18</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-19"><td class="day">2020-06-19</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-20"><td class="day">2020-06-20</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-21"><td class="day">2020-06-21</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-22"><td class="day">2020-06-22</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-23"><td class="day">2020-06-23</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-06-24"><td class="day">2020-06-24</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-25"><td class="day">2020-06-25</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-26"><td class="day">2020-06-26</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-27"><td class="day">2020-06-27</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-28"><td class="day">2020-06-28</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-29"><td class="day">2020-06-29</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-06-30"><td class="day">2020-06-30</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-01"><td class="day">2020-07-01</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-02"><td class="day">2020-07-02</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-03"><td class="day">2020-07-03</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-04"><td class="day">2020-07-04</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-05"><td class="day">2020-07-05</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-06"><td class="day">2020-07-06</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-07"><td class="day">2020-07-07</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-08"><td class="day">2020-07-08</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-09"><td class="day">2020-07-09</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-10"><td class="day">2020-07-10</td><td>Fri</td><td>the family cabin NO</td><td class="num">437 km</td><td>XY 701 OSL→BGO</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-11"><td class="day">2020-07-11</td><td>Sat</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-12"><td class="day">2020-07-12</td><td>Sun</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-13"><td class="day">2020-07-13</td><td>Mon</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-14"><td class="day">2020-07-14</td><td>Tue</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-15"><td class="day">2020-07-15</td><td>Wed</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-16"><td class="day">2020-07-16</td><td>Thu</td><td>the family cabin NO</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-17"><td class="day">2020-07-17</td><td>Fri</td><td>Home</td><td class="num">437 km</td><td>XY 702 BGO→OSL</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-18"><td class="day">2020-07-18</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-19"><td class="day">2020-07-19</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-20"><td class="day">2020-07-20</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-21"><td class="day">2020-07-21</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-22"><td class="day">2020-07-22</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-23"><td class="day">2020-07-23</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-24"><td class="day">2020-07-24</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-25"><td class="day">2020-07-25</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-26"><td class="day">2020-07-26</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-27"><td class="day">2020-07-27</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-28"><td class="day">2020-07-28</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-29"><td class="day">2020-07-29</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-07-30"><td class="day">2020-07-30</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-07-31"><td class="day">2020-07-31</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-01"><td class="day">2020-08-01</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-02"><td class="day">2020-08-02</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-03"><td class="day">2020-08-03</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-04"><td class="day">2020-08-04</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-05"><td class="day">2020-08-05</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-06"><td class="day">2020-08-06</td><td>Thu</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-07"><td class="day">2020-08-07</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-08"><td class="day">2020-08-08</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-09"><td class="day">2020-08-09</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-10"><td class="day">2020-08-10</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-11"><td class="day">2020-08-11</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-12"><td class="day">2020-08-12</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-13"><td class="day">2020-08-13</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-14"><td class="day">2020-08-14</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-15"><td class="day">2020-08-15</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-08-16"><td class="day">2020-08-16</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-17"><td class="day">2020-08-17</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-18"><td class="day">2020-08-18</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-19"><td class="day">2020-08-19</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-20"><td class="day">2020-08-20</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-21"><td class="day">2020-08-21</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-22"><td class="day">2020-08-22</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-23"><td class="day">2020-08-23</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-24"><td class="day">2020-08-24</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-25"><td class="day">2020-08-25</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-26"><td class="day">2020-08-26</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-27"><td class="day">2020-08-27</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-08-28"><td class="day">2020-08-28</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-29"><td class="day">2020-08-29</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-30"><td class="day">2020-08-30</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-08-31"><td class="day">2020-08-31</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-01"><td class="day">2020-09-01</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-02"><td class="day">2020-09-02</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-03"><td class="day">2020-09-03</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-04"><td class="day">2020-09-04</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-05"><td class="day">2020-09-05</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-06"><td class="day">2020-09-06</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-07"><td class="day">2020-09-07</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-08"><td class="day">2020-09-08</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-09"><td class="day">2020-09-09</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-10"><td class="day">2020-09-10</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-11"><td class="day">2020-09-11</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-12"><td class="day">2020-09-12</td><td>Sat</td><td>Cabin NO</td><td class="num">119 km</td><td></td><td>2 stays (4 attached)</td><td>Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-09-13"><td class="day">2020-09-13</td><td>Sun</td><td>Home</td><td class="num">119 km</td><td></td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-14"><td class="day">2020-09-14</td><td>Mon</td><td>47.3769,8.5416 (Zurich) CH</td><td class="num">1,471 km</td><td>XY 561 OSL→ZRH</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-15"><td class="day">2020-09-15</td><td>Tue</td><td>47.3769,8.5418 (Zurich) CH</td><td class="num">2.3 km</td><td></td><td>3 stays (2 attached)</td><td>Marta Keller</td><td></td><td></td></tr>
+<tr id="2020-09-16"><td class="day">2020-09-16</td><td>Wed</td><td>47.3769,8.5416 (Zurich) CH</td><td class="num">3.9 km</td><td></td><td>3 stays (4 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-17"><td class="day">2020-09-17</td><td>Thu</td><td>Home</td><td class="num">1,471 km</td><td>XY 562 ZRH→OSL</td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-18"><td class="day">2020-09-18</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-19"><td class="day">2020-09-19</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-20"><td class="day">2020-09-20</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-21"><td class="day">2020-09-21</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-22"><td class="day">2020-09-22</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-23"><td class="day">2020-09-23</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-24"><td class="day">2020-09-24</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-25"><td class="day">2020-09-25</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-26"><td class="day">2020-09-26</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-27"><td class="day">2020-09-27</td><td>Sun</td><td>Home</td><td class="num">5.4 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-28"><td class="day">2020-09-28</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-09-29"><td class="day">2020-09-29</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-09-30"><td class="day">2020-09-30</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-01"><td class="day">2020-10-01</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-02"><td class="day">2020-10-02</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-03"><td class="day">2020-10-03</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-04"><td class="day">2020-10-04</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-05"><td class="day">2020-10-05</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-06"><td class="day">2020-10-06</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (3 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-07"><td class="day">2020-10-07</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-08"><td class="day">2020-10-08</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-09"><td class="day">2020-10-09</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-10"><td class="day">2020-10-10</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-11"><td class="day">2020-10-11</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-12"><td class="day">2020-10-12</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-13"><td class="day">2020-10-13</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-14"><td class="day">2020-10-14</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-15"><td class="day">2020-10-15</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-16"><td class="day">2020-10-16</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-17"><td class="day">2020-10-17</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-18"><td class="day">2020-10-18</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-19"><td class="day">2020-10-19</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-20"><td class="day">2020-10-20</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-21"><td class="day">2020-10-21</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-22"><td class="day">2020-10-22</td><td>Thu</td><td>55.6849,12.5499 near the Copenhagen flat, 1.4 km DK</td><td class="num">564 km</td><td>XY 571 OSL→CPH</td><td>3 stays (2 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-23"><td class="day">2020-10-23</td><td>Fri</td><td>55.6850,12.5500 near the Copenhagen flat, 1.4 km DK</td><td class="num">3.4 km</td><td></td><td>3 stays (3 attached)</td><td>Freja Lund</td><td></td><td></td></tr>
+<tr id="2020-10-24"><td class="day">2020-10-24</td><td>Sat</td><td>Home</td><td class="num">563 km</td><td>XY 572 CPH→OSL</td><td>2 stays (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-25"><td class="day">2020-10-25</td><td>Sun</td><td>Home</td><td class="num">5.3 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-26"><td class="day">2020-10-26</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-27"><td class="day">2020-10-27</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-28"><td class="day">2020-10-28</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-29"><td class="day">2020-10-29</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-10-30"><td class="day">2020-10-30</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-10-31"><td class="day">2020-10-31</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (2 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-01"><td class="day">2020-11-01</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-02"><td class="day">2020-11-02</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-03"><td class="day">2020-11-03</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-04"><td class="day">2020-11-04</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-05"><td class="day">2020-11-05</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-11-06"><td class="day">2020-11-06</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-07"><td class="day">2020-11-07</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-08"><td class="day">2020-11-08</td><td>Sun</td><td>Home</td><td class="num">5.4 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-09"><td class="day">2020-11-09</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-10"><td class="day">2020-11-10</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-11"><td class="day">2020-11-11</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-12"><td class="day">2020-11-12</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-13"><td class="day">2020-11-13</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-14"><td class="day">2020-11-14</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-15"><td class="day">2020-11-15</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-16"><td class="day">2020-11-16</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-17"><td class="day">2020-11-17</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-11-18"><td class="day">2020-11-18</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-19"><td class="day">2020-11-19</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-20"><td class="day">2020-11-20</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-21"><td class="day">2020-11-21</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-22"><td class="day">2020-11-22</td><td>Sun</td><td>Home</td><td class="num">5.4 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-23"><td class="day">2020-11-23</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-24"><td class="day">2020-11-24</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-11-25"><td class="day">2020-11-25</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-26"><td class="day">2020-11-26</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-11-27"><td class="day">2020-11-27</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-28"><td class="day">2020-11-28</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-29"><td class="day">2020-11-29</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-11-30"><td class="day">2020-11-30</td><td>Mon</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-01"><td class="day">2020-12-01</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-12-02"><td class="day">2020-12-02</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-03"><td class="day">2020-12-03</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-12-04"><td class="day">2020-12-04</td><td>Fri</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-05"><td class="day">2020-12-05</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-06"><td class="day">2020-12-06</td><td>Sun</td><td>Home</td><td class="num">5.4 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-07"><td class="day">2020-12-07</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-08"><td class="day">2020-12-08</td><td>Tue</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-09"><td class="day">2020-12-09</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-10"><td class="day">2020-12-10</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-12-11"><td class="day">2020-12-11</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-12"><td class="day">2020-12-12</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-13"><td class="day">2020-12-13</td><td>Sun</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-14"><td class="day">2020-12-14</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-15"><td class="day">2020-12-15</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-12-16"><td class="day">2020-12-16</td><td>Wed</td><td>Home</td><td class="num">1.3 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-17"><td class="day">2020-12-17</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-18"><td class="day">2020-12-18</td><td>Fri</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-19"><td class="day">2020-12-19</td><td>Sat</td><td>Home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-20"><td class="day">2020-12-20</td><td>Sun</td><td>Home</td><td class="num">5.4 km</td><td></td><td>3 stays (3 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-21"><td class="day">2020-12-21</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-22"><td class="day">2020-12-22</td><td>Tue</td><td>the family home</td><td class="num">374 km</td><td>XY 701 OSL→BGO</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-23"><td class="day">2020-12-23</td><td>Wed</td><td>the family home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-24"><td class="day">2020-12-24</td><td>Thu</td><td>the family home</td><td class="num">0.0 km</td><td></td><td>1 stay (2 attached)</td><td>Eva Nordmann, Kari Nordmann, Ola Nordmann</td><td></td><td></td></tr>
+<tr id="2020-12-25"><td class="day">2020-12-25</td><td>Fri</td><td>the family home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-26"><td class="day">2020-12-26</td><td>Sat</td><td>the family home</td><td class="num">0.0 km</td><td></td><td>1 stay</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-27"><td class="day">2020-12-27</td><td>Sun</td><td>Home</td><td class="num">374 km</td><td>XY 702 BGO→OSL</td><td>2 stays (1 attached)</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-28"><td class="day">2020-12-28</td><td>Mon</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-29"><td class="day">2020-12-29</td><td>Tue</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+<tr id="2020-12-30"><td class="day">2020-12-30</td><td>Wed</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays</td><td></td><td></td><td></td></tr>
+<tr id="2020-12-31"><td class="day">2020-12-31</td><td>Thu</td><td>Home</td><td class="num">1.2 km</td><td></td><td>3 stays (1 attached)</td><td>Per Hansen, Liv Berg</td><td></td><td></td></tr>
+</tbody>
+</table>
+</main>
+<footer>exported from the record · tier 1 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>

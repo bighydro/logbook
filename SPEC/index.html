@@ -1,0 +1,4329 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/SPEC/">
+      
+      
+        <link rel="prev" href="../LORE/">
+      
+      
+        <link rel="next" href="../ARCHITECTURE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Specification v0.2 - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#logbook-format-specification-v03" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Specification v0.2
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The folder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The folder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-line-the-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The line (the envelope)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The chain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The chain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-format-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Format versions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Readers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.2 Readers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#321-listing-a-day-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.1 Listing a day (show)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#322-what-every-derived-reader-shares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.2 What every derived reader shares
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#323-stays-moves-and-nights-derive-stays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.3 Stays, moves and nights (derive stays)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#324-flights-the-standing-set-and-the-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.4 Flights: the standing set and the inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#325-company-who-was-there-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.5 Company: who was there ("with")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#326-trips-trips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.6 Trips (trips)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#327-the-day-day-and-a-window-of-days-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.7 The Day (day) and a window of days (days)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#328-rollups-rollup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.8 Rollups (rollup)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#329-keepers-keepers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.9 Keepers (keepers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3210-promises-promises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.10 Promises (promises)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3211-where-a-source-went-quiet-sources-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.11 Where a source went quiet (sources --gaps)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-payload-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Payload profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Conformance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Conformance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-the-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 The readers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-what-this-spec-does-not-say" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. What this spec does not say
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0031-profile-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_44" >
+        
+          
+          <label class="md-nav__link" for="__nav_44" id="__nav_44_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_44_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_44">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The folder
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The folder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-line-the-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The line (the envelope)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The chain
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The chain">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-format-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Format versions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Readers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3.2 Readers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#321-listing-a-day-show" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.1 Listing a day (show)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#322-what-every-derived-reader-shares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.2 What every derived reader shares
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#323-stays-moves-and-nights-derive-stays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.3 Stays, moves and nights (derive stays)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#324-flights-the-standing-set-and-the-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.4 Flights: the standing set and the inference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#325-company-who-was-there-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.5 Company: who was there ("with")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#326-trips-trips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.6 Trips (trips)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#327-the-day-day-and-a-window-of-days-days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.7 The Day (day) and a window of days (days)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#328-rollups-rollup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.8 Rollups (rollup)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#329-keepers-keepers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.9 Keepers (keepers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3210-promises-promises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.10 Promises (promises)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3211-where-a-source-went-quiet-sources-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2.11 Where a source went quiet (sources --gaps)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Tiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-payload-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Payload profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Conformance
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Conformance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-the-readers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 The readers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-what-this-spec-does-not-say" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. What this spec does not say
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="logbook-format-specification-v03">Logbook format — specification v0.3</h1>
+<p>Status: draft. License: CC0. Anyone may implement this without asking.</p>
+<p>The key words MUST, MUST NOT, SHOULD and MAY are to be interpreted as described in RFC 2119.</p>
+<h2 id="1-the-folder">1. The folder</h2>
+<div class="highlight"><pre><span></span><code>&lt;root&gt;/
+  logbook.json            identity and chain head
+  logbook/&lt;YYYY&gt;/&lt;MM&gt;.jsonl   the record
+  notes/&lt;YYYY&gt;/&lt;YYYY-MM-DD&gt;.md   free text, optional
+  attachments/&lt;sha256&gt;    optional; content-addressed files a line points at (§1.1)
+  inbox/                  optional; not part of conformance
+</code></pre></div>
+<p>A derived locator (<code>index.sqlite</code>, ADR 0007) is disposable and not part of conformance; the reference keeps it in the user's cache directory, outside this folder, so a copy of the folder carries no locator (RFC 0029 §8). An implementation MAY keep one inside the folder.</p>
+<p><code>logbook.json</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"logbook/0.3"</span><span class="p">,</span><span class="w"> </span><span class="nt">"owner_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;uuid&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;RFC3339 UTC&gt;"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"timezone"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;IANA tz&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"seq"</span><span class="p">:</span><span class="w"> </span><span class="mi">4181</span><span class="p">,</span><span class="w"> </span><span class="nt">"head"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;hex sha256&gt;"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"recipients"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl"</span><span class="p">,</span><span class="w"> </span><span class="s2">"age1…"</span><span class="p">],</span>
+<span class="w"> </span><span class="nt">"lineage"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"from_format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"logbook/0.2"</span><span class="p">,</span><span class="w"> </span><span class="nt">"from_head"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;hex sha256&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"migrated_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;RFC3339 UTC&gt;"</span><span class="p">}]}</span>
+</code></pre></div>
+<p><code>recipients</code> lists the age X25519 recipients (the public halves) that tiers 2–3 are sealed to (§4). It is present in a record that seals, with two entries at least; a record without it, or with an empty list, seals nothing. The private identity is never in this folder (RFC 0029 §6).</p>
+<p><code>seq</code> and <code>head</code> are those of the last line in chain order (§3). A record with no lines has <code>seq</code> 0 and <code>head</code> GENESIS. <strong>GENESIS</strong> is the string of 64 ASCII <code>0</code> characters, <code>0000…0000</code>; it is a named constant, not the digest of anything, and it is also the <code>prev</code> of the first line (§3).</p>
+<p><code>lineage</code> is present only in a record that was migrated from an earlier format, or that sealed its past (§3.1).</p>
+<p>Writers MUST preserve keys of <code>logbook.json</code> they do not know: read the file, change <code>seq</code> and <code>head</code>, write everything else back. An implementation that rewrites the file from a fixed set of keys drops <code>lineage</code>, and whatever a later version adds, the first time it appends.</p>
+<h3 id="11-attachments">1.1 Attachments</h3>
+<p>Some observations refer to a file too large, binary or private to put in a line: a transcript, a photo, a voice message. A line MUST NOT inline such content. The file is stored once, named by its own SHA-256, and the line points at it.</p>
+<p>A file lives at <code>&lt;root&gt;/attachments/&lt;sha256&gt;</code>, where <code>&lt;sha256&gt;</code> is the lowercase hex digest of the file's exact bytes: no extension, no subdirectories.</p>
+<p>A payload references it as an object of this shape:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"sha256"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;hex sha256&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"attachments/&lt;hex sha256&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"bytes"</span><span class="p">:</span><span class="w"> </span><span class="mi">48213</span><span class="p">,</span><span class="w"> </span><span class="nt">"media_type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"text/markdown"</span><span class="p">}</span>
+</code></pre></div>
+<p><code>path</code> is relative to the record root. <code>bytes</code> is the length of the file. <code>media_type</code> is an IANA media type. A profile MAY name the field as it likes (<code>content</code>, <code>media</code>, <code>attachments</code>) but MUST use this shape.</p>
+<p>The store is write-once: a digest is written once and never rewritten. Two lines that point at the same bytes share one file; this is how re-importing a source de-duplicates. Attachments are record, not cache (ADR 0001): they are never pruned.</p>
+<p>The chain covers lines, not bytes. The digest is inside the line, so tampering with the file is detectable, but the file is not in the hash chain. <code>verify</code> MUST NOT fail because an attachment is missing; it MUST report missing attachments separately and exit 0 when the chain is intact. A verifier MAY check the digests of present files; a file whose bytes do not match its name <strong>is</strong> an error.</p>
+<p><strong>Sealed files.</strong> In a record that seals (§4), a file a tier 2–3 line points at is stored under the same name, the digest of its plaintext, as an age file (RFC 0029 §7): its first 22 bytes are <code>age-encryption.org/v1\n</code>. The reference inside the line is unchanged and names the plaintext. A verifier without the key counts such a file as sealed and does not check it; one with the key opens it and requires the plaintext to hash to the name, else it is an error. A plain file may be replaced by its sealed form (the protection raised), never the reverse. A file both a tier-1 and a tier-2 line point at is sealed.</p>
+<p>A record with no <code>attachments/</code> directory is valid. Conformance (§6) does not require the store.</p>
+<h2 id="2-the-line-the-envelope">2. The line (the envelope)</h2>
+<p>One observation per line, JSON, UTF-8, newline-terminated, in <code>logbook/&lt;YYYY&gt;/&lt;MM&gt;.jsonl</code>, where YYYY and MM are taken from <code>at</code> in UTC.</p>
+<p>Placement is a writer's obligation, not a validity condition. A writer MUST put a line in the month file of its <code>at</code>. A reader takes every line of every <code>logbook/*/*.jsonl</code> file and verifies it by §3 wherever it was found; a line in the wrong month file is verified normally. A reader other than <code>verify</code> MAY rely on placement: to list a day it MAY read only the month files that day's instants can fall in, and a line it misses because a writer put it in another month file is that writer's bug, not the reader's.</p>
+<p>The stored form of a line is any JSON text for the object on one line: UTF-8, no embedded newline (the newline ends the line), any key order, any whitespace. Only the canonical form (§3) is hashed, so re-serialising a line changes nothing. A reader ignores an empty or whitespace-only line. A line whose JSON text gives the same key twice in one object, at any depth, is invalid.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>uuid</td>
+<td>UUIDv7 (RFC 9562) recommended; identity of this line; outside the hash so it may be assigned at write time</td>
+</tr>
+<tr>
+<td><code>seq</code></td>
+<td>integer ≥ 1</td>
+<td>position in the owner's chain; strictly increasing by 1</td>
+</tr>
+<tr>
+<td><code>at</code></td>
+<td>RFC3339 UTC</td>
+<td>when the thing happened (not when it was recorded)</td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td>RFC3339 UTC or null</td>
+<td>when it stopped, if it had a duration; <code>null</code> otherwise, never absent</td>
+</tr>
+<tr>
+<td><code>tz</code></td>
+<td>IANA name</td>
+<td>the owner's timezone at <code>at</code></td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>who reported it: <code>manual</code>, <code>apple-health</code>, <code>google-takeout</code>, …</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td>string</td>
+<td>what it is: <code>location</code>, <code>photo</code>, <code>event</code>, <code>message</code>, <code>sleep</code>, <code>note</code>, …</td>
+</tr>
+<tr>
+<td><code>tier</code></td>
+<td>1, 2 or 3</td>
+<td>privacy tier, §4</td>
+</tr>
+<tr>
+<td><code>payload</code></td>
+<td>object</td>
+<td>whatever the source said; MUST contain <code>schema</code>, e.g. <code>"location/v1"</code>; for a sealed line, the reference <code>{"schema": "sealed/v1", "of": "&lt;the sealed payload's schema&gt;", "digest": "&lt;hex sha256&gt;"}</code></td>
+</tr>
+<tr>
+<td><code>recorded_at</code></td>
+<td>RFC3339 UTC</td>
+<td>when the line was written</td>
+</tr>
+<tr>
+<td><code>prev</code></td>
+<td>hex sha256</td>
+<td>hash of the previous line; GENESIS (§1) for the first</td>
+</tr>
+<tr>
+<td><code>hash</code></td>
+<td>hex sha256</td>
+<td>§3</td>
+</tr>
+<tr>
+<td><code>payload_enc</code></td>
+<td>string</td>
+<td><strong>sealed lines only</strong> (§4): the sealed content as an age file in standard base64; outside the hash, as <code>id</code> is</td>
+</tr>
+</tbody>
+</table>
+<p>Every field in the table but <code>payload_enc</code> is present in every line; <code>payload_enc</code> is present on a sealed line and on no other. <code>end</code> is <code>null</code> when the observation has no duration or its end is unknown; it is never omitted. Absent and null are different inputs to the hash: an object without <code>end</code> and one with <code>"end":null</code> canonicalise to different bytes. Writers MUST emit <code>null</code>.</p>
+<p><code>at</code>, <code>end</code> and <code>recorded_at</code> are RFC 3339 date-times in UTC with the literal <code>Z</code> designator, as in <code>2026-03-01T07:30:00Z</code>; a numeric offset such as <code>+00:00</code> MUST NOT be used. Fractional seconds are permitted. The string is hashed verbatim, so <code>07:30:00Z</code> and <code>07:30:00.000Z</code> are different inputs. They are the same instant: timestamps compare as the instants they denote, never as text (<code>07:30:00.5Z</code> is after <code>07:30:00Z</code>, though it sorts before it as a string).</p>
+<p><code>tz</code>, and <code>timezone</code> in <code>logbook.json</code>, are IANA zone names. This spec names no edition of the zone database, so a name may be known to one reader and not another (<code>Europe/Kyiv</code> and <code>Europe/Kiev</code> are the same zone under two editions). <code>verify</code> does not interpret <code>tz</code>, so no zone name makes a record invalid. A reader that must localise a time and does not know the zone MUST say so; it MUST NOT silently substitute another zone.</p>
+<p>Unknown fields MUST be preserved by readers and MUST NOT be added by writers at the top level; extensions go inside <code>payload</code>.</p>
+<p><strong>Sealed lines</strong> (RFC 0029). A line whose <code>payload.schema</code> is <code>sealed/v1</code> is sealed: its <code>payload</code> is exactly <code>{"schema": "sealed/v1", "of": "&lt;schema&gt;", "digest": "&lt;lowercase hex sha256&gt;"}</code> and it carries <code>payload_enc</code>. The sealed bytes are <code>canonical_json({"payload": &lt;the real payload&gt;, "salt": "&lt;32 lowercase hex, 16 random bytes&gt;"})</code> in UTF-8; <code>digest</code> is their SHA-256; <code>of</code> is the real payload's <code>schema</code>; <code>payload_enc</code> is that text age-sealed (age-encryption.org/v1, X25519 recipients, the binary file, never the armor) to every recipient of <code>logbook.json</code>, as standard base64 with padding. A <code>sealed/v1</code> payload with other keys, or without a <code>payload_enc</code> that is base64 of bytes beginning with the age header, is invalid; so is a <code>payload_enc</code> on a line whose payload is not <code>sealed/v1</code>. The salt is inside the sealed bytes and inside the digest, so the digest confirms nothing to a reader without the key. Writers seal every tier 2 and 3 line of a record that names recipients, and never a tier-1 line.</p>
+<h2 id="3-the-chain">3. The chain</h2>
+<div class="highlight"><pre><span></span><code>content = canonical_json({at, end, tz, source, kind, tier, payload})
+hash    = sha256( prev + "|" + seq + "|" + sha256(content) + "|" + recorded_at )
+</code></pre></div>
+<p><code>canonical_json</code> is RFC 8785 (JSON Canonicalization Scheme): keys sorted by UTF-16 code units, no whitespace, UTF-8, ES6 number serialisation, no NaN/Infinity.</p>
+<p>In the pre-image, <code>prev</code> and <code>sha256(content)</code> are lowercase hex, <code>seq</code> is decimal with no padding and no sign, <code>recorded_at</code> is the string exactly as written in the line, and <code>|</code> is U+007C. Every hex digest in this format, in a pre-image and as written in a file, is lowercase; a verifier compares digests as strings, so an uppercase digest does not verify.</p>
+<p>A logbook is <strong>valid</strong> when, taking every line from every file and ordering by <code>seq</code> (files partition by the month of <code>at</code>, so backfilled history lands in old files; file order is not chain order):</p>
+<ul>
+<li>every line meets §2: <code>payload.schema</code> is present, <code>tier</code> is 1, 2 or 3, <code>seq</code> ≥ 1, and a sealed line meets the sealed-line rule of §2;</li>
+<li>no two lines share a <code>seq</code>; when they do, the verifier reports the second occurrence;</li>
+<li>every line's <code>seq</code> is the previous plus one, the first being 1;</li>
+<li>every <code>prev</code> equals the previous <code>hash</code>, the first being GENESIS;</li>
+<li>every <code>hash</code> recomputes;</li>
+<li><code>logbook.json</code> <code>seq</code>/<code>head</code> match the last line, or are 0 and GENESIS when there is none.</li>
+</ul>
+<p>A verifier checks the envelope requirements of §2 as well as the chain: a line that chains correctly but has no <code>payload.schema</code> or a <code>tier</code> outside 1..3 makes the record invalid.</p>
+<p><strong>Sealed lines and the key.</strong> <code>payload_enc</code> is outside the hash, so the rules above hold without any key: a verifier without the owner's identity checks the whole chain and the sealed-line rule of §2, reports how many lines it did not open, and exits 0 when the chain holds. It cannot tell a line's sealed bytes from bytes an adversary sealed to the owner's recipients; that is what the key adds. A verifier with the identity MUST open every sealed line, require the SHA-256 of the opened bytes to equal <code>payload.digest</code> and the opened payload's <code>schema</code> to equal <code>of</code>, and treat a mismatch as an error of the record, as a present attachment whose bytes do not match its name is (§1.1). Resealing <code>payload_enc</code> to other recipients changes no hash (RFC 0029 §6.4).</p>
+<p><strong>Write order.</strong> A writer appends in this order: the line, or the batch of lines, to its month file, flushed and fsynced; then <code>logbook.json</code>, written to a temporary file and renamed into place so it is never half-written; then any index. A crash therefore leaves the files ahead of <code>logbook.json</code>, never behind: every line <code>logbook.json</code> names is on disk, and any lines past its <code>seq</code> are a complete, chained tail. Until <code>logbook.json</code> is brought forward, <code>verify</code> reports such a record invalid by the last rule above.</p>
+<p><strong>Truncation.</strong> A crash can also cut a month file inside the line being written. Bytes that are not a line — a file that ends inside a line, or a line that is not one JSON object with distinct keys (§2) — make the record invalid, and a verifier MUST report each by file and line number. It MUST still report <code>seq</code> and <code>head</code>, and they are those of the lines it read: when the whole lines are a chained prefix, as a torn write leaves them, the <code>seq</code> and <code>hash</code> of the last whole line, so the owner learns which prefix of the chain is intact; 0 and GENESIS only when no whole line remains. A verifier MUST NOT report 0 and GENESIS for a record whose first line is whole. A last line that is whole but for its newline is a line, and a file cut there is valid: the chain covers lines, not bytes (§1.1).</p>
+<p>Corrections are new lines. A source that revises an earlier record writes a new line with <code>payload.supersedes = "&lt;id&gt;"</code>. Nothing is ever rewritten or removed. A line that should be hidden rather than corrected is retracted: a new line of kind <code>retraction</code> whose payload supersedes it (RFC 0003, <code>retraction/v1</code>); readers mark it and never drop it.</p>
+<h3 id="31-format-versions">3.1 Format versions</h3>
+<p><code>logbook.json</code> <code>format</code> names the rule the record's hashes were computed with.</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Canonicalisation</th>
+<th>Envelope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>logbook/0.1</code></td>
+<td>Python's <code>json.dumps(sort_keys=True, separators=(",", ":"))</code>. It deviated from RFC 8785 in float layout (<code>0.0</code> and <code>120.0</code> instead of <code>0</code> and <code>120</code>; <code>1e-06</code> instead of <code>0.000001</code>; exponent form from 1e16, not 1e21) and in key order (Unicode code points, not UTF-16 code units).</td>
+<td>§2 without <code>payload_enc</code></td>
+</tr>
+<tr>
+<td><code>logbook/0.2</code></td>
+<td>RFC 8785 exactly, as §3 says.</td>
+<td>§2 without <code>payload_enc</code>; nothing sealed</td>
+</tr>
+<tr>
+<td><code>logbook/0.3</code></td>
+<td>RFC 8785 exactly, the same rule.</td>
+<td>§2 as written: sealed lines, <code>recipients</code> in <code>logbook.json</code></td>
+</tr>
+</tbody>
+</table>
+<p>Canonicalisation is fixed, not versioned (ADR 0014): a conformant implementation carries one rule and MUST refuse to verify or write a <code>logbook/0.1</code> record. Such a record MUST be migrated forward. A migration keeps every line's <code>id</code>, <code>seq</code>, content fields and <code>recorded_at</code> unchanged, recomputes <code>prev</code> and <code>hash</code> in <code>seq</code> order under the current rule, sets <code>format</code> to the current format, appends <code>{from_format, from_head, migrated_at}</code> to <code>lineage</code> in <code>logbook.json</code>, and then appends one line — <code>source</code> <code>manual</code>, <code>kind</code> <code>migration</code>, <code>tier</code> 1, payload <code>{"schema": "migration/v1", "from_format": "logbook/0.1", "from_head": "&lt;old head&gt;"}</code> — so that the fact of the migration, and the head it replaced, are inside the chain. The old head stays reproducible from the old files with the old rule; nothing else about the record changes.</p>
+<p><code>logbook/0.2</code> and <code>logbook/0.3</code> hash by the same rule, so a 0.3 implementation MUST read, verify and write a 0.2 record as it is, never migrating it (ADR 0020); a 0.2 record seals nothing, having no recipients, and becomes 0.3 the moment it is given them. A 0.2 implementation that meets a 0.3 record preserves <code>payload_enc</code> as an unknown field and verifies the chain correctly, but cannot open anything; the format name tells it that it needs another version of the code.</p>
+<p><code>migration/v1</code>, the payload of that one line, is part of this section, not a payload profile of §5: it is frozen with the envelope and listed in no profile table (RFC 0031, question 1).</p>
+<p><strong>Sealing the past</strong> (RFC 0029 §10.2). A record given recipients may seal the tier 2–3 lines written before it had them. That changes those lines' content hashes (the real payload leaves the pre-image and the reference enters it), so it takes the migration road: every line keeps <code>id</code>, <code>seq</code>, <code>at</code>, <code>end</code>, <code>tz</code>, <code>source</code>, <code>kind</code>, <code>tier</code> and <code>recorded_at</code>; a plain tier 2–3 payload becomes the sealed reference with its content in <code>payload_enc</code>; <code>prev</code> and <code>hash</code> are recomputed in <code>seq</code> order; every attachment such a line names is sealed under its name; <code>format</code> becomes <code>logbook/0.3</code>; <code>lineage</code> gains an entry; and one <code>migration/v1</code> line is appended, with <code>from_head</code> the head it replaced and the counts <code>sealed_lines</code> and <code>sealed_attachments</code>. The plain files are not kept beside the record. The old head stays reproducible, with the identity: open every sealed line, put its payload back, recompute.</p>
+<h3 id="32-readers">3.2 Readers</h3>
+<p>A reader is anything that reads the record for a person and writes nothing to it: <code>show</code> and <code>export</code>, which list lines, and the derived readers, which compute something from them and never append (ADR 0013, ADR 0019): <code>derive stays</code>, <code>trips</code>, <code>day</code>, <code>days</code>, <code>rollup</code>, <code>keepers</code>, <code>promises</code> and <code>sources --gaps</code>. Nothing in this subsection touches validity or the hash; it is here so that two implementations print the same day and derive the same stays from the same record. Each derived reader below names its inputs, its rules with their constants, the shape of its JSON output, and what is a reader's own. The text a reader prints is a reader's own throughout: its columns, its wording, its rounding. The JSON form is the contract, and §6.1 says which of them a second implementation is compared on.</p>
+<p>Two words recur. A line is <strong>standing</strong> when it is not retracted (RFC 0003) and no later line of the same kind names it in <code>payload.supersedes</code>; a derived reader takes the standing lines of a kind, and <code>show</code> lists a superseded line with a mark, as it marks a retracted one. The <strong>record's zone</strong> is <code>timezone</code> in <code>logbook.json</code>: every reader localises every instant in it and assigns every line to a local day by it, never by the line's own <code>tz</code> (a <code>flight/v1</code> line whose <code>tz</code> is the origin's zone is on the local day the record's zone gives its <code>at</code>). A reader MAY offer another zone as an option; it is never the default.</p>
+<h4 id="321-listing-a-day-show">3.2.1 Listing a day (<code>show</code>)</h4>
+<ul>
+<li>A day is listed in the order of the instant <code>at</code> denotes, then by <code>seq</code>. A line whose <code>at</code> does not parse is on no day; a reader skips it.</li>
+<li>A reader listing a day MAY read only the month files that day can touch (§2). Resolutions and retractions apply wherever the line they cover is, so it takes those from every file.</li>
+<li>A retraction line is not listed on its own day (RFC 0003 rule 3). It appears as a mark on the line it hides, on that line's day. Every other kind of line is listed on its day, a <code>resolution/v1</code> or a <code>keeper/v1</code> line as much as a photo: what a reader derives (a stay, a trip, a Day, a proposal) is never a line and is never listed.</li>
+<li>An alias walk (RFC 0006 rule 6) that ends without reaching an entity line — on its fourth hop, on a cycle, or at a ref with no line standing — names nothing. The <code>label</code> an alias line carries is a hint written at resolution time, not a resolution.</li>
+<li>A run of consecutive location points from one source and of one subject (RFC 0001 <code>subject</code>; absent is the owner), unbroken by any other row, MAY be collapsed into one row. The row spans from the first point's <code>at</code> to the last point's <code>end</code> when that is not null, else to its <code>at</code>.</li>
+<li>One calendar entry that several sources carry is one row. Two <code>event/v1</code> lines are one entry when they come from different sources, their <code>at</code> and <code>end</code> denote the same instants (both null is the same end), and either their titles name the same flight designator (RFC 0013; <code>Flight to Zürich (XY 561)</code> and <code>Flug XY561</code>) or their titles are equal with case, whitespace and accents aside (NFKD with the combining marks dropped: <code>Zürich</code> and <code>Zurich</code> fold, <code>Tromsø</code> and <code>Tromso</code> do not). A set folds only across sources: one calendar holding an entry twice is two rows, though its repeat folds into a set another calendar already makes. The row is the first line of the set, in the day's order, and stands for every source in it; a retracted line is never folded and folds nothing.</li>
+<li>A <code>flight/v1</code> line with no <code>number</code> (RFC 0013 rule 1) is listed as its route alone.</li>
+<li>A day's hero photos are its keeper lines standing, <code>memory</code> first (3.2.9, RFC 0024 rule 4); a day with none has no hero, and a reader does not pick one.</li>
+<li>A payload whose shape predates its profile (§6) is shown however the reader chooses; reading a string <code>chat</code> as the chat's name and a string attendee as an <code>email</code> ref is reasonable, not required.</li>
+<li>A sealed line a reader can open is listed as its opened payload; one it cannot open (no identity on this machine) is listed on its day, as its <code>kind</code> and <code>of</code>, and says it is sealed. A reader never drops it.</li>
+<li>A read command MAY refuse a <code>logbook/0.1</code> record, so that every command answers a record it does not carry the same way; §3.1 requires refusal only of verify and write. A reader that does read one says nothing about its hashes.</li>
+<li>What <code>show</code> prints for a line, a range of days, a filter by profile and a machine-readable form are a reader's own; the rules above fix which lines are on a day, their order, their marks and their folds, and nothing else. Two implementations that want to print the same text match each other on a fixture, as the reference and logbook-ts do (§6).</li>
+</ul>
+<h4 id="322-what-every-derived-reader-shares">3.2.2 What every derived reader shares</h4>
+<p><strong>Inputs.</strong> The lines of a window, located however the reader likes (§2: a reader MAY rely on placement; the reference goes through its index); the record's settings in <code>policy/stays.json</code> (the table below; an absent file means the defaults, and a reader MUST NOT fail for want of it); its named places in <code>places.json</code> (<code>{"&lt;name&gt;": {"lat", "lon", "radius_m"?, "kind"?, "country"?, "tags"?}}</code>, <code>kind</code> one of <code>home</code>, <code>asset-berth</code>, <code>other</code>, absent is <code>other</code>, <code>radius_m</code> absent is <code>radius_m</code> of the settings); its assets in <code>assets.json</code> (<code>{"assets": [{"id", "kind", "name", …}]}</code>, <code>kind</code> one of <code>yacht</code>, <code>aircraft</code>, <code>car</code>; ADR 0018); the airports table of RFC 0013 rule 5, which also carries each row's municipality and OurAirports type; and, for a country, the zone database's <code>zone.tab</code>. A reader writes none of these. The one exception the reference makes is <code>derive stays</code>, which writes the defaults into <code>policy/stays.json</code> on its first run and never rewrites the file; a reader that does not is conformant.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stay_min_s</code></td>
+<td>1200</td>
+<td>a cluster this long (20 min) is a stay by duration alone; and the overlap a night's stay must reach</td>
+</tr>
+<tr>
+<td><code>stop_min_s</code></td>
+<td>180</td>
+<td>a cluster shorter than this is travel, not a stop</td>
+</tr>
+<tr>
+<td><code>merge_gap_s</code></td>
+<td>600</td>
+<td>out of the radius and back within this: one stay; a silence this long is a gap</td>
+</tr>
+<tr>
+<td><code>radius_m</code></td>
+<td>150</td>
+<td>the radius of an unnamed place, and of an aboard match</td>
+</tr>
+<tr>
+<td><code>airport_km</code></td>
+<td>8</td>
+<td>a move's end this close to an airport is at it</td>
+</tr>
+<tr>
+<td><code>night</code></td>
+<td><code>["22:00", "08:00"]</code></td>
+<td>the window the overnight stay is chosen in, local; an end at or before the start is the next morning</td>
+</tr>
+<tr>
+<td><code>modes.walk_max_kmh</code></td>
+<td>7</td>
+<td>a move at or under this speed is a walk</td>
+</tr>
+<tr>
+<td><code>modes.car_max_kmh</code></td>
+<td>130</td>
+<td>… at or under this a car; above it a train</td>
+</tr>
+<tr>
+<td><code>modes.flight_min_kmh</code></td>
+<td>150</td>
+<td>above this a flight</td>
+</tr>
+<tr>
+<td><code>aboard_window_s</code></td>
+<td>300</td>
+<td>an asset's position this close in time can match an owner's point</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The window.</strong> A reader's window is a range of local days <code>[first, last]</code> in the record's zone. Its lines are those whose <code>at</code> is at or after the first day's local midnight and before the end of the night window of the last day (08:00 the morning after it by default), so the last night is inside; the derivation of stays is also given, per subject, the first location line at or after that end, so a stay that runs past the window ends where the tracker next spoke (3.2.3 rule 4), and that line is not a line of the window. Retractions and resolutions come from the whole record. Where a window defaults, it defaults to the <strong>days the owner's track covers</strong>: the first to the last local day with a <code>location/v1</code> line; a window given by the user is clipped to them (<code>rollup</code>, <code>trips</code>), so a day the record knows nothing about is nothing, not a night in transit.</p>
+<p><strong>Lines.</strong> A derived reader reads standing lines only: a retracted line is out, and so is one a later line of the same kind supersedes. Names come from the resolution lines (RFC 0006) through the alias walk of 3.2.1. The <strong>owner's identities</strong> are <code>owner_id</code> in <code>logbook.json</code>, the addresses under its <code>owner_emails</code>, the <code>names</code>, <code>emails</code> and <code>phones</code> of <code>policy/owner.json</code> when it exists, and the closure of those over the resolution lines (a ref that resolves to an owner entity is the owner's; an owner ref's entity is the owner) with every label they resolve to.</p>
+<p><strong>Output.</strong> Instants in JSON are RFC 3339 UTC with <code>Z</code> to the second; a <code>*_local</code> field is the same instant in the record's zone as an ISO 8601 date-time with its offset. Every number carries, under <code>lines</code>, the ids of the lines it came from: for a stay the first and last location line of its run, for a flight the line standing, for a person the lines that put them there, for a night's sleep its stages. A derived id is reproducible from the record (ARCHITECTURE: derived is disposable, ids are stable): a stay or stop is <code>stay:&lt;subject&gt;:&lt;YYYYMMDDTHHMMZ&gt;@&lt;lat&gt;,&lt;lon&gt;</code> (<code>stop:</code> for a stop; <code>&lt;subject&gt;</code> the asset id or <code>owner</code>; the start in UTC to the minute; the centroid to four decimals), a move <code>move:&lt;subject&gt;:&lt;YYYYMMDDTHHMMZ&gt;</code>, a run aboard an asset <code>aboard:&lt;asset&gt;:&lt;YYYYMMDDTHHMMZ&gt;</code>, a trip <code>trip:&lt;first day&gt;:&lt;last day&gt;</code>, a proposed promise the digest of 3.2.10. Rounding in JSON is as each reader says; a field with nothing behind it is <code>null</code>, never a zero, because a zero is a measurement. Great-circle distances are the haversine on a sphere of radius 6371 km.</p>
+<h4 id="323-stays-moves-and-nights-derive-stays">3.2.3 Stays, moves and nights (<code>derive stays</code>)</h4>
+<p><strong>Inputs.</strong> The <code>location/v1</code> lines standing of the window, by subject (RFC 0001: <code>subject</code> absent is the owner, else an asset id; a line whose <code>lat</code> or <code>lon</code> is not a finite number is skipped); the owner's evidence lines of the window, the kinds <code>event</code>, <code>transcript</code>, <code>note</code>, <code>call</code>, <code>message</code> and <code>photo</code>; the settings, places, assets and airports of 3.2.2. The window is one day (<code>--day</code>, default today) or a range.</p>
+<p><strong>Rules.</strong></p>
+<ol>
+<li>Each subject's points are put in time order, by instant then <code>seq</code>, and clustered in that order. A point joins the current cluster when it lies within the radius of the cluster's place (the cluster's first point lies in a named place: of the places whose radius holds it, the nearest) or, for a cluster at no named place, within <code>radius_m</code> of the cluster's first point (the anchor, never a running centroid, so a slow walk cannot drift a cluster along), however long after the cluster's last point it comes: a tracker is silent while its owner is still. A point outside whose very next point is back inside is GPS noise: it is dropped and counted (<code>noise_points</code>). Any other point outside ends the cluster and starts the next.</li>
+<li>A cluster whose first and last point are less than <code>stop_min_s</code> apart is travel and is dropped. Two consecutive clusters at the same place (the same named place; or, both unnamed, centroids within <code>radius_m</code>) whose gap is under <code>merge_gap_s</code> are one cluster.</li>
+<li>A cluster's centroid is the mean of its points; its place is its first point's named place, if any; it starts at its first point's <code>at</code>.</li>
+<li>A cluster ends at its last point's <code>at</code>, unless the subject's next point comes <code>merge_gap_s</code> or more later and lies within <code>walk_max_kmh</code> for <code>merge_gap_s</code> of the last point (1,167 m by default): then the silence was stillness and the cluster ends at that next point's <code>at</code>. A next point farther than that is travel the tracker did not see, and the cluster ends at its last point.</li>
+<li>A cluster is a <strong>stay</strong> when it lasts <code>stay_min_s</code> or longer, or when any of the owner's evidence lines falls inside it (an instant within its span; a line with <code>end</code> whose span overlaps it); evidence promotes, duration is the fallback, and a stay by evidence alone is marked <code>promoted</code>. Otherwise it is a <strong>stop</strong>. Only the owner's clusters are promoted; <code>attached</code> counts the evidence by kind.</li>
+<li>A <strong>move</strong> lies between two consecutive clusters: it starts where the earlier one ends (rule 4) and ends at the later one's first point. Its distance is the great-circle length of the path from the earlier cluster's last point through every point between (noise left out) to the later one's first; its <code>points</code> are those between. Its <code>airports</code> are the two IATA codes when its two end points each lie within <code>airport_km</code> of an airport. Its mode: when the owner is aboard an asset (rule 7), the asset's kind decides, <code>yacht</code> → <code>boat</code>, <code>aircraft</code> → <code>flight</code>, <code>car</code> → <code>car</code>; an asset's own moves likewise take the mode of its kind; else <code>null</code> when the distance is under <code>radius_m</code> or the duration is not positive (nothing moved); else from the mean speed — above <code>flight_min_kmh</code>, or two airports with no point between, <code>flight</code>; at or under <code>walk_max_kmh</code> <code>walk</code>; at or under <code>car_max_kmh</code> <code>car</code>; else <code>train</code>.</li>
+<li>The owner is <strong>aboard</strong> an asset during a stay or stop when any of the asset's points inside that span lies within <code>radius_m</code> of the centroid; during a move when at least half of the owner's points inside it have an asset point within <code>aboard_window_s</code> of them in time and within <code>radius_m</code> in distance; and during a move with no points between two stays aboard the same asset. Assets are tried in order of id and the first match is taken. Aboard is the owner's relation to the asset (ADR 0018 rule 3): an asset's own segments never carry it.</li>
+<li>The <strong>night</strong> of a day is the owner's stay with the longest overlap of that day's night window (3.2.2), when that overlap reaches <code>stay_min_s</code>; else the day is <strong>in transit</strong>. The night is <strong>at home</strong> when the stay's place is of kind <code>home</code>, or its centroid lies within a home place's radius, or within 400 m of a home place's centre whatever that place's radius: a guest room across the street is not a night away, and a trip never starts or ends with such a night.</li>
+</ol>
+<p><strong>Output.</strong> One object: <code>window</code> (<code>since</code>, <code>until</code>, <code>days</code>), <code>settings</code> (as the table), <code>subjects</code> (<code>null</code> for the owner, then the asset ids, sorted), <code>segments</code>, <code>nights</code>, <code>noise_points</code>. A segment carries <code>id</code>, <code>kind</code> (<code>stay</code>, <code>stop</code>, <code>move</code>), <code>subject</code>, <code>start</code>, <code>end</code>, <code>start_local</code>, <code>end_local</code>, <code>duration_s</code>, <code>points</code>, <code>aboard</code> and <code>lines</code> (<code>first</code>, <code>last</code>, <code>points</code>); a stay or stop also <code>lat</code> and <code>lon</code> to six decimals, <code>place</code>, <code>attached</code> (<code>{&lt;kind&gt;: &lt;count&gt;}</code>) and <code>promoted</code>; a move also <code>distance_m</code> (whole metres), <code>mode</code> and <code>airports</code>. A night carries <code>day</code>, <code>stay</code> (a segment, or <code>null</code>), <code>in_transit</code> and <code>home</code>. The owner's segments come first, then each asset's, each in time order.</p>
+<p><strong>A reader's own.</strong> The locator; whether the settings file is written; the text.</p>
+<h4 id="324-flights-the-standing-set-and-the-inference">3.2.4 Flights: the standing set and the inference</h4>
+<p><strong>The standing set</strong> is what every reader of flights takes (RFC 0013 rule 4): the <code>flight/v1</code> lines not retracted and not named by another flight line's <code>supersedes</code>, the last line per key <code>(date, carrier, number)</code> (or <code>(date, "", "&lt;from&gt;&gt;&lt;to&gt;")</code> for a leg with no number), and of two standing lines that are one flight under two numbers (rule 1: the same <code>date</code>, the same route, departures within 30 minutes, scheduled against scheduled when both have one, else actual against actual, else whatever each has) only one: the numbered one when the other has none, else the one marked <code>extra.operating</code> true when exactly one is, else the first written. One line per flight, its <code>evidence</code> the strongest folded in. A reader shows a flight with no number as its route alone.</p>
+<p><strong>The inference</strong> (<code>infer flights</code>) is a producer, not a reader: it appends <code>flight/v1</code> lines with <code>source</code> <code>flight-inference</code> and <code>evidence</code> <code>inferred</code> through the merge of RFC 0013 rule 3, and a re-run appends nothing. Its rules, with the constants RFC 0013 names in prose:</p>
+<ol>
+<li>A candidate is an <code>event/v1</code> line standing (not retracted, not superseded), not <code>cancelled</code>, whose title names a flight designator: a carrier code the airlines table knows followed by one to four digits, or any such code when the title also says <code>flight</code>, <code>Flug</code> or <code>✈</code>.</li>
+<li>Its window of location points runs from 4 hours before the entry's <code>at</code> to 8 hours after its <code>end</code> (an entry with no <code>end</code> is given 6 hours; an all-day entry 4 hours either side). The points are the standing <code>location/v1</code> lines of that window in time order. A point is <strong>at an airport</strong> when the nearest airport in the table is within 8 km.</li>
+<li>A <strong>leg</strong> is the latest point at one airport followed by the first point at a different airport, every point between them at no airport. It counts when it is at least 20 minutes long, the two airports are at least 150 km apart (closer, it was a drive), and, for a timed entry, it overlaps the entry (the arrival point at or after the entry's <code>at</code>, the departure point no later than 4 hours after its <code>end</code>). Of several legs, the one whose route is the two airport codes the title names wins, else the longest.</li>
+<li>The leg's two points are <code>actual_departure</code> and <code>actual_arrival</code>; a timed entry's <code>at</code> and <code>end</code> are <code>scheduled_departure</code> and <code>scheduled_arrival</code>; <code>date</code> is the local date of the scheduled departure at the origin (of the actual one for an all-day entry); <code>from</code> and <code>to</code> are the leg's airports.</li>
+<li>Nothing is written when a <code>tracked</code> flight standing on the same route, under another key, covers the leg (the leg lies between 4 hours before that flight's <code>at</code> and 8 hours after its <code>end</code>): the leg is that flight seen again.</li>
+<li>The leg carries the entry's designator unless a <code>tracked</code> or <code>declared</code> flight standing already holds that designator on another route with its <code>at</code> inside the window: then the entry named that flight, this leg is another, and it is written with neither <code>carrier</code> nor <code>number</code>, keyed by date and route.</li>
+<li>The line's <code>raw_id</code> is <code>&lt;key&gt;@&lt;actual_departure&gt;/&lt;actual_arrival&gt;</code>; <code>extra.event</code> is the entry's id and <code>extra.gap</code> the two points' ids.</li>
+</ol>
+<p><strong>Output.</strong> Lines, not a report; the counts a run prints are a producer's own.</p>
+<h4 id="325-company-who-was-there-with">3.2.5 Company: who was there ("with")</h4>
+<p>Who was with the owner at a stay, split into <strong>confirmed</strong>, what the calendar, a recording or the owner's own words say, and <strong>proposed</strong>, a library's guess or an entry that names no hour. The owner is never their own company: evidence carrying one of the owner's identities (3.2.2) is dropped. A move has attachments but no company.</p>
+<p><strong>Inputs.</strong> One stay and the lines of the local days it touches; the resolution lines; the owner's identities; the places.</p>
+<p><strong>Rules.</strong></p>
+<ol>
+<li><strong>Calendar.</strong> An attendee of a timed <code>event/v1</code> <strong>held at the stay</strong> is confirmed. An entry is held at the stay when it overlaps the stay and either is located within 1,000 m of the stay's centroid (coordinates under <code>extra.location.latitude</code>/<code>longitude</code>, or a <code>location</code> that is the name of a place in <code>places.json</code>, case aside) or has no location at all and overlaps the stay by more than 3,600 s. A located entry the record cannot place places nobody. An all-day entry places nobody unless it is located at the stay, and then its attendees are proposed, since it names no hour. An attendee who <code>declined</code> is not listed; one whose <code>ref</code> resolves to a person takes that person's label, else their display <code>name</code>; a bare address with no name, and a calendar system address (<code>@calendar.google.com</code>, <code>noreply</code>, <code>reservations@</code>, <code>invite@</code>), is dropped.</li>
+<li><strong>Transcript.</strong> A participant of a <code>transcript/v1</code> whose span overlaps the stay (or whose <code>at</code> lies in it) is confirmed when the record resolves them to a person: by their <code>email</code>, <code>phone</code> or <code>provider_id</code> ref, else by their <code>name</code> matching exactly one person's label (case aside), else exactly one person's label by its first word. A diarizer's <code>Speaker A</code>, <code>me</code>, <code>them</code>, <code>Unknown</code> or a name no resolution knows is not company.</li>
+<li><strong>Note.</strong> A <code>note/v1</code> whose <code>at</code> lies inside the stay and whose text says <code>with &lt;Name&gt;</code>, the names capitalised and joined by <code>and</code>, <code>og</code> or <code>&amp;</code>, confirms each name the record resolves to a person by rule 2's name match; <code>with US</code>, an acronym, a country or a name the record does not know names nobody.</li>
+<li><strong>Photo.</strong> A <code>photo/v1</code> whose <code>at</code> lies inside the stay proposes each id under <code>people</code>, as the ref <code>provider_id</code> <code>&lt;library&gt;:&lt;id&gt;</code>, resolved to a person's label when a resolution line names it, else shown as the ref.</li>
+<li><strong>Circle.</strong> Reserved for a page another member of the circle shared (ARCHITECTURE); names nobody until that bundle is defined.</li>
+</ol>
+<p>Evidence is merged per person (by entity id, else by name, case aside): the status is confirmed when any evidence confirms, the sources are listed in the order calendar, transcript, note, photo, and confirmed people come before proposed.</p>
+<p><strong>Output.</strong> Wherever a reader lists company: <code>confirmed</code> and <code>proposed</code>, each a list of <code>{person, name, status, confidence, sources, reasons, lines}</code>.</p>
+<p><strong>A reader's own.</strong> <code>confidence</code> (the reference writes 0.8 for an attendee who accepted, 0.6 for one who has not answered, 0.9 for a transcript, 1.0 for a note, 0.5 for a face, 0.3 for an all-day entry) and the wording of <code>reasons</code>; both are dropped before two implementations are compared (§6.1).</p>
+<h4 id="326-trips-trips">3.2.6 Trips (<code>trips</code>)</h4>
+<p><strong>Inputs.</strong> The nights of the window (3.2.3 rule 8), the places, the owner's stays, the standing flights (3.2.4) and the company of 3.2.5. The window is <code>--year</code>, or <code>--since</code>/<code>--until</code>, clipped to the days the owner's track covers; without either, those days.</p>
+<p><strong>Rules.</strong></p>
+<ol>
+<li>Without a place of kind <code>home</code> nothing is away from home: there are no trips, and the reader says so (<code>warning</code>).</li>
+<li>A <strong>trip</strong> is a maximal run of consecutive days of the window whose night is not at home: away or in transit. A run whose every night is in transit is no trip, since nothing places the owner anywhere.</li>
+<li><code>start</code> is the run's first day, <code>end</code> its last, <code>until</code> the day after <code>end</code> (the return day); <code>nights</code> is the number of days in the run and <code>in_transit</code> how many of them had no stay.</li>
+<li>The <strong>route</strong> is one label per night stay in order, two consecutive stays folded into the first when they are at the same named place or, both unnamed, within 200 m of each other, and consecutive equal labels folded. A stay's label is its named place; else, when it is <strong>at an airport</strong> — within 3.5 km of the reference point of an airport with scheduled traffic (OurAirports type <code>large_airport</code> or <code>medium_airport</code>, whose terminal is often well off the runway midpoint the row marks), within 2 km of any other row — the airport's IATA code and city, <code>ZRH, Zurich</code> (the code alone when the row names no municipality); else its coordinates to four decimals, <code>59.8500,10.6000</code>, followed by <code>near &lt;place&gt;, &lt;x.x&gt; km</code> for the nearest named place when one is within 5 km, else by <code>(&lt;city&gt;)</code> for the nearest airport within 30 km when its row names a municipality. The city is the municipality's text before any parenthesis or comma. The same label names an unnamed cluster in <code>rollup places</code>; <code>day</code> and <code>days</code> print the coordinates alone where this rule would add <code>near &lt;place&gt;</code>.</li>
+<li><code>places</code> are the named places, home places left out, of the owner's stays overlapping the span from <code>start</code>'s local midnight to the end of <code>until</code>, each once, in order of first visit; <code>people</code> the confirmed company of those stays merged per person, ordered by the number of evidence lines, most first, then name, at most 12; <code>flights</code> the standing flights whose <code>date</code> lies in <code>[start, until]</code>, <code>flights_in</code> those dated <code>start</code> and <code>flights_out</code> those dated <code>until</code>.</li>
+<li><code>asset</code> is set when every night of the trip that has a stay was aboard the same asset.</li>
+<li>The id is <code>trip:&lt;start&gt;:&lt;end&gt;</code>. The captain's name for a trip is a <code>note/v1</code> line dated inside it, never a field here (ADR 0019).</li>
+</ol>
+<p><strong>Output.</strong> One object: <code>window</code>, <code>trips</code> (each <code>id</code>, <code>start</code>, <code>end</code>, <code>until</code>, <code>nights</code>, <code>in_transit</code>, <code>asset</code>, <code>route</code>, <code>places</code>, <code>people</code> as <code>{id, name, confidence, lines}</code>, <code>flights_in</code>, <code>flights_out</code>, <code>flights</code> as <code>{date, carrier, number, from, to, evidence, lines}</code>, <code>lines</code>) and <code>warning</code> when there is one.</p>
+<h4 id="327-the-day-day-and-a-window-of-days-days">3.2.7 The Day (<code>day</code>) and a window of days (<code>days</code>)</h4>
+<p><strong>Inputs.</strong> For a Day: a window of the day and the day before (the night before is that day's night); the day's lines; the <code>health-sample/v1</code> lines of both days; the standing flights. <code>days</code> reads a range the same way, a chunk at a time, and asks each day of it; its range defaults to the days the owner's track covers, else to the days with any line.</p>
+<p><strong>Rules.</strong></p>
+<ol>
+<li>The <strong>timeline</strong> is the owner's stays, stops and moves that overlap the local day, each keeping its real span and carrying <code>within_day</code>, the part of it on the day (a stay that began the evening before starts at 00:00 there); plus the standing flights whose <code>date</code> is the day (the local day of <code>at</code> when a line has no <code>date</code>), as rows of their own. Rows are ordered by their start on the day, a flight after a row that starts at the same instant.</li>
+<li>A run of two or more consecutive segments aboard one asset is one row of kind <code>aboard</code>, with the run under <code>inside</code>: the asset's movement never fragments the stay.</li>
+<li>A move with no points, lasting <code>merge_gap_s</code> or more, whose mode is not <code>flight</code> and that is not aboard an asset is a <strong>gap</strong>: the tracker did not see it. A gap attaches nothing and has no company.</li>
+<li>To every other row <strong>attach</strong> the day's lines inside its span (an instant within it; a line with an <code>end</code> whose span overlaps it): events named, with their fold (3.2.1) and never an all-day one; transcripts and notes named (a note by the first line of its text, at most 72 characters, a longer one cut to 71 and an ellipsis); mail as threads, by <code>thread</code>, else <code>message_id</code>, else the line's id, with a message count; calls, with the counterparty's name, else their ref's value, else <code>withheld</code>; keepers named; messages and photos counted. Company is the stay's by 3.2.5; a move has attachments and no company; a move also lists the flights whose span overlaps it.</li>
+<li><strong>Unplaced</strong> are the day's events (not all-day), transcripts, notes, mail and calls inside no row that is not a gap: what the calendar planned where the track has nothing.</li>
+<li>The <strong>nights</strong> before and after are the nights of the day before and of the day (3.2.3 rule 8). The <strong>country</strong> is that of the night after's stay, else of the longest stay on the day, else unknown: a place in <code>places.json</code> whose radius holds the stay's centroid and carries a <code>country</code> decides; else the nearest airport within 300 km and the country its zone is filed under in <code>zone.tab</code>; else unknown. It is coarse near borders and far from airports, and says which method it used.</li>
+<li><strong>All-day</strong> entries are the day's all-day <code>event/v1</code> lines, folded.</li>
+<li><strong>Health</strong> is the day's row from the <code>health-sample/v1</code> lines standing (RFC 0014 rules 4 and 5; of several lines that supersede the same line the latest stands): <code>sleep_h</code>, the asleep stages (<code>asleep</code>, <code>core</code>, <code>deep</code>, <code>rem</code>; never <code>in_bed</code> or <code>awake</code>) of the night that ends on the day, per device the union of their spans, the longest device taken, in hours to one decimal; <code>steps</code>, the larger device's count per quarter hour, summed; <code>resting_hr</code>, the mean of the day's resting readings in whole bpm, a reading in <code>count/s</code> multiplied by 60; <code>hrv</code>, the mean of the day's readings in whole ms. A field no line gives is <code>null</code>; a day with no health line has no row.</li>
+<li><strong>Sources</strong> are every source with a line on the day, with its count and its first and newest instant, most lines first then by name, the folded calendar entries counted.</li>
+</ol>
+<p><strong>Output of <code>day</code>.</strong> One object: <code>day</code>, <code>weekday</code>, <code>tz</code>; <code>nights</code> (<code>before</code>, <code>after</code>: <code>day</code>, <code>where</code>, <code>home</code>, <code>aboard</code>, <code>in_transit</code>, <code>stay</code>, <code>lines</code>); <code>country</code> (<code>code</code>, <code>method</code> of <code>place</code>, <code>airport</code> or <code>null</code>, <code>by</code>, <code>from</code> of <code>night</code> or <code>longest stay</code>); <code>all_day</code> (<code>title</code>, <code>line</code>, <code>sources</code>, <code>lines</code>); <code>timeline</code>, one entry per row: a segment as 3.2.3 gives it plus <code>within_day</code> (<code>start</code>, <code>end</code>, <code>duration_s</code>), <code>where</code> (a stay's named place, else the airport label of 3.2.6 rule 4, else its coordinates, with <code>(&lt;city&gt;)</code> when no named place is within 5 km; <code>aboard &lt;asset name&gt;</code> for an <code>aboard</code> row; <code>null</code> for a move), <code>gap</code>, <code>attached</code> (<code>events</code>, <code>transcripts</code>, <code>notes</code>, <code>mail</code>, <code>calls</code>, <code>keepers</code>, and <code>messages</code> and <code>photos</code> as <code>{count, lines}</code>), <code>with</code> (3.2.5) and, for a move, <code>flights</code>; an <code>aboard</code> entry also <code>asset</code> (<code>id</code>, <code>name</code>, <code>kind</code>) and <code>inside</code>; a flight entry <code>id</code>, <code>kind</code> <code>flight</code>, <code>start</code>, <code>end</code>, <code>start_local</code>, <code>end_local</code>, <code>carrier</code>, <code>number</code>, <code>from</code>, <code>to</code>, <code>evidence</code>, <code>role</code>, <code>aircraft</code>, <code>line</code>; then <code>flights</code>, <code>unplaced</code> (<code>kind</code>, <code>at</code>, <code>end</code>, <code>title</code>, <code>line</code>, and for an event <code>sources</code> and <code>lines</code>), <code>health</code> (the row with <code>lines</code> and <code>by</code>) and <code>sources</code>.</p>
+<p><strong><code>days</code>.</strong> One object per day, oldest first, JSON Lines under <code>--json</code>, every number the Day's: <code>day</code>, <code>weekday</code>, <code>night</code> (the night after: <code>where</code>, <code>home</code>, <code>aboard</code>, <code>in_transit</code>, <code>stay</code>), <code>country</code> (the code), <code>moved_m</code> (the whole metres of every move that started on the day, the passages inside an <code>aboard</code> row counted the same way, so a move across midnight counts once), <code>flights</code> (<code>carrier</code>, <code>number</code>, <code>from</code>, <code>to</code>, <code>evidence</code>, <code>line</code>), <code>stays</code> (<code>count</code>, the rows of kind <code>stay</code> or <code>aboard</code>, never a stop; <code>attached</code>, the attachments of every row but a flight; <code>with_attachments</code>, the stay rows with any), <code>people</code> (<code>confirmed</code>, the people confirmed at any row, each once; <code>names</code>), <code>health</code>, <code>sources</code> and <code>gaps</code>: every <strong>usual</strong> source with no line on the day, a source being usual when it has a line on at least four in five of the window's days that have any line (retractions aside).</p>
+<h4 id="328-rollups-rollup">3.2.8 Rollups (<code>rollup</code>)</h4>
+<p>The record summed up per calendar year over a window, from one reading of it; <code>health</code> per calendar month or ISO week from the health lines alone. The window is <code>--year</code>, or <code>--since</code>/<code>--until</code>, clipped to the days the record covers: with a location line for <code>countries</code>, <code>nights</code>, <code>places</code> and <code>people</code>; with any line for <code>flights</code>; with a health line for <code>health</code>. Without either, those days. A window the record has no day in is empty.</p>
+<ul>
+<li><strong><code>countries</code>.</strong> Per year, for each night of the window: in transit when it has no stay; else the country of its stay by 3.2.7 rule 6, counted under its code, or under <code>unknown</code>. Each bucket carries <code>days</code>, <code>dates</code>, <code>lines</code> and, per country, <code>by</code> (<code>{place: n, airport: n}</code>); countries are ordered by days, most first, then code.</li>
+<li><strong><code>flights</code>.</strong> Per year from the standing flights (3.2.4) dated in it: <code>count</code>; <code>km</code>, the great-circle distance between the two airports' table coordinates, summed and rounded, a flight whose airport the table does not know counted under <code>unmeasured</code> with <code>km</code> <code>null</code>; <code>long_haul</code>, flights over 3,500 km; <code>by_evidence</code>; and <code>flights</code> (<code>date</code>, <code>carrier</code>, <code>number</code>, <code>from</code>, <code>to</code>, <code>km</code>, <code>evidence</code>, <code>role</code>, <code>lines</code>), by date then <code>seq</code>.</li>
+<li><strong><code>nights</code>.</strong> Per year: <code>home</code>, <code>away</code> and <code>in_transit</code> nights, <code>aboard</code> (nights per asset), and <code>longest_trip</code>, the longest run of consecutive non-home nights of the year (<code>start</code>, <code>end</code>, <code>nights</code>, <code>lines</code>); a <code>warning</code> when no place of kind <code>home</code> exists, since every night then counts as away.</li>
+<li><strong><code>places</code>.</strong> Per year, for every named place and every asset (an asset's stays are the owner's stays aboard it): <code>stays</code>, <code>hours</code> to one decimal, <code>nights</code> (the days whose night is there), <code>first</code> and <code>last</code> (the first stay's start day, the last stay's end day), <code>people</code> (the confirmed company of its stays, each with their <code>stays</code>, <code>days</code> — the distinct local days of the evidence that put them there — and <code>nights</code> — the nights there on a day their evidence is dated — and <code>lines</code>) and <code>lines</code>; then <code>unnamed</code>, the owner's stays at no named place grouped within 300 m of each group's first stay, ranked by hours, the top five of the year, each under the id of its first stay with <code>lat</code>, <code>lon</code> (the hours-weighted centre), <code>label</code> (3.2.6 rule 4, with <code>aboard &lt;asset&gt;</code> when most of its hours were aboard one), <code>aboard</code>, <code>nearest</code> (<code>name</code>, <code>kind</code>, <code>metres</code>) and <code>city</code>. <code>--with</code> adds, per year, the place × person table under <code>with</code>: one row per person per place (<code>place</code>, <code>label</code>, <code>kind</code> of <code>place</code>, <code>asset</code> or <code>unnamed</code>, <code>id</code>, <code>name</code>, <code>stays</code>, <code>days</code>, <code>nights</code>, <code>lines</code>).</li>
+<li><strong><code>people</code>.</strong> Per year, from the confirmed company only: per person <code>days</code> together (the distinct local days of the confirmed evidence), <code>nights</code> together (the nights whose stay they were confirmed at on that day), <code>stays</code> shared, <code>last_contact</code>, <code>places</code> (a named place, <code>aboard &lt;asset&gt;</code>, else the unnamed label), <code>confirmed</code> (the evidence count) and <code>lines</code>; ordered by days, most first, then last contact, then name. A confirmed name the record resolves to no person is listed apart under <code>unresolved</code>.</li>
+<li><strong><code>health</code>.</strong> Per period (<code>YYYY-MM</code>, or the ISO week <code>YYYY-Www</code> in its ISO year) from the day rows of 3.2.7 rule 8: <code>sleep</code> (<code>mean_h</code> to one decimal, <code>nights</code>), <code>steps</code> (<code>mean</code>, <code>days</code>), <code>resting_hr</code> (<code>mean</code>, <code>min</code>, <code>max</code>, <code>days</code>), <code>hrv</code> (<code>mean_ms</code>, <code>days</code>), each with <code>lines</code> and each <code>null</code> when no day of the period has a line for it. Every period the window touches is listed, with <code>first</code> and <code>last</code>, its days inside the window.</li>
+</ul>
+<p>Every rollup is one object with <code>kind</code>, <code>window</code> and <code>years</code> (<code>health</code>: <code>by</code> and <code>periods</code>); <code>countries</code> also carries <code>method</code>, a sentence that is a reader's own.</p>
+<h4 id="329-keepers-keepers">3.2.9 Keepers (<code>keepers</code>)</h4>
+<p><strong>Inputs.</strong> The <code>keeper/v1</code> lines standing (RFC 0024) whose local day is in the range, and the retractions. <strong>Rules.</strong> One entry per keeper, ordered by day, then <code>at</code>, then lane; <code>--lane</code> keeps one lane. A day's <strong>hero</strong> photos are its keepers standing, those of lane <code>memory</code> first, then the others, each group by <code>at</code>; a photo is named by its <code>file_name</code>, else its <code>asset_id</code>, else the photo line's id. <strong>Output.</strong> <code>{"keepers": [{line, day, at, lane, source, photo}]}</code>, <code>photo</code> as the line carries it. <strong>A reader's own.</strong> The hero line's text.</p>
+<h4 id="3210-promises-promises">3.2.10 Promises (<code>promises</code>)</h4>
+<p>The commitments the record's own words suggest, proposed and never asserted: only the owner closes one, and nothing the reader reads can close another. <strong>Inputs.</strong> The <code>transcript/v1</code> lines standing whose text is in the attachment store (read by its media type: WebVTT, SRT, JSON segments, <code>Speaker: text</code> prose, plain text; a transcript whose text is not there is counted under <code>skipped</code> and passed over) and the <code>note/v1</code> lines standing, from <code>--since</code> on; the <code>task/v1</code> lines; the resolution lines; the owner's identities.</p>
+<p><strong>Rules.</strong></p>
+<ol>
+<li>The <strong>extractor</strong> is a reader's own: anything that reads a text and returns the sentences in it that read as a promise, each with the words that made it one (<code>cue</code>), a <code>class</code> of <code>future</code>, <code>obligation</code> or <code>offer</code>, a <code>language</code> and the date phrase in it. The reference's extractor is a set of rules, first-person future, obligation and offer cues in English and German, not negated right after the cue and not a question; a local model is another. A report names its extractor (<code>name</code>, <code>version</code>).</li>
+<li>One proposal per sentence. Its <strong>id</strong> is the first sixteen hex characters of the SHA-256 of the origin line's <code>id</code>, a newline, and the sentence with whitespace collapsed and case folded: the same sentence in the same line has the same id however often the reader runs and whichever extractor quoted it.</li>
+<li>The proposal's <code>day</code> and <code>at</code> are the line's. Its <strong>speaker</strong> is the turn's label resolved: a participant of the line of that name through their <code>email</code>, <code>phone</code> or <code>provider_id</code> ref, else the one person the record labels by that name (3.2.5 rule 2); <code>me</code>, <code>I</code> and the owner's own names are the owner; a note is the owner's, except for text that carries its own labels (a line beginning <code>Speaker 2:</code> or <code>&lt;a known name&gt;:</code> is that speaker's); a diarizer's label or a name nobody resolves stays as spoken with no person. <code>direction</code> is <code>owed_by_owner</code> when the owner said it, <code>owed_to_owner</code> when a resolved person did, else <code>null</code>.</li>
+<li>The <strong>due hint</strong> is the date phrase resolved against the day it was said, carried with a question mark because it is a reading of the words: a weekday is the next one strictly after that day; <code>next week</code> its Monday; <code>this week</code> and <code>end of the week</code> the Friday on or after; <code>next month</code> the first of it; <code>tomorrow</code> and <code>tonight</code> as they say; <code>in N days/weeks/months</code> counted on; a month and a day the next such date; <code>the Nth</code> the next such day of a month. Words that name no day leave it <code>null</code>.</li>
+<li>A proposal is <strong>closed</strong> when the latest standing <code>task/v1</code> line whose <code>extra.promise</code> is its id has <code>status</code> <code>done</code> or <code>cancelled</code>. <code>promises done &lt;id&gt;</code> appends that line and nothing else (<code>source</code> <code>manual</code>, tier 2, <code>title</code> the sentence, <code>status</code> <code>done</code>, <code>due</code> the hint, <code>completed_at</code>, <code>list</code> <code>promises</code>, <code>raw_id</code> <code>promise:&lt;id&gt;@&lt;time&gt;</code>, and under <code>extra</code> the <code>promise</code>, its <code>origin</code> line, the <code>speaker</code> and the <code>extractor</code>). A reader never closes a proposal on its own.</li>
+<li>A <strong>judge</strong>, a second reading of the candidates by a local model, is a reader's own: it never opens a socket, never changes a proposal, its id or what <code>done</code> writes, and keeps its verdicts outside the chain.</li>
+</ol>
+<p><strong>Output.</strong> One object: <code>since</code>, <code>open_only</code>, <code>judged_only</code>, <code>threshold</code>, <code>extractor</code>, <code>judge</code>, <code>unjudged</code>, <code>skipped</code> and <code>proposals</code>, each <code>id</code>, <code>status</code> (<code>open</code>, <code>done</code>), <code>closed_by</code>, <code>day</code>, <code>at</code>, <code>line</code>, <code>seq</code>, <code>kind</code>, <code>source</code>, <code>title</code>, <code>speaker</code> (<code>label</code>, <code>spoken</code>, <code>person</code>, <code>owner</code>), <code>direction</code>, <code>certainty</code> (always <code>inferred</code>), <code>language</code>, <code>cue</code>, <code>class</code>, <code>quote</code>, <code>due</code> (<code>phrase</code>, <code>date</code>) and <code>judgement</code>; the proposals in order of day, <code>at</code>, <code>seq</code>.</p>
+<h4 id="3211-where-a-source-went-quiet-sources-gaps">3.2.11 Where a source went quiet (<code>sources --gaps</code>)</h4>
+<p><strong>Inputs.</strong> Every line of every source, retracted or not (a retracted line still shows the source was alive), by local day, and the clock. <strong>Rules.</strong> The range is <code>--since</code> to today in the record's zone, or, per source, from the day of its first line; a line dated after today is outside it. A source's silences are the stretches between its consecutive lines, the stretch from the range's start to its first line when <code>--since</code> names one, and the open stretch from its last line to now; the longest is reported with its ends, <code>to</code> <code>null</code> when it is still running. Its <code>missing_days</code> are the days of the range with no line from it, today among them only once the source has been silent a full day (86,400 s). With <code>--expect</code>, only the named sources are reported, one with no line among them, and a source is <code>flagged</code> when its longest silence is 86,400 s or more or it has no line at all; the command exits non-zero when any is. <strong>Output.</strong> <code>since</code>, <code>today</code>, <code>timezone</code>, <code>expect</code>, <code>flagged</code> and <code>sources</code>, each <code>source</code>, <code>lines</code>, <code>first</code>, <code>last</code>, <code>silence</code> (<code>from</code>, <code>to</code>, <code>seconds</code>), <code>missing_days</code>, <code>flagged</code>. Its output depends on the clock, so it is not among the readers two implementations are compared on.</p>
+<h2 id="4-tiers">4. Tiers</h2>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Typical content</th>
+<th>At rest</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>location, photo metadata, calendar, public activity</td>
+<td>plain</td>
+</tr>
+<tr>
+<td>2</td>
+<td>notes, messages, decisions, confirmations, personal mail</td>
+<td>sealed with age to the owner's recipients (§2, RFC 0029)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>money, health</td>
+<td>sealed with age to the owner's recipients (§2, RFC 0029)</td>
+</tr>
+</tbody>
+</table>
+<p>Derived data inherits the highest tier of its evidence. Conformance requires the field. In a record whose <code>logbook.json</code> names <code>recipients</code> (§1), every tier 2 and 3 line is sealed as §2 says and every file such a line points at is sealed as §1.1 says; a record that names none is written plain, as before, and a verifier reports how many tier 2–3 lines are plain so the owner sees them. The envelope stays plain: <code>at</code>, <code>end</code>, <code>tz</code>, <code>source</code>, <code>kind</code>, <code>tier</code> and <code>recorded_at</code> are readable without any key, so a reader lists a day, an index locates a line and <code>verify</code> checks the chain without one. What the envelope gives away, and what the key handling is, is RFC 0029.</p>
+<p>Each payload profile (§5) names the tier its producers write by default. The table repeats what the RFCs say, and the RFC is authoritative where the two differ:</p>
+<table>
+<thead>
+<tr>
+<th>Default tier</th>
+<th>Profiles (RFC)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>location/v1</code> (0001), <code>photo/v1</code> (0002), <code>event/v1</code> (0009; a source MAY set 2 on entries with attendees), <code>crossing/v1</code> (0011, MUST), <code>call/v1</code> (0012), <code>flight/v1</code> (0013), <code>trip/v1</code> (0020; 3 when it carries a <code>price</code>), <code>keeper/v1</code> (0024), <code>weather/v1</code> (0026), <code>migration/v1</code> (§3.1)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>retraction/v1</code> (0003), <code>transcript/v1</code> (0004), <code>resolution/v1</code> (0006; the highest tier of its evidence, 2 in practice), <code>message/v1</code> (0008, MUST), <code>note/v1</code> (0010, MUST), <code>mail/v1</code> (0015), <code>task/v1</code> (0016, MUST), <code>browse/v1</code> (0017, MUST), <code>watch/v1</code> (0018, MUST), <code>listen/v1</code> (0019, MUST), <code>highlight/v1</code> (0022), <code>voice-memo/v1</code> (0023)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>health-sample/v1</code> (0014), <code>transaction/v1</code> (0021, MUST; an import option MUST NOT lower it)</td>
+</tr>
+</tbody>
+</table>
+<p>A default marked MUST is the profile's tier; the others are SHOULD: a producer MAY write a higher tier for a reason it states (the reference <code>transcript</code>, <code>granola</code> and <code>wispr-flow</code> adapters write <code>transcript/v1</code> at 3), and an import option (<code>logbook add --tier</code>) MAY set another tier for a whole run where the RFC allows it, never per line.</p>
+<h2 id="5-payload-profiles">5. Payload profiles</h2>
+<p>The envelope is the standard. Payloads are versioned by <code>payload.schema</code> and proposed as RFCs in <code>rfcs/</code>; the profiles so far are those of the table in §4, listed with their RFCs in <code>rfcs/README.md</code>. A logbook with unknown schemas is still valid, and so is a line whose payload does not have the shape its profile describes: a profile constrains writers, and a reader MUST NOT fail on a payload it cannot interpret.</p>
+<p>Every profile is one of three words, said in its RFC's status line and decided by RFC 0031. <strong>Frozen</strong>: the schema is additive-only (a field may be added as MAY; none is removed, renamed or retyped; a change that needs any of these is <code>name/v2</code> with its own RFC), the JSON of every reader that reads it keeps every key it has with the same meaning and type under the fields §6.1 compares, and one conformance fixture holds it (§6.1). <strong>Parked</strong>: adapters keep writing it, its RFC says <em>may change before v1.0</em>, an amendment with a date may rename, retype or drop a field, a line written before the amendment is read by what it says, it has no fixture and no row in §6.1, and it is not in the v1.0 promise; it becomes frozen by the process RFC 0031 gives. <strong>Deleted</strong>: withdrawn by an RFC, written and read by nothing, its RFC kept as the record of it; <code>commitment/v1</code> and <code>commitment-close/v1</code> are the two (RFC 0007, withdrawn by RFC 0031).</p>
+<h2 id="6-conformance">6. Conformance</h2>
+<p>An implementation is conformant when <code>verify</code> on <code>conformance/sample-logbook</code> reports valid and prints the head in <code>conformance/expected.json</code>; when appending one line to a copy of it yields a logbook that still verifies, with <code>seq</code> + 1; and when changing any hashed field of any line of the copy (a content field of §3, <code>seq</code>, <code>prev</code>, <code>recorded_at</code> or <code>hash</code>), or deleting any line of it, makes <code>verify</code> report invalid; and when cutting the copy's month file inside any line makes <code>verify</code> report invalid with the <code>seq</code> and <code>head</code> of the last whole line (§3, truncation). <code>id</code> is outside the hash, and the stored form is not hashed (§2): a change to <code>id</code>, or a re-serialisation that leaves the canonical form unchanged, is not detected and is not required to be. <code>verify</code> checks the envelope requirements of §2 as well as the chain rules of §3. The sample tests the envelope and the chain, not the profiles: its payloads were written before the RFCs that now define <code>message/v1</code> and <code>event/v1</code>, and some do not have the shapes those RFCs give (a <code>chat</code> that is a string, an attendee that is a string). They are not profile examples; the RFCs are. The sample is a <code>logbook/0.2</code> record, which a conformant implementation reads as it is (§3.1). Two independent implementations must agree before v1.0 is frozen.</p>
+<p><strong>Level 2 (sealing).</strong> <code>conformance/sample-logbook-sealed</code> is the same week sealed to two recipients, one of them the identity published in <code>conformance/identity.txt</code> (it opens the fixture and nothing else). An implementation is Level 2 conformant when, in addition: <code>verify</code> on it without the identity reports valid, prints the head in <code>conformance/expected-sealed.json</code> and counts its sealed lines; <code>verify</code> with the identity reports valid, the same head, and every sealed line opened and matching its digest; changing any byte of a <code>payload_enc</code> leaves the keyless <code>verify</code> valid and makes the keyed one report invalid; and appending one tier-2 line to a copy seals it, and the other implementation opens it. The fixture's salts are data, so its head is reproducible by anyone who regenerates it; its ciphertext is not, and is not hashed.</p>
+<p><em>Status:</em> two independent implementations, <a href="https://github.com/bighydro/logbook">openlogbook</a> (Python, reference) and <a href="https://github.com/bighydro/logbook-ts">logbook-ts</a> (TypeScript), reproduce the head in <code>conformance/expected.json</code>; they agree on <code>verify</code> and <code>append</code>, on <code>verify</code> of a copy torn inside a line, and on <code>show</code> over the fixture records of logbook-ts's cross-implementation test (§6.1). The per-profile fixtures of §6.1 are compared from the day each lands in <code>conformance/profiles/</code>.</p>
+<h3 id="61-the-readers">6.1 The readers</h3>
+<p>Format conformance is §6 above and needs none of the readers: an implementation that verifies and appends is conformant. Two implementations that both carry a reader of §3.2 are compared on the <strong>demo record</strong>, a synthetic month the reference invents from a seed (<code>logbook demo --days 30 --seed 1 --out &lt;dir&gt;</code>: thirty days from 2026-06-01, 12,772 lines, a person who does not exist), which the cross-impl job generates with the reference and hands to the other implementation as a folder. The job runs each reader below in both and compares the JSON after dropping the fields §3.2 marks as a reader's own: <code>confidence</code> and <code>reasons</code> under <code>with</code> and under a trip's <code>people</code>, the <code>method</code> sentence of <code>rollup countries</code>, and <code>warning</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Reader</th>
+<th>Compared on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>derive stays --since 2026-06-01 --until 2026-06-30 --json</code></td>
+<td><code>segments</code>, <code>nights</code> and <code>noise_points</code>, every subject</td>
+</tr>
+<tr>
+<td><code>trips --json</code></td>
+<td><code>trips</code></td>
+</tr>
+<tr>
+<td><code>day &lt;day&gt; --json</code>, for every day of the month</td>
+<td>the whole object</td>
+</tr>
+<tr>
+<td><code>days --json</code></td>
+<td>every line</td>
+</tr>
+<tr>
+<td><code>rollup countries\|flights\|nights\|places\|people\|health --json</code></td>
+<td><code>years</code>, or <code>periods</code></td>
+</tr>
+<tr>
+<td><code>keepers --json</code></td>
+<td><code>keepers</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>A frozen profile's fixture is part of conformance.</strong> For every frozen profile (§5, RFC 0031) <code>conformance/profiles/&lt;profile&gt;/</code> holds one synthetic line as its RFC's example gives it, its canonical form and hash, the <code>show</code> row the reference prints for it, and, for a profile a reader of the table above reads, that reader's JSON over a record that holds the line. An implementation passes the parts its readers cover: every implementation the line, its canonical form, its hash and (with <code>show</code>) its row; one that carries a reader of the table, that reader's JSON after dropping the fields §3.2 marks as a reader's own. The fixture is the freeze: a change that fails it is a new profile version, not an amendment.</p>
+<p>Not compared: <code>show</code>, whose text is a reader's own (the reference and logbook-ts diff it on fixture records of logbook-ts's own); <code>promises</code>, whose extractor is a reader's own (and the demo record proposes nothing); <code>sources --gaps</code>, whose output depends on the clock; and <code>infer flights</code>, a producer, whose lines are compared through the standing set that <code>day</code>, <code>trips</code> and <code>rollup flights</code> read.</p>
+<p><em>Status:</em> no second implementation of a derived reader exists yet; logbook-ts carries <code>verify</code>, <code>add</code> and <code>show</code>. The cross-impl job compares <code>verify</code> and <code>append</code> on the conformance sample, and logbook-ts's own cross-implementation test diffs its <code>show</code>, <code>day</code>, <code>days</code>, <code>stats</code>, <code>trips</code> and <code>rollup countries|nights</code> against the reference's on its fixture records, the conformance sample and the seed-1 demo among them. Of the per-profile fixtures, the parts compared today are the line, its canonical form, its hash and its <code>show</code> row; the reader JSON binds the reference alone until a second derived reader exists (RFC 0031, question 4). The table is what the next reader is held to.</p>
+<h2 id="7-what-this-spec-does-not-say">7. What this spec does not say</h2>
+<p>Nothing about servers, databases, user interfaces, engines, agents, or how two logbooks exchange pages. Those are layers. The spec is finished when it is small enough to implement in an afternoon. §3.2 is not the format: it is the readings the reference ships, written down so that a second implementation can agree with them, and §6.1 says which are compared; the format alone is conformance (§6).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

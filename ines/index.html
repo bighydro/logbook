@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logbook · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain{list-style:none;padding:0;margin:0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+</style>
+</head>
+<body>
+<header><nav><a href="index.html">Logbook</a><a href="trips.html">trips</a><a href="places.html">places</a><a href="people.html">people</a></nav></header>
+<main>
+<h1>Logbook</h1>
+<p>78,190 lines, 1986-07-01 – 2026-06-30 (Europe/Oslo) · tier 1 · held back: 36,555 lines above tier 1</p>
+<h2>Years</h2>
+<table>
+<thead><tr><th>year</th><th class="num">days</th><th class="num">trips</th><th class="num">nights away</th><th class="num">people</th></tr></thead>
+<tbody>
+<tr><td class="day"><a href="years/1986.html">1986</a></td><td class="num"><a href="days/1986.html">8</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1987.html">1987</a></td><td class="num"><a href="days/1987.html">17</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1988.html">1988</a></td><td class="num"><a href="days/1988.html">12</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1989.html">1989</a></td><td class="num"><a href="days/1989.html">15</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1990.html">1990</a></td><td class="num"><a href="days/1990.html">13</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1991.html">1991</a></td><td class="num"><a href="days/1991.html">8</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1992.html">1992</a></td><td class="num"><a href="days/1992.html">35</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1993.html">1993</a></td><td class="num"><a href="days/1993.html">55</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1994.html">1994</a></td><td class="num"><a href="days/1994.html">56</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1995.html">1995</a></td><td class="num"><a href="days/1995.html">59</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1996.html">1996</a></td><td class="num"><a href="days/1996.html">55</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1997.html">1997</a></td><td class="num"><a href="days/1997.html">55</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1998.html">1998</a></td><td class="num"><a href="days/1998.html">55</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/1999.html">1999</a></td><td class="num"><a href="days/1999.html">51</a></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="day"><a href="years/2000.html">2000</a></td><td class="num"><a href="days/2000.html">221</a></td><td class="num">2</td><td class="num">14</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2001.html">2001</a></td><td class="num"><a href="days/2001.html">365</a></td><td class="num">2</td><td class="num">11</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2002.html">2002</a></td><td class="num"><a href="days/2002.html">365</a></td><td class="num">3</td><td class="num">18</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2003.html">2003</a></td><td class="num"><a href="days/2003.html">365</a></td><td class="num">2</td><td class="num">11</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2004.html">2004</a></td><td class="num"><a href="days/2004.html">366</a></td><td class="num">3</td><td class="num">18</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2005.html">2005</a></td><td class="num"><a href="days/2005.html">365</a></td><td class="num">2</td><td class="num">11</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2006.html">2006</a></td><td class="num"><a href="days/2006.html">365</a></td><td class="num">1</td><td class="num">7</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2007.html">2007</a></td><td class="num"><a href="days/2007.html">365</a></td><td class="num">1</td><td class="num">7</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2008.html">2008</a></td><td class="num"><a href="days/2008.html">366</a></td><td class="num">2</td><td class="num">138</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2009.html">2009</a></td><td class="num"><a href="days/2009.html">365</a></td><td class="num">2</td><td class="num">12</td><td class="num">3</td></tr>
+<tr><td class="day"><a href="years/2010.html">2010</a></td><td class="num"><a href="days/2010.html">365</a></td><td class="num">1</td><td class="num">7</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2011.html">2011</a></td><td class="num"><a href="days/2011.html">365</a></td><td class="num">1</td><td class="num">7</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2012.html">2012</a></td><td class="num"><a href="days/2012.html">366</a></td><td class="num">2</td><td class="num">10</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2013.html">2013</a></td><td class="num"><a href="days/2013.html">365</a></td><td class="num">3</td><td class="num">13</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2014.html">2014</a></td><td class="num"><a href="days/2014.html">365</a></td><td class="num">4</td><td class="num">47</td><td class="num">4</td></tr>
+<tr><td class="day"><a href="years/2015.html">2015</a></td><td class="num"><a href="days/2015.html">365</a></td><td class="num">3</td><td class="num">13</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2016.html">2016</a></td><td class="num"><a href="days/2016.html">366</a></td><td class="num">3</td><td class="num">13</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2017.html">2017</a></td><td class="num"><a href="days/2017.html">365</a></td><td class="num">3</td><td class="num">13</td><td class="num">5</td></tr>
+<tr><td class="day"><a href="years/2018.html">2018</a></td><td class="num"><a href="days/2018.html">365</a></td><td class="num">3</td><td class="num">13</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2019.html">2019</a></td><td class="num"><a href="days/2019.html">365</a></td><td class="num">6</td><td class="num">17</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2020.html">2020</a></td><td class="num"><a href="days/2020.html">366</a></td><td class="num">10</td><td class="num">21</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2021.html">2021</a></td><td class="num"><a href="days/2021.html">365</a></td><td class="num">10</td><td class="num">26</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2022.html">2022</a></td><td class="num"><a href="days/2022.html">365</a></td><td class="num">9</td><td class="num">25</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2023.html">2023</a></td><td class="num"><a href="days/2023.html">365</a></td><td class="num">10</td><td class="num">43</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2024.html">2024</a></td><td class="num"><a href="days/2024.html">366</a></td><td class="num">11</td><td class="num">27</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2025.html">2025</a></td><td class="num"><a href="days/2025.html">365</a></td><td class="num">9</td><td class="num">25</td><td class="num">7</td></tr>
+<tr><td class="day"><a href="years/2026.html">2026</a></td><td class="num"><a href="days/2026.html">181</a></td><td class="num">8</td><td class="num">18</td><td class="num">7</td></tr>
+</tbody>
+</table>
+<ul class="plain">
+<li><a href="trips.html">Trips</a>: every run of nights away, 116 pages.</li>
+<li><a href="places.html">Places</a>: the named places of the record.</li>
+<li><a href="people.html">People</a>: 11 people confirmed present.</li>
+</ul>
+</main>
+<footer>exported from the record · tier 1 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>

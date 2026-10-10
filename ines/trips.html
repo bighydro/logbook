@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trips · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain{list-style:none;padding:0;margin:0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+</style>
+</head>
+<body>
+<header><nav><a href="index.html">Logbook</a><a href="trips.html">trips</a><a href="places.html">places</a><a href="people.html">people</a></nav></header>
+<main>
+<h1>Trips <small>116 trips</small></h1>
+<table>
+<thead><tr><th>days</th><th>nights</th><th>route</th><th>flights</th><th>places</th><th>with</th></tr></thead>
+<tbody>
+<tr><td class="day"><a href="trips/trip-2000-07-10-2000-07-16.html">2000-07-10 – 2000-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2000-07-21-2000-07-27.html">2000-07-21 – 2000-07-27</a></td><td>7 nights</td><td>39.5400,2.6500 (Palma de Mallorca)</td><td>in XY 611 BGO → PMI, out XY 612 PMI → BGO</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2001-03-28-2001-03-31.html">2001-03-28 – 2001-03-31</a></td><td>4 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2001-07-10-2001-07-16.html">2001-07-10 – 2001-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2002-03-28-2002-03-31.html">2002-03-28 – 2002-03-31</a></td><td>4 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2002-07-10-2002-07-16.html">2002-07-10 – 2002-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2002-07-21-2002-07-27.html">2002-07-21 – 2002-07-27</a></td><td>7 nights</td><td>51.5150,-0.1300 (London)</td><td>in XY 621 BGO → LHR, out XY 622 LHR → BGO</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2003-03-28-2003-03-31.html">2003-03-28 – 2003-03-31</a></td><td>4 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2003-07-10-2003-07-16.html">2003-07-10 – 2003-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2004-03-27-2004-03-30.html">2004-03-27 – 2004-03-30</a></td><td>4 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2004-07-10-2004-07-16.html">2004-07-10 – 2004-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2004-07-21-2004-07-27.html">2004-07-21 – 2004-07-27</a></td><td>7 nights</td><td>41.3900,2.1700 (Barcelona)</td><td>in XY 631 BGO → BCN, out XY 632 BCN → BGO</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2005-03-28-2005-03-31.html">2005-03-28 – 2005-03-31</a></td><td>4 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2005-07-10-2005-07-16.html">2005-07-10 – 2005-07-16</a></td><td>7 nights</td><td>the family cabin</td><td></td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2006-07-10-2006-07-16.html">2006-07-10 – 2006-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2007-07-10-2007-07-16.html">2007-07-10 – 2007-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2008-01-10-2008-05-19.html">2008-01-10 – 2008-05-19</a></td><td>131 nights</td><td>41.3900,2.1700 (Barcelona)</td><td>in XY 651 CPH → BCN, out XY 652 BCN → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2008-07-10-2008-07-16.html">2008-07-10 – 2008-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2009-05-27-2009-05-31.html">2009-05-27 – 2009-05-31</a></td><td>5 nights</td><td>51.5150,-0.1300 (London)</td><td>in XY 661 CPH → LHR, out XY 662 LHR → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2009-07-10-2009-07-16.html">2009-07-10 – 2009-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2010-07-10-2010-07-16.html">2010-07-10 – 2010-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2011-07-10-2011-07-16.html">2011-07-10 – 2011-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2012-07-10-2012-07-16.html">2012-07-10 – 2012-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2012-09-14-2012-09-16.html">2012-09-14 – 2012-09-16</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2013-04-12-2013-04-14.html">2013-04-12 – 2013-04-14</a></td><td>3 nights</td><td>47.3768,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2013-07-10-2013-07-16.html">2013-07-10 – 2013-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2013-09-14-2013-09-16.html">2013-09-14 – 2013-09-16</a></td><td>3 nights</td><td>47.3768,8.5417 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2014-04-12-2014-04-14.html">2014-04-12 – 2014-04-14</a></td><td>3 nights</td><td>47.3769,8.5418 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2014-07-10-2014-07-16.html">2014-07-10 – 2014-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2014-08-10-2014-09-12.html">2014-08-10 – 2014-09-12</a></td><td>34 nights</td><td>38.7100,-9.1400 (Lisbon)</td><td>in XY 681 CPH → LIS, out XY 682 LIS → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2014-09-14-2014-09-16.html">2014-09-14 – 2014-09-16</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2015-04-12-2015-04-14.html">2015-04-12 – 2015-04-14</a></td><td>3 nights</td><td>47.3768,8.5417 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2015-07-10-2015-07-16.html">2015-07-10 – 2015-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2015-09-14-2015-09-16.html">2015-09-14 – 2015-09-16</a></td><td>3 nights</td><td>47.3768,8.5417 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2016-04-11-2016-04-13.html">2016-04-11 – 2016-04-13</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2016-07-10-2016-07-16.html">2016-07-10 – 2016-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2016-09-14-2016-09-16.html">2016-09-14 – 2016-09-16</a></td><td>3 nights</td><td>47.3768,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2017-04-12-2017-04-14.html">2017-04-12 – 2017-04-14</a></td><td>3 nights</td><td>47.3769,8.5418 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2017-07-10-2017-07-16.html">2017-07-10 – 2017-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2017-09-14-2017-09-16.html">2017-09-14 – 2017-09-16</a></td><td>3 nights</td><td>47.3769,8.5418 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2018-04-12-2018-04-14.html">2018-04-12 – 2018-04-14</a></td><td>3 nights</td><td>47.3770,8.5417 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2018-07-10-2018-07-16.html">2018-07-10 – 2018-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 642 CPH → BGO, out XY 641 BGO → CPH</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2018-09-14-2018-09-16.html">2018-09-14 – 2018-09-16</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 671 CPH → ZRH, out XY 672 ZRH → CPH</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-04-12-2019-04-14.html">2019-04-12 – 2019-04-14</a></td><td>3 nights</td><td>47.3769,8.5418 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-07-10-2019-07-16.html">2019-07-10 – 2019-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-08-10-2019-08-10.html">2019-08-10 – 2019-08-10</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-09-09-2019-09-11.html">2019-09-09 – 2019-09-11</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-10-24-2019-10-25.html">2019-10-24 – 2019-10-25</a></td><td>2 nights</td><td>55.6850,12.5499 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td>Office</td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2019-12-14-2019-12-14.html">2019-12-14 – 2019-12-14</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-04-06-2020-04-08.html">2020-04-06 – 2020-04-08</a></td><td>3 nights</td><td>47.3769,8.5418 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-05-02-2020-05-02.html">2020-05-02 – 2020-05-02</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-05-09-2020-05-09.html">2020-05-09 – 2020-05-09</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-05-30-2020-05-30.html">2020-05-30 – 2020-05-30</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-06-13-2020-06-13.html">2020-06-13 – 2020-06-13</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-07-10-2020-07-16.html">2020-07-10 – 2020-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-08-15-2020-08-15.html">2020-08-15 – 2020-08-15</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-09-12-2020-09-12.html">2020-09-12 – 2020-09-12</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-09-14-2020-09-16.html">2020-09-14 – 2020-09-16</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2020-10-22-2020-10-23.html">2020-10-22 – 2020-10-23</a></td><td>2 nights</td><td>55.6849,12.5499 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td></td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-01-16-2021-01-16.html">2021-01-16 – 2021-01-16</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-02-13-2021-02-13.html">2021-02-13 – 2021-02-13</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-02-20-2021-02-20.html">2021-02-20 – 2021-02-20</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-04-12-2021-04-14.html">2021-04-12 – 2021-04-14</a></td><td>3 nights</td><td>47.3770,8.5416 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-04-24-2021-04-24.html">2021-04-24 – 2021-04-24</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-07-10-2021-07-16.html">2021-07-10 – 2021-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-07-22-2021-07-27.html">2021-07-22 – 2021-07-27</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.6001 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0300 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-09-13-2021-09-15.html">2021-09-13 – 2021-09-15</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-10-21-2021-10-22.html">2021-10-21 – 2021-10-22</a></td><td>2 nights</td><td>55.6850,12.5500 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td></td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2021-12-11-2021-12-11.html">2021-12-11 – 2021-12-11</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-01-29-2022-01-29.html">2022-01-29 – 2022-01-29</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-02-05-2022-02-05.html">2022-02-05 – 2022-02-05</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-04-11-2022-04-13.html">2022-04-11 – 2022-04-13</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-05-21-2022-05-21.html">2022-05-21 – 2022-05-21</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-07-10-2022-07-16.html">2022-07-10 – 2022-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-07-22-2022-07-27.html">2022-07-22 – 2022-07-27</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.5999 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0300 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-09-12-2022-09-14.html">2022-09-12 – 2022-09-14</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-10-20-2022-10-21.html">2022-10-20 – 2022-10-21</a></td><td>2 nights</td><td>55.6850,12.5499 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td>Office</td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2022-11-12-2022-11-12.html">2022-11-12 – 2022-11-12</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-03-18-2023-03-18.html">2023-03-18 – 2023-03-18</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-04-01-2023-04-01.html">2023-04-01 – 2023-04-01</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-04-10-2023-04-12.html">2023-04-10 – 2023-04-12</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-05-13-2023-05-13.html">2023-05-13 – 2023-05-13</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-05-27-2023-05-27.html">2023-05-27 – 2023-05-27</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-07-10-2023-07-16.html">2023-07-10 – 2023-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-07-22-2023-07-27.html">2023-07-22 – 2023-07-27</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.6000 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0301 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-08-30-2023-09-18.html">2023-08-30 – 2023-09-18</a></td><td>20 nights</td><td>41.8950,12.4800 (Rome)</td><td>in XY 711 OSL → FCO, out XY 712 FCO → OSL</td><td></td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-10-07-2023-10-07.html">2023-10-07 – 2023-10-07</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2023-10-19-2023-10-20.html">2023-10-19 – 2023-10-20</a></td><td>2 nights</td><td>55.6850,12.5501 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td></td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-02-10-2024-02-10.html">2024-02-10 – 2024-02-10</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-04-08-2024-04-10.html">2024-04-08 – 2024-04-10</a></td><td>3 nights</td><td>47.3768,8.5416 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-04-13-2024-04-13.html">2024-04-13 – 2024-04-13</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-06-15-2024-06-15.html">2024-06-15 – 2024-06-15</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-07-06-2024-07-06.html">2024-07-06 – 2024-07-06</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-07-10-2024-07-16.html">2024-07-10 – 2024-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-07-22-2024-07-27.html">2024-07-22 – 2024-07-27</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.6000 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0300 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-09-09-2024-09-11.html">2024-09-09 – 2024-09-11</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-09-28-2024-09-28.html">2024-09-28 – 2024-09-28</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-10-12-2024-10-12.html">2024-10-12 – 2024-10-12</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2024-10-24-2024-10-25.html">2024-10-24 – 2024-10-25</a></td><td>2 nights</td><td>55.6850,12.5499 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td></td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-03-01-2025-03-01.html">2025-03-01 – 2025-03-01</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-03-08-2025-03-08.html">2025-03-08 – 2025-03-08</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-04-07-2025-04-09.html">2025-04-07 – 2025-04-09</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-06-14-2025-06-14.html">2025-06-14 – 2025-06-14</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-07-10-2025-07-16.html">2025-07-10 – 2025-07-16</a></td><td>7 nights</td><td>the family cabin</td><td>in XY 701 OSL → BGO, out XY 702 BGO → OSL</td><td>the family cabin</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-07-22-2025-07-27.html">2025-07-22 – 2025-07-27</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.6000 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0300 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-09-08-2025-09-10.html">2025-09-08 – 2025-09-10</a></td><td>3 nights</td><td>47.3769,8.5416 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-10-23-2025-10-24.html">2025-10-23 – 2025-10-24</a></td><td>2 nights</td><td>55.6850,12.5501 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td>Office</td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2025-12-06-2025-12-06.html">2025-12-06 – 2025-12-06</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-01-24-2026-01-24.html">2026-01-24 – 2026-01-24</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-02-14-2026-02-14.html">2026-02-14 – 2026-02-14</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-03-14-2026-03-14.html">2026-03-14 – 2026-03-14</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-04-06-2026-04-08.html">2026-04-06 – 2026-04-08</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-06-06-2026-06-06.html">2026-06-06 – 2026-06-06</a></td><td>1 night</td><td>Cabin</td><td></td><td>Cabin</td><td><a href="people/ola-nordmann.html">Ola Nordmann</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-06-08-2026-06-10.html">2026-06-08 – 2026-06-10</a></td><td>3 nights</td><td>47.3769,8.5417 (Zurich)</td><td>in XY 561 OSL → ZRH, out XY 562 ZRH → OSL</td><td></td><td><a href="people/marta-keller.html">Marta Keller</a></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-06-15-2026-06-20.html">2026-06-15 – 2026-06-20</a></td><td>6 nights aboard Nordlys</td><td>59.8500,10.6000 → 59.4300,10.4800 (Sandefjord) → 59.0500,10.0300 (Sandefjord) → 59.8500,10.6000 → Marina</td><td></td><td>Marina</td><td></td></tr>
+<tr><td class="day"><a href="trips/trip-2026-06-25-2026-06-26.html">2026-06-25 – 2026-06-26</a></td><td>2 nights</td><td>55.6850,12.5500 near the Copenhagen flat, 1.4 km</td><td>in XY 571 OSL → CPH, out XY 572 CPH → OSL</td><td>Office</td><td><a href="people/freja-lund.html">Freja Lund</a>, <a href="people/liv-berg.html">Liv Berg</a>, <a href="people/per-hansen.html">Per Hansen</a></td></tr>
+</tbody>
+</table>
+</main>
+<footer>exported from the record · tier 1 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>

@@ -1,0 +1,3929 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/rfcs/0031-profile-freeze/">
+      
+      
+        <link rel="prev" href="../0026-weather-v1/">
+      
+      
+        <link rel="next" href="../0034-the-signed-day/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>0031 Profile freeze for v1.0 - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rfc-0031-profile-freeze-for-v10" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              0031 Profile freeze for v1.0
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-sets-were-computed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the sets were computed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-frozen-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frozen set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-parked-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The parked set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deleted-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The deleted set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-frozen-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "frozen" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-parked-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "parked" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deletions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deletions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rename-tripv1-journeyv1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rename: trip/v1 → journey/v1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-how-a-parked-profile-gets-frozen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process: how a parked profile gets frozen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unresolved-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unresolved questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_44" >
+        
+          
+          <label class="md-nav__link" for="__nav_44" id="__nav_44_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_44_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_44">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#motivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Motivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-sets-were-computed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the sets were computed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-frozen-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frozen set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-parked-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The parked set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deleted-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The deleted set
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-frozen-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "frozen" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-parked-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "parked" means
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deletions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deletions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rename-tripv1-journeyv1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rename: trip/v1 → journey/v1
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#process-how-a-parked-profile-gets-frozen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Process: how a parked profile gets frozen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unresolved-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unresolved questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="rfc-0031-profile-freeze-for-v10">RFC 0031 — Profile freeze for v1.0</h1>
+<p>Status: <strong>draft</strong> · 2026-10-04 · comment period: two weeks · Decision 2 of the October 2026 audit</p>
+<p>The envelope (SPEC §2–3) is what v1.0 freezes. The payload profiles under it (SPEC §5, one RFC each in <code>rfcs/</code>) have so far been drafts, every one of them, and a draft may change. This RFC sorts them into three sets by one rule computed from the code, not from memory: a profile that a reader, a rollup or a derive command reads is <strong>frozen</strong>; a profile that an adapter writes and nothing reads is <strong>parked</strong>; a profile that nothing writes and nothing reads is <strong>deleted</strong>. It then says what each word binds, how a parked profile becomes frozen later, and the five pull requests that carry it out.</p>
+<h2 id="summary">Summary</h2>
+<ul>
+<li>Nineteen profiles are frozen: schema additive-only, reader output stable, one conformance fixture each that both implementations pass.</li>
+<li>Seven are parked: adapters keep writing them, the schema may change, no reader and no fixture, not in the v1.0 promise.</li>
+<li>Two are deleted: <code>commitment/v1</code> and <code>commitment-close/v1</code>, written by nothing and read by nothing since RFC 0007 was drafted.</li>
+<li><code>trip/v1</code> is renamed <code>journey/v1</code> for new lines; readers accept both spellings; no migration, since the record is append-only and a rename is a reader's concern.</li>
+<li>The frozen set does not change before v1.0; a parked profile joins it by a reader, a fixture in both implementations and one amendment to this RFC.</li>
+</ul>
+<h2 id="motivation">Motivation</h2>
+<p>A format people can build on must stop moving. A second implementation, a notebook that reads the folder, an adapter someone writes for a service we have never seen: each of them is a bet that the shape of a line on disk today is the shape it has next year. The envelope has held still since v0.2 and the chain proves it. The profiles have not: RFC 0020 was amended a day after it was drafted, RFC 0019 gained a field this month, and every RFC in the list says <em>draft</em>. A builder reading the list cannot tell which drafts are load-bearing.</p>
+<p>Two implementations must agree. SPEC §6 says it for the envelope and the chain, and the cross-impl job holds <a href="https://github.com/bighydro/logbook-ts">logbook-ts</a> to it on every push; SPEC §6.1 says it for the readers and names the readers that are compared. A profile is only as frozen as the fixtures that pin it: <strong>a frozen profile is one whose schema, canonical form and reader output are covered by conformance fixtures in both implementations.</strong> Without the fixture, a freeze is a sentence in a document; with it, a change that breaks the promise fails a job.</p>
+<p>The rule for the three sets is deliberately mechanical. Whether a profile is read is a fact of the code, found by looking for the lines that select its kind (<code>Index.by_kind</code>, <code>of_kind</code>, <code>evidence</code>, <code>retractions</code>, <code>resolutions</code>) and interpret its fields. A profile the owner cares about but nothing reads cannot be frozen yet, because there is no reader output to pin; the way to freeze it is to write the reader. That is the process section.</p>
+<h2 id="how-the-sets-were-computed">How the sets were computed</h2>
+<p>The writers are the modules that spell a <code>payload.schema</code> value (every adapter sets <code>SCHEMA = "&lt;name&gt;/v1"</code>, or imports another adapter's), plus the core commands that append a line of a kind (<code>add</code>, <code>retract</code>, <code>migrate</code>, <code>infer flights</code>, the keeper inference of a photo import, <code>add story</code>, <code>export crossing</code>, <code>import trip-bundle</code>, <code>done</code>, <code>people merge</code>). The readers are the modules that select lines by kind and read the payload: the Day, <code>days</code>, <code>derive stays</code>, <code>trips</code>, the rollups, <code>keepers</code>, <code>promises</code>, <code>year</code>, <code>ledger</code>, <code>people</code>, <code>places</code>, <code>digest</code>, <code>questions</code>, <code>done</code> and the pages built on them.</p>
+<p>Two commands touch every profile and count for neither set. <code>show</code> (SPEC §3.2.1) prints one row per line of whatever kind it meets, with a formatter for the profiles it knows and <code>text</code>, <code>title</code>, <code>name</code>, <code>url</code> or <code>key=value</code> for the rest; <code>search</code> indexes the words of thirteen kinds. Neither interprets a profile's structure, and neither is compared across implementations (§6.1), so neither can pin a schema. A profile read only by them is parked. The demo generators (<code>demo.py</code>, <code>demo_life.py</code>) write every profile and are not adapters.</p>
+<p>The five bundle formats (<code>crossing-package/v1</code>, <code>shared-page/v1</code>, <code>trip-bundle/v1</code>, <code>trip-share/v1</code>, <code>day-package/v1</code>) are manifests and pages, not line payloads, and are outside this RFC; <code>received/v1</code>, the line that <code>import trip-bundle</code> appends, is in it.</p>
+<p>The count the audit expected was 18 frozen, 10 parked, 2 deleted. The code gives <strong>19, 7, 2</strong> (28 profiles). The deleted pair matches. The difference is in the other two sets, and the numbers are the code's as of main at the time of writing, not the earlier audit's: <code>story/v1</code> and <code>received/v1</code> became read by the Day in the week before this RFC (#187, #194), the screen-time lines under <code>event/v1</code> are read by <code>rollup attention</code>, and the earlier audit may have counted the bundle formats, which this one leaves out. The tables below are the evidence; a reader who disagrees with a row can point at the module.</p>
+<h2 id="the-frozen-set">The frozen set</h2>
+<p>Nineteen profiles. <em>Written by</em> names adapters by their registry names, and core commands in italics. <em>Read by</em> names the module and, where it differs, the command.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Written by</th>
+<th>Read by</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>call/v1</code> (0012)</td>
+<td>ios-calls, google-takeout-meet</td>
+<td><code>day</code>, <code>people</code>, <code>stays</code> (evidence), <code>rollup people --drifting</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>event/v1</code> (0009)</td>
+<td>ios-calendar, ics, gcal, apple-wallet, screentime (kind <code>app-use</code>), google-takeout-home, -pay, -access-log</td>
+<td><code>day</code>, <code>stays</code> (evidence), <code>people</code>, <code>flights</code> (<code>infer flights</code>), <code>digest</code>, <code>questions</code>, <code>done</code>, <code>rollup attention</code> (kind <code>app-use</code>)</td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>flight/v1</code> (0013)</td>
+<td>flighty; <em>add flights</em>, <em>infer flights</em></td>
+<td><code>flights</code> (the standing set), <code>day</code>, <code>trips</code>, <code>rollup flights</code>, <code>year</code>, <code>digest</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>health-sample/v1</code> (0014; kind <code>health</code>)</td>
+<td>apple-health, withings, withings-export, myfitnesspal, myfitnesspal-export</td>
+<td><code>health</code> (<code>rollup health</code>), <code>day</code>, <code>days</code>, <code>year</code>, <code>trip</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>keeper/v1</code> (0024)</td>
+<td><em>the keeper inference of a photo import</em> (producer <code>keeper-inference</code>)</td>
+<td><code>keepers</code>, <code>day</code>, <code>year</code>, <code>describe</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>listen/v1</code> (0019)</td>
+<td>spotify, apple-music, apple-podcasts, shazam</td>
+<td><code>listen_rollup</code> (<code>rollup listen</code>)</td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>location/v1</code> (0001)</td>
+<td>google-takeout-location, dawarich, dawarich (live), ais, adsb, passages</td>
+<td><code>stays</code> (<code>derive stays</code>), <code>day</code>, <code>days</code>, <code>trips</code>, <code>rollup</code>, <code>year</code>, <code>places</code>, <code>flights</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>mail/v1</code> (0015)</td>
+<td>mail</td>
+<td><code>day</code>, <code>people</code>, <code>done</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>message/v1</code> (0008)</td>
+<td>imessage, imessage (live), whatsapp, beeper, line, twitter, google-takeout-chat</td>
+<td><code>day</code>, <code>people</code>, <code>stays</code> (evidence), <code>rollup people --drifting</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>note/v1</code> (0010)</td>
+<td>ios-notes, google-takeout-keep, granola; <em>add</em>, <em>setup</em>, <em>describe</em>, the MCP server</td>
+<td><code>day</code>, <code>promises</code>, <code>stays</code> (evidence), <code>places</code>, <code>ledger</code>, <code>describe</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>photo/v1</code> (0002)</td>
+<td>apple-photos, immich, google-takeout-photos</td>
+<td><code>day</code>, <code>keepers</code>, <code>stays</code> (evidence), <code>people</code> (faces), <code>pages</code>, <code>year</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>received/v1</code> (0025)</td>
+<td><em>import trip-bundle</em></td>
+<td><code>day</code>, <code>trip</code> (the shared columns), <code>serve</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>resolution/v1</code> (0006)</td>
+<td>ios-contacts, whatsapp-contacts, google-takeout-contacts; <em>people merge</em></td>
+<td><code>resolve</code>, and through it the names of every reader; <code>people</code>, <code>trips</code>, <code>digest</code>, <code>questions</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>retraction/v1</code> (0003)</td>
+<td><em>retract</em>, <em>repair</em></td>
+<td>every reader: <code>Index.retractions</code> is what makes a line standing</td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>story/v1</code> (0028)</td>
+<td><em>add story</em></td>
+<td><code>day</code>, <code>days</code> (the stories about the day)</td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>task/v1</code> (0016)</td>
+<td>apple-reminders, google-takeout-tasks; <em>done</em>, the MCP server</td>
+<td><code>promises</code>, <code>done</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>transaction/v1</code> (0021)</td>
+<td>splitwise, copilot, google-takeout-pay</td>
+<td><code>ledger</code>, <code>trip</code> (the page), <code>done</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>transcript/v1</code> (0004)</td>
+<td>transcript, granola, wispr-flow; <em>transcribe</em></td>
+<td><code>day</code>, <code>promises</code>, <code>people</code>, <code>stays</code> (evidence), <code>add story</code></td>
+<td>frozen</td>
+</tr>
+<tr>
+<td><code>weather/v1</code> (0026)</td>
+<td>weather (live)</td>
+<td><code>day</code>, <code>year</code>, <code>trips</code></td>
+<td>frozen</td>
+</tr>
+</tbody>
+</table>
+<p>Three rows deserve a word. <code>retraction/v1</code> and <code>resolution/v1</code> are read by every reader, since standing lines and names are computed from them before any reader starts; they are frozen whether or not anyone thought of them as profiles. <code>story/v1</code> is frozen by the rule although RFC 0028 is marked <em>unfinished</em>: the Day reads it, so its shape is load-bearing today. Its open questions are for its author to close before the fixture is written, and until then the freeze covers the fields the Day reads (<code>title</code>, <code>text</code>, <code>refers_to</code>, <code>teller</code>, <code>listener</code>, <code>confidence</code>, <code>source</code>) and not the ones still in question.</p>
+<h2 id="the-parked-set">The parked set</h2>
+<p>Seven profiles. An adapter, or a core command, writes each; no reader, rollup or derive command reads it. <code>show</code> prints it and <code>search</code> indexes its words where it has any.</p>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Written by</th>
+<th>Read by</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>browse/v1</code> (0017)</td>
+<td>safari, pocket, google-takeout-chrome, google-takeout-activity</td>
+<td>nothing (<code>show</code>, <code>search</code>)</td>
+<td>parked</td>
+</tr>
+<tr>
+<td><code>crossing/v1</code> (0011)</td>
+<td><em>export crossing</em>, <em>share day</em>, <em>export trip-bundle</em></td>
+<td>nothing (<code>show</code>); the crossing watermark is a file beside the record, not these lines</td>
+<td>parked</td>
+</tr>
+<tr>
+<td><code>highlight/v1</code> (0022)</td>
+<td>apple-books, google-takeout-maps</td>
+<td>nothing (<code>show</code>, <code>search</code>)</td>
+<td>parked</td>
+</tr>
+<tr>
+<td><code>migration/v1</code> (SPEC §3.1)</td>
+<td><em>migrate</em></td>
+<td>nothing; <code>verify</code> checks the chain it sits in, not the line</td>
+<td>parked, see the unresolved questions</td>
+</tr>
+<tr>
+<td><code>trip/v1</code> (0020) → <code>journey/v1</code></td>
+<td>easypark, sbb, passages</td>
+<td>nothing (<code>show</code>, <code>search</code>)</td>
+<td>parked, renamed</td>
+</tr>
+<tr>
+<td><code>voice-memo/v1</code> (0023)</td>
+<td>voice-memos</td>
+<td>nothing as a reader; <code>transcribe</code> reads it to write <code>transcript/v1</code> lines</td>
+<td>parked</td>
+</tr>
+<tr>
+<td><code>watch/v1</code> (0018)</td>
+<td>google-takeout-youtube</td>
+<td>nothing (<code>show</code>, <code>search</code>)</td>
+<td>parked</td>
+</tr>
+</tbody>
+</table>
+<p><code>trip/v1</code> is the surprise of the table. The passage lines (RFC 0020 rule 6) are the only thing a deck log writes that is not a position, and the Day shows a vessel's leg from the <code>location/v1</code> lines beside them, as ADR 0018 says it should; the trip line itself is read by nothing. The parking is the fact, and the rename below is what makes the fact safe to leave.</p>
+<h2 id="the-deleted-set">The deleted set</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Written by</th>
+<th>Read by</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>commitment/v1</code> (0007)</td>
+<td>nothing</td>
+<td>nothing</td>
+<td>deleted</td>
+</tr>
+<tr>
+<td><code>commitment-close/v1</code> (0007)</td>
+<td>nothing</td>
+<td>nothing</td>
+<td>deleted</td>
+</tr>
+</tbody>
+</table>
+<p>No adapter sets either schema; no core command appends either kind; no reader selects either. <code>promises</code> (SPEC §3.2.10) proposes and never asserts, which is RFC 0007's rule 3 applied so thoroughly that the profile the rule belongs to was never written.</p>
+<h2 id="what-frozen-means">What "frozen" means</h2>
+<p>For every profile in the frozen set, from the merge of this RFC until v1.0 and through it:</p>
+<ol>
+<li><strong>The schema is additive-only.</strong> A field may be added, as MAY. No field is removed, renamed or retyped; no MUST becomes MAY or the reverse; no enumerated value is withdrawn. A change that needs any of these is a new version, <code>name/v2</code>, with its own RFC, and the readers keep reading <code>v1</code>.</li>
+<li><strong>The canonical form is fixed.</strong> It already is, by ADR 0014 and SPEC §3: the line's hash is computed over RFC 8785 JSON of the content fields. The freeze adds nothing here and is listed so that nobody reads an "additive" field change as licence to rename a key a hash covers.</li>
+<li><strong>The reader output is stable.</strong> The JSON of every reader that reads the profile keeps every key it has today with the same meaning and type under the fields SPEC §6.1 compares; a key may be added. The fields §3.2 marks as a reader's own (<code>confidence</code>, <code>reasons</code>, <code>method</code>, <code>warning</code>) stay the reader's own.</li>
+<li><strong>One conformance fixture per profile</strong>, under <code>tests/fixtures/conformance/&lt;profile&gt;/</code>: one synthetic line as its RFC's example gives it, its canonical form and hash, the <code>show</code> row the reference prints for it, and, for a profile that a §6.1 reader reads, that reader's JSON over a record that holds the line. The fixture is the freeze. logbook-ts must pass the parts of it that its readers cover, and the cross-impl job runs them.</li>
+</ol>
+<p>A frozen profile's RFC moves from <em>draft</em> to <em>frozen for v1.0</em> in its status line, with the date and a pointer here. The RFC is not otherwise edited: an addition under rule 1 is an amendment to the RFC with its date, as RFC 0020 did on 2026-10-02.</p>
+<h2 id="what-parked-means">What "parked" means</h2>
+<p>For every profile in the parked set:</p>
+<ol>
+<li><strong>Adapters keep writing it.</strong> Nothing about <code>logbook add</code> or <code>import-backup</code> changes; a line written today is as valid as one written yesterday, and the chain holds it either way.</li>
+<li><strong>The schema is marked "may change".</strong> Its RFC's status line says <em>parked · may change before v1.0</em>. A field may be renamed, retyped or dropped by an amendment with a date, and a line written before the amendment is read by what it says, not by what the amendment says.</li>
+<li><strong>A reader may be added later.</strong> That is the only way out of the set (the process below).</li>
+<li><strong>No conformance fixture</strong>, and no row in the §6.1 table.</li>
+<li><strong>Not in the v1.0 promise.</strong> A builder who reads a parked profile does so knowing the shape is a draft, and a change to it is not a breaking change of the format.</li>
+</ol>
+<p>Parked is not a judgement of worth. <code>browse/v1</code> and <code>watch/v1</code> carry more lines than most frozen profiles in a real record; they are parked because nothing reads them yet, and a schema nobody reads is a schema nobody has tested against a day.</p>
+<h2 id="deletions">Deletions</h2>
+<p><code>commitment/v1</code> and <code>commitment-close/v1</code> are removed from the code, the documents and the registry:</p>
+<ul>
+<li><strong>Code.</strong> There is nothing to remove from the writers or the readers, since neither exists. <code>promises.py</code> cites RFC 0007 for the word <code>inferred</code> (its <code>certainty</code>), and <code>judge.py</code> for what a commitment is; the citation moves to <code>docs/promises.md</code> and SPEC §3.2.10, which carry the definition from then on.</li>
+<li><strong>Documents.</strong> The two rows leave SPEC §4's tier table, with no spec version bump: §4 lists defaults for profiles that exist, the envelope (§2–3) is untouched, and the conformance sample holds no line of either kind (its profile lines are RFCs 0011–0024). <code>rfcs/README.md</code> lists RFC 0007 under <em>withdrawn</em>. <code>docs/promises.md</code> and the README stop pointing at it for the definition.</li>
+<li><strong>Registry.</strong> RFC 0007's status line becomes <em>withdrawn by RFC 0031</em>, dated the day PR 1 merges; the file stays, since RFCs are the project's own record and are never deleted, and the number is never reused.</li>
+</ul>
+<p><strong>Existing records still verify.</strong> <code>verify</code> checks the envelope and the chain (SPEC §6); a payload's schema is not its concern, and SPEC §5 already says a logbook with unknown schemas is valid. A record that holds a <code>commitment/v1</code> line keeps its hash, its <code>seq</code> and its place in the chain. <code>show</code> prints it as it prints any line of a kind it has no formatter for: the clock, the kind, the source, then the payload's <code>text</code> where there is one (a commitment has one) and every field as <code>key=value</code> where there is none (a close). Nothing is hidden and nothing is rewritten.</p>
+<h2 id="rename-tripv1-journeyv1">Rename: <code>trip/v1</code> → <code>journey/v1</code></h2>
+<p>For the written form: a new line of a bought movement or a metered stop (RFC 0020) carries <code>kind: "journey"</code> and <code>payload.schema: "journey/v1"</code>; <code>easypark</code>, <code>sbb</code> and <code>passages</code> write that from the pull request that lands the alias. <code>journey/v1</code> is <code>trip/v1</code> under a new name, field for field; RFC 0020 is amended with the rename and the date, and keeps its number.</p>
+<p><strong>Readers accept both.</strong> <code>show</code> formats a <code>trip</code>/<code>trip/v1</code> line and a <code>journey</code>/<code>journey/v1</code> line the same way; <code>search --kinds trip</code> and <code>--kinds journey</code> each find both; any reader that is later written for the profile reads both kinds. A record written across the rename holds lines of both kinds, and that is the normal state of a record.</p>
+<p><strong><code>migrate</code> is not required, and is not offered.</strong> The record is append-only (SPEC §3): the old lines cannot be rewritten, and a migration that appended a <code>journey/v1</code> twin of every <code>trip/v1</code> line would double the record to spell a word differently. A rename is a reader concern. The chain does not care what a payload calls itself; the reader does, and the reader is the one place a rule can be held, versioned and re-run (ADR 0013). The <code>migration/v1</code> line of SPEC §3.1 exists for a change of canonicalisation, which a reader cannot absorb; this is not that.</p>
+<p><strong>Why rename at all.</strong> Since ADR 0019, <em>trip</em> names the derived thing (<code>logbook trips</code>, <code>trip:&lt;first&gt;:&lt;last&gt;</code>, the trip page, the shared trip); a <code>trip/v1</code> line is a ride, a ticket, a parking session or a passage: raw evidence, like a flight line. Two things called <em>trip</em> in the same <code>show</code> row and the same <code>search --kinds</code> is the kind of ambiguity a frozen format should not carry into its first stable year, and the profile is parked, so this is the cheap moment. ADR 0019 rule 4 says the profile "keeps its name"; it was written to refuse a profile for the derived trip, and this rename refuses the same thing from the other side. It still needs a new ADR to say so, since ADRs are not edited (unresolved question 2).</p>
+<h2 id="process-how-a-parked-profile-gets-frozen">Process: how a parked profile gets frozen</h2>
+<p>Three things, in this order, and then one amendment:</p>
+<ol>
+<li><strong>A reader.</strong> A reader, rollup or derive command of the reference reads the profile's lines and interprets its fields; its output is a §3.2 section, written down so that a second implementation can agree with it. A <code>show</code> formatter or a <code>search</code> row is not a reader.</li>
+<li><strong>A fixture in both implementations.</strong> The fixture of the frozen section above, passed by the reference, and by logbook-ts for the parts its readers cover, in the cross-impl job.</li>
+<li><strong>A schema pass.</strong> The RFC's field table is read once more against every writer, and any field a writer sets that the table does not have is added as MAY or dropped from the writer, so the frozen table is the whole truth.</li>
+<li><strong>One amendment to this RFC</strong>, dated, moving the row from the parked table to the frozen table with its reader and its fixture named. The profile's own RFC changes its status line.</li>
+</ol>
+<p>A profile frozen this way is frozen from the amendment's date; the frozen set grows and never shrinks before v1.0.</p>
+<p>The reverse does not exist. A frozen profile does not return to parked: if its reader is withdrawn, the fixture still holds and the schema is still frozen, because a builder may have read the promise.</p>
+<h2 id="unresolved-questions">Unresolved questions</h2>
+<ol>
+<li><strong>Is <code>migration/v1</code> a profile or a part of §3.1?</strong> It is written by <code>migrate</code>, read by nothing, and named in the spec's own text. By the rule it is parked; by its place in the spec it is frozen with the envelope. Proposed answer: it belongs to §3.1, is frozen with it, and leaves the tables of this RFC; the spec's wording is the place to say so (PR 5). Carl decides.</li>
+<li><strong>ADR 0019 rule 4 and the rename.</strong> The rule says <code>trip/v1</code> keeps its name. A new ADR that supersedes that one sentence, and only it, is proposed alongside PR 2; the alternative is to drop the rename and freeze nothing about the word. Carl decides whether a one-sentence ADR is worth its number.</li>
+<li><strong>Where the per-profile fixtures live.</strong> This RFC says <code>tests/fixtures/conformance/&lt;profile&gt;/</code>, as the audit asked. logbook-ts works from <code>SPEC.md</code>, <code>rfcs/</code> and the root <code>conformance/</code> folder and nothing else (CONTRIBUTING, the clean-room rule); a fixture under <code>tests/</code> is one it would have to be told about. Either the fixtures live under <code>conformance/profiles/</code> or the clean-room rule names the new path.</li>
+<li><strong>What "reader output stable" binds while logbook-ts has no derived reader.</strong> §6.1's status line is honest: logbook-ts carries <code>verify</code>, <code>add</code> and <code>show</code>, and no second implementation of a derived reader exists. Until one does, rule 3 of the freeze binds the reference alone, and the cross-implementation fixture covers the line, its hash and its <code>show</code> row. The RFC says this plainly rather than promising what cannot yet be checked.</li>
+<li><strong><code>story/v1</code> is frozen while its RFC is unfinished.</strong> The freeze covers the fields the Day reads. Whether the open questions of RFC 0028 (its non-technical co-author's) should be closed before this RFC merges, or whether the fixture can wait for them, is the author's call and the captain's.</li>
+<li><strong>Does <code>search</code> count for anything?</strong> It reads the text fields of thirteen kinds by name and skips a fixed list of keys. This RFC says it is not a reader. If Carl disagrees, <code>browse/v1</code>, <code>watch/v1</code>, <code>highlight/v1</code>, <code>voice-memo/v1</code> and <code>trip/v1</code> move to frozen and the count is 24, 2, 2.</li>
+<li><strong>The <code>event/v1</code> kind <code>app-use</code>.</strong> Screen-time lines carry <code>event/v1</code> under a kind of their own, and <code>rollup attention</code> reads them by that kind while <code>day</code> reads <code>event</code>. One profile under two kinds is a shape no other profile has; whether that is an amendment to RFC 0009 or a profile of its own is open, and the freeze of <code>event/v1</code> covers both kinds as they are.</li>
+<li><strong>The counts.</strong> 19, 7, 2 against the expected 18, 10, 2. The rule above is the whole method, and the tables are the evidence; if the earlier audit's universe can be reconstructed, the two can be reconciled row by row.</li>
+<li><strong>The date promise.</strong> The frozen set does not change before v1.0. v1.0's horizon is the roadmap's phase 5, which has no date. A freeze with no end is a promise a builder can hold; a freeze with no v1.0 is one the project has to keep indefinitely. Both are acceptable; the roadmap should say which is intended.</li>
+</ol>
+<h2 id="implementation-plan">Implementation plan</h2>
+<p>Five pull requests, in order, each one issue, each mergeable alone:</p>
+<ol>
+<li><strong>Delete the two dead profiles.</strong> RFC 0007's status line; the two rows of SPEC §4; <code>rfcs/README.md</code>; the citations in <code>docs/promises.md</code>, the README, <code>promises.py</code> and <code>judge.py</code> moved to the reader's own documents. No code path changes; the tests that mention the word <em>commitment</em> describe <code>promises</code> and stay. Changelog fragment under <em>Profiles and spec</em>.</li>
+<li><strong>The <code>journey/v1</code> alias.</strong> <code>easypark</code>, <code>sbb</code> and <code>passages</code> write <code>journey</code>/<code>journey/v1</code>; <code>show</code>, <code>search</code> and the kind tables accept both; RFC 0020 amended; the one-sentence ADR if question 2 says yes; the fixtures of the three adapters regenerated; a test that a record with both spellings shows and searches as one.</li>
+<li><strong>Conformance fixtures, Python side.</strong> <code>tests/fixtures/conformance/&lt;profile&gt;/</code> for the nineteen frozen profiles (or the path question 3 settles), generated by a script beside <code>conformance/make_sample.py</code>, with a test that every frozen profile has one and that every fixture's hash, <code>show</code> row and reader JSON still hold. The nineteen RFCs' status lines.</li>
+<li><strong>logbook-ts fixtures.</strong> The same fixtures read by logbook-ts's cross-implementation test for the parts it covers (<code>verify</code>, <code>add</code>, <code>show</code>), wired into the cross-impl job. Filed against logbook-ts from the spec's words, never from this repository's source.</li>
+<li><strong>SPEC §6.1 wording.</strong> §5 gains the three words and what each binds, pointing here; §6.1 says that a frozen profile's fixture is part of conformance; §3.1 answers question 1; the <em>Status</em> lines of §6 and §6.1 say what is compared today. Spec text only, no envelope change, no version bump.</li>
+</ol>
+<p>The letter to builders, <code>docs/letters/2026-10-04-the-freeze.md</code>, goes out with this RFC and is updated once when the five have merged.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

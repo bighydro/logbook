@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>places · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain{list-style:none;padding:0;margin:0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+</style>
+</head>
+<body>
+<header><nav><a href="index.html">Logbook</a><a href="trips.html">trips</a><a href="places.html">places</a><a href="people.html">people</a></nav></header>
+<main>
+<h1>Places</h1>
+<table>
+<thead><tr><th>name</th><th class="num">position</th><th class="num">radius</th><th>kind</th><th>tags</th><th>country</th></tr></thead>
+<tbody>
+<tr><td>the family home</td><td class="num">60.3913,5.3221</td><td class="num">120 m</td><td>home</td><td>family</td><td>NO</td></tr>
+<tr><td>the family cabin</td><td class="num">60.6300,6.4200</td><td class="num">200 m</td><td>other</td><td>mountains</td><td></td></tr>
+<tr><td>the Copenhagen flat</td><td class="num">55.6800,12.5700</td><td class="num">120 m</td><td>home</td><td></td><td>DK</td></tr>
+<tr><td>the Copenhagen office</td><td class="num">55.6760,12.5850</td><td class="num">120 m</td><td>other</td><td></td><td></td></tr>
+<tr><td>Home</td><td class="num">59.9139,10.7522</td><td class="num">120 m</td><td>home</td><td></td><td>NO</td></tr>
+<tr><td>Office</td><td class="num">59.9100,10.7600</td><td class="num">120 m</td><td>other</td><td></td><td></td></tr>
+<tr><td>Cabin</td><td class="num">60.6000,9.1000</td><td class="num">200 m</td><td>other</td><td>mountains</td><td></td></tr>
+<tr><td>Marina</td><td class="num">59.9050,10.7350</td><td class="num">150 m</td><td>asset-berth</td><td>boat</td><td></td></tr>
+</tbody>
+</table>
+</main>
+<footer>exported from the record · tier 1 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>

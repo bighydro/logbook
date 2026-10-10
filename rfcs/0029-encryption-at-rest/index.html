@@ -1,0 +1,4545 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/rfcs/0029-encryption-at-rest/">
+      
+      
+        <link rel="prev" href="../0028-story/">
+      
+      
+        <link rel="next" href="../bench-encryption-2026-10/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>0029 encryption at rest for tiers 2–3 - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rfc-0029-encryption-at-rest-for-tiers-23" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              0029 encryption at rest for tiers 2–3
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_19" >
+        
+          
+          <label class="md-nav__link" for="__nav_19" id="__nav_19_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_19">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-must-keep-holding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What must keep holding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-threat-model-and-what-stays-visible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Threat model, and what stays visible
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-building-block-age" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The building block: age
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-hash-chain-three-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The hash chain: three options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. The hash chain: three options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-option-a-the-chain-over-the-plaintext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Option A — the chain over the plaintext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-option-b-the-chain-over-the-ciphertext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Option B — the chain over the ciphertext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-option-c-the-chain-over-a-sealed-digest-the-ciphertext-beside-the-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Option C — the chain over a sealed digest; the ciphertext beside the chain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-side-by-side" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Side by side
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-sealed-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The sealed line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-key-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Key handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Key handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-one-identity-per-record-recipients-in-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 One identity per record; recipients in the record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-where-the-identity-lives-and-where-it-never-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Where the identity lives, and where it never does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-who-needs-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Who needs what
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-changing-recipients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Changing recipients
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Attachments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-the-sqlite-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. The SQLite index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-performance-on-a-record-of-millions-of-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Performance on a record of millions of lines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Performance on a record of millions of lines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-the-variant-a-record-data-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 The variant: a record data key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-migration-of-an-existing-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Migration of an existing record
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Migration of an existing record">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-seal-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 Seal forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-seal-the-past" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 Seal the past
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103-what-the-format-name-says" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 What the format name says
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-logbook-ts-must-implement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What logbook-ts must implement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-spec-changes-this-draft-asks-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Spec changes this draft asks for
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-the-questions-that-were-open-and-the-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. The questions that were open, and the answers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-where-the-implementation-parts-from-this-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Where the implementation parts from this text
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0031-profile-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_44" >
+        
+          
+          <label class="md-nav__link" for="__nav_44" id="__nav_44_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_44_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_44">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-must-keep-holding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What must keep holding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-threat-model-and-what-stays-visible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Threat model, and what stays visible
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-building-block-age" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The building block: age
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-hash-chain-three-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The hash chain: three options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. The hash chain: three options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-option-a-the-chain-over-the-plaintext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Option A — the chain over the plaintext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-option-b-the-chain-over-the-ciphertext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Option B — the chain over the ciphertext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-option-c-the-chain-over-a-sealed-digest-the-ciphertext-beside-the-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Option C — the chain over a sealed digest; the ciphertext beside the chain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-side-by-side" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Side by side
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-sealed-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The sealed line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-key-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Key handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Key handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-one-identity-per-record-recipients-in-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 One identity per record; recipients in the record
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-where-the-identity-lives-and-where-it-never-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Where the identity lives, and where it never does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-who-needs-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Who needs what
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-changing-recipients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Changing recipients
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Attachments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-the-sqlite-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. The SQLite index
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-performance-on-a-record-of-millions-of-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Performance on a record of millions of lines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Performance on a record of millions of lines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-the-variant-a-record-data-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 The variant: a record data key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-migration-of-an-existing-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Migration of an existing record
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Migration of an existing record">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-seal-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 Seal forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-seal-the-past" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 Seal the past
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103-what-the-format-name-says" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 What the format name says
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-logbook-ts-must-implement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What logbook-ts must implement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-spec-changes-this-draft-asks-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Spec changes this draft asks for
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-the-questions-that-were-open-and-the-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. The questions that were open, and the answers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-where-the-implementation-parts-from-this-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Where the implementation parts from this text
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="rfc-0029-encryption-at-rest-for-tiers-23">RFC 0029 — encryption at rest for tiers 2–3</h1>
+<p>Status: <strong>adopted</strong> · written 2026-10-01 as a draft, decided 2026-10-02, numbered with ADR 0020 and SPEC v0.3 on 2026-10-03 (0029: 0025 to 0028 were taken by the shared page, weather, reflection and story while this was a draft). The questions of §13 are answered there, by the captain; the body reflects the answers. The benchmark of §14 step 1 ran on 2026-10-02 (<code>bench-encryption-2026-10.md</code>); §9 carries its numbers. The reference implementation of §14 step 3 landed with this number; §15 says where the implementation and this text part.</p>
+<h2 id="summary">Summary</h2>
+<p>SPEC §4 promises that tiers 2 and 3 are "encrypted with the owner's key (a later version)" and names the tool: age, X25519, the recipient being the owner's key. SECURITY.md promises a key that never leaves the owner's machine. This draft works out how to keep those two promises without breaking the ones the format already keeps: files are the truth (ADR 0001), the chain is mandatory and <code>verify</code> reads files only (ADR 0006), one canonicalisation (ADR 0014), attachments content-addressed and outside the hash (ADR 0015), a crossing package made of verbatim lines (RFC 0005), one mapping for backfill and live so a re-import appends nothing twice (ADR 0017), and a second implementation that fits in an afternoon.</p>
+<p>The one question everything else hangs on is what the hash chain covers once a payload is ciphertext: the plaintext, the ciphertext, or something in between. Three options are laid out with what each breaks; the recommendation is the third, <strong>the chain over a salted digest of the plaintext, with the ciphertext beside the chain</strong> the way attachment bytes already are. Then key handling, attachments, the SQLite index, performance on a record of millions of lines, migration of a record that exists today, and what logbook-ts has to implement. The questions that were open, and their answers, at the end. Every example is synthetic: the Oslo persona, who does not exist, and the fixture key pair published in <code>conformance/identity.txt</code>.</p>
+<p>A word used throughout: a line whose payload is encrypted is <strong>sealed</strong>; reading it back is <strong>opening</strong> it. Plain English, as the code's names are.</p>
+<h2 id="1-what-must-keep-holding">1. What must keep holding</h2>
+<p>Whatever the design, these stay true, or the design is wrong:</p>
+<ol>
+<li><strong>The files are the record.</strong> A folder copied to another disk is the whole record. No key material that the record needs for <em>integrity</em> lives outside it; key material the record needs for <em>reading</em> is the owner's and lives outside it on purpose.</li>
+<li><strong>Nothing is rewritten.</strong> <code>Logbook.append</code> is the only way a line is written. A sealed line is appended sealed. A change to how lines are stored (adopting encryption, changing recipients) is a migration in the ADR 0014 sense: a temporary folder, a verify, a swap, a line in the chain that says it happened, never an edit in place.</li>
+<li><strong><code>verify</code> reads files, never the index, and prints the head.</strong> Whether it may also need a key is the question of §4.</li>
+<li><strong>One canonicalisation, RFC 8785, no version switch.</strong> The hash rule of SPEC §3 is not changed by this RFC; what goes into the <code>payload</code> slot of the pre-image is.</li>
+<li><strong>Attachments are content-addressed by the bytes a line names, and outside the chain.</strong></li>
+<li><strong>A crossing package carries lines whose hashes the recipient can recompute</strong>, even though it cannot replay the chain.</li>
+<li><strong>Backfill and live produce the same line and dedupe on <code>(source, raw_id)</code>.</strong> <code>raw_id</code> is inside the payload, so sealing it has consequences for the index (§8) and for performance (§9).</li>
+<li><strong>No network in any default path.</strong> age needs none. An age plugin (a hardware key) is a local process.</li>
+<li><strong>Two implementations agree on the conformance fixture</strong>, and the fixture is regenerated by a script. A design under which the sample record cannot be regenerated to the same head fails this on its own (§4.2).</li>
+<li><strong>The owner is never locked out of the chain.</strong> A lost key loses the <em>words</em> of tiers 2–3, never the proof that the record is intact: <code>verify</code> must still say valid on a record whose key is gone.</li>
+</ol>
+<h2 id="2-threat-model-and-what-stays-visible">2. Threat model, and what stays visible</h2>
+<p>SECURITY.md: the record lives on a machine the owner controls; the adversary is anyone who obtains the files. That is a stolen laptop, a cloud backup, a sync folder, a disk sold second-hand, a copy a tool left behind. It is <strong>not</strong> an adversary on the running machine while the owner is logged in: that adversary has the key, and no at-rest design helps. It is not the circle either: what a circle member may see is RFC 0005 and ADR 0016, and this RFC only changes how a package is carried (§7).</p>
+<p><strong>The envelope stays plain.</strong> <code>id</code>, <code>seq</code>, <code>at</code>, <code>end</code>, <code>tz</code>, <code>source</code>, <code>kind</code>, <code>tier</code>, <code>recorded_at</code>, <code>prev</code>, <code>hash</code> are readable without any key, for every line. This is deliberate: placement by month, listing a day, the index, <code>stats</code>, dedupe of tier-1 lines, and <code>verify</code> itself all read the envelope and nothing else, and sealing it would make every one of them need the key. The price is stated plainly so nobody expects more: an adversary with the files learns the <em>shape</em> of the owner's life at tiers 2–3 (a <code>message</code> from <code>whatsapp</code> at 23:14, a <code>health-sample</code> every fifteen minutes, a <code>transaction</code> on the first of the month) and none of the words, names, numbers or amounts. A design that also seals <code>kind</code> and <code>source</code> is in the open questions (§13.2); it is a different trade, not a refinement of this one.</p>
+<p><strong>What a hash gives away.</strong> SHA-256 is not hiding for a low-entropy input. A content hash computed over the plaintext of <code>{"schema":"health-sample/v1","type":"steps","value":312,…}</code> lets an adversary who holds the envelope (visible) and can enumerate step counts <em>confirm</em> the value: hash each guess, compare. The same holds for a short note ("had lunch"), a yes/no confirmation, a transaction amount. So any option that puts the plaintext under a hash the adversary can see must salt it. This is why §4 is not simply "hash the plaintext, as today".</p>
+<p><strong>Old copies.</strong> Encryption at rest protects copies made after it is turned on. A backup taken before the migration (§10) holds the plaintext for as long as it exists; the migration says so and cannot do anything about it.</p>
+<h2 id="3-the-building-block-age">3. The building block: age</h2>
+<p>age (age-encryption.org/v1) is a small, fixed file format with reference implementations in Go (<code>age</code>), Rust (<code>rage</code>), Python bindings (<code>pyrage</code>, wheels for macOS, Linux and Windows) and TypeScript (<code>age-encryption</code> on npm, pure TypeScript over Web Crypto, by the same author). It has no modes, no negotiation and no versions to choose between, which is the whole reason to use it rather than a library of primitives.</p>
+<p>What one age file is, as this RFC relies on it:</p>
+<ul>
+<li>A <strong>header</strong>: the line <code>age-encryption.org/v1</code>, one <strong>stanza</strong> per recipient, a MAC over the header. For an X25519 recipient the stanza is an ephemeral public share and the <strong>file key</strong> (16 random bytes, fresh for every file) wrapped to that recipient. Then a 16-byte nonce.</li>
+<li>A <strong>body</strong>: the plaintext in 64 KiB chunks, each ChaCha20-Poly1305 under a key derived from the file key and the nonce. The last chunk is marked, so truncation is detected. Streaming in both directions; a 100 MB recording is never held whole.</li>
+<li>Sizes, for the estimates in §9: the header is 168 bytes with one X25519 recipient and 98 bytes more per further recipient; the body adds 16 (nonce) + 16 (tag) bytes per 64 KiB chunk. A 161-byte plaintext sealed to one recipient is 361 bytes, 484 as standard base64; to two recipients, 459 and 612. In practice rage (and so <code>pyrage</code>) adds a random grease stanza to every header, about 100 bytes more; the benchmark (§9) measured 466 and 564 bytes for a 171-byte plaintext.</li>
+<li>The <strong>recipient</strong> is the public half, a bech32 string <code>age1…</code>; the <strong>identity</strong> is the private half, <code>AGE-SECRET-KEY-1…</code>. The pair below is the conformance fixture's, published in <code>conformance/identity.txt</code> on purpose: it opens the sealed sample and nothing else, and is used in every example here (§11):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>recipient: age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl
+identity:  AGE-SECRET-KEY-1…  (the whole line is in conformance/identity.txt; not repeated here, so no secret scanner has to be taught that it is public)
+</code></pre></div>
+<ul>
+<li>An identity file may itself be sealed with a passphrase (age's scrypt recipient, <code>age -p</code>). Plugins (<code>age-plugin-yubikey</code>, <code>age-plugin-se</code>) put the private half in hardware; the record sees only another recipient string.</li>
+</ul>
+<p>Two properties matter for the chain question. <strong>Sealing is randomised</strong>: the same plaintext sealed twice is two different byte strings (fresh file key, fresh ephemeral share). <strong>Adding a recipient changes the header</strong>, and therefore the file. Anything that hashes the ciphertext inherits both.</p>
+<p>The binary age file is carried inside a JSON line as <strong>standard base64 with padding</strong> (RFC 4648 §4), one string, no line breaks. age's ASCII armor is not used: it is a second encoding of the same bytes and the second implementation would have to carry both.</p>
+<h2 id="4-the-hash-chain-three-options">4. The hash chain: three options</h2>
+<p>Today, SPEC §3:</p>
+<div class="highlight"><pre><span></span><code>content = canonical_json({at, end, tz, source, kind, tier, payload})
+hash    = sha256( prev + "|" + seq + "|" + sha256(content) + "|" + recorded_at )
+</code></pre></div>
+<p>The <code>payload</code> slot is the question. Each option below says what goes there for a sealed line, what the stored line looks like, and what it does to: <code>verify</code> without the key and with it; <code>show</code> and every other reader; the second implementation; crossing packages; ADR 0017 re-imports and dedupe; changing recipients; adopting encryption on a record that exists; the conformance fixture.</p>
+<h3 id="41-option-a-the-chain-over-the-plaintext">4.1 Option A — the chain over the plaintext</h3>
+<p>The pre-image is unchanged: <code>payload</code> in <code>content</code> is the real payload. The stored line replaces <code>payload</code> with <code>payload_enc</code>, the base64 age file of <code>canonical_json(payload)</code>. Nothing else is added; the content hash is not stored.</p>
+<ul>
+<li><strong><code>verify</code> without the key</strong> can check <code>seq</code>, <code>prev</code> links and <code>recorded_at</code> as text, and nothing else: it cannot recompute a single hash past the first sealed line, because the content hash it needs is inside the ciphertext. A backup host, a CI job, a stranger holding the folder cannot say whether the record is intact. This alone breaks promise 10 for a lost key: the record becomes unverifiable, not just unreadable.</li>
+<li><strong><code>verify</code> with the key</strong> is exactly today's code after one decryption per line.</li>
+<li><strong>Readers</strong> need the key, as under every option.</li>
+<li><strong>The second implementation</strong> must implement age before it can verify anything, so Level 1 conformance (chain only) and Level 2 (encryption) collapse into one; the conformance sample must ship with an identity.</li>
+<li><strong>Crossing packages</strong> ship opened lines and the recipient recomputes the owner's hashes exactly as today. Best of the three here.</li>
+<li><strong>Re-imports</strong>: the same observation sealed twice has the same content hash, so a content-hash dedupe would even be possible; the <code>(source, raw_id)</code> dedupe needs the index or a decryption pass, as under every option.</li>
+<li><strong>Recipients</strong> can be added or rotated by resealing the stored form; no hash changes.</li>
+<li><strong>Adoption</strong> on an existing record changes no hash either: today's lines already hash the plaintext. No migration, no lineage.</li>
+<li><strong>The fixture</strong> regenerates to the same head.</li>
+<li><strong>The leak of §2</strong>: the content hash is confirmable from the visible line hash (<code>prev</code>, <code>seq</code>, <code>recorded_at</code> are visible). Fixing it means a salt in the pre-image, which is a pre-image change for new lines, which gives back most of the migration advantage and all of its simplicity.</li>
+</ul>
+<p>Option A is the design that keeps the most and verifies the least. Its defining cost, a record that nobody can verify without the owner's key, is the one this project cannot pay: a chain nobody can check is not a chain.</p>
+<h3 id="42-option-b-the-chain-over-the-ciphertext">4.2 Option B — the chain over the ciphertext</h3>
+<p>The <code>payload</code> slot holds the sealed object itself: <code>{"schema": "encrypted/v1", "age": "&lt;base64&gt;"}</code>. Verify is today's code, byte for byte.</p>
+<ul>
+<li><strong><code>verify</code> without the key</strong> is complete: every hash recomputes, the chain is as checkable as it is today. <strong>With the key</strong> it can additionally open each line and report the ones that do not open.</li>
+<li><strong>The second implementation</strong> verifies with no cryptography at all. Level 1 is untouched.</li>
+<li><strong>Crossing packages break.</strong> The line is verbatim ciphertext sealed to the owner; the circle member cannot open it. The exporter must ship an opened payload beside the verbatim line, and the recipient has no way to bind the opened payload to the hashed one: the binding is the age file key, which the libraries do not hand out. Provenance becomes "trust the exporter", which RFC 0005 was written to avoid.</li>
+<li><strong>Re-imports</strong> are fine for dedupe (by <code>raw_id</code>, after opening) and meaningless for the hash: two sealings of one observation are two different hashes, always.</li>
+<li><strong>Recipients cannot change without a chain rewrite.</strong> Adding a recovery key, a new laptop, a hardware key: each is a new header on every sealed line, a new content hash, a new chain from that line on, with a lineage entry (ADR 0014) every time. A record that cannot afford to lose its key cannot afford that either. This is the decisive failure.</li>
+<li><strong>Adoption</strong> rewrites every tier 2–3 line's hash: a migration with lineage.</li>
+<li><strong>The fixture cannot be regenerated to the same head</strong>, because sealing is randomised. <code>make_sample.py</code> would have to check in the ciphertext as a fixture and never regenerate it, and the cross-implementation test could not seal in one implementation and verify in the other against a known head.</li>
+</ul>
+<p>Option B is the one that looks like no change and costs the most.</p>
+<h3 id="43-option-c-the-chain-over-a-sealed-digest-the-ciphertext-beside-the-chain">4.3 Option C — the chain over a sealed digest; the ciphertext beside the chain</h3>
+<p>The stored line keeps a plain <code>payload</code>, which is a <strong>reference</strong> to the sealed content, and gains one top-level field <code>payload_enc</code> that is <strong>outside the hash</strong>, as <code>id</code> is:</p>
+<div class="highlight"><pre><span></span><code>plain    = canonical_json({"payload": &lt;the real payload&gt;, "salt": &lt;32 hex chars, 16 random bytes&gt;})
+digest   = sha256(plain)                                    lowercase hex
+payload  = {"schema": "sealed/v1", "of": &lt;inner schema&gt;, "digest": digest}   hashed, as any payload is
+payload_enc = base64( age_seal(plain, recipients) )         stored, not hashed
+</code></pre></div>
+<p>The pre-image definition is untouched. <code>payload.schema</code> is present, so SPEC §3's envelope rule holds without a special case. The salt is inside the sealed bytes and inside the digest, so the digest confirms nothing to anyone who cannot open the line (§2). The sealed bytes <em>are</em> the canonical text, so an opener hashes what it decrypted and compares, with no re-canonicalisation.</p>
+<ul>
+<li><strong><code>verify</code> without the key</strong> checks the whole chain as today, and additionally that every <code>sealed/v1</code> line carries a <code>payload_enc</code> that is well-formed (base64 of bytes beginning <code>age-encryption.org/v1\n</code>). It reports the count of sealed lines it did not open and exits 0 when the chain holds. It cannot tell a genuine ciphertext from one an adversary sealed to the owner's public recipient and swapped in; that is the one thing the key adds.</li>
+<li><strong><code>verify</code> with the key</strong> opens every sealed line and requires <code>sha256(plain) == payload.digest</code>. A mismatch is an error, exit non-zero, exactly as a present attachment whose bytes do not match its name is an error (SPEC §1.1). It then also follows attachment references inside opened payloads (§7).</li>
+<li><strong>The second implementation</strong> verifies the chain with no cryptography (Level 1) and adds age for Level 2 (§11).</li>
+<li><strong>Crossing packages</strong>: the ciphertext is outside the chain, so the exporter may <strong>reseal</strong> every crossed line to the destination's own recipient, or ship it opened, and in both cases the line's <code>payload</code>, <code>hash</code> and every other hashed field are the owner's, verbatim; the recipient recomputes the digest from what it opened and the line hash from the envelope. RFC 0005's promise is kept, and a package in transit is sealed to its reader (§7).</li>
+<li><strong>Re-imports</strong>: dedupe by <code>(source, raw_id)</code> after opening, through the index (§8). Two sealings of one observation have different salts and different digests, as two <code>recorded_at</code> already give them different line hashes today; identity is <code>raw_id</code>, as ADR 0017 says.</li>
+<li><strong>Recipients</strong> change by resealing <code>payload_enc</code>: a stored-form change, "re-serialising a line changes nothing" (SPEC §2) made literal. Done the migration way (temporary folder, verify, swap) and recorded by one line in the chain (§6.4), but no hash moves and no lineage entry is needed.</li>
+<li><strong>Adoption</strong> on an existing record changes the content hash of every tier 2–3 line, because the real payload leaves the pre-image and the reference enters it. One migration, once, with lineage (§10). An owner may also seal forward only and never rewrite (§10.1).</li>
+<li><strong>The fixture regenerates to the same head</strong>: the salts are data in the sample, the ciphertext is not hashed, and a run with the published identity opens every line.</li>
+<li><strong>What it does not give</strong>: an adversary can replace a sealed line's <code>payload_enc</code> with garbage and a keyless <code>verify</code> says valid. The record is still intact in the sense the chain promises (nothing added, removed or reordered; every hashed field as written) and the owner's next keyed <code>verify</code>, <code>show</code> or <code>day</code> finds the line does not open and says which. This is the same position attachments are in today, chosen for the same reason (ADR 0015): the chain covers what the owner wrote, the bytes that carry it are checked by whoever can read them.</li>
+</ul>
+<h3 id="44-side-by-side">4.4 Side by side</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>A: plaintext</th>
+<th>B: ciphertext</th>
+<th>C: sealed digest</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>verify</code> without the key</td>
+<td>links and <code>seq</code> only; no hash</td>
+<td>complete</td>
+<td>complete chain; sealed bytes unchecked</td>
+</tr>
+<tr>
+<td><code>verify</code> with the key</td>
+<td>complete</td>
+<td>complete + "opens"</td>
+<td>complete + digest of every opened line</td>
+</tr>
+<tr>
+<td>Second implementation, Level 1</td>
+<td>needs age</td>
+<td>no change</td>
+<td>one new field outside the hash, one payload shape</td>
+</tr>
+<tr>
+<td>Crossing package (RFC 0005)</td>
+<td>opened lines, hashes verbatim</td>
+<td>ciphertext the member cannot open, or unbound plaintext</td>
+<td>resealed to the member or opened; hashes verbatim</td>
+</tr>
+<tr>
+<td>ADR 0017 re-import</td>
+<td>dedupe by <code>raw_id</code>; same hash too</td>
+<td>dedupe by <code>raw_id</code></td>
+<td>dedupe by <code>raw_id</code></td>
+</tr>
+<tr>
+<td>Add or rotate a recipient</td>
+<td>reseal, no hash change</td>
+<td>chain rewrite, lineage, every time</td>
+<td>reseal, no hash change, one line says so</td>
+</tr>
+<tr>
+<td>Adopt on an existing record</td>
+<td>no hash change</td>
+<td>chain rewrite, lineage</td>
+<td>chain rewrite once, lineage; or seal forward only</td>
+</tr>
+<tr>
+<td>Conformance fixture regenerates</td>
+<td>yes</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Guess confirmation (§2)</td>
+<td>yes, unless salted</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Lost key</td>
+<td>words lost <strong>and</strong> chain unverifiable</td>
+<td>words lost, chain verifiable</td>
+<td>words lost, chain verifiable</td>
+</tr>
+</tbody>
+</table>
+<h3 id="45-recommendation">4.5 Recommendation</h3>
+<p><strong>Option C.</strong> It is the only one that keeps <code>verify</code> keyless <em>and</em> keeps keys out of the chain, and it is the one that treats sealed bytes the way the format already treats attachment bytes, so the spec gains a shape it already has rather than a new idea. Its cost, that a keyless verifier cannot vouch for the sealed bytes, is paid in the same coin as ADR 0015 and reported the same way: a separate count, never a silent pass and never a false failure.</p>
+<p>The rest of this draft assumes Option C. Where another option would do differently, it says so.</p>
+<h2 id="5-the-sealed-line">5. The sealed line</h2>
+<p>A synthetic example: the Oslo persona's note, written at the command line, sealed to one recipient. The envelope is as today; <code>payload</code> is the reference; <code>payload_enc</code> is the age file, shortened here.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0199a1c0-5e2a-7c31-9a0b-3d4e5f607182"</span><span class="p">,</span><span class="w"> </span><span class="nt">"seq"</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-01T18:42:00Z"</span><span class="p">,</span><span class="w"> </span><span class="nt">"end"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"tz"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Europe/Oslo"</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"manual"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"note"</span><span class="p">,</span><span class="w"> </span><span class="nt">"tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"payload"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sealed/v1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"of"</span><span class="p">:</span><span class="w"> </span><span class="s2">"note/v1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"digest"</span><span class="p">:</span><span class="w"> </span><span class="s2">"6f61103210f69c83f179c8adf6d928182bc8e6b6a57327c007baa8aafe253a91"</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"payload_enc"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSA…"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"recorded_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-01T18:42:03Z"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"prev"</span><span class="p">:</span><span class="w"> </span><span class="s2">"035a74e0027faa6872580c3c7b5f7a0efec92f15bb29cee400a6593814fd345c"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"hash"</span><span class="p">:</span><span class="w"> </span><span class="s2">"06fdc5af319cdaecc3cfc63d4636407bf4452b590fb399461d3b75def7c0fcad"</span><span class="p">}</span>
+</code></pre></div>
+<p>What the owner's identity opens <code>payload_enc</code> to, byte for byte (161 bytes; its SHA-256 is the digest above):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"payload"</span><span class="p">:{</span><span class="nt">"schema"</span><span class="p">:</span><span class="s2">"note/v1"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"Dinner with Kari at the marina; Solvind needs a new impeller before Saturday."</span><span class="p">},</span><span class="nt">"salt"</span><span class="p">:</span><span class="s2">"3b9f0c2e7d1a4f6b8c0d2e4f6a8b0c1d"</span><span class="p">}</span>
+</code></pre></div>
+<p>The <code>prev</code> is the v0.5.0 conformance head, so the <code>hash</code> above is what a line with this envelope would carry as line 32 of the sample; both recompute from the text shown.</p>
+<p>Rules:</p>
+<ol>
+<li>A line is sealed when its <code>tier</code> is 2 or 3 and <code>logbook.json</code> names recipients (§6.1: two at least, or none). A tier-1 line is never sealed. A tier 2–3 line in a record with no recipients is written plain, as today, and <code>verify</code> counts such lines (<code>plain at tier 2–3: n</code>) so the owner sees them.</li>
+<li><code>payload</code> of a sealed line is exactly <code>{"schema": "sealed/v1", "of": "&lt;the inner schema&gt;", "digest": "&lt;64 lowercase hex&gt;"}</code>. No other key. <code>of</code> is the sealed payload's own <code>schema</code> (<code>note/v1</code>) in clear, so <code>stats</code> can count by profile and a reader can decide whether to open a line before it does; it reveals little beyond <code>kind</code> (decided, §13.3). A keyed opener MUST check that the inner <code>schema</code> equals <code>of</code>.</li>
+<li><code>payload_enc</code> is present on a sealed line and absent on a plain one. A <code>sealed/v1</code> payload without <code>payload_enc</code>, or a <code>payload_enc</code> beside a payload that is not <code>sealed/v1</code>, makes the line invalid to any verifier, with or without the key.</li>
+<li><code>payload_enc</code> is outside the hash, with <code>id</code>. SPEC §2's "unknown fields MUST be preserved by readers" already covers it for a reader that predates this RFC; SPEC §6's "a change to <code>id</code> … is not detected" extends to it.</li>
+<li>The sealed bytes are <code>canonical_json({"payload": …, "salt": …})</code> in UTF-8, nothing else: no trailing newline, no other keys. The salt is 16 bytes from the operating system's random source, as 32 lowercase hex characters, fresh per line. The digest is the SHA-256 of those bytes.</li>
+<li>A keyed opener MUST compare the digest before it parses the plaintext, and MUST treat a mismatch as an error of the record, not a warning.</li>
+<li>Retraction and <code>supersedes</code> work by <code>id</code>, which is plain, and are not affected. A retraction's own payload (the reason) is tier 2 and is sealed. Readers already have to open a retraction to show its reason; they need nothing but its <code>supersedes</code> to apply it, and that is inside too, so the index carries it (§8).</li>
+<li>Derived data inherits the highest tier of its evidence (SPEC §4), so a <code>resolution/v1</code> or <code>commitment/v1</code> line over tier-2 evidence is tier 2 and sealed. Engines (ARCHITECTURE layer 3) therefore need the identity to run, as readers do.</li>
+</ol>
+<h2 id="6-key-handling">6. Key handling</h2>
+<h3 id="61-one-identity-per-record-recipients-in-the-record">6.1 One identity per record; recipients in the record</h3>
+<p>The long-term secret is <strong>one X25519 identity per record</strong>, the owner's. There is no symmetric record key to wrap, store or rotate: age makes a fresh file key for every line and wraps it in the line's own header, so the only key anybody keeps is the identity. (The variant with a record data key is in §9.1, for the case where the measurements demand it.)</p>
+<p><code>logbook.json</code> gains one key, public material only:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"logbook/0.3"</span><span class="p">,</span><span class="w"> </span><span class="nt">"owner_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;uuid&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"created_at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"timezone"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Europe/Oslo"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"seq"</span><span class="p">:</span><span class="w"> </span><span class="mi">4182</span><span class="p">,</span><span class="w"> </span><span class="nt">"head"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;hex&gt;"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"recipients"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl"</span><span class="p">]}</span>
+</code></pre></div>
+<p>Every sealed line is sealed to <strong>every</strong> recipient listed at the time it is written. Writers preserve the key as they preserve <code>lineage</code> (SPEC §1). A record with the key absent or empty seals nothing (§5 rule 1).</p>
+<p>Why a list and not one string: a record MUST have at least two recipients before it seals anything, the identity on this machine and a <strong>recovery identity</strong> generated once, printed, and kept on paper somewhere else (<code>logbook key recovery</code> prints it and never stores it). <code>init</code> writes <code>recipients</code> only when the second exists and refuses to seal until then; a record with one recipient is a record with none (decided, §13.10). A hardware recipient (an age plugin) is a third. Losing the laptop then loses nothing; losing every recipient loses the words of tiers 2–3 and nothing else (promise 10).</p>
+<h3 id="62-where-the-identity-lives-and-where-it-never-does">6.2 Where the identity lives, and where it never does</h3>
+<ul>
+<li><strong>Never in the record.</strong> Not under <code>&lt;root&gt;</code>, not in <code>logbook.json</code>, not in a dotfile beside it. The record is the folder that gets copied, synced and backed up; a key inside it travels with every copy and the encryption protects nothing.</li>
+<li><strong>Never in an environment variable that is on disk.</strong> No <code>LOGBOOK_IDENTITY=AGE-SECRET-KEY-…</code> in a shell profile, a <code>.env</code>, a <code>launchd</code> plist, a Docker compose file or a CI secret store that writes to the container's environment. The variable the CLI reads, if any, names a <strong>path</strong> (<code>LOGBOOK_IDENTITY_FILE</code>), as <code>import-backup</code> already takes a password in a variable set for one command and never a flag. An identity passed as a flag would land in shell history; there is no such flag.</li>
+<li><strong>Default location</strong>: <code>~/.config/logbook/identities/&lt;owner_id&gt;.txt</code> (<code>%APPDATA%\logbook\identities\</code> on Windows, via <code>pathlib</code>, never by string), mode 0600, one age identity file as <code>age-keygen</code> writes it. Several records on one machine, several files. <code>logbook init</code> creates it, prints the recipient, writes <code>recipients</code> and says in one sentence that the recovery identity is the next thing to do.</li>
+<li><strong>Lookup order</strong> when a command needs to open: <code>--identity-file PATH</code>; <code>LOGBOOK_IDENTITY_FILE</code>; the default location; a plugin recipient's own mechanism. The first that exists is used; a file that does not open the line (wrong record) is one clear error naming the path, never a traceback.</li>
+<li><strong>A passphrase on the identity file</strong> (age's scrypt recipient) is the owner's choice at <code>init</code>, off by default: full-disk encryption and the recovery recipient cover the copied-file case, and a prompt breaks every unattended read (decided, §13.9). When chosen, it is prompted on the terminal, never read from a flag, a variable or a file.</li>
+<li><strong>The operating system keychain</strong> (macOS Keychain, the Windows credential store, the Secret Service on Linux) is a later option, not required: it is one more place the second implementation would have to read.</li>
+</ul>
+<h3 id="63-who-needs-what">6.3 Who needs what</h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Needs the recipient (public)</th>
+<th>Needs the identity (secret)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add</code>, <code>sync</code>, <code>append_many</code>: seal new tier 2–3 lines</td>
+<td>yes</td>
+<td>yes, to dedupe by <code>raw_id</code> (§8); the CLI refuses without it</td>
+</tr>
+<tr>
+<td><code>add</code>, <code>sync</code>: tier-1 lines</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>verify</code>, keyless</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>verify</code>, keyed</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>show</code>, <code>day</code>, <code>trips</code>, engines, <code>export</code> (opened, the default)</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>export --sealed</code> (lines verbatim, still sealed)</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>export crossing</code> (reseal to a destination)</td>
+<td>the destination's</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>index</code> rebuild (the <code>raw_id</code>, <code>supersedes</code>, <code>entity</code>, <code>media</code> columns)</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>key add-recipient</code>, <code>key rotate</code> (reseal)</td>
+<td>the new ones</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>Sealing without the secret is a property of the format worth keeping, and the CLI does not use it: a writer that holds only the recipients cannot dedupe against sealed lines (§8), so <code>sync</code> and <code>add</code> <strong>refuse to write tier 2–3 lines without the identity</strong>, in one sentence naming what is missing, rather than append what the next keyed run would have to retract (decided, §13.6). Tier-1 sources (<code>ais</code>, a location tracker) need neither key and run unattended as before.</p>
+<h3 id="64-changing-recipients">6.4 Changing recipients</h3>
+<p>Adding a recipient (a new laptop, a hardware key, a recovery identity made late) and rotating the identity (a laptop stolen while unlocked, an identity file found in a backup) are the same operation: <strong>reseal</strong> every sealed line and every sealed attachment to the new list. It runs the way <code>migrate</code> runs (ADR 0014): into a temporary folder, verified keyed and keyless, then swapped; an interrupted run leaves the record as it was. No hash changes; <code>logbook.json</code> <code>recipients</code> is replaced; and one line is appended so the chain records that it happened:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-01T19:00:00Z"</span><span class="p">,</span><span class="w"> </span><span class="nt">"end"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"tz"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Europe/Oslo"</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"logbook"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rekey"</span><span class="p">,</span><span class="w"> </span><span class="nt">"tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"payload"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rekey/v1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"recipients_before"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"recipients_after"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"recipients"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"age1x5ut7lplvtgkzcnvtjux674z32mu5q72r6ffaxemxtg9g08p7g5qa8ytxl"</span><span class="p">,</span><span class="w"> </span><span class="s2">"age1…"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"sealed_lines"</span><span class="p">:</span><span class="w"> </span><span class="mi">4100</span><span class="p">,</span><span class="w"> </span><span class="nt">"sealed_attachments"</span><span class="p">:</span><span class="w"> </span><span class="mi">212</span><span class="p">}}</span>
+</code></pre></div>
+<p>The recipients are public and go in the line; the removed one is not named, because naming it is pointless once nothing is sealed to it. Rotation does not unlock the past for whoever took the old identity <em>and</em> an old copy of the files; the owner is told that in the command's output, once.</p>
+<h2 id="7-attachments">7. Attachments</h2>
+<p>ADR 0015 left this to "the version that defines the encryption envelope". The store is <code>&lt;root&gt;/attachments/&lt;sha256&gt;</code>, named by the plaintext's digest, write-once, outside the chain, de-duplicated across lines.</p>
+<p><strong>Rule: an attachment is sealed when any line that references it is tier 2 or 3, and the file keeps its name.</strong> <code>attachments/&lt;sha256 of the plaintext&gt;</code> holds the age file of the plaintext, sealed to the record's recipients. The reference inside the payload (<code>{sha256, path, bytes, media_type}</code>) is unchanged and still names the plaintext: <code>sha256</code> the plaintext digest, <code>bytes</code> the plaintext length. The reference lives inside a sealed payload, so nobody without the key can read it anyway; the file's own first 22 bytes (<code>age-encryption.org/v1\n</code>) say it is sealed.</p>
+<p>Why the plaintext digest and not the ciphertext's: de-duplication is by content, and a ciphertext digest is random per sealing (§3), so two lines attaching the same recording would be two files and the same file attached from two sources would never meet. Why not a suffix or a second directory: SPEC §1.1 says no extension and no subdirectories, and the age header is a better marker than a name.</p>
+<ul>
+<li><strong><code>verify</code>, keyless</strong>: a file in the store that does not begin with the age header is checked against its name as today; one that does is counted as <em>sealed, not checked</em> and is not an error. A plain file in the store whose digest does not match its name is an error, as today.</li>
+<li><strong><code>verify</code>, keyed</strong>: opens each sealed line, follows its references, opens the file, streams it through SHA-256, requires the plaintext digest to equal the name. A mismatch is an error; a missing file is reported separately and is not (SPEC §1.1).</li>
+<li><strong>Tier 1 and tier 2 sharing one file</strong>: the photo a tier-1 <code>photo/v1</code> line names and a tier-2 <code>note/v1</code> line attaches is the same bytes under the same name. The higher tier wins: the file is sealed. A writer that attaches bytes already present plain from a tier 2–3 line seals the file in place (temporary name, rename), which raises the file's protection and never lowers it; write-once is a rule about content, and the content did not change. The reverse (a tier-1 line attaching bytes present sealed) leaves the file sealed; the tier-1 reader opens it with the identity like anything else.</li>
+<li><strong>Streaming</strong>: age chunks at 64 KiB, so <code>attach_file</code> seals a voice memo of a hundred megabytes in one pass without holding it, and an opener streams it to a player. Overhead is 32 bytes per 64 KiB; nothing to measure.</li>
+<li><strong>Crossing packages (RFC 0005)</strong> ship copies "under the same names". The exporter opens each crossed file and reseals it to the destination's recipient (or ships it plain when the destination has none and the owner said <code>--open</code>); the name is the plaintext digest, so a crossed line's <code>content.path</code> resolves inside the bundle as before, and the consumer checks the file by opening it and hashing, as it must already hash. <code>policy/crossing.json</code> gains the destination's recipient: <code>{"hermes": {"max_tier": 2, "recipient": "age1…"}}</code>. A destination without one receives a package only with <code>--open</code>, typed.</li>
+<li><strong>The <code>day-package/v1</code></strong> never carries payloads or files and is unaffected.</li>
+</ul>
+<h2 id="8-the-sqlite-index">8. The SQLite index</h2>
+<p><code>index.sqlite</code> is a disposable locator (ADR 0007): <code>seq, id, at, day_local, kind, source, tier, raw_id, file, offset, supersedes, entity, media</code>. Nine of those columns are the envelope and are plain whatever this RFC does. Four come from the payload and, for a sealed line, exist only after opening: <code>raw_id</code> (dedupe, ADR 0017), <code>supersedes</code> (readers apply corrections and retractions), <code>entity</code> (resolution counts), <code>media</code> (attachment counts). <code>raw_id</code> is the one that talks: a WhatsApp <code>raw_id</code> is <code>&lt;chat jid&gt;:&lt;stanza id&gt;</code> and the jid is a phone number; a mail <code>raw_id</code> is a Message-ID naming a domain. An index with that column in clear undoes a good part of the sealing for anyone who copies the folder.</p>
+<p>Three ways, as asked:</p>
+<ol>
+<li><strong>An encrypted index.</strong> SQLite has no encryption of its own; SQLCipher and SEE are different builds, and Python's <code>sqlite3</code> and Node's modules cannot open their files without being rebuilt against them, on three operating systems. Decrypting an index to a temporary file on open is a multi-gigabyte plaintext in <code>/tmp</code> on a record of millions of lines, which is the thing being prevented. Rejected.</li>
+<li><strong>Rebuilt, never persisted.</strong> Build the index in memory per process, from the files, opening every sealed line each time. <code>show</code> on a three-million-line record would open a million lines before printing a day: minutes per command. The reason the index exists is that this does not happen. Rejected as the default; as <code>--no-index</code> for a one-off on a machine the owner does not trust with a cache it is fine, and already nearly what <code>verify</code> does.</li>
+<li><strong>Plain, with a warning.</strong> Keep the index as it is, say in the README and in <code>logbook index</code> that it is a plaintext locator, and tell the owner not to copy it. Honest, cheap, and the warning will be ignored by the first sync client.</li>
+</ol>
+<p><strong>Recommendation: 3, hardened in two ways, so the warning has little to protect.</strong></p>
+<ul>
+<li><strong>Blind <code>raw_id</code>.</strong> For a sealed line the index stores <code>HMAC-SHA256(k, raw_id)</code> as hex, not the <code>raw_id</code>, with <code>k</code> a 32-byte <strong>index key</strong> generated when the index is first built and stored in the index's own <code>meta</code> table sealed to the record's recipients. The index is self-contained and disposable as before; an adversary with the folder has HMACs under a key they cannot open, and a phone number cannot be confirmed by guessing. Dedupe compares HMACs: deterministic, so <code>(source, raw_id)</code> lookups are unchanged in cost. <code>supersedes</code>, <code>entity</code> and <code>media</code> are ids this record minted and digests already visible as file names; they stay plain. Tier-1 lines keep <code>raw_id</code> plain; nothing about them is sealed.</li>
+<li><strong>Move the index out of the record root.</strong> <code>&lt;root&gt;/index.sqlite</code> is listed in SPEC §1 as optional and disposable. Put it in the user's cache directory instead (<code>~/.cache/logbook/&lt;owner_id&gt;/index.sqlite</code>; the platform equivalent on macOS and Windows, via <code>pathlib</code>), so a copy of the record folder, by any tool, never carries the locator at all. The Docker image keeps its index inside the container, where it is rebuilt on first use, as now. <code>verify</code> never opens it (unchanged), and a record whose cache is gone is a record whose index is rebuilt (unchanged).</li>
+</ul>
+<p>Building and rebuilding the index on a record with sealed lines needs the identity, for the four payload columns. Without it, the index is built with those columns <code>NULL</code> for sealed lines and <code>meta</code> says so (<code>opened: false</code>); readers that only list a day work, writers of tier 2–3 lines refuse (§6.3), and the next command run with the identity fills the columns in place of a rebuild. Both hardenings, the blinded <code>raw_id</code> and the move to the cache directory, are adopted (decided, §13.8).</p>
+<h2 id="9-performance-on-a-record-of-millions-of-lines">9. Performance on a record of millions of lines</h2>
+<p>The project's floors today: <code>append_many</code> at 20,000 lines a second or better; <code>verify</code> and dedupe in flat memory on three million lines; <code>show</code> of a day in under a second after indexing. Sealing touches the first and adds a per-line public-key operation that today's code does not have. The draft estimated the cost; the benchmark <code>bench-encryption-2026-10.md</code> (<code>scripts/bench_seal.py</code>, 2026-10-02) measured it, on a 3,000,000-line record of the stress tests' shape with 2,000,000 sealed lines (1,000,000 health-sized at tier 3, 1,000,000 message-sized at tier 2), Option C exactly as §4.3 and §5 say it, <code>pyrage</code> 1.4.0, one machine: a 4-vCPU cloud container with a slow core (7,300 lines a second on the stress suite's own <code>append_many</code> test, against the 20,000 floor), so the ratios carry over and the absolute times are a ceiling. The three CI runners have the same workflow under <code>workflow_dispatch</code> and had not been run when this was written.</p>
+<table>
+<thead>
+<tr>
+<th>Per sealed line</th>
+<th>age, 1 recipient</th>
+<th>age, 2 recipients</th>
+<th>plain, for comparison</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Seal (the age call alone)</td>
+<td>88 µs</td>
+<td>167 µs</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Seal step in the writer (canonical JSON, salt, SHA-256, age, base64)</td>
+<td>128 µs · 7,800 lines/s</td>
+<td>214 µs · 4,700 lines/s</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Open (decode, decrypt, digest, parse)</td>
+<td>145 µs · 6,900 lines/s</td>
+<td>194 µs · 5,100 lines/s</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Stored line, health-sized (payload ≈ 110 B)</td>
+<td>1,127 B (2.20×)</td>
+<td>1,258 B (2.45×)</td>
+<td>513 B</td>
+</tr>
+<tr>
+<td>Stored line, message-sized (payload ≈ 600 B)</td>
+<td>1,786 B (1.77×)</td>
+<td>1,917 B (1.90×)</td>
+<td>1,010 B</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Whole record, 3,000,000 lines</th>
+<th>age, 1 recipient</th>
+<th>age, 2 recipients</th>
+<th>plain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Write, end to end</td>
+<td>589 s · peak 110 MB</td>
+<td>785 s · peak 115 MB</td>
+<td>339 s · peak 81 MB</td>
+</tr>
+<tr>
+<td>Keyless <code>verify</code></td>
+<td>154 s · 27 MB</td>
+<td>160 s · 27 MB</td>
+<td>175 s · 27 MB</td>
+</tr>
+<tr>
+<td>Keyed <code>verify</code></td>
+<td>460 s · 27 MB</td>
+<td>583 s · 27 MB</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Index rebuild with opening</td>
+<td>382 s · 35 MB</td>
+<td>481 s · 35 MB</td>
+<td>69 s · 33 MB (plain rebuild)</td>
+</tr>
+<tr>
+<td>Month files on disk</td>
+<td>3.37 GB (+1.39)</td>
+<td>3.63 GB (+1.65)</td>
+<td>1.98 GB</td>
+</tr>
+</tbody>
+</table>
+<p>The size of the plaintext does not matter at these lengths; the cost is the key agreement, and in <code>pyrage</code> opening costs more than sealing. What it means for the floors:</p>
+<ul>
+<li><strong>Who is sealed.</strong> Tier-1 lines (location points, the bulk of most records) cost nothing: 460 bytes, unchanged. Tier-3 <code>health-sample/v1</code> lines are the problem case: steps every quarter hour, heart rate by the minute, sleep stages; a few years of Apple Health is one to five million tier-3 lines. Messages and mail are hundreds of thousands. The benchmark's shape is a realistic one.</li>
+<li><strong>The 20,000 lines a second floor is tier-1-only</strong> (decided, §13.1). It is 50 µs a line, and the age call alone is 88 µs to one recipient and 167 to two, so no core holds it for sealed lines. Sealed lines get a floor of their own: <strong>4,000 lines a second at two recipients</strong>, which this slow core meets at 4,683 and a laptop core should beat two or three times over (an estimate, not measured). A backfill of 1,000,000 health samples therefore seals in 2 to 4 minutes over the 2 it takes to write, once.</li>
+<li><strong>Keyed <code>verify</code></strong> of the whole record: 7.7 minutes at one recipient, 9.7 at two, against 2.6–2.9 keyless, once a night, in 27 MB. The draft allowed three to seven minutes; two recipients is at the edge of that and accepted. Keyless <code>verify</code> is unchanged or a little faster, because a <code>sealed/v1</code> reference canonicalises in fewer bytes than a message.</li>
+<li><strong>Index rebuild</strong> pays the same opening pass once (6.4 or 8 minutes against 1.2 plain); thereafter incremental on append, as now.</li>
+<li><strong><code>show</code>, <code>day</code></strong>: a day of a few thousand sealed lines opens in a few tenths of a second; the under-a-second floor holds. A day of 5,000 or more sealed lines (heart rate by the minute plus steps by the quarter hour) is at the edge; if real health records show such days, §9.1's middle road for <code>health-sample/v1</code> alone is the thing to measure next.</li>
+<li><strong>Dedupe</strong> of a 100,000-draft re-import against three million lines through the blinded index: 100,000 HMACs (microseconds each) and the same SQLite lookups as today. Unchanged in shape.</li>
+<li><strong>Size on disk.</strong> 1.39 GB more at one recipient for the 2,000,000 sealed lines, 1.65 GB at two. Per further recipient, 131 base64 characters a line, 261 MB over two million lines, 85 µs more to seal and 50 to open. Two recipients is the default (§6.1); five is a decision.</li>
+<li><strong>Memory</strong>: unchanged, 27–41 MB in every reading phase against 27–33 plain. Nothing holds more than one line per month file, or one 64 KiB attachment chunk, at a time.</li>
+</ul>
+<h3 id="91-the-variant-a-record-data-key">9.1 The variant: a record data key</h3>
+<p>Not adopted; measured and recorded so the reason is on file. The variant is one <strong>32-byte record data key</strong>, generated at <code>init</code>, sealed by age to the recipients and stored at <code>&lt;root&gt;/keys/record.age</code>, with each line sealed by ChaCha20-Poly1305 under it with a fresh nonce instead of by age. The benchmark ran it beside age: 40 µs a line to seal (3 of them the cipher, the rest the Option C wrapper every variant pays), 10 µs to open, keyed <code>verify</code> of the record in 3 minutes, 0.68 GB more on disk. A real gain, one-time for a backfill and nightly for <code>verify</code>, bought with everything the draft listed: a long-term key in the record (wrapped, but there, and "never in the record" was a line this RFC drew); a line that the <code>age</code> CLI alone cannot open, so the format gains a construction of its own where it had a file format everyone can check; a writer that needs the identity to seal (it must unwrap the record key), losing the seal-without-the-secret property of §6.3; and rotation of the record key being a reseal of every line, where age's per-line file keys make rotation a reseal of headers only. None of that is worth four minutes on a backfill (decided, §13.1). The middle road, the record key for <code>health-sample/v1</code> alone and age for everything else, stays unmeasured and unadopted; it is the next measurement only if real records show days of 5,000 or more sealed lines.</p>
+<h2 id="10-migration-of-an-existing-record">10. Migration of an existing record</h2>
+<p>Every record today is <code>logbook/0.2</code> with tiers 2–3 in plain, hashed over the plaintext. Two paths, the owner's choice at <code>logbook key init</code> (the command that creates the identity and writes <code>recipients</code> into an existing record). The maintainer's own record takes the second, after the benchmark (decided, §13.1 and the closing note of §13).</p>
+<h3 id="101-seal-forward">10.1 Seal forward</h3>
+<p>Add the recipients, seal every tier 2–3 line <em>from now on</em>, leave the past as it is. No rewrite, no hash changes, no lineage. <code>verify</code> reports <code>plain at tier 2–3: n</code> so the number is always in view, and the owner may take the second path any later day. A record is allowed to be mixed indefinitely; readers open what is sealed and read what is not.</p>
+<h3 id="102-seal-the-past">10.2 Seal the past</h3>
+<p><code>logbook seal --all</code>: the ADR 0014 road. Into a temporary folder: every tier 2–3 line gets a fresh salt, its payload becomes the sealed reference and the age file, <code>prev</code> and <code>hash</code> are recomputed in <code>seq</code> order from the first sealed line; every attachment such a line references is sealed in place under its name; <code>format</code> becomes <code>logbook/0.3</code>; <code>lineage</code> gains <code>{from_format: "logbook/0.2", from_head, migrated_at}</code>; the index is rebuilt (into the cache directory, §8); keyed and keyless <code>verify</code> both pass; the folder is swapped in. Then one line is appended:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"at"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-01T20:00:00Z"</span><span class="p">,</span><span class="w"> </span><span class="nt">"end"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">"tz"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Europe/Oslo"</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"manual"</span><span class="p">,</span><span class="w"> </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"migration"</span><span class="p">,</span><span class="w"> </span><span class="nt">"tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"payload"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"migration/v1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"from_format"</span><span class="p">:</span><span class="w"> </span><span class="s2">"logbook/0.2"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"from_head"</span><span class="p">:</span><span class="w"> </span><span class="s2">"035a74e0027faa6872580c3c7b5f7a0efec92f15bb29cee400a6593814fd345c"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"sealed_lines"</span><span class="p">:</span><span class="w"> </span><span class="mi">4100</span><span class="p">,</span><span class="w"> </span><span class="nt">"sealed_attachments"</span><span class="p">:</span><span class="w"> </span><span class="mi">212</span><span class="p">}}</span>
+</code></pre></div>
+<p>Two things differ from ADR 0014's migration. <strong>The old files are not kept beside the record.</strong> Keeping a plaintext copy next to the sealed one would defeat the point; the command replaces the folder and prints, once, that any backup taken before this moment still holds the plaintext, and that it does not and cannot shred anything. <strong>The old head stays reproducible, but only with the identity</strong>: open every sealed line, put its payload back in the pre-image, recompute under the same rule, and the <code>from_head</code> falls out. That is enough for <code>lineage</code> to mean what it means.</p>
+<p>Time: one read of the record plus one sealing per tier 2–3 line (§9): a few minutes for a record of a million such lines. An interrupted run leaves the record as it was, by construction.</p>
+<h3 id="103-what-the-format-name-says">10.3 What the format name says</h3>
+<p>ADR 0014 made <code>format</code> name the hash <em>rule</em>, and the rule does not change here. What changes is the envelope (one new top-level field) and the pre-image's content for sealed lines, and SPEC §4 said "a later version will define the encryption envelope". This draft bumps to <code>logbook/0.3</code> because §2 changes shape, and because a <code>0.2</code> implementation that meets a sealed line will preserve <code>payload_enc</code> as an unknown field and verify the chain correctly but cannot open anything, so the record should say it needs another version of the code. A <code>0.3</code> implementation <strong>reads and verifies a <code>0.2</code> record without migration</strong> (decided, §13.4): the hash rule is the same, so ADR 0014's reason for refusal does not apply, and forcing every owner through §10 before reading would be wrong. The code carries two format names for the first time; it still carries one canonicalisation. Writing to a <code>0.2</code> record seals nothing, since it has no recipients, and <code>key init</code> is what moves it to <code>0.3</code>.</p>
+<h2 id="11-what-logbook-ts-must-implement">11. What logbook-ts must implement</h2>
+<p>The second implementation reproduces the conformance head and agrees with the Python CLI on <code>verify</code> and <code>append</code> across a record the other wrote. This RFC splits conformance into two levels, as SPEC §6 anticipated, and the split is the point: Level 1 stays an afternoon.</p>
+<p><strong>Level 1 (the chain), changes:</strong></p>
+<ol>
+<li><code>payload_enc</code> at the top level is outside the hash, as <code>id</code> is. Preserve it; never hash it.</li>
+<li>A payload <code>{"schema": "sealed/v1", "of": &lt;schema&gt;, "digest": &lt;hex&gt;}</code> is a payload like any other; <code>payload.schema</code> is present. Validity rule 3 of §5: <code>sealed/v1</code> without <code>payload_enc</code>, or <code>payload_enc</code> without <code>sealed/v1</code>, is invalid.</li>
+<li><code>verify</code> checks that each <code>payload_enc</code> is standard base64 whose decoded bytes start with <code>age-encryption.org/v1\n</code>, and prints a count of sealed lines it did not open. Exit 0 when the chain holds.</li>
+<li><code>logbook.json</code>: preserve <code>recipients</code> (already required by SPEC §1's preserve-unknown-keys rule). Accept <code>format</code> <code>logbook/0.2</code> and <code>logbook/0.3</code> both (§10.3).</li>
+<li>Attachments: a file in the store beginning with the age header is counted as sealed, not checked.</li>
+</ol>
+<p><strong>Level 2 (encryption):</strong></p>
+<ol>
+<li>age X25519 seal and open, through <code>age-encryption</code> (npm) or an equivalent; binary age files, standard base64 with padding, no armor.</li>
+<li>The sealed bytes: <code>canonical_json({"payload": …, "salt": …})</code> under the RFC 8785 implementation it already has; a 16-byte salt from <code>crypto.getRandomValues</code>; SHA-256 of the bytes as <code>digest</code>; compare before parse.</li>
+<li><code>append</code> seals a tier 2–3 line when <code>recipients</code> is non-empty, to every recipient; writes plain otherwise. <code>export</code> emits opened payloads by default (the ADR 0017 interchange form) and the lines verbatim, still sealed, under a flag.</li>
+<li>Keyed <code>verify</code>: open every sealed line, compare digests, follow attachment references, stream each sealed file through SHA-256 against its name.</li>
+<li>Identity discovery in the same order and from the same places as §6.2 (<code>--identity-file</code>, <code>LOGBOOK_IDENTITY_FILE</code>, the default path), so one identity file serves both implementations on one machine.</li>
+<li>Attachments: seal and open streaming; the higher-tier-wins rule of §7.</li>
+<li>Resealing (<code>key add-recipient</code>) is optional for Level 2; it is a stored-form rewrite and either implementation's command works on a record the other wrote.</li>
+<li>An index, if it has one, blinds <code>raw_id</code> as §8 says, or does not persist that column; this is a recommendation for interoperability of a cache, not conformance.</li>
+</ol>
+<p><strong>Fixture.</strong> <code>conformance/sample-logbook</code> grows a sealed sibling, <code>conformance/sample-logbook-sealed</code>, made by <code>make_sample.py</code> from the same lines with the published fixture identity of §3 (<code>conformance/identity.txt</code>) and a second recipient (<code>conformance/recovery-recipient.txt</code>), and salts from a seeded generator, so its <code>expected-sealed.json</code> head is reproducible by anyone. The <code>cross-impl</code> CI job gains two steps: Python seals an appended note and TypeScript opens and verifies it keyed; TypeScript seals, Python opens. Level 2 conformance is: keyless <code>verify</code> prints the head; keyed <code>verify</code> with the published identity prints the head and reports zero digest mismatches; changing any byte of a <code>payload_enc</code> makes keyed <code>verify</code> fail and keyless <code>verify</code> not.</p>
+<h2 id="12-spec-changes-this-draft-asks-for">12. Spec changes this draft asks for</h2>
+<p>None of these happen in this PR. They land together in one PR after the benchmark, as CLAUDE.md requires of any envelope change: a spec version bump, the regenerated fixtures, an ADR. The order of everything is in §14.</p>
+<ul>
+<li>§1 <code>logbook.json</code>: <code>recipients</code>; <code>format</code> <code>logbook/0.3</code>; <code>index.sqlite</code> moves out of the folder listing or is marked "or in the cache directory".</li>
+<li>§1.1: a sealed file keeps its name and begins with the age header; keyless <code>verify</code> counts it; keyed <code>verify</code> checks it.</li>
+<li>§2: <code>payload_enc</code>, present on a sealed line, outside the hash; the <code>sealed/v1</code> payload shape; the validity rule tying the two.</li>
+<li>§3: the pre-image unchanged; what a keyless and a keyed verifier each check and report; a digest mismatch is an error.</li>
+<li>§3.1: <code>logbook/0.3</code> row; a <code>0.3</code> implementation reads <code>0.2</code>; the two migration paths; <code>migration/v1</code> gains the two counts.</li>
+<li>§4: the table's "a later version" becomes this; the sentence "<code>payload_enc</code> replacing <code>payload</code>" is replaced by what §5 says, since <code>payload</code> stays and holds the reference.</li>
+<li>§6: Level 2 conformance, the sealed fixture, the published identity.</li>
+<li><code>init</code>: two recipients or none; <code>export --sealed</code>; <code>sync</code> and <code>add</code> refuse tier 2–3 without the identity.</li>
+<li>A <code>rekey/v1</code> profile RFC (§6.4) and a one-paragraph <code>sealed/v1</code> entry in <code>rfcs/README.md</code>.</li>
+<li>ADR 0020, the decision of §4.5, superseding nothing and extending ADR 0015.</li>
+<li><code>policy/crossing.json</code>: a destination's <code>recipient</code> (ADR 0016's file, one key more).</li>
+</ul>
+<h2 id="13-the-questions-that-were-open-and-the-answers">13. The questions that were open, and the answers</h2>
+<p>Asked 2026-10-01; answered by the captain 2026-10-02. The question stands as asked, the answer follows it.</p>
+<ol>
+<li><strong>The budget, and the record data key.</strong> What does per-line age actually cost in <code>pyrage</code> on the three-million-line stress record, sealing and opening, on the three CI platforms? Does the 20,000 lines a second floor become tier-1-only, or is §9.1's record data key adopted for the hot path? Nothing below is worth deciding until this is measured.</li>
+</ol>
+<p><strong>Decided:</strong> measure first; <code>bench/encryption</code> ran on 2026-10-02 and its numbers are in §9 and in <code>bench-encryption-2026-10.md</code>. Per-line age stays. The record data key is not adopted: a key inside the record and a construction the age CLI cannot open are both costs not worth paying, and the numbers did not force it (it saves four minutes on a backfill of a million lines). The 20,000 lines a second floor becomes a tier-1 floor; sealed lines get a floor of 4,000 a second at two recipients.
+2. <strong>Sealing the envelope.</strong> Should a tier-3 line be allowed to seal <code>kind</code> and <code>source</code> too (a <code>kind</code> of <code>sealed</code> with the real kind inside), accepting that such a line is on no reader's day and in no <code>stats</code> without the key? This RFC says no for v0.3; the owner who needs it has a different threat model than §2 and the design should be its own RFC.</p>
+<p><strong>Decided:</strong> no for 0.3. A separate RFC, if ever.
+3. <strong>The inner schema in clear.</strong> Should the <code>sealed/v1</code> reference carry <code>"of": "note/v1"</code>? It helps <code>stats</code> and a reader deciding whether to open, and it reveals little beyond <code>kind</code>; it also makes the reference a place where things accumulate.</p>
+<p><strong>Decided:</strong> yes. The reference carries <code>of</code> (§5 rule 2).
+4. <strong><code>0.3</code> and <code>0.2</code>.</strong> Must a <code>0.3</code> implementation refuse a <code>0.2</code> record, as <code>0.2</code> refuses <code>0.1</code>? The hash rule is the same, so ADR 0014's reason does not apply; refusing would force every owner through §10 before reading, which seems wrong; not refusing means two formats in the code for the first time.</p>
+<p><strong>Decided:</strong> yes, <code>0.3</code> reads <code>0.2</code> records without migration. Two formats in the code is the lesser cost (§10.3).
+5. <strong>The salt.</strong> 16 bytes is enough against guessing and keeps the sealed bytes short; 32 would match every other digest-sized field in the format. Is there a reason beyond tidiness to go to 32?</p>
+<p><strong>Decided:</strong> 16 bytes.
+6. <strong>A writer with only the recipient.</strong> A <code>sync</code> on a machine without the identity can seal but cannot dedupe against sealed lines (§8). Does it append and leave duplicates for the next keyed run to retract, refuse to run, or does the blinded index key live in a second place the writer can read? The last leaks HMACs under a guessable key to anyone with the folder, which is to say it does not work.</p>
+<p><strong>Decided:</strong> it refuses to sync tiers 2–3 (§6.3). Tier-1 writers (<code>ais</code>) need nothing.
+7. <strong><code>notes/</code> and <code>inbox/</code>.</strong> <code>notes/&lt;YYYY&gt;/&lt;date&gt;.md</code> is free text at tier 2 by nature and outside the chain; <code>inbox/</code> holds raw exports, the most sensitive bytes in the folder. Both are outside this RFC. Should the inbox at least be sealed on arrival, or documented as "delete after import"?</p>
+<p><strong>Decided:</strong> <code>inbox/</code> gets a <code>logbook inbox clean</code> after a verified import, and "delete after import" in the docs; that is independent of this RFC and has since landed (#164). <code>notes/</code> stays outside for now.
+8. <strong>The index out of the root.</strong> Moving <code>index.sqlite</code> to the cache directory changes a line of SPEC §1 and the Docker layout; is the sync-folder argument strong enough, or is the blinded <code>raw_id</code> with the file left in place enough?</p>
+<p><strong>Decided:</strong> both. The index moves to the cache directory and <code>raw_id</code> is blinded (§8).
+9. <strong>A passphrase on the identity by default?</strong> It protects against a copied identity file and costs a prompt on every read; an unattended reader (a nightly <code>day</code> page) then needs an agent or the keychain, which §6.2 deferred.</p>
+<p><strong>Decided:</strong> not by default. Full-disk encryption and the recovery key cover the copied-file case; a prompt breaks unattended reads (§6.2).
+10. <strong>The recovery ceremony.</strong> <code>init</code> prints the recipient and suggests a recovery identity; should it refuse to seal until a second recipient exists, or is one recipient and a warning the right default for the first day?</p>
+<div class="highlight"><pre><span></span><code>**Decided:** `init` refuses to seal until a second recipient exists. Mandatory, not a warning (§6.1).
+</code></pre></div>
+<ol>
+<li>
+<p><strong>Export for re-entry (ADR 0017).</strong> <code>logbook export</code> of sealed lines emits opened payloads, so the interchange JSON stays "a line minus the chain fields" and can be re-added. Should it also be able to emit sealed lines verbatim, for a copy of the record that stays sealed?</p>
+<p><strong>Decided:</strong> both. Opened for re-entry is the default; sealed verbatim under a flag (§6.3, §11).
+12. <strong>The sealed fixture's identity.</strong> A published identity makes the fixture reproducible and obviously synthetic; is there any objection to a published private key in <code>conformance/</code>, given it unlocks only a fixture?</p>
+<p><strong>Decided:</strong> fine.</p>
+</li>
+</ol>
+<p><strong>Migration of the existing record:</strong> seal the past (§10.2), after the benchmark, with the warning about older copies printed once.</p>
+<h2 id="14-sequence">14. Sequence</h2>
+<ol>
+<li>The benchmark (<code>bench/encryption</code>, <code>bench-encryption-2026-10.md</code>): per-line age on the stress record, sealing and opening. <strong>Done on one machine, 2026-10-02</strong>; the three CI runners can be dispatched from the Actions tab for confirmation, and nothing in §9 waits on them.</li>
+<li>ADR 0020 and the spec changes of §12 in one PR: version bump, regenerated fixtures, the sealed fixture with the published identity.</li>
+<li>The implementation in the reference CLI: <code>key init</code>, sealing on append, keyed and keyless <code>verify</code>, the index changes, <code>seal --all</code>, <code>export --sealed</code>. (<code>inbox clean</code> has landed on its own, #164.)</li>
+<li>logbook-ts Level 2.</li>
+</ol>
+<p>Not before the readers have settled.</p>
+<h2 id="15-where-the-implementation-parts-from-this-text">15. Where the implementation parts from this text</h2>
+<p>The reference implementation landed with this number (v0.6, <code>logbook/core/sealing.py</code> and the changes around it). Where it decided something this text left open, or chose differently, the implementation is the rule and this section says so:</p>
+<ul>
+<li><strong>The search table</strong> (<code>logbook search</code>, which landed after the draft) holds no words of a sealed line: the index is a plaintext locator in the cache directory, and a full-text table of tier 2–3 words would undo the sealing for anyone who copied it. A sealed record is searched by its plain lines only, until a design for a sealed search table exists.</li>
+<li><strong>An attachment whose line's tier the writer does not know is sealed.</strong> Adapters hand bytes to the store before they yield the draft that points at them, so <code>Logbook.attach</code> seals whenever the record names recipients unless the caller says <code>tier=1</code>; the photo adapters do not say so yet, so a sealing record seals its photos too. §7's "higher tier wins" is kept; the default sits on the safe side.</li>
+<li><strong>A sealed line shipped opened in a crossing package carries <code>payload_open</code></strong>, the <code>{payload, salt}</code> pre-image, in place of <code>payload_enc</code>; the manifest's <code>sealing</code> says <code>resealed</code> (with the recipient) or <code>opened</code>. RFC 0005 gains that section.</li>
+<li><strong><code>rekey/v1</code></strong> is defined by this RFC (§6.4) rather than an RFC of its own, and carries <code>recipients_before</code>, <code>recipients_after</code>, <code>recipients</code>, <code>sealed_lines</code> and <code>sealed_attachments</code>.</li>
+<li><strong>The index's blinding key lives in the index's own <code>meta</code></strong>, sealed to the recipients; an index built without the identity records <code>opened: false</code> and the first keyed reader rebuilds it. The index records the recipients it was built for, so a reseal rebuilds it.</li>
+<li><strong>A 0.1 record migrates to 0.3</strong> directly: the same rule, one hop.</li>
+<li><strong>The identity file holds one identity</strong>, in age's own format, with the recipient in a comment; <code>LOGBOOK_IDENTITY_FILE</code> names a path; <code>--identity-file</code> sets that variable for the one process.</li>
+<li><strong><code>verify --keyless</code></strong> exists so a keyed machine can show what a keyless one sees.</li>
+<li><strong>The shared page (RFC 0025, <code>shared-page/v1</code>) carries a day's lines verbatim</strong>, as a crossing package did before §7: a sealed line in a shared page is ciphertext the receiver cannot open. Resealing to the receiver's key, or refusing to share a day with sealed lines, is the follow-up; until then <code>share day</code> at tier 1 is unaffected, since tier 1 is never sealed.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
