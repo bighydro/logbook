@@ -4,7 +4,9 @@
 `logbook person <name-or-ref> [--year YYYY] [--json]` is one of them on one page, with the timeline
 of the days you spent together. Both are readers (ADR 0013): derived from the record at its head,
 every time, and never written. The owner is never listed: the record is yours, and you are not
-your own company.
+your own company. `people merge` finds the same person named twice, `people review` finds the people
+the sources saw that the record has not placed, and `people --priority` ranks everyone by a plain
+score; each writes only when you say so, and only through the record's own lines.
 
 ```bash
 logbook people                          # everyone with evidence in the record, most days together first
@@ -14,6 +16,8 @@ logbook person "Ola Nordmann"           # a label; a unique first or last name d
 logbook person ola@example.org          # an address the resolution lines know
 logbook person +447700900001            # a phone number
 logbook person provider_id:immich:f_01  # any ref as kind:value; the entity id works too
+logbook people --priority               # everyone heard in the last year, ranked, with the score
+logbook people review                   # who the sources saw that the record has not placed
 ```
 
 ## Who is a person
@@ -174,6 +178,120 @@ of its secondary into its primary. A row whose secondary already resolves to its
 and skipped, so the same file applies twice without harm; a row naming an entity the record does
 not know, or the same entity on both sides, is refused before anything is written. A file without
 the three columns is not a review file.
+
+## Review
+
+The record has two layers of people, and the rule between them is the one lesson an earlier system
+taught the hard way.
+
+An **observed** person is what one source saw: the address a mail came from, the number a message
+came from, the attendee on a calendar entry, the name a transcript gave a speaker. Nobody chose
+them; they are in the record because a line names them. A **canonical** person is one you have
+confirmed: an entity the resolution lines name (RFC 0006), minted by a contacts import, a
+`logbook add` of a name for an address, or a `people merge`. `people` lists the canonical people and
+nobody else; the observed people are the rest, waiting. There is no third store: a confirmation is
+the alias line `people merge` writes, and a rejection is one line too.
+
+**The strongest-identifier rule.** An observed person's identity is derived from the *strongest
+identifier* the observation carries, in this order and never any other way:
+
+1. the **email** address, case aside;
+2. else the **phone** number in E.164 — a `+44…` as written, a WhatsApp JID
+   (`447700900101@s.whatsapp.net`) read as the number it spells, a number entered without a country
+   code read with `LOGBOOK_DIAL_PREFIX` as the adapters read it;
+3. else the **name** as shown, its words folded and sorted (`Berg, Liv` and `Liv Berg` are one).
+
+Never from the id a source gives one observation — a speaker id, a chat guid, a message id, a line
+id. An address seen under three display names is one observed person with three names; a number
+seen as `+447700900101` in one chat and as a JID in another is one. Keyed the other way, one person
+explodes into a row per observation, and no queue survives that.
+
+**The table.** Observed people are a derived table in the index, `observed_people` in
+`index.sqlite`: one row per strongest identifier with the display names and the identifiers as the
+lines wrote them, counts per source and per kind, the days seen, first and last seen, the tier of
+the evidence, a few line ids as evidence, and the canonical person the row resolves to when one of
+its identifiers has a resolution standing *as written* — the readers look a ref up as the line
+carries it, so `Per.Hansen@example.org` on a calendar entry is not placed by a line for
+`per.hansen@example.org` — or, for a name alone, when the people reader would place a speaker of
+that name. The table is built from the standing `mail/v1`, `message/v1`, `transcript/v1` and
+`event/v1` lines through the index, your own identities left out (`owner_id`, `owner_emails`,
+`policy/owner.json` and their closure), stamped with the head it was built at, served while the
+head stands and rebuilt when the record grows. Its shape is checked with `PRAGMA table_info`; a
+table of another shape is built again, never read. Nothing is written to the record.
+
+**The queue.** `logbook people review` proposes each observed person not yet placed against each
+canonical person, ranked by the evidence, numbered from 1, one line each:
+
+```
+15 proposals · 17 observed people not yet placed, 36 placed · tier 2
+   1  [80]  eva.nordmann@example.org (Eva Nordmann; event 1) → Eva Nordmann: same email eva.nordmann@example.org · same name Eva Nordmann
+   3  [22]  +447700900115 (Astrid Bakke; message 3) → Astrid Bakke: same name Astrid Bakke · together on 1 day
+  11  [22]  maren.eide@example.org (Maren Eide; mail 3) → Maren Eide: same name Maren Eide · together on 1 day
+  15  [20]  M. Eide (transcript 1) → Maren Eide: same name M. Eide ~ Maren Eide
+nothing written: `people review --accept N[,N]`, `--reject N[,N]`, or `--all-above SCORE`
+```
+
+The score is a plain sum of what speaks for the pair:
+
+| Evidence | Points | What it means |
+|---|---|---|
+| same email | 60 | an identifier of the observed person is an address a canonical ref spells, case aside |
+| same phone | 50 | the same E.164 number, by the rules above |
+| same name | 20, +5 per further source up to +10 | a display name and the canonical label are one name by `people merge`'s rule: the same words in any order, or an initial for a first name; two words at least, never a word one letter off |
+| together on the same days | 2 per day, up to 20 | both were seen on the day; days alone never propose |
+
+A pair you rejected is never proposed again. An observed person with no identifier a resolution
+line can carry (a spoken name alone, matching nobody exactly) is listed under `observed.unplaced`
+in `--json` and proposed nothing: there is nothing to write for it; name the speaker with
+`logbook add` instead. The numbers are the queue's at this head and change when the record does;
+`--json` carries a stable `id` per pair beside them.
+
+**Your say.** Nothing is promoted on its own; the owner decides, and only `Logbook.append` writes.
+
+```bash
+logbook people review --accept 1,3 --reject 11   # accept these, reject that; numbers from the listing
+logbook people review --all-above 50            # accept every proposal at or above 50
+logbook people review --json                    # the queue, the unplaced and the placed count
+```
+
+- `--accept N[,N]` writes, per identifier of the observed person as the lines wrote it, the line
+  `people merge` writes: one `resolution/v1`, `source` `manual`, `method` `owner`, `alias_of` the
+  canonical person's own ref (a phone before an address), the `logbook_head` the proposal was read
+  against, the target's line and the observed lines as `evidence`, and under `extra` the proposal
+  id, the entity, the score and what matched. The identifier, and every reader that looks it up,
+  then resolves to the canonical person through the ordinary alias walk.
+- `--reject N[,N]` writes one `people-review/v1` line (RFC 0035, `kind` `people-review`) saying the
+  observed person and the canonical person are not the same: the strongest identifier as `ref`,
+  the identifiers as written under `refs`, the display names, the entity, the same head and
+  evidence. The pair never comes back; retract the line and it does.
+- `--all-above SCORE` accepts every proposal at or above the score, a whole number.
+
+Every number is checked before the first line is written; a number the queue does not have, a
+number both accepted and rejected, or a score that is not a whole number exits 2 and writes nothing.
+A second `people review` after accepting is shorter by what was accepted, numbered afresh, and the
+`people` rows of the people already placed do not change: a review adds refs to a person, never a
+person to the list.
+
+## Priority
+
+`logbook people --priority [--year YYYY] [--json]` ranks the canonical people heard in the last year
+of the record (the 365 days ending on its last day, clipped to it; `--year` is that year) by a
+score you can argue with, printed beside each name. The score is a sum, nothing more:
+
+1. **3 per day together** in the window (the confirmed days of the with module, as `people` counts them).
+2. **1 per message exchanged**, the smaller of the two directions (their lines to you, your lines to them in a direct chat), up to 50: a conversation, not a broadcast.
+3. **2 per meeting**: a timed calendar entry they attended, a transcript they spoke in.
+4. **10 when the last real contact** (a message either way, an answered call, a day together) is within 30 days of the window's end, **5** within 90, else 0.
+5. Nothing else: no mail (a newsletter is a mail too), no faces, no model.
+
+```
+priority · 2025-06-22 – 2026-06-21 · 11 people
+  47  Ola Nordmann  3 days together · messages 2 from them, 3 from you · meetings 2 · last real contact 2026-06-16
+  10  Eva Nordmann  last real contact 2026-06-17
+```
+
+Under `--json`: `window` and `people`, each `id`, `name`, `score`, `days`, `messages` (`them`, `me`),
+`meetings`, `last_real_contact` and `recency`. Nothing is written.
 
 ## The window
 
