@@ -15,6 +15,8 @@ logbook day sign 2026-06-09             # sign it: every line on the page is con
 logbook day sign 2026-06-09 --note "Quiet day. The call with Kari was the thing."
 logbook day sign 2026-06-09 --confirm 4181,4183   # only these lines, by seq or id as `show` lists them
 logbook day sign 2026-06-09 --kept 4181 --carried 4183   # and what became of the commitments on them
+logbook day sign 2026-06-09 --confirm none               # nothing on the page is a fact of the day
+logbook day sign 2026-06-09 --at 2026-06-09T19:30:00+02:00   # signed when you clicked, not when this ran
 logbook show 2026-06-09                 # the header now says `signed 2026-06-10 08:15`
 ```
 
@@ -25,7 +27,7 @@ One line, `signed-day/v1` (RFC 0034, `docs/rfcs/0034-the-signed-day.md`), tier 1
 
 - the day signed, and you as its subject (the record's `owner_id`);
 - the ids of the lines you confirmed, in the page's order: every line on the page unless
-  `--confirm` names some;
+  `--confirm` names some, or none at all with `--confirm none` (below);
 - the digest of the page as shown: the SHA-256 over the hashes of the lines the page listed, in
   order. Not over the text: the words are a reader's own, the lines are the record's. Anyone with
   the record recomputes it, and a day that grew after you signed is seen to have;
@@ -78,6 +80,26 @@ before. `--json` carries the map under `signed.dispositions`. `show` lists the c
 signature's row (`kept 2, missed 1`). `logbook promises` reads the standing signature of each
 promise's day: kept and dropped are done, missed is done and flagged, carried is open, and
 `--open` hides the first three. The crossing carries the field with the line.
+
+## Confirming nothing, and the moment you signed
+
+Two things a day signed from a phone needs (RFC 0034, amendment 2).
+
+**`--confirm none`.** You read the page, you untick every proposed fact, and the day is still
+signed: the line carries an empty `confirmed`, the page digest is still over what you were shown,
+and the header says `signed` as for any signature. The day's lines cross with it, as the lines of
+any signed day do: the gate is the signature, not the list. The word goes alone: `--confirm
+none,4181` and `--confirm none --kept 4181` are each refused in one sentence, because a line given
+a disposition is confirmed by that. `--confirm ""` is still refused as naming no line, so an empty
+shell variable never signs a day by accident; you type the word.
+
+**`--at RFC3339`.** The signature carries the moment you clicked, not the moment the command ran:
+`--at 2026-06-09T19:30:00+02:00`, with an offset or `Z`, stored in UTC like every `at` in the
+record and shown by `show` and `day` in the record's local time (`signed 2026-06-09 19:30`). Three
+things are refused, each in a sentence with nothing written: a moment that is not RFC 3339 with an
+offset or `Z` (the message shows the shape); a moment more than five minutes ahead of this
+machine's clock (a phone runs a few minutes fast, never hours); and a moment before the day you
+are signing starts, in the record's zone. Without `--at`, the signature is at now, as before.
 
 ## Readiness: is the day all in?
 

@@ -12,6 +12,7 @@ logbook day 2026-06-13 --json   # the same Day as one JSON object, every row wit
 logbook day                     # today
 logbook day sign 2026-06-13     # sign it: you read the page and these are the day's facts (RFC 0034)
 logbook day sign 2026-06-13 --kept 4181 --carried 4183   # and what became of the commitments on it
+logbook day sign 2026-06-13 --confirm none --at 2026-06-13T22:10:00+02:00   # nothing confirmed, signed when you clicked
 ```
 
 The header says whether you have signed the day (`· unsigned`, or `· signed 2026-06-14 08:15`),

@@ -209,9 +209,15 @@ def day_arguments(sub: Subparsers) -> None:
     s.add_argument("--note", metavar="TEXT", help="sign: one line in your words; it is tier 1 and crosses")
     s.add_argument(
         "--confirm",
-        metavar="ID,ID",
+        metavar="ID,ID|none",
         help="sign: the lines you confirm as the day's facts, by seq or id as `show` lists them"
-        " (default: every line on the page)",
+        f" (default: every line on the page); `{signing.NOTHING}` confirms nothing, and goes alone",
+    )
+    s.add_argument(
+        "--at",
+        metavar="RFC3339",
+        help=f"sign: when you signed, if not now, e.g. {signing.AT_EXAMPLE}: with an offset or Z, at most"
+        " five minutes ahead of this clock, not before the day; stored in UTC",
     )
     for value, meaning in DISPOSITION_HELP.items():
         s.add_argument(
@@ -236,7 +242,7 @@ DISPOSITION_HELP = {
     signing.DROPPED: "you let go of, on purpose",
     signing.CARRIED: "still open, carried to a later day",
 }
-SIGN_FLAGS = ("--note", "--confirm", *(f"--{value}" for value in signing.DISPOSITIONS))
+SIGN_FLAGS = ("--note", "--confirm", "--at", *(f"--{value}" for value in signing.DISPOSITIONS))
 
 
 def cmd_day(a: argparse.Namespace) -> None:
@@ -251,7 +257,7 @@ def cmd_day(a: argparse.Namespace) -> None:
     if a.signed_day is not None:
         print(f"day: {a.day!r} takes no second argument; `day sign YYYY-MM-DD` signs a day", file=sys.stderr)
         sys.exit(2)
-    if a.note is not None or a.confirm is not None or _dispositions(a):
+    if a.note is not None or a.confirm is not None or a.at is not None or _dispositions(a):
         flags = f"{', '.join(SIGN_FLAGS[:-1])} and {SIGN_FLAGS[-1]}"
         print(f"day: {flags} belong to `day sign YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
@@ -281,20 +287,40 @@ def _dispositions(a: argparse.Namespace) -> dict[str, list[str]]:
     }
 
 
+def _confirm(a: argparse.Namespace) -> list[str] | None:
+    """`--confirm ID,ID` as `signing.sign` takes it: None when not given, the entries typed, or the
+    empty list for `--confirm none` (amendment 2), which goes alone: an id beside it, or any
+    disposition flag, is refused in one sentence."""
+    if a.confirm is None:
+        return None
+    entries = str(a.confirm).split(",")
+    if not any(entry.strip().lower() == signing.NOTHING for entry in entries):
+        return entries
+    if len(entries) > 1 or _dispositions(a):
+        flags = ", ".join(f"--{value}" for value in signing.DISPOSITIONS[:-1])
+        raise signing.SignError(
+            f"--confirm {signing.NOTHING} goes alone: no id beside it and no {flags} or"
+            f" --{signing.DISPOSITIONS[-1]}, since a line given a disposition is confirmed"
+        )
+    return []
+
+
 def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
-    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID] [--kept ID,ID] [--missed ID,ID] [--dropped
-    ID,ID] [--carried ID,ID]` (RFC 0034 and its amendment 1, `logbook.core.signing`): the owner's
-    reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual — the day,
-    the ids confirmed (every line on the page by default; a line given a disposition is confirmed by
-    that), what became of each commitment named, the digest of the page as shown and the note — and
+    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID|none] [--at RFC3339] [--kept ID,ID] [--missed
+    ID,ID] [--dropped ID,ID] [--carried ID,ID]` (RFC 0034 and its amendments, `logbook.core.signing`):
+    the owner's reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual
+    — the day, the ids confirmed (every line on the page by default; a line given a disposition is
+    confirmed by that; none at all for `--confirm none`), what became of each commitment named, the
+    digest of the page as shown and the note, at the moment the owner signed (`--at`, else now) — and
     nothing else touched. A day signed before is signed again: the new line supersedes the standing
     one. Only the owner signs: no agent and no MCP tool runs this."""
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
-    confirm = None if a.confirm is None else a.confirm.split(",")
     try:
-        line = signing.sign(lb, a.signed_day, confirm=confirm, note=a.note, dispositions=_dispositions(a))
+        line = signing.sign(
+            lb, a.signed_day, confirm=_confirm(a), note=a.note, at=a.at, dispositions=_dispositions(a)
+        )
     except ValueError as e:  # SignError, a day that is not one
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)

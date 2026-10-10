@@ -1,8 +1,9 @@
-"""`logbook day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` (RFC 0034, `signed-day/v1`): the owner's
-reading of a day's page, appended as one tier-1 line and rewriting nothing; `show` and `day` say in
-their header whether a day is signed; a later signature supersedes; the page digest binds which lines
-were on the page; and the Day's `readiness` block says per class of source whether the day is in.
-Synthetic Oslo persona, who does not exist."""
+"""`logbook day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID|none] [--at RFC3339]` (RFC 0034,
+`signed-day/v1`): the owner's reading of a day's page, appended as one tier-1 line and rewriting
+nothing; `show` and `day` say in their header whether a day is signed; a later signature supersedes;
+the page digest binds which lines were on the page; the Day's `readiness` block says per class of
+source whether the day is in; and, amendment 2, a signature may confirm nothing and carry the moment
+the owner clicked. Synthetic Oslo persona, who does not exist."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import hashlib
 import inspect
 import json
 import tempfile
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +90,15 @@ def _page_sha256(lb: Logbook, day: str, seqs: tuple[int, ...]) -> str:
     lines = _by_seq(lb)
     page = {"day": day, "tz": TZ, "lines": [lines[s]["hash"] for s in seqs]}
     return hashlib.sha256(canonical_json(page).encode("utf-8")).hexdigest()
+
+
+def _zone(offset: str) -> timezone:
+    """A fixed zone from an RFC 3339 offset: the owner's clock, wherever it is."""
+    if offset == "Z":
+        return UTC
+    sign = 1 if offset[0] == "+" else -1
+    hours, minutes = int(offset[1:3]), int(offset[4:6])
+    return timezone(sign * timedelta(hours=hours, minutes=minutes))
 
 
 def _files(root: Path) -> dict[Path, bytes]:
@@ -255,21 +266,32 @@ Disposed = dict[str, str]  # which of a day's two lines (`location`, `note`) get
 _DISPOSED = st.dictionaries(st.sampled_from(["location", "note"]), st.sampled_from(signing.DISPOSITIONS))
 
 
+_OFFSETS = st.sampled_from(["Z", "+01:00", "+05:30", "-08:00"])  # the owner's clock, wherever it is
+
+
 @settings(max_examples=20, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(
     signings=st.lists(
-        st.tuples(st.sampled_from(["2026-03-01", "2026-03-02", "2026-03-03"]), st.booleans(), _DISPOSED),
+        st.tuples(
+            st.sampled_from(["2026-03-01", "2026-03-02", "2026-03-03"]),
+            st.booleans(),
+            _DISPOSED,
+            st.booleans(),
+            _OFFSETS,
+        ),
         max_size=8,
     )
 )
 def test_re_signing_never_changes_the_chain_head_of_earlier_days(
-    signings: list[tuple[str, bool, Disposed]],
+    signings: list[tuple[str, bool, Disposed, bool, str]],
 ) -> None:
     """Three days of lines; any sequence of signings and re-signings, each written later than all
-    three days, with or without a note and with any dispositions on the day's lines (amendment 1):
-    every line of those days keeps its hash, each day's last line (its head in the chain) stays what
-    it was, every page digest stays what it was, the signature written is valid and reads back the
-    dispositions given, and the record verifies after each."""
+    three days at an explicit moment given with any offset (amendment 2), with or without a note,
+    with any dispositions on the day's lines (amendment 1) or else, sometimes, confirming nothing
+    (amendment 2): every line of those days keeps its hash, each day's last line (its head in the
+    chain) stays what it was, every page digest stays what it was, the signature written is valid,
+    carries its moment in UTC and reads back the dispositions given, and the record verifies after
+    each."""
     with tempfile.TemporaryDirectory() as tmp:
         lb = Logbook.init(Path(tmp) / "lb", TZ)
         drafts = []
@@ -287,23 +309,28 @@ def test_re_signing_never_changes_the_chain_head_of_earlier_days(
         }
         with lb.index() as idx:
             pages = {day: signing.page_digest(day, TZ, signing.page(idx, day)) for day in heads}
-        for n, (day, with_note, disposed) in enumerate(signings):
+        for n, (day, with_note, disposed, nothing, offset) in enumerate(signings):
             by_value: dict[str, list[str]] = {}
             for kind, value in disposed.items():
                 by_value.setdefault(value, []).append(on_day[day][kind])
+            nothing = nothing and not disposed  # `--confirm none` goes alone
+            clock = datetime(2026, 3, 10, 12, 0, 0, tzinfo=UTC) + timedelta(hours=n)
             line = signing.sign(
                 lb,
                 day,
-                at=f"2026-03-10T{8 + n:02d}:00:00Z",
+                at=clock.astimezone(_zone(offset)).isoformat().replace("+00:00", "Z"),
                 note="again" if with_note else None,
+                confirm=[] if nothing else None,
                 dispositions=by_value or None,
             )
             assert line["payload"]["day"] == day
+            assert line["at"] == clock.isoformat().replace("+00:00", "Z"), "the moment, stored in UTC"
             assert signing.validate(line["payload"]) == []
             expected = {on_day[day][kind]: value for kind, value in disposed.items()}
             assert signing.dispositions_of(line["payload"]) == expected
             assert ("dispositions" in line["payload"]) == bool(disposed), "optional: absent when none"
             assert set(expected) <= set(line["payload"]["confirmed"]), "a disposed line is confirmed"
+            assert (line["payload"]["confirmed"] == []) == nothing, "an empty confirmation is what was asked"
             after = _by_seq(lb)
             for seq, old in before.items():
                 assert after[seq]["hash"] == old["hash"] and after[seq]["prev"] == old["prev"]
@@ -561,3 +588,117 @@ def test_an_unsigned_day_and_a_signature_without_dispositions_print_nothing_new(
     signed = _run(capsys, "day", DAY)
     assert unsigned.splitlines()[1:] == signed.splitlines()[1:], "only the header differs"
     assert not any(symbol in signed for symbol in ("✓", "✗"))
+
+
+# -- amendment 2: an empty confirmation and the owner's clock ----------------------------------------------
+
+
+def test_confirm_none_signs_a_day_with_nothing_confirmed(lb: Logbook, capsys: pytest.CaptureFixture[str]):
+    """`--confirm none`: the owner signs that nothing on the page is a fact of the day. The line is
+    valid with an empty `confirmed`, the page digest is still over what was shown, and the header
+    says `signed` as it does for any signature."""
+    out = _run(capsys, "day", "sign", DAY, "--confirm", "none", "--at", SIGNED_AT)
+    line = _by_seq(lb)[6]
+    p = line["payload"]
+    assert p["confirmed"] == [] and p["page"] == {"sha256": _page_sha256(lb, DAY, PAGE), "lines": 4}
+    assert signing.validate(p) == []
+    assert "0 lines confirmed of 4" in out
+    assert _run(capsys, "show", DAY).splitlines()[0].startswith(f"{DAY}  signed ")
+    signed = json.loads(_run(capsys, "day", DAY, "--json"))["signed"]
+    assert signed["confirmed"] == 0 and signed["lines"] == 4 and signed["page_matches"] is True
+    assert signed["line"] == line["id"] and signed["page_sha256"] == p["page"]["sha256"]
+    assert _run(capsys, "day", DAY).splitlines()[0].startswith(f"{DAY}  Sunday · signed ")
+    rows = _run(capsys, "show", "2026-03-02").splitlines()
+    assert rows[-1].endswith(f"signed {DAY}: 0 lines confirmed of 4"), rows[-1]
+    again = signing.sign(lb, DAY, confirm=[], at="2026-03-03T08:00:00Z")  # the core, called directly
+    assert again["payload"]["confirmed"] == [] and again["payload"]["supersedes"] == line["id"]
+    assert lb.verify()[2] == []
+
+
+def test_confirm_none_goes_alone(lb: Logbook, capsys: pytest.CaptureFixture[str]):
+    """`none` beside an id, or with any disposition flag, is refused in one sentence; `--confirm ""`
+    still names no line and is refused as before."""
+    seq = lb.meta["seq"]
+    for args in (
+        ("--confirm", "none,1"),
+        ("--confirm", "1,none"),
+        ("--confirm", "none", "--kept", "2"),
+        ("--confirm", "None", "--carried", "5"),
+    ):
+        assert _fails("day", "sign", DAY, *args) == 2, args
+        err = capsys.readouterr().err
+        assert err.startswith("day sign: --confirm none") and len(err.strip().splitlines()) == 1, err
+    assert _fails("day", "sign", DAY, "--confirm", "") == 2
+    assert "names no line" in capsys.readouterr().err
+    with pytest.raises(signing.SignError):
+        signing.sign(lb, DAY, confirm=[], dispositions={"kept": ["2"]})
+    assert lb.meta["seq"] == seq, "nothing was written"
+
+
+def test_at_is_the_moment_the_owner_clicked_stored_in_utc(lb: Logbook, capsys: pytest.CaptureFixture[str]):
+    """`--at` carries the moment the owner clicked, not the moment the command ran: given with an
+    offset, stored in UTC as every `at` is, and shown in the header in the record's local time."""
+    seq = lb.meta["seq"]
+    out = _run(capsys, "day", "sign", DAY, "--at", "2026-03-01T19:30:00+01:00")
+    line = _by_seq(lb)[seq + 1]
+    assert line["at"] == "2026-03-01T18:30:00Z"
+    assert f"{DAY}: signed 2026-03-01T18:30:00Z as #{seq + 1}" in out
+    assert _run(capsys, "show", DAY).splitlines()[0] == f"{DAY}  signed 2026-03-01 19:30"
+    assert _run(capsys, "day", DAY).splitlines()[0] == f"{DAY}  Sunday · signed 2026-03-01 19:30"
+    signed = json.loads(_run(capsys, "day", DAY, "--json"))["signed"]
+    assert signed["at"] == "2026-03-01T18:30:00Z" and signed["at_local"] == "2026-03-01T19:30:00+01:00"
+    assert signing.validate(line["payload"]) == []
+    _run(capsys, "day", "sign", DAY, "--at", "2026-03-02T08:00:00Z")
+    assert _by_seq(lb)[seq + 2]["at"] == "2026-03-02T08:00:00Z", "a Z stamp is kept as given"
+    _run(capsys, "day", "sign", DAY, "--at", "2026-02-28T23:30:00Z")  # 00:30 on the 1st, Oslo
+    assert _by_seq(lb)[seq + 3]["at"] == "2026-02-28T23:30:00Z", "on the day in local time, not in UTC"
+    _run(capsys, "day", "sign", DAY)
+    assert _by_seq(lb)[seq + 4]["at"].endswith("Z"), "without --at the signing moment is now, as before"
+    assert _fails("day", DAY, "--at", "2026-03-02T08:00:00Z") == 2, "--at belongs to sign"
+    assert "belong to `day sign" in capsys.readouterr().err
+    assert lb.verify()[2] == []
+
+
+def test_at_in_the_future_refuses_beyond_five_minutes_of_skew(lb: Logbook, capsys):
+    now = datetime.now(UTC).replace(microsecond=0)
+    soon = (now + timedelta(minutes=4)).isoformat().replace("+00:00", "Z")
+    later = (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+    seq = lb.meta["seq"]
+    _run(capsys, "day", "sign", DAY, "--at", soon)
+    assert _by_seq(lb)[seq + 1]["at"] == soon, "a phone's clock may be a few minutes ahead"
+    assert _fails("day", "sign", DAY, "--at", later) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("day sign: --at") and "future" in err, err
+    assert _fails("day", "sign", DAY, "--at", "2099-01-01T00:00:00Z") == 2
+    assert lb.meta["seq"] == seq + 1
+
+
+def test_at_before_the_day_refuses(lb: Logbook, capsys: pytest.CaptureFixture[str]):
+    seq = lb.meta["seq"]
+    assert _fails("day", "sign", DAY, "--at", "2026-02-28T23:59:00+01:00") == 2
+    err = capsys.readouterr().err
+    assert err.startswith("day sign: --at") and f"before {DAY}" in err, err
+    assert _fails("day", "sign", DAY, "--at", "2026-02-28T22:59:59Z") == 2, "23:59:59 on the 28th, Oslo"
+    assert _fails("day", "sign", "2026-03-02", "--at", "2026-03-01T19:30:00+01:00") == 2
+    assert lb.meta["seq"] == seq
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2026-03-01",
+        "2026-03-01T19:30:00",
+        "2026-03-01 19:30:00Z",
+        "2026-03-01T19:30Z",
+        "yesterday",
+        "2026-03-01T25:30:00Z",
+        "",
+    ],
+)
+def test_a_malformed_at_refuses_with_the_example(text: str, lb: Logbook, capsys):
+    seq = lb.meta["seq"]
+    assert _fails("day", "sign", DAY, "--at", text) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("day sign: --at") and "RFC 3339" in err and "e.g. 2026-06-09T19:30:00+02:00" in err
+    assert len(err.strip().splitlines()) == 1, err
+    assert lb.meta["seq"] == seq
