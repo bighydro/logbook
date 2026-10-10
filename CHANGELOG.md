@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.6.1 — 2026-10-10
+
+### Fixed
+- `doctor`, `verify` and every reader of the chain hold at most a handful of month files open at
+  once, however many the record has: the chain-order merge (`Logbook.lines`), the sorted fallback,
+  the index's reads, `migrate`, `seal` and `append_many` each keep a bounded set of handles and reopen
+  a file where they left off. A record of a few decades (hundreds of month files) failed `doctor`
+  and `verify` on macOS with `[Errno 24] Too many open files` under the default limit of 256.
+- `logbook sync immich` says what it is walking before it starts and never a number that reads as the total unless it is one: the first line is `immich: N assets on the server, M already in the record` (`N` from `GET /api/assets/statistics`, the key's own count, else the server's `GET /api/server/statistics`; `total unknown` when neither answers; `M` through the index), then one page line as `x of N assets` (`x assets since <watermark>` on an incremental pull, `x assets so far (total unknown)` otherwise). A first walk of a 426,121-asset library printed an opening line that was read as a total of about 85,000 and then counted past 467,000, and was stopped as a suspected loop.
+- Each asset is fetched once: pages are ordered by `fileCreatedAt`, which is not unique (a burst, a live-photo pair, a batch of scans or received files stamped by the importing device share a second), and the cursor names a stamp, not an asset, so the page after a boundary inside a run of equal stamps began at that stamp again and served the run's earlier members a second time — about 41,000 more fetches than assets over that library. The adapter keeps the ids of the previous page's last-stamp run and drops them when they come again; the summary says `also N served again by the server at a page boundary, counted once`. A run longer than a page grows the page (up to Immich's 1,000) and one longer than that stops the walk with one clear error naming the stamp, never a loop. The record's dedupe by (source, raw_id) stays the safety net.
+- An interrupted walk resumes: after every page the adapter tells `sync` where the walk could continue, and `sync` writes that checkpoint (cursor, assets so far, the boundary ids, the watermark so far) under `walk` in `state/immich.json` at every checkpoint of the record, never ahead of the lines on disk; the next run says `resuming where the last run stopped, at x of N assets` and asks for nothing before the saved cursor. The walk's watermark is written only once the walk completes and is never later than the moment the walk began, so what the server changed meanwhile is pulled next time. `--restart` walks the whole library again; `--since` begins a new walk; a dry run resumes too and saves nothing.
+- `logbook sync --all` runs the quick sources first and `immich` last, and its first line says the order (`running dawarich, imessage, …, then immich last`), so a photo walk of hours never holds up the messages, the calendar, the positions or the weather. `--all` refuses `--restart` as it refuses `--since`.
+- `logbook add <mbox> --dry-run` counts a message that appears twice in the same mbox (Takeout writes one under every label it carries) as the real run does — written once, the repeat refused — and says `1 repeated in the input` beside what is already in the record, instead of counting both as lines it would add. The counts of `sync`'s summary line carry thousands separators.
+- One writer at a time (#234): `append` and `append_many`, and `add`, `sync` and `import backup` for
+  the whole of their run, hold `state/writer.lock` in the record folder, so a `sync`'s walk is inside
+  it. A second writer prints `another logbook command is writing to this record (<command>, since
+  <time>); waiting` and waits, or with the global `--no-wait` refuses with exit 2; a lock whose
+  process is gone is taken over with one line saying so; a reader never takes it. The guard behind
+  the courtesy: before every batch is written, `append_many` reads `logbook.json` again and refuses
+  (`HeadMoved`, one sentence, exit 2, nothing written) when the head moved since the batch was
+  computed, so a batch chained from a stale head can never reach the files. A long `sync` whose
+  head another command had moved past used to lose its batch with `sqlite3.IntegrityError: UNIQUE
+  constraint failed: lines.seq` from the index, after the month files had taken it.
+
+### Added
+- `logbook serve mcp` gains three read tools behind the same `mcp` ceiling of `policy/crossing.json` as the
+  nine before (`docs/mcp.md`): `day_lines(day?, kinds?)` is `logbook show DAY` as one object per standing
+  line, in time order, with the line's id, kind, profile, local time, counterpart and the text part of the
+  row `show` prints, `kinds` keeping only the profile families asked for (`mail`, `message`, `transcript`,
+  `note`, `location`, `photo`, `calendar`); `line(id)` is one line in full, the row, the payload and the
+  text, a transcript's turns read from the attachment store as `promises` reads them; `digest(period?,
+  date?)` is the text `logbook digest DATE` prints, or the seven digests of the ISO week that holds the
+  date. Lines above the ceiling are left out of `day_lines` and counted in `above_ceiling` with nothing of
+  them crossing, not even an id; `line` refuses one naming its tier and nothing else; the digest is read
+  through the gate, so at a ceiling of 1 it is the digest of a record that holds only tier 1. An agent on
+  this machine could search a day's lines but not read them without a word to search for, read a
+  transcript's summary but not its text, and not get the digest; now it can, under the ceiling. The server
+  logs one line per call on the `logbook.mcp` logger (stderr): the tool, the day or id, and counts — never
+  content. The row `show` prints for a line moved from `logbook/commands/rows.py` to
+  `logbook/contrib/rows.py` so a contrib reader can print it (the commands import the same names); nothing
+  any command prints changed.
+- `logbook people review` (`logbook/contrib/people_review.py`, `docs/people.md`): the record's people in two
+  layers. An **observed** person is what one source saw, keyed by its strongest identifier — the email
+  address, else the phone number in E.164 (a WhatsApp JID read as the number it spells), else the folded
+  name — never by a per-observation id, so an address seen under three display names is one person; they
+  are a derived table in the index, `observed_people`, built from the standing mail, message, transcript
+  and event lines, stamped with the head and rebuilt when the record grows, nothing stored in the record. A
+  **canonical** person is one the resolution lines name, as `people` lists them. The command proposes each
+  observed person not yet placed against the canonical people, ranked by the evidence (same email 60, same
+  phone 50, same name 20 and +5 per further source, together on the same days 2 per day) and numbered;
+  `--accept N[,N]` writes the alias line `people merge` writes, one per identifier as the lines wrote it;
+  `--reject N[,N]` writes one `people-review/v1` line (RFC 0035, draft) saying the two are not the same
+  person, so the pair never comes back; `--all-above SCORE` accepts at or above. Nothing is promoted on its
+  own; every number is checked before the first line is written; `--json` carries the queue, the unplaced
+  and a stable id per pair.
+- `logbook people --priority [--year YYYY]` ranks the canonical people heard in the last year by a plain
+  sum printed beside each name: 3 per day together, 1 per message exchanged (the smaller direction, up to
+  50), 2 per meeting, 10 when the last real contact is within 30 days and 5 within 90. No model.
+- `logbook promises` reads mail and messages (`docs/promises.md`): every `mail/v1` and `message/v1` line beside the transcripts and the notes, by rules alone, in two sections. **I promised** is every commitment cue in a line you wrote (a mail from one of your addresses, a message with `from_me`, your turn of a transcript, a note); **I was asked** is every request cue in a line you received. Who wrote the line decides, from `owner_emails`, `policy/owner.json` and the resolution lines, never the words: a request in your own mail is you asking and is not proposed, a commitment in someone else's is theirs and `--all` lists it apart. Each row carries the day, the counterpart (`to Ola Nordmann`, `by Kari Nordmann`: the person the record resolves behind the address, the number or the chat), the sentence, the due hint, the proposal's id for `promises done` and the origin line's id, which `logbook day sign DAY --confirm` takes (RFC 0034). New flags `--mine`, `--theirs` and `--source mail|message|transcript|note`; `--since` as before. The cue list, documented in full, gains the terse forms of both languages (`will do`, `on it`, `mach ich`, `schick ich dir`, `erledige ich`, `versprochen`, a short `by Friday` or `bis Freitag` on its own) and the requests (`can you`, `could you send`, `would you mind`, `please confirm`, `let me know`, `don't forget to`, `kannst du`, `könnten Sie`, `schick mir`, `sag mir Bescheid`, `vergiss nicht`). A mail body is read up to its first reply header or signature delimiter with the quoted lines left out, so a reply that quotes a promise never proposes it again. The rules show by default; the judge stays opt-in (`--judge`), reads your commitments only (never a request), and a verdict of no, or below 0.6, sets a candidate aside, which `--all` still lists. Under `--json` every proposal carries `role`, `counterpart` and `line`; the report carries `sources`, `mine_only`, `theirs_only` and `all` where it carried `judged_only`. Recall test on a synthetic fortnight of the Oslo persona (24 planted commitments, 12 planted requests, 60 distractor lines across mail, iMessage, WhatsApp and one transcript; `tests/test_promises_wider_net.py`): the rules read 22 of 24 and 11 of 12 at precision 0.97; the test holds them to 20, 10 and 0.8.
+- `logbook repair fork [--apply]` (`logbook/core/fork.py`, #234): a record whose month files hold two
+  chains forked at one head — a long `sync` wrote its batch chained from a head another command had
+  moved past, and the index refused it after the files took it — is diagnosed (the fork, each orphan
+  chain's count, seq range, sources and files, `logbook.json` against the record's chain; counts and
+  hashes only, nothing written) and with `--apply` repaired: every orphan line is copied in order to
+  `repair/<stamp>-removed.jsonl` in the record folder with a `repair/<stamp>-report.json`, each touched
+  month file is written again without them with every kept line byte for byte, `logbook.json` is set
+  to the record's head, the index rebuilt and `verify` run. The record's chain is the one the index
+  agrees with, else the longer one, else the command refuses; `--keep-head <hash>` (a full head as
+  the dry run prints every chain's, or a unique prefix) names it and overrides both rules, and
+  without an index the dry run says it is the safer choice; it also refuses a break that is not a
+  fork, a torn month file, a sealed orphan line it cannot open, and a folder under a sync client.
+  `doctor`'s record check names it beside `logbook verify`; `docs/recovery.md` is the page.
+- `logbook day sign YYYY-MM-DD` takes `--confirm none` and `--at RFC3339`, RFC 0034 amendment 2 (`docs/rfcs/0034-the-signed-day.md`, `docs/signed-day.md`). `--confirm none` signs a day with nothing confirmed: the `signed-day/v1` line carries an empty `confirmed`, the page digest is still over the page as shown, the header says `signed` and the day's lines cross as those of any signed day; the word goes alone, and `none` beside an id or with `--kept`, `--missed`, `--dropped` or `--carried` is refused in one sentence. `--at` is the moment the owner clicked rather than the moment the command ran, an RFC 3339 moment with an offset or `Z`, stored in UTC and shown in the header in local time; a malformed moment (refused with an example), one more than five minutes ahead of this clock, or one before the day signed starts in the record's zone is refused and nothing is written. Without either flag nothing changes.
+- Dispositions on the signed day, RFC 0034 amendment 1 (`docs/rfcs/0034-the-signed-day.md`, `docs/signed-day.md`): `logbook day sign YYYY-MM-DD` gains `--kept ID,ID`, `--missed ID,ID`, `--dropped ID,ID` and `--carried ID,ID`, and the `signed-day/v1` line an optional `dispositions` object, a confirmed line's id → one of the four words; a line given one is confirmed by that, and an unknown id, a retracted line, a line given twice or a flag that names no line is refused in a sentence. `day DAY` prints ✓, ✗, – or → before each line the signature disposed of and carries the map under `signed.dispositions`; `show` counts them on the signature's row; `promises` treats kept and dropped as closed, missed as closed and flagged (`missed on <day>`), carried as still open, and carries `disposition` in its JSON; `export crossing` carries the field with the line. The field is optional: every signature written before, the conformance samples' 32nd line included, is valid and its hash unchanged.
+- The signed day, RFC 0034 (`docs/rfcs/0034-the-signed-day.md`, `docs/signed-day.md`, `logbook/core/signing.py`): `logbook day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID]` appends one `signed-day/v1` line, tier 1, source `manual`, saying the owner read the day's page and these are its facts — the day, the owner as subject, the ids confirmed (every line on the page by default, else the seqs or ids named), the digest of the page as shown (the SHA-256 over the hashes of the lines the page listed, in order, so any implementation recomputes it) and an optional one-line note. Nothing is rewritten; a day signed again is superseded by the later line, and a retracted signature leaves the earlier one standing. Only the owner signs: the MCP server has no such tool. `show DAY` says `signed <when>` or `unsigned` in its header and lists a signature as a row on the day it was written; `day DAY` says the same after the weekday, `, the page has changed since` when the day grew after signing, and carries it under `signed` in `--json`. The conformance sample gains a 32nd line, the first day signed on the last evening (new heads in `conformance/README.md`).
+- `logbook export crossing` crosses the lines of signed days only, by default (RFC 0034 rule 5): a line's day is the local day of its `at`, a signature crosses with the day it signs, the console says how many lines were held back on unsigned days, and `--unsigned` crosses them too. The manifest's `policy` carries `signed_days` (`only` or `any`), `counts` gains `held_back_unsigned`, and the `crossing/v1` line's `policy` gains `signed_only`. The shared page, the trip bundle, the vault and the site keep their own selections.
+- Readiness (`logbook/core/readiness.py`): `logbook day DAY` gains a `readiness` row, and `--json` a `readiness` block, saying for each class of source — mail, message, meeting, location, photo, calendar — whether the day has lines of it, from which sources, and which usual sources (a line of the class on four in five of the logged days of the last four weeks, not disabled in `policy/import.json`) have not delivered; from the record and the policy alone, no connection opened, nothing written.
+- ADR 0022, the record's home (`docs/adr/0022-the-records-home.md`): one machine holds the only
+  writable copy, runs the sync schedule, the MCP server and the local models, and serves the Day page
+  over the owner's own network; every other device is a reader; an orchestrator elsewhere reaches the
+  record only through the crossing; sources come to the home; a collaborator is an OS user on it; and
+  every cloud model or service that may see record content has its own entry in `policy/crossing.json`.
+  `logbook sync --install-schedule` names this machine the home in `state/home.json` (hostname and
+  date; a second install on the same host keeps the date). `doctor` gains a `home` line (pass on the
+  home or when none is set, a warn elsewhere: writers belong on the home) and a `crossing` line listing
+  every destination's ceiling as it counts today.
+- `policy/crossing.json`: an entry may carry `"until": "YYYY-MM-DD"`, the last day it holds; from the
+  next day it counts as `max_tier` 0 for `export crossing`, `export vault`, `export site` and the MCP
+  server, the refusal says when it expired, and `doctor` names it. An `until` that is not a date is
+  refused naming the file.
+
 ## 0.6.0 — 2026-10-06
 
 Twenty-two commands where there were forty-nine, and `logbook --help` on one screen; every old name still works and says the new one. One package in three tiers, core, contrib and labs, with a thin command line that loads no adapter until one is asked for. Tiers 2 and 3 sealed at rest with age (SPEC v0.3, RFC 0029): the chain still covers the real payload, so a keyless `verify` holds. Property tests of the format, the chain, the tiers, time and identity, and a strict reader that reports the last whole line of a torn month file. The profile freeze (RFC 0031): nineteen profiles frozen with one conformance fixture each, two withdrawn, `trip/v1` written as `journey/v1`. Mail at scale, read through the index. The paper products: a year on one sheet, a week on four pages, a trip page that prints. Local models for transcripts and photo descriptions, nothing leaving the machine. The manifesto, the rules, the open problems, governance and the roadmap, with the first letter to builders. A synthetic forty-year record published with the docs, and `logbook demo` for trying every command on nothing of yours. Issues closed on the way: #83, #96, #98, #118, #121, #122, and tonight #79 (`add` says what the record already held) and #123 (`show` orders a day by the instant).
