@@ -34,6 +34,8 @@ def _no_real_home_before_the_first_test(tmp_path_factory: pytest.TempPathFactory
         mp.setenv("LOCALAPPDATA", str(base / "AppData" / "Local"))
         for variable in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "LOGBOOK_CACHE_HOME", "LOGBOOK_IDENTITY_FILE"):
             mp.delenv(variable, raising=False)
+        for variable in _shell_variables():
+            mp.delenv(variable, raising=False)
         yield
 
 
@@ -52,8 +54,25 @@ def _logbook_home_is_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "home" / "AppData" / "Local"))
     for variable in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "LOGBOOK_CACHE_HOME", "LOGBOOK_IDENTITY_FILE"):
         monkeypatch.delenv(variable, raising=False)
-    # The shell may hold the password of a real backup; a test that needs one sets its own.
-    monkeypatch.delenv("LOGBOOK_BACKUP_PASSWORD", raising=False)
+    # The shell may hold the owner's own LOGBOOK_* settings: the keys and hosts of the live sources
+    # (`doctor` would say `sync:immich configured` and change its line list and spacing), the dial
+    # prefix, the notifier's token, the password of a real backup. None of them reaches a test: every
+    # one goes here, and a test that needs one sets its own. The fixture's own variables above and the
+    # tier switches (`OPT_IN`, read once at collection) are the only ones kept.
+    for variable in _shell_variables():
+        monkeypatch.delenv(variable, raising=False)
+
+
+# set by the fixtures above, or read once at collection (`OPT_IN`)
+KEPT = frozenset({"LOGBOOK_HOME", "LOGBOOK_SLOW", "LOGBOOK_STRESS"})
+
+
+def _shell_variables() -> list[str]:
+    """Every `LOGBOOK_*` variable the shell exported, less the ones the fixtures own, so that a
+    developer's shell (an Immich key, a dial prefix, an IMAP password) can never change what a test
+    sees. Computed at each fixture's setup, so a variable set by an earlier test's monkeypatch and
+    already undone is not in the way."""
+    return [name for name in os.environ if name.startswith("LOGBOOK_") and name not in KEPT]
 
 
 # marker -> the variable that, set to 1, runs the tests it marks (pyproject.toml lists both markers)
