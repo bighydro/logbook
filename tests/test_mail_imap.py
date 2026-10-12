@@ -591,11 +591,9 @@ def test_doctor_shows_sync_mail_configured_or_unconfigured_by_name_only(
         "LOGBOOK_IMAP_USER": INES,
         "LOGBOOK_IMAP_PASSWORD": PASSWORD,
     }
-    checks = {c.name: c for c in doctor.run(lb, env, installed=lambda _m: True)}
-    assert "sync:mail" not in checks, "a record with no mail and no mark never asks for the variables"
-    (lb.root / "state").mkdir(exist_ok=True)
-    (lb.root / "state" / "mail.json").write_text("{}", encoding="utf-8")
-    checks = {c.name: c for c in doctor.run(lb, env, installed=lambda _m: True)}
+    checks = {c.name: c for c in doctor.run(lb, {}, installed=lambda _m: True)}
+    assert "sync:mail" not in checks, "no mail, no mark, no variable: the record does not use the source"
+    checks = {c.name: c for c in doctor.run(lb, env, installed=lambda _m: True)}  # a variable set: it does
     assert checks["sync:mail"].status == "pass"
     assert (
         checks["sync:mail"].detail
