@@ -55,14 +55,16 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    1.0 km`), else the city of the nearest large airport within 30 km in parentheses
    (`53.5998,10.0130 (Hamburg)`), the `trips` route's rule. A stop with nothing attached says so.
    A move prints its distance, duration and mode (walk, car, train, boat, flight), with the
-   airports when it is a flight between two. A move with no points that lasts a silence or more
+   airports (`OSL → ZRH`) only when it is a flight: its speed and distance are a flight's (mode
+   `flight`), or a `flight/v1` line lies inside it or over at least half of it, whose departure
+   and arrival it then names. A car or train move whose ends lie near an airport — a 1.6 km drive
+   from the car park to the terminal — names none. A move with no points that lasts a silence or more
    (`merge_gap_s`) and is not a flight is a **gap**: the tracker did not see it, so it places
    nothing. Flights come from the `flight/v1` lines standing — the merged set `infer flights`
    maintains, one line per flight — with their evidence: `tracked`, `inferred` or `declared`; the
    move a flight covers names it under `--json`.
    Under each row: its attachments, named for events (with their time; an entry several calendars
-   carry — the same start and end, the same flight or the same title, case and accents aside — is
-   one event, `×N sources`), transcripts, notes (the first line), mail threads (with the message
+   carry is one event, see below), transcripts, notes (the first line), mail threads (with the message
    count), calls and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
    (`with <name>`, only a name the record's resolution lines make a person: `with US` names
    nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
@@ -97,6 +99,19 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    notes, mail and calls, one per row. The page is read from the folder it was kept in, never from
    the chain; under `--json` it is `received`, each named line with its id. A day nobody shared
    has no such section.
+
+## One event from several calendars
+
+The same entry often reaches the record twice: from the phone's calendar (`ios-calendar`) and from
+a Google calendar or a subscribed .ics (`ics`; `sync gcal` writes its lines under that source, so
+two calendars of one source are told apart by the calendar they name). Two event lines are one
+event when they come from different calendars, start less than a minute apart, last as long as each
+other or one of them is all-day, and carry the same title (case, accents and whitespace aside) or
+name the same flight (`XY561`, `XY 561`). The Day shows it once: the richest line of the set — a
+timed entry before an all-day one, then the one that fills the most fields (location, attendees,
+notes) — with the others named, `Check-in XY 561 07:40–08:00 · ×2 sources (ics, ios-calendar)`, and
+under `--json` its `sources` (its own first) and the ids of every line it stands for. The fold is
+at read time only: every line stays in the log as written, and the sources row counts each.
 
 ## A synthetic example
 

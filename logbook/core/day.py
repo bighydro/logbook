@@ -19,16 +19,22 @@ What a Day shows, in order:
    moves, each clipped to the day for display and keeping its real span — and the flights of the
    day from the `flight/v1` lines standing (`flights.standing`, the merged set: one line per
    flight, its `evidence` tracked, inferred or declared), as rows of their own; a move the flight
-   covers names it. A stay aboard an asset — the owner's position matching the asset's own track
-   for twenty minutes or longer (`stays._aboard`, ADR 0018), the run of stays and moves aboard it
-   folded into one stay by `stays.fold` — is one `aboard <asset>` row, with the asset's berths,
-   passages and anchorages inside it: the asset's movement never fragments the stay. A
+   covers names it. A move prints an airport pair (`OSL → ZRH`) only when it is a flight: its
+   speed and distance are a flight's (`stays`, mode `flight`), or a flight line lies inside it or
+   over at least half of it, whose departure and arrival it then names; a car move that starts
+   and ends near an airport prints none. A stay aboard an asset — the owner's position matching
+   the asset's own track for twenty minutes or longer (`stays._aboard`, ADR 0018), the run of
+   stays and moves aboard it folded into one stay by `stays.fold` — is one `aboard <asset>` row,
+   with the asset's berths, passages and anchorages inside it: the asset's movement never
+   fragments the stay. A
    move with no points that lasts a silence or more (`merge_gap_s`), and is not a flight, is a
    gap in the track, said so, and it places nothing. To each row attach the day's lines that
    fall inside its span:
    events, transcripts, notes, mail threads and calls named; messages and photos counted; keepers
-   (RFC 0024) named. A calendar entry several sources carry — the same start and end, the same
-   flight or the same title, case and accents aside (`events.fold`) — is one event, `×N sources`.
+   (RFC 0024) named. A calendar entry several calendars carry — starts less than a minute apart,
+   the same duration or one side all-day, the same flight or the same title, case and accents
+   aside (`events.fold`) — is one event, the richest line of the set, `×N sources (ics,
+   ios-calendar)` naming the others; the fold is at read time, the lines stay as they are.
    Who was there (`present.company`) is split into confirmed — declared in a
    note, speaking in a transcript, attending a timed calendar entry — and proposed — a face in a
    photo, an attendee of an all-day entry; never the owner.
@@ -446,7 +452,27 @@ def _finish(
         entry["flights"] = [
             f["id"] for f in flights if _instant(f["start"]) < end and (_instant(f["end"]) or start) > start
         ]
+        if not entry["airports"]:
+            entry["airports"] = _flown(start, end, flights)
     return entry
+
+
+def _flown(start: datetime, end: datetime, flights: Sequence[dict[str, Any]]) -> list[str]:
+    """The departure and arrival of the flight line that covers a move — the whole flight inside
+    the move, or the flight over at least half of it — both codes known, for a move whose own
+    speed is not a flight's (a tracker silent from the gate until the evening); nothing for a
+    move no flight covers. A move's own pair is a flight's only (`stays`): a car move between two
+    points near an airport names none."""
+    length = (end - start).total_seconds()
+    for f in flights:
+        since, until = _instant(f["start"]), _instant(f["end"]) if f["end"] else None
+        if until is None or not (f["from"] and f["to"]):
+            continue
+        overlap = (min(end, until) - max(start, since)).total_seconds()
+        inside = start <= since and until <= end
+        if length > 0 and overlap > 0 and (inside or overlap * 2 >= length):
+            return [str(f["from"]), str(f["to"])]
+    return []
 
 
 # -- flights ------------------------------------------------------------------------------------------------
@@ -884,9 +910,10 @@ def _entry_rows(
 
 
 def sources_text(item: Mapping[str, Any]) -> str:
-    """` · ×N sources` for a calendar entry several sources carry; nothing for one source."""
+    """` · ×N sources (ios-calendar, ics)` for a calendar entry several sources carry, the sources
+    named in evidence order, the kept line's first; nothing for one source."""
     sources = item.get("sources") or []
-    return f"{DOT}×{len(sources)} sources" if len(sources) > 1 else ""
+    return f"{DOT}×{len(sources)} sources ({', '.join(map(str, sources))})" if len(sources) > 1 else ""
 
 
 def counts(attached: Mapping[str, Any] | None) -> list[tuple[int, str]]:

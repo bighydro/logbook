@@ -35,8 +35,11 @@ The rules:
   it is a stop, kept and flagged. Evidence is the owner's, so only the owner's clusters are promoted.
 - A move spans from the end of one cluster to the start of the next: its distance is measured along
   the points between them, its mode from the average speed (walk, car, train, flight), or flight
-  when a gap starts and ends near airports (the flights table, RFC 0013), or, when the owner is
-  aboard an asset, by the asset's kind (a yacht moves by boat, an aircraft by flight, a car by car).
+  when a gap starts and ends near two different airports (the flights table, RFC 0013), or, when
+  the owner is aboard an asset, by the asset's kind (a yacht moves by boat, an aircraft by flight,
+  a car by car). Only a flight carries an airport pair (`Segment.airports`, `OSL → ZRH`): a move
+  whose ends lie near airports but whose mode is not flight — a 1.6 km drive round the airport, a
+  train from the terminal — carries none.
 - The owner is aboard an asset when the asset's own positions lie within the radius of the
   owner's points for `aboard_min_s` (20 minutes by default) or longer: during a stay, the asset's
   points in that span within the stay's radius, measured from the first such point to the last;
@@ -636,7 +639,7 @@ def _move(
     mode = _mode(
         distance,
         (end.at - leaves).total_seconds(),
-        len(codes) == 2 and not between,
+        len(codes) == 2 and codes[0] != codes[1] and not between,
         settings,
         asset_kind,
     )
@@ -648,7 +651,7 @@ def _move(
         points=len(between),
         distance_m=distance,
         mode=mode,
-        airports=codes if len(codes) == 2 else (),
+        airports=codes if len(codes) == 2 and mode == "flight" else (),  # a flight's pair, never a car's
         first_line=start.id or None,
         last_line=end.id or None,
         first_seq=start.seq,

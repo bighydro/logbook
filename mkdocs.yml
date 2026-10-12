@@ -110,6 +110,7 @@ nav:
   - The MCP server: mcp.md
   - Backup: backup.md
   - The schedule: schedule.md
+  - The doctor: doctor.md
   - When verify fails: recovery.md
   - The attachment store: attachments.md
   - Adapters:
