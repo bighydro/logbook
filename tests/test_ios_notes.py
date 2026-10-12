@@ -30,6 +30,9 @@ TAKEOUT = ROOT / "tests" / "fixtures" / "takeout" / "Records.json"
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))
 ENVELOPE = {"at", "end", "tz", "source", "kind", "tier", "payload"}
 APPLE_EPOCH = 978_307_200  # 2001-01-01T00:00:00Z, the zero of ZCREATIONDATE3/ZMODIFICATIONDATE1
+EARLIEST_AT = datetime.fromtimestamp(ios_notes.APPLE_EPOCH + ios_notes.EARLIEST_DATE, UTC).strftime(
+    "%Y-%m-%dT%H:%M:%SZ"
+)  # the adapter's floor as RFC3339, so the test cannot disagree with it
 
 DDL = """
 CREATE TABLE ZICCLOUDSYNCINGOBJECT (
@@ -463,7 +466,7 @@ def _rfc_rules(line: dict) -> None:
     assert line["kind"] == "note" and line["tier"] == 2 and line["end"] is None
     assert line["source"] == "ios-notes" and line["source"] != "manual"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", line["at"])
-    assert line["at"] >= "2010-07-07T"  # ZCREATIONDATE3 >= 300000000
+    assert line["at"] >= EARLIEST_AT  # ZCREATIONDATE3 >= ios_notes.EARLIEST_DATE
     p = line["payload"]
     assert {"schema", "text", "raw_id", "extra"} <= set(p)
     assert set(p) <= {"schema", "text", "title", "raw_id", "modified_at", "folder", "extra"}

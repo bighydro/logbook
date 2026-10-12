@@ -48,7 +48,7 @@ SCHEMA = "note/v1"
 SQLITE_HEADER = b"SQLite format 3\x00"
 REQUIRED_TABLES = frozenset({"ZICCLOUDSYNCINGOBJECT", "ZICNOTEDATA"})
 APPLE_EPOCH = 978_307_200  # 2001-01-01T00:00:00Z; ZCREATIONDATE3/ZMODIFICATIONDATE1 count from it
-EARLIEST_DATE = 300_000_000  # 2010-07-07: anything earlier is a placeholder, not a creation time
+EARLIEST_DATE = 300_000_000  # 2010-07-05T05:20:00Z: anything earlier is a placeholder, not a creation time
 TEXT_PATH = (2, 3, 2)  # Document → Note → note_text
 
 WIRE_VARINT, WIRE_FIXED64, WIRE_LENGTH, WIRE_FIXED32 = 0, 1, 2, 5
