@@ -214,10 +214,24 @@ def test_nearby_a_journey(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> No
     assert e.value.code == 2
 
 
+def test_the_help_names_the_readers_defaults() -> None:
+    from logbook.commands.people import people_drift_default
+    from logbook.contrib import people_drift, people_nearby
+
+    assert int(people_drift_default("min")) == people_drift.DEFAULT_MIN_DAYS
+    assert int(people_drift_default("quiet")) == people_drift.DEFAULT_QUIET_DAYS
+    assert float(people_drift_default("radius")) == people_nearby.DEFAULT_RADIUS_KM
+
+
 def test_nearby_takes_one_of_a_place_a_journey_or_days(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    for args in (["people", "nearby"], ["people", "nearby", "Bergen", "--days", "2025-12-19", "2025-12-23"]):
+    for args in (
+        ["people", "nearby"],
+        ["people", "nearby", "Bergen", "--days", "2025-12-19", "2025-12-23"],
+        ["people", "merge", "Bergen"],
+        ["people", "Bjørn", "--min-days", "3"],
+    ):
         with pytest.raises(SystemExit) as e:
             cli.main(args)
         assert e.value.code == 2

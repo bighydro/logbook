@@ -141,6 +141,9 @@ def cmd_people(a: argparse.Namespace) -> None:
     the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written. `people NAME` is one person's page (`cmd_person`);
     `people merge` the duplicates (`_people_merge`)."""
+    if a.place is not None and a.name != NEARBY:
+        print(f"people: {a.place!r}: a second word goes with `people nearby PLACE` only", file=sys.stderr)
+        sys.exit(2)
     if a.name == MERGE:
         _people_merge(Logbook.find(), a)
         return
@@ -150,9 +153,6 @@ def cmd_people(a: argparse.Namespace) -> None:
     if a.name == NEARBY:
         _people_nearby(Logbook.find(), a)
         return
-    if a.place is not None:
-        print(f"people: {a.place!r}: a place goes with `people nearby`", file=sys.stderr)
-        sys.exit(2)
     if any(getattr(a, flag) is not None for flag in NEARBY_FLAGS):
         print("people: --journey, --days and --radius go with `people nearby`", file=sys.stderr)
         sys.exit(2)
