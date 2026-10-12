@@ -46,7 +46,7 @@ from zoneinfo import ZoneInfo
 from .. import __version__
 from ..core import day as day_reader
 from ..core import days as days_reader
-from ..core import flights, pages, policy, reading, rollup, signing, stays, transcripts, trips
+from ..core import flights, pages, policy, reading, rollup, sealing, signing, stays, transcripts, trips
 from ..core.chain import Line, is_sealed
 from ..core.export import parse_day
 from ..core.flights import Airports
@@ -1226,7 +1226,14 @@ def call(root: Path, name: str, arguments: Arguments, allow_tier_3: bool = False
         try:
             with held:
                 data = tool.fn(lb, arguments)
-        except (stays.SettingsError, pages.PageError, policy.PolicyError, FormatError, HeadMoved) as e:
+        except (
+            stays.SettingsError,
+            pages.PageError,
+            policy.PolicyError,
+            FormatError,
+            HeadMoved,
+            sealing.IdentityRequired,  # a tier-2 line in a sealed record, on a machine without the identity
+        ) as e:
             raise ToolError(str(e)) from e
         except Locked as e:
             raise ToolError(str(e).replace(NOT_WAITING, NOT_WAITED)) from e
