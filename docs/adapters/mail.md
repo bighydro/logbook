@@ -2,7 +2,8 @@
 
 One line per message. `logbook add mail` reads a Google Takeout `Mail/` export — `All mail Including
 Spam and Trash.mbox`, twenty gigabytes for a mailbox that has been running for fifteen years — or any
-mbox file or folder of them, and writes one `mail/v1` line per message (RFC 0015): who, when, the
+mbox file or folder of them, and `logbook sync mail` reads the same mailbox live over IMAP
+([below](#mail-imap)); either writes one `mail/v1` line per message (RFC 0015): who, when, the
 subject, the thread, the labels, the body as text, the attachments by name and size. Tier 2 by default.
 
 ```bash
@@ -65,12 +66,79 @@ its own. It is `slow`: `LOGBOOK_SLOW=1 uv run pytest tests/test_mail_scale.py`. 
 the same file check every message the standard library's `mailbox` finds is a line here, on a file
 read in 4 KB chunks so separators fall across chunk boundaries.
 
+## Mail (IMAP)
+
+`logbook sync mail` reads the same mailbox live, over IMAP, so the record keeps up after the Takeout
+import without another export: mail is the last daily source to get a live feed, and `promises` reads
+it — the Sent mail most of all, which is where your own commitments are. IMAP is a standard: Gmail is
+the first server, not the only one. The configuration is the environment and nothing else:
+
+| Variable | What it is |
+|---|---|
+| `LOGBOOK_IMAP_HOST` | the server, `imap.gmail.com` for Gmail |
+| `LOGBOOK_IMAP_USER` | the mailbox address; it is the `account` on every line and the prefix of its `raw_id`, so `add mail --account <the same address>` and the live pull dedupe each other |
+| `LOGBOOK_IMAP_PASSWORD` | an app password. Never logged, never echoed, never written to any file by the command: it lives only in the environment of the user who runs the schedule (`~/.config/logbook/sync.env`, mode 600, which you write) |
+| `LOGBOOK_IMAP_PORT` | optional, 993. TLS from the first byte, the certificate and the host name verified; never STARTTLS, never plaintext |
+| `LOGBOOK_IMAP_FOLDERS` | optional, comma-separated. Without it: the folder the server flags `\All` — Gmail's `[Gmail]/All Mail`, found through `LIST` with SPECIAL-USE or the older `XLIST` — else `INBOX` and the folder flagged `\Sent` |
+
+Gmail takes an app password only with 2-step verification on the account (Google Account → Security →
+2-Step Verification → App passwords); the password is sixteen letters and is the only secret the
+source holds.
+
+```bash
+logbook sync mail                                 # what is new in each folder since the last run
+logbook sync mail --since 2026-03-01T00:00:00Z    # SEARCH SINCE that day instead (the record refuses the overlap)
+logbook sync mail --dry-run                       # fetch the headers, count, write nothing
+logbook sync mail --restart                       # every folder from its first message again
+```
+
+**Read-only, enforced.** A folder is opened with `EXAMINE`, never `SELECT`; bodies are fetched with
+`BODY.PEEK[]`, which marks nothing read; `STORE`, `COPY`, `MOVE`, `EXPUNGE`, `APPEND` and every
+flag change are absent from the source, and the tests assert on a fake server's command log that
+none was ever sent.
+
+**One parser.** Every message goes through the mbox adapter's own `parse_message`, with the
+server's `INTERNALDATE` standing where the mbox separator's date would (counted
+`date_from_internaldate`): the same fields, the same body cap, the same `raw_id`. Attachments are
+named, sized and digested (`sha256`; the bytes are in hand) and never stored.
+
+**Labels are a snapshot.** With Gmail's extension (`X-GM-EXT-1`) the labels and the thread id are
+fetched with the message and written where the Takeout import puts `X-Gmail-Labels` and
+`X-GM-THRID` — `labels`, spelled as Takeout spells them (`Inbox`, `Sent`), and
+`extra.gmail_thread_id` — as they stood at ingest, once; the source never revisits a message to
+update them. On a server without the extension the line carries neither.
+
+**The watermark is for economy, the record's refusal is the guarantee.** Per folder the source keeps
+`{uidvalidity, uid}` — the folder's `UIDVALIDITY` and the highest UID handled — under `resume` in
+`state/mail.json`, written only once the lines up to it are in the record. A connection lost midway
+leaves the mark at the last batch written and the next run resumes there; a folder whose
+`UIDVALIDITY` changed is read from its first message again, which costs headers and writes nothing
+new; a walk after a lost mark writes nothing new either, because the dedupe on `(source, raw_id)`
+refuses what the record holds.
+
+**Headers first.** Each batch of 200 UIDs is fetched as `Message-ID` and size alone, the record is
+asked which of those it holds (one SELECT), and only the other bodies are fetched, in batches of at
+most 32 MB by the sizes reported. The first run over a 400,000-message All Mail after the Takeout
+import fetches no body the record would refuse. The progress line per batch says what is true —
+`[Gmail]/All Mail: 1,200 fetched, 37 new, 1,163 already in the record` — never a guessed total, and
+the summary names each folder's mark.
+
+**Errors are one sentence, never a value.** The login refused names `LOGBOOK_IMAP_USER` and
+`LOGBOOK_IMAP_PASSWORD`; TLS failed names `LOGBOOK_IMAP_HOST`; a folder not on the server names the
+folder and `LOGBOOK_IMAP_FOLDERS`. `doctor` shows `sync:mail` configured or unconfigured by the
+variables' names alone, and `sync --all` runs mail among the quick sources, so the 07:00 and 19:00
+schedule picks it up with no further configuration.
+
 ## What is counted, never dropped silently
 
 `add` reports: messages without a `Message-ID` (keyed by digest), timed by the mbox separator (no
 `Date`), with the body taken from HTML, with the body cut at 64 KB, with undecodable bytes replaced,
 attachments referenced or stored, and messages skipped by label. A message with neither a readable
 `Date` nor a readable separator is the only one skipped (`skipped_no_date`).
+
+`sync mail` reports, besides these: messages already in the record by `Message-ID`, whose bodies
+were never fetched, and folders read from the first message again because their `UIDVALIDITY`
+changed.
 
 `show` prints `✉ subject — from → to (n attachments)`, never the body; `show --raw` prints the body
 under the row.

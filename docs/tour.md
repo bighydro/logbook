@@ -204,6 +204,7 @@ logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JS
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message
 logbook sync granola                              # every Granola recording, and its summary as a derived note
+logbook sync mail                                 # the same mailbox live over IMAP, read-only; dedupes against the Takeout import
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook add story ~/Stories/lake.md --teller ola@example.org --listener kari.nordmann@example.org --refers-to 1961   # a told story (RFC 0028): on the day it was told, about the time it names
@@ -233,6 +234,10 @@ before that point; `--restart` walks the library from the beginning instead. Eac
 once: the pages are ordered by capture time, which a burst or a batch of scans shares to the second,
 and the server serves such a run again at a page boundary; the adapter sees through that and the
 record's own refusal of a line it already holds stays the safety net.
+
+`sync mail` is the mailbox over IMAP (`LOGBOOK_IMAP_HOST`, `LOGBOOK_IMAP_USER`, `LOGBOOK_IMAP_PASSWORD`,
+an app password): read-only, every folder resumed from its own mark, and a message the Takeout import
+already wrote is refused by `Message-ID` before its body is fetched ([Mail](adapters/mail.md#mail-imap)).
 
 `logbook sync --all` runs every configured live source in turn — configured: at least one of its
 `LOGBOOK_*` variables set, and all it needs present — each from its own watermark; a disabled source
