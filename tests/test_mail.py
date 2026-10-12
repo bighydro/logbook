@@ -467,3 +467,42 @@ def test_add_dry_run_counts_a_message_repeated_in_the_mbox_as_the_real_run_does(
     cli.main(["add", "mail", str(mbox), "--dry-run", "--restart"])  # past the cursor: the file again
     out = capsys.readouterr().out
     assert "mail: 0 lines would be added, 3 already in the record (dry run, nothing written)" in out
+
+
+# -- parse_message: the one parser, for an mbox and for a live source ---------------------------------
+
+
+def test_parse_message_is_the_parser_run_uses_with_a_fallback_date_and_an_optional_digest():
+    """`sync mail` hands the server's bytes and INTERNALDATE to the same function `run` calls with the
+    separator's date; the line is the same, and a live source may digest the attachments it holds
+    without storing them (RFC 0015 rule 5: `sha256`, no `path`)."""
+    from datetime import UTC, datetime
+
+    raw = (
+        b"Message-ID: <x1@mail.example.org>\r\nFrom: Ola Nordmann <ola@example.org>\r\n"
+        b"To: kari.nordmann@example.org\r\nSubject: No date on this one\r\n"
+        b'Content-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nHei.\r\n'
+        b'--b\r\nContent-Type: application/pdf; name="a.pdf"\r\nContent-Transfer-Encoding: base64\r\n\r\n'
+        b"JVBERi0xLjQK\r\n--b--\r\n"
+    )
+    counts: dict[str, int] = {}
+    fallback = datetime(2026, 3, 2, 10, 15, tzinfo=UTC)
+    line, blobs = mail.parse_message(
+        raw, fallback, counts, TZ, None, {OWNER}, OWNER, fallback_name="internaldate"
+    )
+    assert line is not None and blobs == []
+    assert line["at"] == "2026-03-02T10:15:00Z" and "date" not in line["payload"]
+    assert counts["date_from_internaldate"] == 1
+    assert line["payload"]["raw_id"] == f"{OWNER}:x1@mail.example.org"
+    assert line["payload"]["attachments"] == [
+        {"filename": "a.pdf", "media_type": "application/pdf", "bytes": 9}
+    ]
+    digested, blobs = mail.parse_message(raw, fallback, {}, TZ, None, set(), None, digest_attachments=True)
+    assert digested is not None and blobs == []
+    entry = digested["payload"]["attachments"][0]
+    assert entry["bytes"] == 9 and entry["sha256"] == hashlib.sha256(b"%PDF-1.4\n").hexdigest()
+    assert "path" not in entry
+    none, _ = mail.parse_message(raw, None, counts, TZ, None, set(), None)
+    assert none is None and counts["skipped_no_date"] == 1
+    assert mail.separator_date(b"From x@xxx Mon Mar 02 10:15:00 +0000 2026\n") == fallback
+    assert mail.separator_date(b"From x@xxx\n") is None
