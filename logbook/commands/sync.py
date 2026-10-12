@@ -94,8 +94,10 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola,"
-        " ais, adsb, weather); safe to re-run; --all for every configured source, --install-schedule for"
-        " twice a day."
+        " mail, ais, adsb, weather); safe to re-run; --all for every configured source, --install-schedule"
+        " for twice a day."
+        " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
+        " from the last batch written; --restart reads every folder from its first message again."
         " immich: the first run walks the whole library and says how many assets the server holds before it"
         " starts, then counts `x of N`; a walk interrupted (Ctrl-C, a lost connection, a server error) is"
         " checkpointed in state/immich.json and the next run resumes where it stopped instead of walking"
@@ -105,9 +107,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "name",
         nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
-        " bridges, through its local API), gcal (Google Calendar), granola, ais (your vessels via"
-        " aisstream.io), adsb (your aircraft via OpenSky), weather (the places of your days, one decimal of"
-        " latitude, from Open-Meteo)",
+        " bridges, through its local API), gcal (Google Calendar), granola, mail (a mailbox over IMAP, Gmail"
+        " with an app password), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky),"
+        " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",
@@ -157,7 +159,8 @@ def sync_arguments(sub: Subparsers) -> None:
         "--restart",
         action="store_true",
         help="immich: walk the whole library from the beginning, whatever the watermark and the checkpoint"
-        " of an interrupted walk say (the record still refuses what it already holds)",
+        " of an interrupted walk say; mail: every folder from its first message again, the stored marks"
+        " dropped (the record still refuses what it already holds)",
     )
     s.set_defaults(fn=cmd_sync)
 
@@ -505,9 +508,13 @@ def _sync_one(a: argparse.Namespace) -> None:
     stored = _read_state(state_path).get("since")
     since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
     walks = _takes(adapter, "walk", live=True)
+    resumes = walks and bool(getattr(adapter, "RESUMES", False))  # the checkpoint is its lasting resume state
     restart = bool(getattr(a, "restart", False))  # `setup` builds its own namespace without the flag
     if restart and not walks:
-        print(f"sync: --restart is for a source that walks a library (immich), not {a.name}", file=sys.stderr)
+        print(
+            f"sync: --restart is for a source that walks a library (immich, mail), not {a.name}",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if restart and a.since is not None:
         print("sync: give --restart (the whole library again) or --since, not both", file=sys.stderr)
@@ -532,9 +539,16 @@ def _sync_one(a: argparse.Namespace) -> None:
         total = _total(adapter, config)
         with lb.index() as idx:
             in_record = next((int(s["lines"]) for s in idx.sources() if s["source"] == adapter.NAME), 0)
-        on_server = "total unknown" if total is None else f"{total:,} {unit} on the server"
-        print(f"{a.name}: {on_server}, {in_record:,} already in the record")
-        walk = WalkState(state_path, since, restart=restart)
+        if resumes:  # the source never claims a total: what it holds is said per folder as it goes
+            print(f"{a.name}: {in_record:,} {unit} already in the record")
+        else:
+            on_server = "total unknown" if total is None else f"{total:,} {unit} on the server"
+            print(f"{a.name}: {on_server}, {in_record:,} already in the record")
+        walk = (
+            ResumeState(state_path, since, restart=restart)
+            if resumes
+            else WalkState(state_path, since, restart=restart)
+        )
         options["walk"] = walk
         for text in walk.notices(unit, total):
             print(f"  {text}", file=sys.stderr)
@@ -544,8 +558,14 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["store"] = lb.attach
     if _takes(adapter, "lookup", live=True):
         options["lookup"] = _lookup(lb)
+    if _takes(adapter, "existing", live=True):
+        options["existing"] = _existing(lb)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
+    if _takes(adapter, "owner_emails", live=True):
+        options["owner_emails"] = list(lb.meta.get("owner_emails") or [])
+    if _takes(adapter, "notice", live=True):  # a line of its own on stderr, under the progress lines
+        options["notice"] = lambda text: print(f"  {text}", file=sys.stderr)
     failed: list[str] = []  # one line per feed the adapter could not read, the others still pulled
     if _takes(adapter, "failed", live=True):
         options["failed"] = failed
@@ -579,7 +599,6 @@ def _sync_one(a: argparse.Namespace) -> None:
             print(f"  listening for {_window_text(listen_s)}", file=sys.stderr)
         options["listen_s"] = listen_s
         options["status"] = status
-        options["notice"] = lambda text: print(f"  {text}", file=sys.stderr)
     group: Callable[[dict[str, Any]], str] | None = getattr(adapter, "group", None)
     seen["groups"] = Counter()
     seen["group_marks"] = {}  # the largest watermark per group, kept in the state when GROUP_MARKS
@@ -649,11 +668,18 @@ def _sync_one(a: argparse.Namespace) -> None:
         kept = ""
         mark = stored
     already = seen["count"] - n
+    if isinstance(walk, ResumeState):  # the marks are the source's own, per folder, said below
+        tail = f"; marks in {_under_root(lb, state_path)}"
+    else:
+        tail = f"; watermark {mark or since or '-'}{kept}"
     print(
         f"{a.name}: {n:,} new lines of {seen['count']:,} seen {where}"
         + (f" ({already:,} already in the record)" if already else "")
-        + f"; watermark {mark or since or '-'}{kept}"
+        + tail
     )
+    if isinstance(walk, ResumeState):
+        for text in walk.describe(getattr(adapter, "describe", None)):
+            print(f"  {text}")
     for name, count in seen["groups"].items():
         print(f"  {name}: {count - already_in_group[name]} new of {count} seen")
     _report_skipped(skipped)
@@ -1045,6 +1071,19 @@ def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
     return lookup
 
 
+def _existing(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], set[tuple[str, str]]]:
+    """For a live adapter whose `pull` takes `existing`: which of a batch of (source, raw_id) keys
+    the record already holds, one SELECT through the index, so a source that can name its items
+    before fetching them (`mail`: the Message-ID from the headers) never fetches a body the record
+    would refuse."""
+
+    def existing(keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
+        with lb.index() as idx:
+            return idx.existing(keys)
+
+    return existing
+
+
 def _start(
     lb: Logbook, adapter: adapters.LiveAdapter, config: object, given: str | None, stored: str | None
 ) -> tuple[str | None, str | None]:
@@ -1144,6 +1183,9 @@ class WalkState:
     and begins again. `started` is when the walk began (the first run's clock), the latest the
     walk's watermark may be. Bookkeeping, not the record: nothing here is in the chain."""
 
+    KEY = "walk"  # where the checkpoint lives in the state file
+    LASTS = False  # a walk's checkpoint goes when the walk completes; a ResumeState's stays
+
     def __init__(self, path: Path, since: str | None, restart: bool = False) -> None:
         self.path = path
         self.since = since
@@ -1151,11 +1193,11 @@ class WalkState:
         self.pending: list[tuple[int, dict[str, Any]]] = []
         self.checkpoint: dict[str, Any] | None = None
         self.dropped: tuple[str, dict[str, Any]] | None = None  # (why, the walk) when one is left behind
-        saved = _read_state(path).get("walk")
+        saved = _read_state(path).get(self.KEY)
         if isinstance(saved, dict) and isinstance(saved.get("checkpoint"), dict):
             if restart:
                 self.dropped = ("--restart", saved)
-            elif saved.get("since") != since:
+            elif saved.get("since") != since and not self.LASTS:
                 self.dropped = ("since", saved)
             else:
                 self.checkpoint = dict(saved["checkpoint"])
@@ -1197,18 +1239,45 @@ class WalkState:
         if not reached:
             return
         state = _read_state(self.path)
-        state["walk"] = {
+        state[self.KEY] = {
             "since": self.since,
             "started": self.started,
             "saved": now_utc(),
             "checkpoint": reached[-1],
         }
         _write_state(self.path, state)
+        self.checkpoint = reached[-1]
 
     def finish(self) -> None:
         """The walk completed: no checkpoint to resume from."""
         self.pending = []
+        if self.LASTS:
+            return
         state = _read_state(self.path)
-        if "walk" in state:
-            del state["walk"]
+        if self.KEY in state:
+            del state[self.KEY]
             _write_state(self.path, state)
+
+
+class ResumeState(WalkState):
+    """The lasting form of the checkpoint, for a source whose resume state is its own (`RESUMES`:
+    `mail`, with a UIDVALIDITY and a highest UID per folder): kept under `resume` in
+    `state/<name>.json`, written as a walk's is — only once the lines up to it are in the record,
+    so an interrupted run leaves it at the last batch written — and never removed when a run
+    completes, since the next run starts from it. `--since` narrows that one run and leaves the
+    state alone; `--restart` drops it. The adapter's `describe(checkpoint)` says what it holds, one
+    line per folder, after the summary."""
+
+    KEY = "resume"
+    LASTS = True
+
+    def notices(self, unit: str, total: int | None) -> list[str]:
+        if self.dropped is not None:
+            return [f"--restart: the stored marks are dropped ({self.path.parent.name}/{self.path.name})"]
+        return []
+
+    def describe(self, describe: Callable[[dict[str, Any]], list[str]] | None) -> list[str]:
+        """What the state holds now, in the adapter's words; nothing when there is none yet."""
+        if self.checkpoint is None or describe is None:
+            return []
+        return list(describe(self.checkpoint))

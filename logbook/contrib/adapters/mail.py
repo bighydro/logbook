@@ -504,14 +504,14 @@ def parse_message(
         return None, []
     if date is None:
         _count(counts, f"date_from_{fallback_name}")
-    message_id = _first_id(headers.get("message-id"))
+    message_id = first_id(headers.get("message-id"))
     if message_id is None:
         _count(counts, "no_message_id")
         own = f"sha256:{hashlib.sha256(raw).hexdigest()}"
     else:
         own = message_id
     references = _ids(headers.get("references"))
-    in_reply_to = _first_id(headers.get("in-reply-to"))
+    in_reply_to = first_id(headers.get("in-reply-to"))
     sender = _addresses(headers, "from")
     payload: dict[str, Any] = {
         "schema": SCHEMA,
@@ -582,7 +582,9 @@ def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
     counts[key] = counts.get(key, 0) + n
 
 
-def _first_id(value: str | None) -> str | None:
+def first_id(value: str | None) -> str | None:
+    """The first id in a `Message-ID`, `In-Reply-To` or `References` header, without its brackets,
+    or None: the rule `raw_id` is keyed by, which a live source applies to the headers alone."""
     ids = _ids(value)
     return ids[0] if ids else None
 

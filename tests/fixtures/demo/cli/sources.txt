@@ -37,7 +37,7 @@ ios-calls            file       enabled
 ios-contacts         file       enabled
 ios-notes            file       enabled
 line                 file       enabled
-mail                 file       enabled
+mail                 file+live  enabled
 myfitnesspal         file       enabled
 passages             file       enabled
 pocket               file       enabled

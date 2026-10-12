@@ -79,6 +79,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "gcal",
         "ais",
         "adsb",
+        "mail",
         "apple-podcasts",
         "beeper",
         "weather",
