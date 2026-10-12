@@ -1,5 +1,7 @@
 # Logbook
 
+Why it exists: [the manifesto](MANIFESTO.md) · [the ten rules](RULES.md) · [Letter 0](docs/letters/2026-10-12-why-i-built-it.md)
+
 **A diary that writes itself.**
 
 Your life already gets recorded, by your phone, your photos, your calendar, your messages. Logbook writes it all down once, in one folder that only you hold, and reads it back to you as days. You hand a page to someone you care about; they hand one back.
