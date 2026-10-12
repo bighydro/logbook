@@ -10,7 +10,11 @@ Twelve read tools answer from the index and the readers every command already us
 themselves, `day_lines` (`logbook show DAY`, one object per line), `line` (one line in full, a
 transcript's text from the attachment store included) and `digest` (`logbook digest`, the text as the
 command prints it) — and two write tools go through `Logbook.append` and nothing else: `add_note` is
-`logbook add "<sentence>"`, and `promise_done` is `logbook promises done <id>`.
+`logbook add "<sentence>"`, and `promise_done` is `logbook promises done <id>`. Two more write tools
+are refused unless the owner allows them by name in the `mcp` entry's `write` (ADR 0022: orchestrators
+reach the record only through the crossing): `sign_day` is `logbook day sign`, through the same
+`signing.sign`, and `note_day` appends one `note/v1` line to a day. Both take the writer lock without
+waiting and write only to a day inside the write window (`policy.mcp_door`).
 
 Every tool's output passes the crossing gate of ADR 0016. `policy/crossing.json` names the `mcp`
 destination and the highest tier that may cross to it, 1 unless the owner raises it (`policy.mcp_ceiling`);
@@ -26,6 +30,7 @@ about and counts — never a line's content, never a search's words, never a nam
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -33,7 +38,7 @@ import sys
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -41,13 +46,23 @@ from zoneinfo import ZoneInfo
 from .. import __version__
 from ..core import day as day_reader
 from ..core import days as days_reader
-from ..core import flights, pages, policy, reading, rollup, stays, transcripts, trips
+from ..core import flights, pages, policy, reading, rollup, signing, stays, transcripts, trips
 from ..core.chain import Line, is_sealed
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.index import RETRACTED, EvidenceRow, Index, LocationRow, Place
 from ..core.resolve import Ref, labels
-from ..core.store import RETRACTION, FormatError, Logbook, now_utc, retractions, utc
+from ..core.store import (
+    NOT_WAITING,
+    RETRACTION,
+    FormatError,
+    HeadMoved,
+    Locked,
+    Logbook,
+    now_utc,
+    retractions,
+    utc,
+)
 from . import digest as digest_reader
 from . import gaps, promises
 from .rows import _attendee, _clock, _line_text, _mail_person, _name, _ref_value
@@ -66,8 +81,15 @@ QUOTED = re.compile(
 )  # what a refusal quotes back (a name, a day as typed): elided in the log
 ELIDED = "'\u2026'"
 # the arguments a log line may carry: a day, an id, a window, a switch; never `text`, never `name`
-LOGGED = ("day", "date", "id", "from", "to", "since", "until", "year", "period", "kinds", "open", "limit")
+LOGGED = (
+    "day", "kind", "date", "id", "from", "to", "since", "until", "year", "period", "kinds", "open", "limit"
+)  # fmt: skip
 PERIODS = ("day", "week")
+NOTE_KINDS = ("note", "proposal", "reflection")  # `note_day(kind)`, carried in note/v1's `labels`
+NOTE_MAX = 4000  # `note_day(text)`: the most characters one note through the door may hold
+NOTE_SOURCE = "mcp"  # the source of a `note_day` line: written through the door, in the owner's words
+NOTE_TIER = 2  # RFC 0010: a note/v1 line is tier 2, whoever writes it
+NOT_WAITED = "; the door does not wait for another writer, so nothing was written"
 # `day_lines(kinds)`: a profile family -> the kinds in it (`calendar` is the `event/v1` lines)
 FAMILIES: dict[str, tuple[str, ...]] = {
     "mail": ("mail",),
@@ -114,6 +136,7 @@ class GatedLogbook(Logbook):
     def __init__(self, root: Path, gate: Gate):
         super().__init__(root)
         self.gate = gate
+        self.window_days = policy.WRITE_WINDOW_DAYS  # how far back a write tool may write (`call` sets it)
 
     def index(self) -> Index:
         idx = GatedIndex.open(self)
@@ -350,6 +373,7 @@ class Tool:
     fn: ToolFn
     sample: dict[str, Any]  # the arguments `--inspect` shows
     writes: bool = False
+    named: bool = False  # a write tool refused unless the policy's `mcp` entry names it under `write`
 
     @property
     def schema(self) -> dict[str, Any]:
@@ -823,6 +847,116 @@ def tool_promise_done(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     return {**_written(lb, line), "already_done": False, "promise": found.id, "quote": found.match.quote}
 
 
+# -- the write tools the owner allows by name (ADR 0022) -------------------------------------------------
+
+
+def _write_day(lb: GatedLogbook, a: Arguments) -> str:
+    """The `day` a named write tool writes to, inside the window: today in the record's zone and the
+    `window_days` before it (`write_window_days` in the policy's `mcp` entry, else 60)."""
+    day = parse_day(_string(a, "day", required=True) or "")
+    today = date.fromisoformat(_today(lb))
+    first = today - timedelta(days=lb.window_days)
+    if not first <= day <= today:
+        raise ToolError(
+            f"{day.isoformat()} is outside the write window, {first.isoformat()} to {today.isoformat()}"
+            f" (today and the {lb.window_days} days before it, set by {policy.WINDOW} in the mcp entry"
+            f" of {policy.POLICY_FILE.as_posix()})"
+        )
+    return day.isoformat()
+
+
+def _entries(a: Arguments, key: str) -> list[str]:
+    value = a.get(key)
+    if not isinstance(value, list) or not all(isinstance(entry, str) for entry in value):
+        raise ToolError(f"{key} must be a list of line ids or seqs, as day_lines lists them")
+    return value
+
+
+def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """`logbook day sign DAY` through the door: the arguments mapped onto the flags and handed to
+    `signing.sign`, the one implementation, over the record itself and not through the gate, so the
+    line is byte for byte what the command writes with the same flags and `--at`. Returns the line's
+    envelope, the header the command prints, and counts."""
+    day = _write_day(lb, a)
+    confirm = a.get("confirm")
+    entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
+    disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
+    line = signing.sign(
+        Logbook(lb.root),
+        day,
+        confirm=signing.confirmation(entries, bool(disposed)),
+        note=_string(a, "note"),
+        at=_string(a, "at"),
+        dispositions=disposed,
+    )
+    p = line["payload"]
+    given = signing.dispositions_of(p).values()
+    return {
+        **_written(lb, line),
+        "day": p["day"],
+        "header": signing.summary(line)[0],
+        "confirmed": len(p["confirmed"]),
+        "on_page": p["page"]["lines"],
+        "dispositions": {value: n for value in signing.DISPOSITIONS if (n := list(given).count(value))},
+        "supersedes": p.get("supersedes"),
+    }
+
+
+def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """One note/v1 line on a day, through the door: source `mcp`, tier 2 (RFC 0010), the text as given
+    and never filtered, `kind` in the profile's `labels`. `at` is checked by the rules of `day sign
+    --at` and must fall on the day in the record's zone; without it the note is now when the day is
+    today, else at 23:59 of the day."""
+    day = _write_day(lb, a)
+    text = _string(a, "text", required=True) or ""
+    if not text.strip():
+        raise ToolError("text is empty; a note is the owner's words")
+    if len(text) > NOTE_MAX:
+        raise ToolError(f"text is {len(text)} characters, over the cap of {NOTE_MAX}; nothing was written")
+    kind = _string(a, "kind") or NOTE_KINDS[0]
+    if kind not in NOTE_KINDS:
+        raise ToolError(f"kind must be one of {', '.join(NOTE_KINDS)}")
+    tz = str(lb.meta["timezone"])
+    at = _string(a, "at")
+    if at is not None:
+        stamp = signing.moment(at, day, tz)
+        if _instant(stamp).astimezone(ZoneInfo(tz)).date().isoformat() != day:
+            raise ToolError(f"at {at.strip()} is not on {day} in {tz}; a note on a day is written during it")
+    elif day == _today(lb):
+        stamp = now_utc()
+    else:
+        stamp = utc(datetime.combine(parse_day(day), time(23, 59), tzinfo=ZoneInfo(tz)).isoformat())
+    line = Logbook(lb.root).append(
+        at=stamp,
+        source=NOTE_SOURCE,
+        kind="note",
+        tier=NOTE_TIER,
+        payload={"schema": "note/v1", "text": text, "labels": [kind]},
+    )
+    return {**_written(lb, line), "day": day, "label": kind, "chars": len(text)}
+
+
+def _door(root: Path, name: str) -> policy.Ceiling:
+    """The policy's `mcp` entry when it allows the write tool `name` today; else the refusal, one
+    sentence that says what to write in the file."""
+    try:
+        door = policy.mcp_door(root)
+    except policy.PolicyError as e:
+        raise ToolError(str(e)) from e
+    file = policy.POLICY_FILE.as_posix()
+    if door is not None and door.expired and door.until is not None and name in door.write:
+        raise ToolError(
+            f"{name} is not allowed through the door: the mcp entry of {file} expired on"
+            f" {door.until.isoformat()} and allows no write tool"
+        )
+    if door is None or name not in door.writes:
+        raise ToolError(
+            f"{name} is not allowed through the door: the mcp entry of {file} does not name it"
+            f' under "{policy.WRITE}"'
+        )
+    return door
+
+
 def _written(lb: GatedLogbook, line: Line) -> dict[str, Any]:
     """What a write tool says about the line it appended: its envelope, never its payload, and
     whether this server will read it back under the ceiling in force."""
@@ -1010,6 +1144,61 @@ TOOLS: dict[str, Tool] = {
             {"id": "3b9e5d0f2a71c846"},
             writes=True,
         ),
+        Tool(
+            "sign_day",
+            "Sign a day as `logbook day sign DAY` does, through the same code: one signed-day/v1 line,"
+            " tier 1, the owner's reading of the page. `confirm` names the lines confirmed (default every"
+            ' line on the page; "none" confirms nothing and goes alone), `kept`, `missed`, `dropped`,'
+            " `carried` say what became of a commitment, `at` is when the owner signed. A day signed before"
+            ' is superseded. Refused unless the mcp entry of policy/crossing.json names it under "write".',
+            {
+                "day": DAY,
+                "confirm": {
+                    "anyOf": [
+                        {"type": "array", "items": {"type": "string"}},
+                        {"type": "string", "enum": [signing.NOTHING]},
+                    ],
+                    "description": 'line ids or seqs on the page, or "none"',
+                },
+                **{
+                    value: {"type": "array", "items": {"type": "string"}, "description": f"lines {meaning}"}
+                    for value, meaning in (
+                        (signing.KEPT, "kept"),
+                        (signing.MISSED, "missed"),
+                        (signing.DROPPED, "let go of on purpose"),
+                        (signing.CARRIED, "still open, carried to a later day"),
+                    )
+                },
+                "note": {"type": "string", "description": "one line in the owner's words"},
+                "at": {
+                    "type": "string",
+                    "description": f"RFC 3339 with an offset or Z, e.g. {signing.AT_EXAMPLE}",
+                },
+            },
+            ("day",),
+            tool_sign_day,
+            {"day": "2026-06-09", "kept": ["019cadd3-6bc0-7dcd-9133-000000000010"], "at": signing.AT_EXAMPLE},
+            writes=True,
+            named=True,
+        ),
+        Tool(
+            "note_day",
+            f"Append one note to a day: a note/v1 line, source mcp, tier 2, the text as given (at most"
+            f" {NOTE_MAX} characters), `kind` ({', '.join(NOTE_KINDS)}) in its labels, at `at` on that day"
+            " or, without it, now for today and 23:59 for an earlier day. Refused unless the mcp entry of"
+            ' policy/crossing.json names it under "write".',
+            {
+                "day": DAY,
+                "text": {"type": "string", "maxLength": NOTE_MAX},
+                "at": {"type": "string", "description": "RFC 3339 with an offset or Z, on the day"},
+                "kind": {"type": "string", "enum": list(NOTE_KINDS), "default": NOTE_KINDS[0]},
+            },
+            ("day", "text"),
+            tool_note_day,
+            {"day": "2026-06-09", "text": "Proposed: book the crane for Friday.", "kind": "proposal"},
+            writes=True,
+            named=True,
+        ),
     )
 }
 
@@ -1030,10 +1219,17 @@ def call(root: Path, name: str, arguments: Arguments, allow_tier_3: bool = False
     try:
         gate = Gate(ceiling(root, allow_tier_3), set())
         lb = GatedLogbook(root, gate)
+        held: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        if tool.named:  # allowed by name, under the writer lock, never waiting for another writer
+            lb.window_days = _door(root, name).window_days
+            held = lb.writer(command=f"logbook serve mcp {name}", wait=False, notice=LOG.info)
         try:
-            data = tool.fn(lb, arguments)
-        except (stays.SettingsError, pages.PageError, policy.PolicyError, FormatError) as e:
+            with held:
+                data = tool.fn(lb, arguments)
+        except (stays.SettingsError, pages.PageError, policy.PolicyError, FormatError, HeadMoved) as e:
             raise ToolError(str(e)) from e
+        except Locked as e:
+            raise ToolError(str(e).replace(NOT_WAITING, NOT_WAITED)) from e
     except (ToolError, ValueError, FileNotFoundError) as e:
         _log(name, arguments, f"refused: {QUOTED.sub(ELIDED, str(e))}")  # a quoted argument is not logged
         raise
@@ -1083,8 +1279,15 @@ def inspect_text() -> str:
             f"{key}{'' if key in tool.required else '?'}: {spec.get('type', 'any')}"
             for key, spec in tool.properties.items()
         )
-        lines.append(f"{tool.name}({args}){'  [writes one line]' if tool.writes else ''}")
+        mark = "  [writes one line; only when the policy names it]" if tool.named else "  [writes one line]"
+        lines.append(f"{tool.name}({args}){mark if tool.writes else ''}")
         lines.append(f"    {tool.description}")
+    named = ", ".join(t.name for t in TOOLS.values() if t.named)
+    lines += [
+        "",
+        f'write tools, allowed by name in the mcp entry\'s "{policy.WRITE}": {named} (none by default; e.g.'
+        f' {{"mcp": {{"max_tier": 1, "{policy.WRITE}": ["sign_day", "note_day"]}}}})',
+    ]
     sample = TOOLS["day"]
     request = {
         "jsonrpc": "2.0",

@@ -344,9 +344,11 @@ def crossing_check(root: Path) -> Check:
 
 
 def _ceiling_text(c: policy.Ceiling) -> str:
-    """`hermes 2`, `cloud-model 2 until 2026-12-31`: the ceiling as it counts today."""
+    """`hermes 2`, `cloud-model 2 until 2026-12-31`, `mcp 2 write sign_day,note_day`: the ceiling as it
+    counts today, and the write tools it lets through the door by name (ADR 0022)."""
     when = f" until {c.until.isoformat()}" if c.until is not None and not c.expired else ""
-    return f"{c.destination} {c.max_tier}{when}"
+    write = f" write {','.join(c.writes)}" if c.writes else ""
+    return f"{c.destination} {c.max_tier}{when}{write}"
 
 
 NO_HOME = (

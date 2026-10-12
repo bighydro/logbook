@@ -299,21 +299,10 @@ def _dispositions(a: argparse.Namespace) -> dict[str, list[str]]:
 
 
 def _confirm(a: argparse.Namespace) -> list[str] | None:
-    """`--confirm ID,ID` as `signing.sign` takes it: None when not given, the entries typed, or the
-    empty list for `--confirm none` (amendment 2), which goes alone: an id beside it, or any
-    disposition flag, is refused in one sentence."""
-    if a.confirm is None:
-        return None
-    entries = str(a.confirm).split(",")
-    if not any(entry.strip().lower() == signing.NOTHING for entry in entries):
-        return entries
-    if len(entries) > 1 or _dispositions(a):
-        flags = ", ".join(f"--{value}" for value in signing.DISPOSITIONS[:-1])
-        raise signing.SignError(
-            f"--confirm {signing.NOTHING} goes alone: no id beside it and no {flags} or"
-            f" --{signing.DISPOSITIONS[-1]}, since a line given a disposition is confirmed"
-        )
-    return []
+    """`--confirm ID,ID` as `signing.sign` takes it (`signing.confirmation`): None when not given,
+    the entries typed, or the empty list for `--confirm none` (amendment 2), which goes alone."""
+    entries = None if a.confirm is None else str(a.confirm).split(",")
+    return signing.confirmation(entries, bool(_dispositions(a)))
 
 
 def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
@@ -324,7 +313,8 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     confirmed by that; none at all for `--confirm none`), what became of each commitment named, the
     digest of the page as shown and the note, at the moment the owner signed (`--at`, else now) — and
     nothing else touched. A day signed before is signed again: the new line supersedes the standing
-    one. Only the owner signs: no agent and no MCP tool runs this."""
+    one. Only the owner signs: here, or through the MCP tool `sign_day` when the owner's policy allows
+    it by name (ADR 0022), which signs through the same `signing.sign`."""
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
@@ -335,19 +325,8 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     except ValueError as e:  # SignError, a day that is not one
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
-    p = line["payload"]
-    n, on_page = len(p["confirmed"]), p["page"]["lines"]
-    print(f"{p['day']}: signed {line['at']} as #{line['seq']} {signing.SCHEMA}")
-    lines = f"{n} line{'s' if n != 1 else ''} confirmed of {on_page} on the page"
-    print(f"  {lines} · page sha256 {p['page']['sha256'][:12]}…")
-    counts = signing.counts_text(signing.dispositions_of(p))
-    if counts:
-        print(f"  dispositions: {counts}")
-    if p.get("note"):
-        print(f"  note: {p['note']}")
-    if p.get("supersedes"):
-        print(f"  signed again: supersedes {p['supersedes']}")
-    print("  only signed days cross by default (`export crossing`); re-sign after the day changes")
+    for text in signing.summary(line):
+        print(text)
 
 
 def digest_arguments(sub: Subparsers) -> None:

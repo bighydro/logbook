@@ -95,7 +95,7 @@ def test_the_tools_are_listed_with_their_schemas(tmp_path: Path, monkeypatch: py
     tools = {t.name: t for t in _list(lb)}
     assert set(tools) == {
         "day", "days", "trips", "places", "people", "person", "promises", "gaps", "search",
-        "day_lines", "line", "digest", "add_note", "promise_done",
+        "day_lines", "line", "digest", "add_note", "promise_done", "sign_day", "note_day",
     }  # fmt: skip
     assert tools["line"].input_schema["required"] == ["id"]
     assert set(tools["day_lines"].input_schema["properties"]) == {"day", "kinds"}

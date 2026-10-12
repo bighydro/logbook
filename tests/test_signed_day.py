@@ -253,10 +253,15 @@ def test_an_empty_day_can_be_signed(lb: Logbook, capsys: pytest.CaptureFixture[s
     assert _run(capsys, "show", "2026-03-20").splitlines()[0].startswith("2026-03-20: nothing logged")
 
 
-def test_the_mcp_server_cannot_sign():
-    """ARCHITECTURE: a confirmation stays with the human. No tool of the MCP server signs a day."""
+def test_the_mcp_server_signs_only_through_signing_sign():
+    """ADR 0022 and RFC 0034 amendment 3: the MCP server signs a day only through `sign_day`, which the
+    owner allows by name, and only through `signing.sign`: no second implementation of a signature.
+    (`tests/test_mcp_write_tools.py` holds the tool to the bytes `day sign` writes.)"""
     source = inspect.getsource(mcp_server)
-    assert "signing" not in source and "sign_day" not in source and "signed-day" not in source
+    assert source.count("signing.sign(") == 1
+    for built in ('"signed-day', "signing.SCHEMA", "signing.KIND", "page_digest", "signing.page("):
+        assert built not in source, f"the server builds no signature of its own ({built})"
+    assert mcp_server.TOOLS["sign_day"].named
 
 
 # -- property: re-signing never changes the chain head of earlier days -----------------------------------
