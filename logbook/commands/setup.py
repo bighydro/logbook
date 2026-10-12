@@ -79,6 +79,8 @@ KEY_SOURCES = {
     "immich": "Immich → Account settings → API keys, with only the asset.read permission; the URL is yours",
     "gcal": "Google Calendar → Settings → the calendar → Integrate calendar → Secret address in iCal format",
     "granola": "Granola → Connectors → API keys (Business and Enterprise plans)",
+    "beeper": "Beeper Desktop → Settings → Developers → Approved connections (+); the token reads every chat"
+    " and can send as you, so it is a password; the app must be running, Remote Access off",
     "ais": "a free key from aisstream.io, for the vessels registered in assets.json",
     "adsb": "an account at opensky-network.org (optional: anonymous access works, with a lower rate)",
 }
