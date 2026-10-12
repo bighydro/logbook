@@ -4,7 +4,8 @@
 Protocol](https://modelcontextprotocol.io): the host (an editor, a chat client, an agent runner) starts
 `logbook mcp` as a child process and calls its tools over that process's own stdin and stdout. That is the
 only transport. Nothing listens on a port, no socket opens, and the record stays where it is. The agent asks;
-the readers answer; the two things it may write go through `Logbook.append` like everything else.
+the readers answer; what it may write goes through `Logbook.append` like everything else, and two of those
+writes only when you allow them by name ([below](#write-tools)).
 
 ```bash
 pip install "openlogbook[mcp]"      # the official Python MCP SDK, the one optional dependency
@@ -38,7 +39,8 @@ the environment the record needs and nothing more: no adapter key is read here, 
 
 ## The tools
 
-Twelve read tools and two write tools. Each read tool is one command you already know, with the same output
+Twelve read tools, two write tools, and two more write tools that are refused until your policy names them
+([Write tools](#write-tools)). Each read tool is one command you already know, with the same output
 as its `--json` (or, for the three that read the lines themselves, as its text):
 
 | Tool | Arguments | The command |
@@ -57,6 +59,8 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | `digest` | `period?` (`day`, `week`), `date?` | `logbook digest DATE`, the text as printed ([below](#the-lines-themselves)) |
 | `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2 |
 | `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line |
+| `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; only when the policy names it |
+| `note_day` | `day`, `text`, `at?`, `kind?` | one `note/v1` line on `day`, tier 2, source `mcp`; only when the policy names it |
 
 `search` is a scan, not the ranked search `logbook search` is ([search](search.md)). It cuts the window
 (`since` and `until` are local days, inclusive) and the kinds in the index, reads the standing lines in chain
@@ -167,7 +171,9 @@ tool's name, the arguments that are a day, an id, a window or a switch, and the 
 day=2026-06-10 kinds=note,transcript lines=3 count=3 above_ceiling=1 retracted=0 withheld=4`, `line
 id=019c… withheld=0`, or `refused: line '019c…' is tier 3, above the mcp ceiling of 2`. Never a line's
 content, never a search's words, never a name: an argument that is text (`search`'s `text`, `person`'s
-`name`, `add_note`'s `text`) is not logged.
+`name`, `add_note`'s and `note_day`'s `text`, `sign_day`'s ids and `note`) is not logged. A write tool's line
+is the tool, the day, and counts: `note_day day=2026-06-09 kind=proposal seq=812 tier=2 chars=41 withheld=0`,
+`sign_day day=2026-06-09 seq=813 tier=1 confirmed=14 on_page=15 withheld=0`.
 
 ## The write tools
 
@@ -181,7 +187,62 @@ is extended as a line is appended, as it is for every writer.
 The ARCHITECTURE's rule that an agent is an operator, not an author, holds here in the way it holds for the
 command line: the agent types what you told it to, under your name, and the line says `manual`. Whether a host
 may call a write tool at all is the host's setting, not the server's; most hosts ask before a tool that
-writes, and `--inspect` marks the two that do.
+writes, and `--inspect` marks the ones that do.
+
+## Write tools
+
+ADR 0022 says it in one sentence: *orchestrators reach the record only through the crossing: read tools under
+the ceiling, and the few write tools the owner allows by name.* An orchestrator that builds the Day page used
+to print a `day sign` command for you to run by hand, and your verdicts on its proposals lived outside the
+record. With the two tools here, the proposals and your verdicts become lines, and the Day page can be rebuilt
+from the record alone.
+
+Neither is allowed until the `mcp` entry of `policy/crossing.json` names it under `write`:
+
+```json
+{"mcp": {"max_tier": 1, "write": ["sign_day", "note_day"], "write_window_days": 60}}
+```
+
+- No `write`, an empty one, or no `mcp` entry at all: no write tool is allowed. Each is refused with one
+  sentence, `sign_day is not allowed through the door: the mcp entry of policy/crossing.json does not name it
+  under "write"`, and nothing is written.
+- An entry past its `until` day allows none, whatever it names.
+- `write` names only `sign_day` and `note_day`; anything else in it is one error naming the file, for every
+  call, as a broken ceiling is.
+- `write_window_days` (60 when absent) is how far back the door writes: a day from that many days before today
+  through today, in the record's zone, and no other. A day outside it is refused naming the window.
+- `--allow-tier-3` has no effect on either. Neither writes above the tier its profile fixes: `sign_day`
+  writes `signed-day/v1` at tier 1, `note_day` writes `note/v1` at tier 2 (RFC 0010 makes a note tier 2,
+  whoever writes it), and nothing else.
+
+`logbook doctor` shows the tools on its crossing line (`mcp 1 write sign_day,note_day`), and `logbook serve mcp
+--inspect` lists them, marked `[writes one line; only when the policy names it]`.
+
+**`sign_day(day, confirm?, kept?, missed?, dropped?, carried?, note?, at?)`** is `logbook day sign DAY` through
+the same code, `signing.sign`, with no second implementation: `confirm` is a list of ids or seqs on the page,
+or `"none"` (which goes alone); the four dispositions are lists of ids or seqs (RFC 0034 amendment 1); `note`
+is one line; `at` is the moment you signed, with the same rules as `--at` (amendment 2). The ids are checked
+against the page as the command checks them, and a day already signed is signed again, the new line
+superseding the old. The line is byte for byte what `day sign` writes with the same flags and `--at`, source
+`manual` included: the signature is yours, carried by the orchestrator. The page signed is the whole page, as
+`day sign` signs it, lines above the ceiling included, which the orchestrator cannot read; the answer is the
+line's envelope, `header` (the first line `day sign` prints, `2026-06-09: signed 2026-06-09T19:30:00Z as #813
+signed-day/v1`), and counts: `confirmed`, `on_page`, `dispositions` per word, and `supersedes`.
+
+**`note_day(day, text, at?, kind?)`** appends one `note/v1` line: source `mcp`, tier 2, the text exactly as
+given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer one is refused and nothing is
+written). `kind` is one of `note` (the default), `proposal` and `reflection`, carried in the profile's own
+slot for a label, `labels: [kind]` (RFC 0010), so a proposal an agent made and the note it came with are told
+apart without a new profile. `at`, when given, follows `--at`'s rules and must fall on `day` in the record's
+zone; without it the note is now for today and 23:59 of the day for an earlier one. The answer is the line's
+envelope with `readable` (false at a ceiling of 1: the agent wrote a note it cannot read back), `label` and
+`chars`.
+
+Both hold the writer lock for the whole call, like any command that writes, and neither waits for it: when
+another writer holds it the call is refused with `another logbook command is writing to this record (logbook
+sync, since …); the door does not wait for another writer, so nothing was written`, and the orchestrator tries
+again later. `sign_day` reads the head again before it appends, and when it has moved the call is refused with
+`the record's head moved … nothing was signed`; neither tool ever retries on its own.
 
 ## Testing it
 
@@ -196,4 +257,8 @@ tiers 1, 2 and 3 across location, calendar, note, mail, message, transcript and 
 ceiling matches, line for line, what `logbook digest` prints over a second record holding only the lines at
 or below that ceiling; a missing policy file is a ceiling of 1, a broken one is refused; the log holds counts
 and never content.
+`tests/test_mcp_write_tools.py` holds the two named write tools to the policy: refused without `write`, with
+an expired entry and outside the window; `sign_day`'s line byte for byte the line `day sign` writes for the same
+flags and `--at`; a re-sign superseding; dispositions in the signature; `note_day` with each kind; another
+writer's lock and a moved head refused; a log with counts and never the persona's name.
 `logbook mcp --inspect` is the hand check: the table, and a request you can paste.

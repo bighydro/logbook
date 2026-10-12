@@ -1,6 +1,6 @@
 # RFC 0034 — The signed day: `signed-day/v1`, and the gate on the crossing
 
-Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08 · amendment 2 (an empty confirmation and the owner's clock) 2026-10-09
+Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08 · amendment 2 (an empty confirmation and the owner's clock) 2026-10-09 · amendment 3 (signing through the door) 2026-10-12
 
 Agents draft; the owner signs; only signed days cross. This RFC adds one payload profile, `signed-day/v1`, the line the owner appends when they have read a day's page and confirm it as the day's facts; one default for the crossing package (RFC 0005, ADR 0016), which now crosses the lines of signed days unless the owner asks for the rest; one header for `show`; and one block in the Day reader, `readiness`, which says per class of source whether the day's lines are in and which usual sources have not delivered. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and no agent can sign.
 
@@ -46,7 +46,7 @@ page_sha256 = sha256( canonical_json({"day": "<YYYY-MM-DD>", "tz": "<the record'
 
 ## Rules
 
-1. **Only the owner signs.** `logbook day sign` is the one producer. The MCP server (`logbook serve mcp`) exposes no tool that signs, now or later, and an agent that wants a day signed asks the owner (ARCHITECTURE: a confirmation stays with the human, enforced in layer 1). A line whose `subject` is not the record's `owner_id` is not a signature.
+1. **Only the owner signs.** `logbook day sign` is the one producer. The MCP server (`logbook serve mcp`) signs only through the tool `sign_day`, which the owner allows by name and which runs the same writer (amendment 3); without that, an agent that wants a day signed asks the owner (ARCHITECTURE: a confirmation stays with the human, enforced in layer 1). A line whose `subject` is not the record's `owner_id` is not a signature.
 2. **A signature appends; nothing is rewritten.** The writer appends one line through `Logbook.append` and touches no other line, no file of the record and no setting. Correcting a day is new lines and a new signature.
 3. **Re-signing supersedes.** A day may be signed any number of times. The later line carries `supersedes` with the earlier line's id. The **standing signature** of a day is the latest `signed-day` line (by `seq`) naming that day whose subject is the owner and that is not retracted (RFC 0003); a retracted later signature leaves the earlier standing. A day with no standing signature is **unsigned**.
 4. **The confirmed set defaults to the page.** Without `--confirm`, every line of the page not retracted is confirmed. With `--confirm ID,ID,…`, each entry is a line id or a `seq`, resolved against the page; an entry that names a line not on the page, or a retracted line, is refused naming it, and nothing is written.
@@ -143,6 +143,27 @@ What does not change: the page digest, the payload's fields, the hash of every l
 before. `signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its
 schema may change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a
 reader, a fixture in both implementations, a schema pass and one dated amendment to that RFC.
+
+## Amendment 3 — signing through the door
+
+Dated 2026-10-12, after ADR 0022: *orchestrators reach the record only through the crossing: read tools
+under the ceiling, and the few write tools the owner allows by name*, today the day's signature and its
+note. Rule 1 said the MCP server would expose no tool that signs, now or later; this amendment replaces
+that sentence and keeps its point. The owner still signs: an orchestrator that shows the owner the
+Day page on a phone carries the owner's verdict back as `sign_day`, and only when the owner's own
+`policy/crossing.json` names the tool under the `mcp` entry's `write` (docs/mcp.md, "Write tools"). The
+tool has no implementation of its own: it calls the writer `day sign` calls, with the same validation of
+ids against the page, the same `--at` rules, the same `--confirm none` and the same supersession, and
+the line it writes is byte for byte the line the command writes with the same flags and `--at`,
+`source` `manual` included. It holds the writer lock without waiting and refuses when another writer
+holds it; the writer now reads the page and appends under one hold of the lock and reads the head again
+before it appends, refusing when it moved, for the command and the tool alike. It refuses a day outside
+the owner's write window (60 days unless the entry says otherwise), and an entry past its `until` allows
+it no longer.
+
+What does not change: the payload, the page digest, the readers and the crossing. A signature carried
+through the door is a signature; nothing in the line says how it arrived, because the owner's reading of
+the page is the same reading wherever they clicked.
 
 ## Conformance
 
