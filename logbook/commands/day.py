@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
-from ..contrib import gaps, print_layout, print_page, questions, week_paper, year_poster
+from ..contrib import gaps, people_drift, print_layout, print_page, questions, week_paper, year_poster
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core import flights, keepers, pages, policy, reading, search, signing, stays
@@ -231,6 +231,11 @@ def day_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--json", action="store_true", help="the Day as one JSON object, every row with its line ids"
     )
+    s.add_argument(
+        "--no-anniversaries",
+        action="store_true",
+        help="leave out the days together 1, 2, 3, 5 and 10 years ago (`anniversaries`)",
+    )
     s.set_defaults(fn=cmd_day)
 
 
@@ -247,7 +252,10 @@ def cmd_day(a: argparse.Namespace) -> None:
     """`day [YYYY-MM-DD] [--json]`: the Day — the nights either side, the country, the timeline of
     stays, moves, stops and flights with what attached to each and who was there, the health
     line, the sources — read through the index from one reading of the day and the day before
-    (`logbook.core.day`). Nothing is written, not even `policy/stays.json`."""
+    (`logbook.core.day`); then the anniversaries, the days together exactly 1, 2, 3, 5 and 10 years
+    before with the same canonical person (`logbook.contrib.people_drift`), unless
+    `--no-anniversaries`: under `--json` the key is there only on a day that has one, so the Day's
+    object (SPEC §3.2.7) is otherwise unchanged. Nothing is written, not even `policy/stays.json`."""
     lb = Logbook.find()
     if a.day == signing_verb:
         _day_sign(lb, a)
@@ -261,8 +269,13 @@ def cmd_day(a: argparse.Namespace) -> None:
         sys.exit(2)
     day = date.today().isoformat() if a.day in (None, "today") else a.day
     try:
-        data = day_reader.read(lb, day, _airports(a.airports))
-    except (ValueError, stays.SettingsError) as e:
+        airports = _airports(a.airports)
+        data = day_reader.read(lb, day, airports)
+        if not a.no_anniversaries:
+            found = people_drift.anniversaries(lb, day, airports)
+            if found:
+                data["anniversaries"] = found
+    except (ValueError, stays.SettingsError, policy.PolicyError) as e:
         print(f"day: {e}", file=sys.stderr)
         sys.exit(2)
     if a.json:

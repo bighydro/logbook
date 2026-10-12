@@ -771,6 +771,10 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             mark = signing.mark(marks, item["line"])
             yield _row("unplaced", f"{span}  {item['kind']:<6} {mark}{item['title']}{sources_text(item)}")
     yield from story.rows(data.get("stories") or (), tz)
+    if data.get("anniversaries"):
+        yield ""
+        for i, item in enumerate(data["anniversaries"]):
+            yield _row("anniversaries" if i == 0 else "", anniversary_text(item))
     yield ""
     yield _row("health", health_text(data["health"]))
     if data.get("spend"):
@@ -788,6 +792,14 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row(f"from {page['from']}", received_text(page))
         for item in page["named"]:
             yield f"      {item['kind']:<10} {item['title']}"
+
+
+def anniversary_text(item: Mapping[str, Any]) -> str:
+    """`1 year ago, 2024-11-03: Kari Nordmann · Office`: a day together years before, which the
+    command adds to the Day when there is one (`people_drift.anniversaries`)."""
+    years = int(item["years"])
+    ago = f"{years} year{'s' if years != 1 else ''} ago"
+    return f"{ago}, {item['day']}: {item['name']}{DOT}{item['where']}"
 
 
 def _marks(data: Mapping[str, Any]) -> dict[str, str]:

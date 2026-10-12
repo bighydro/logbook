@@ -1,5 +1,5 @@
-"""The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`
-and `people review`."""
+"""The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`,
+`people review`, `people drift` and `people nearby`."""
 
 from __future__ import annotations
 
@@ -20,30 +20,73 @@ if TYPE_CHECKING:
 
 MERGE = "merge"  # `people merge`: never a person's name
 REVIEW = "review"  # `people review`: nor this
+DRIFT = "drift"  # `people drift`
+NEARBY = "nearby"  # `people nearby`
 MERGE_FLAGS = ("propose", "apply", "export_review", "apply_review")
 REVIEW_FLAGS = ("accept", "reject", "all_above")
+DRIFT_FLAGS = ("min_days", "quiet_days", "show")
+NEARBY_FLAGS = ("journey", "days", "radius")
 
 
 def people_arguments(sub: Subparsers) -> None:
     """`logbook people [NAME|merge|review]`."""
     s = sub.add_parser(
         "people",
-        help="everyone the record names; NAME: one person's page; merge; review",
+        help="everyone the record names; NAME, merge, review, drift, nearby",
         description="everyone the record names, never the owner: channels, days together, last real contact;"
         " --priority: ranked by a plain score; NAME: one person's page; merge: the same person named twice;"
-        " review: who the sources saw that the record has not placed, proposed against the people it names",
+        " review: who the sources saw that the record has not placed, proposed against the people it names;"
+        " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go",
     )
     s.add_argument(
         "name",
         nargs="?",
-        metavar="NAME|merge|review",
+        metavar="NAME|merge|review|drift|nearby",
         help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
         " `merge`: the same person named twice or more, proposals with the evidence, merged only when told;"
         " `review`: the observed people not yet placed, proposed against the canonical ones, numbered,"
-        " accepted or rejected only when told",
+        " accepted or rejected only when told; `drift`: many days together in a year, no real contact"
+        " for long; `nearby PLACE`: the people seen at or near a place",
     )
     s.add_argument(
-        "--year", metavar="YYYY", help="one year (default the whole record; --priority: the last year)"
+        "place",
+        nargs="?",
+        metavar="PLACE",
+        help="nearby: lat,lon, a name of places.json, a city of the airports table, or an airport code",
+    )
+    s.add_argument(
+        "--year",
+        metavar="YYYY",
+        help="one year (default the whole record; --priority: the last year; drift: the year the days"
+        " together are counted in)",
+    )
+    s.add_argument(
+        "--min-days",
+        type=int,
+        metavar="N",
+        help=f"drift: at least N days together in one year (default {people_drift_default('min')})",
+    )
+    s.add_argument(
+        "--quiet-days",
+        type=int,
+        metavar="M",
+        help=f"drift: no real contact in more than M days (default {people_drift_default('quiet')})",
+    )
+    s.add_argument(
+        "--show", action="store_true", help="drift: the days together of each, with where; never a word"
+    )
+    s.add_argument("--journey", metavar="ID", help="nearby: where this journey or flight line goes")
+    s.add_argument(
+        "--days",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        help="nearby: the places planned on these days: located calendar entries, flights, journeys",
+    )
+    s.add_argument(
+        "--radius",
+        type=float,
+        metavar="KM",
+        help=f"nearby: how near a stay must be to the place (default {people_drift_default('radius')} km)",
     )
     s.add_argument(
         "--json",
@@ -104,6 +147,21 @@ def cmd_people(a: argparse.Namespace) -> None:
     if a.name == REVIEW:
         _people_review(Logbook.find(), a)
         return
+    if a.name == NEARBY:
+        _people_nearby(Logbook.find(), a)
+        return
+    if a.place is not None:
+        print(f"people: {a.place!r}: a place goes with `people nearby`", file=sys.stderr)
+        sys.exit(2)
+    if any(getattr(a, flag) is not None for flag in NEARBY_FLAGS):
+        print("people: --journey, --days and --radius go with `people nearby`", file=sys.stderr)
+        sys.exit(2)
+    if a.name == DRIFT:
+        _people_drift(Logbook.find(), a)
+        return
+    if any(getattr(a, flag) not in (None, False) for flag in DRIFT_FLAGS):
+        print("people: --min-days, --quiet-days and --show go with `people drift`", file=sys.stderr)
+        sys.exit(2)
     if any(getattr(a, flag) for flag in MERGE_FLAGS):
         print(
             "people: --propose, --apply, --export-review and --apply-review go with `people merge`",
@@ -242,6 +300,82 @@ def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
         print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
         return
     for text in people_review.rows(report):
+        print(text)
+
+
+def people_drift_default(what: str) -> str:
+    """The defaults the help names, without importing the readers at parser time."""
+    return {"min": "20", "quiet": "365", "radius": "50"}[what]
+
+
+def _people_drift(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people drift [--min-days N] [--quiet-days M] [--year YYYY] [--show] [--json]`: the canonical
+    people with at least N days together in one year whose last real contact is more than M days
+    ago (`logbook.contrib.people_drift`), most days together first. Nothing is written."""
+    from ..contrib import people_drift
+
+    if a.priority:
+        print("people drift: --priority ranks everyone; drift is its own list", file=sys.stderr)
+        sys.exit(2)
+    try:
+        found = people_drift.drift(
+            lb,
+            people_drift.DEFAULT_MIN_DAYS if a.min_days is None else a.min_days,
+            people_drift.DEFAULT_QUIET_DAYS if a.quiet_days is None else a.quiet_days,
+            a.year,
+        )
+    except (ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people drift: {e}", file=sys.stderr)
+        sys.exit(2)
+    if found is None:
+        print(json.dumps({"window": None, "people": []}) if a.json else "no people: the record has no lines")
+        return
+    if a.json:
+        print(json.dumps(found.to_json(a.show), indent=2, ensure_ascii=False))
+        return
+    for text in people_drift.drift_rows(found, a.show):
+        print(text)
+
+
+def _people_nearby(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people nearby PLACE | --journey ID | --days FROM TO [--radius KM] [--json]`: the canonical
+    people seen at or near a place, or at each place the owner has planned on those days
+    (`logbook.contrib.people_nearby`), with their last contact. Nothing is written."""
+    from ..contrib import people_nearby
+    from ..core.export import parse_day
+    from ..core.flights import Airports
+
+    asked = [x for x in (a.place, a.journey, a.days) if x is not None]
+    if len(asked) != 1:
+        print("people nearby: say one of PLACE, --journey ID or --days FROM TO", file=sys.stderr)
+        sys.exit(2)
+    if a.priority or any(getattr(a, flag) not in (None, False) for flag in DRIFT_FLAGS):
+        print(
+            "people nearby: --priority, --min-days, --quiet-days and --show do not go with it",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    radius = people_nearby.DEFAULT_RADIUS_KM if a.radius is None else a.radius
+    try:
+        airports = Airports.load()
+        known = stays.read_places(lb.root, stays.read_settings(lb.root).radius_m)
+        span = None
+        unplaced: list[dict[str, object]] = []
+        if a.place is not None:
+            targets = [people_nearby.place(a.place, known, airports)]
+        elif a.journey is not None:
+            targets = [people_nearby.journey(lb, a.journey, known, airports)]
+        else:
+            span = (parse_day(a.days[0]).isoformat(), parse_day(a.days[1]).isoformat())
+            targets, unplaced = people_nearby.planned(lb, *span, known, airports, radius)
+        found = people_nearby.nearby(lb, targets, radius, airports, span, unplaced)
+    except (ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people nearby: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(found.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in people_nearby.rows(found):
         print(text)
 
 
