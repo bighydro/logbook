@@ -56,7 +56,6 @@ import imaplib
 import re
 import socket
 import ssl
-import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
@@ -192,7 +191,8 @@ def pull(
     within a folder. `since` (RFC3339 UTC) searches each folder SINCE that day in place of its mark.
     `walk` is `sync`'s checkpoint keeper: its `start()` holds the marks, `reached(ordinal, marks)`
     is told after every batch. `existing` is the record's answer to a batch of (source, raw_id)
-    keys. `notice` prints one line per batch. Raises OSError or ValueError with one plain sentence."""
+    keys. `notice` prints one line per batch; `progress` is not used, since that line is the
+    progress and names no total. Raises OSError or ValueError with one plain sentence."""
     counts = counts if counts is not None else {}
     say = notice if notice is not None else (lambda _text: None)
     owners = {e.strip().lower() for e in (owner_emails or []) if e.strip()}
@@ -212,7 +212,6 @@ def pull(
             else _default_folders(imap, capabilities)
         )
         ordinal = 0
-        started = time.monotonic()
         for folder in folders:
             shown = decode_utf7(folder)
             uidvalidity = _examine(imap, folder, shown, given)
@@ -225,7 +224,7 @@ def pull(
                     _count(counts, STARTED_OVER)
                     say(f"{shown}: UIDVALIDITY changed, reading the folder from its first message again")
                 marks[folder] = {"uidvalidity": uidvalidity, "uid": 0}
-            uids = _search(imap, folder, shown, start, day)
+            uids = _search(imap, shown, start, day)
             fetched = new = already = 0
             for batch in _batches(uids, BATCH):
                 heads = _fetch_heads(imap, shown, batch)
@@ -268,8 +267,6 @@ def pull(
                 if walk is not None:
                     walk.reached(ordinal, {"folders": dict(marks)})
                 say(f"{shown}: {fetched:,} fetched, {new:,} new, {already:,} already in the record")
-                if progress is not None:
-                    progress(fetched, time.monotonic() - started)
             if not uids and walk is not None:  # an empty folder, or one started over with nothing in it
                 walk.reached(ordinal, {"folders": dict(marks)})
     finally:
@@ -384,7 +381,7 @@ def _examine(imap: imaplib.IMAP4, folder: str, shown: str, given: bool) -> int:
     return int(value)
 
 
-def _search(imap: imaplib.IMAP4, folder: str, shown: str, start: int, day: str | None) -> list[int]:
+def _search(imap: imaplib.IMAP4, shown: str, start: int, day: str | None) -> list[int]:
     """The UIDs to handle, ascending: from `start` up, or SINCE `day` (every UID of that day and
     later, the mark set aside for this run)."""
     criteria = ["SINCE", day] if day is not None else ["UID", f"{start}:*"]
