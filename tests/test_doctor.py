@@ -5,6 +5,7 @@ exist, and every value an environment variable holds is a sentinel the output mu
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -245,6 +246,15 @@ def test_installed_never_raises_on_an_odd_name() -> None:
 
 
 # -- the environment ------------------------------------------------------------------------------------
+
+
+def test_no_live_source_variable_of_the_shell_reaches_a_test() -> None:
+    """`tests/conftest.py` drops every `LOGBOOK_*` variable the shell exported before a test runs, so a
+    developer's Immich key or IMAP password can never turn a `sync:<name>` line to `configured` and
+    change doctor's output under a test; a test that needs one sets its own."""
+    leaked = sorted(name for name in os.environ if name.startswith("LOGBOOK_") and name != "LOGBOOK_HOME")
+    assert leaked in ([], ["LOGBOOK_SLOW"], ["LOGBOOK_STRESS"], ["LOGBOOK_SLOW", "LOGBOOK_STRESS"])
+    assert os.environ["LOGBOOK_HOME"] != "", "the fixture's own"
 
 
 def test_a_sync_the_record_uses_needs_its_variables_by_name_only(lb: Logbook) -> None:

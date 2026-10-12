@@ -35,10 +35,12 @@ case-insensitive, counted `skipped_label`); `since` cuts on `at`.
 
 Built for a 20 GB export: the file is read in chunks and scanned for separators, one message is in
 memory at a time, the headers are parsed by hand, the MIME tree is walked by offsets, and no
-attachment is ever decoded or copied. `progress(messages, bytes_read, elapsed)` is called every
-`PROGRESS_EVERY` messages. A `cursor` (the inbox manifest's, `logbook.contrib.inbox`) says where to start
-in each file and is told, before every draft, how far the file is read, so an interrupted import
-resumes at the last message the record holds. Pure: no network, never writes the source.
+attachment is ever decoded or copied. `parse_message` is the one parser, which `logbook sync mail`
+(`mail_imap`, the live IMAP source) calls with the same rules on the bytes the server hands it, so an
+export and a live pull of one mailbox write the same line. `progress(messages, bytes_read, elapsed)`
+is called every `PROGRESS_EVERY` messages. A `cursor` (the inbox manifest's, `logbook.contrib.inbox`)
+says where to start in each file and is told, before every draft, how far the file is read, so an
+interrupted import resumes at the last message the record holds. Pure: no network, never writes the source.
 """
 
 from __future__ import annotations
@@ -175,8 +177,15 @@ def run(
                 read += 1
                 if progress is not None and read % PROGRESS_EVERY == 0:
                     progress(read, done + end - start, time.monotonic() - started)
-                line, blobs = _line(
-                    separator, raw, counts, timezone or "UTC", tier, owners, account, bool(attachments)
+                line, blobs = parse_message(
+                    raw,
+                    separator_date(separator),
+                    counts,
+                    timezone or "UTC",
+                    tier,
+                    owners,
+                    account,
+                    keep_attachments=bool(attachments),
                 )
                 if line is None:
                     continue
@@ -465,35 +474,44 @@ def _part(raw: bytes, lo: int, hi: int, depth: int) -> Iterator[Part]:
     yield from leaves(raw, Headers(head), body_lo, hi, depth + 1)
 
 
-def _line(
-    separator: bytes,
+def parse_message(
     raw: bytes,
+    fallback: datetime | None,
     counts: dict[str, int],
     tz: str,
     tier: int | None,
     owners: set[str],
     account: str | None,
-    keep_attachments: bool,
+    keep_attachments: bool = False,
+    digest_attachments: bool = False,
+    fallback_name: str = "separator",
 ) -> tuple[dict[str, Any] | None, list[bytes]]:
+    """The mail/v1 line draft for one message, and the attachment bytes to store (only with
+    `keep_attachments`), from the message's bytes: the one parser, for an mbox and for a live
+    source alike. `fallback` is the time to use when the `Date` header is missing or unreadable (the
+    mbox separator's, an IMAP server's INTERNALDATE), counted `date_from_<fallback_name>`; with none
+    either, (None, []) and `skipped_no_date`. `owners` and `account` decide `direction` and prefix
+    `raw_id`. `digest_attachments` names every attachment's sha256 without storing it (a live source
+    has the bytes in hand and the record keeps the reference; RFC 0015 rule 5)."""
     m = BLANK_LINE.search(raw)
     if m is None:
         headers, body_lo = Headers(raw), len(raw)
     else:
         headers, body_lo = Headers(raw[: m.start()]), m.end()
-    at, date = _when(headers.get("date"), separator)
+    at, date = _when(headers.get("date"), fallback)
     if at is None:
         _count(counts, NO_DATE)
         return None, []
     if date is None:
-        _count(counts, "date_from_separator")
-    message_id = _first_id(headers.get("message-id"))
+        _count(counts, f"date_from_{fallback_name}")
+    message_id = first_id(headers.get("message-id"))
     if message_id is None:
         _count(counts, "no_message_id")
         own = f"sha256:{hashlib.sha256(raw).hexdigest()}"
     else:
         own = message_id
     references = _ids(headers.get("references"))
-    in_reply_to = _first_id(headers.get("in-reply-to"))
+    in_reply_to = first_id(headers.get("in-reply-to"))
     sender = _addresses(headers, "from")
     payload: dict[str, Any] = {
         "schema": SCHEMA,
@@ -532,7 +550,7 @@ def _line(
         extra["body_truncated"] = True
         _count(counts, "body_truncated")
     payload["size"] = len(raw)
-    attachments, blobs = _attachments(raw, parts, keep_attachments)
+    attachments, blobs = _attachments(raw, parts, keep_attachments, digest_attachments)
     if attachments:
         payload["attachments"] = attachments
         noted = "attachments_stored" if keep_attachments else "attachments_referenced"
@@ -564,7 +582,9 @@ def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
     counts[key] = counts.get(key, 0) + n
 
 
-def _first_id(value: str | None) -> str | None:
+def first_id(value: str | None) -> str | None:
+    """The first id in a `Message-ID`, `In-Reply-To` or `References` header, without its brackets,
+    or None: the rule `raw_id` is keyed by, which a live source applies to the headers alone."""
     ids = _ids(value)
     return ids[0] if ids else None
 
@@ -631,9 +651,9 @@ def _labels(value: str | None) -> list[str]:
     return [label.strip() for label in decode_words(value).split(",") if label.strip()]
 
 
-def _when(header: str | None, separator: bytes) -> tuple[str | None, str | None]:
-    """(`at` in UTC, `date` with the header's offset), the header's own; the separator's date, and
-    no `date`, when the header is missing or unreadable; (None, None) when neither is readable."""
+def _when(header: str | None, fallback: datetime | None) -> tuple[str | None, str | None]:
+    """(`at` in UTC, `date` with the header's offset), the header's own; the fallback, and no
+    `date`, when the header is missing or unreadable; (None, None) when there is neither."""
     if header:
         try:
             parsed = parsedate_to_datetime(header)
@@ -643,20 +663,26 @@ def _when(header: str | None, separator: bytes) -> tuple[str | None, str | None]
             if parsed.tzinfo is None:  # `-0000`: the sender said nothing about its zone
                 parsed = parsed.replace(tzinfo=UTC)
             return _utc(parsed), parsed.isoformat()
+    if fallback is None:
+        return None, None
+    return _utc(fallback if fallback.tzinfo is not None else fallback.replace(tzinfo=UTC)), None
+
+
+def separator_date(separator: bytes) -> datetime | None:
+    """The date on an mbox separator line (`From <id> Mon Mar 02 10:15:00 +0000 2026`), UTC when
+    it carries no offset; None when it is not readable."""
     text = separator.decode("ascii", errors="replace").rstrip("\r\n")
     parts = text.split(None, 2)
     if len(parts) < 3:
-        return None, None
+        return None
     stamp = " ".join(parts[2].split())
     for layout in SEPARATOR_DATE:
         try:
             when = datetime.strptime(stamp, layout)
         except ValueError:
             continue
-        if when.tzinfo is None:
-            when = when.replace(tzinfo=UTC)
-        return _utc(when), None
-    return None, None
+        return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
+    return None
 
 
 def _utc(when: datetime) -> str:
@@ -739,9 +765,12 @@ def _window(raw: bytes, lo: int, hi: int, encoding: str) -> tuple[bytes, bool]:
     return data, truncated
 
 
-def _attachments(raw: bytes, parts: list[Part], keep: bool) -> tuple[list[dict[str, Any]], list[bytes]]:
+def _attachments(
+    raw: bytes, parts: list[Part], keep: bool, digest: bool = False
+) -> tuple[list[dict[str, Any]], list[bytes]]:
     """Every attachment leaf as `{filename, media_type, bytes}` (+ `sha256` and `path` when `keep`,
-    the only time the bytes are decoded), and the bytes to store, in message order."""
+    `sha256` alone when `digest`: the two times the bytes are decoded), and the bytes to store, in
+    message order."""
     found: list[dict[str, Any]] = []
     blobs: list[bytes] = []
     for part in parts:
@@ -751,11 +780,13 @@ def _attachments(raw: bytes, parts: list[Part], keep: bool) -> tuple[list[dict[s
             "filename": part.headers.filename(),
             "media_type": part.headers.content_type()[0],
         }
-        if keep:
+        if keep or digest:
             data = _decode(raw, part)
             sha256 = hashlib.sha256(data).hexdigest()
-            entry.update(bytes=len(data), sha256=sha256, path=f"{ATTACHMENTS_DIR}/{sha256}")
-            blobs.append(data)
+            entry.update(bytes=len(data), sha256=sha256)
+            if keep:
+                entry["path"] = f"{ATTACHMENTS_DIR}/{sha256}"
+                blobs.append(data)
         else:
             entry["bytes"] = _decoded_length(raw, part)
         found.append(entry)

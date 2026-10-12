@@ -278,6 +278,7 @@ def test_the_real_adapters_run_immich_last_under_all() -> None:
         "gcal",
         "ais",
         "adsb",
+        "mail",
         "apple-podcasts",
         "beeper",
         "weather",

@@ -58,7 +58,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Adapters](adapters/README.md): what an adapter is, the three names it exports, the rules it keeps.
 - [Adapter bounties](adapter-bounties.md): the adapters not yet written, each with its export, profile and tier.
 - [Google Takeout](adapters/takeout.md): one archive, many witnesses; the sub-adapters for [Tasks](adapters/takeout-tasks.md), [Maps](adapters/takeout-maps.md), [Home](adapters/takeout-home.md) and [YouTube](adapters/takeout-youtube.md).
-- [Mail](adapters/mail.md): one line per message from a Takeout mailbox, at 20 GB scale.
+- [Mail](adapters/mail.md): one line per message from a Takeout mailbox, at 20 GB scale, and the same mailbox live over IMAP, read-only.
 - [Health](adapters/health.md): Apple Health, Withings and MyFitnessPal as `health-sample/v1`.
 - [Apple Photos](adapters/photos.md): the library, its albums, favourites and the names you gave the faces.
 - [Apple Wallet](adapters/wallet.md): boarding passes and tickets as flights and events.

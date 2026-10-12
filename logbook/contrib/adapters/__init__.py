@@ -40,6 +40,11 @@ and optionally:
     total(config) -> int | None                 # how many items the source holds, asked once before the
                                                 # walk so `sync` says `N on the server` and `x of N`;
                                                 # None when the source cannot say (`total unknown`)
+    RESUMES: bool                               # with `walk`: the checkpoint is the source's lasting
+                                                # resume state (`mail`: UIDVALIDITY and UID per folder),
+                                                # kept under `resume` in the state file, never dropped
+                                                # when a run completes; `describe(checkpoint)` then
+                                                # says what it holds, one line per folder, after the summary
 
 `pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may), `assets`
 (the registry, as `run` may) and `failed: list[str]`: a source made of several feeds appends one line per
@@ -49,14 +54,19 @@ keeper `sync` drives (`logbook.commands.sync.WalkState`): `walk.start()` is the 
 saved last time — a JSON object of its own making, with `fetched`, the count progress continues from —
 or None, and `walk.reached(ordinal, checkpoint)` after a page says: once draft `ordinal` is in the
 record, `checkpoint` is where to resume. An interrupted run then carries on where it stopped; the
-record's dedupe by (source, raw_id) stays the safety net.
+record's dedupe by (source, raw_id) stays the safety net. `pull` may also take `owner_emails` (the
+record's own addresses, as a file adapter's `run` may), `existing(keys) -> set` (which of a batch of
+(source, raw_id) keys the record already holds, one SELECT, so a source that can name its items before
+fetching them never fetches what would be refused) and `notice(text)` (one line of its own on stderr,
+for a progress line that says what is true: fetched, new, already in the record, never a guessed total).
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
-reads a phone backup's sms.db and the Mac's own chat.db); they write the same lines, so either
-dedupes the other. A live source need not be a service: `imessage` reads a file on this machine and
-`ENV` names only optional overrides, so its `configure` never returns None. Nor need it share the
-NAME: `gcal` pulls Google Calendar's feeds through the `ics` reader and writes `ics` lines, so a
-feed and an export of the same calendar dedupe each other.
+reads a phone backup's sms.db and the Mac's own chat.db; `mail` reads a Takeout mbox and pulls the
+mailbox over IMAP through the one parser); they write the same lines, so either dedupes the other. A
+live source need not be a service: `imessage` reads a file on this machine and `ENV` names only
+optional overrides, so its `configure` never returns None. Nor need it share the NAME: `gcal` pulls
+Google Calendar's feeds through the `ics` reader and writes `ics` lines, so a feed and an export of the
+same calendar dedupe each other.
 
 `since` and the watermark are in the *source's* clock (when it received or last changed the item),
 not the event's: `logbook sync` stores the largest watermark of a completed pull and passes it back
@@ -122,6 +132,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "ais",
     "adsb",
     "mail",
+    "mail_imap",
     "safari",
     "shazam",
     "apple_podcasts",
