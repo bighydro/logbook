@@ -8,6 +8,7 @@ apple-podcasts       file+live  enabled
 apple-reminders      file       enabled
 apple-wallet         file       enabled
 beeper               file+live  enabled
+claude-code          file       enabled
 copilot              file       enabled
 dawarich             file+live  enabled
 drive                live       enabled
@@ -53,6 +54,7 @@ screentime           file       enabled
 shazam               file       enabled
 splitwise            file       enabled
 spotify              file       enabled
+telegram             file+live  enabled
 transcript           file       enabled
 twitter              file       enabled
 voice-memos          file       enabled

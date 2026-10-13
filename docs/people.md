@@ -38,6 +38,12 @@ The owner is `owner_id` and `owner_emails` in `logbook.json`, every resolution t
 and the names, addresses and numbers of `policy/owner.json`, as the with module reads them
 (`present.owner_of`). A ref of the owner's counts for nobody.
 
+An agent is never a person, whatever it is called ([your own agents](adapters/agents.md)): a line
+of a conversation with one of the owner's bots (`extra.counterpart` of kind `agent`), whoever wrote
+it, and a transcript's participant marked `machine` (the assistant of a Claude Code session) count
+for nobody in `people`, `person`, `rollup people`, the company of a stay, drift and review, which
+never observes one and never proposes one, even a bot named after someone the record knows.
+
 ## What is known
 
 ```
