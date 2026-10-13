@@ -545,6 +545,13 @@ def doctor_arguments(sub: Subparsers) -> None:
         " `sources`:"
         " every adapter, and with --gaps where each went quiet",
     )
+    s.add_argument(
+        "--implausible",
+        action="store_true",
+        help="list the ids of the lines dated outside their source's plausible range (calendars 1970 to"
+        " now plus 5 years, mail 1990 to now plus 1 day, the rest 1970 to now plus 1 day;"
+        " policy/plausible.json overrides per source); nothing is changed",
+    )
     s.set_defaults(fn=cmd_doctor)
     checks = s.add_subparsers(dest="check", required=False, metavar="<check>")
     sources_arguments(checks)
@@ -559,6 +566,13 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         lb: Logbook | None = Logbook.find()
     except FileNotFoundError:
         lb = None
+    if getattr(a, "implausible", False):
+        if lb is None:
+            sys.exit("no logbook found; run `logbook init`, or set LOGBOOK_HOME")
+        status = doctor_checks.report_implausible(lb, sys.stdout)
+        if status:
+            sys.exit(status)
+        return
     status = doctor_checks.report(doctor_checks.run(lb, os.environ), sys.stdout)
     if status:
         sys.exit(status)

@@ -14,6 +14,12 @@ The checks, in the order they print:
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
   (`trips`, `rollup nights`). None is a warn, not a places file is a fail.
 - `assets`: `assets.json` is a registry when it exists (ADR 0018). Absent is fine.
+- `dates`: every line's timestamp lies in its source's plausible range (`plausible`: calendar
+  entries 1970 to now plus 5 years, mail 1990 to now plus 1 day, the rest 1970 to now plus 1 day,
+  each overridable per source in `policy/plausible.json`). Lines outside it are a warn that counts
+  them per source with the earliest and the latest; they are never deleted or hidden, and
+  `logbook doctor --implausible` lists their ids. Read from the index when it is current, else
+  from the month files. A settings file that is not the shape is a fail naming it.
 - `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed, with its
   install line when not (a warn).
 - `sync:<name>`: for each live source the record uses — a `state/<name>.json` watermark, or lines of
@@ -49,12 +55,12 @@ import sqlite3
 import sys
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
-from ..core import assets, index, places, policy
+from ..core import assets, index, places, plausible, policy
 from ..core.store import FormatError, Logbook
 from . import adapters, home, last_run, schedule
 
@@ -203,6 +209,38 @@ def assets_check(root: Path) -> Check:
     if not registry:
         return Check("assets", "pass", f"no {assets.ASSETS_FILE}; nothing is tracked as a subject")
     return Check("assets", "pass", f"{len(registry)} asset(s): " + ", ".join(a.id for a in registry))
+
+
+def implausible(lb: Logbook, state: str, now: datetime) -> list[plausible.Found]:
+    """The lines whose timestamp is outside their source's plausible range, in chain order: from the
+    index when it is `current` (opened read-only), else from the month files. `PlausibleError` for a
+    `policy/plausible.json` that is not the shape."""
+    given = plausible.overrides(lb.root)
+    rows = (
+        plausible.rows_from_index(lb.index_path)
+        if state == "current"
+        else plausible.rows_from_lines(lb.lines_unsorted())
+    )
+    return list(plausible.find(rows, now, given))
+
+
+def dates_check(lb: Logbook, state: str, now: datetime) -> Check:
+    name = plausible.PLAUSIBLE_FILE.as_posix()
+    try:
+        found = implausible(lb, state, now)
+    except plausible.PlausibleError as e:
+        return Check("dates", "fail", str(e))
+    if not found:
+        return Check("dates", "pass", f"every line is dated inside its source's plausible range ({name})")
+    per = "; ".join(
+        f"{c.source} {c.lines} ({c.earliest[:10]} to {c.latest[:10]})" for c in plausible.counts(found)
+    )
+    return Check(
+        "dates",
+        "warn",
+        f"{len(found)} line(s) dated outside their source's plausible range: {per};"
+        f" kept as written, `logbook doctor --implausible` lists them, {name} widens a range",
+    )
 
 
 def module_installed(module: str) -> bool:
@@ -455,6 +493,7 @@ def run(
     *,
     installed: Callable[[str], bool] = module_installed,
     usage: Usage = shutil.disk_usage,
+    now: datetime | None = None,
 ) -> list[Check]:
     """Every check in print order. Without a record only the record failure and the extras."""
     checks: list[Check] = []
@@ -468,6 +507,7 @@ def run(
     checks.append(owner_check(lb.root))
     checks.append(places_check(lb.root))
     checks.append(assets_check(lb.root))
+    checks.append(dates_check(lb, state, now or last_run.now()))
     checks.extend(extras_checks(installed))
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
@@ -477,6 +517,23 @@ def run(
     checks.append(disk_check(lb.root, usage))
     checks.append(folder_check(lb.root, env))
     return checks
+
+
+def report_implausible(lb: Logbook, out: TextIO = sys.stdout, now: datetime | None = None) -> int:
+    """`logbook doctor --implausible`: one row per line dated outside its source's plausible range,
+    id, source, kind and timestamp, then the count; exit 1 only when the settings file is broken."""
+    when = now or last_run.now()
+    try:
+        given = plausible.overrides(lb.root)
+        found = implausible(lb, index_state(lb)[0], when)
+    except plausible.PlausibleError as e:
+        out.write(f"{e}\n")
+        return 1
+    for f in found:
+        window = plausible.window(f.kind, f.source, given)
+        out.write(f"{f.id}  {f.source}  {f.kind}  {f.at}  (plausible {window.text(when)})\n")
+    out.write(f"{len(found)} line(s) outside their source's plausible range; none was changed\n")
+    return 0
 
 
 def report(checks: list[Check], out: TextIO = sys.stdout) -> int:
