@@ -451,7 +451,7 @@ def somewhere(line: Line) -> bool:
     by the owner or by anyone else — carries neither and comes from neither: it happened nowhere.
     A payload the reader cannot open carries nothing, so only its source can say."""
     source = line.get("source")
-    if source in CALENDARS:
+    if isinstance(source, str) and source in CALENDARS:
         return True
     payload = line.get("payload")
     if not isinstance(payload, dict):

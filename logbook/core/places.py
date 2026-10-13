@@ -14,8 +14,9 @@ this module does not know are kept when the file is rewritten (SPEC §1 for `log
 by hours, each with the nearest known place, the Google Timeline visits that overlap it when the
 record holds Takeout timeline lines, and a suggested name. The stays come from the index alone
 (`reading.owner_track`): the owner's points, the evidence and the retractions are columns of it, so
-a window of years over a record of millions of lines is read in seconds and no month file is opened;
-only the Timeline visit lines are read whole, found through the index by their `raw_id`. It appends
+a window of years over a record of millions of lines is read in seconds and no month file is opened
+for them; only the Timeline visit lines are read whole, found through the index by their `raw_id`, and
+the events of a source that is not a calendar, whose payload says whether they promote a stay. It appends
 nothing; `--write` appends the namings the captain accepts, through `Logbook.append`."""
 
 from __future__ import annotations
