@@ -44,7 +44,10 @@ coordinates for one, so none is read. A name with coordinates names the cluster 
 stay its line falls in.
 
 **Nothing leaves the machine.** No geocoder is asked, online or off: a spot has a name here only when
-a source wrote one into a line. Where none did, the proposal is a blank for the owner to fill.
+a source wrote one into a line. Where none did, the proposal is a blank for the owner to fill. The one
+thing the owner may add is `--ask-photos` (`places_photos`): the names their own photo libraries hold
+for the photos already in the record, asked by asset id, counted as `library` evidence (`immich ×12:
+Havbyen`), weighed as a photo line's place is; this module never asks anything itself.
 
 **The queue.** One proposal per observed place at no named place, ranked by nights, then hours,
 then the first visit, numbered from 1. Its name is the one the evidence weighs most — a Timeline
@@ -116,15 +119,17 @@ COLUMNS = (
 )
 STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: bookkeeping, never a line
 TIMELINE_SEGMENTS = {"visit:": "visit", "placeVisit:": "placeVisit"}  # raw_id prefix → `extra.segment`
-WEIGHTS = {"timeline": 3, "calendar": 3, "photo": 2, "dawarich": 2}  # a line's weight for a specific name
+# a line's weight for a specific name; `library` is a photo whose library was asked (`places_photos`)
+WEIGHTS = {"timeline": 3, "calendar": 3, "photo": 2, "dawarich": 2, "library": 2}
 COARSE = ("city", "type")  # grades that weigh 1 whatever said them
-UNITS = {"timeline": "visit", "photo": "photo", "calendar": "event", "dawarich": "stay"}
+UNITS = {"timeline": "visit", "photo": "photo", "calendar": "event", "dawarich": "stay", "library": "photo"}
 ORIGINS = tuple(UNITS)
 SAMPLES = 3  # line ids kept per name, as evidence
 TYPES = {"HOME": "Home", "WORK": "Work"}  # a Timeline semantic type, its prefixes off, → a name
 ONLINE = re.compile(
     r"://|\bzoom\b|\bteams\b|google meet|meet\.google|\bwebex\b|\bskype\b|\bfacetime\b|\bwhereby\b", re.I
 )
+LIBRARY_LABELS = {"immich": "immich", "apple-photos": "photos"}  # a library asked, as the evidence says it
 BLANK = "____"
 EN_DASH = "\u2013"
 NOT_EQUAL = "\u2260"
@@ -142,7 +147,7 @@ class Name:
     """One name one source gave a spot: how many of its lines said it (visits, photos, events, or
     for Dawarich stays), and a few of their ids."""
 
-    origin: str  # timeline, photo, calendar, dawarich
+    origin: str  # timeline, photo, calendar, dawarich, library
     source: str  # the lines' `source`
     name: str
     grade: str  # name, address, city or type
@@ -505,9 +510,7 @@ class _Names:
         self.counted: set[tuple[int, str, str, str]] = set()  # (cluster, stay, name, origin) once each
 
     def of(self, n: int) -> list[Name]:
-        names = list(self.found.get(n, {}).values())
-        names.sort(key=lambda x: (-x.weight * x.count, ORIGINS.index(x.origin), x.name.casefold(), x.source))
-        return names
+        return ranked(self.found.get(n, {}).values())
 
     def add(self, n: int | None, origin: str, source: str, name: str, grade: str, line: Line) -> None:
         if n is None or not name.strip():
@@ -612,23 +615,7 @@ class _Names:
         payload = line.get("payload") or {}
         extra = payload.get("extra")
         place = extra.get("place") if isinstance(extra, dict) else None
-        if not isinstance(place, dict):
-            return
-        names = place.get("names")
-        first_name = names[0] if isinstance(names, list) and names else None
-        found = next(
-            (
-                (str(value), grade)
-                for value, grade in (
-                    (place.get("name"), "name"),
-                    (first_name, "name"),
-                    (place.get("address"), "address"),
-                    (place.get("city"), "city"),
-                )
-                if _text(value)
-            ),
-            None,
-        )
+        found = photo_name(place)
         at = stays.instant(line.get("at"))
         if found is None or at is None:
             return
@@ -686,6 +673,36 @@ class _Names:
             return
         self.counted.add(key)
         self.add(n, "dawarich", "dawarich", name, grade, line)
+
+
+def ranked(names: Iterable[Name]) -> list[Name]:
+    """Names weightiest first (`Name.weight` a line), then by origin, then by name and source."""
+    return sorted(
+        names, key=lambda x: (-x.weight * x.count, ORIGINS.index(x.origin), x.name.casefold(), x.source)
+    )
+
+
+def photo_name(place: object) -> tuple[str, str] | None:
+    """(name, grade) of the place a photo's library named (`extra.place`): `name`, else the first of
+    `names` (the areas Photos put it in), else `address`, else `city` (all Immich has); None for
+    anything that names nothing."""
+    if not isinstance(place, dict):
+        return None
+    names = place.get("names")
+    first_name = names[0] if isinstance(names, list) and names else None
+    return next(
+        (
+            (str(value), grade)
+            for value, grade in (
+                (place.get("name"), "name"),
+                (first_name, "name"),
+                (place.get("address"), "address"),
+                (place.get("city"), "city"),
+            )
+            if _text(value)
+        ),
+        None,
+    )
 
 
 def _semantic(value: object) -> str | None:
@@ -795,7 +812,7 @@ def read(lb: Logbook, cluster_m: float = CLUSTER_M) -> Report:
         if o.place is not None:
             named += 1
             continue
-        refused = {r.name for r in rejected if places.distance_m(o.lat, o.lon, r.lat, r.lon) <= cluster_m}
+        refused = refused_at(rejected, o.lat, o.lon, cluster_m)
         name = choose(o.names, taken, refused)
         if name is None and None in refused:
             held_back += 1
@@ -810,6 +827,16 @@ def read(lb: Logbook, cluster_m: float = CLUSTER_M) -> Report:
             )
         )
     return Report(found, proposals, named, held_back, known, tz, cluster_m, str(lb.meta["head"]))
+
+
+def refused_at(rejected: Iterable[Rejection], lat: float, lon: float, cluster_m: float) -> set[str | None]:
+    """The names (None for the blank) the owner rejected for the spot at lat, lon."""
+    return {r.name for r in rejected if places.distance_m(lat, lon, r.lat, r.lon) <= cluster_m}
+
+
+def rejections(root: Path) -> list[Rejection]:
+    """Every pair the owner rejected, from `state/places-review.json`."""
+    return _rejected(root)
 
 
 def choose(names: Sequence[Name], taken: set[str], refused: set[str | None]) -> str | None:
@@ -1045,6 +1072,9 @@ def evidence_text(names: Sequence[Name]) -> str:
         return "no source names it"
     said = []
     for n in names:
+        if n.origin == "library":  # asked now, not read from a line: `immich ×12: Havbyen`
+            said.append(f"{LIBRARY_LABELS.get(n.source, n.source)} ×{n.count}: {n.name}")
+            continue
         who = f"{n.source} timeline" if n.origin == "timeline" else n.source
         grade = "" if n.grade == "name" else f", {n.grade}"
         said.append(f'{who}: "{n.name}" ({_plural(n.count, n.unit)}{grade})')
