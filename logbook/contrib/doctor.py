@@ -402,10 +402,10 @@ def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterat
             )
             continue
         if config is None:
-            missing = [v for v in adapter.ENV if not env.get(v, "").strip()]
-            yield Check(name, "warn", "set " + " and ".join(missing))
+            yield Check(name, "warn", "set " + adapters.needs(adapter, env))
             continue
-        detail = "configured (" + ", ".join(adapter.ENV) + ")"
+        given = [v for v in adapter.ENV if env.get(v, "").strip()]  # the ones it reads; all when none is set
+        detail = "configured (" + ", ".join(given or adapter.ENV) + ")"
         ask = getattr(adapter, "check", None)
         if ask is None:
             yield Check(name, "pass", detail)

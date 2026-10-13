@@ -474,8 +474,9 @@ def _unconfigured(adapter: adapters.LiveAdapter) -> str | None:
     except ValueError as e:
         return str(e)
     if config is None:
-        missing = [v for v in adapter.ENV if not os.environ.get(v, "").strip()]
-        return f"set {' and '.join(missing)}"
+        from ..contrib import adapters
+
+        return f"set {adapters.needs(adapter, os.environ)}"
     return None
 
 
@@ -620,8 +621,7 @@ def _sync_one(a: argparse.Namespace) -> None:
         print(f"sync: {a.name}: {e}", file=sys.stderr)
         sys.exit(2)
     if config is None:
-        missing = [v for v in adapter.ENV if not os.environ.get(v, "").strip()]
-        print(f"sync: {a.name}: set {' and '.join(missing)}", file=sys.stderr)
+        print(f"sync: {a.name}: set {adapters.needs(adapter, os.environ)}", file=sys.stderr)
         sys.exit(2)
     if a.since is not None and not _is_rfc3339(a.since):
         print(
