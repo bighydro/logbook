@@ -33,6 +33,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [RFC 0025, the shared bundle](rfcs/rfc-0025-shared-page-bundle.md): the signed page one logbook hands another.
 - [RFC 0027, reflection](rfcs/0027-reflection.md): the digest's closing question comes from the record.
 - [RFC 0034, the signed day](rfcs/0034-the-signed-day.md): agents draft, the owner signs, only signed days cross.
+- [RFC 0037, entities](rfcs/0037-entities.md): orgs, ideas, places and assets reviewed like people, with a status the owner disposes (draft).
 - [Benchmark, per-line sealing](rfcs/bench-encryption-2026-10.md): what encryption at rest would cost on a three-million-line record.
 
 ## Reading the record
