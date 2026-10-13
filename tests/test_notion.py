@@ -33,8 +33,10 @@ from notion_api import (
     UNSHARED,
     VERSION,
     FakeNotion,
+    block,
     page,
     parent_of,
+    uid,
     workspace,
 )
 
@@ -434,6 +436,97 @@ def test_a_page_whose_parent_is_not_shared_has_the_path_it_can_see(lb: Logbook, 
     assert _sync() == 0
     extra = _keyed(lb)[_key(lone, "2026-03-02", "created")]["payload"]["extra"]
     assert extra["path"] == [] and extra["parent"] == {"type": "page", "id": UNSHARED}
+
+
+# -- blocks the API withholds, blocks gone while a page is read -------------------------------------
+
+
+def _withhold(fake: FakeNotion) -> None:
+    """An AI block in Boats, at the top, and one in Sail plan's toggle, read after half its text."""
+    fake.children[BOATS].append(block(uid(0x320), "ai_block", "A summary Notion keeps to itself"))
+    nested = uid(0x300)
+    fake.children[nested].append(block(uid(0x321), "ai_block", "Another summary"))
+
+
+def test_a_page_with_a_block_the_api_withholds_is_written_with_its_body_unavailable(
+    lb: Logbook, fake: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _withhold(fake)
+    assert _sync() == 0
+    out, err = capsys.readouterr()
+    assert f"notion: {FIRST_RUN} new lines of {FIRST_RUN} seen from the beginning" in out
+    assert "  also 2 pages with blocks the API withholds" in out.splitlines()
+    keyed = _keyed(lb)
+    boats = keyed[_key(BOATS, "2026-02-03", "created")]["payload"]["extra"]
+    sail = keyed[_key(SAIL_PLAN, "2026-03-02", "edited")]["payload"]["extra"]
+    assert boats["body"] == {"unavailable": "withheld"}, "a marker, never a digest of half the text"
+    assert sail["body"] == {"unavailable": "withheld"}
+    assert sail["actor"]["id"] == OLA and sail["path"] == ["Research", "Boats"], "the rest of the line stands"
+    assert keyed[_key(FERRY, "2026-03-02", "edited")]["payload"]["extra"]["body"]["words"] == 4
+    assert err.count("ai_block") == 1, "the block type, once a run"
+    assert "Boats" not in err and "Sail plan" not in err, "never a page's title"
+    assert "A summary" not in json.dumps(_lines(lb)) and "summary" not in err
+
+
+def test_a_dry_run_counts_the_pages_with_withheld_blocks(
+    lb: Logbook, fake: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _withhold(fake)
+    assert _sync("--dry-run") == 0
+    out, err = capsys.readouterr()
+    assert f"notion: {FIRST_RUN} lines from the beginning (dry run, nothing written)" in out
+    assert "  also 2 pages with blocks the API withholds" in out.splitlines()
+    assert err.count("ai_block") == 1
+    assert lb.meta["seq"] == 0
+
+
+def test_once_the_withheld_block_is_gone_the_body_is_read_again(
+    lb: Logbook, fake: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _withhold(fake)
+    assert _sync() == 0
+    capsys.readouterr()
+    fake.children[uid(0x300)].pop()
+    fake.edit(SAIL_PLAN, "2026-03-03T09:00Z")
+    assert _sync() == 0
+    assert "withholds" not in capsys.readouterr().out
+    body = _keyed(lb)[_key(SAIL_PLAN, "2026-03-03", "edited")]["payload"]["extra"]["body"]
+    assert body["sha256"] == _digest("Plan", *SAIL_PLAN_TEXT) and body["words"] == 17
+    assert "words_delta" not in body, "no count on the page's previous line to compare with"
+
+
+def test_a_block_gone_while_the_page_is_read_marks_the_body_unavailable(
+    lb: Logbook, fake: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The toggle in Sail plan is listed with children, then deleted before they are read: 404."""
+    del fake.blocks[uid(0x300)]
+    assert _sync() == 0
+    out = capsys.readouterr().out
+    assert f"notion: {FIRST_RUN} new lines of {FIRST_RUN} seen from the beginning" in out
+    assert "  also 1 pages with a block deleted while they were read" in out.splitlines()
+    keyed = _keyed(lb)
+    assert keyed[_key(SAIL_PLAN, "2026-03-02", "edited")]["payload"]["extra"]["body"] == {
+        "unavailable": "not_found"
+    }
+    assert keyed[_key(BOATS, "2026-02-03", "created")]["payload"]["extra"]["body"]["words"] == 7
+
+
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        ("validation_error", "path failed validation: path.block_id should be a valid uuid."),
+        ("invalid_request", "Block type ai_block is not supported via the API for your bot type."),
+    ],
+)
+def test_any_other_400_still_stops_the_run_on_one_line(
+    lb: Logbook, fake: FakeNotion, capsys: pytest.CaptureFixture[str], code: str, message: str
+) -> None:
+    fake.refuse[f"/v1/blocks/{SAIL_PLAN}/children"] = (400, code, message)
+    assert _sync() == 1
+    said = [line for line in capsys.readouterr().err.splitlines() if line.startswith("sync:")]
+    assert len(said) == 1 and said[0].startswith("sync: notion:"), "one line, under the progress lines"
+    assert f"answered 400: {code}: {message}" in said[0]
+    assert not (lb.root / "state").exists(), "the watermark stays where it was"
 
 
 # -- --since, --dry-run, roots ------------------------------------------------------------------------
