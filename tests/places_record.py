@@ -157,3 +157,84 @@ def record(root: Path) -> Logbook:
     lb.append_many(location.run(timeline_export(root.parent / "takeout")))
     lb.append_many(evidence_lines())
     return lb
+
+
+# -- photos the libraries can name: `places review --ask-photos` -------------------------------------------
+#
+# Photo lines imported before #255 carry no place: the record holds their coordinates and asset ids, the
+# libraries the names. Twelve Immich photos at S3 (the 404th at 120 m is no longer on the server), two at
+# S1 (named by the Timeline: asked only with --all), three Photos pictures at S7 (and one the library
+# has lost), none at S8. Immich's city and Photos' area are invented, as everything here.
+
+HARBOUR_TOWN, PLATFORM = "Havbyen", "Plattformen"
+
+
+def immich_id(n: int) -> str:
+    return f"0000a5e7-0000-4000-8000-{n:012x}"
+
+
+def apple_id(n: int) -> str:
+    return f"A7000000-0000-4000-8000-{n:012d}"
+
+
+AT_S3 = [immich_id(0x300 + k) for k in range(12)]  # 0, 8, … 88 m north of S3: the nearest first
+GONE = immich_id(0x3FF)  # 120 m north of S3, deleted from the server since the import
+AT_S1 = [immich_id(0x100 + k) for k in range(2)]
+AT_S7 = [apple_id(k) for k in range(1, 4)]
+LOST = apple_id(9)  # at S7, not in the library any more
+
+
+def _north(where: tuple[float, float], metres: float) -> tuple[float, float]:
+    return (round(where[0] + metres / 111_320, 7), where[1])
+
+
+def _photo_line(at: str, where: tuple[float, float], asset_id: str, library: str) -> dict[str, Any]:
+    line = photo(at, where, library=library)
+    line["payload"]["asset_id"] = line["payload"]["raw_id"] = asset_id
+    return line
+
+
+def unplaced_photos() -> list[dict[str, Any]]:
+    """The photo lines without `extra.place`: their libraries know the place, the record does not."""
+    out = [
+        _photo_line(utc(DAYS[5], f"22:{k:02d}"), _north(S[3], 8 * k), asset, "immich")
+        for k, asset in enumerate(AT_S3)
+    ]
+    out.append(_photo_line(utc(DAYS[9], "23:00"), _north(S[3], 120), GONE, "immich"))
+    out += [
+        _photo_line(utc(DAYS[1], f"21:{10 + k:02d}"), _north(S[1], 10 * k), asset, "immich")
+        for k, asset in enumerate(AT_S1)
+    ]
+    out += [
+        _photo_line(utc(DAYS[4], f"11:{10 + k:02d}"), _north(S[7], 5 * k), asset, "apple-photos")
+        for k, asset in enumerate([*AT_S7, LOST])
+    ]
+    return out
+
+
+def immich_asset(asset_id: str) -> dict[str, Any] | None:
+    """What `GET /api/assets/{id}` answers for an asset of the record, or None for one it lost: the
+    asset with the city its server named from the coordinates."""
+    if asset_id not in AT_S3 + AT_S1:
+        return None
+    return {
+        "id": asset_id,
+        "type": "IMAGE",
+        "originalFileName": f"IMG_{asset_id[-4:]}.HEIC",
+        "exifInfo": {"city": HARBOUR_TOWN, "state": None, "country": "Nordsjøen"},
+    }
+
+
+def library_assets() -> list[tuple[str, bytes | None, int | None]]:
+    """The Photos library's rows for the pictures at S7: the area Photos named on the phone."""
+    from photos_library import reverse_location
+
+    blob = reverse_location("Plattformveien 7, Nordsjøen", "Nordsjøen", [PLATFORM, "Nordsjøen"])
+    return [(asset, blob, 1) for asset in AT_S7]
+
+
+def record_with_photos(root: Path) -> Logbook:
+    """The fortnight, and then the photos whose places only their libraries know."""
+    lb = record(root)
+    lb.append_many(unplaced_photos())
+    return lb
