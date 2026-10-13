@@ -17,6 +17,7 @@ logbook day sign 2026-06-09 --confirm 4181,4183   # only these lines, by seq or 
 logbook day sign 2026-06-09 --kept 4181 --carried 4183   # and what became of the commitments on them
 logbook day sign 2026-06-09 --confirm none               # nothing on the page is a fact of the day
 logbook day sign 2026-06-09 --at 2026-06-09T19:30:00+02:00   # signed when you clicked, not when this ran
+logbook day reflect 2026-06-09 --audio evening.m4a --sign      # or close it by voice (below)
 logbook show 2026-06-09                 # the header now says `signed 2026-06-10 08:15`
 ```
 
@@ -111,6 +112,96 @@ things are refused, each in a sentence with nothing written: a moment that is no
 offset or `Z` (the message shows the shape); a moment more than five minutes ahead of this
 machine's clock (a phone runs a few minutes fast, never hours); and a moment before the day you
 are signing starts, in the record's zone. Without `--at`, the signature is at now, as before.
+
+## Closing the day by voice
+
+At the end of the day you say a few sentences about it: what went out, what did not, what you will do
+tomorrow, what Ola should do. `logbook day reflect` makes that the close of the day. The words become
+part of the record, and what you said about your commitments, and about what others should do, is
+proposed to you, so that the day can be signed with it in one go.
+
+```bash
+logbook day reflect 2026-06-09 --audio evening.m4a        # a recording, heard on this machine
+logbook day reflect 2026-06-09 --text "The photos went out. Ola should book the ferry."
+logbook day reflect 2026-06-09 --mic 60                   # on macOS: sixty seconds from the microphone
+logbook day reflect 2026-06-09                            # the Wispr Flow dictation that begins with "reflect"
+logbook day reflect 2026-06-09 --from-wispr               # take that dictation as it is
+logbook day reflect 2026-06-09 --dry-run                  # what it would write, and nothing written
+logbook day reflect 2026-06-09 --sign --accept 3,6        # sign the day with the proposals you accept
+```
+
+**The reflection** is one `note/v1` line on the day (RFC 0010: tier 2, as every note is, whoever writes
+it), source `reflect`, with `reflection` in its `labels`, the same convention `note_day` uses through the
+door, and written through the same code. `--text` is typed; `--audio FILE` is heard by the local whisper
+engine of the `openlogbook[transcribe]` extra, exactly as `derive transcripts` hears a voice memo: nothing
+leaves the machine, the hub is offline while it listens, and a model that is not on the machine stops the
+command until you run it once with `--fetch-model`. Without the extra, `--audio` says which extra to
+install; `--text` always works. `--mic SECONDS` records from the default microphone on macOS with ffmpeg,
+then hears it the same way, and keeps no recording; elsewhere, without ffmpeg, or with no microphone, it
+says so in a sentence. The reflection is printed back a sentence a line, numbered. Without `--sign`,
+nothing else is written. The same words already on the day are not written twice: run the command again
+and it reads the reflection that is there.
+
+**The Wispr Flow convention.** If you dictate with Wispr Flow all day, there is no new habit: a dictation
+that begins with the word *reflect* is the reflection. The first word counts, in any case, after any
+spaces and punctuation: "Reflect: a long day on the water...", "reflect, the photos went out...". The
+word must be *reflect* itself; "reflection" or "reflecting" does not count, and neither does the word
+later in a dictation. `logbook day reflect DAY` with no input offers the latest such dictation of the day
+as the draft, without that word: on a terminal you answer y to take it, e to type it again as it should
+read, or n to leave it; elsewhere it prints the draft and writes nothing until you say `--from-wispr`.
+`--from-wispr SEQ` takes the dictation with that seq instead. The note keeps the dictation's id under
+`extra.dictation` and the moment you spoke as its `at`, and a dictation taken up is not offered again.
+The dictation itself stays what Wispr Flow made it, tier 3; the reflection is a note and tier 2, because
+you confirmed it as one.
+
+**The proposals** are read out of the reflection by rules, no model, with the cue tables `promises` uses,
+and printed numbered, each with its evidence; every one is a guess until you accept it:
+
+- **commitment** — a sentence that reads as your promise: "I'll fix the bilge pump on Saturday", "ich
+  werde die Rechnung morgen bezahlen", with the day its date phrase names. The reflection is a note in
+  your words, so `promises` lists it from the reflection itself; accepting it writes nothing more.
+- **delegation** — what someone else should do: "ask Ola to ...", "tell Ines to ...", "Ola should ...",
+  "Ola must ...", "Ola soll ...", "frag Ines, ob ...", "Ola, can you ...", with the name as you said it.
+  A name is a capitalised word or two that is not a pronoun or a day and does not follow an article ("Die
+  Fähre soll ..." asks no one). Accepted, it is one more `note/v1` line on the day, label `delegation`,
+  `extra.to` the name and `extra.reflection` the reflection's id: no profile `promises` reads requests
+  from fits a request you make of someone else, so it is a note, in your words.
+- **kept, missed, dropped, carried** — a sentence that says what became of a commitment already on the
+  day's page: "went out", "done", "sent" for kept; "didn't", "not yet" for missed; "drop", "forget it"
+  for dropped; "tomorrow", "next week" for carried; and their German ("erledigt", "noch nicht", "vergiss
+  es", "morgen"). The first such word in a sentence decides. The sentence must also be about the
+  commitment: its words and the commitment's (casefolded, three letters or more, a plural *s* dropped,
+  function words, days and the disposition's own words left out) overlap by a Dice coefficient of 0.5 or
+  more, `reflect.MATCH`; the best match wins. "The mooring photos went out to the harbour office" matches
+  "I'll send the mooring photos to the harbour office by Friday" at 0.89; "The harbour office sent a
+  letter about the berth fee" shares two of its five words with it, 0.4, and is no reference. Accepted, the
+  disposition goes into the signature.
+
+**`--sign`** signs the day after the proposals are printed, in one go, through the same `signing.sign`
+`day sign` calls. You say which proposals you accept with `--accept N,N` (or `--accept none`); on a
+terminal it asks y or n for each delegation and disposition, and q stops with nothing written. Without a
+terminal and without `--accept`, it prints the proposals and refuses, writing nothing. Then, under one
+hold of the writer lock: the reflection is written (unless it is on the day already), each accepted
+delegation is written, and the day is signed: the reflection and the delegations among the lines
+confirmed, the accepted dispositions in the signature, and `--at` (the moment you spoke, with an offset or
+`Z`, on the day) as both the reflection's moment and the signature's. The signature is byte for byte the
+one `day sign DAY --kept ... --at ...` writes over the same page. A day you signed before is signed again,
+superseding the standing signature as RFC 0034 allows, and keeping what it said: the lines it confirmed
+that are still on the page, its dispositions (an accepted one wins on a line they share) and its note,
+with the reflection added. Two accepted proposals that give one line two dispositions, a number no
+proposal has and a moment off the day are each refused before anything is written. Another writer
+holding the record (with `--no-wait`) and a head that moved while the page was read are the store's own
+errors, said in one sentence; nothing is retried. `--note`, `--confirm` and the four disposition flags
+stay with `day sign`.
+
+**Where it shows.** `logbook day` prints the reflection in a section of its own, labelled `reflection`
+with the time you spoke: your words in your voice, below the header and above the record, the timeline
+and everything after it. The Day page of `logbook serve` shows it the same way, under *Reflection*.
+`day --json` carries it under `reflection` (`line`, `seq`, `at`, `at_local`, `source`, `text`), a key
+that is there only on a day that has one, so every other Day's object, the conformance sample's among
+them, is unchanged. The latest reflection standing is the one shown; retract it and the one before it
+stands. The reflection is still a note of the day like any other: `show` lists it, and the MCP tool
+`day_lines` returns it as it returns every note, under the ceiling.
 
 ## Readiness: is the day all in?
 

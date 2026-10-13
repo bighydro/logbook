@@ -14,14 +14,18 @@ logbook day                     # today
 logbook day sign 2026-06-13     # sign it: you read the page and these are the day's facts (RFC 0034)
 logbook day sign 2026-06-13 --kept 4181 --carried 4183   # and what became of the commitments on it
 logbook day sign 2026-06-13 --confirm none --at 2026-06-13T22:10:00+02:00   # nothing confirmed, signed when you clicked
+logbook day reflect 2026-06-13 --audio evening.m4a --sign   # close it in your words, then sign it
 ```
 
 The header says whether you have signed the day (`· unsigned`, or `· signed 2026-06-14 08:15`),
 and the last row, `readiness`, says for each class of source — mail, message, meeting, location,
 photo, calendar — whether the day has lines of it and which usual sources have not delivered.
-Both are [the signed day](signed-day.md); `day sign` is the one thing under `day` that writes, and
-it writes one line. On a signed day a symbol stands before each line the signature disposed of
-(✓ kept, ✗ missed, – dropped, → carried); an unsigned day prints none.
+Both are [the signed day](signed-day.md); `day sign` and `day reflect` are the things under `day`
+that write: `day sign` one line, `day reflect` the reflection as one note and, with `--sign`, the
+delegations you accept and the signature. On a signed day a symbol stands before each line the
+signature disposed of (✓ kept, ✗ missed, – dropped, → carried); an unsigned day prints none. A day
+with a reflection shows it in a section of its own, `reflection`, below the header and above the
+timeline: your words, as you said them ([closing the day by voice](signed-day.md#closing-the-day-by-voice)).
 
 ## What a Day is
 
@@ -257,7 +261,9 @@ the flight line's fields and `line`; a move lists the `flights` that cover it �
 `teller`, `listener`, `confidence`, `source`), `health` (with the ids of the lines each number came
 from), `sources`, and `received`, one object per page the circle shared for the day (`from`,
 `owner_id`, `created`, `max_tier`, `lines`, `held_back`, `by_kind`, `named` with each line's id,
-`attachments`).
+`attachments`). On a day with a reflection (`day reflect`, or a note labelled `reflection` through the
+MCP door) the object carries `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`,
+`source` and `text`; the key is absent on every other day.
 
 ## A window of days
 
