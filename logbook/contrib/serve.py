@@ -9,8 +9,18 @@ assets and the last fix of each (`asset_status.read`); `/gaps` where each source
 (`gaps.report`); `/today` redirects to the Day the owner is in now: the current date in the
 record's timezone, the date before until the record's `day_start` (RFC 0036), whose Day then says
 where it begins. Every page is built from the index and the readers, so a Day renders in the time
-`logbook day` takes whatever the record's length, and nothing is written: every request is a GET
+`logbook day` takes whatever the record's length, and nothing is written by a GET: every page is
 answered from the record at its head.
+
+One page writes, on a POST: `/places` carries the review queue of `setup places review`
+(`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
+`/places/review` (`Site.write`), which names a cluster or rejects it through the engine's own
+`accept` and `reject`, so `places.json`, the naming note and `state/places-review.json` are what the
+CLI writes. The Library's first write act, allowed because the server binds 127.0.0.1 and runs as
+the record's own user: the POST is answered only when the connection comes from this machine (the
+client address is loopback) and the form was submitted from the server's own pages (the browser's
+`Origin`, when it sends one, names 127.0.0.1); anything else is a 403 and nothing is written. After
+a write the head has moved, and the next request reads the record again as after a sync.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -25,11 +35,14 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
 - The server binds 127.0.0.1 and refuses any other host (`HostError`, raised before a socket is
   opened), so the record is readable from this machine and nowhere else. It never resolves a
   name, not even its own.
-- A page is one HTML document with one inline stylesheet: no script, no font, no image, no
-  stylesheet link, and no reference to any URL but the server's own paths. The
-  Content-Security-Policy header says the same to the browser, so nothing a payload carried could
-  make a page fetch from elsewhere even if the escaping here were wrong.
-- Read-only. The pages call the readers; the readers never write (not even `policy/stays.json`).
+- A page is one HTML document with one inline stylesheet: no font, no image, no stylesheet link,
+  no script fetched, and no reference to any URL but the server's own paths. The one script is
+  inline on the Places page (`PLACES_SCRIPT`: the keys Enter, n and Space), named in that page's
+  Content-Security-Policy by its hash and by nothing else; every other page's policy allows no
+  script. The header tells the browser what the markup already does, so nothing a payload carried
+  could make a page fetch from elsewhere even if the escaping here were wrong.
+- Read-only but for the one POST above. The pages call the readers; the readers never write (not
+  even `policy/stays.json`).
 
 The text grammar is the commands' own (`day.span_text`, `days.night_text`, `gaps.runs`, …), so a
 row reads here as it prints there.
@@ -41,8 +54,11 @@ page has nothing to submit to. The rendering is this module's either way."""
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import ipaddress
 import json
+import math
 import re
 import secrets
 import socketserver
@@ -53,7 +69,7 @@ from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, NamedTuple
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from ..core import assets, day_start, drafts, places, reading, share, stays, trips, weather
@@ -62,7 +78,7 @@ from ..core import days as days_reader
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.store import Logbook
-from . import asset_status, gaps
+from . import asset_status, gaps, places_review
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
@@ -72,6 +88,31 @@ CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-u
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
 RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places"})  # and every Day: the record's, not the clock's
+REVIEW_PATH = "/places/review"  # the one path that writes: POST only, from this machine only
+PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
+FORM_BYTES = 16 * 1024  # the most a POST body may carry: a name, a cluster id, a page number
+STATE_FILES = (places_review.STATE_FILE,)  # record-relative bookkeeping the pages read, in the tag
+PLACES_SCRIPT = """
+(function(){
+var keys={Enter:"button[value=name]",n:"button[value=reject]",N:"button[value=reject]"," ":"a.skip"};
+function current(){var all=document.querySelectorAll(".cluster");
+for(var i=0;i<all.length;i++){if(all[i].getBoundingClientRect().bottom>60)return all[i];}return null;}
+document.addEventListener("keydown",function(e){
+var t=e.target,tag=t&&t.tagName;
+if(e.altKey||e.ctrlKey||e.metaKey)return;
+if(tag==="INPUT"||tag==="TEXTAREA"){if(e.key==="Escape")t.blur();return;}
+if(tag==="BUTTON"||tag==="A"||tag==="SUMMARY")return;
+var c=current(),sel=keys[e.key];if(!c||!sel)return;
+var el=c.querySelector(sel);if(!el)return;
+e.preventDefault();
+if(el.tagName==="A")location.assign(el.getAttribute("href"));else el.click();
+});
+})();
+"""
+PLACES_SCRIPT_HASH = (
+    "sha256-" + base64.b64encode(hashlib.sha256(PLACES_SCRIPT.encode("utf-8")).digest()).decode()
+)
+PLACES_CSP = CSP.replace("style-src", f"script-src '{PLACES_SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
@@ -120,6 +161,25 @@ form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 
 input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
 border:1px solid var(--line);border-radius:3px}
 p.pager,p.mute,.mute{color:var(--mute)}
+a.name{font-size:.8rem;margin-left:.5rem}
+ol.queue{list-style:none;padding:0;margin:0}
+li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
+border-bottom:1px solid var(--line)}
+li.cluster:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:3px}
+li.cluster svg text{font:11px system-ui,sans-serif;fill:var(--mute)}
+li.cluster svg circle.spot{fill:var(--accent)}
+li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--mute);stroke-dasharray:3 2}
+li.cluster svg line{stroke:var(--mute)}
+li.cluster p.facts{margin:0}
+li.cluster p.facts b{font-variant-numeric:tabular-nums}
+ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem}
+li.cluster details{margin:0;font-size:.9rem}
+form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
+form.name input[type=text]{min-width:16rem;flex:1}
+a.skip{display:inline-block;padding:.2rem .4rem;border:1px solid var(--line);border-radius:3px;
+text-decoration:none}
+@media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
 """
 
 NAV = (
@@ -136,18 +196,27 @@ class NotFound(Exception):
     """No page at this path."""
 
 
+class Redirect(Exception):
+    """A page that is somewhere else: `/places?at=` landing on a cluster."""
+
+    def __init__(self, location: str):
+        super().__init__(location)
+        self.location = location
+
+
 class Response(NamedTuple):
     status: int
     body: bytes
     content_type: str = HTML
     etag: str | None = None  # a page of the record at its head: kept by the browser, asked again
     location: str | None = None  # a redirect's target
+    csp: str = CSP  # the Places page names its one inline script; every other page allows none
 
     @property
     def headers(self) -> dict[str, str]:
         found = {
             "Content-Type": self.content_type,
-            "Content-Security-Policy": CSP,
+            "Content-Security-Policy": self.csp,
             "Cache-Control": "no-store" if self.etag is None else "no-cache",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
@@ -192,6 +261,7 @@ class Site:
         self.nav = nav
         self.footer = footer
         self._lock = threading.Lock()
+        self._review_lock = threading.Lock()  # the queue is read (its table built once) and acted on under it
         self._head: str | None = None  # the head the index was last brought to by `current`
         self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
 
@@ -218,6 +288,8 @@ class Site:
         again rather than keeping a stale page."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
+        if path == REVIEW_PATH:
+            return self._error(405, f"{REVIEW_PATH} takes the Places page's forms (POST), nothing else")
         meta = self.current()
         if path == TODAY:
             return self._today(meta)
@@ -225,14 +297,74 @@ class Site:
         if etag is not None and if_none_match is not None and _matches(if_none_match, etag):
             return Response(304, b"", etag=etag)
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
+        csp = PLACES_CSP if path == "/places" else CSP
         try:
-            return Response(200, self._page(path, params).encode("utf-8"), etag=etag)
+            return Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
         except NotFound:
             return self._error(404, f"no page at {path}")
-        except (stays.SettingsError, places.PlaceError, assets.AssetError, day_start.DayStartError) as e:
+        except Redirect as r:
+            body = f'<p><a href="{escape(r.location)}">{escape(r.location)}</a></p>\n'
+            return Response(302, self.document("places", body).encode("utf-8"), location=r.location)
+        except (
+            stays.SettingsError,
+            places.PlaceError,
+            assets.AssetError,
+            places_review.ReviewError,
+            day_start.DayStartError,
+        ) as e:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
+
+    def write(self, path: str, form: Mapping[str, str], client: str, origin: str | None) -> Response:
+        """A POST: the Places page's form, `act` `name` (the field `name`, else the name proposed)
+        or `reject` on the cluster `id`, through `places_review.accept` and `reject`, the one path
+        the CLI's `--name`, `--accept` and `--reject` take. Refused (403, nothing written) unless
+        `client`, the connection's address, is loopback and `origin`, the browser's Origin header
+        when it sent one, names 127.0.0.1: this machine, the server's own pages. A cluster no
+        longer in the queue (named or rejected since the page was read) is a 409; a name the engine
+        refuses a 400. Done, a 303 to the page the form came from, at the next cluster."""
+        if path != REVIEW_PATH:
+            return self._error(404, f"nothing to post at {path}; the Places page posts to {REVIEW_PATH}")
+        if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
+            where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
+            return self._error(
+                403,
+                f"refused {where}: a place is named from this machine only, through the server's own"
+                " pages or `logbook setup places review`; nothing was written",
+            )
+        act, cluster = form.get("act", ""), form.get("id", "")
+        page = form.get("page", "1")
+        page = page if page.isdigit() and int(page) >= 1 else "1"
+        if act not in ("name", "reject") or not cluster:
+            return self._error(400, "the form names a cluster (id) and an act: name or reject")
+        with self._review_lock:
+            self.current()
+            try:
+                report = places_review.read(self.lb)
+            except places_review.ReviewError as e:
+                return self._error(500, str(e))
+            found = [n for n, p in enumerate(report.proposals) if p.id == cluster]
+            if not found:
+                back = f"/places?page={page}"
+                return self._error(
+                    409,
+                    f"{cluster} is not in the queue: named or rejected already, or the page was older than"
+                    f" the record; {back} is the queue as it stands",
+                )
+            n = found[0]
+            proposal = report.proposals[n]
+            try:
+                if act == "name":
+                    given = " ".join(form.get("name", "").split()) or None
+                    places_review.accept(self.lb, [(proposal, given)])
+                else:
+                    places_review.reject(self.lb, [proposal])
+            except (places_review.ReviewError, places.PlaceError, stays.SettingsError) as e:
+                return self._error(400, str(e))
+        following = report.proposals[n + 1 : n + 2]
+        location = f"/places?page={page}" + (f"#{following[0].id}" if following else "")
+        return Response(303, b"", location=location)
 
     def current(self) -> dict[str, Any]:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
@@ -252,10 +384,10 @@ class Site:
     def etag(self, path: str, query: str, meta: Mapping[str, Any]) -> str | None:
         """The tag of a page that is the record's and nothing else: the head, then a digest of the
         request and what else the pages read — the rest of `logbook.json`, the settings beside the
-        chain (`places.json`, `assets.json`, `policy/`), the pages received from the circle, and
-        this server's start. One page's tag never stands for another's, and a request that is an
-        error is given none. None for a page the clock moves (`/assets`, `/gaps`) or a path with no
-        page."""
+        chain (`places.json`, `assets.json`, `policy/`), the review's bookkeeping in `state/`, the
+        pages received from the circle, and this server's start. One page's tag never stands for
+        another's, and a request that is an error is given none. None for a page the clock moves
+        (`/assets`, `/gaps`) or a path with no page."""
         if path not in RECORD_PAGES and DAY_PATH.match(path) is None:
             return None
         root = self.lb.root
@@ -265,6 +397,7 @@ class Site:
             root / places.PLACES_FILE,
             root / assets.ASSETS_FILE,
             *sorted((root / "policy").glob("*.json")),
+            *(root.joinpath(*f.parts) for f in STATE_FILES),
             circle,
             *senders,
         ]
@@ -299,7 +432,7 @@ class Site:
         if path == "/trips":
             return self.page_trips(params.get("year") or None)
         if path == "/places":
-            return self.page_places()
+            return self.page_places(params.get("page") or "1", params.get("at") or None)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
@@ -310,7 +443,10 @@ class Site:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
         return Response(status, self.document(str(status), body).encode("utf-8"))
 
-    def document(self, title: str, body: str) -> str:
+    def document(self, title: str, body: str, script: str | None = None) -> str:
+        """One HTML document: the head, the navigation, `body`, the footer; `script` is the one
+        inline script a page may carry (the Places page's keys), named by hash in that page's
+        policy."""
         meta = self.lb.meta
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
@@ -326,7 +462,8 @@ class Site:
             f"<title>{escape(title)} · Logbook</title>\n"
             f"<style>{STYLE}</style>\n</head>\n<body>\n"
             f"<header><nav>{self.nav}</nav></header>\n<main>\n{body}</main>\n"
-            f"<footer>{footer}</footer>\n</body>\n</html>\n"
+            f"<footer>{footer}</footer>\n{'' if script is None else f'<script>{script}</script>' + chr(10)}"
+            "</body>\n</html>\n"
         )
 
     def _whole(self) -> tuple[str, str] | None:
@@ -403,7 +540,10 @@ class Site:
         parts.append("<h2>Timeline</h2>\n")
         if data["timeline"]:
             parts.append('<ol class="timeline">\n')
-            parts.extend(_entry_html(entry, tz, expanded=expanded) for entry in data["timeline"])
+            name_this = None if self.static else self._name_this
+            parts.extend(
+                _entry_html(entry, tz, expanded=expanded, name_this=name_this) for entry in data["timeline"]
+            )
             parts.append("</ol>\n")
         else:
             parts.append('<p class="mute">nothing logged</p>\n')
@@ -444,6 +584,14 @@ class Site:
                     parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
                 parts.append("</ul>\n")
         return self.document(f"{day} {data['weekday']}", "".join(parts))
+
+    def _name_this(self, entry: Mapping[str, Any]) -> str:
+        """The "name this place" link of a stay printed as coordinates: the Places page at its
+        cluster (`/places?at=lat,lon`). Nothing for a named stay, a move, or a stay with no fix."""
+        if entry["kind"] not in (stays.STAY, stays.STOP) or entry.get("place") or entry.get("lat") is None:
+            return ""
+        at = f"{entry['lat']:.4f},{entry['lon']:.4f}"
+        return f' <a class="name" href="/places?at={at}">name this place</a>'
 
     # -- /days ----------------------------------------------------------------------------------------------
 
@@ -542,27 +690,147 @@ class Site:
 
     # -- /places, /assets, /gaps ----------------------------------------------------------------------------
 
-    def page_places(self) -> str:
-        found = places.read(self.lb.root)
-        body = "<h1>Places</h1>\n"
-        if not found:
-            body += (
-                f"<p>no places ({escape(places.PLACES_FILE)}): `logbook places add` or `places propose`</p>\n"
-            )
-            return self.document("places", body)
-        rows: list[list[Cell]] = [
-            [
-                escape(p.name),
-                (f"{p.lat:.4f},{p.lon:.4f}", "num"),
-                (escape(_number(p.radius_m)) + " m", "num"),
-                escape(p.kind),
-                escape(", ".join(p.tags)),
-                escape(p.country or ""),
+    def page_places(self, page: str = "1", at: str | None = None) -> str:
+        """The named places first (name, nights, last visit: from the observed places), then
+        "Name this place": the review queue in the CLI's order, `PAGE_SIZE` a page, each cluster
+        with a dot on a plain canvas, its counts, its evidence folded, and a form. A static site
+        gets the named places alone. `at=lat,lon` (the Day's link) is a redirect to the page the
+        nearest cluster is on, at that cluster, or this page with a note when there is none."""
+        if not page.isdigit() or int(page) < 1:
+            raise ValueError(f"page must be a number from 1, not {page!r}")
+        with self._review_lock:  # requests that arrive together wait for one build of the table
+            report = places_review.read(self.lb)
+        tz = report.tz
+        note = ""
+        if at is not None:
+            lat, lon = places.parse_stay_id(at)
+            near = [
+                (m, p)
+                for p in report.proposals
+                if (m := places.distance_m(lat, lon, p.lat, p.lon)) <= places_review.MATCH_M
             ]
-            for p in found
+            if near:
+                p = min(near, key=lambda pair: pair[0])[1]
+                on = (report.proposals.index(p) // PAGE_SIZE) + 1
+                raise Redirect(f"/places?page={on}#{p.id}")
+            note = f"no place to name at {lat:.4f},{lon:.4f}: it is named or rejected, or it was never a stay"
+        body = "<h1>Places</h1>\n"
+        if note:
+            body += f'<p class="mute">{escape(note)}</p>\n'
+        body += self._named_places(report)
+        if self.static:
+            return self.document("places", body)
+        total = len(report.proposals)
+        pages = max(1, math.ceil(total / PAGE_SIZE))
+        n = min(int(page), pages)
+        first = (n - 1) * PAGE_SIZE
+        shown = report.proposals[first : first + PAGE_SIZE]
+        body += f"<h2>Name this place <small>{escape(places_review.head(report))}</small></h2>\n"
+        if not report.observed:
+            body += "<p>no places observed: the record has no stays yet</p>\n"
+            return self.document("places", body)
+        if not shown:
+            body += "<p>nothing to review: every place you return to is named</p>\n"
+            return self.document("places", body)
+        body += (
+            '<p class="mute">The places you return to that have no name yet, by nights then hours, each'
+            " with what the record already says about it. Name writes the field into places.json and the"
+            " naming into the record, as <code>setup places review</code> does; Not a place keeps the"
+            " spot out of the queue; Skip moves on. Keys: Enter names, n is not a place, Space skips.</p>\n"
+        )
+        body += f'<ol class="queue" start="{first + 1}">\n'
+        for k, p in enumerate(shown):
+            following = shown[k + 1 : k + 2]
+            skip = (
+                f"/places?page={n}#{following[0].id}"
+                if following
+                else (f"/places?page={n + 1}" if n < pages else "")
+            )
+            body += self._cluster_html(p, tz, n, skip)
+        body += "</ol>\n"
+        last = first + len(shown)
+        pager = [f"{first + 1}{EN_DASH}{last} of {total}"]
+        if n > 1:
+            pager.insert(0, f'<a href="/places?page={n - 1}">← earlier</a>')
+        if n < pages:
+            pager.append(f'<a href="/places?page={n + 1}">more →</a>')
+        body += f'<p class="pager">{DOT.join(pager)}</p>\n'
+        return self.document("places", body, PLACES_SCRIPT)
+
+    def _named_places(self, report: places_review.Report) -> str:
+        found = report.places
+        if not found:
+            return (
+                f"<p>no places ({escape(places.PLACES_FILE)}) yet: name one below, or"
+                " `logbook setup places add`</p>\n"
+            )
+        nights: dict[str, int] = {}
+        last: dict[str, str] = {}
+        for o in report.observed:
+            if o.place is None:
+                continue
+            nights[o.place] = nights.get(o.place, 0) + o.nights
+            last[o.place] = max(last.get(o.place, ""), o.last)
+        days = day_start.of(self.lb.meta)  # the last visit's day, by the record's own boundary
+        rows: list[list[Cell]] = []
+        for p in sorted(found, key=lambda p: (-nights.get(p.name, 0), p.name.casefold())):
+            rows.append(
+                [
+                    escape(p.name),
+                    _num(nights.get(p.name, 0)),
+                    escape(days.day_of(last[p.name])) if p.name in last else "",
+                    escape(p.kind),
+                    (f"{p.lat:.4f},{p.lon:.4f}", "num"),
+                    (escape(_number(p.radius_m)) + " m", "num"),
+                    escape(", ".join(p.tags)),
+                    escape(p.country or ""),
+                ]
+            )
+        return _table(
+            [
+                "name",
+                ("nights", "num"),
+                "last visit",
+                "kind",
+                ("position", "num"),
+                ("radius", "num"),
+                "tags",
+                "country",
+            ],
+            rows,
+        )
+
+    def _cluster_html(self, p: places_review.Proposal, tz: ZoneInfo, page: int, skip: str) -> str:
+        """One cluster of the queue: the canvas, the facts (`places_review.summary`), the evidence
+        folded (three lines, the rest behind a toggle), and the form."""
+        lines = [places_review.group_text(g) for g in places_review.groups(p.observed.names)]
+        out = [
+            f'<li class="cluster" id="{escape(p.id)}">\n{_spot_svg(p)}\n',
+            f'<p class="facts"><b>{p.number}.</b> {escape(places_review.summary(p, tz), quote=False)}</p>\n',
         ]
-        body += _table(["name", ("position", "num"), ("radius", "num"), "kind", "tags", "country"], rows)
-        return self.document("places", body)
+        if not lines:
+            out.append('<ul class="evidence"><li>no source names it</li></ul>\n')
+        else:
+            out.append('<ul class="evidence">\n')
+            out.extend(f"<li>{escape(line, quote=False)}</li>\n" for line in lines[: places_review.SHOWN])
+            out.append("</ul>\n")
+            rest = lines[places_review.SHOWN :]
+            if rest:
+                out.append(f'<details><summary>… and {len(rest)} more</summary>\n<ul class="evidence">\n')
+                out.extend(f"<li>{escape(line, quote=False)}</li>\n" for line in rest)
+                out.append("</ul>\n</details>\n")
+        out.append(
+            f'<form class="name" method="post" action="{REVIEW_PATH}">'
+            f'<input type="hidden" name="id" value="{escape(p.id)}">'
+            f'<input type="hidden" name="page" value="{page}">'
+            f'<input type="text" name="name" value="{escape(p.name or "")}" placeholder="what you call it"'
+            f' aria-label="name" autocomplete="off">'
+            '<button name="act" value="name">Name</button>'
+        )
+        if skip:
+            out.append(f'<a class="skip" href="{escape(skip)}">Skip</a>')
+        out.append('<button name="act" value="reject">Not a place</button></form>\n</li>\n')
+        return "".join(out)
 
     def page_assets(self) -> str:
         registry = assets.read(self.lb.root)
@@ -656,9 +924,16 @@ class Site:
 # -- the Day's rows ---------------------------------------------------------------------------------------
 
 
-def _entry_html(entry: Mapping[str, Any], tz: ZoneInfo, inside: bool = False, expanded: bool = False) -> str:
+def _entry_html(
+    entry: Mapping[str, Any],
+    tz: ZoneInfo,
+    inside: bool = False,
+    expanded: bool = False,
+    name_this: Callable[[Mapping[str, Any]], str] | None = None,
+) -> str:
     """One timeline row: the clock, the kind, what it was; then an `aboard` entry's inner rows;
-    then, behind a toggle, the attachments by name and the company. The grammar is `day.rows`'."""
+    then, behind a toggle, the attachments by name and the company. The grammar is `day.rows`'.
+    `name_this` gives a stay printed as coordinates its link to the Places page."""
     if entry["kind"] == day_reader.FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = day_reader.span_text(entry["start"], entry["end"], tz)
@@ -698,11 +973,14 @@ def _entry_html(entry: Mapping[str, Any], tz: ZoneInfo, inside: bool = False, ex
     out = [
         f'<li class="row {escape(kind)}"><span class="clock">{escape(clock)}</span> '
         f'<span class="kind">{escape(kind)}</span> {escape(DOT.join(parts))}'
+        f"{name_this(entry) if name_this is not None else ''}"
     ]
     if entry.get("inside"):
         out.append('\n<ol class="inside">\n')
         out.extend(
-            _entry_html({**s, "attached": None, "with": None}, tz, inside=True, expanded=expanded)
+            _entry_html(
+                {**s, "attached": None, "with": None}, tz, inside=True, expanded=expanded, name_this=name_this
+            )
             for s in entry["inside"]
         )
         out.append("</ol>")
@@ -821,6 +1099,72 @@ def _trip_row(trip: trips.Trip, rd: reading.Reading, dates: str) -> list[Cell]:
     ]
 
 
+# -- the spot's canvas ------------------------------------------------------------------------------------
+
+SVG_W, SVG_H = 160, 104
+
+
+def _spot_svg(p: places_review.Proposal) -> str:
+    """A dot on a plain canvas, drawn here: the cluster at the centre with the radius accepting it
+    would write, and the nearest named place (within 5 km) as a ring where it lies, or at the edge
+    in its direction when it is off the canvas, with its name and distance. No tile, no fetch."""
+    cx, cy = SVG_W / 2, SVG_H / 2
+    half_m = max(p.radius_m * 2.5, 150.0)
+    near = p.nearest if p.nearest is not None and p.nearest[1] <= places_review.NEAR_KM * 1000 else None
+    if near is not None and near[1] <= 1500:
+        half_m = max(half_m, near[1] * 1.15 + near[0].radius_m)
+    scale = (cx - 4) / half_m
+    out = [
+        f'<svg viewBox="0 0 {SVG_W} {SVG_H}" role="img" aria-label="the spot">',
+        f'<circle class="ring" cx="{cx:.1f}" cy="{cy:.1f}" r="{max(p.radius_m * scale, 4):.1f}"/>',
+        f'<circle class="spot" cx="{cx:.1f}" cy="{cy:.1f}" r="3.5"/>',
+    ]
+    if near is not None:
+        place, metres = near
+        east = (place.lon - p.lon) * math.cos(math.radians(p.lat)) * 111_320
+        north = (place.lat - p.lat) * 111_320
+        x, y = cx + east * scale, cy - north * scale
+        inside = abs(x - cx) <= cx - 6 and abs(y - cy) <= cy - 6
+        if not inside:  # at the edge, in its direction
+            k = min((cx - 8) / abs(east * scale or 1e-9), (cy - 8) / abs(north * scale or 1e-9))
+            x, y = cx + east * scale * k, cy - north * scale * k
+            out.append(f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}"/>')
+        r = min(max(place.radius_m * scale, 3), 60) if inside else 3
+        out.append(f'<circle class="near" cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}"/>')
+        label = escape(f"{place.name}, {_metres(metres)}")
+        if inside:  # under its ring (above it near the foot), clear of the centre, kept on the canvas
+            ty = y + r + 12 if y + r + 14 <= SVG_H - 14 else y - r - 4
+            half = len(f"{place.name}, {_metres(metres)}") * 2.9 + 2  # about half the text's width
+            tx = min(max(x, half), SVG_W - half)
+            out.append(f'<text x="{tx:.1f}" y="{ty:.1f}" text-anchor="middle">{label}</text>')
+        else:  # the corner, clear of the line
+            out.append(f'<text x="4" y="12">{label}</text>')
+    out.append(f'<text x="4" y="{SVG_H - 5}">{escape(_metres(p.radius_m))} round</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _loopback(client: str) -> bool:
+    """The connection's address is this machine's loopback: 127.0.0.0/8 or ::1 (and ::1 mapped)."""
+    try:
+        address = ipaddress.ip_address(client.partition("%")[0])
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return address.is_loopback
+
+
+def _loopback_origin(origin: str) -> bool:
+    """The browser's Origin names the server as it is reached from this machine: `http://127.0.0.1`
+    or `http://[::1]`, any port; a name (`localhost` included: it may resolve to anything), another
+    scheme, another host, or `null` (an opaque origin) is not."""
+    parts = urlsplit(origin.strip())
+    if parts.scheme != "http" or parts.hostname is None:
+        return False
+    return _loopback(parts.hostname)
+
+
 # -- fragments --------------------------------------------------------------------------------------------
 
 
@@ -901,10 +1245,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self) -> None:
         self._answer(body=False)
 
+    def do_POST(self) -> None:
+        """The Places page's form: read in full, then `Site.write` with the connection's address
+        and the Origin header, which decide whether it is answered at all."""
+        assert isinstance(self.server, Server)
+        length = self.headers.get("Content-Length") or "0"
+        size = int(length) if length.isdigit() else 0
+        if size > FORM_BYTES:
+            self._send(self.server.site._error(413, f"a form is at most {FORM_BYTES:,} bytes"), body=True)
+            return
+        raw = self.rfile.read(size) if size > 0 else b""
+        form = {k: v[-1] for k, v in parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
+        path = self.path.partition("?")[0]
+        response = self.server.site.write(path, form, str(self.client_address[0]), self.headers.get("Origin"))
+        self._send(response, body=True)
+
     def _answer(self, body: bool) -> None:
         assert isinstance(self.server, Server)
         path, _, query = self.path.partition("?")
         response = self.server.site.respond(path, query, self.headers.get("If-None-Match"))
+        self._send(response, body)
+
+    def _send(self, response: Response, body: bool) -> None:
         self.send_response(response.status)
         for name, value in response.headers.items():
             self.send_header(name, value)

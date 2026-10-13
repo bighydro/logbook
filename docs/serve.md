@@ -9,9 +9,10 @@ logbook serve --install-service   # kept running by launchd or systemd (As a ser
 ```
 
 It is a reader (ADR 0013) with another output: the pages are the commands' own readers rendered as
-HTML instead of text, built from the index and nothing else, and nothing is written. Open the
-address it prints, read, close it. There is no login because there is no one to log in: the server
-answers this machine and no other.
+HTML instead of text, built from the index and nothing else, and nothing is written by reading. Open
+the address it prints, read, close it. There is no login because there is no one to log in: the server
+answers this machine and no other. One page asks you something and writes your answer: the Places
+page names the places you return to ([Places — name this place](#places--name-this-place)).
 
 ![The Day of 17 June of the demo record, every attachment toggle open](serve.png)
 
@@ -25,7 +26,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the all-day entries; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts, notes, mail threads, calls, keepers named; messages and photos counted) and company (confirmed, then proposed) under a toggle; what is unplaced; the health line; the sources and when each last spoke | `logbook day` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook trips --year` |
-| `/places` | the named places of `places.json`: position, radius, kind, tags, country | `logbook places list` |
+| `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
 
@@ -53,19 +54,22 @@ carries `--host`. To read the record from another device, see
 [reaching it from another device](#reaching-it-from-another-device).
 
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
-script, no font, no image, no stylesheet link, no frame; every link, form and tooltip points at the
-server's own paths. The `Content-Security-Policy` header the server sends (`default-src 'none'`)
-tells the browser the same, so a payload that carried markup could not make a page fetch from
-elsewhere even if the escaping here were wrong (every value is escaped). The test renders every page
-and checks each attribute that can hold a URL, the inline style and the headers.
+font, no image, no stylesheet link, no frame, no script fetched; every link, form and tooltip points
+at the server's own paths. The one script is inline on the Places page, a dozen lines for its three
+keys, and that page's `Content-Security-Policy` names it by its hash and nothing else; every other
+page's policy (`default-src 'none'`) allows no script at all. The header tells the browser what the
+markup already does, so a payload that carried markup could not make a page fetch from elsewhere
+even if the escaping here were wrong (every value is escaped). The test renders every page and checks
+each attribute that can hold a URL, the inline style, the one script and the headers.
 
-**Read-only.** Every request is a GET answered from the record at its head through the readers, and
-the readers never write, not even `policy/stays.json`. The test takes the head and every file before
-and after serving every page and finds them the same. The server keeps nothing but the head it last
-saw: when a sync moves the head while it runs, the next request brings the index to the new head
-first and every page reads the new lines, with no restart. That rebuild happens once, under a lock,
-however many requests arrive at that moment; they wait for it rather than each starting their own on
-the same file.
+**Read-only, but for one form.** Every GET is answered from the record at its head through the
+readers, and the readers never write, not even `policy/stays.json`. The test takes the head and every
+file before and after serving every page and finds them the same. The one write is the Places page's
+form, a POST from this machine only ([below](#places--name-this-place)). The server keeps nothing
+but the head it last saw: when a sync, or that form, moves the head while it runs, the next request
+brings the index to the new head first and every page reads the new lines, with no restart. That
+rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
+rather than each starting their own on the same file.
 
 ## Performance
 
@@ -79,7 +83,8 @@ command does; a year is a dozen readings. The airports table is loaded once, whe
 A reload at the same head costs nothing. Every page that is the record's and nothing else (`/`, a
 Day, `/days`, `/trips`, `/places`) carries an `ETag`: the first twelve characters of the head, then a
 digest of the request and of what else the page reads (the rest of `logbook.json`, `places.json`,
-`assets.json`, `policy/`, the pages received from the circle) and of the server's start. It is sent
+`assets.json`, `policy/`, `state/places-review.json`, the pages received from the circle) and of
+the server's start. It is sent
 with `Cache-Control: no-cache`, so the browser keeps the page and asks every time; when the tag it
 sends back is the page's, the answer is a `304` with no body and nothing is read or rendered. A sync
 that moves the head, a place renamed or a restart changes the tag, and the next reload is the page
@@ -163,10 +168,60 @@ nothing it serves leaves the machine, so whatever you put in front of it decides
 them. Keep it to your own devices. The server does not know it is there and does not change for it:
 same pages, same headers, the same refusal of any other host.
 
+## Places — name this place
+
+`/places` is two things. First the named places of `places.json`, as `setup places list` prints them,
+each with the nights the record has spent there and the last visit (from the observed places, below).
+Then **Name this place**: the review queue of `logbook setup places review`
+([places](places.md#review)), the places you return to that have no name yet, in the same order (by
+nights, then hours), twenty a page with *more* at the foot. Each cluster shows
+
+- a dot on a plain canvas, drawn by the server: the spot, the radius naming it would write, and the
+  nearest named place where it lies or at the edge in its direction, with its name and distance. No
+  tile, no map host, nothing fetched;
+- its facts, the line the CLI prints: the coordinates, visits, nights, hours, first and last visit,
+  the asset it was aboard, the nearest named place;
+- its evidence, folded as the CLI folds it: the addresses one source wrote along one street are one
+  line (`dawarich: "Plattformveien" (38 addresses, 217 stays)`), three lines are shown, and *… and
+  N more* opens the rest;
+- a field prefilled with the name the evidence weighs most (blank where no source names the spot),
+  and three acts: **Name** writes the field, **Skip** moves to the next cluster, **Not a place**
+  rejects it.
+
+Keys, when the cursor is not in the field: Enter names, `n` is not a place, Space skips; Escape
+leaves the field. The keys act on the cluster at the top of the window. They are the page's one
+script, inline; without it the buttons and links do the same.
+
+**One path.** Name and Not a place post to `/places/review`, and the server answers through the
+review engine's own `accept` and `reject`, the code `setup places review --name`, `--accept` and
+`--reject` run: `places.json` gets the place at the cluster's centre with its fitted radius, the
+record gets the naming as one `note/v1` line through `Logbook.append`, and a rejection goes into
+`state/places-review.json`, byte for byte what the CLI writes. There is no second implementation.
+After a write the head has moved, and the page you come back to is read again: the named place in
+the table, the queue one shorter, the next cluster scrolled to. A form from a page older than the
+record, naming a cluster that is gone, is refused (409) and nothing is written; so is a name the
+engine refuses (400: already a place, no name given), with the reason on the page.
+
+**This machine only.** This is the Library's first write act, and it is allowed because the server
+binds 127.0.0.1 and runs as the record's own user: whoever can reach the form can already run
+`setup places review` in a terminal here. The server holds it to that: a POST is answered only when
+the connection comes from this machine (the client address is loopback, `127.0.0.0/8` or `::1`) and,
+when the browser sends an `Origin` header, it names `127.0.0.1` or `[::1]` (the server's own pages,
+as reached from here; not `localhost`, a name, and not another scheme or host). Anything else is a
+`403` and nothing is written. Through an SSH tunnel the browser's origin is `127.0.0.1` and the form
+works; behind a proxy with its own name it is read-only, as every other page is written, and the
+naming is done here. `GET /places/review` is a `405`.
+
+**A Day's stay without a name** carries a small *name this place* link to the Places page at its
+cluster (`/places?at=lat,lon`, which redirects to the page the cluster is on and scrolls to it, or
+says there is nothing to name there when the spot is named, rejected, or was never a stay). A stay
+inside a named place prints its name at once, as before.
+
 ## What it is not
 
-Not an editor: the pages write nothing, and the captain's words — a note, a naming, a confirmation
-— go through the CLI as lines in the record, which the next page reads. Not a web application: no
-JavaScript, no framework, no build step, no state but the record. Not the circle (ADR 0009): a page
+Not an editor: the pages write nothing but the one naming above, and the captain's other words — a
+note, a confirmation — go through the CLI as lines in the record, which the next page reads. Not a
+web application: no framework, no build step, no state but the record, and one inline script of a
+dozen lines for three keys. Not the circle (ADR 0009): a page
 here is for the owner's eyes on the owner's machine; a shared page is a signed bundle, and that is
 another layer.

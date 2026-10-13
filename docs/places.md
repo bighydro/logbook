@@ -21,7 +21,7 @@ near Hytta på banken, 1.1 km`. Name a place and the next page you open says it.
 | `logbook setup places add NAME --lat --lon [--radius M] [--kind] [--tags]` | add one, by hand; appends nothing |
 | `logbook setup places name LAT,LON NAME` | add one and put the naming in the record |
 | `logbook setup places propose` | your unnamed stays grouped and ranked by hours, with what is near; `--write` asks for a name for each |
-| `logbook setup places review` | the places you return to, each with the name the record already holds for it, to accept, name or reject (below); `--ask-photos` asks your photo libraries too ([below](#ask-the-photos)) |
+| `logbook setup places review` | the places you return to, each with the name the record already holds for it, to accept, name or reject (below); `--ask-photos` asks your photo libraries too ([below](#ask-the-photos)); `logbook serve`'s Places page asks the same, in a browser |
 | `logbook setup places import-takeout PATH` | Google Maps' saved and starred places as entries, written only with `--write` |
 
 `logbook places …` still works for each of these, with one line saying the new name.
@@ -45,6 +45,11 @@ nothing written: `setup places review --accept N[,N]`, `--name N "…"`, or `--r
 ```
 
 (A synthetic record at sea; nobody lives at those coordinates.)
+
+The evidence is folded: a reverse geocoder names every house number a track passes, so the addresses
+one source wrote along one street are one line (`dawarich: "Plattformveien" (38 addresses, 217
+stays)`), three lines are shown, and `… and N more` counts the rest. `--verbose` prints every name on
+its own, as before.
 
 ### Observed places
 
@@ -193,6 +198,16 @@ The numbers are the queue's as `review` prints it, also with `--near` and `--top
 command is checked before anything is written, and after a write the queue is numbered again. On a
 terminal, `review` asks for each proposal shown: `y` accepts the name, `n` rejects it, anything else is
 the name to give it, Enter skips, `q` stops. Each answer is written at once.
+
+### In the browser
+
+`logbook serve`'s Places page ([serve](serve.md#places--name-this-place)) asks the same questions
+without a terminal: the queue in this order, twenty a page, each cluster with a dot on a plain canvas,
+its facts, its evidence folded, a field prefilled with the proposal, and Name, Skip and Not a place
+(Enter, Space and `n`). Name and Not a place go through the same `accept` and `reject` as `--name`,
+`--accept` and `--reject`, so what lands in `places.json`, the record and `state/places-review.json` is
+what the CLI writes. The form is answered from this machine only. A Day's stay printed as coordinates
+links to its cluster there.
 
 ### The fitted radius
 
