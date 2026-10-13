@@ -28,13 +28,15 @@ from __future__ import annotations
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..core import drafts, places, resolve, signing
 from ..core.chain import Line
 from ..core.store import Logbook, retractions
-from .adapters import ics
+
+if TYPE_CHECKING:
+    from .adapters import ics
 
 OWNER = drafts.OWNER  # the source of a confirmed event: the owner, not the model and not an adapter
 CALENDAR = "logbook"  # the calendar a confirmed event lives in: the record's own (X-WR-CALNAME)
@@ -161,6 +163,8 @@ def wrote_text(proposal: Proposed, line: Line) -> str:
 def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
     """The line `--accept` writes for `proposal`: the calendar adapter's for the VEVENT of its fields
     (the module's docstring), source `owner`, `extra.from` the draft. Nothing is written."""
+    from .adapters import ics  # here, not at the top: `--help` imports no adapter (tests/test_cli_lazy.py)
+
     tz = str(lb.meta["timezone"])
     zone = ZoneInfo(tz)
     item = proposal.item
@@ -232,6 +236,8 @@ def _attendee(ref: resolve.Ref, label: str) -> dict[str, Any]:
 def _time(name: str, stamp: str, zone: ZoneInfo) -> ics.Property:
     """A start or end as a calendar spells it: the wall clock in the record's zone with its TZID; in
     UTC with a `Z` when that wall clock reads back as another instant (the hour the clocks go back)."""
+    from .adapters import ics
+
     when = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(UTC)
     local = when.astimezone(zone)
     wall = datetime(local.year, local.month, local.day, local.hour, local.minute, local.second, tzinfo=zone)
