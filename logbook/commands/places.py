@@ -330,8 +330,8 @@ def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     from ..contrib import places_review
 
     radius = places_review.CLUSTER_M if a.radius is None else float(a.radius)
-    if a.top is not None and a.top < 1:
-        raise places_review.ReviewError(f"--top takes a number from 1, not {a.top}")
+    if a.top is not None and a.top < 0:
+        raise places_review.ReviewError(f"--top takes a number from 0, not {a.top}")
     report = places_review.read(lb, radius)
     accepted = places_review.numbers(a.accept)
     rejected = places_review.numbers(a.reject)

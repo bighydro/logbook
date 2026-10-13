@@ -282,6 +282,7 @@ def test_near_and_top_filter_the_list_and_keep_the_queue_s_numbers(
     data = _json(capsys, "--near", "55.61,4.335")
     assert [p["number"] for p in data["proposals"]] == [1, 5, 9]
     assert [p["number"] for p in _json(capsys, "--near", "55.61,4.335", "--top", "2")["proposals"]] == [1, 5]
+    assert _json(capsys, "--top", "0")["proposals"] == [], "as `propose --top 0`: nothing listed"
     places.add(lb.root, places.Place("Rig", 55.61, 4.335, 100))
     assert [p["number"] for p in _json(capsys, "--near", "rig")["proposals"]] == [1, 5, 9]
     with pytest.raises(SystemExit) as e:
