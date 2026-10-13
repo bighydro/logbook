@@ -44,6 +44,8 @@ URL = "http://immich.test:2283"  # .test is reserved: no such host anywhere
 KEY = "synthetic-read-only-key"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "places-review"
 BLANK = places_review.BLANK
+MAC_FOLDER = str(Path("~", "Pictures", "Photos Library.photoslibrary"))  # a Mac's library, under the home
+MAC_LIBRARY = str(Path(MAC_FOLDER, "database", "Photos.sqlite"))
 
 
 @pytest.fixture(scope="module")
@@ -146,8 +148,7 @@ def test_an_unnamed_place_gains_the_name_its_photos_hold_counted_by_photo_and_so
         " centre first",
         "  immich: 13 photos; sending 13 asset ids to immich.test:2283, nothing else, at most 10 a second"
         " (about 2 s)",
-        f"  photos: 4 photos; reading their places from the library at {places_photos.store_of(None)}, on"
-        " this machine",
+        f"  photos: 4 photos; reading their places from the library at {MAC_LIBRARY}, on this machine",
     ]
     assert "  immich: 12 named a place, 1 not on the server" in err.splitlines()
     assert "  photos: 3 named a place, 1 not in the library" in err.splitlines()
@@ -300,8 +301,9 @@ def test_a_server_or_library_that_is_not_there_is_said_and_the_review_goes_on(
 ) -> None:
     out, err = _review(capsys, "--ask-photos")
     assert "  immich: 13 photos; 13 not asked: set LOGBOOK_IMMICH_URL and LOGBOOK_IMMICH_KEY" in err
-    where = places_photos.store_of(None)
-    assert f"  photos: 4 photos; 4 not asked: no Photos library at {where} (--photos-library PATH)" in err
+    assert (
+        f"  photos: 4 photos; 4 not asked: no Photos library at {MAC_FOLDER} (--photos-library PATH)" in err
+    )
     assert out.splitlines()[0].startswith("12 places observed")
     assert _rows(out)[3][0].endswith(f"→ {BLANK}")
     assert no_network == []

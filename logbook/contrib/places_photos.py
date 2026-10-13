@@ -49,7 +49,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -119,6 +119,14 @@ def store_of(path: str | Path | None) -> Path:
     """The Photos store `--photos-library` names, else the one a Mac keeps under the home folder."""
     folder = Path(path).expanduser() if path else Path.home().joinpath(*apple_photos.DEFAULT_LIBRARY)
     return apple_photos.library_store(folder)
+
+
+def shown(path: Path) -> str:
+    """A path as the owner's lines say it: under the home folder as `~/…`."""
+    try:
+        return str(PurePath("~") / Path(path).relative_to(Path.home()))
+    except ValueError:
+        return str(path)
 
 
 def cache_path(root: Path) -> Path:
@@ -280,7 +288,7 @@ def _unaskable(
     if name == immich.NAME and config is None:
         return f"set {' and '.join(immich.ENV)}"
     if name == apple_photos.NAME and not store.is_file():
-        return f"no Photos library at {store} (--photos-library PATH)"
+        return f"no Photos library at {shown(store)} (--photos-library PATH)"
     return None
 
 
@@ -301,7 +309,7 @@ def _plan_text(outcome: Outcome, todo: Sequence[str], reason: str | None, store:
             f" at most {rate:g} a second (about {_duration(len(todo) / rate)})"
         )
     which = "their places" if len(todo) == outcome.photos else f"the places of the other {len(todo)}"
-    return f"{text}; reading {which} from the library at {store}, on this machine"
+    return f"{text}; reading {which} from the library at {shown(store)}, on this machine"
 
 
 def _duration(seconds: float) -> str:
