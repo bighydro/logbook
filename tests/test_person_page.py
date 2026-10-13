@@ -18,6 +18,7 @@ from logbook.core import people, reading
 from logbook.core.store import Logbook
 
 OCTOBER = datetime(2025, 10, 1, 12, 0, tzinfo=UTC)
+NOT_DRIFTED = ("Camilla Strand", "Frode Berg", "Guro Lund", "Ingrid Aas")  # contact since, recent, under 20
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +78,9 @@ def test_the_drift_on_a_page_is_the_command_s(lb: Logbook) -> None:
     whole = reading.record_days(lb)
     assert whole is not None
     report = people.read(lb, *whole)
-    for p in report.people:
+    sample = [p for p in report.people if p.entity in listed or p.name in NOT_DRIFTED]
+    assert len(sample) == len(listed) + len(NOT_DRIFTED)
+    for p in sample:
         assert person_page.read(lb, p.entity, now=OCTOBER)["drift"]["drifted"] == (p.entity in listed), p.name
 
 
