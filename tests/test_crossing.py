@@ -780,3 +780,33 @@ def test_a_link_to_an_earlier_bundle_still_names_the_new_one(lb: Logbook, tmp_pa
     assert sorted(_on_disk(real)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(real)
     assert sorted(p.name for p in real.parent.iterdir()) == ["real"]
+
+
+@pytest.mark.parametrize("where", ["the record", "its attachment store", "its log", "a folder that holds it"])
+def test_the_record_is_never_replaced_even_under_force(lb: Logbook, tmp_path: Path, where: str, capsys):
+    """Replacing a target removes what was there, so the record, a folder of it outside `export/`,
+    and a folder that holds it are refused whatever the flags; nothing of the record is touched."""
+    out = {
+        "the record": lb.root,
+        "its attachment store": lb.root / "attachments",
+        "its log": lb.root / "logbook",
+        "a folder that holds it": tmp_path,
+    }[where]
+    (lb.root / "manifest.json").write_bytes(  # an export into the root before this fix left one there
+        json.dumps({"schema": "crossing-package/v1"}).encode("utf-8")
+    )
+    before = _on_disk(lb.root)
+    assert _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force") == 2
+    err = capsys.readouterr().err
+    assert str(out) in err and "record" in err
+    assert _on_disk(lb.root) == before
+    assert lb.verify()[2] == [] and lb.meta["seq"] == 14
+    assert not any(p.name.startswith(f".{out.name}.") for p in out.parent.iterdir()), "no staging folder"
+
+
+def test_a_bundle_under_the_records_export_folder_is_replaced_as_anywhere(lb: Logbook):
+    out = lb.root / "export" / "for-hermes"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
+    _matches_its_manifest(out)

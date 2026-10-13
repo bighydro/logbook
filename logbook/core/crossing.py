@@ -485,7 +485,7 @@ def write_bundle(
     destination's recipient, or, under `--open`, with `payload_open` in its place (RFC 0029 §7);
     its hashed fields are the owner's, verbatim, either way."""
     out = _target(out)
-    check_target(out, force)
+    check_target(out, force, lb.root)
     out.parent.mkdir(parents=True, exist_ok=True)
     staging = _beside(out, "staging")
     staging.mkdir()
@@ -597,12 +597,18 @@ def is_bundle(folder: Path) -> bool:
     return isinstance(manifest, dict) and manifest.get("schema") == SCHEMA
 
 
-def check_target(out: Path, force: bool = False) -> None:
+def check_target(out: Path, force: bool = False, root: Path | None = None) -> None:
     """Refuse an output that exists and is not an earlier bundle, before anything is written: a file,
     or a folder that holds anything and no manifest of ours. Such a folder is replaced, and all of
-    it removed, only under `force`. Nothing there, or an empty folder, is a fresh target."""
+    it removed, only under `force`. Nothing there, or an empty folder, is a fresh target. Whatever
+    the flags, the record at `root` is never replaced, nor a folder that holds it, nor one inside
+    it but under `export/` (where the default `--out` is)."""
     out = _target(out)
-    if force or not out.exists():
+    if not out.exists():
+        return
+    if root is not None:
+        _outside_the_record(out, Path(root))
+    if force:
         return
     if out.is_dir() and (is_bundle(out) or not any(out.iterdir())):
         return
@@ -611,6 +617,29 @@ def check_target(out: Path, force: bool = False) -> None:
         f"{out} is {what}, not an earlier bundle, so it is not replaced; "
         "choose another --out, or pass --force to replace it and everything in it with the bundle"
     )
+
+
+def _outside_the_record(out: Path, root: Path) -> None:
+    """Refuse an existing `out` that is the record, holds it, or is inside it but outside `export/`.
+    Compared by file identity, not by name: a case-insensitive disk has `~/logbook` and `~/Logbook`
+    as one folder, and a link is another name for its folder."""
+    export = root / "export"
+    if any(_same(out, folder) for folder in (root, *root.resolve().parents)):
+        raise CrossingError(f"{out} holds the record at {root}; a bundle never replaces it, --force or not")
+    around = [out.resolve(), *out.resolve().parents]
+    inside = next((i for i, folder in enumerate(around) if _same(folder, root)), None)
+    if inside is not None and not any(_same(folder, export) for folder in around[:inside]):
+        raise CrossingError(
+            f"{out} is a part of the record at {root}; a bundle never replaces it, --force or not: "
+            f"give an --out outside the record, or one under {export}"
+        )
+
+
+def _same(a: Path, b: Path) -> bool:
+    try:
+        return a.samefile(b)
+    except OSError:
+        return False
 
 
 def _target(out: Path) -> Path:

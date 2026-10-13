@@ -271,7 +271,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             _tier3_warning(req, sel)
         return
     try:
-        crossing.check_target(out, a.force)  # before the policy file or anything else is written
+        crossing.check_target(out, a.force, lb.root)  # before the policy file or anything else is written
     except crossing.CrossingError as e:
         print(f"export crossing: {e}", file=sys.stderr)
         sys.exit(2)
@@ -400,7 +400,7 @@ def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
             print(text)
         return
     try:
-        crossing.check_target(out, a.force)
+        crossing.check_target(out, a.force, lb.root)
     except crossing.CrossingError as e:
         print(f"export trip-bundle: {e}", file=sys.stderr)
         sys.exit(2)
