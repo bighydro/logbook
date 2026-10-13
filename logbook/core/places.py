@@ -227,7 +227,8 @@ class TimelineVisit(NamedTuple):
 
 def timeline_visits(lines: Iterable[Line]) -> list[TimelineVisit]:
     """The Google Timeline visits the takeout adapter wrote as location lines (`extra.segment`
-    `visit`, the `start` edge, the span under `extra.segment_start` / `segment_end`)."""
+    `visit`, the `start` edge, the span under `extra.segment_start` / `segment_end`), from the
+    Android export or the iPhone's (`placeID`, its numbers as strings)."""
     visits: list[TimelineVisit] = []
     for line in lines:
         if line.get("kind") != "location" or line.get("source") != TIMELINE_SOURCE:
@@ -249,20 +250,34 @@ def timeline_visits(lines: Iterable[Line]) -> list[TimelineVisit]:
             (extra.get("visit") or {}).get("topCandidate") if isinstance(extra.get("visit"), dict) else None
         )
         candidate = candidate if isinstance(candidate, dict) else {}
-        probability = candidate.get("probability")
         visits.append(
             TimelineVisit(
                 start,
                 end,
                 float(lat),
                 float(lon),
-                _text(candidate.get("placeId")),
+                _text(candidate.get("placeId")) or _text(candidate.get("placeID")),  # the iPhone's spelling
                 _text(candidate.get("semanticType")),
-                float(probability) if isinstance(probability, int | float) else None,
+                _probability(candidate.get("probability")),
                 str(line.get("id")),
             )
         )
     return visits
+
+
+def _probability(value: object) -> float | None:
+    """A number, or the string of one the iPhone's export writes (`"0.812"`); None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        return number if number == number and abs(number) != float("inf") else None
+    return None
 
 
 @dataclass(frozen=True)

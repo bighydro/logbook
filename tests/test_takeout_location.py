@@ -1,4 +1,6 @@
-"""Google Takeout → location/v1: Records.json (the archive) and Timeline.json (the on-device export)."""
+"""Google Takeout → location/v1: Records.json (the archive), the Semantic Location History (the
+archive's monthly visits), Timeline.json (the Android on-device export) and location-history.json
+(the iPhone's on-device export)."""
 
 from __future__ import annotations
 
@@ -27,6 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "takeout"
 RECORDS = FIXTURES / "Records.json"
 TIMELINE = FIXTURES / "Timeline.json"
+SEMANTIC = FIXTURES / "Semantic Location History" / "2019" / "2019_JANUARY.json"
+ON_DEVICE = FIXTURES / "location-history.json"  # the iPhone's export: a top-level array
 DAWARICH = ROOT / "tests" / "fixtures" / "dawarich" / "export.json"
 SCHEMA = json.loads((ROOT / "schema" / "observation.schema.json").read_text(encoding="utf-8"))
 ENVELOPE = {"at", "end", "tz", "source", "kind", "tier", "payload"}
@@ -57,8 +61,8 @@ def test_registry_lists_google_takeout_location():
     assert "google-takeout-location" in [a.NAME for a in adapters.all_adapters()]
 
 
-@pytest.mark.parametrize("fixture", [RECORDS, TIMELINE])
-def test_registry_find_returns_takeout_for_both_shapes(fixture):
+@pytest.mark.parametrize("fixture", [RECORDS, TIMELINE, SEMANTIC, ON_DEVICE])
+def test_registry_find_returns_takeout_for_every_shape(fixture):
     found = adapters.find(fixture)
     assert found is not None and found.NAME == "google-takeout-location"
 
@@ -133,7 +137,7 @@ def test_sniff_gives_up_on_a_large_unrelated_document(tmp_path):
 # -- run: envelope -----------------------------------------------------------
 
 
-@pytest.mark.parametrize(("fixture", "n"), [(RECORDS, 6), (TIMELINE, 7)])
+@pytest.mark.parametrize(("fixture", "n"), [(RECORDS, 6), (TIMELINE, 7), (SEMANTIC, 6), (ON_DEVICE, 6)])
 def test_run_yields_location_lines_with_the_takeout_source(fixture, n):
     lines = list(location.run(fixture))
     assert len(lines) == n
@@ -308,6 +312,128 @@ def test_timeline_segment_without_coordinates_emits_nothing():
 def test_timeline_since_compares_in_utc_and_keeps_export_order():
     lines = list(location.run(TIMELINE, since="2026-03-01T08:30:00Z"))
     assert [line["at"] for line in lines] == ["2026-03-01T08:35:00Z", "2026-03-01T08:34:00Z"]
+
+
+# -- run: Semantic Location History ------------------------------------------------------
+
+
+def test_sniff_accepts_the_semantic_history_and_the_on_device_array():
+    assert location.sniff(SEMANTIC) is True
+    assert location.sniff(ON_DEVICE) is True
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '[{"ts": "2026-01-01T00:00:00Z", "ms_played": 1200}]',
+        '[{"startTime": "2026-01-01T00:00:00Z", "title": "not a segment"}]',
+        '{"timelineObjects": [{"note": "neither a visit nor an activity"}]}',
+        "[]",
+    ],
+)
+def test_sniff_rejects_arrays_and_objects_that_are_not_a_timeline(tmp_path, content):
+    p = tmp_path / "other.json"
+    p.write_text(content, encoding="utf-8")
+    assert location.sniff(p) is False
+
+
+def test_place_visit_emits_start_and_end_at_the_place_with_its_name_and_address():
+    lines = list(location.run(SEMANTIC))
+    start, end = lines[0], lines[1]
+    assert start["at"] == "2019-01-05T10:00:00Z" and end["at"] == "2019-01-05T12:30:00Z"
+    for line in (start, end):
+        p = line["payload"]
+        assert (p["lat"], p["lon"]) == (55.6012, 4.4021)
+        assert p["extra"]["segment"] == "placeVisit"
+        assert p["extra"]["segment_start"] == "2019-01-05T10:00:00.000Z"
+        assert p["extra"]["segment_end"] == "2019-01-05T12:30:00Z"
+        place = p["extra"]["placeVisit"]["location"]
+        assert place["name"] == "Hytta på banken" and place["address"] == "Plattformveien 1, Nordsjøen"
+        assert (
+            p["extra"]["placeVisit"]["otherCandidateLocations"][0]["placeId"] == "ChIJ-synthetic-other-0002"
+        )
+    assert start["payload"]["extra"]["edge"] == "start" and end["payload"]["extra"]["edge"] == "end"
+    assert start["payload"]["raw_id"] == "placeVisit:2019-01-05T10:00:00.000Z:start"
+    assert end["payload"]["raw_id"] == "placeVisit:2019-01-05T12:30:00Z:end"
+
+
+def test_place_visit_reads_the_older_milliseconds_and_keeps_the_span_as_rfc3339():
+    lines = [line for line in location.run(SEMANTIC) if "Verkstedet" in json.dumps(line, ensure_ascii=False)]
+    assert [line["at"] for line in lines] == ["2019-01-05T13:20:00Z", "2019-01-05T15:20:00Z"]
+    extra = lines[0]["payload"]["extra"]
+    assert (extra["segment_start"], extra["segment_end"]) == ("2019-01-05T13:20:00Z", "2019-01-05T15:20:00Z")
+    assert lines[0]["payload"]["raw_id"] == "placeVisit:1546694400000:start"
+    assert (lines[0]["payload"]["lat"], lines[0]["payload"]["lon"]) == (55.7203, 4.28)
+
+
+def test_activity_segment_emits_its_start_and_end_location():
+    lines = [
+        line for line in location.run(SEMANTIC) if line["payload"]["extra"]["segment"] == "activitySegment"
+    ]
+    assert [line["at"] for line in lines] == ["2019-01-05T12:30:00Z", "2019-01-05T13:10:00Z"]
+    assert [(line["payload"]["lat"], line["payload"]["lon"]) for line in lines] == [
+        (55.6012, 4.4021),
+        (55.7203, 4.28),
+    ]
+    assert lines[0]["payload"]["extra"]["activitySegment"]["activityType"] == "SAILING"
+    assert lines[0]["payload"]["raw_id"] == "activitySegment:2019-01-05T12:30:00Z:start"
+
+
+def test_semantic_history_skips_visits_without_time_or_coordinates_and_counts_them():
+    counts: dict[str, int] = {}
+    lines = list(location.run(SEMANTIC, counts=counts))
+    assert len(lines) == 6
+    assert counts == {"skipped_no_timestamp": 2, "skipped_bad_coordinates": 4}
+    assert not any(
+        "No coordinates" in json.dumps(line) or "Off the earth" in json.dumps(line) for line in lines
+    )
+
+
+# -- run: the iPhone's on-device export --------------------------------------------------
+
+
+def test_on_device_array_visit_reads_a_geo_place_location_and_string_numbers():
+    lines = list(location.run(ON_DEVICE))
+    start, end = lines[0], lines[1]
+    assert start["at"] == "2026-02-02T08:30:00Z" and end["at"] == "2026-02-02T11:00:00Z"
+    for line in (start, end):
+        p = line["payload"]
+        assert (p["lat"], p["lon"]) == (55.7203, 4.28)
+        assert p["extra"]["segment"] == "visit"
+        assert p["extra"]["visit"]["topCandidate"]["placeID"] == "ChIJ-synthetic-workshop-0003"
+    assert start["payload"]["raw_id"] == "visit:2026-02-02T09:30:00.000+01:00:start"
+
+
+def test_on_device_array_activity_and_path_points_offset_from_the_segment_start():
+    lines = list(location.run(ON_DEVICE))
+    activity = [line for line in lines if line["payload"]["extra"]["segment"] == "activity"]
+    assert [(line["payload"]["lat"], line["payload"]["lon"]) for line in activity] == [
+        (55.7203, 4.28),
+        (55.6012, 4.4021),
+    ]
+    path = [line for line in lines if line["payload"]["extra"]["segment"] == "timelinePath"]
+    assert [line["at"] for line in path] == ["2026-02-02T11:10:00Z", "2026-02-02T11:25:00Z"]
+    assert path[0]["payload"]["raw_id"] == "path:2026-02-02T11:10:00Z"
+    assert path[0]["payload"]["extra"]["durationMinutesOffsetFromStartTime"] == "10"
+
+
+def test_on_device_array_skips_what_it_cannot_place_and_counts_it():
+    counts: dict[str, int] = {}
+    assert len(list(location.run(ON_DEVICE, counts=counts))) == 6
+    assert counts == {"skipped_no_timestamp": 1, "skipped_bad_coordinates": 3}
+
+
+def test_every_new_shape_appends_valid_lines_once(tmp_path):
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    assert lb.append_many(location.run(SEMANTIC)) == 6
+    assert lb.append_many(location.run(ON_DEVICE)) == 6
+    assert lb.append_many(location.run(SEMANTIC)) == 0
+    assert lb.append_many(location.run(ON_DEVICE)) == 0
+    seq, _head, errors = lb.verify()
+    assert errors == [] and seq == 12
+    validator = Draft202012Validator(SCHEMA)
+    for line in lb.lines():
+        validator.validate(line)
 
 
 # -- the log --------------------------------------------------------------------
