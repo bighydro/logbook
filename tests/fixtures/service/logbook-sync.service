@@ -1,5 +1,5 @@
 [Unit]
-Description=logbook sync --scheduled: every configured live source, then doctor, twice a day
+Description=logbook sync --scheduled: every configured live source, then doctor
 
 [Service]
 Type=oneshot

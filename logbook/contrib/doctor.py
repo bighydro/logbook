@@ -377,7 +377,7 @@ def home_check(root: Path) -> Check:
 
 
 RESTORE_TEST_WITHIN = timedelta(days=35)  # the first Sundays of two months are at most five weeks apart
-INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` twice a day and writes it"
+INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it"
 RESTORE_TEST = (
     "`logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it;"
     " the schedule runs it on the first Sunday of the month"
@@ -385,15 +385,20 @@ RESTORE_TEST = (
 
 
 def schedule_installed(env: Mapping[str, str]) -> bool:
-    """Whether this machine has the agent or timer `sync --install-schedule` writes."""
+    """Whether this machine has the agents or timers `sync --install-schedule` writes, the user's or,
+    with `--system`, the system's copies."""
     xdg = env.get("XDG_CONFIG_HOME", "").strip()
+    config, root = (Path(xdg).expanduser() if xdg else None), serve_service.SYSTEM_ROOT
     try:
-        plan = schedule.plan(
-            schedule.system(), Path.home(), sys.executable, None, Path(xdg).expanduser() if xdg else None
-        )
+        plans = [  # the user's agents or timers, then the system's copies (whichever account they run as)
+            schedule.plan(
+                schedule.system(), Path.home(), sys.executable, None, config, user=user, system_root=root
+            )
+            for user in (None, "-")
+        ]
     except schedule.ScheduleError:
         return False
-    return schedule.installed(plan)
+    return any(schedule.installed(plan) for plan in plans)
 
 
 def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
@@ -405,7 +410,9 @@ def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
     if state is None:
         if schedule_installed(env):
             return Check(
-                "last-run", "warn", "the schedule is installed but has not run yet; wait for 07:00 or 19:00"
+                "last-run",
+                "warn",
+                "the schedule is installed but has not run yet; wait for 00:00, 06:00, 12:00 or 18:00",
             )
         return Check("last-run", "pass", f"no schedule on this machine; {INSTALL}")
     run = state.run
