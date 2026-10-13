@@ -15,7 +15,7 @@ from ..core.store import Logbook
 from .common import Subparsers, _plural
 
 if TYPE_CHECKING:
-    from ..contrib import people_merge
+    from ..contrib import google_contacts, people_merge
 
 
 MERGE = "merge"  # `people merge`: never a person's name
@@ -23,7 +23,7 @@ REVIEW = "review"  # `people review`: nor this
 DRIFT = "drift"  # `people drift`
 NEARBY = "nearby"  # `people nearby`
 MERGE_FLAGS = ("propose", "apply", "export_review", "apply_review")
-REVIEW_FLAGS = ("accept", "reject", "all_above")
+REVIEW_FLAGS = ("accept", "reject", "all_above", "from_google")
 DRIFT_FLAGS = ("min_days", "quiet_days", "show")
 NEARBY_FLAGS = ("journey", "days", "radius")
 
@@ -108,6 +108,14 @@ def people_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--all-above", metavar="SCORE", help="review: accept every proposal at or above this score"
     )
+    s.add_argument(
+        "--from-google",
+        action="store_true",
+        help="review: your Google contacts and other contacts as a name source, read with the one Google key"
+        " (LOGBOOK_DRIVE_SA_KEY, LOGBOOK_DRIVE_USER): evidence for a pair, a name for a new person, and the"
+        " contacts that share an address or a number; never a line of them; kept 24 h in"
+        " state/google-contacts.json; give it with --accept and --reject too",
+    )
     g = s.add_mutually_exclusive_group()
     g.add_argument(
         "--priority",
@@ -169,7 +177,10 @@ def cmd_people(a: argparse.Namespace) -> None:
         )
         sys.exit(2)
     if any(getattr(a, flag) for flag in REVIEW_FLAGS):
-        print("people: --accept, --reject and --all-above go with `people review`", file=sys.stderr)
+        print(
+            "people: --accept, --reject, --all-above and --from-google go with `people review`",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if a.name is not None:
         if a.priority:
@@ -205,7 +216,10 @@ def _people_merge(lb: Logbook, a: argparse.Namespace) -> None:
     from ..contrib import people_merge
 
     if any(getattr(a, flag) for flag in REVIEW_FLAGS):
-        print("people merge: --accept, --reject and --all-above go with `people review`", file=sys.stderr)
+        print(
+            "people merge: --accept, --reject, --all-above and --from-google go with `people review`",
+            file=sys.stderr,
+        )
         sys.exit(2)
     try:
         report = people_merge.read(lb)
@@ -248,11 +262,13 @@ def _say_merged(applied: list[people_merge.Applied], as_json: bool) -> None:
 
 
 def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
-    """`people review [--accept N[,N]] [--reject N[,N]] [--all-above SCORE] [--json]`: the observed
-    people the record has not placed, proposed against the canonical ones, ranked by the evidence
-    and numbered (`logbook.contrib.people_review`); nothing is written unless told. `--accept` and
-    `--all-above` append the alias lines `people merge` writes, `--reject` one `people-review/v1`
-    line per pair, all through `Logbook.append`; every number is checked before the first line."""
+    """`people review [--from-google] [--accept N[,N]] [--reject N[,N]] [--all-above SCORE] [--json]`:
+    the observed people the record has not placed, proposed against the canonical ones, ranked by the
+    evidence and numbered (`logbook.contrib.people_review`); nothing is written unless told. `--accept`
+    and `--all-above` append the alias lines `people merge` writes, `--reject` one `people-review/v1`
+    line per pair, all through `Logbook.append`; every number is checked before the first line. With
+    `--from-google` the owner's Google contacts are a name source too (`logbook.contrib.google_contacts`):
+    read on the one Google key, or from the cache in state/ within its TTL, never a line of them."""
     from ..contrib import people_review
 
     if any(getattr(a, flag) for flag in MERGE_FLAGS):
@@ -261,8 +277,9 @@ def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(2)
+    book = _google_contacts(lb) if a.from_google else None
     try:
-        report = people_review.read(lb)
+        report = people_review.read(lb, book)
         accepted = people_review.numbers(a.accept)
         rejected = people_review.numbers(a.reject)
         both = sorted(set(accepted) & set(rejected))
@@ -301,6 +318,37 @@ def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
         return
     for text in people_review.rows(report):
         print(text)
+
+
+def _google_contacts(lb: Logbook) -> google_contacts.Book:
+    """The owner's Google contacts for `people review --from-google`: the cache within its TTL, else read
+    on the one Google key. Exit 2 when the key is not set or not good, 1 when Google cannot be read; a
+    book whose scope is not delegated is said on stderr and left out."""
+    import os
+
+    from ..contrib import google_contacts
+    from ..contrib.adapters import service_account
+
+    try:
+        account = service_account.configure(os.environ)
+    except ValueError as e:
+        print(f"people review: --from-google: {e}", file=sys.stderr)
+        sys.exit(2)
+    if account is None:
+        print(f"people review: --from-google: set {' and '.join(service_account.ENV)}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        book = google_contacts.load(lb.root, account)
+    except OSError as e:  # service_account.GoogleError is one
+        print(f"people review: --from-google: {e}", file=sys.stderr)
+        sys.exit(1)
+    for name in book.refused:
+        print(
+            f"people review: --from-google: {name} not read; the delegation does not grant"
+            f" {service_account.SCOPES[name]}",
+            file=sys.stderr,
+        )
+    return book
 
 
 def people_drift_default(what: str) -> str:

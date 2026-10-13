@@ -464,3 +464,14 @@ def test_doctor_shows_sync_meet_and_asks_google_nothing(lb: Logbook, fake: Fake)
     assert f"configured ({KEY_ENV}, {USER_ENV})" in checks["sync:meet"].detail
     assert "meet" in checks["google"].detail
     assert fake.requests == []
+
+
+def test_people_review_sees_a_participant_by_the_account_the_api_names(lb: Logbook, fake: Fake) -> None:
+    from logbook.contrib import people_review
+
+    assert _sync() == 0
+    rows = {row.key: row for row in people_review.observed(lb)}
+    ola = rows[("name", "nordmann ola")]
+    assert ("provider_id", "users/1001") in ola.identifiers and ola.entity is None
+    assert set(ola.kinds) == {"event", "transcript"} and ola.writable == [("provider_id", "users/1001")]
+    assert rows[("name", "guest")].writable == [], "a guest is a display name alone: listed, never proposed"

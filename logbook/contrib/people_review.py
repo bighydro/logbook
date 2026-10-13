@@ -67,10 +67,12 @@ from ..core import day_start, people, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
-from ..core.store import Logbook, now_utc, retractions
-from . import people_merge
+from ..core.store import Logbook, now_utc, retractions, uuid7
+from . import google_contacts, people_merge
 from .adapters import phone as phones
+from .adapters import service_account
 from .adapters.ios_contacts import DIAL_PREFIX_ENV
+from .google_contacts import Contact
 
 KIND = "people-review"  # the line a rejection writes
 SCHEMA = "people-review/v1"
@@ -100,6 +102,9 @@ COLUMNS = (
 SAMPLES = 3  # line ids kept per observed person, as evidence
 EMAIL, PHONE, NAME, TOGETHER = 60, 50, 20, 2  # the evidence, in points
 NAME_SOURCE, NAME_SOURCE_CAP, TOGETHER_CAP = 5, 10, 20
+CONTACT, CONTACT_NAME = 50, 20  # a Google contact holds the observed identifier and the canonical's, or name
+NAMED_TIER = 2  # a name from the owner's address book is personal: a resolution over it is tier 2 at least
+NAMED_FROM = "google contacts"  # the name source a new person's name came from, under `extra`
 DAYS, MESSAGES, MESSAGES_CAP, MEETINGS = 3, 1, 50, 2  # the priority score
 RECENT, RECENT_DAYS, RECENTISH, RECENTISH_DAYS = 10, 30, 5, 90
 YEAR = 365
@@ -511,26 +516,42 @@ class Canonical:
 
 @dataclass(frozen=True)
 class Proposal:
+    """One pair for the owner to decide: the observed person and a canonical one, or — from a name
+    source, `canonical` None — a Google contact whose name the observed person would be given, as a
+    new person."""
+
     number: int
     id: str
     observed: Observed
-    canonical: Canonical
+    canonical: Canonical | None
     score: int
     evidence: tuple[str, ...]
+    contact: Contact | None = None
+
+    @property
+    def label(self) -> str:
+        if self.canonical is not None:
+            return self.canonical.label
+        return str(self.contact.name if self.contact is not None else "")
 
     @property
     def tier(self) -> int:
-        return max(self.observed.tier, self.canonical.tier)
+        if self.canonical is not None:
+            return max(self.observed.tier, self.canonical.tier)
+        return max(self.observed.tier, NAMED_TIER)
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        found: dict[str, Any] = {
             "number": self.number,
             "id": self.id,
             "score": self.score,
             "evidence": list(self.evidence),
             "observed": self.observed.to_json(),
-            "canonical": self.canonical.to_json(),
+            "canonical": self.canonical.to_json() if self.canonical is not None else None,
         }
+        if self.contact is not None:
+            found["contact"] = self.contact.shown()
+        return found
 
 
 @dataclass(frozen=True)
@@ -542,24 +563,34 @@ class Report:
     rejected: Rejected
     standing: dict[Ref, Line]
     head: str
+    book: google_contacts.Book | None = None  # the Google contacts weighed, with --from-google
+    duplicates: list[google_contacts.Duplicate] = field(default_factory=list)
 
     @property
     def tier(self) -> int | None:
         return max((p.tier for p in self.proposals), default=None)
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        found: dict[str, Any] = {
             "tier": self.tier,
             "observed": {"placed": self.placed, "unplaced": [o.to_json() for o in self.unplaced]},
             "rejected": self.rejected.pairs,
             "proposals": [p.to_json() for p in self.proposals],
         }
+        if self.book is not None:
+            found["contacts"] = {
+                **self.book.to_json(),
+                "duplicates": [d.to_json() for d in self.duplicates],
+            }
+        return found
 
 
-def read(lb: Logbook) -> Report:
+def read(lb: Logbook, book: google_contacts.Book | None = None) -> Report:
     """The queue of the record at its head: the observed people through the index's table, the
     canonical people through the `people` reader, the owner's rejections through the standing
-    `people-review` lines. Writes nothing to the record. Raises what `people.read` raises."""
+    `people-review` lines; with `book`, the owner's Google contacts as a name source too (evidence for
+    a pair, a name for a new person, the duplicates among them), less the contact proposals the owner
+    rejected. Writes nothing to the record. Raises what `people.read` raises."""
     rows = observed(lb)
     with lb.index() as idx:
         marks, resolutions = idx.retractions(), idx.resolutions()
@@ -595,9 +626,21 @@ def read(lb: Logbook) -> Report:
             )
     prefix = os.environ.get(DIAL_PREFIX_ENV, "").strip()
     unplaced = [o for o in rows if o.entity is None]
-    proposals = propose(unplaced, canonicals, rejected, prefix)
+    contacts = book.contacts if book is not None else ()
+    passed = google_contacts.rejected(lb.root) if book is not None else frozenset()
+    proposals = propose(unplaced, canonicals, rejected, prefix, contacts, passed)
     placed_count = sum(1 for o in rows if o.entity is not None)
-    return Report(proposals, unplaced, placed_count, canonicals, rejected, standing, str(lb.meta["head"]))
+    return Report(
+        proposals,
+        unplaced,
+        placed_count,
+        canonicals,
+        rejected,
+        standing,
+        str(lb.meta["head"]),
+        book,
+        google_contacts.duplicates(contacts, prefix) if book is not None else [],
+    )
 
 
 @dataclass(frozen=True)
@@ -640,23 +683,41 @@ def propose(
     canonicals: Mapping[str, Canonical],
     rejected: Rejected,
     prefix: str = "",
+    contacts: Sequence[Contact] = (),
+    passed: frozenset[str] = frozenset(),
 ) -> list[Proposal]:
-    """The pure function: every (observed, canonical) pair with evidence, ranked by score, then
-    by how much evidence, then by the observed key and the canonical label; numbered from 1."""
-    found: list[tuple[int, tuple[str, ...], Observed, Canonical]] = []
+    """The pure function: every (observed, canonical) pair with evidence, the owner's Google contacts
+    among it when given, and every (observed, contact) pair a contact would name as a new person (less
+    the ones in `passed`, rejected), ranked by score, then by how much evidence, then by the observed
+    key and the label; numbered from 1."""
+    links = Links(contacts, canonicals, prefix) if contacts else None
+    found: list[tuple[int, tuple[str, ...], Observed, Canonical | None, Contact | None, str]] = []
     for o in unplaced:
         if not o.writable:
             continue
+        linked, naming = links.of(o) if links is not None else ({}, [])
         for c in canonicals.values():
             if rejected.holds(o, c.entity):
                 continue
-            score, why = evidence(o, c, prefix)
+            link = linked.get(c.entity)
+            score, why = evidence(o, c, prefix, (link,) if link is not None else ())
             if score:
-                found.append((score, why, o, c))
-    found.sort(key=lambda f: (-f[0], -len(f[1]), f[2].key, f[3].label.casefold(), f[3].entity))
+                found.append((score, why, o, c, None, proposal_id(o.key, c.entity)))
+        for k, score, why in naming:
+            pid = naming_id(o.key, k)
+            if pid not in passed:
+                found.append((score, why, o, None, k, pid))
+    found.sort(
+        key=lambda f: (
+            -f[0],
+            -len(f[1]),
+            f[2].key,
+            (f[3].label if f[3] is not None else str(f[4].name if f[4] else "")).casefold(),
+            f[5],
+        )
+    )
     return [
-        Proposal(n, proposal_id(o.key, c.entity), o, c, score, why)
-        for n, (score, why, o, c) in enumerate(found, start=1)
+        Proposal(n, pid, o, c, score, why, k) for n, (score, why, o, c, k, pid) in enumerate(found, start=1)
     ]
 
 
@@ -664,8 +725,113 @@ def proposal_id(key: Ref, entity: str) -> str:
     return hashlib.sha256(f"{key[0]}\n{key[1]}\n{entity}".encode()).hexdigest()[:16]
 
 
-def evidence(o: Observed, c: Canonical, prefix: str) -> tuple[int, tuple[str, ...]]:
-    """(score, the evidence in words) for one pair; (0, ()) when nothing but days speaks."""
+def naming_id(key: Ref, contact: Contact) -> str:
+    """A contact proposal's id: a digest that names neither the person nor the contact."""
+    return hashlib.sha256(f"{key[0]}\n{key[1]}\ncontact\n{contact.id}".encode()).hexdigest()[:16]
+
+
+class Links:
+    """What the owner's Google contacts say about the observed people, against the canonical ones. A
+    contact that holds an observed person's address or number **links** them to a canonical person
+    when it also holds one of the canonical person's own (`CONTACT` points), or else when its name is
+    the canonical person's (`CONTACT_NAME`): evidence for that pair. A contact that touches no canonical
+    person — none of its identifiers is theirs, its name is none of theirs — and has a name **names**
+    the observed people it holds an identifier of, or whose shown name is its own: a proposal of a new
+    person by that name, scored as a pair is (the same email, phone, name). Indexed by identifier and
+    by name word, so an observed person meets only the contacts that could speak for it."""
+
+    def __init__(self, contacts: Sequence[Contact], canonicals: Mapping[str, Canonical], prefix: str) -> None:
+        self.prefix = prefix
+        self.contacts = list(contacts)
+        self.ids = [google_contacts.keys(k, prefix) for k in self.contacts]
+        self.by_key: dict[Ref, list[int]] = {}
+        self.by_word: dict[str, list[int]] = {}
+        for i, (k, ids) in enumerate(zip(self.contacts, self.ids, strict=True)):
+            for key in ids:
+                self.by_key.setdefault(key, []).append(i)
+            for word in set(people_merge._words(k.name or "")):
+                self.by_word.setdefault(word, []).append(i)
+        self.owners: dict[Ref, set[str]] = {}
+        labels: dict[str, set[str]] = {}
+        for entity, c in canonicals.items():
+            for key in _keys(c.refs, prefix, canonical=True):
+                self.owners.setdefault(key, set()).add(entity)
+            for word in set(people_merge._words(c.label)):
+                labels.setdefault(word, set()).add(entity)
+        self.by_id = [{e for key in ids for e in self.owners.get(key, ())} for ids in self.ids]
+        self.by_name: list[set[str]] = []
+        for k in self.contacts:
+            near = {e for word in people_merge._words(k.name or "") for e in labels.get(word, ())}
+            self.by_name.append(
+                {e for e in near if people_merge.similar_names(k.name or "", canonicals[e].label)}
+            )
+        self.free = [
+            bool(k.name) and not self.by_id[i] and not self.by_name[i] for i, k in enumerate(self.contacts)
+        ]
+
+    def of(
+        self, o: Observed
+    ) -> tuple[dict[str, tuple[int, str]], list[tuple[Contact, int, tuple[str, ...]]]]:
+        """For one observed person: the strongest thing a contact says for each canonical person, in
+        points and words, and each contact that would name it as a new person, with the score and the
+        evidence."""
+        mine = _keys(o.identifiers, self.prefix)
+        holding = {i for key in mine for i in self.by_key.get(key, ())}
+        links: dict[str, tuple[int, str]] = {}
+        for i in sorted(holding):
+            k, ids = self.contacts[i], self.ids[i]
+            held = sorted(ids & mine)[0][1]
+            who = f"Google contact {k.name}" if k.name else "a Google contact"
+            found: dict[str, tuple[int, str]] = {}
+            for entity in self.by_id[i]:
+                bridge = sorted(key for key in ids - mine if entity in self.owners.get(key, ()))
+                if bridge:
+                    found[entity] = (CONTACT, f"{who} has {held} and {bridge[0][1]}")
+            for entity in self.by_name[i] - set(found):
+                found[entity] = (CONTACT_NAME, f"{who} has {held}")
+            for entity, link in found.items():
+                if entity not in links or (-link[0], link[1]) < (-links[entity][0], links[entity][1]):
+                    links[entity] = link
+        words = {word for label in o.labels for word in people_merge._words(label)}
+        near = holding | {i for word in words for i in self.by_word.get(word, ())}
+        naming = []
+        for i in sorted(near):
+            if not self.free[i]:
+                continue
+            k, ids = self.contacts[i], self.ids[i]
+            score, why = 0, []
+            for kind, points in (("email", EMAIL), ("phone", PHONE)):
+                for _kind, value in sorted(key for key in ids & mine if key[0] == kind):
+                    score += points
+                    why.append(f"same {kind} {value}")
+            for label, _n in o.labels.most_common():
+                if people_merge.similar_names(label, k.name or ""):
+                    extra = min(NAME_SOURCE * (len(o.sources) - 1), NAME_SOURCE_CAP)
+                    score += NAME + extra
+                    why.append(f"same name {label}" if label == k.name else f"same name {label} ~ {k.name}")
+                    break
+            if why:
+                naming.append((k, score, tuple(why)))
+        return links, naming
+
+
+def _keys(refs: Iterable[Ref], prefix: str, canonical: bool = False) -> frozenset[Ref]:
+    """Refs as the review keys an identifier: an address case aside, a number in E.164."""
+    found: set[Ref] = set()
+    for ref in refs:
+        key = _email_key(ref) or (
+            people_merge._phone_key(ref, prefix) if canonical else _phone_key(ref, prefix)
+        )
+        if key is not None:
+            found.add(key)
+    return frozenset(found)
+
+
+def evidence(
+    o: Observed, c: Canonical, prefix: str, linked: Sequence[tuple[int, str]] = ()
+) -> tuple[int, tuple[str, ...]]:
+    """(score, the evidence in words) for one pair, with what a Google contact says for it (`linked`,
+    from `Links`); (0, ()) when nothing but days speaks."""
     score, why = 0, []
     emails = {key[1] for ref in o.identifiers if (key := _email_key(ref)) is not None}
     theirs = {key[1] for ref in c.refs if (key := _email_key(ref)) is not None}
@@ -686,6 +852,9 @@ def evidence(o: Observed, c: Canonical, prefix: str) -> tuple[int, tuple[str, ..
                 text += f" across {', '.join(sorted(o.sources))}"
             why.append(text)
             break
+    for points, text in linked:
+        score += points
+        why.append(text)
     if not why:
         return 0, ()
     together = len(o.days & c.days)
@@ -705,12 +874,19 @@ class Written:
     lines: list[Line]
 
     def to_json(self) -> dict[str, Any]:
+        p = self.proposal
+        into: dict[str, Any]
+        if p.canonical is not None:
+            into = p.canonical.to_json()
+        else:  # a new person, named after a contact: its id is the one the lines minted, if any
+            minted = self.lines[0]["payload"]["entity"]["id"] if self.lines else None
+            into = {"id": minted, "name": p.label, "new": True}
         return {
-            "proposal": self.proposal.id,
-            "number": self.proposal.number,
+            "proposal": p.id,
+            "number": p.number,
             "verdict": self.verdict,
-            "observed": self.proposal.observed.to_json()["key"],
-            "into": self.proposal.canonical.to_json(),
+            "observed": p.observed.to_json()["key"],
+            "into": into,
             "lines": [str(line["id"]) for line in self.lines],
         }
 
@@ -754,8 +930,11 @@ def above(report: Report, score: str) -> list[Proposal]:
 def accept(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[Written]:
     """The proposals accepted: per identifier of the observed person a resolution line can carry,
     as the line wrote it, one alias line to the canonical person's own ref — what `people merge`
-    writes — appended through `Logbook.append`. Every proposal is checked before the first line."""
-    plans = []
+    writes — appended through `Logbook.append`. A proposal from a name source (a Google contact) mints
+    a person instead: one entity line per identifier, the contact's name as the label, one entity for
+    every proposal of one contact in the run; nothing else of the contact is written. Every proposal is
+    checked before the first line."""
+    plans: list[tuple[Proposal, people_merge.Candidate | None, Ref | None]] = []
     keys: dict[Ref, Proposal] = {}
     for p in proposals:
         other = keys.setdefault(p.observed.key, p)
@@ -764,17 +943,25 @@ def accept(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
                 f"proposals {other.number} and {p.number} place {p.observed.name} with two people;"
                 " accept one, and reject the other or leave it"
             )
+        if p.canonical is None:
+            if p.contact is None or not p.contact.name:
+                raise ReviewError(f"proposal {p.number} names nobody")
+            plans.append((p, None, None))
+            continue
         candidate = p.canonical.candidate
         if candidate is None:
             raise ReviewError(f"{p.canonical.label} ({p.canonical.entity}) has no resolution line of its own")
         try:
-            target = people_merge._target(candidate)
+            plans.append((p, candidate, people_merge._target(candidate)))
         except people_merge.MergeError as e:
             raise ReviewError(str(e)) from e
-        plans.append((p, candidate, target))
     at = now_utc()
     written = []
+    minted: dict[str, str] = {}  # a contact's id → the person minted for it in this run
     for p, candidate, target in plans:
+        if p.canonical is None or candidate is None or target is None:
+            written.append(Written(p, "accepted", _named(lb, report, p, minted, at)))
+            continue
         lines = []
         for ref in p.observed.writable:
             own = report.standing.get(ref)
@@ -801,12 +988,53 @@ def accept(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
     return written
 
 
+def _named(lb: Logbook, report: Report, p: Proposal, minted: dict[str, str], at: str) -> list[Line]:
+    """A contact proposal accepted: the observed person becomes a person of the record, named after
+    the contact, through one entity line per identifier the lines wrote (RFC 0006: the first mints
+    the id, the rest reuse it). The name is all that comes of the contact."""
+    contact = p.contact
+    if contact is None or not contact.name:  # never: `accept` checks every proposal before the first line
+        raise ReviewError(f"proposal {p.number} names nobody")
+    entity = minted.setdefault(contact.id, uuid7())
+    lines = []
+    for ref in p.observed.writable:
+        own = report.standing.get(ref)
+        payload: dict[str, Any] = {
+            "schema": people_merge.SCHEMA,
+            "ref": {"kind": ref[0], "value": ref[1]},
+            "entity": {"type": "person", "id": entity, "registry": "logbook"},
+            "label": contact.name,
+            "method": METHOD,
+            "evidence": list(p.observed.samples),
+            "logbook_head": report.head,
+            "raw_id": f"review:{p.id}:{ref[0]}:{ref[1]}",
+            "extra": {
+                "review": p.id,
+                "score": p.score,
+                "matched": list(p.evidence),
+                "named_from": NAMED_FROM,
+            },
+        }
+        if own is not None:
+            payload["supersedes"] = str(own["id"])
+        lines.append(lb.append(at=at, source=SOURCE, kind="resolution", tier=p.tier, payload=payload))
+    return lines
+
+
 def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[Written]:
     """The proposals rejected: one `people-review/v1` line each, saying the observed person and
-    the canonical person are not the same, appended through `Logbook.append`."""
+    the canonical person are not the same, appended through `Logbook.append`. A contact proposal's no
+    writes no line, the contact not being in the record: its id is kept in
+    `state/google-contacts-review.json` (`google_contacts.reject`) and it is not proposed again."""
     at = now_utc()
+    passed = [p.id for p in proposals if p.canonical is None]
+    if passed:
+        google_contacts.reject(lb.root, passed, at)
     written = []
     for p in proposals:
+        if p.canonical is None:
+            written.append(Written(p, "rejected", []))
+            continue
         o = p.observed
         payload: dict[str, Any] = {
             "schema": SCHEMA,
@@ -983,12 +1211,14 @@ def _entity(ref: Ref | None, report: people.Report) -> str | None:
 
 
 def rows(report: Report) -> Iterator[str]:
-    """The queue: one numbered line per proposal with the score and the evidence, then what to do."""
+    """The queue: one numbered line per proposal with the score and the evidence, the Google contacts
+    weighed and their duplicates when they were, then what to do."""
     if not report.proposals:
         if report.unplaced:
             yield f"no proposals: {_unplaced(report)} not yet placed, nobody matches"
         else:
             yield "no proposals: nobody observed is unplaced"
+        yield from contact_rows(report)
         return
     head = f"{_plural(len(report.proposals), 'proposal')} · {_unplaced(report)} not yet placed"
     head += f", {report.placed} placed · tier {report.tier}"
@@ -999,18 +1229,57 @@ def rows(report: Report) -> Iterator[str]:
         shown = o.key[1] if o.key[0] != "name" else o.name
         seen = ", ".join(f"{kind} {n}" for kind, n in sorted(o.kinds.items()))
         who = f"{shown} ({o.name}; {seen})" if o.name != shown else f"{shown} ({seen})"
-        yield f"  {p.number:>{width}}  [{p.score}]  {who} → {p.canonical.label}: {' · '.join(p.evidence)}"
-    yield "nothing written: `people review --accept N[,N]`, `--reject N[,N]`, or `--all-above SCORE`"
+        yield f"  {p.number:>{width}}  [{p.score}]  {who} → {_target(p)}: {' · '.join(p.evidence)}"
+    yield from contact_rows(report)
+    flag = " --from-google" if report.book is not None else ""
+    yield f"nothing written: `people review{flag} --accept N[,N]`, `--reject N[,N]`, or `--all-above SCORE`"
+
+
+def _target(p: Proposal) -> str:
+    """Who a proposal places the observed person with: a canonical person's label, or a contact's name
+    and the book it is in, as a new person."""
+    if p.canonical is not None or p.contact is None:
+        return p.label
+    return f"{p.contact.name}, new (Google {p.contact.book})"
+
+
+def contact_rows(report: Report) -> Iterator[str]:
+    """What was weighed of the Google contacts: how many, when they were read, any book not read, and
+    the groups of contacts that share an address or a number. Never a contact in full."""
+    book = report.book
+    if book is None:
+        return
+    counts = book.counts()
+    when = f"{'from the cache, read' if book.cached else 'read'} {book.read_at}"
+    hours = int(google_contacts.TTL.total_seconds() // 3600)
+    yield (
+        f"google contacts: {counts[google_contacts.CONTACTS]:,} contacts, {counts[google_contacts.OTHER]:,}"
+        f" other contacts, {when}, kept {hours} h in {google_contacts.CACHE.as_posix()}"
+    )
+    for name in book.refused:
+        yield f"  {name}: not read; the delegation does not grant {service_account.SCOPES[name]}"
+    if not report.duplicates:
+        return
+    groups = _plural(len(report.duplicates), "group")
+    yield f"{groups} of duplicate contacts, to merge in Google Contacts (Merge & fix; the key only reads):"
+    for d in report.duplicates:
+        names = " ↔ ".join(c.name or "(no name)" for c in d.contacts)
+        yield f"  {names}: {' · '.join(d.evidence)}"
 
 
 def written_rows(written: Iterable[Written]) -> Iterator[str]:
     for w in written:
-        o, c = w.proposal.observed, w.proposal.canonical
+        o = w.proposal.observed
         shown = o.key[1] if o.key[0] != "name" else o.name
+        sign = "→" if w.verdict == "accepted" else NOT_EQUAL
+        target = _target(w.proposal)
+        if not w.lines:
+            kept = f"no line, a contact is not in the record; kept in {google_contacts.REJECTED.as_posix()}"
+            yield f"{w.verdict} {shown} {sign} {target}: {kept}"
+            continue
         seqs = [int(line["seq"]) for line in w.lines]
         span = f" (seq {seqs[0]})" if len(seqs) == 1 else f" (seq {seqs[0]}{EN_DASH}{seqs[-1]})"
-        sign = "→" if w.verdict == "accepted" else NOT_EQUAL
-        yield f"{w.verdict} {shown} {sign} {c.label}: {_plural(len(seqs), 'line')}{span}"
+        yield f"{w.verdict} {shown} {sign} {target}: {_plural(len(seqs), 'line')}{span}"
 
 
 def priority_rows(ranked: Priority) -> Iterator[str]:
