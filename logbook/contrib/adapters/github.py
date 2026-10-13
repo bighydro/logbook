@@ -89,7 +89,7 @@ import subprocess
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
@@ -630,11 +630,11 @@ class _Version:
 def is_doc(path: str) -> bool:
     """A README at the top (any suffix), a file at the top with a doc's suffix, or one under `docs/`
     or `doc/` with a doc's suffix or `.txt`."""
-    parts = path.split("/")  # git's own spelling, always `/`, never this machine's
-    suffix = os.path.splitext(parts[-1])[1].casefold()
-    if len(parts) == 1:
-        return parts[0].casefold().startswith("readme") or suffix in DOC_SUFFIXES
-    return parts[0] in DOC_DIRS and (suffix in DOC_SUFFIXES or suffix == ".txt")
+    spelled = PurePosixPath(path)  # git's own spelling of a path in the tree, never this machine's
+    suffix = spelled.suffix.casefold()
+    if len(spelled.parts) == 1:
+        return spelled.name.casefold().startswith("readme") or suffix in DOC_SUFFIXES
+    return spelled.parts[0] in DOC_DIRS and (suffix in DOC_SUFFIXES or suffix == ".txt")
 
 
 def _version_list(git: _Git, counts: dict[str, int]) -> list[_Version]:
@@ -698,7 +698,7 @@ def _versions(
         seen.add((v.path, v.blob))
         if floor is not None and v.authored < floor:
             continue
-        suffix = os.path.splitext(v.path)[1].casefold()
+        suffix = PurePosixPath(v.path).suffix.casefold()
         content: dict[str, Any] = {
             "sha256": hashlib.sha256(data).hexdigest(),
             "bytes": len(data),
@@ -784,9 +784,12 @@ def _archive(
         if link.repo is None:
             _count(counts, "skipped_no_url")
             continue
-        git_url = _text(row.get("git_url")) or ""
-        relative = git_url.split("://", 1)[1].split("/", 1)[1] if git_url.startswith("tarball://") else ""
-        bare = archive.joinpath(*relative.split("/")) if relative else None
+        git_url = _text(row.get("git_url")) or ""  # `tarball://root/repositories/<owner>/<name>.git`
+        inside = (
+            PurePosixPath(urlsplit(git_url).path.lstrip("/")) if git_url.startswith("tarball://") else None
+        )
+        inside = inside if inside is not None and inside.parts and ".." not in inside.parts else None
+        bare = archive.joinpath(*inside.parts) if inside is not None else None  # never outside the export
         if bare is None or not _is_repository(bare):
             report.append(f"{link.repo}: its repository is not in the export; its commits are not read")
             continue

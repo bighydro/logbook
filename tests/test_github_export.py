@@ -18,7 +18,7 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import pytest
@@ -68,7 +68,7 @@ def _commit(
 ) -> str:
     """One commit at `at` (RFC 3339 with an offset) by `name`; a file given None is removed."""
     for path, data in files.items():
-        target = repo.joinpath(*path.split("/"))
+        target = repo.joinpath(*PurePosixPath(path).parts)
         if data is None:
             target.unlink()
             continue
