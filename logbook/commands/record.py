@@ -240,6 +240,7 @@ def cmd_stats(a: argparse.Namespace) -> None:
     index, one row per local day — sleep hours, steps, resting heart rate — and no device, no
     zone, no other field of any line."""
     lb = Logbook.find()
+    day_start.of(lb.meta)  # the years count local days: a boundary not a clock is refused (RFC 0036)
     if a.health:
         days = health_days(lb)
         if a.json:

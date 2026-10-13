@@ -8,10 +8,9 @@ over one `reading.read`); `/places` the named places of `places.json`; `/assets`
 assets and the last fix of each (`asset_status.read`); `/gaps` where each source went quiet
 (`gaps.report`); `/today` redirects to the Day the owner is in now: the current date in the
 record's timezone, the date before until the record's `day_start` (RFC 0036), whose Day then says
-where it begins. Every
-page is built from the index and the readers, so a Day renders in the time `logbook day` takes
-whatever the record's length, and nothing is written: every request is a GET answered from the
-record at its head.
+where it begins. Every page is built from the index and the readers, so a Day renders in the time
+`logbook day` takes whatever the record's length, and nothing is written: every request is a GET
+answered from the record at its head.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,

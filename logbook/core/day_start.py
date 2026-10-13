@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 
 KEY = "day_start"  # the key of logbook.json
 MIDNIGHT = "00:00"  # absent, this: the calendar day
+_MIDNIGHT = time(0)
 _CLOCK = re.compile(r"([01]\d|2[0-3]):([0-5]\d)\Z")
 
 
@@ -49,7 +50,7 @@ def clock(value: object) -> time:
     """`value` as the clock it names; None (the key absent) is midnight. `DayStartError` naming the
     key and the value for anything that is not `HH:MM` from 00:00 to 23:59."""
     if value is None:
-        return time(0)
+        return _MIDNIGHT
     found = _clock(value) if isinstance(value, str) else None
     if found is None:
         raise DayStartError(
@@ -63,7 +64,7 @@ def clock(value: object) -> time:
 def lenient(value: object) -> time:
     """The index's reading of `value`: its clock, or midnight for a value no reader accepts."""
     found = _clock(value) if isinstance(value, str) else None
-    return time(0) if found is None else found
+    return _MIDNIGHT if found is None else found
 
 
 @functools.lru_cache(maxsize=64)
@@ -81,7 +82,7 @@ def local_day(instant: datetime, zone: ZoneInfo, start: time) -> date:
     """The rule (RFC 0036): the calendar date of `instant` on the wall clock of `zone`, the date
     before when that clock reads earlier than `start`."""
     local = instant.astimezone(zone)
-    if start != time(0) and local.time() < start:
+    if start != _MIDNIGHT and local.time() < start:
         return local.date() - timedelta(days=1)
     return local.date()
 

@@ -321,10 +321,11 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
     try:
+        day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
         line = signing.sign(
             lb, a.signed_day, confirm=_confirm(a), note=a.note, at=a.at, dispositions=_dispositions(a)
         )
-    except ValueError as e:  # SignError, a day that is not one
+    except ValueError as e:  # SignError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
     for text in signing.summary(line):
@@ -640,6 +641,7 @@ def cmd_search(a: argparse.Namespace) -> None:
     local day, each as the row `show` prints with a snippet of the matching words under it. Tiers
     1 and 2 unless `--tier 3`. Nothing is written."""
     lb = Logbook.find()
+    day_start.of(lb.meta)  # a hit is listed on its day: a boundary not a clock is refused (RFC 0036)
     try:
         q = search.query(
             a.text,

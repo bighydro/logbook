@@ -603,3 +603,38 @@ def _allow(lb: Logbook, name: str, max_tier: int) -> None:
     policy = json.loads(path.read_text(encoding="utf-8"))
     policy[name] = {"max_tier": max_tier}
     path.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
+
+
+# -- a record whose day begins at 06:00 (RFC 0036) -------------------------------------------------------
+
+
+def test_a_page_says_where_the_senders_day_begins_and_the_receiver_holds_its_lines_to_it(
+    records: tuple[Logbook, Logbook], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ines's day begins at 06:00: the line she wrote at 01:30 on the 14th is the 13th's, on the page of
+    the 13th, and the manifest says `day_start` so Ola puts it on the same day. A page whose
+    `day_start` is not a clock is refused, never read as midnight."""
+    ines, ola = records
+    use(monkeypatch, ines)
+    ines.set_meta(day_start="06:00")
+    late = ines.append(
+        at="2026-06-13T23:30:00Z",  # 01:30 on the 14th in Oslo
+        source="manual",
+        kind="note",
+        tier=1,
+        payload={"schema": "note/v1", "text": "home from the boat party"},
+    )
+    page = share.share_day(ines, DAY, "ola", 2, tmp_path / "late.zip", created=CREATED).out
+    manifest = _manifest(page)
+    assert manifest["day_start"] == "06:00"
+    assert json.loads(_members(page)["package.json"])["day_start"] == "06:00"
+    assert late["id"] in [line["id"] for line in _lines(_members(page)["lines.jsonl"])]
+    _circle_add(monkeypatch, ola, "ines", INES_SEED)
+    received = share.receive(ola, page)
+    assert received.manifest["day_start"] == "06:00"
+    members = _members(page)
+    altered = json.loads(members["manifest.json"])
+    altered["day_start"] = "6am"
+    members["manifest.json"] = (json.dumps(altered, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    with pytest.raises(share.ReceiveError, match="day_start"):
+        share.receive(ola, _rewrite(page, members, INES_SEED))

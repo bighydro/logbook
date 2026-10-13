@@ -230,12 +230,26 @@ def test_setup_day_start_refuses_a_value_that_is_not_a_clock(
 
 def test_a_reader_refuses_a_boundary_it_cannot_parse(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     lb.set_meta(day_start="25:00")
-    for args in (["show", "2026-10-13"], ["day", "2026-10-13"], ["show", "days", "--from", "2026-10-12"]):
+    head = lb.meta["head"]
+    for args in (
+        ["show", "2026-10-13"],
+        ["show"],
+        ["day", "2026-10-13"],
+        ["day", "sign", "2026-10-13"],
+        ["show", "days", "--from", "2026-10-12"],
+        ["show", "stats"],
+        ["search", "concert"],
+        ["digest", "2026-10-12"],
+        ["doctor", "sources", "--gaps"],
+    ):
         with pytest.raises(SystemExit) as e:
             cli.main(args)
         assert e.value.code == 2, args
         err = capsys.readouterr().err
         assert "day_start" in err and "'25:00'" in err, args
+    assert lb.meta["head"] == head, "nothing signed"
+    cli.main(["verify"])  # verify never reads the setting
+    assert "valid" in capsys.readouterr().out
 
 
 def test_show_lists_the_page_of_the_day_so_defined(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:

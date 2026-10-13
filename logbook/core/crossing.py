@@ -226,9 +226,8 @@ def select(lb: Logbook, req: Request) -> Selection:
     """The lines of `[since, until)` in the requested tiers and kinds, not retracted, on a signed
     day unless the request lifts that gate (RFC 0034 rule 5: a line's day is the local day of its
     `at` in the record's zone, under its `day_start` (RFC 0036); a `signed-day` line's day is the day
-    it signs), in chain order; the
-    resolution lines their refs walk through; the attachments they reference. The index says
-    where; only the lines that cross are read from the files."""
+    it signs), in chain order; the resolution lines their refs walk through; the attachments they
+    reference. The index says where; only the lines that cross are read from the files."""
     since, until = instant(req.since), instant(req.until)
     unsigned_held = 0
     with lb.index() as idx:

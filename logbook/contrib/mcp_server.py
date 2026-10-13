@@ -508,6 +508,7 @@ def tool_gaps(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
 
 
 def tool_search(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    day_start.of(lb.meta)  # a hit is listed on its day: a boundary not a clock is refused (RFC 0036)
     text = (_string(a, "text", required=True) or "").strip()
     if not text:
         raise ToolError("text is empty")
@@ -673,6 +674,7 @@ def tool_day_lines(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     that reads nothing of them. A retracted line is left out and counted; a retraction is never a
     row. The names are the resolution lines under the ceiling, as every reader has them."""
     day = _day(a, "day") or _today(lb)
+    day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
     families = _families(a)
     kinds = None if families is None else [kind for family in families for kind in FAMILIES[family]]
     tz = ZoneInfo(str(lb.meta["timezone"]))
@@ -890,7 +892,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     `signing.sign`, the one implementation, over the record itself and not through the gate, so the
     line is byte for byte what the command writes with the same flags and `--at`. Returns the line's
     envelope, the header the command prints, and counts."""
-    day = _write_day(lb, a)
+    day = _write_day(lb, a)  # `_today` under the record's day_start: a boundary not a clock is refused
     confirm = a.get("confirm")
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}

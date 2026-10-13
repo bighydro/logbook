@@ -4,8 +4,7 @@ A Day is the ordered list of the owner's stays and moves between 00:00 and 24:00
 record's `day_start` to the same clock the next morning when it sets one, RFC 0036: the header then
 says so, and the JSON carries `day_start`), with what attached to each and who was there, framed by
 the night before and the night after (the nights whose windows hold the day's start and its end). It
-is read,
-never written: `read(lb, day)` is a function of the record at one head, built from one
+is read, never written: `read(lb, day)` is a function of the record at one head, built from one
 `reading.read` of the day and the day before (the night before is that day's night), located
 through the index, so a multi-million-line record reads a day in the time its day takes. Every
 number and name points at the lines it came from.
