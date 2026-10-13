@@ -578,3 +578,19 @@ def test_system_is_refused_as_root_and_without_install(
             cli.main(args)
         assert e.value.code == 2, args
         assert "--install-schedule" in capsys.readouterr().err
+
+
+def test_doctor_sees_a_system_schedule_as_installed(home: Path, account: str) -> None:
+    from logbook.contrib import doctor, service
+
+    lb = Logbook.find()
+    checks = {c.name: c for c in doctor.run(lb, {})}
+    assert checks["last-run"].status == "pass", "no schedule on this machine"
+    units = service.SYSTEM_ROOT / "etc" / "systemd" / "system"
+    units.mkdir(parents=True)
+    for name in ("logbook-sync", "logbook-sync-close"):
+        for kind in ("service", "timer"):
+            (units / f"{name}.{kind}").write_text("[Unit]\n", encoding="utf-8")
+    checks = {c.name: c for c in doctor.run(lb, {})}
+    assert checks["last-run"].status == "warn"
+    assert "has not run yet" in checks["last-run"].detail and "06:00" in checks["last-run"].detail

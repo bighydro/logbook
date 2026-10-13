@@ -466,3 +466,49 @@ def test_the_conformance_samples_keep_the_default_boundary_and_their_heads(
     assert json.loads((CONFORMANCE / expected).read_text(encoding="utf-8"))["head"] == head
     cli.main(["verify", "--root", str(CONFORMANCE / sample), "--expect", str(CONFORMANCE / expected)])
     assert f"head {head}" in capsys.readouterr().out
+
+
+# -- doctor --------------------------------------------------------------------------------------------------
+
+
+def _checks(lb: Logbook) -> dict[str, tuple[str, str]]:
+    from logbook.contrib import doctor
+
+    return {c.name: (c.status, c.detail) for c in doctor.run(lb, {}, installed=lambda _m: True)}
+
+
+def test_doctor_says_nothing_of_the_boundary_at_midnight(lb: Logbook) -> None:
+    with lb.index():
+        pass
+    assert "day-start" not in _checks(lb)
+
+
+def test_doctor_shows_the_boundary_when_it_is_not_midnight(lb: Logbook) -> None:
+    lb.set_meta(day_start="06:00")
+    with lb.index():
+        pass
+    status, detail = _checks(lb)["day-start"]
+    assert status == "pass" and "06:00" in detail
+
+
+def test_doctor_warns_when_the_index_was_built_under_another_boundary(lb: Logbook) -> None:
+    with lb.index():  # built at midnight
+        pass
+    lb.set_meta(day_start="06:00")  # changed by hand, no reader since
+    checks = _checks(lb)
+    status, detail = checks["day-start"]
+    assert status == "warn"
+    assert "06:00" in detail and "00:00" in detail and "repair index" in detail
+    assert checks["index"][0] == "warn", "the index is behind logbook.json"
+    lb.set_meta(day_start="05:00")
+    with lb.index():  # a reader rebuilt it under 05:00
+        pass
+    lb.set_meta(day_start="00:00")
+    status, detail = _checks(lb)["day-start"]
+    assert status == "warn" and "05:00" in detail, "back to midnight, the index still says 05:00"
+
+
+def test_doctor_fails_a_boundary_no_reader_accepts(lb: Logbook) -> None:
+    lb.set_meta(day_start="half past five")
+    status, detail = _checks(lb)["day-start"]
+    assert status == "fail" and "'half past five'" in detail and "setup day_start" in detail
