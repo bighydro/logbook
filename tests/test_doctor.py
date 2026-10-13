@@ -369,6 +369,76 @@ def test_a_schedule_that_is_installed_but_has_not_run_warns(
     assert check.status == "warn" and "has not run yet" in check.detail
 
 
+def _installed_for_the_user(system: str) -> None:
+    """The agents or user timers `sync --install-schedule` writes."""
+    schedule.install(schedule.plan(system, Path.home(), "/opt/py"), lambda _text: None)
+
+
+def _installed_for_the_system(system: str) -> None:
+    """`sync --install-schedule --system`'s files, copied where the system's scheduler reads them, as
+    the printed sudo commands do — under the empty root `tests/conftest.py` gives every test
+    (`service.SYSTEM_ROOT`), never the machine's own."""
+    plan = schedule.plan(system, Path.home(), "/opt/py", user="ines", system_root=service.SYSTEM_ROOT)
+    for text, copy in zip(plan.files.values(), plan.copies, strict=True):
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        copy.write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize("system", ["darwin", "linux"])
+def test_the_last_run_is_read_whichever_install_wrote_it(
+    system: str, lb: Logbook, clock: datetime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`state/last-run.json` is the record's, written by whichever install ran `sync --scheduled`: the
+    user's agents, the system's daemons, or one installed elsewhere; the line reads it the same way."""
+    monkeypatch.setattr(schedule, "system", lambda: system)
+    _ran(lb, NOW - timedelta(hours=2))
+    expected = "2026-10-08 17:00 (2 h ago): alpha 2 lines; doctor 12 pass, 0 warn, 0 fail"
+    check = _run(lb)["last-run"]
+    assert (check.status, check.detail) == ("pass", expected), "no install on this machine"
+    _installed_for_the_system(system)
+    check = _run(lb)["last-run"]
+    assert (check.status, check.detail) == ("pass", expected), "the system's daemons or units"
+    for copy in schedule.plan(
+        system, Path.home(), "/opt/py", user="ines", system_root=service.SYSTEM_ROOT
+    ).copies:
+        copy.unlink()
+    _installed_for_the_user(system)
+    check = _run(lb)["last-run"]
+    assert (check.status, check.detail) == ("pass", expected), "the user's agents or timers"
+
+
+@pytest.mark.parametrize(
+    ("system", "user", "system_wide"),
+    [
+        ("darwin", "launchd agents", "launchd daemons"),
+        ("linux", "systemd user timers", "systemd system timers"),
+    ],
+)
+def test_the_user_and_the_system_install_both_present_warn_that_every_run_is_twice(
+    system: str,
+    user: str,
+    system_wide: str,
+    lb: Logbook,
+    clock: datetime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(schedule, "system", lambda: system)
+    _installed_for_the_user(system)
+    _installed_for_the_system(system)
+    twice = f"the schedule is installed twice, as {user} and as {system_wide}: every run happens twice"
+    check = _run(lb)["last-run"]
+    assert check.status == "warn" and "has not run yet" in check.detail and twice in check.detail
+    _ran(lb, NOW - timedelta(hours=2))
+    check = _run(lb)["last-run"]
+    assert check.status == "warn", "a clean run, but every source ran twice"
+    assert check.detail.startswith("2026-10-08 17:00 (2 h ago): alpha 2 lines") and twice in check.detail
+    assert "`logbook sync --uninstall-schedule`" in check.detail
+    _ran(lb, NOW - timedelta(hours=30))
+    check = _run(lb)["last-run"]
+    assert "more than 26 h ago" in check.detail and twice in check.detail
+    assert doctor.schedule_installed({}), "installed, whichever"
+
+
 def test_a_last_run_file_that_is_not_the_shape_is_a_warning_naming_it(lb: Logbook, clock: datetime) -> None:
     path = lb.root / "state" / "last-run.json"
     path.write_text("{", encoding="utf-8")
