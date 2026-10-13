@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..contrib import attach, inbox, ios_backup, ios_backup_crypto, stream
-from ..core import assets, attachments, flights, keepers, places, story
+from ..core import assets, attachments, flights, keepers, places, stays, story
 from ..core.export import parse_day
 from ..core.resolve import Ref, identities_from, labels
 from ..core.store import Logbook, dedupe_key, now_utc
@@ -527,6 +527,12 @@ def add_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="a folder: name every file no adapter reads (default: count them in the folder's last line)",
     )
+    s.add_argument(
+        "--trip",
+        metavar="ID-OR-DAY",
+        help="the words name this journey (a trip id as `show trips` prints it, or any day of it): one note"
+        " dated inside it, labelled `name`, which the Journeys page and the trip read back",
+    )
     s.set_defaults(fn=cmd_add)
 
 
@@ -558,6 +564,9 @@ def _add(a: argparse.Namespace) -> None:
         "asset": a.asset,
         "routes": Path(a.routes).expanduser() if a.routes else None,
     }
+    if a.trip is not None:
+        _add_name(lb, a)
+        return
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         if a.dry_run:
             print("add: --dry-run goes with a file or folder, not a declared flight", file=sys.stderr)
@@ -802,6 +811,27 @@ def _add_story(lb: Logbook, a: argparse.Namespace) -> None:
         found = written.get(raw_id)
         if found is not None:
             print(f"#{found['seq']} {found['at']}  {story.KIND} {story.text(found['payload'], names)}")
+
+
+def _add_name(lb: Logbook, a: argparse.Namespace) -> None:
+    """`add --trip ID-OR-DAY "NAME"`: the captain names a journey (ADR 0019), one `note/v1` line
+    through `journeys.name`, the path the Journeys page's form takes too. `--at` is the journey's
+    own (inside it), so it is refused; a dry run writes nothing anyway and is refused as well."""
+    from ..contrib import journeys
+
+    if a.at is not None or a.dry_run:
+        print(
+            "add --trip: the name is dated inside the journey; --at and --dry-run do not go with it",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        line = journeys.name(lb, a.trip, " ".join(a.what), _airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:
+        print(f"add --trip: {e}", file=sys.stderr)
+        sys.exit(2)
+    trip = (line["payload"].get("extra") or {}).get("trip")
+    print(f"#{line['seq']} {line['at']}  named {trip}: {line['payload']['text']}")
 
 
 def _add_sentence(lb: Logbook, what: str, at: str | None) -> None:

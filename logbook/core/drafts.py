@@ -69,6 +69,8 @@ ID_SHORT = 8  # an evidence id shortened to its last 8 characters in text
 LANGUAGE = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\Z")  # a BCP 47 tag, loosely
 SHA256_HEX = 64
 NOT_ON_DAY = "evidence names a line that is not on the day"
+NOT_ON_JOURNEY = "evidence names a line that is not of the journey"
+UNIT_JOURNEY = "journey"
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
 DOT = " · "
@@ -226,6 +228,27 @@ def by_day(lines: Iterable[Line], retracted: Collection[str]) -> dict[str, list[
     return found
 
 
+def by_unit(lines: Iterable[Line], retracted: Collection[str], unit: str) -> dict[str, list[Line]]:
+    """The draft lines of another unit than the day (`by_day`'s), not retracted, by each subject
+    they name, each subject's in `at` then `seq` order: a `subject` that is a string is one, an
+    array names every entry in it (a journey's draft names the lines or the derived id it is about,
+    `trip:<first day>:<last day>`, RFC 0036); a line whose payload is not a draft's is left out."""
+    found: dict[str, list[Line]] = {}
+    for line in lines:
+        payload = line.get("payload") or {}
+        if line.get("kind") != KIND or payload.get("schema") != SCHEMA or payload.get("unit") != unit:
+            continue
+        if str(line["id"]) in retracted:
+            continue
+        named = payload.get("subject")
+        subjects = [named] if isinstance(named, str) else named if isinstance(named, list) else []
+        for subject in dict.fromkeys(s for s in subjects if isinstance(s, str)):
+            found.setdefault(subject, []).append(line)
+    for subject in found:
+        found[subject].sort(key=lambda line: (str(line["at"]), int(line["seq"])))
+    return found
+
+
 def standing(found: Sequence[Line]) -> Line | None:
     """Rule 2: the latest draft not named in a later draft's `supersedes`; None when there is none."""
     if not found:
@@ -296,15 +319,21 @@ def withheld(lines: Iterable[Line], retracted: Collection[str], allowed: Allowed
     return out
 
 
-def day_json(line: Line, found: Sequence[Line], on_day: Collection[str] | None) -> dict[str, Any]:
+def day_json(
+    line: Line, found: Sequence[Line], on_day: Collection[str] | None, missing: str = NOT_ON_DAY
+) -> dict[str, Any]:
     """The standing draft as the Day carries it: the line, its source and model, when it was
     written, what it read, its segments each with `supported` and, when a reader holding the
     record found the evidence not on the day, `why`; the ids of the earlier drafts newest first,
-    how many times the day was dreamed and the day it was last."""
+    how many times the day was dreamed and the day it was last. Another unit's page reads its
+    draft the same way, `on_day` the unit's lines and `missing` its own words for an id outside
+    them (`NOT_ON_JOURNEY`)."""
     payload = line.get("payload") or {}
     tz = ZoneInfo(str(line.get("tz") or "UTC"))
     problems = validate(payload)
-    segments = [segment_json(s, on_day) for s in (payload.get("segments") or []) if isinstance(s, dict)]
+    segments = [
+        segment_json(s, on_day, missing) for s in (payload.get("segments") or []) if isinstance(s, dict)
+    ]
     parts = (payload.get("extra") or {}).get("parts") if isinstance(payload.get("extra"), dict) else None
     if isinstance(parts, list) and len(parts) == len(segments):
         for segment, part in zip(segments, parts, strict=True):
@@ -334,16 +363,17 @@ def day_json(line: Line, found: Sequence[Line], on_day: Collection[str] | None) 
     }
 
 
-def segment_json(segment: Mapping[str, Any], on_day: Collection[str] | None) -> dict[str, Any]:
+def segment_json(
+    segment: Mapping[str, Any], on_day: Collection[str] | None, missing: str = NOT_ON_DAY
+) -> dict[str, Any]:
     """One segment with its verdict: supported when every evidence id is a line of the day (when
-    the reader holds the day; any id otherwise); else unsupported with `why`."""
+    the reader holds the day; any id otherwise); else unsupported with `why` (`missing`)."""
     shape = segment_shape(segment)
     text = str(segment.get("text") or "").strip()
     if shape == SUPPORTED:
         evidence = [str(e) for e in segment["evidence"]]
-        missing = [e for e in evidence if on_day is not None and e not in on_day]
-        if missing:
-            return {"text": text, "evidence": evidence, "supported": False, "why": NOT_ON_DAY}
+        if any(on_day is not None and e not in on_day for e in evidence):
+            return {"text": text, "evidence": evidence, "supported": False, "why": missing}
         return {"text": text, "evidence": evidence, "supported": True, "why": None}
     if shape == UNSUPPORTED:
         return {"text": text, "evidence": [], "supported": False, "why": None}
