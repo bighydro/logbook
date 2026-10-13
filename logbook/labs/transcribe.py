@@ -166,17 +166,33 @@ def run(
         return report
     if engine is None:
         raise EngineMissing(f"no transcription engine; install {EXTRA}")
-    if not engine.ready():
-        if not fetch_model:
-            raise ModelMissing(
-                f"model {engine.model!r} is not on this machine; run once with --fetch-model to download it"
-                " (the only time this command uses the network)"
-            )
-        engine.fetch()
+    _ready(engine, fetch_model)
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with offline():
         report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress))
     return report
+
+
+def hear(engine: Engine, audio: Path, fetch_model: bool = False, chunk_s: float = CHUNK_S) -> Result:
+    """One recording heard by `engine` on this machine, window by window, with the hub offline: the
+    segments with words in them and the language detected, for a caller that writes its own line
+    (`logbook day reflect`). The model must be on this machine unless `fetch_model` (ModelMissing)."""
+    _ready(engine, fetch_model)
+    with offline():
+        _text, language, _windows, segments = _hear(engine, audio, chunk_s)
+    return Result(segments, language)
+
+
+def _ready(engine: Engine, fetch_model: bool) -> None:
+    """The model on this machine, fetched first when `fetch_model` says so; else ModelMissing."""
+    if engine.ready():
+        return
+    if not fetch_model:
+        raise ModelMissing(
+            f"model {engine.model!r} is not on this machine; run once with --fetch-model to download it"
+            " (the only time this command uses the network)"
+        )
+    engine.fetch()
 
 
 def chunks(samples: int, rate: int, chunk_s: float) -> list[tuple[int, int]]:

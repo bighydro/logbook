@@ -48,6 +48,7 @@ from ..core import day as day_reader
 from ..core import (
     day_start,
     flights,
+    notes,
     pages,
     policy,
     reading,
@@ -97,10 +98,10 @@ LOGGED = (
     "day", "kind", "date", "id", "from", "to", "since", "until", "year", "period", "kinds", "open", "limit"
 )  # fmt: skip
 PERIODS = ("day", "week")
-NOTE_KINDS = ("note", "proposal", "reflection")  # `note_day(kind)`, carried in note/v1's `labels`
+NOTE_KINDS = (notes.NOTE, notes.PROPOSAL, notes.REFLECTION)  # `note_day(kind)`, in note/v1's `labels`
 NOTE_MAX = 4000  # `note_day(text)`: the most characters one note through the door may hold
 NOTE_SOURCE = "mcp"  # the source of a `note_day` line: written through the door, in the owner's words
-NOTE_TIER = 2  # RFC 0010: a note/v1 line is tier 2, whoever writes it
+NOTE_TIER = notes.TIER  # RFC 0010: a note/v1 line is tier 2, whoever writes it
 NOT_WAITED = "; the door does not wait for another writer, so nothing was written"
 # `day_lines(kinds)`: a profile family -> the kinds in it (`calendar` is the `event/v1` lines)
 FAMILIES: dict[str, tuple[str, ...]] = {
@@ -919,9 +920,10 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
 
 def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     """One note/v1 line on a day, through the door: source `mcp`, tier 2 (RFC 0010), the text as given
-    and never filtered, `kind` in the profile's `labels`. `at` is checked by the rules of `day sign
-    --at` and must fall on the day in the record's zone; without it the note is now when the day is
-    today, else at 23:59 of the day."""
+    and never filtered, `kind` in the profile's `labels`, written through `notes.write`, the note path
+    `day reflect` writes through too. `at` is checked by the rules of `day sign --at` and must fall on
+    the day in the record's zone; without it the note is now when the day is today, else at 23:59 of
+    the day."""
     day = _write_day(lb, a)
     text = _string(a, "text", required=True) or ""
     if not text.strip():
@@ -931,24 +933,7 @@ def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     kind = _string(a, "kind") or NOTE_KINDS[0]
     if kind not in NOTE_KINDS:
         raise ToolError(f"kind must be one of {', '.join(NOTE_KINDS)}")
-    tz = str(lb.meta["timezone"])
-    days = day_start.of(lb.meta)  # the day so defined: from its day_start to the next (RFC 0036)
-    at = _string(a, "at")
-    if at is not None:
-        stamp = signing.moment(at, day, tz)
-        if days.day_of(stamp) != day:
-            raise ToolError(f"at {at.strip()} is not on {day} in {tz}; a note on a day is written during it")
-    elif day == _today(lb):
-        stamp = now_utc()
-    else:  # the day's last minute: 23:59, or 05:59 the next morning when the day begins at 06:00
-        stamp = utc((days.span(day)[1] - timedelta(minutes=1)).isoformat())
-    line = Logbook(lb.root).append(
-        at=stamp,
-        source=NOTE_SOURCE,
-        kind="note",
-        tier=NOTE_TIER,
-        payload={"schema": "note/v1", "text": text, "labels": [kind]},
-    )
+    line = notes.write(Logbook(lb.root), day, text, kind, NOTE_SOURCE, at=_string(a, "at"), today=_today(lb))
     return {**_written(lb, line), "day": day, "label": kind, "chars": len(text)}
 
 

@@ -6,20 +6,33 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
-from ..contrib import gaps, people_drift, print_layout, print_page, questions, week_paper, year_poster
+from ..contrib import (
+    gaps,
+    people_drift,
+    print_layout,
+    print_page,
+    questions,
+    reflect,
+    week_paper,
+    year_poster,
+)
 from ..core import day as day_reader
-from ..core import day_start, flights, keepers, pages, policy, reading, search, signing, stays
+from ..core import day_start, flights, keepers, notes, pages, policy, reading, search, signing, stays
 from ..core import days as days_reader
 from ..core import year as year_reader
+from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.resolve import Ref, labels
 from ..core.store import RETRACTION, Logbook, retractions
-from .common import Subparsers, _airports, _csv, _print_target, _under_home
+from .common import Subparsers, _airports, _clock, _csv, _print_target, _under_home
+from .derive import TRANSCRIBE_DEFAULT_MODEL
 from .rows import _day_rows, _line_row, _line_text, by_photo
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
@@ -196,16 +209,27 @@ def day_arguments(sub: Subparsers) -> None:
     """`logbook day`."""
     s = sub.add_parser(
         "day",
-        help="one day read back: night, stays, company, health; or sign it",
+        help="one day read back: night, stays, company, health; reflect, sign",
         description="one day read back: nights, country, stays and moves with who and what, flights, health,"
         " whether every usual source is in, and whether you have signed it; `day sign YYYY-MM-DD` signs"
         " it: one tier-1 line saying you read the page and these are the day's facts (RFC 0034), and"
-        " what became of each commitment on it: --kept, --missed, --dropped, --carried (amendment 1)",
+        " what became of each commitment on it: --kept, --missed, --dropped, --carried (amendment 1);"
+        " `day reflect YYYY-MM-DD` closes it in your words: a reflection typed, heard or dictated becomes"
+        " one note on the day, its commitments, delegations and dispositions proposed, and --sign signs"
+        " the day with the ones you --accept",
     )
     s.add_argument(
-        "day", nargs="?", metavar="YYYY-MM-DD", help="the local day (default today); or `sign`, then the day"
+        "day",
+        nargs="?",
+        metavar="YYYY-MM-DD",
+        help="the local day (default today); or `sign` or `reflect`, then the day",
     )
-    s.add_argument("signed_day", nargs="?", metavar="YYYY-MM-DD", help="with sign: the local day to sign")
+    s.add_argument(
+        "signed_day",
+        nargs="?",
+        metavar="YYYY-MM-DD",
+        help="with sign or reflect: the local day to sign or reflect on",
+    )
     s.add_argument("--note", metavar="TEXT", help="sign: one line in your words; it is tier 1 and crosses")
     s.add_argument(
         "--confirm",
@@ -225,6 +249,52 @@ def day_arguments(sub: Subparsers) -> None:
             metavar="ID,ID",
             help=f"sign: the commitments {meaning}, by seq or id; each is confirmed by that",
         )
+    s.add_argument("--text", metavar="TEXT", help="reflect: the reflection, typed")
+    s.add_argument(
+        "--audio",
+        metavar="FILE",
+        help="reflect: a recording of the reflection, heard on this machine (openlogbook[transcribe])",
+    )
+    s.add_argument(
+        "--mic",
+        metavar="SECONDS",
+        type=float,
+        help="reflect, on macOS: record this many seconds from the microphone (ffmpeg), then hear them",
+    )
+    s.add_argument(
+        "--from-wispr",
+        nargs="?",
+        const="",
+        metavar="SEQ",
+        help='reflect: take the day\'s latest Wispr Flow dictation that begins with "reflect" as it is,'
+        " or the dictation SEQ names",
+    )
+    s.add_argument(
+        "--sign",
+        action="store_true",
+        help="reflect: then sign the day, the reflection confirmed and the proposals you accept written",
+    )
+    s.add_argument(
+        "--accept",
+        metavar="N,N|none",
+        help="reflect, with --sign: the proposals you accept, by the numbers printed; on a terminal it asks",
+    )
+    s.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="reflect: print the reflection and its proposals; write nothing",
+    )
+    s.add_argument(
+        "--model",
+        metavar="NAME",
+        help=f"reflect, with --audio or --mic: the whisper model (default {TRANSCRIBE_DEFAULT_MODEL})",
+    )
+    s.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="reflect, with --audio or --mic: download the model first when it is not on this machine (the"
+        " only time it uses the network)",
+    )
     s.add_argument(
         "--airports",
         metavar="FILE",
@@ -262,12 +332,23 @@ def cmd_day(a: argparse.Namespace) -> None:
     if a.day == signing_verb:
         _day_sign(lb, a)
         return
+    if a.day == REFLECT_VERB:
+        _day_reflect(lb, a)
+        return
     if a.signed_day is not None:
-        print(f"day: {a.day!r} takes no second argument; `day sign YYYY-MM-DD` signs a day", file=sys.stderr)
+        print(
+            f"day: {a.day!r} takes no second argument; `day sign YYYY-MM-DD` signs a day and"
+            " `day reflect YYYY-MM-DD` closes it in your words",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if a.note is not None or a.confirm is not None or a.at is not None or _dispositions(a):
         flags = f"{', '.join(SIGN_FLAGS[:-1])} and {SIGN_FLAGS[-1]}"
         print(f"day: {flags} belong to `day sign YYYY-MM-DD`", file=sys.stderr)
+        sys.exit(2)
+    reflecting = _reflect_flags(a)
+    if reflecting:
+        print(f"day: {_listed(reflecting)} belong to `day reflect YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
     try:
         day = day_start.of(lb.meta).today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
@@ -320,6 +401,10 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
+    reflecting = _reflect_flags(a)
+    if reflecting:
+        print(f"day sign: {_listed(reflecting)} belong to `day reflect YYYY-MM-DD`", file=sys.stderr)
+        sys.exit(2)
     try:
         day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
         line = signing.sign(
@@ -328,6 +413,385 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     except ValueError as e:  # SignError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
+    for text in signing.summary(line):
+        print(text)
+
+
+# -- day reflect ---------------------------------------------------------------------------------------------
+
+REFLECT_VERB = "reflect"
+INPUTS = ("--text", "--audio", "--mic", "--from-wispr")
+
+
+def _reflect_flags(a: argparse.Namespace) -> list[str]:
+    """The flags of `day reflect` given, as typed, for the refusal of another verb."""
+    given = [
+        flag
+        for flag, dest in (
+            ("--text", "text"),
+            ("--audio", "audio"),
+            ("--mic", "mic"),
+            ("--from-wispr", "from_wispr"),
+            ("--accept", "accept"),
+            ("--model", "model"),
+        )
+        if getattr(a, dest, None) is not None
+    ]
+    given += [
+        flag
+        for flag, dest in (("--sign", "sign"), ("--dry-run", "dry_run"), ("--fetch-model", "fetch_model"))
+        if getattr(a, dest, False)
+    ]
+    return given
+
+
+def _listed(flags: Sequence[str]) -> str:
+    return flags[0] if len(flags) == 1 else f"{', '.join(flags[:-1])} and {flags[-1]}"
+
+
+def _on_a_tty() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _refuse(text: str) -> None:
+    print(f"day reflect: {text}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
+    """`day reflect YYYY-MM-DD [--text TEXT | --audio FILE | --mic SECONDS | --from-wispr [SEQ]] [--at
+    RFC3339] [--sign [--accept N,N|none]] [--dry-run]` (`logbook.contrib.reflect`): the reflection, in
+    the owner's words, typed, heard on this machine, recorded from the microphone on macOS, or taken
+    from the day's Wispr Flow dictation that begins with "reflect" (offered as a draft when no input is
+    given, written only when confirmed); printed back a sentence a line, numbered, with the proposals
+    the rules read in it. Written as one `note/v1` line, label `reflection`, source `reflect`, through
+    `notes.write`; nothing else unless `--sign`: then the delegations accepted are written as notes and
+    the day is signed through `signing.sign`, the reflection among the lines confirmed, the accepted
+    dispositions in the signature, at `--at` (when the owner spoke) or now; a day signed already is
+    signed again, keeping what its standing signature said. Every number and every flag is checked
+    before anything is written; with no input and no draft, the reflection on the day is the one read."""
+    if a.signed_day is None or a.signed_day == REFLECT_VERB:
+        _refuse('the day, YYYY-MM-DD, is needed: logbook day reflect 2026-06-09 --text "..."')
+    signs = [
+        flag
+        for flag, given in (("--note", a.note is not None), ("--confirm", a.confirm is not None))
+        if given
+    ]
+    signs += [f"--{value}" for value in _dispositions(a)]
+    if signs:
+        _refuse(
+            f"{_listed(signs)} belong to `day sign`; a reflection signs with --sign and the proposals"
+            " you --accept"
+        )
+    if a.accept is not None and not a.sign:
+        _refuse("--accept goes with --sign: the proposals you accept are written when the day is signed")
+    inputs = [
+        flag
+        for flag, given in zip(INPUTS, (a.text, a.audio, a.mic, a.from_wispr), strict=True)
+        if given is not None
+    ]
+    if len(inputs) > 1:
+        _refuse(f"give one of {', '.join(INPUTS[:-1])} or {INPUTS[-1]}, not {' and '.join(inputs)}")
+    if (a.model is not None or a.fetch_model) and not {"--audio", "--mic"} & set(inputs):
+        _refuse("--model and --fetch-model go with --audio or --mic")
+    try:
+        day = parse_day(a.signed_day).isoformat()
+        tz = str(lb.meta["timezone"])
+        days = day_start.of(lb.meta)  # the page is the day so defined (RFC 0036)
+        today = notes.today_in(days)
+        if day > today:
+            raise reflect.ReflectError(
+                f"{day} is ahead of today in {tz}; a reflection is of today or a day before it"
+            )
+        if a.at is not None:
+            notes.moment(day, tz, a.at, today, days)  # the note's rules, checked before anything is heard
+        wanted = None if a.accept is None else reflect.numbers(a.accept)
+        _reflect(lb, a, day, today, wanted)
+    except ValueError as e:  # ReflectError, SignError, NoteError, a day that is not one
+        _refuse(str(e))
+
+
+def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: list[int] | None) -> None:
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    lines, retracted = reflect.day_lines(lb, day)
+    standing = reflect.reflections(lines, retracted)
+    r, shown = _reflection(lb, a, day, lines, retracted, standing, zone)
+    if r is None:
+        return
+    if not r.text.strip():
+        raise reflect.ReflectError("the reflection is empty; say or type a few words")
+    if r.note is None and r.how != reflect.DRAFT:
+        existing = reflect.same(r.text, standing, r.dictation)
+        if existing is not None:  # the same words on the day already: read, never written twice
+            r, shown = reflect.on_the_day(existing), False
+    exclude = {
+        str(line["id"]) for line in (r.note, r.dictation.line if r.dictation else None) if line is not None
+    }
+    proposals = reflect.propose(r.text, day, reflect.commitments(lb, day, exclude))
+    if not shown:
+        _print_reflection(day, r, zone)
+    for text in _proposal_rows(proposals):
+        print(text)
+    if a.dry_run:
+        print("dry run: nothing was written")
+        return
+    if r.how == reflect.DRAFT:
+        print(
+            f"nothing was written: take it as the reflection with `logbook day reflect {day} --from-wispr`,"
+            " or name another dictation with --from-wispr SEQ"
+        )
+        return
+    askable = [p for p in proposals if p.kind != reflect.COMMITMENT]
+    if not a.sign:
+        if r.note is None:
+            _write_reflection(lb, day, r, a.at, today, zone)
+        else:
+            print(f"nothing was written: the reflection #{r.note['seq']} is on the day already")
+        accept = " --accept N,N" if askable else ""
+        print(
+            f"nothing else was written; `logbook day reflect {day} --sign{accept}` signs the day"
+            + (" with the proposals you accept" if askable else "")
+        )
+        return
+    if wanted is not None:
+        accepted = reflect.chosen(proposals, wanted)
+    elif not askable:
+        accepted = []
+    elif _on_a_tty():
+        answered = _ask_each(askable)
+        if answered is None:
+            print("stopped: nothing was written")
+            return
+        accepted = reflect.chosen(proposals, answered)
+    else:
+        raise reflect.ReflectError(
+            "not at a terminal, so say which proposals you accept: --accept N,N, or --accept none;"
+            " nothing was written"
+        )
+    _reflect_sign(lb, a, day, today, r, accepted, zone)
+
+
+def _reflection(
+    lb: Logbook,
+    a: argparse.Namespace,
+    day: str,
+    lines: list[Line],
+    retracted: set[str],
+    standing: list[Line],
+    zone: ZoneInfo,
+) -> tuple[reflect.Reflection | None, bool]:
+    """The reflection the flags name, and whether its lines were printed already (a draft confirmed on
+    a terminal); None when the owner left a draft as it was."""
+    if a.text is not None:
+        return reflect.Reflection(a.text.strip(), reflect.TYPED), False
+    if a.audio is not None:
+        path = Path(a.audio)
+        if not path.is_file():
+            raise reflect.ReflectError(f"no recording at {a.audio}")
+        return _heard(path, a), False
+    if a.mic is not None:
+        with tempfile.TemporaryDirectory(prefix="logbook-reflect-") as folder:
+            return _heard(reflect.record(a.mic, Path(folder)), a), False
+    said = reflect.dictations(lb, lines, retracted)
+    if a.from_wispr is not None:
+        if a.from_wispr:
+            return reflect.dictated(reflect.pick(said, a.from_wispr, day)), False
+        found = reflect.drafts(said, [])
+        if not found:
+            raise reflect.ReflectError(f'no Wispr Flow dictation on {day} begins with "{reflect.CUE}"')
+        return reflect.dictated(found[-1]), False
+    pending = reflect.drafts(said, standing)
+    if pending:
+        draft = reflect.draft(pending[-1])
+        if a.dry_run or not _on_a_tty():
+            return draft, False
+        _print_reflection(day, draft, zone)
+        taken, edited = _confirm_draft()
+        if not taken:
+            print("left as it is: nothing was written")
+            return None, True
+        if edited is not None:
+            return reflect.dictated(pending[-1], edited), False
+        return reflect.dictated(pending[-1]), True
+    if standing:
+        return reflect.on_the_day(standing[-1]), False
+    raise reflect.ReflectError(
+        f"nothing to reflect on for {day}: give --text, --audio FILE or --mic SECONDS, or dictate in"
+        " Wispr Flow"
+        f' a note that begins with "{reflect.CUE}"'
+    )
+
+
+def _heard(path: Path, a: argparse.Namespace) -> reflect.Reflection:
+    """The recording at `path` heard by the local engine (`transcribe.hear`), its segments joined
+    with a space so that a sentence the engine cut in two is one sentence again."""
+    from ..labs import transcribe
+
+    try:
+        engine = transcribe.detect(a.model or TRANSCRIBE_DEFAULT_MODEL)
+        result = transcribe.hear(engine, path, fetch_model=a.fetch_model)
+    except (transcribe.EngineMissing, transcribe.ModelMissing) as e:
+        raise reflect.ReflectError(str(e)) from e
+    except (OSError, RuntimeError) as e:  # a file the engine cannot decode
+        raise reflect.ReflectError(f"{path.name} could not be heard: {e}") from e
+    text = " ".join(s.text.strip() for s in result.segments if s.text.strip())
+    if not text:
+        raise reflect.ReflectError(f"no words were heard in {path.name}")
+    heard_by = {"engine": engine.name, "model": engine.model, "language": result.language or None}
+    return reflect.Reflection(text, reflect.HEARD, extra={"heard_by": heard_by})
+
+
+def _print_reflection(day: str, r: reflect.Reflection, zone: ZoneInfo) -> None:
+    if r.note is not None:
+        head = f"the reflection #{r.note['seq']} of {_clock(str(r.note['at']), zone)}"
+    elif r.dictation is not None:
+        when = f"the Wispr Flow dictation #{r.dictation.seq} of {_clock(r.dictation.at, zone)}"
+        head = (
+            f'{when} begins with "{reflect.CUE}"; the draft'
+            if r.how == reflect.DRAFT
+            else f"the reflection, from {when}"
+        )
+    elif r.how == reflect.HEARD:
+        by = r.extra["heard_by"]
+        language = f", {by['language']}" if by["language"] else ""
+        head = f"the reflection, heard by {by['engine']} ({by['model']}{language})"
+    else:
+        head = "the reflection, typed"
+    print(f"{day}  {head}:")
+    for n, sentence in enumerate(reflect.sentences(r.text), 1):
+        print(f"  {n:>3}  {sentence}")
+
+
+def _proposal_rows(proposals: Sequence[reflect.Proposal]) -> Iterator[str]:
+    """One row per proposal, numbered: what it is, the line of the reflection it was read in, and the
+    evidence (the sentence, the cue, a due day; a disposition's commitment and the overlap)."""
+    if not proposals:
+        yield "no proposals: the rules read no commitment, delegation or disposition in it"
+        return
+    yield "proposals, by rules alone; each is a guess until you accept it:"
+    for p in proposals:
+        due = f" · due {p.due}" if p.due else (f" · {p.due_phrase}" if p.due_phrase else "")
+        if p.kind == reflect.DISPOSITION:
+            word = str(p.value)
+            what = f"#{p.seq} \u201c{p.target}\u201d · {p.cue} · overlap {p.score or 0:.2f}"
+        elif p.kind == reflect.DELEGATION:
+            word = p.kind
+            what = f"to {p.counterpart}: \u201c{p.quote}\u201d · {p.cue}{due}"
+        else:
+            word = p.kind
+            what = f"\u201c{p.quote}\u201d · {p.cue}{due} · `promises` reads it from the reflection"
+        yield f"  {p.number:>3}  {word:<11} line {p.sentence}  {what}"
+
+
+def _confirm_draft() -> tuple[bool, str | None]:
+    """On a terminal: y takes the draft as it is, e asks for the words instead (an empty line ends
+    them), n or q or the end of input leaves it. (taken, the words typed or None)."""
+    while True:
+        try:
+            answer = input("      y takes it as the reflection, e edits it, n leaves it: ").strip().casefold()
+        except EOFError:
+            print()
+            return False, None
+        if answer in ("n", "q"):
+            return False, None
+        if answer == "y":
+            return True, None
+        if answer == "e":
+            break
+    print("      type the reflection; an empty line ends it:")
+    typed: list[str] = []
+    while True:
+        try:
+            row = input("      ")
+        except EOFError:
+            break
+        if not row.strip():
+            break
+        typed.append(row.strip())
+    return (True, "\n".join(typed)) if typed else (False, None)
+
+
+def _ask_each(askable: Sequence[reflect.Proposal]) -> list[int] | None:
+    """On a terminal, one y or n per proposal that would write something; q or the end of input
+    stops, and then nothing is written. The numbers accepted."""
+    accepted: list[int] = []
+    for p in askable:
+        word = p.value if p.kind == reflect.DISPOSITION else p.kind
+        while True:
+            try:
+                answer = input(f"      {p.number} {word}: accept? y/n, q stops: ").strip().casefold()
+            except EOFError:
+                print()
+                return None
+            if answer == "q":
+                return None
+            if answer in ("y", "n"):
+                break
+        if answer == "y":
+            accepted.append(p.number)
+    return accepted
+
+
+def _write_reflection(
+    lb: Logbook, day: str, r: reflect.Reflection, at: str | None, today: str, zone: ZoneInfo
+) -> Line:
+    """The reflection as one note/v1 line on the day (`notes.write`): at `--at` when given, else when
+    the dictation was spoken, else the note's own default."""
+    note = notes.write(
+        lb,
+        day,
+        r.text,
+        notes.REFLECTION,
+        reflect.SOURCE,
+        at=at if at is not None else r.at,
+        today=today,
+        extra=r.extra,
+    )
+    print(
+        f"wrote the reflection as #{note['seq']} {notes.SCHEMA} (source {reflect.SOURCE}, tier {notes.TIER})"
+        f" at {_clock(str(note['at']), zone)}"
+    )
+    return note
+
+
+def _reflect_sign(
+    lb: Logbook,
+    a: argparse.Namespace,
+    day: str,
+    today: str,
+    r: reflect.Reflection,
+    accepted: Sequence[reflect.Proposal],
+    zone: ZoneInfo,
+) -> None:
+    """Under one hold of the writer lock: the page read again (a disposition's line retracted while
+    the owner answered is refused, nothing written), the reflection written when it is new, the
+    accepted delegations written as notes, then the signature through `signing.sign`. HeadMoved and
+    another writer are the store's own errors, said by `cli.main`; nothing is retried."""
+    with lb.writer():
+        lines, retracted = reflect.day_lines(lb, day)
+        page = reflect.on_page(lines, retracted)
+        gone = [p for p in accepted if p.kind == reflect.DISPOSITION and p.line not in page]
+        if gone:
+            raise reflect.ReflectError(
+                f"#{gone[0].seq} is no longer on the page of {day}; nothing was written"
+            )
+        with lb.index() as idx:
+            earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
+        note = r.note if r.note is not None else _write_reflection(lb, day, r, a.at, today, zone)
+        joined = [str(note["id"])]
+        for p in accepted:
+            if p.kind == reflect.COMMITMENT:
+                print(f"commitment {p.number}: nothing to write; `promises` lists it from the reflection")
+            elif p.kind == reflect.DELEGATION:
+                line = reflect.delegate(lb, day, p, note, today)
+                joined.append(str(line["id"]))
+                print(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
+        args = reflect.signature(earlier, page | set(joined), joined, accepted)
+        if args.kept is not None:
+            print(f"  {args.kept}")
+        line = signing.sign(
+            lb, day, confirm=args.confirm, note=args.note, at=a.at, dispositions=args.dispositions
+        )
     for text in signing.summary(line):
         print(text)
 

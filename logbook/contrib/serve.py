@@ -395,7 +395,10 @@ class Site:
             parts.append(
                 _dt("all day", ", ".join(a["title"] + day_reader.sources_text(a) for a in data["all_day"]))
             )
-        parts.append("</dl>\n<h2>Timeline</h2>\n")
+        parts.append("</dl>\n")
+        if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
+            parts.append(_reflection_html(data["reflection"], tz))
+        parts.append("<h2>Timeline</h2>\n")
         if data["timeline"]:
             parts.append('<ol class="timeline">\n')
             parts.extend(_entry_html(entry, tz, expanded=expanded) for entry in data["timeline"])
@@ -717,6 +720,18 @@ def _entry_html(entry: Mapping[str, Any], tz: ZoneInfo, inside: bool = False, ex
         out.append("</details>")
     out.append("</li>\n")
     return "".join(out)
+
+
+def _reflection_html(item: Mapping[str, Any], tz: ZoneInfo) -> str:
+    """The reflection: when it was recorded and by which source, then the words, a paragraph each."""
+    paragraphs = "".join(
+        f"<p>{escape(text)}</p>\n" for text in str(item["text"]).splitlines() if text.strip()
+    )
+    when = f"{_clock(str(item['at']), tz)}{DOT}{item['source']}"
+    return (
+        f'<h2>Reflection</h2>\n<div class="reflection" title="line {escape(str(item["line"]))}">\n'
+        f'<p class="mute">{escape(when)}</p>\n{paragraphs}</div>\n'
+    )
 
 
 def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:
