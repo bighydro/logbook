@@ -30,18 +30,20 @@ the day with nothing confirmed, an empty `confirmed` over the page digest as sho
 whose every proposed fact the owner unticked is still signed; it goes alone, with no disposition.
 And `at` is the moment the owner clicked, which on a phone is hours before the command runs:
 given as an RFC 3339 moment with an offset or Z, checked by `moment` (not beyond five minutes in
-the future, for clock skew; not before the day signed starts in the record's zone) and stored in
-UTC as every `at` is. Without `at` the signing moment is now, as before."""
+the future, for clock skew; not before the day signed starts in the record's zone, at its
+`day_start`, RFC 0036) and stored in UTC as every `at` is. Without `at` the signing moment is now,
+as before."""
 
 from __future__ import annotations
 
 import hashlib
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
+from . import day_start
 from .chain import Line, canonical_json
 from .export import parse_day
 from .index import Index
@@ -168,8 +170,8 @@ def sign(
     every such line is confirmed, whatever `confirm` says, and a line given two dispositions is
     refused. `note` is one line. `at` is when the owner signed, an RFC 3339 moment with an offset
     or Z, stored in UTC (amendment 2: not beyond five minutes ahead of this clock, not before the
-    day starts in the record's zone); now by default. When the day has a standing signature the new
-    line supersedes it. `SignError` says why a signature is refused.
+    day starts in the record's zone, at its `day_start`); now by default. When the day has a
+    standing signature the new line supersedes it. `SignError` says why a signature is refused.
 
     The page is read and the line appended under one hold of the writer lock (`Logbook.writer`), and
     the head is read again before the append: when another writer moved it in between, the page
@@ -197,7 +199,7 @@ def _sign(
 ) -> Line:
     meta = lb.meta
     owner, tz = str(meta["owner_id"]), str(meta["timezone"])
-    signed_at = moment(at, day, tz) if at is not None else now_utc()
+    signed_at = moment(at, day, tz, days=day_start.of(meta)) if at is not None else now_utc()
     with lb.index() as idx:
         lines = page(idx, day)
         retracted = retractions(idx.retractions())
@@ -268,13 +270,18 @@ def summary(line: Line) -> list[str]:
     return out
 
 
-def moment(at: str, day: str, tz: str, now: datetime | None = None) -> str:
+def moment(
+    at: str, day: str, tz: str, now: datetime | None = None, days: day_start.DayStart | None = None
+) -> str:
     """`at` as the owner's clock gave it, checked and returned in UTC (amendment 2): an RFC 3339
     moment with a numeric offset or Z (anything else is refused with the example), not beyond
     `SKEW` ahead of `now` (this clock; a phone's clock runs a few minutes fast, a signature from
     the future is not one), and not before `day` starts in the record's zone `tz` (a day is signed
-    on it or after it, never before it was lived). A Z stamp is kept as given; an offset is
-    converted, as every `at` of the record is."""
+    on it or after it, never before it was lived). Where a day starts is `days`, the record's
+    `day_start` (RFC 0036; None is midnight in `tz`), and the moment is on a day before `day` by the
+    one rule the index puts every line on its day by (`DayStart.day`, `day_start.local_day`): with
+    the day beginning at 06:00, 01:30 on the 13th is the 12th's and too early to sign the 13th. A Z
+    stamp is kept as given; an offset is converted, as every `at` of the record is."""
     text = at.strip()
     parsed: datetime | None = None
     if _MOMENT.match(text):
@@ -287,9 +294,12 @@ def moment(at: str, day: str, tz: str, now: datetime | None = None) -> str:
     clock = now if now is not None else datetime.now(UTC)
     if parsed > clock + SKEW:
         raise SignError(f"--at {text} is in the future; a signature is when you signed, not later")
-    start = datetime.combine(parse_day(day), time(), tzinfo=ZoneInfo(tz))
-    if parsed < start:
-        raise SignError(f"--at {text} is before {day} starts in {tz}; a day is signed on it or after it")
+    days = days if days is not None else day_start.DayStart(ZoneInfo(tz))
+    if days.day(parsed) < parse_day(day):
+        starts = "" if days.midnight else f" at {days.text}"
+        raise SignError(
+            f"--at {text} is before {day} starts{starts} in {tz}; a day is signed on it or after it"
+        )
     return utc(text)
 
 

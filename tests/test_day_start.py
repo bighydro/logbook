@@ -9,15 +9,18 @@ the 13th's; at midnight both are the 13th's."""
 
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from logbook import cli
 from logbook.core import day_start, index
+from logbook.core.chain import canonical_json
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
@@ -393,6 +396,116 @@ def test_setting_the_boundary_says_how_many_signed_pages_moved(
     cli.main(["setup", "day_start", "06:00"])
     out = capsys.readouterr().out
     assert "1 of 1 no longer match their page" in out
+
+
+AT_EARLY = "2026-10-13T01:30:00+02:00"  # EARLY on the owner's clock: 01:30 on the 13th
+
+
+def _last(lb: Logbook) -> dict[str, Any]:
+    return list(lb.lines())[-1]
+
+
+def test_sign_at_before_the_boundary_signs_the_day_before(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`day sign --at` checks the moment against the day's start as the index draws it: with the day
+    beginning at 06:00, 01:30 on the 13th is still the 12th, so it signs the 12th, and the 13th, which has
+    not begun, is refused with nothing written."""
+    lb.set_meta(day_start="06:00")
+    seq = lb.meta["seq"]
+    with pytest.raises(SystemExit) as e:
+        cli.main(["day", "sign", "2026-10-13", "--at", AT_EARLY])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert err.startswith("day sign: --at") and "before 2026-10-13 starts at 06:00" in err, err
+    assert lb.meta["seq"] == seq, "nothing signed"
+    cli.main(["day", "sign", "2026-10-12", "--at", AT_EARLY])
+    assert capsys.readouterr().out.startswith("2026-10-12: signed 2026-10-12T23:30:00Z")
+    line = _last(lb)
+    assert line["at"] == EARLY and line["payload"]["day"] == "2026-10-12"
+    assert index.local_date(str(line["at"]), TZ, "06:00") == "2026-10-12", "the moment is on the 12th"
+    cli.main(["day", "sign", "2026-10-13", "--at", "2026-10-13T06:00:00+02:00"])
+    assert _last(lb)["payload"]["day"] == "2026-10-13", "06:00 itself begins the 13th"
+
+
+@pytest.mark.parametrize(
+    "at",
+    [
+        EARLY,
+        MORNING,
+        "2026-10-13T03:59:59Z",  # 05:59:59 on the 13th: the 12th's
+        "2026-10-13T04:00:00Z",  # 06:00 on the 13th: the 13th's
+        "2026-10-25T04:59:59Z",  # 05:59:59 CET, the night the clocks go back: the 24th's
+        "2026-10-25T05:00:00Z",  # 06:00 CET: the 25th's
+    ],
+)
+def test_the_at_check_and_the_index_draw_one_boundary(at: str) -> None:
+    """`signing.moment` refuses a moment for a day exactly when the index puts the moment on an earlier
+    day: one rule (`day_start.local_day`), not a second one beside it."""
+    from logbook.core import signing
+
+    days = day_start.DayStart(OSLO, time(6, 0))
+    clock = datetime(2026, 10, 26, tzinfo=UTC)
+    on = date.fromisoformat(index.local_date(at, TZ, "06:00"))
+    for day in (on - timedelta(days=1), on, on + timedelta(days=1)):
+        if day > on:
+            with pytest.raises(signing.SignError, match=f"before {day} starts at 06:00"):
+                signing.moment(at, day.isoformat(), TZ, now=clock, days=days)
+        else:
+            assert signing.moment(at, day.isoformat(), TZ, now=clock, days=days) == at
+
+
+def test_the_page_signed_is_the_page_the_day_shows(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    """Signed at 01:30 under a 06:00 boundary, the 12th's page digest is over the lines `day` shows on
+    the 12th, and `day` reads the signature as matching its page."""
+    lb.set_meta(day_start="06:00")
+    cli.main(["day", "sign", "2026-10-12", "--at", AT_EARLY])
+    capsys.readouterr()
+    signature = _last(lb)
+    cli.main(["day", "2026-10-12", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert [u["title"] for u in data["unplaced"]] == ["back from the late concert"]
+    concert = next(x for x in lb.lines() if x["kind"] == "note" and x["payload"]["text"].startswith("back"))
+    page = {"day": "2026-10-12", "tz": TZ, "lines": [concert["hash"]]}
+    digest = hashlib.sha256(canonical_json(page).encode("utf-8")).hexdigest()
+    assert signature["payload"]["page"] == {"sha256": digest, "lines": 1}
+    assert signature["payload"]["confirmed"] == [concert["id"]]
+    signed = data["signed"]
+    assert signed["page_sha256"] == digest and signed["page_matches"] is True
+    assert signed["at_local"] == "2026-10-13T01:30:00+02:00"
+    cli.main(["day", "2026-10-12"])
+    assert capsys.readouterr().out.splitlines()[0] == (
+        "2026-10-12  Monday · signed 2026-10-13 01:30 · 06:00 to 06:00 the next day"
+    )
+
+
+def test_a_signature_written_under_midnight_is_never_checked_again(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The `--at` check is made when a signature is written, never on one already in the record: signed
+    at 01:30 on the 13th for the 13th while the day began at midnight, the signature still stands and the
+    record still verifies once the day begins at 06:00, though the same moment for the 13th is refused
+    now; back at midnight its page matches as it did."""
+    from logbook.core import signing
+
+    cli.main(["day", "sign", "2026-10-13", "--at", AT_EARLY])  # midnight: 01:30 is on the 13th
+    capsys.readouterr()
+    signature = _last(lb)
+    assert signature["payload"]["page"]["lines"] == 2
+    lb.set_meta(day_start="06:00")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["day", "sign", "2026-10-13", "--at", AT_EARLY])
+    assert e.value.code == 2 and "before 2026-10-13 starts at 06:00" in capsys.readouterr().err
+    with lb.index() as idx:
+        assert signing.standing(idx, str(lb.meta["owner_id"]))["2026-10-13"]["id"] == signature["id"]
+    cli.main(["show", "2026-10-13"])
+    assert capsys.readouterr().out.splitlines()[0].startswith("2026-10-13  signed 2026-10-13 01:30")
+    cli.main(["verify"])
+    assert "valid" in capsys.readouterr().out
+    lb.set_meta(day_start="00:00")
+    cli.main(["day", "2026-10-13", "--json"])
+    signed = json.loads(capsys.readouterr().out)["signed"]
+    assert signed["line"] == signature["id"] and signed["page_matches"] is True
 
 
 # -- gaps, the digest, /today -------------------------------------------------------------------------------
