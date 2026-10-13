@@ -101,7 +101,9 @@ record, not a constant in the code:
 
 - `policy/crossing.json` maps a destination to the highest tier that may cross to it:
   `{"hermes": {"max_tier": 2}}`. A destination the file does not name has no ceiling and cannot
-  receive anything.
+  receive anything. An entry may add `until`, the last day it holds (ADR 0022), and
+  `signed_within_days`, so only days whose signature is that fresh cross through it (RFC 0036,
+  draft).
 - Every export names its destination and the tiers it asks for: `logbook export crossing --to
   hermes --tier 1,2`. A request above the ceiling exits non-zero and names the file, so the owner
   raises the ceiling deliberately, in the record, or does not.

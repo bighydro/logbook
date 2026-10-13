@@ -142,6 +142,16 @@ the export appends (`policy.signed_only`).
 The shared page (`export share day`), the trip bundle, the vault and the site keep their own
 selections and are not gated by signatures.
 
+A destination that should see only what you have looked at lately gets `signed_within_days` on its
+entry in `policy/crossing.json` (RFC 0036, draft): `{"cloud-model": {"max_tier": 2, "until":
+"2026-12-31", "signed_within_days": 14}}` crosses, through that entry, only the lines of days whose
+standing signature you wrote in the last fourteen days, today included; a day unsigned or signed
+earlier crosses nothing but its header, the day and its signed state. Signing a day again
+refreshes it. Absent, there is no restriction, which is the behaviour above. The key is the
+entry's, not the command's, so it holds for every crossing that reads the entry, the shared page,
+the bundle, the vault, the site and the MCP read tools included, and `--unsigned` does not lift it;
+the tier ceiling and `until` apply on top, as always.
+
 ## In the conformance sample
 
 `conformance/sample-logbook` signs its first day on its last evening, so a verifier meets the

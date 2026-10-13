@@ -88,6 +88,7 @@ nav:
       - "0026 weather/v1": rfcs/0026-weather-v1.md
       - "0031 Profile freeze for v1.0": rfcs/0031-profile-freeze.md
       - "0034 The signed day": rfcs/0034-the-signed-day.md
+      - "0036 Goals, reviews, drafts, chapters (draft)": rfcs/0036-goals-reviews-drafts-chapters.md
   - Letters:
       - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
