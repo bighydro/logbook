@@ -148,6 +148,28 @@ are as they always were.
    out. An earlier draft of the day stays in the record, listed by id under `--json`, and `show` lists
    every draft line on the day it was written.
 
+## What makes a stop a stay
+
+A short cluster of points — the ten minutes at the cafe — is a **stop** unless something of the
+owner's falls inside it: an event, a transcript, a note, a call, a message or a photo (SPEC §3.2.3
+rule 5, `stays.somewhere`). Then it is a **stay**, marked `promoted`: the evidence says the owner
+was there, and duration is only the fallback.
+
+An event counts only when it happened somewhere:
+
+- it carries a **location** (any source: a Wallet pass with its venue, a ticket with its address), or
+- it carries **attendees** (someone was invited to it), or
+- its source is one whose entries are places and times whatever they carry: a **calendar**
+  (`ios-calendar`; `ics`, which `sync gcal` and Takeout's `Calendar/` write too) or **Google Home's
+  history** (Takeout's Home App, an arrival or the alarm at the door; source `google-takeout`,
+  calendar `google-home`).
+
+A Notion page edited, a Drive file changed — by the owner or by someone else on the owner's file —
+happen nowhere: they carry no location and no attendees, and their sources are not physical. Inside a
+stop they do not make it a stay. The Day still shows them under the row their time falls in (`Boat
+jobs`, `Edited Crew list ×3`), as it does any event; they are simply not evidence of where the owner
+was. A task (`task/v1`, `sync gtasks`) is not an event and was never evidence.
+
 ## One event from several calendars
 
 The same entry often reaches the record twice: from the phone's calendar (`ios-calendar`) and from

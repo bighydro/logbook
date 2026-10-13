@@ -33,6 +33,10 @@ The rules:
   it: an event, transcript, note, call, message or photo whose instant falls inside it (a line with
   an `end` counts when its span overlaps). Evidence promotes; duration is the fallback. Otherwise
   it is a stop, kept and flagged. Evidence is the owner's, so only the owner's clusters are promoted.
+  An event is evidence only when it happened somewhere (`somewhere`): it carries a `location` or
+  `attendees`, or its source is one whose entries are places and times — a calendar (`CALENDARS`)
+  or Google Home's history of the door (`HOME_HISTORY`). A Notion page edited, a Drive file changed
+  (perhaps by someone else, on the owner's file) happen nowhere, and are not.
 - A move spans from the end of one cluster to the start of the next: its distance is measured along
   the points between them, its mode from the average speed (walk, car, train, flight), or flight
   when a gap starts and ends near two different airports (the flights table, RFC 0013), or, when
@@ -86,6 +90,12 @@ from .store import RETRACTION, retractions
 SETTINGS_FILE = PurePosixPath("policy/stays.json")  # record-relative
 PLACES_FILE = registry_of_places.PLACES_FILE
 EVIDENCE = ("event", "transcript", "note", "call", "message", "photo")
+# The sources whose events are the owner somewhere whatever the line carries (SPEC §3.2.3 rule 5): a
+# calendar entry is a plan for a place and a time (`ics` is also what Google Calendar's feed and
+# Takeout's Calendar/ write), and an arrival in Google Home's history is the household at the door,
+# written by Takeout's Home App under the shared `google-takeout` source with a calendar id of its own.
+CALENDARS = frozenset({"ios-calendar", "ics"})
+HOME_HISTORY = ("google-takeout", "google-home")  # (source, calendar id)
 STAY, STOP, MOVE = "stay", "stop", "move"
 MODES = ("walk", "car", "train", "boat", "flight")
 KIND_MODE = {"yacht": "boat", "aircraft": "flight", "car": "car"}  # an asset's kind decides its mode
@@ -428,9 +438,31 @@ def _split(lines: Iterable[Line]) -> tuple[dict[str | None, list[Point]], list[E
             tracks.setdefault(subject, []).append(
                 Point(at, float(lat), float(lon), subject, int(line.get("seq", 0)), str(line.get("id", "")))
             )
-        elif line.get("kind") in EVIDENCE:
+        elif line.get("kind") in EVIDENCE and (line.get("kind") != "event" or somewhere(line)):
             evidence.append(Evidence(at, instant(line.get("end")), str(line["kind"])))
     return tracks, evidence
+
+
+def somewhere(line: Line) -> bool:
+    """Whether an `event/v1` line happened somewhere, and so is evidence that promotes a stop
+    (rule 5): its payload carries a `location` (a string with a word in it) or `attendees` (a list
+    with someone in it), or its source is a calendar (`CALENDARS`) or Google Home's history
+    (`HOME_HISTORY`, by the calendar id the line gives). A Notion page or a Drive file changed —
+    by the owner or by anyone else — carries neither and comes from neither: it happened nowhere.
+    A payload the reader cannot open carries nothing, so only its source can say."""
+    source = line.get("source")
+    if source in CALENDARS:
+        return True
+    payload = line.get("payload")
+    if not isinstance(payload, dict):
+        return False
+    calendar = payload.get("calendar")
+    if isinstance(calendar, dict) and (source, calendar.get("id")) == HOME_HISTORY:
+        return True
+    location, attendees = payload.get("location"), payload.get("attendees")
+    return (isinstance(location, str) and bool(location.strip())) or (
+        isinstance(attendees, list) and bool(attendees)
+    )
 
 
 # -- clustering --------------------------------------------------------------------------------------------

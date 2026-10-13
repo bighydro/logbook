@@ -823,7 +823,8 @@ logbook derive stays --subject solvind        # one asset's own track (assets.js
 
 A stay is a span at one place of twenty minutes or more, or of any length when something is attached to
 it: a calendar event, a transcript, a note, a call, a message or a photo whose time falls inside it.
-Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
+An event counts when it happened somewhere — a calendar entry, Google Home's door, an event with a
+location or attendees — and a Notion or Drive edit does not. Evidence promotes; duration is the fallback. A shorter span with nothing attached is a stop, kept and
 flagged. A move is what lies between: its distance along the points, its duration, and a mode from the
 speed (walk, car, train, flight; flight also when a gap starts and ends near airports). The night of each
 day is the longest stay between 22:00 and 08:00; a night with none is in transit.
