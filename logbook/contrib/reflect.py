@@ -770,11 +770,12 @@ def close(
     """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
     writer lock: the page read again (a disposition's line retracted since the proposals were read
     is refused, nothing written), the dream's proposed events accepted read again, numbered from
-    `first` (`dream_events.again`), the reflection written when it is new (`write`), the accepted
-    delegations written as notes (`delegate`), the accepted events as event lines
-    (`dream_events.write`), then the signature through `signing.sign` with what `signature` says, at
-    `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
-    the store's own errors; nothing is retried."""
+    `first`, and every one made into its line before the first is written (`dream_events.prepared`),
+    the reflection written when it is new (`write`), the accepted delegations written as notes
+    (`delegate`), the accepted events as event lines (`dream_events.write`), then the signature
+    through `signing.sign` with what `signature` says, at `at` or now. `say` hears what the command
+    prints as it goes. HeadMoved and another writer are the store's own errors; nothing is
+    retried."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with lb.writer():
         lines, retracted = day_lines(lb, day)
@@ -782,7 +783,7 @@ def close(
         gone = [p for p in accepted if p.kind == DISPOSITION and p.line not in page]
         if gone:
             raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
-        taken = dream_events.again(lb, day, events, first)
+        prepared = dream_events.prepared(lb, day, events, first)
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
         note = r.note
@@ -800,8 +801,8 @@ def close(
                 delegations.append(line)
                 say(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
         written: list[Line] = []
-        for e in taken:
-            line = dream_events.write(lb, e)
+        for e, made in prepared:
+            line = dream_events.write(lb, made)
             joined.append(str(line["id"]))
             written.append(line)
             say(dream_events.wrote_text(e, line))

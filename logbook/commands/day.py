@@ -488,18 +488,18 @@ def _sign_with_events(
     at: str | None,
     dispositions: dict[str, list[str]],
 ) -> Line:
-    """Under one hold of the writer lock: the proposals read again (`dream_events.again`), each
-    accepted one written as an event line, then the signature through `signing.sign`, the events
-    among the lines confirmed."""
+    """Under one hold of the writer lock: the proposals read again and every event line made before
+    the first is written (`dream_events.prepared`), each written, then the signature through
+    `signing.sign`, the events among the lines confirmed."""
     with lb.writer():
-        written = [_write_event(lb, p) for p in dream_events.again(lb, day, taken)]
+        written = [_write_event(lb, p, line) for p, line in dream_events.prepared(lb, day, taken)]
         if confirm:
             confirm = [*confirm, *written]
         return signing.sign(lb, day, confirm=confirm, note=note, at=at, dispositions=dispositions)
 
 
-def _write_event(lb: Logbook, proposal: dream_events.Proposed) -> str:
-    line = dream_events.write(lb, proposal)
+def _write_event(lb: Logbook, proposal: dream_events.Proposed, made: dict[str, Any]) -> str:
+    line = dream_events.write(lb, made)
     print(dream_events.wrote_text(proposal, line))
     return str(line["id"])
 
@@ -873,11 +873,11 @@ def _reflect_sign(
 ) -> None:
     """The day closed through `reflect.close`, the code the Day page's Sign runs too: under one hold
     of the writer lock, the page read again (a disposition's line retracted while the owner answered
-    is refused, nothing written), the proposed events accepted read again (`dream_events.again`),
-    the reflection written when it is new, the accepted delegations written as notes, the accepted
-    events as event lines, then the signature through `signing.sign`; each step printed as it is
-    done. HeadMoved and another writer are the store's own errors, said by `cli.main`; nothing is
-    retried."""
+    is refused, nothing written), the proposed events accepted read again and made into their lines
+    (`dream_events.prepared`), the reflection written when it is new, the accepted delegations
+    written as notes, the accepted events as event lines, then the signature through `signing.sign`;
+    each step printed as it is done. HeadMoved and another writer are the store's own errors, said
+    by `cli.main`; nothing is retried."""
     closed = reflect.close(lb, day, today, r, accepted, a.at, say=print, events=taken, first=first)
     for text in signing.summary(closed.signature):
         print(text)

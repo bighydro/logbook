@@ -168,12 +168,17 @@ are as they always were.
    part it belongs to (day, thread, question, people, promise), its text and its evidence ids
    shortened. An unsupported segment starts with `~` and ends with `unsupported` (and why, when the
    reader found an id that is not on the day), never run into the prose around it and never as a
-   fact. The draft is a proposal; your signature and your notes are the facts. `--no-dream` leaves it
-   out. An earlier draft of the day stays in the record, listed by id under `--json`, and `show` lists
-   every draft line on the day it was written. A draft follows the `dream` entry of
-   `policy/crossing.json`, not the head: one above the entry's `max_tier` today (lowered, expired or
-   removed since) is not shown, and when the day's standing draft is one, the row says `superseded by
-   policy` and why, and nothing of the draft ([the dream](dream.md), *When the entry changes*).
+   fact. Then the events it proposes ([the dream](dream.md#proposed-events)), one row each, `event N`
+   with the span, the title, the place and the people: a proposal waiting for you starts with `?` and
+   ends with `proposed` and its evidence (greyed on the `serve` page); one you accepted (`day sign
+   --accept N`) says `confirmed as #seq`, and its event line sits among the day's events in the
+   timeline, where it places its people as a calendar entry does. The draft is a proposal; your
+   signature and your notes are the facts. `--no-dream` leaves it out. An earlier draft of the day
+   stays in the record, listed by id under `--json`, and `show` lists every draft line on the day it
+   was written. A draft follows the `dream` entry of `policy/crossing.json`, not the head: one above
+   the entry's `max_tier` today (lowered, expired or removed since) is not shown, and when the day's
+   standing draft is one, the row says `superseded by policy` and why, and nothing of the draft, its
+   proposed events included ([the dream](dream.md), *When the entry changes*).
 8. **Goals, reviews and chapters** (RFC 0036, [goals](goals.md)) — the chapter the day is in, in the
    header after the signed state (`· chapter The Lofoten summer`, with `, clashes with <name>` should
    two standing chapters hold the day); after the draft, a `reviews` row per review standing on the
@@ -330,13 +335,15 @@ from), `sources`, and `received`, one object per page the circle shared for the 
 `owner_id`, `created`, `max_tier`, `lines`, `held_back`, `by_kind`, `named` with each line's id,
 `attachments`); and, only on a day a model has dreamed, `draft`, the standing draft (`line`,
 `seq`, `source`, `model`, `tier`, `at`, `read_head`, `read_count`, `language`, `segments` each with
-`text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `supersedes`, `earlier`
-newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`; and, only on a day whose
-standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `seq`, `tier`, `max_tier`,
-`why`), left out under `--no-dream` too. On a day with a
-reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the object carries
-`reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and `text`; the key
-is absent on every other day. Likewise `chapter` (`name`, `line`, `from`, `to`, and `clash` when another
+`text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `proposals` each with
+`number`, `kind`, `title`, `start`, `end`, `start_local`, `end_local`, `place`, `where`, `people` (`id`,
+`name`), `evidence`, `supported`, `why` and `confirmed` (`line`, `seq`, or null), `supersedes`,
+`earlier` newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`; and, only on a
+day whose standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `seq`, `tier`,
+`max_tier`, `why`, and nothing of the draft's text or proposals), left out under `--no-dream` too.
+On a day with a reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the
+object carries `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and
+`text`; the key is absent on every other day. Likewise `chapter` (`name`, `line`, `from`, `to`, and `clash` when another
 standing chapter holds the day), `reviews` (`line`, `goal`, `goal_text`, `disposition`, `period`,
 `note`, `recorded_at`), `goals` and `chapters` (the lines written on the day, each with `superseded`)
 are there only on a day that has them ([goals](goals.md#on-the-day)).

@@ -22,8 +22,9 @@ A model's text about one unit of the record, a day, a journey, an event, a week,
 | `language` | string | MUST | the language of the text, a BCP 47 tag (`en`, `nb`) |
 | `segments` | array of object | MUST | the text, in order, each `{ text, evidence }` or `{ text, unsupported: true }` (below); at least one |
 | `supersedes` | string | MAY | the id of the earlier `draft` line of the same unit this one replaces |
+| `proposals` | array of object | MAY | what the model proposes the owner confirm, beside its text (below); absent when it proposes nothing |
 
-Anything else MAY be kept under `extra`: the prompt's name, the model's parameters, how long it took.
+Anything else MAY be kept under `extra`: the prompt's name, the model's parameters, how long it took, how many proposals the writer dropped and why (`dropped`, reason → count).
 
 **A segment** is one object with `text`, a non-empty string, one sentence or a few, and exactly one of:
 
@@ -31,6 +32,19 @@ Anything else MAY be kept under `extra`: the prompt's name, the model's paramete
 - `"unsupported": true`: the text rests on no line. No `evidence` key at all, not an empty one.
 
 A segment with both, with neither, with an empty `evidence`, or with `unsupported` false, makes the line invalid: a writer refuses it, and a reader that meets one anyway treats the segment as unsupported and says the line is malformed.
+
+**A proposal** (amendment of 2026-10-13) is one object, and `kind` says what it proposes; `event` is the only kind so far: an event the model thinks the unit held and the owner may confirm. An event proposal has exactly these keys:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `kind` | `"event"` | |
+| `title` | string | short, non-empty |
+| `start`, `end` | RFC3339 UTC with `Z` | the span; `start` before `end`, `start` on the day |
+| `place` | string or null | a named place of `places.json` by its name, or an observed place by its id `place:<lat>,<lon>`, as `places review` names a cluster; a place the unit's stays were at |
+| `people` | array of string | canonical person ids: entity ids the resolution lines (RFC 0006) name as a person after the alias walk, never the owner; may be empty |
+| `evidence` | array of string | the line ids it rests on, non-empty, every one a line of the unit the model read |
+
+A proposal is numbered by its place in the array, from 1. Unlike a segment it has no unsupported form: a writer drops a proposal whose time, place, people or evidence is not of the unit, and MAY count the drops under `extra`. A proposal of another shape makes the line invalid, as a malformed segment does; a reader shows the valid ones and says the line is malformed. A proposal is never a line of its own kind. The owner confirms an event proposal by writing it as an `event/v1` line (RFC 0009), source `owner`, `raw_id` `<draft id>/<number>`, `extra.from` the draft's id; a reader shows a proposal with such a line standing as confirmed, and the event among the day's events.
 
 ## Tier
 
@@ -41,7 +55,7 @@ The highest tier among the lines the model read, by SPEC §4: *derived data inhe
 1. **The dedupe key is `(source, unit, subject, read_head)`, and the crossing entry it read under when the draft names one (rule 7).** The same model on the same unit at the same head under the same entry is one draft: a writer that holds one writes nothing and says so. The record moved, or the entry changed, the model runs again, and that is a new line.
 2. **A draft is never edited.** A later draft of the same unit carries `supersedes` naming the earlier one. The **standing draft** of a unit is its latest `draft` line not retracted and not named in a later draft's `supersedes`. The earlier text stays in the record, marked.
 3. **Every sentence has evidence or a mark.** The rule of RFC 0036 (*The evidence rule*). A reader prints a supported segment with its evidence reachable and an unsupported one set apart, marked, never run into the prose around it, and never as a fact.
-4. **A draft is a proposal.** No reader derives a fact from a draft: not a stay, not a person, not a promise, not a goal. The owner confirms a sentence by confirming the lines it rests on (a signed day whose `confirmed` names them), by writing a note, by reviewing a goal, or by starring a keeper; an unsupported sentence has no lines to confirm and is confirmed by nothing but the owner writing it down themselves.
+4. **A draft is a proposal.** No reader derives a fact from a draft: not a stay, not a person, not a promise, not a goal, not an event. The owner confirms a sentence by confirming the lines it rests on (a signed day whose `confirmed` names them), by writing a note, by reviewing a goal, or by starring a keeper; an unsupported sentence has no lines to confirm and is confirmed by nothing but the owner writing it down themselves.
 5. **A draft reads under a ceiling and says so.** `read_count` is the count under the ceiling the writer read under; a draft written through the door is of the lines the door showed, and the page may hold more. A reader that holds the record MAY compare `read_count` with the unit's lines today and say the draft is of a smaller unit.
 6. **Evidence is checked.** A writer refuses a segment whose `evidence` names an id that is not a line of the unit it read. A reader that holds the record and finds an id that is not on the unit shows the segment as unsupported and says why.
 7. **A draft follows the policy, not the head** (amended 2026-10-13; ADR 0016, *Derived material follows the policy, not the head*). A writer that reads under a crossing entry SHOULD name the entry's version under `extra.policy_version`: the SHA-256, lowercase hex, of the RFC 8785 JSON of `{"max_tier", "model", "until"}` as the entry writes them (`null` for one it does not set). A reader shows a draft only while that entry, as it counts today, allows the draft's `tier`: lowered, expired or removed, the draft is withheld whatever the head, the reader that holds the record says so and shows nothing of the text, and the line stays in the record. A writer that finds the standing draft above the entry, or under another version of it, MAY write the unit again under the entry as it is, superseding it (rule 2).
@@ -73,7 +87,7 @@ draft · model:qwen2.5-7b-instruct · read at bb97e90d · 5 lines
   ~ Ola came by in the evening.                                           unsupported
 ```
 
-The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. A draft of another unit is for that unit's page (the trip page, the year) and is not on the Day. The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, supersedes }`.
+The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. A draft of another unit is for that unit's page (the trip page, the year) and is not on the Day. The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. After the segments come the proposed events, one row each: a proposal waiting for the owner marked as one (a leading `?` and the word `proposed` in text, greyed in `serve`), one the owner confirmed marked with the line it became, which the Day shows among its events. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, proposals, supersedes }`.
 
 ## Notes
 
