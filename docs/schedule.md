@@ -68,6 +68,8 @@ them, as an administrator:
 Installing again over copies already there prints the commands that stop and replace them; run as root,
 it is refused (the jobs would run as root, with root's home). `--uninstall-schedule --system` removes the
 copies in your home directory and prints the commands that stop the jobs and remove the system's.
+Moving from the agents to the daemons, remove the agents (`--uninstall-schedule`): with both, every run
+happens twice, and `doctor` says so.
 
 ## What the scheduled run does
 
@@ -121,9 +123,13 @@ pass  restore-test  passed 2026-10-04 (2026-10-04T030000Z, 12,772 lines)
 
 - `last-run` is a **warn** when the last scheduled run is older than 26 hours (the schedule runs four
   times a day, so a day and a little means the machine was off or the agents are gone), or when
-  it failed (a source failed, or a check failed), with the first failing line. No scheduled run yet is a
-  pass on a machine with no schedule, saying how to install one, and a warn where one is installed and
-  has not run.
+  it failed (a source failed, or a check failed), with the first failing line. The run is the record's
+  `state/last-run.json`, read the same whichever install wrote it: your agents or timers, the system's
+  daemons or units (`--system`), or a schedule on another machine. No scheduled run yet is a pass on a
+  machine with no schedule, saying how to install one, and a warn where one is installed and has not run.
+  Both installed at once — the agents and the daemons, the user timers and the system's — is a warn
+  whatever the run said, since every run then happens twice: keep one (`--uninstall-schedule`, or
+  `--uninstall-schedule --system` for the system's).
 - `restore-test` is a **pass** when a restore test passed within 35 days (the first Sundays of two
   months are at most five weeks apart), a **warn** when there has been none, the last is older, or it
   was skipped, each saying what to do, and a **fail** when the last test failed, with the reason.

@@ -648,3 +648,181 @@ def test_derive_is_pure(monkeypatch: pytest.MonkeyPatch) -> None:
     second = stays.derive(lines, settings, places=[], assets={}, tz=TZ)
     assert first.segments == second.segments
     assert [s.kind for s in first.segments] == ["stay", "move", "stop", "move", "stay"]
+
+
+# -- which events promote: the ones that happen somewhere -------------------------------------------------
+
+
+def _notion_edit(at: str) -> dict[str, Any]:
+    """A page edited in Notion, as `sync notion` writes it: a title, the page and who acted, no place."""
+    return {
+        "at": at,
+        "source": "notion",
+        "kind": "event",
+        "tier": 1,
+        "payload": {
+            "schema": "event/v1",
+            "raw_id": f"0f1e2d3c4b5a69788796a5b4c3d2e1f0/{DAY}/edited",
+            "title": "Boat jobs",
+            "calendar": {"id": "notion", "name": "Notion"},
+            "all_day": False,
+            "modified_at": at,
+            "extra": {
+                "action": "edited",
+                "page": {"id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0"},
+                "path": ["Boat"],
+                "actor": {"id": "u-ines", "name": "Ines Nordmann", "type": "person", "role": "owner"},
+            },
+        },
+    }
+
+
+def _drive_edit_by_another(at: str, end: str) -> dict[str, Any]:
+    """Ola editing a file of the owner's in Drive, as `sync drive` writes it: an hour folded, no place."""
+    return {
+        "at": at,
+        "end": end,
+        "source": "drive",
+        "kind": "event",
+        "tier": 1,
+        "payload": {
+            "schema": "event/v1",
+            "raw_id": "1AbCdEfGhIjKlMnOp/edit@2026-06-10T07Z/0123456789ab",
+            "title": "Edited Crew list ×3",
+            "calendar": {"id": "google-drive", "name": "Google Drive"},
+            "all_day": False,
+            "modified_at": end,
+            "extra": {
+                "activity": "edit",
+                "count": 3,
+                "file": {"id": "1AbCdEfGhIjKlMnOp", "name": "Crew list"},
+                "actors": [{"kind": "user", "person_name": "people/100000000000000000001"}],
+                "by_owner": False,
+            },
+        },
+    }
+
+
+def _home_arrival(at: str, structure: str | None = None) -> dict[str, Any]:
+    """Google Home's `Arrived home`, as the Takeout Home App adapter writes it; with no home named,
+    the line carries no `location`, and its source still says it happened at the door."""
+    payload: dict[str, Any] = {
+        "schema": "event/v1",
+        "raw_id": f"home:{at}",
+        "title": "Arrived home",
+        "calendar": {"id": "google-home", "name": "Google Home"},
+        "all_day": False,
+        "extra": {"activity": "arrival"},
+    }
+    if structure:
+        payload["location"] = structure
+    return {"at": at, "source": "google-takeout", "kind": "event", "tier": 1, "payload": payload}
+
+
+def _cafe(data: dict[str, Any]) -> dict[str, Any]:
+    cafe: dict[str, Any] = _owner(data)[2]
+    assert abs(cafe["lat"] - CAFE[0]) < 0.001
+    return cafe
+
+
+def test_a_notion_edit_inside_a_ten_minute_stop_does_not_promote_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _record(tmp_path, monkeypatch, _morning_with_cafe([_notion_edit(_utc(DAY, "09:15"))]))
+    data = _derive_json(capsys, "--day", DAY)
+    assert [s["kind"] for s in _owner(data)] == ["stay", "move", "stop", "move", "stay"]
+    assert _cafe(data)["attached"] == {} and _cafe(data)["promoted"] is False
+
+
+def test_a_calendar_entry_inside_a_ten_minute_stop_promotes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A calendar is a physical source: its entry promotes with no location and nobody invited."""
+    entry = _event(_utc(DAY, "09:14"), _utc(DAY, "09:20"), "Coffee")
+    assert "location" not in entry["payload"] and "attendees" not in entry["payload"]
+    _record(tmp_path, monkeypatch, _morning_with_cafe([entry]))
+    data = _derive_json(capsys, "--day", DAY)
+    assert [s["kind"] for s in _owner(data)] == ["stay", "move", "stay", "move", "stay"]
+    assert _cafe(data)["attached"] == {"event": 1} and _cafe(data)["promoted"] is True
+
+
+def test_a_drive_edit_by_another_actor_does_not_promote_the_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    edit = _drive_edit_by_another(_utc(DAY, "09:10"), _utc(DAY, "09:40"))  # overlaps the whole stop
+    _record(tmp_path, monkeypatch, _morning_with_cafe([edit]))
+    data = _derive_json(capsys, "--day", DAY)
+    assert [s["kind"] for s in _owner(data)] == ["stay", "move", "stop", "move", "stay"]
+    assert _cafe(data)["promoted"] is False
+
+
+@pytest.mark.parametrize(
+    "where",
+    [
+        {"location": "Kafé Solvind, Storgata 1"},
+        {"attendees": [{"ref": {"kind": "email", "value": "ola@example.org"}, "name": "Ola Nordmann"}]},
+    ],
+    ids=["location", "attendees"],
+)
+def test_an_event_of_any_source_that_carries_a_place_or_people_promotes(
+    where: dict[str, Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    line = _notion_edit(_utc(DAY, "09:15"))
+    line["payload"].update(where)
+    _record(tmp_path, monkeypatch, _morning_with_cafe([line]))
+    data = _derive_json(capsys, "--day", DAY)
+    assert _cafe(data)["kind"] == "stay" and _cafe(data)["promoted"] is True
+
+
+@pytest.mark.parametrize("structure", [None, "Home"], ids=["no-home-named", "home-named"])
+def test_a_google_home_arrival_promotes_whether_or_not_it_names_the_home(
+    structure: str | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _record(tmp_path, monkeypatch, _morning_with_cafe([_home_arrival(_utc(DAY, "09:15"), structure)]))
+    data = _derive_json(capsys, "--day", DAY)
+    assert _cafe(data)["promoted"] is True
+
+
+def test_the_day_shows_a_digital_event_under_a_stop_and_the_stop_stays_a_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The Day still attaches the edit to the row it falls in; it does not make the row a stay."""
+    _record(
+        tmp_path,
+        monkeypatch,
+        _morning_with_cafe(
+            [_notion_edit(_utc(DAY, "09:15")), _drive_edit_by_another(_utc(DAY, "09:16"), _utc(DAY, "09:18"))]
+        ),
+    )
+    cli.main(["day", DAY, "--json"])
+    day = json.loads(capsys.readouterr().out)
+    [row] = [e for e in day["timeline"] if e["kind"] in ("stay", "stop") and abs(e["lat"] - CAFE[0]) < 0.001]
+    assert row["kind"] == "stop" and row["promoted"] is False
+    assert sorted(e["title"] for e in row["attached"]["events"]) == ["Boat jobs", "Edited Crew list ×3"]
+
+
+def test_the_index_reading_promotes_by_the_same_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`places propose` reads the owner's stays from the index (`reading.owner_track`): the same rule,
+    so the same stays — the Notion edit's stop is not one, the calendar entry's is."""
+    from logbook.core import reading
+
+    digital = [
+        _notion_edit(_utc(DAY, "09:15")),
+        _drive_edit_by_another(_utc(DAY, "09:10"), _utc(DAY, "09:40")),
+    ]
+    lb = _record(tmp_path, monkeypatch, _morning_with_cafe(digital))
+    track = reading.owner_track(lb, DAY, DAY)
+    assert not [s for s in track.stays if abs((s.lat or 0) - CAFE[0]) < 0.001]
+    assert all(s.attached == {} for s in track.stays), "neither edit is evidence anywhere"
+
+    calendar_day = _morning_with_cafe([_event(_utc(DAY, "09:14"), _utc(DAY, "09:20"), "Coffee")])
+    lb = _record(tmp_path / "second", monkeypatch, calendar_day)
+    track = reading.owner_track(lb, DAY, DAY)
+    [cafe] = [s for s in track.stays if abs((s.lat or 0) - CAFE[0]) < 0.001]
+    assert cafe.promoted and cafe.attached == {"event": 1}

@@ -14,6 +14,10 @@ unchanged one appends nothing. `status` is `done` for `completed`, else `open`; 
 task id), `modified_at`; `extra` carries `hidden`, `deleted` (counted) and `links` as
 `{type, description, url}`. A task with no title is skipped and counted. Pure: no network, never
 writes the source.
+
+`draft` is the mapping, and `sync gtasks` calls it too (ADR 0017): the Tasks API answers with the
+task objects Takeout writes here, so a task seen live and the same task in a later export are one
+line by `(source, raw_id)`, in either order.
 """
 
 from __future__ import annotations
@@ -25,6 +29,8 @@ from pathlib import Path
 from typing import Any
 
 from . import SOURCE
+
+__all__ = ["KIND", "NAME", "SCHEMA", "SOURCE", "TIER", "draft", "run", "sniff"]
 
 NAME = "google-takeout-tasks"
 KIND = "task"
@@ -89,9 +95,9 @@ def run(
             for task in task_list.get("items") or []:
                 if not isinstance(task, dict):
                     continue
-                draft = _draft(task, name, timezone or "UTC", counts)
-                if draft is not None and (since is None or draft["at"] >= since):
-                    drafts.append(draft)
+                line = draft(task, name, timezone or "UTC", counts)
+                if line is not None and (since is None or line["at"] >= since):
+                    drafts.append(line)
     yield from sorted(drafts, key=lambda d: (d["at"], d["payload"]["raw_id"]))
 
 
@@ -99,7 +105,9 @@ def _count(counts: dict[str, int], key: str) -> None:
     counts[key] = counts.get(key, 0) + 1
 
 
-def _draft(task: dict[str, Any], list_name: str, tz: str, counts: dict[str, int]) -> dict[str, Any] | None:
+def draft(task: dict[str, Any], list_name: str, tz: str, counts: dict[str, int]) -> dict[str, Any] | None:
+    """One task/v1 line draft for one task object, as Takeout and the Tasks API both spell it, in the
+    list called `list_name`; None for a task with no title or no time, counted."""
     title = " ".join(str(task.get("title") or "").split())
     if not title:
         _count(counts, NO_TITLE)

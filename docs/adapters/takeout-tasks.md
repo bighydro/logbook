@@ -31,4 +31,13 @@ One `task/v1` line per task (RFC 0016), subtasks lines of their own, tier 2, sou
 `--since` cuts on `at`. Nothing is written back and nothing is fetched. `logbook promises` reads
 these lines when it closes a proposal (SPEC §3.2, *Promises*); a reader never changes a task.
 
+## Live: `logbook sync gtasks`
+
+`sync gtasks` asks the Tasks API for the same task objects and hands them to this adapter's mapping
+(ADR 0017), so a task it saw and the same task in an export are one line by `(source, raw_id)`, whichever
+came first: import the export after a month of `sync` and only what `sync` never saw is added; import it
+first and `sync` carries on from its newest task. A live line differs in what only the record knows —
+`supersedes` the task's earlier line, `extra.open_for_s` on a done one — and in the notes, which it keeps
+as `extra.notes` `{sha256, words}`, never the words ([the tour](../tour.md#google-tasks)).
+
 The fixture is `tests/fixtures/takeout/Tasks/Tasks.json`, the Oslo persona's lists.

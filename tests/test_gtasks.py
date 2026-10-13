@@ -1,8 +1,9 @@
-"""`logbook sync gtasks`: the owner's Google Tasks as events, from the Tasks API v1, read-only, with the
-service account `sync drive` uses (`tests/test_service_account.py`). A task seen open for the first time
-is a `created` line, a task done is a `completed` line with how long it was open; a due day passing is no
-event, an edit is no second `created`, a deletion writes nothing. The title is the line's title; the notes
-are never stored, only their digest and word count.
+"""`logbook sync gtasks`: the owner's Google Tasks as `task/v1` (RFC 0016), from the Tasks API v1, read-only,
+with the service account `sync drive` uses (`tests/test_service_account.py`). A task is a snapshot: one line
+per task as it stands when it last changed, the same mapping and the same `(source, raw_id)` as the Takeout
+Tasks adapter, so a Takeout export of tasks already seen live writes nothing, and the other way round
+(ADR 0017). A done snapshot says how long the task was open, from the first open snapshot the record holds.
+The notes are never stored, only their digest and word count.
 
 Against the in-process fake of `tests/google_fake.py`: Ines Nordmann's two lists, Inbox and Boat. Nobody
 in them exists, and nothing leaves the process (`no_network`)."""
@@ -21,6 +22,7 @@ from google_fake import DRIVE_SCOPE, TASKS_SCOPE, USER, Fake, private_key, write
 from logbook import cli
 from logbook.contrib import adapters, doctor
 from logbook.contrib.adapters import drive, gtasks, service_account
+from logbook.contrib.adapters.takeout import tasks as takeout_tasks
 from logbook.core.store import Logbook
 
 KEY_ENV, USER_ENV = service_account.KEY_ENV, service_account.USER_ENV
@@ -73,7 +75,15 @@ def _tasks() -> dict[str, list[dict[str, Any]]]:
     }
 
 
-LINES = 5  # created t1, t3, t7; completed t2, t5 (first seen done: no created line)
+LINES = 6  # t1, t2, t3, t4 (deleted: still a line, RFC 0016 rule 5), t5, t7; t6 has no title
+KEYS = [
+    "t1@2026-09-14T08:00:00Z",
+    "t2@2026-09-14T10:05:00Z",
+    "t3@2026-09-14T09:00:00Z",
+    "t4@2026-09-14T09:30:00Z",
+    "t5@2026-09-10T16:00:00Z",
+    "t7@2026-09-14T09:05:00Z",
+]
 
 
 @pytest.fixture(scope="module")
@@ -122,86 +132,128 @@ def _tasks_calls(fake: Fake) -> list[dict[str, Any]]:
 # -- registry and configuration -------------------------------------------------------------------
 
 
-def test_registry_has_gtasks_as_a_live_adapter_of_tier_2_event_lines() -> None:
+def test_registry_has_gtasks_as_a_live_adapter_of_tier_2_task_lines() -> None:
     assert adapters.live("gtasks") is gtasks
     assert gtasks.ENV == drive.ENV == service_account.ENV, "one place to configure both"
-    assert (gtasks.KIND, gtasks.TIER, gtasks.SCOPE) == ("event", 2, TASKS_SCOPE)
+    assert (gtasks.KIND, gtasks.TIER, gtasks.SCOPE) == ("task", 2, TASKS_SCOPE)
+    assert (
+        (gtasks.SOURCE, gtasks.SCHEMA) == (takeout_tasks.SOURCE, "task/v1") == ("google-takeout", "task/v1")
+    )
 
 
 # -- the lines ------------------------------------------------------------------------------------
 
 
-def test_pull_writes_created_for_an_open_task_and_completed_for_a_done_one(fake: Fake) -> None:
+def test_pull_writes_one_task_v1_snapshot_per_task(fake: Fake) -> None:
     drafts, counts = _pull()
-    assert sorted(_by(drafts)) == ["t1/created", "t2/completed", "t3/created", "t5/completed", "t7/created"]
+    assert sorted(_by(drafts)) == KEYS
     assert [d["at"] for d in drafts] == sorted(d["at"] for d in drafts)
-    assert counts == {"skipped_no_title": 1, "skipped_deleted": 1}
-    assert {(d["source"], d["kind"], d["tier"], d["tz"]) for d in drafts} == {
-        ("gtasks", "event", 2, "Europe/Oslo")
+    assert counts == {"skipped_no_title": 1, "deleted": 1}
+    assert {(d["source"], d["kind"], d["tier"], d["tz"], d["end"]) for d in drafts} == {
+        ("google-takeout", "task", 2, "Europe/Oslo", None)
     }
+    assert {d["payload"]["schema"] for d in drafts} == {"task/v1"}
 
 
-def test_a_created_line_has_the_title_the_list_the_due_day_and_a_reference(fake: Fake) -> None:
+def test_an_open_snapshot_has_the_title_the_list_the_due_day_and_the_parent(fake: Fake) -> None:
     drafts, _ = _pull()
-    line = _by(drafts)["t1/created"]
+    line = _by(drafts)["t1@2026-09-14T08:00:00Z"]
     payload = line["payload"]
-    assert line["at"] == "2026-09-14T08:00:00Z" and line["end"] is None
-    assert payload["title"] == "Buy the long rope"
-    assert (
-        payload["calendar"] == {"id": "google-tasks", "name": "Google Tasks"} and payload["all_day"] is False
-    )
-    assert payload["modified_at"] == "2026-09-14T08:00:00Z"
-    extra = payload["extra"]
-    assert extra["activity"] == "created" and extra["list"] == "Inbox" and extra["due"] == "2026-09-20"
-    assert extra["task"] == {"id": "t1", "list_id": "L-inbox"}
-    assert _by(drafts)["t3/created"]["payload"]["extra"]["task"]["url"] == "https://tasks.google.com/t3"
-    assert _by(drafts)["t7/created"]["payload"]["extra"]["parent"] == "t3"
+    assert line["at"] == "2026-09-14T08:00:00Z", "Google keeps no creation time: the snapshot's own"
+    assert payload["title"] == "Buy the long rope" and payload["status"] == "open"
+    assert payload["list"] == "Inbox" and payload["due"] == "2026-09-20", "a day, never the midnight instant"
+    assert payload["modified_at"] == "2026-09-14T08:00:00Z" and "completed_at" not in payload
+    assert _by(drafts)["t7@2026-09-14T09:05:00Z"]["payload"]["parent"] == "t3"
+    assert "open_for_s" not in payload.get("extra", {}), "an open task has not been open for a while yet"
 
 
 def test_the_notes_are_a_digest_and_a_word_count_never_the_words(fake: Fake) -> None:
     drafts, _ = _pull()
-    notes = _by(drafts)["t1/created"]["payload"]["extra"]["notes"]
+    payload = _by(drafts)["t1@2026-09-14T08:00:00Z"]["payload"]
     plain = NOTES.replace("\r\n", "\n")
-    assert notes == {"sha256": hashlib.sha256(plain.encode("utf-8")).hexdigest(), "words": 8}
+    assert "notes" not in payload, "the profile's `notes` is the words, which this source never keeps"
+    assert payload["extra"]["notes"] == {
+        "sha256": hashlib.sha256(plain.encode("utf-8")).hexdigest(),
+        "words": 8,
+    }
     text = json.dumps(drafts)
     assert "chandlery" not in text and "12 mm" not in text
-    assert "notes" not in _by(drafts)["t3/created"]["payload"]["extra"]
+    assert "extra" not in _by(drafts)["t3@2026-09-14T09:00:00Z"]["payload"]
 
 
-def test_a_task_first_seen_done_is_one_completed_line_open_for_an_unknown_time(fake: Fake) -> None:
+def test_a_task_first_seen_done_is_done_and_open_for_an_unknown_time(fake: Fake) -> None:
     drafts, _ = _pull()
-    line = _by(drafts)["t2/completed"]
-    assert line["at"] == "2026-09-14T10:00:00Z" and line["payload"]["title"] == "Call Ola about the mooring"
-    extra = line["payload"]["extra"]
-    assert extra["activity"] == "completed" and extra["list"] == "Inbox" and extra["open_for_s"] is None
-    assert "t2/created" not in _by(drafts), "the record never saw it open: its creation is not a line"
-    assert _by(drafts)["t5/completed"]["at"] == "2026-09-10T16:00:00Z", (
-        "a done task cleared from the list too"
-    )
+    line = _by(drafts)["t2@2026-09-14T10:05:00Z"]
+    payload = line["payload"]
+    assert line["at"] == "2026-09-14T10:05:00Z" and payload["title"] == "Call Ola about the mooring"
+    assert payload["status"] == "done" and payload["completed_at"] == "2026-09-14T10:00:00Z"
+    assert payload["extra"] == {"open_for_s": None}, "the record never saw it open"
+    hidden = _by(drafts)["t5@2026-09-10T16:00:00Z"]["payload"]
+    assert hidden["status"] == "done" and hidden["extra"]["hidden"] is True, "done and cleared from the list"
 
 
-def test_completed_is_open_for_since_the_created_line_the_record_holds(fake: Fake) -> None:
-    created = {"at": "2026-09-14T08:00:00Z", "payload": {"raw_id": "t1/created"}}
-    asked: list[tuple[str, str]] = []
+def test_a_deleted_task_is_still_a_line(fake: Fake) -> None:
+    drafts, counts = _pull()
+    payload = _by(drafts)["t4@2026-09-14T09:30:00Z"]["payload"]
+    assert payload["title"] == "Old idea" and payload["extra"] == {"deleted": True}
+    assert counts["deleted"] == 1
 
-    def held(keys: Any) -> dict[tuple[str, str], dict[str, Any]]:
-        keys = list(keys)
-        asked.extend(keys)
-        return {("gtasks", "t1/created"): created} if ("gtasks", "t1/created") in keys else {}
+
+def test_a_done_snapshot_is_open_for_since_the_first_open_snapshot_and_supersedes_the_last(
+    fake: Fake,
+) -> None:
+    earlier = [
+        {
+            "id": "line-a",
+            "at": "2026-09-14T08:00:00Z",
+            "payload": {"schema": "task/v1", "raw_id": "t1@2026-09-14T08:00:00Z", "status": "open"},
+        },
+        {
+            "id": "line-b",
+            "at": "2026-09-15T07:00:00Z",
+            "payload": {"schema": "task/v1", "raw_id": "t1@2026-09-15T07:00:00Z", "status": "open"},
+        },
+        {
+            "id": "line-other",
+            "at": "2026-09-13T07:00:00Z",
+            "payload": {"schema": "task/v1", "raw_id": "t10@2026-09-13T07:00:00Z", "status": "open"},
+        },
+    ]
+    asked: list[str | None] = []
+
+    def recorded(since: str | None) -> list[dict[str, Any]]:
+        asked.append(since)
+        return earlier
 
     fake.tasks["L-inbox"][0].update(
         status="completed", completed="2026-09-16T12:00:00.000Z", updated="2026-09-16T12:00:30.000Z"
     )
-    drafts, _ = _pull(held=held)
-    line = _by(drafts)["t1/completed"]
-    assert line["at"] == "2026-09-16T12:00:00Z" and line["payload"]["extra"]["open_for_s"] == 52 * 3600
-    assert ("gtasks", "t1/created") in asked and ("gtasks", "t1/completed") in asked
+    drafts, _ = _pull(recorded=recorded)
+    line = _by(drafts)["t1@2026-09-16T12:00:30Z"]
+    payload = line["payload"]
+    assert payload["status"] == "done" and payload["completed_at"] == "2026-09-16T12:00:00Z"
+    assert payload["extra"]["open_for_s"] == 52 * 3600, "from the first open snapshot, not the latest"
+    assert payload["supersedes"] == "line-b", "the newest earlier snapshot of the same task"
+    assert asked == [None], "every snapshot the record holds, however old"
+    assert "supersedes" not in _by(drafts)["t3@2026-09-14T09:00:00Z"]["payload"]
 
 
-def test_due_passing_without_completion_is_no_event(fake: Fake) -> None:
-    drafts, _ = _pull()
-    assert {d["payload"]["extra"]["activity"] for d in drafts} == {"created", "completed"}
-    assert [d for d in drafts if d["payload"]["extra"]["task"]["id"] == "t1"] == [_by(drafts)["t1/created"]]
+def test_the_file_and_the_api_give_the_same_line_but_the_notes(fake: Fake, tmp_path: Path) -> None:
+    """ADR 0017: one mapping, two entrances. The Takeout export of the same tasks and the API's answer
+    are the same drafts, but for the notes, which this source keeps as a digest."""
+    live, _ = _pull()
+    from_file = list(takeout_tasks.run(_export(tmp_path, fake), timezone="Europe/Oslo"))
+    assert sorted(_by(from_file)) == KEYS
+
+    def without_notes(draft: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(draft["payload"])
+        payload.pop("notes", None)
+        extra = {
+            k: v for k, v in (payload.pop("extra", None) or {}).items() if k not in ("notes", "open_for_s")
+        }
+        return {**draft, "payload": {**payload, **({"extra": extra} if extra else {})}}
+
+    assert [without_notes(d) for d in live] == [without_notes(d) for d in from_file]
 
 
 # -- what is asked, and how -----------------------------------------------------------------------
@@ -217,7 +269,12 @@ def test_every_list_is_asked_for_every_task_done_hidden_and_deleted_from_since(f
 
 def test_since_keeps_the_tasks_changed_from_then_on(fake: Fake) -> None:
     drafts, _ = _pull(since="2026-09-14T09:00:00Z")
-    assert sorted(_by(drafts)) == ["t2/completed", "t3/created", "t7/created"]
+    assert sorted(_by(drafts)) == [
+        "t2@2026-09-14T10:05:00Z",
+        "t3@2026-09-14T09:00:00Z",
+        "t4@2026-09-14T09:30:00Z",
+        "t7@2026-09-14T09:05:00Z",
+    ]
 
 
 def test_pull_pages_lists_and_tasks_until_the_last_page(fake: Fake) -> None:
@@ -245,7 +302,7 @@ def test_the_client_only_reads(fake: Fake) -> None:
 
 def test_watermark_is_the_tasks_last_change_and_resume_looks_back_a_day(fake: Fake) -> None:
     drafts, _ = _pull()
-    line = _by(drafts)["t2/completed"]
+    line = _by(drafts)["t2@2026-09-14T10:05:00Z"]
     assert gtasks.watermark(line) == "2026-09-14T10:05:00Z"
     assert gtasks.resume(_config(), "2026-09-14T10:05:00Z") == "2026-09-13T10:05:00Z"
     assert gtasks.group(line) == "Inbox"
@@ -263,17 +320,41 @@ def _sync(*args: str, source: str = "gtasks") -> int:
 
 
 def _lines(lb: Logbook) -> dict[str, dict[str, Any]]:
-    return {line["payload"]["raw_id"]: line for line in lb.lines() if line["source"] == "gtasks"}
+    return {line["payload"]["raw_id"]: line for line in lb.lines() if line["kind"] == "task"}
+
+
+def _export(tmp_path: Path, fake: Fake) -> Path:
+    """The tasks the fake serves as Takeout writes them, `Takeout/Tasks/Tasks.json`: the API's own task
+    objects under their lists."""
+    path = tmp_path / "Takeout" / "Tasks" / "Tasks.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "kind": "tasks#taskLists",
+        "items": [
+            {**task_list, "items": [dict(t) for t in fake.tasks[task_list["id"]]]} for task_list in LISTS
+        ],
+    }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return path
+
+
+def _add(path: Path, capsys: Any) -> str:
+    cli.main(["add", str(path)])
+    out: str = capsys.readouterr().out
+    return out
 
 
 def test_sync_first_run_writes_every_line_and_the_second_none(lb: Logbook, fake: Fake, capsys: Any) -> None:
     assert _sync() == 0
     out = capsys.readouterr().out
     assert f"gtasks: {LINES} new lines of {LINES} seen from the beginning" in out
-    assert "Inbox: 2 new of 2 seen" in out and "Boat: 3 new of 3 seen" in out
-    assert "skipped 1 without a title, 1 deleted" in out
+    assert "Inbox: 2 new of 2 seen" in out and "Boat: 4 new of 4 seen" in out
+    assert "skipped 1 without a title" in out and "1 marked for deletion" in out
     seq, _head, errors = lb.verify()
     assert errors == [] and seq == LINES
+    assert {(line["source"], line["kind"], line["tier"]) for line in lb.lines()} == {
+        ("google-takeout", "task", 2)
+    }
     state = json.loads((lb.root / "state" / "gtasks.json").read_text(encoding="utf-8"))
     assert state["since"] == "2026-09-14T10:05:00Z"
     assert _sync() == 0
@@ -281,7 +362,52 @@ def test_sync_first_run_writes_every_line_and_the_second_none(lb: Logbook, fake:
     assert lb.meta["seq"] == LINES
 
 
-def test_sync_a_task_done_later_is_completed_with_how_long_it_was_open(
+def test_logbook_tasks_lists_a_task_seen_live(lb: Logbook, fake: Fake, capsys: Any) -> None:
+    _sync()
+    capsys.readouterr()
+    cli.main(["tasks", "--json"])
+    report = json.loads(capsys.readouterr().out)
+    by_title = {t["title"]: t for t in report["tasks"]}
+    rope = by_title["Buy the long rope"]
+    assert (rope["status"], rope["due"], rope["list"], rope["key"]) == ("open", "2026-09-20", "Inbox", "t1")
+    assert rope["source"] == "google-takeout"
+    assert by_title["Call Ola about the mooring"]["status"] == "done"
+    cli.main(["tasks", "--open"])
+    out = capsys.readouterr().out
+    assert "Buy the long rope" in out and "Renew the boat insurance" in out
+    assert "Call Ola about the mooring" not in out
+
+
+def test_a_takeout_export_of_the_tasks_seen_live_writes_nothing(
+    lb: Logbook, fake: Fake, capsys: Any, tmp_path: Path
+) -> None:
+    assert _sync() == 0
+    capsys.readouterr()
+    out = _add(_export(tmp_path, fake), capsys)
+    assert "added 0 lines from google-takeout-tasks" in out
+    assert lb.meta["seq"] == LINES
+
+
+def test_a_live_sync_after_a_takeout_export_of_the_same_tasks_writes_nothing(
+    lb: Logbook, fake: Fake, capsys: Any, tmp_path: Path
+) -> None:
+    out = _add(_export(tmp_path, fake), capsys)
+    assert f"added {LINES} lines from google-takeout-tasks" in out
+    assert _sync() == 0
+    out = capsys.readouterr().out
+    assert "starting from the record's newest gtasks task, 2026-09-14T10:05:00Z, less the lookback" in out, (
+        "the first sync carries on where the export ended (ADR 0017)"
+    )
+    assert "gtasks: 0 new lines of 5 seen since 2026-09-13T10:05:00Z" in out
+    assert lb.meta["seq"] == LINES
+    assert _sync("--since", "2026-01-01T00:00:00Z") == 0
+    assert f"gtasks: 0 new lines of {LINES} seen" in capsys.readouterr().out, "every task, none new"
+    assert "chandlery" in _lines(lb)["t1@2026-09-14T08:00:00Z"]["payload"]["notes"], (
+        "the first to arrive stands: the export's line, with the words it carries"
+    )
+
+
+def test_sync_a_task_done_later_is_a_done_snapshot_with_how_long_it_was_open(
     lb: Logbook, fake: Fake, capsys: Any
 ) -> None:
     _sync()
@@ -290,47 +416,65 @@ def test_sync_a_task_done_later_is_completed_with_how_long_it_was_open(
     )
     assert _sync() == 0
     assert "gtasks: 1 new lines of" in capsys.readouterr().out
-    done = _lines(lb)["t1/completed"]
-    assert done["payload"]["extra"]["open_for_s"] == 52 * 3600 and done["tier"] == 2
+    lines = _lines(lb)
+    done = lines["t1@2026-09-16T12:00:30Z"]
+    assert done["payload"]["status"] == "done" and done["tier"] == 2
+    assert done["payload"]["extra"]["open_for_s"] == 52 * 3600
+    assert done["payload"]["supersedes"] == lines["t1@2026-09-14T08:00:00Z"]["id"]
+    cli.main(["tasks", "--open"])
+    assert "Buy the long rope" not in capsys.readouterr().out, "the newest snapshot is the task's state"
 
 
-def test_sync_a_task_updated_twice_is_not_two_created_lines(lb: Logbook, fake: Fake, capsys: Any) -> None:
+def test_a_done_task_backfilled_open_from_takeout_is_open_for_since_the_export(
+    lb: Logbook, fake: Fake, capsys: Any, tmp_path: Path
+) -> None:
+    _add(_export(tmp_path, fake), capsys)
+    fake.tasks["L-inbox"][0].update(
+        status="completed", completed="2026-09-16T12:00:00.000Z", updated="2026-09-16T12:00:30.000Z"
+    )
+    assert _sync() == 0
+    done = _lines(lb)["t1@2026-09-16T12:00:30Z"]
+    assert done["payload"]["extra"]["open_for_s"] == 52 * 3600
+
+
+def test_sync_an_edited_task_is_a_new_snapshot_and_an_unchanged_one_appends_nothing(
+    lb: Logbook, fake: Fake, capsys: Any
+) -> None:
     _sync()
     boat = fake.tasks["L-boat"][0]
     boat.update(title="Renew the boat insurance before October", updated="2026-09-15T09:00:00.000Z")
     assert _sync() == 0
-    boat.update(notes="Two quotes.", updated="2026-09-15T10:00:00.000Z")
-    capsys.readouterr()
+    assert "gtasks: 1 new lines of" in capsys.readouterr().out
     assert _sync() == 0
     assert "gtasks: 0 new lines of" in capsys.readouterr().out
-    created = [key for key in _lines(lb) if key.startswith("t3/")]
-    assert created == ["t3/created"] and lb.meta["seq"] == LINES
-    assert _lines(lb)["t3/created"]["payload"]["title"] == "Renew the boat insurance", (
-        "the line is never rewritten"
+    snapshots = sorted(key for key in _lines(lb) if key.startswith("t3@"))
+    assert snapshots == ["t3@2026-09-14T09:00:00Z", "t3@2026-09-15T09:00:00Z"]
+    assert _lines(lb)["t3@2026-09-14T09:00:00Z"]["payload"]["title"] == "Renew the boat insurance", (
+        "the earlier snapshot is never rewritten"
     )
+    assert lb.meta["seq"] == LINES + 1
 
 
-def test_sync_a_deleted_task_writes_nothing_new(lb: Logbook, fake: Fake, capsys: Any) -> None:
+def test_sync_a_task_deleted_later_is_a_deleted_snapshot(lb: Logbook, fake: Fake, capsys: Any) -> None:
     _sync()
     fake.tasks["L-boat"][3].update(deleted=True, updated="2026-09-15T08:00:00.000Z")
     assert _sync() == 0
     out = capsys.readouterr().out
-    assert "gtasks: 0 new lines of" in out and "1 deleted" in out
-    assert lb.meta["seq"] == LINES and "t7/created" in _lines(lb), "what was written stays"
-
-
-def test_sync_a_reopened_task_never_seen_open_is_no_created_line(lb: Logbook, fake: Fake) -> None:
-    _sync()
-    fake.tasks["L-inbox"][1].update(status="needsAction", updated="2026-09-15T08:00:00.000Z")
-    del fake.tasks["L-inbox"][1]["completed"]
-    assert _sync() == 0
-    assert "t2/created" not in _lines(lb) and lb.meta["seq"] == LINES
+    assert "gtasks: 1 new lines of" in out and "1 marked for deletion" in out
+    lines = _lines(lb)
+    assert lines["t7@2026-09-15T08:00:00Z"]["payload"]["extra"] == {"deleted": True}
+    assert "t7@2026-09-14T09:05:00Z" in lines, "what was written stays"
 
 
 def test_sync_since_is_used_as_given(lb: Logbook, fake: Fake, capsys: Any) -> None:
     assert _sync("--since", "2026-09-14T09:00:00Z") == 0
-    assert "gtasks: 3 new lines of 3 seen since 2026-09-14T09:00:00Z" in capsys.readouterr().out
-    assert sorted(_lines(lb)) == ["t2/completed", "t3/created", "t7/created"]
+    assert "gtasks: 4 new lines of 4 seen since 2026-09-14T09:00:00Z" in capsys.readouterr().out
+    assert sorted(_lines(lb)) == [
+        "t2@2026-09-14T10:05:00Z",
+        "t3@2026-09-14T09:00:00Z",
+        "t4@2026-09-14T09:30:00Z",
+        "t7@2026-09-14T09:05:00Z",
+    ]
 
 
 def test_sync_dry_run_counts_and_writes_nothing(lb: Logbook, fake: Fake, capsys: Any) -> None:
@@ -382,7 +526,7 @@ def test_sync_all_runs_both_with_the_two_variables_and_nothing_else(
         ["drive", "ok"],
         ["gtasks", "ok"],
     ]
-    assert {line["source"] for line in lb.lines()} == {"drive", "gtasks"}
+    assert {line["source"] for line in lb.lines()} == {"drive", "google-takeout"}
 
 
 def test_both_are_registered_live_sources_sync_all_takes() -> None:

@@ -217,7 +217,8 @@ def test_every_source_on_the_key_runs_and_no_token_is_ever_written(
     assert out.splitlines()[0] == "running gmail, gcal, drive, gtasks"
     summary = out[out.index("sync --all:") :].splitlines()[1:]
     assert [line.split()[:2] for line in summary] == [[name, "ok"] for name in service_account.SOURCES]
-    assert {line["source"] for line in lb.lines()} == {"mail", "ics", "drive", "gtasks"}
+    # each under the source its file side writes (ADR 0017): gmail as `mail`, gtasks as Takeout Tasks
+    assert {line["source"] for line in lb.lines()} == {"mail", "ics", "drive", "google-takeout"}
     scopes = set(fake.issued.values())
     assert scopes == set(service_account.SCOPES.values()), "a token per scope, each minted once"
     secrets = [t.encode() for t in fake.issued] + [b"access_token", b"refresh_token", b"Bearer "]

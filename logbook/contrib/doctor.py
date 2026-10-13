@@ -44,9 +44,11 @@ The checks, in the order they print:
   names this machine, or no home is set (a pass either way); another machine is a warn: writers
   belong on the home.
 - `last-run`: when the schedule (`sync --install-schedule`) last ran `sync --scheduled`, from
-  `state/last-run.json`, and whether it was clean: a run older than 26 hours, or one in which a source
-  failed or a check failed, is a warn. No file: a pass when no schedule is installed here, a warn when
-  one is and has not run yet.
+  `state/last-run.json` whichever install wrote it (the user's agents or timers, the system's with
+  `--system`, or none on this machine), and whether it was clean: a run older than 26 hours, or one in
+  which a source failed or a check failed, is a warn. No file: a pass when no schedule is installed
+  here, a warn when one is and has not run yet. Both the user's and the system's installed is a warn
+  whatever the run said: each runs every source at the same times.
 - `restore-test`: the last `backup --restore-test` (`state/last-restore-test.json`) passed within 35
   days (the schedule runs it on the first Sunday of the month); none, older, or skipped is a warn saying
   what to do; failed is a fail with the reason.
@@ -486,9 +488,10 @@ RESTORE_TEST = (
 )
 
 
-def schedule_installed(env: Mapping[str, str]) -> bool:
-    """Whether this machine has the agents or timers `sync --install-schedule` writes, the user's or,
-    with `--system`, the system's copies."""
+def schedules_installed(env: Mapping[str, str]) -> list[str]:
+    """Which installs of the schedule this machine has, in this order: `user`, the agents or timers
+    `sync --install-schedule` writes, and `system`, the system's copies of `--system`'s (whichever
+    account they run as)."""
     xdg = env.get("XDG_CONFIG_HOME", "").strip()
     config, root = (Path(xdg).expanduser() if xdg else None), serve_service.SYSTEM_ROOT
     try:
@@ -499,22 +502,46 @@ def schedule_installed(env: Mapping[str, str]) -> bool:
             for user in (None, "-")
         ]
     except schedule.ScheduleError:
-        return False
-    return any(schedule.installed(plan) for plan in plans)
+        return []
+    return [which for which, plan in zip(("user", "system"), plans, strict=True) if schedule.installed(plan)]
+
+
+def schedule_installed(env: Mapping[str, str]) -> bool:
+    """Whether this machine has the agents or timers `sync --install-schedule` writes, the user's or,
+    with `--system`, the system's copies."""
+    return bool(schedules_installed(env))
+
+
+def _twice(system: str) -> str:
+    """The warning for a machine with both installs: each runs every source at the same four times."""
+    user, system_wide = (
+        ("launchd agents", "launchd daemons")
+        if system == "darwin"
+        else ("systemd user timers", "systemd system timers")
+    )
+    return (
+        f"the schedule is installed twice, as {user} and as {system_wide}: every run happens twice; keep one"
+        " (`logbook sync --uninstall-schedule` removes the user's, `--uninstall-schedule --system` says how"
+        " to remove the system's)"
+    )
 
 
 def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
-    """`state/last-run.json`: the last scheduled run, when, and whether it was clean."""
+    """`state/last-run.json`: the last scheduled run, when, and whether it was clean, whichever install
+    of the schedule wrote it; a warn besides when both the user's and the system's are installed."""
     try:
         state = last_run.read(lb.root)
     except last_run.LastRunError as e:
         return Check("last-run", "warn", str(e))
+    installs = schedules_installed(env)
+    twice = f"; {_twice(schedule.system())}" if len(installs) > 1 else ""
     if state is None:
-        if schedule_installed(env):
+        if installs:
             return Check(
                 "last-run",
                 "warn",
-                "the schedule is installed but has not run yet; wait for 00:00, 06:00, 12:00 or 18:00",
+                "the schedule is installed but has not run yet; wait for 00:00, 06:00, 12:00 or 18:00"
+                + twice,
             )
         return Check("last-run", "pass", f"no schedule on this machine; {INSTALL}")
     run = state.run
@@ -526,13 +553,13 @@ def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
     if age > last_run.STALE_AFTER:
         hours = round(last_run.STALE_AFTER.total_seconds() / 3600)
         return Check(
-            "last-run", "warn", f"{detail}; more than {hours} h ago: is the schedule still installed?"
+            "last-run", "warn", f"{detail}; more than {hours} h ago: is the schedule still installed?{twice}"
         )
     if run.doctor is None and age > timedelta(hours=3):
-        return Check("last-run", "warn", f"{detail}; the run did not finish")
+        return Check("last-run", "warn", f"{detail}; the run did not finish{twice}")
     if run.failed:
-        return Check("last-run", "warn", f"{detail}; first failing line: {run.first_failing}")
-    return Check("last-run", "pass", detail)
+        return Check("last-run", "warn", f"{detail}; first failing line: {run.first_failing}{twice}")
+    return Check("last-run", "warn" if twice else "pass", detail + twice)
 
 
 def restore_test_check(lb: Logbook) -> Check:

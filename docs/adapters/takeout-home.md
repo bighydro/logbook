@@ -46,7 +46,8 @@ recording or clip is opened.
 The Day (SPEC §3.2.3) decides the night from the owner's stays: the stay with the longest overlap of
 the night window is the night, at home when it lies in a place of kind `home`. These lines are the
 evidence that goes with it. An `event/v1` line inside a cluster of the owner's points promotes a
-short cluster to a stay (rule 5) and is attached to it, so `logbook day` shows *Alarm armed (home)*
+short cluster to a stay (rule 5: Google Home's history is a source that happened somewhere, so an
+arrival promotes whether or not it names the home) and is attached to it, so `logbook day` shows *Alarm armed (home)*
 under the night's stay and a ten-minute cluster at home with an arrival inside it is a stay, not a
 stop. What the lines do not do yet is stand in for the track: a night with no location points at
 all has no stay to attach to, and the Day does not read an arrival at 23:00 and a departure at

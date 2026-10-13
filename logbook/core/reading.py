@@ -14,7 +14,10 @@ the same window, clustered from what the index serves without a line read from t
 owner's points and the registered assets' (`Index.locations`), the evidence that promotes a stay
 (`Index.evidence`), the retracted ids (`Index.superseded`) — so two years of a record of millions
 of lines are read in seconds. The only lines read whole are the Google Timeline visits, found
-through the index by their `raw_id`. The same window and the same rules as `read`, so the stays
+through the index by their `raw_id`, and the events of a source that is not a calendar
+(`Index.of_kind`, one source at a time): whether such an event promotes depends on what its payload
+carries (`stays.somewhere`), which the index's columns do not hold. A calendar's entries promote
+whatever they carry and are never read. The same window and the same rules as `read`, so the stays
 are the same stays.
 
 `read(..., tiers=(1,))` is the same reading through a gate (ADR 0016): only the lines whose tier is
@@ -27,6 +30,7 @@ the same gate for the lines a reader takes beside the reading (health, stories).
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
@@ -37,10 +41,11 @@ from .chain import Line
 from .day_start import DayStart
 from .export import day_range
 from .flights import Airports
-from .index import EvidenceRow, LocationRow
+from .index import EvidenceRow, Index, LocationRow
 from .places import TimelineVisit
 from .store import RETRACTION, Logbook, retractions
 
+EVENT = "event"  # the one evidence kind whose lines are read whole (`stays.somewhere`)
 fromisoformat = (
     datetime.fromisoformat
 )  # a bound method, looked up once for a comprehension over a million rows
@@ -225,7 +230,8 @@ def owner_track(lb: Logbook, first: str, last: str, airports: Airports | None = 
             subject: _track(idx.locations(first, spill, subject), subject, start, end)
             for subject in (None, *sorted(registered))
         }
-        evidence = _evidence(idx.evidence(stays.EVIDENCE, first, spill), start, end)
+        retracted = frozenset(idx.superseded(RETRACTION))
+        evidence = _evidence(_somewhere(idx, first, spill, retracted), start, end)
         derived = stays.derive_tracks(
             {subject: track for subject, track in tracks.items() if track},
             evidence,
@@ -239,7 +245,6 @@ def owner_track(lb: Logbook, first: str, last: str, airports: Airports | None = 
         found = [s for s in derived.segments if s.subject is None and s.kind == stays.STAY]
         ids = idx.ids(seq for s in found for seq in (s.first_seq, s.last_seq) if seq is not None)
         visits = idx.of_source("location", places.TIMELINE_SOURCE, first, spill, places.TIMELINE_VISIT_RAW_ID)
-        retracted = frozenset(idx.superseded(RETRACTION))
     standing = [
         line
         for line in visits
@@ -320,6 +325,33 @@ def _evidence(rows: list[EvidenceRow], start: datetime, end: datetime) -> list[s
             if (at := stays.instant(text)) is not None
         ]
     return [e for e in found if start <= e.at < end]
+
+
+def _somewhere(idx: Index, first: str, last: str, retracted: frozenset[str]) -> list[EvidenceRow]:
+    """The evidence rows of [first, last] that promote, as `stays.derive` takes them from the lines:
+    every row of the evidence kinds from the index's columns, less the events that happened nowhere
+    (`stays.somewhere`). Those can only be told by their payload, so the events of each source in the
+    window that is not a calendar are read whole (through `Index.of_kind`, which a gated index cuts as
+    it cuts `Index.evidence`), and one row is set aside per standing line of them that carries no
+    place and no people; a calendar's are never read."""
+    rows = idx.evidence(stays.EVIDENCE, first, last)
+    _days, present = idx.kind_source_days(first, last, (EVENT,))
+    nowhere: Counter[tuple[str, str | None]] = Counter()
+    for _kind, source in sorted(present):
+        if source in stays.CALENDARS:
+            continue
+        for line in idx.of_kind(EVENT, first, last, source):
+            if str(line.get("id")) not in retracted and not stays.somewhere(line):
+                end = line.get("end")
+                nowhere[(str(line.get("at")), end if isinstance(end, str) and end else None)] += 1
+    kept: list[EvidenceRow] = []
+    for row in rows:
+        kind, at, end_ = row
+        if kind == EVENT and nowhere[(at, end_)] > 0:
+            nowhere[(at, end_)] -= 1
+            continue
+        kept.append(row)
+    return kept
 
 
 def _first_points_after(lines: list[Line], end: datetime) -> list[Line]:

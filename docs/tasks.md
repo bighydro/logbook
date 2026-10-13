@@ -1,7 +1,8 @@
 # Tasks
 
 `logbook tasks [--open] [--propose-done] [--json]` reads the record's tasks back: every `task/v1`
-line (RFC 0016) a task app's export left, as the task it describes, in the state it was last seen.
+line (RFC 0016) a task app's export or `logbook sync gtasks` left, as the task it describes, in the
+state it was last seen.
 `--propose-done` asks the record whether an open task was done without anyone ticking it off: a
 booking confirmation in the mail for "book flights to Zürich", a calendar entry for "call Ola", a
 card payment at the marina for "pay the berth fee at Marina Solvind". It finds them by rules, in
