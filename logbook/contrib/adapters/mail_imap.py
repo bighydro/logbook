@@ -258,7 +258,7 @@ def pull(
                         )
                         if line is None:
                             continue
-                        _gmail_fields(line["payload"], labels, thread_id)
+                        mail.gmail_fields(line["payload"], labels, thread_id)
                         ordinal += 1
                         new += 1
                         yield line
@@ -477,17 +477,6 @@ def _labels(meta: bytes) -> list[str]:
         if text:
             labels.append(text)
     return labels
-
-
-def _gmail_fields(payload: dict[str, Any], labels: list[str] | None, thread_id: str | None) -> None:
-    """The labels and the thread id as observed now, in the fields the mbox adapter uses."""
-    if labels is not None:
-        if labels:
-            payload["labels"] = labels
-        else:
-            payload.pop("labels", None)
-    if thread_id is not None:
-        payload.setdefault("extra", {})["gmail_thread_id"] = thread_id
 
 
 def _lost(shown: str, e: Exception) -> OSError:

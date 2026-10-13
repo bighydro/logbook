@@ -582,6 +582,20 @@ def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
     counts[key] = counts.get(key, 0) + n
 
 
+def gmail_fields(payload: dict[str, Any], labels: list[str] | None, thread_id: str | None) -> None:
+    """Gmail's labels and thread id as a live source observes them now (`mail_imap` from X-GM-LABELS and
+    X-GM-THRID, `gmail` from the API), in the fields this parser fills from Takeout's headers: `labels`
+    (None: the source cannot say, the line keeps what the headers gave) and `extra.gmail_thread_id`, in
+    decimal. One function, so the two live sources write the same line for the same message."""
+    if labels is not None:
+        if labels:
+            payload["labels"] = labels
+        else:
+            payload.pop("labels", None)
+    if thread_id is not None:
+        payload.setdefault("extra", {})["gmail_thread_id"] = thread_id
+
+
 def first_id(value: str | None) -> str | None:
     """The first id in a `Message-ID`, `In-Reply-To` or `References` header, without its brackets,
     or None: the rule `raw_id` is keyed by, which a live source applies to the headers alone."""

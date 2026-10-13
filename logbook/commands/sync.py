@@ -94,12 +94,13 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, granola, mail, notion, ais, adsb, weather); safe to re-run; --all for every configured"
-        " source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the 06:00 run"
-        " closes the day)."
-        " drive and gtasks: a Google Workspace service account with domain-wide delegation, read-only"
-        " (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address it reads as); a token per"
-        " run, never stored."
+        " gtasks, granola, mail, gmail, notion, ais, adsb, weather); safe to re-run; --all for every"
+        " configured source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the"
+        " 06:00 run closes the day)."
+        " gmail, gcal, drive and gtasks: one Google Workspace service account with domain-wide delegation,"
+        " read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address"
+        " it reads as); a token per run, never stored; gcal reads its iCal feeds (LOGBOOK_GCAL_URLS) only"
+        " without the two."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
         " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
@@ -115,9 +116,9 @@ def sync_arguments(sub: Subparsers) -> None:
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
         " bridges, through its local API), gcal (Google Calendar), drive (what happened to your Google Drive"
         " files: created, edited, renamed, moved, shared, commented, trashed, restored), gtasks (your Google"
-        " Tasks, created and done), granola, mail (a mailbox over IMAP, Gmail"
-        " with an app password), notion (pages created, edited, moved, archived; never their text), ais (your"
-        " vessels via aisstream.io), adsb (your aircraft via OpenSky),"
+        " Tasks, created and done), granola, mail (a mailbox over IMAP, any provider), gmail (a Gmail"
+        " mailbox over the Gmail API, the line IMAP writes), notion (pages created, edited, moved, archived;"
+        " never their text), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky),"
         " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
@@ -187,7 +188,8 @@ def sync_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="immich: walk the whole library from the beginning, whatever the watermark and the checkpoint"
         " of an interrupted walk say; mail: every folder from its first message again, the stored marks"
-        " dropped (the record still refuses what it already holds)",
+        " dropped; gmail: every message again, the history id dropped (the record still refuses what it"
+        " already holds)",
     )
     s.set_defaults(fn=cmd_sync)
 
@@ -636,7 +638,7 @@ def _sync_one(a: argparse.Namespace) -> None:
     restart = bool(getattr(a, "restart", False))  # `setup` builds its own namespace without the flag
     if restart and not walks:
         print(
-            f"sync: --restart is for a source that walks a library (immich, mail), not {a.name}",
+            f"sync: --restart is for a source that walks a library (immich, mail, gmail), not {a.name}",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -661,8 +663,9 @@ def _sync_one(a: argparse.Namespace) -> None:
     walk: WalkState | None = None
     if walks:  # before the walk: how many there are, how many are here, and where it resumes
         total = _total(adapter, config)
+        source = str(getattr(adapter, "SOURCE", adapter.NAME))  # `gmail` writes `mail` lines
         with lb.index() as idx:
-            in_record = next((int(s["lines"]) for s in idx.sources() if s["source"] == adapter.NAME), 0)
+            in_record = next((int(s["lines"]) for s in idx.sources() if s["source"] == source), 0)
         if resumes:  # the source never claims a total: what it holds is said per folder as it goes
             print(f"{a.name}: {in_record:,} {unit} already in the record")
         else:

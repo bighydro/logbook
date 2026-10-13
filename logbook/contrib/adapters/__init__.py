@@ -147,6 +147,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "adsb",
     "mail",
     "mail_imap",
+    "gmail",
     "safari",
     "shazam",
     "apple_podcasts",
