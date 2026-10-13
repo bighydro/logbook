@@ -10,11 +10,19 @@ in files beside the log, each yours to edit. `logbook setup` asks about the ones
 | your timezone | `logbook.json`, `timezone` | `logbook setup --step timezone` |
 | where your day begins | `logbook.json`, `day_start` | `logbook setup day_start 06:00` |
 | your own addresses | `logbook.json`, `owner_emails` | `logbook setup --step owner` |
+| your other names, addresses, numbers and handles | `policy/owner.json` | `logbook setup --step owner`; `handles` by hand |
 | the named places, your home | `places.json` | `logbook setup places` |
 | the assets you track | `assets.json` | `logbook setup assets` |
 | the digest's questions | `policy/questions.json` | `logbook setup questions` |
 | what may leave, and to whom | `policy/crossing.json` | by hand ([the signed day](signed-day.md)) |
 | how long a stay is, the night | `policy/stays.json` | by hand |
+
+`policy/owner.json` is `{"names": [...], "emails": [...], "phones": [...], "handles": [...]}`: the
+ways the record meets you, so you are never your own company and never a person to review. `handles`
+are your logins on a service — `ines-example`, `@ines-example`, or `github:ines-example` for GitHub's
+alone, case aside — by which `sync github` and `add github-export` mark your own commits, issues and
+comments `owner` ([GitHub](adapters/github.md)). Every key is optional: a file written before `handles`
+existed lists none.
 
 Changing a setting rewrites nothing: no line, no hash, no month file. The index is a cache of the
 record's days and is rebuilt when a setting it depends on changes (`timezone`, `day_start`).

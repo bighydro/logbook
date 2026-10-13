@@ -210,7 +210,9 @@ identifier* the observation carries, in this order and never any other way:
 2. else the **phone** number in E.164 — a `+44…` as written, a WhatsApp JID
    (`447700900101@s.whatsapp.net`) read as the number it spells, a number entered without a country
    code read with `LOGBOOK_DIAL_PREFIX` as the adapters read it;
-3. else the **name** as shown, its words folded and sorted (`Berg, Liv` and `Liv Berg` are one).
+3. else a **handle** a service names, `github:<login>`, case aside: the organizer of a GitHub line
+   ([GitHub](adapters/github.md)), named by the name the line gives (a commit's author);
+4. else the **name** as shown, its words folded and sorted (`Berg, Liv` and `Liv Berg` are one).
 
 Never from the id a source gives one observation — a speaker id, a chat guid, a message id, a line
 id. An address seen under three display names is one observed person with three names; a number
