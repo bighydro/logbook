@@ -859,6 +859,11 @@ def dream(
 # -- catch-up ----------------------------------------------------------------------------------------------
 
 
+def today() -> date:
+    """The day a catch-up counts back from: this machine's date."""
+    return date.today()
+
+
 def days_to_catch_up(today: date, days: int) -> list[str]:
     """The last `days` local days before today, oldest first; today is still being written."""
     return [(today - timedelta(days=n)).isoformat() for n in range(days, 0, -1)]
