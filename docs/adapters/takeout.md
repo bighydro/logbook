@@ -34,7 +34,7 @@ find what they need by what a header or key says, and a column that is not there
 
 | Takeout folder | Adapter (`takeout-…`) | Lines | Tier | Default |
 |---|---|---|---|---|
-| `Location History (Timeline)/`, `Records.json`, `Timeline.json` | `location` | `location/v1` | 1 | on |
+| `Location History (Timeline)/`: `Records.json`, `Semantic Location History/`; the phone exports `Timeline.json`, `location-history.json` | `location` ([below](#location-history-and-the-timeline)) | `location/v1` | 1 | on |
 | `Calendar/` | `calendar` (the `ics` adapter) | `event/v1` | 1 | on |
 | `Google Photos/` | `photos` | `photo/v1` | 1 | on |
 | `Keep/` | `keep` | `note/v1` | 2 | on |
@@ -56,8 +56,42 @@ reason (`every sign-in to every Google service; opt in`, `every search and app o
 record made before this file existed gets the same list on its first read. Remove the entry to opt in;
 `logbook sources` shows the state. An adapter existing is not a decision to run it.
 
-The first seven are described in the [adapters overview](README.md); Tasks, YouTube, Maps, the
+Location is described below; Calendar, Photos, Keep, Chrome and the rest of the first seven in the [adapters overview](README.md); Tasks, YouTube, Maps, the
 Home App and Fit have pages of their own, linked in the table. The rest:
+
+### Location History and the Timeline
+
+`takeout-location` reads four files, each sniffed by its shape, all into `location/v1` lines:
+
+| File | Where it comes from | What it holds |
+|---|---|---|
+| `Records.json` | a Takeout archive, `Location History (Timeline)/` | every raw point |
+| `Semantic Location History/<year>/<year>_<MONTH>.json` | the same archive, beside it | the visits (`placeVisit`) and the moves (`activitySegment`); a visit carries the **name and address** Google Maps knew the place by |
+| `Timeline.json` | an Android phone's own export | raw points, visits and moves; a visit has a place id and a type (`HOME`, `WORK`), no name |
+| `location-history.json` | an iPhone's own export | the same as a top-level array, with `geo:` coordinates and numbers as strings |
+
+A raw point is one line. A visit or a move is two, at its start and its end, with the source's own
+object kept whole under `extra` (`extra.placeVisit`, `extra.visit`, `extra.activity`) and its span under
+`extra.segment_start` and `segment_end`. The names in the Semantic Location History are what
+`setup places review` proposes for the places you return to ([places](../places.md#review)); nothing is
+looked up to find them.
+
+Since 2024 Google keeps Timeline on the phone, and Takeout no longer offers it for most accounts. To
+get it out:
+
+1. **On the phone**, open Google Maps, tap your profile picture, then **Your Timeline**. Open the menu
+   (⋮ on Android, ⋯ on an iPhone) and go to **Location and privacy settings**, then **Export Timeline
+   data**. (On Android the same export is also under the phone's Settings → Location → Location
+   services → Timeline.) The menu names move between app versions; the export is the entry that says
+   it saves your Timeline as a file.
+2. Save the file and copy it to the computer that holds the record: `Timeline.json` from Android,
+   `location-history.json` from an iPhone (AirDrop or the Files app).
+3. `logbook add ~/Downloads/location-history.json`. A second export later appends only what is new:
+   every line's `raw_id` is spelled from the export's own times.
+
+A Takeout archive downloaded before Google moved Timeline to the phone holds `Records.json` and the
+`Semantic Location History/` folder: `logbook add ~/Takeout/"Location History (Timeline)"` reads both.
+Keep that archive: its monthly files are the only Timeline export that names places.
 
 ### Google Pay → `transaction/v1`, `event/v1`
 

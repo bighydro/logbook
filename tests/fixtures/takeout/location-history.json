@@ -1,0 +1,46 @@
+[
+  {
+    "endTime": "2026-02-02T12:00:00.000+01:00",
+    "startTime": "2026-02-02T09:30:00.000+01:00",
+    "visit": {
+      "hierarchyLevel": "0",
+      "topCandidate": {
+        "probability": "0.812",
+        "semanticType": "Work",
+        "placeID": "ChIJ-synthetic-workshop-0003",
+        "placeLocation": "geo:55.720300,4.280000"
+      },
+      "probability": "0.95"
+    }
+  },
+  {
+    "endTime": "2026-02-02T12:40:00.000+01:00",
+    "startTime": "2026-02-02T12:00:00.000+01:00",
+    "activity": {
+      "probability": "0.99",
+      "end": "geo:55.601200,4.402100",
+      "topCandidate": {"type": "boating", "probability": "0.71"},
+      "distanceMeters": "15210.0",
+      "start": "geo:55.720300,4.280000"
+    }
+  },
+  {
+    "endTime": "2026-02-02T14:00:00.000+01:00",
+    "startTime": "2026-02-02T12:00:00.000+01:00",
+    "timelinePath": [
+      {"point": "geo:55.700000,4.300000", "durationMinutesOffsetFromStartTime": "10"},
+      {"point": "geo:55.650000,4.350000", "durationMinutesOffsetFromStartTime": "25"},
+      {"point": "geo:nan,4.360000", "durationMinutesOffsetFromStartTime": "30"},
+      {"point": "geo:55.620000,4.380000"}
+    ]
+  },
+  {
+    "endTime": "2026-02-02T15:00:00.000+01:00",
+    "startTime": "2026-02-02T14:00:00.000+01:00",
+    "visit": {
+      "hierarchyLevel": "0",
+      "topCandidate": {"probability": "0.5", "semanticType": "Unknown", "placeID": "ChIJ-synthetic-nowhere-0004"},
+      "probability": "0.5"
+    }
+  }
+]

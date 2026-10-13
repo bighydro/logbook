@@ -343,3 +343,34 @@ def test_home_is_the_place_kind_not_the_name() -> None:
     office = places.Place("Home Office", 59.91, 10.76, 120, "other")
     assert places.at_home(59.9140, 10.7523, [home, office]) is home
     assert places.at_home(59.91, 10.76, [home, office]) is None
+
+
+def test_timeline_visits_read_the_iphone_export_s_place_id_and_string_numbers() -> None:
+    """The iPhone's on-device export spells `placeID` and writes its numbers as strings."""
+    line = {
+        "id": "v1",
+        "kind": "location",
+        "source": "google-takeout",
+        "payload": {
+            "schema": "location/v1",
+            "lat": 55.7203,
+            "lon": 4.28,
+            "extra": {
+                "segment": "visit",
+                "edge": "start",
+                "segment_start": "2026-02-02T09:30:00.000+01:00",
+                "segment_end": "2026-02-02T12:00:00.000+01:00",
+                "visit": {
+                    "topCandidate": {
+                        "placeID": "ChIJ-synthetic-workshop-0003",
+                        "semanticType": "Work",
+                        "probability": "0.812",
+                        "placeLocation": "geo:55.720300,4.280000",
+                    }
+                },
+            },
+        },
+    }
+    [visit] = places.timeline_visits([line])
+    assert visit.place_id == "ChIJ-synthetic-workshop-0003"
+    assert visit.probability == 0.812 and visit.semantic_type == "Work"

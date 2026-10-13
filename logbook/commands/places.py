@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from ..core import places, reading, stays
 from ..core.chain import Line
 from ..core.export import parse_day
-from ..core.store import Logbook, now_utc
+from ..core.store import Logbook
 from .common import EN_DASH, Subparsers, _csv, _distance_text, _plural
 
 if TYPE_CHECKING:
@@ -56,7 +56,7 @@ def _places_import_takeout(lb: Logbook, a: argparse.Namespace) -> None:
 def places_arguments(sub: Subparsers) -> None:
     """`logbook setup places` (`logbook places` until 0.6)."""
     s = sub.add_parser(
-        "places", help="the named places of the record (places.json): list, add, name, propose"
+        "places", help="the named places of the record (places.json): list, add, name, propose, review"
     )
     verbs = s.add_subparsers(dest="verb", required=True)
     v = verbs.add_parser("list", help="one line per place")
@@ -99,6 +99,32 @@ def places_arguments(sub: Subparsers) -> None:
         " candidates: one near an unnamed stay suggests its name; the rest are listed for `places add`",
     )
     v.set_defaults(fn=cmd_places)
+    v = verbs.add_parser(
+        "review",
+        help="the places you return to, with the names the record already holds; accept, name or reject",
+        description="The observed places (clusters of your stays), ranked by nights then hours, each"
+        " proposed with the name the record's sources gave it and who said it, or a blank. Nothing is"
+        " looked up and nothing leaves this machine. Nothing is written unless told; on a terminal it"
+        " asks for each: y, n, or a name.",
+    )
+    v.add_argument("--top", type=int, metavar="N", help="only the first N")
+    v.add_argument("--near", metavar="PLACE", help="only those within 5 km of a named place, or of lat,lon")
+    v.add_argument(
+        "--accept", action="append", metavar="N[,N]", help="write these into places.json, with their names"
+    )
+    v.add_argument(
+        "--name",
+        nargs=2,
+        action="append",
+        metavar=("N", "NAME"),
+        help="write this one into places.json under your own name",
+    )
+    v.add_argument(
+        "--reject", action="append", metavar="N[,N]", help="never propose this name for this spot again"
+    )
+    v.add_argument("--radius", type=float, metavar="M", help="metres: one spot (default 75)")
+    v.add_argument("--json", action="store_true", help="the queue, or what was written, as one JSON object")
+    v.set_defaults(fn=cmd_places)
 
 
 def cmd_places(a: argparse.Namespace) -> None:
@@ -111,7 +137,8 @@ def cmd_places(a: argparse.Namespace) -> None:
     `--takeout` adds Google Maps' saved places as candidates (`takeout.maps.candidates`): one near a
     proposal is shown under it with its list and the day it was saved and becomes the suggested
     name; the rest are listed after the proposals for `places add`. `import-takeout` proposes
-    entries from Google Maps' saved places in bulk (`_places_import_takeout`)."""
+    entries from Google Maps' saved places in bulk (`_places_import_takeout`). `review` is the
+    observed places and the owner's say over them (`_places_review`)."""
     lb = Logbook.find()
     try:
         if a.verb == "list":
@@ -125,6 +152,8 @@ def cmd_places(a: argparse.Namespace) -> None:
             _name_place(lb, _place_from_args(a.name, lat, lon, a.radius, a.kind, a.tags))
         elif a.verb == "import-takeout":
             _places_import_takeout(lb, a)
+        elif a.verb == "review":
+            _places_review(lb, a)
         else:
             _places_propose(lb, a)
     except (places.PlaceError, stays.SettingsError, ValueError) as e:
@@ -172,12 +201,8 @@ def _number_text(value: float) -> str:
 
 def _name_place(lb: Logbook, place: places.Place) -> Line:
     """Add the place to places.json and put the naming in the record as one note/v1 line."""
-    places.add(lb.root, place)
-    text = places.naming_text(place.lat, place.lon, place.name)
-    line = lb.append(
-        at=now_utc(), source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": text}
-    )
-    print(f"{text} (#{line['seq']}); {_place_row(place)}")
+    line = places.name(lb, place)
+    print(f"{places.naming_text(place.lat, place.lon, place.name)} (#{line['seq']}); {_place_row(place)}")
     return line
 
 
@@ -293,6 +318,111 @@ def _ask_name(p: places.Proposal) -> str | None:
     if answer.casefold() == "s" or (not answer and not p.suggested):
         return ""
     return answer or p.suggested
+
+
+def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
+    """`places review [--top N] [--near PLACE] [--accept N[,N]] [--name N NAME] [--reject N[,N]]
+    [--radius M] [--json]`: the observed places at no named place, ranked and numbered, each with the
+    name the record's sources gave it and the evidence (`logbook.contrib.places_review`). Nothing is
+    written unless told: `--accept` and `--name` write places.json and one naming note each,
+    `--reject` the pair into `state/places-review.json`; every number is checked before anything is
+    written. On a terminal, with nothing told, it asks for each proposal shown."""
+    from ..contrib import places_review
+
+    radius = places_review.CLUSTER_M if a.radius is None else float(a.radius)
+    if a.top is not None and a.top < 0:
+        raise places_review.ReviewError(f"--top takes a number from 0, not {a.top}")
+    report = places_review.read(lb, radius)
+    accepted = places_review.numbers(a.accept)
+    rejected = places_review.numbers(a.reject)
+    named: list[tuple[int, str]] = []
+    for number, text in a.name or []:
+        found = places_review.numbers([number])
+        if len(found) != 1:
+            raise places_review.ReviewError(
+                f'--name takes one number and a name: --name 3 "The cabin", not {number!r}'
+            )
+        named.append((found[0], text))
+    told = [*accepted, *(n for n, _ in named)]
+    both = sorted(set(told) & set(rejected))
+    if both:
+        raise places_review.ReviewError(
+            f"proposal {', '.join(map(str, both))} is both accepted and rejected; say one"
+        )
+    twice = sorted({n for n in told if told.count(n) > 1})
+    if twice:
+        raise places_review.ReviewError(
+            f"proposal {', '.join(map(str, twice))} is given --accept and --name, or --name twice; say one"
+        )
+    if told or rejected:
+        chosen: list[tuple[places_review.Proposal, str | None]] = [
+            (p, None) for p in places_review.pick(report, accepted)
+        ]
+        chosen += [
+            (p, text)
+            for p, (_n, text) in zip(places_review.pick(report, [n for n, _ in named]), named, strict=True)
+        ]
+        written = [
+            *places_review.accept(lb, chosen),
+            *places_review.reject(lb, places_review.pick(report, rejected)),
+        ]
+        if a.json:
+            print(json.dumps({"written": [w.to_json() for w in written]}, indent=2, ensure_ascii=False))
+            return
+        for text in places_review.written_rows(written):
+            print(text)
+        return
+    shown = places_review.near(report, a.near) if a.near else report.proposals
+    if a.top is not None:
+        shown = shown[: a.top]
+    if a.json:
+        print(json.dumps(report.to_json(shown), indent=2, ensure_ascii=False))
+        return
+    if shown and _on_a_tty():
+        _review_on_a_tty(lb, report, shown)
+        return
+    for text in places_review.rows(report, shown):
+        print(text)
+
+
+def _on_a_tty() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _review_on_a_tty(lb: Logbook, report: Any, shown: list[Any]) -> None:
+    """One proposal at a time: y accepts its name, n rejects it, anything else is the name to give
+    it; Enter skips, q or the end of input stops. Each answer is written at once."""
+    from ..contrib import places_review
+
+    print(places_review.head(report))
+    for p in shown:
+        print(f"  {p.number}  {places_review.summary(p, report.tz)} → {p.name or places_review.BLANK}")
+        print(f"      {places_review.evidence_text(p.observed.names)}")
+        hint = "y to accept, n to reject, or type a name" if p.name else "type a name, or n to reject"
+        while True:
+            try:
+                answer = input(f"      {hint}; Enter skips, q stops: ").strip()
+            except EOFError:
+                print()
+                return
+            if answer.casefold() == "q":
+                return
+            if not answer:
+                break
+            if answer.casefold() == "n":
+                written = places_review.reject(lb, [p])
+            elif answer.casefold() == "y" and not p.name:
+                print("      no name to accept: type one, n to reject, or Enter to skip")
+                continue
+            else:
+                try:
+                    written = places_review.accept(lb, [(p, None if answer.casefold() == "y" else answer)])
+                except places_review.ReviewError as e:
+                    print(f"      {e}")
+                    continue
+            for text in places_review.written_rows(written):
+                print(f"      {text}")
+            break
 
 
 def _reader_days(lb: Logbook, since: str | None, until: str | None) -> tuple[str, str]:

@@ -23,9 +23,11 @@ before the walk, so `sync` can say `x of N`. A `walk` (the consumer's checkpoint
 `WalkState`) is told after every page where the walk could resume; `pull` starts from what it saved.
 
 One line per asset. The pixels stay in Immich; the line points at them by asset id. Names of people
-are never logged, only Immich's person ids. Network happens only inside `total` and `pull`, which
-only `logbook sync immich` calls (ADR 0012: no network on a file adapter's default path; a live adapter
-has no default path).
+are never logged, only Immich's person ids. The place Immich gave the photo — `exifInfo.city`, `state`
+and `country`, which the server reverse-geocodes from the coordinates with a table it ships, offline —
+is kept under `extra.place` when the server had one; nothing here looks a place up. Network happens
+only inside `total` and `pull`, which only `logbook sync immich` calls (ADR 0012: no network on a file
+adapter's default path; a live adapter has no default path).
 """
 
 from __future__ import annotations
@@ -51,6 +53,8 @@ PAGE_SIZE = 250
 MAX_PAGE_SIZE = 1000  # Immich's ceiling on `size`; a run of equal stamps longer than this cannot be walked
 TIMEOUT_S = 60
 STATISTICS = ("/api/assets/statistics", "/api/server/statistics")  # the key's own count, then the server's
+# the place Immich named from the photo's coordinates with its own bundled table, on the owner's server
+PLACE_FIELDS = ("city", "state", "country")
 
 # -- provenance rule (RFC 0002, ADR 0011): data, so it can be reconsidered ----------------------
 # A camera file: HEIC/RAW/JPEG stills, or a video, with make/model and an original capture time.
@@ -359,6 +363,13 @@ def _payload(asset: dict[str, Any], exif: dict[str, Any]) -> dict[str, Any]:
     description = (exif.get("description") or "").strip()
     if description:
         extra["description"] = description
+    place = {
+        key: value.strip()
+        for key in PLACE_FIELDS
+        if isinstance(value := exif.get(key), str) and value.strip()
+    }
+    if place:
+        extra["place"] = place
     payload["extra"] = extra
     return payload
 

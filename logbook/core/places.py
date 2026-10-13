@@ -30,6 +30,7 @@ from typing import Any, NamedTuple
 
 from .chain import Line
 from .flights import distance_km
+from .store import Logbook, now_utc
 
 PLACES_FILE = "places.json"
 KINDS = ("home", "asset-berth", "other")
@@ -189,6 +190,20 @@ def parse_stay_id(text: str) -> tuple[float, float]:
     return lat, lon
 
 
+def name(lb: Logbook, place: Place) -> Line:
+    """Name a place: add it to places.json (`add`, which refuses a name already taken) and put the
+    naming in the record as one `note/v1` line, "named <lat>,<lon> as <name>", through
+    `Logbook.append`. Every naming goes this way: `places name`, `propose --write`, `review`."""
+    add(lb.root, place)
+    return lb.append(
+        at=now_utc(),
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={"schema": "note/v1", "text": naming_text(place.lat, place.lon, place.name)},
+    )
+
+
 def naming_text(lat: float, lon: float, name: str) -> str:
     """The text of the note/v1 line a naming appends: `named <lat>,<lon> as <name>`."""
     return f"named {_coordinate(lat)},{_coordinate(lon)} as {name}"
@@ -227,7 +242,8 @@ class TimelineVisit(NamedTuple):
 
 def timeline_visits(lines: Iterable[Line]) -> list[TimelineVisit]:
     """The Google Timeline visits the takeout adapter wrote as location lines (`extra.segment`
-    `visit`, the `start` edge, the span under `extra.segment_start` / `segment_end`)."""
+    `visit`, the `start` edge, the span under `extra.segment_start` / `segment_end`), from the
+    Android export or the iPhone's (`placeID`, its numbers as strings)."""
     visits: list[TimelineVisit] = []
     for line in lines:
         if line.get("kind") != "location" or line.get("source") != TIMELINE_SOURCE:
@@ -249,20 +265,34 @@ def timeline_visits(lines: Iterable[Line]) -> list[TimelineVisit]:
             (extra.get("visit") or {}).get("topCandidate") if isinstance(extra.get("visit"), dict) else None
         )
         candidate = candidate if isinstance(candidate, dict) else {}
-        probability = candidate.get("probability")
         visits.append(
             TimelineVisit(
                 start,
                 end,
                 float(lat),
                 float(lon),
-                _text(candidate.get("placeId")),
+                _text(candidate.get("placeId")) or _text(candidate.get("placeID")),  # the iPhone's spelling
                 _text(candidate.get("semanticType")),
-                float(probability) if isinstance(probability, int | float) else None,
+                _probability(candidate.get("probability")),
                 str(line.get("id")),
             )
         )
     return visits
+
+
+def _probability(value: object) -> float | None:
+    """A number, or the string of one the iPhone's export writes (`"0.812"`); None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        return number if number == number and abs(number) != float("inf") else None
+    return None
 
 
 @dataclass(frozen=True)

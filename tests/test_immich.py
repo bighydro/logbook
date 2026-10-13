@@ -271,8 +271,24 @@ def test_camera_photo_maps_every_field(server):
             "original_path": "/data/library/owner-1/2026/2026-03-01/IMG_2041.HEIC",
             "favorite": False,
             "updated_at": "2026-03-02T06:10:00Z",
+            "place": {"city": "Oslo", "state": "Oslo", "country": "Norway"},
         },
     }
+
+
+def test_the_place_immich_reverse_geocoded_is_kept_and_an_empty_one_is_not():
+    """Immich names a photo's city from its own bundled table, on the server: the line carries what
+    the source had, and `places review` reads it. Blank fields are not carried."""
+    asset = {
+        "id": "a-1",
+        "originalFileName": "IMG_1.HEIC",
+        "fileCreatedAt": "2026-03-01T08:00:00.000Z",
+        "type": "IMAGE",
+        "exifInfo": {"city": "  ", "state": None, "country": "Norway", "latitude": 55.6, "longitude": 4.4},
+    }
+    assert immich._line(asset)["payload"]["extra"]["place"] == {"country": "Norway"}
+    asset["exifInfo"] = {"city": "", "country": None}
+    assert "place" not in immich._line(asset)["payload"]["extra"]
 
 
 def test_watermark_is_the_assets_updated_at_not_its_capture_time(server):

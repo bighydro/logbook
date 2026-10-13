@@ -11,7 +11,9 @@ Reads the library store an iPhone keeps at `Media/PhotoData/Photos.sqlite` (`Cam
                                   ZDIRECTORY — where the pixels are below the library's Media/ folder,
                                   `DCIM/100APPLE` —, ZUNIFORMTYPEIDENTIFIER)
     ZADDITIONALASSETATTRIBUTES   (ZASSET → ZASSET.Z_PK, ZORIGINALFILENAME, ZTIMEZONENAME, ZIMPORTEDBY,
-                                  ZIMPORTEDBYBUNDLEIDENTIFIER)
+                                  ZIMPORTEDBYBUNDLEIDENTIFIER, ZREVERSELOCATIONDATA — the place Photos
+                                  named, an NSKeyedArchiver `PLRevGeoLocationInfo` — and
+                                  ZREVERSELOCATIONDATAISVALID)
     ZGENERICALBUM                (ZKIND 2 the owner's own albums, ZTITLE, ZTRASHEDSTATE)
     Z_<n>ASSETS                  the album ↔ asset join; `n` is the Album entity's number in
                                  Z_PRIMARYKEY and changes with iOS, so the table is found by its shape
@@ -27,7 +29,12 @@ person counts under its merge target; ids, never names — RFC 0002), `favorite`
 `albums` the titles of the owner's own albums (kind 2, not trashed) it is in, sorted; the automatic
 groupings (smart albums, memories, shared streams, folders) are not albums. `extra` keeps the UTI,
 `imported_by`, the importing app's bundle id and `faces`, the names the owner gave those people in
-the People album (the full name, else the display name; a merged person under its target's), sorted.
+the People album (the full name, else the display name; a merged person under its target's), sorted;
+and `place`, what Photos itself named the picture's place on the device (`ZREVERSELOCATIONDATA`,
+decoded with `keyed_archive`): its `address` (`addressString`), `city` (the postal address's) and
+`names` (the areas the point lies in, `mapItem.sortedPlaceInfos`, in the store's order), whichever the
+archive holds. A row Photos marks not valid, an archive of another shape and a store without the column
+carry no place; nothing here looks a place up.
 A name there is the library's guess at who is in the picture and the owner's spelling of it: a
 reader proposes it as company and never confirms it (`present.from_photos`), and resolves it to a
 person only when it is exactly a label a resolution line carries.
@@ -73,6 +80,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from . import keyed_archive
+
 NAME = "apple-photos"
 KIND = "photo"
 TIER = 1  # RFC 0002: metadata; `logbook add --tier` overrides
@@ -113,7 +122,14 @@ ASSET_COLUMNS = (
 )
 # The pixels' (sha256, bytes) at a path below the library's Media/ folder, or None when they are not there.
 MediaDigest = Callable[[str], tuple[str, int] | None]
-ATTRIBUTE_COLUMNS = ("ZORIGINALFILENAME", "ZTIMEZONENAME", "ZIMPORTEDBY", "ZIMPORTEDBYBUNDLEIDENTIFIER")
+ATTRIBUTE_COLUMNS = (
+    "ZORIGINALFILENAME",
+    "ZTIMEZONENAME",
+    "ZIMPORTEDBY",
+    "ZIMPORTEDBYBUNDLEIDENTIFIER",
+    "ZREVERSELOCATIONDATA",
+    "ZREVERSELOCATIONDATAISVALID",
+)
 
 
 def sniff(path: Path) -> bool:
@@ -351,6 +367,10 @@ def _line(
         extra["imported_by_bundle"] = bundle
     if pk in names:
         extra["faces"] = names[pk]
+    if values.get("ZREVERSELOCATIONDATAISVALID") != 0 and (
+        place := _place(values.get("ZREVERSELOCATIONDATA"))
+    ):
+        extra["place"] = place
     local_path = _local_path(values.get("ZDIRECTORY"), values.get("ZFILENAME"))
     if local_path is not None:
         media: dict[str, Any] = {"local_path": local_path}
@@ -375,6 +395,32 @@ def _line(
         "tier": tier,
         "payload": payload,
     }
+
+
+def _place(blob: object) -> dict[str, Any] | None:
+    """The place Photos named, from its `PLRevGeoLocationInfo` archive: `address`, `city` and `names`,
+    whichever it holds; None for a blob that is no archive, or one that names nothing."""
+    info = keyed_archive.decode(blob)
+    if not isinstance(info, dict):
+        return None
+    place: dict[str, Any] = {}
+    address = info.get("addressString")
+    if isinstance(address, str) and address.strip():
+        place["address"] = address.strip()
+    postal = info.get("postalAddress")
+    city = postal.get("_city") if isinstance(postal, dict) else None
+    if isinstance(city, str) and city.strip():
+        place["city"] = city.strip()
+    map_item = info.get("mapItem")
+    infos = map_item.get("sortedPlaceInfos") if isinstance(map_item, dict) else None
+    names: list[str] = []
+    for item in infos if isinstance(infos, list) else []:
+        name = item.get("name") if isinstance(item, dict) else None
+        if isinstance(name, str) and name.strip() and name.strip() not in names:
+            names.append(name.strip())
+    if names:
+        place["names"] = names
+    return place or None
 
 
 def _local_path(directory: object, file_name: object) -> str | None:

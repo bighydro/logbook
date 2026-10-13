@@ -1,0 +1,71 @@
+{
+  "timelineObjects": [
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 556012000,
+          "longitudeE7": 44021000,
+          "placeId": "ChIJ-synthetic-cabin-0001",
+          "address": "Plattformveien 1, Nordsjøen",
+          "name": "Hytta på banken",
+          "semanticType": "TYPE_HOME",
+          "sourceInfo": {"deviceTag": 1234567},
+          "locationConfidence": 91.5
+        },
+        "duration": {
+          "startTimestamp": "2019-01-05T10:00:00.000Z",
+          "endTimestamp": "2019-01-05T12:30:00Z"
+        },
+        "placeConfidence": "HIGH_CONFIDENCE",
+        "centerLatE7": 556011000,
+        "centerLngE7": 44020000,
+        "visitConfidence": 88,
+        "otherCandidateLocations": [
+          {"latitudeE7": 556030000, "longitudeE7": 44050000, "placeId": "ChIJ-synthetic-other-0002", "semanticType": "TYPE_UNKNOWN", "locationConfidence": 4.1}
+        ],
+        "editConfirmationStatus": "NOT_CONFIRMED"
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {"latitudeE7": 556012000, "longitudeE7": 44021000},
+        "endLocation": {"latitudeE7": 557203000, "longitudeE7": 42800000},
+        "duration": {"startTimestamp": "2019-01-05T12:30:00Z", "endTimestamp": "2019-01-05T13:10:00Z"},
+        "distance": 15210,
+        "activityType": "SAILING",
+        "confidence": "HIGH",
+        "simplifiedRawPath": {"points": [{"latE7": 556600000, "lngE7": 43400000, "accuracyMeters": 12, "timestamp": "2019-01-05T12:50:00Z"}]}
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 557203000,
+          "longitudeE7": 42800000,
+          "placeId": "ChIJ-synthetic-workshop-0003",
+          "address": "Verkstedkaia 2, Nordsjøen",
+          "name": "Verkstedet"
+        },
+        "duration": {"startTimestampMs": "1546694400000", "endTimestampMs": "1546701600000"}
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {"placeId": "ChIJ-synthetic-nowhere-0004", "name": "No coordinates at all"},
+        "duration": {"startTimestamp": "2019-01-06T08:00:00Z", "endTimestamp": "2019-01-06T09:00:00Z"}
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {"latitudeE7": 557203000, "longitudeE7": 42800000, "name": "No time at all"},
+        "duration": {}
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {"latitudeE7": 2000000000, "longitudeE7": 42800000, "name": "Off the earth"},
+        "duration": {"startTimestamp": "2019-01-07T08:00:00Z", "endTimestamp": "2019-01-07T09:00:00Z"}
+      }
+    }
+  ]
+}
