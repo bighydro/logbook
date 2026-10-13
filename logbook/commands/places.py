@@ -145,6 +145,11 @@ def places_arguments(sub: Subparsers) -> None:
         help="with --ask-photos: the Photos library to read"
         " (default ~/Pictures/Photos Library.photoslibrary)",
     )
+    v.add_argument(
+        "--verbose",
+        action="store_true",
+        help="every name on its own: no folding of a street's addresses, no `… and N more`",
+    )
     v.add_argument("--json", action="store_true", help="the queue, or what was written, as one JSON object")
     v.set_defaults(fn=cmd_places)
 
@@ -344,14 +349,15 @@ def _ask_name(p: places.Proposal) -> str | None:
 
 def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     """`places review [--top N] [--near PLACE] [--accept N[,N]] [--name N NAME] [--reject N[,N]]
-    [--radius M] [--ask-photos [--all] [--limit N] [--photos-library PATH]] [--json]`: the observed
-    places at no named place, ranked and numbered, each with the name the record's sources gave it and
-    the evidence (`logbook.contrib.places_review`). Nothing is written unless told: `--accept` and
-    `--name` write places.json and one naming note each, `--reject` the pair into
-    `state/places-review.json`; every number is checked before anything is written. On a terminal,
-    with nothing told, it asks for each proposal shown. `--ask-photos` adds what the photo libraries
-    say about the blanks shown, or the proposals told (`logbook.contrib.places_photos`), before any
-    of that; the queue and its numbers are the same without it."""
+    [--radius M] [--verbose] [--ask-photos [--all] [--limit N] [--photos-library PATH]] [--json]`: the
+    observed places at no named place, ranked and numbered, each with the name the record's sources
+    gave it and the evidence, folded by street and cut at three lines unless `--verbose`
+    (`logbook.contrib.places_review`). Nothing is written unless told: `--accept` and `--name` write
+    places.json and one naming note each, `--reject` the pair into `state/places-review.json`; every
+    number is checked before anything is written. On a terminal, with nothing told, it asks for each
+    proposal shown. `--ask-photos` adds what the photo libraries say about the blanks shown, or the
+    proposals told (`logbook.contrib.places_photos`), before any of that; the queue and its numbers
+    are the same without it."""
     from ..contrib import places_review
 
     radius = places_review.CLUSTER_M if a.radius is None else float(a.radius)
@@ -416,9 +422,9 @@ def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return
     if shown and _on_a_tty():
-        _review_on_a_tty(lb, report, shown)
+        _review_on_a_tty(lb, report, shown, a.verbose)
         return
-    for text in places_review.rows(report, shown):
+    for text in places_review.rows(report, shown, a.verbose):
         print(text)
 
 
@@ -454,7 +460,7 @@ def _on_a_tty() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def _review_on_a_tty(lb: Logbook, report: Any, shown: list[Any]) -> None:
+def _review_on_a_tty(lb: Logbook, report: Any, shown: list[Any], verbose: bool = False) -> None:
     """One proposal at a time: y accepts its name, n rejects it, anything else is the name to give
     it; Enter skips, q or the end of input stops. Each answer is written at once."""
     from ..contrib import places_review
@@ -462,7 +468,7 @@ def _review_on_a_tty(lb: Logbook, report: Any, shown: list[Any]) -> None:
     print(places_review.head(report))
     for p in shown:
         print(f"  {p.number}  {places_review.summary(p, report.tz)} → {p.name or places_review.BLANK}")
-        print(f"      {places_review.evidence_text(p.observed.names)}")
+        print(f"      {places_review.evidence_text(p.observed.names, verbose)}")
         hint = "y to accept, n to reject, or type a name" if p.name else "type a name, or n to reject"
         while True:
             try:

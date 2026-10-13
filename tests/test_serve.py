@@ -34,6 +34,7 @@ PAGES = (
     "/trips",
     "/trips?year=2026",
     "/places",
+    "/places?page=2",
     "/assets",
     "/gaps",
 )
@@ -86,9 +87,11 @@ def test_refuses_to_bind_anything_but_loopback(
 
 def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Every link, form and image on every page points inside the server: a path from `/`, never
-    a scheme, a host or a protocol-relative `//`. No script, no stylesheet link, no frame, no
-    `url()` or `@import` in the inline style, and a Content-Security-Policy that would stop a
-    browser following any of those even if one slipped in."""
+    a scheme, a host or a protocol-relative `//`. No script fetched (the Places page carries one
+    inline, for its keys, named by its hash in that page's policy and by nothing else; every other
+    page has none and a policy that allows none), no stylesheet link, no frame, no `url()` or
+    `@import` in the inline style, and a Content-Security-Policy that would stop a browser
+    following any of those even if one slipped in."""
     _lb, site = _open(tmp_path, monkeypatch)
     for page in PAGES:
         path, _, query = page.partition("?")
@@ -100,8 +103,16 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
             target = html.unescape(found)
             assert target.startswith("/") and not target.startswith("//"), (page, target)
             assert ":" not in target.split("?")[0], (page, target)
+        csp = response.headers["Content-Security-Policy"]
+        if path == "/places":
+            assert text.count("<script") == 1 and "<script src" not in low and "<script>" in text, page
+            assert (
+                f"script-src '{serve.PLACES_SCRIPT_HASH}'" in csp
+                and "'unsafe-inline'" not in csp.split("style-src")[0]
+            )
+        else:
+            assert "<script" not in low and "script-src" not in csp, page
         for tag in (
-            "<script",
             "<link",
             "<iframe",
             "<frame",
@@ -115,7 +126,7 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
         assert style is not None, page
         assert "url(" not in style.group(1) and "@import" not in style.group(1), page
         assert "http://" not in style.group(1) and "https://" not in style.group(1), page
-        assert response.headers["Content-Security-Policy"].startswith("default-src 'none'"), page
+        assert csp.startswith("default-src 'none'"), page
 
 
 # -- the pages ----------------------------------------------------------------------------------------------
