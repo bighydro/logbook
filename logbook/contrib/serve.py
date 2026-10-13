@@ -216,7 +216,8 @@ td.day{white-space:nowrap}
 dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
 dl.header dt{color:var(--mute)}
 dl.header dd{margin:0}
-ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain{list-style:none;padding:0;margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
+li.proposal{padding:.15rem 0}
 .row{padding:.4rem 0;border-bottom:1px solid var(--line)}
 .clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
 .kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
@@ -1499,7 +1500,9 @@ def _owner_html(data: Mapping[str, Any]) -> str:
 def _draft_html(draft: Mapping[str, Any]) -> str:
     """The standing draft of the day (RFC 0036) above the timeline: headed as a draft, one
     paragraph per segment with its evidence ids (the whole id on hover), an unsupported segment a
-    muted block marked with the word, never run into the prose around it."""
+    muted block marked with the word, never run into the prose around it; then the events it
+    proposes, a proposed one greyed and marked, a confirmed one plain with the line it became (the
+    event itself is in the timeline, among the day's events)."""
     parts = [
         "<h2>Draft</h2>\n",
         f'<p class="mute">{escape(drafts.head_text(draft))}</p>\n<div class="draft">\n',
@@ -1519,11 +1522,37 @@ def _draft_html(draft: Mapping[str, Any]) -> str:
                 f'<p class="segment unsupported mute">{head}~ {escape(segment["text"])}'
                 f" <small>{drafts.UNSUPPORTED}{why}</small></p>\n"
             )
+    if draft.get("proposals"):
+        parts.append('<ul class="proposals">\n')
+        parts.extend(_proposal_html(p) for p in draft["proposals"])
+        parts.append("</ul>\n")
     if draft.get("earlier"):
         earlier = ", ".join(escape(drafts.short_id(e)) for e in draft["earlier"])
         parts.append(f'<p class="mute">earlier drafts: {earlier}</p>\n')
     parts.append("</div>\n")
     return "".join(parts)
+
+
+def _proposal_html(p: Mapping[str, Any]) -> str:
+    """One proposed event: greyed and marked `proposed` with its evidence ids until the owner accepts
+    it (`day sign --accept N`), then plain and marked with the event line it became; muted and
+    marked `unsupported` when its evidence is no longer on the day."""
+    head = f'<span class="kind">event {int(p["number"])}</span> {escape(drafts.proposal_text(p))}'
+    confirmed = p.get("confirmed")
+    if confirmed:
+        line = escape(str(confirmed["line"]))
+        return (
+            f'<li class="proposal confirmed" title="line {line}">{head}'
+            f" <small>confirmed as #{int(confirmed['seq'])}</small></li>\n"
+        )
+    if not p["supported"]:
+        why = f": {escape(str(p['why']))}" if p.get("why") else ""
+        return f'<li class="proposal unsupported mute">{head} <small>{drafts.UNSUPPORTED}{why}</small></li>\n'
+    ids = ", ".join(
+        f'<span class="id" title="line {escape(e)}">{escape(drafts.short_id(e))}</span>'
+        for e in p["evidence"]
+    )
+    return f'<li class="proposal proposed mute">{head} <small>proposed [{ids}]</small></li>\n'
 
 
 def _withheld_html(row: Mapping[str, Any], heading: bool = True) -> str:
