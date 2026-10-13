@@ -158,6 +158,9 @@ def read(
         retracted = retractions(idx.retractions())
         draft, withheld = drafts.for_day(idx, day, tiers, drafts.allowed(lb.root))
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
+    night = night_row(found, rd, day)
+    if night is not None:  # only on a day a night ends on: the Day's object is otherwise unchanged
+        data["night"] = night
     data["signed"] = signing.signed_json(signature, tz, page, day)
     reflected = notes.standing(on_day, notes.REFLECTION, retracted)
     if reflected:  # under --json only on a day that has one: the Day's object is otherwise unchanged
@@ -708,6 +711,29 @@ def health_rows(found: Iterable[Line], rd: Reading) -> dict[str, dict[str, Any]]
     return {str(row["day"]): {k: v for k, v in row.items() if k not in ("day", "by")} for row in rows}
 
 
+def night_row(found: Iterable[Line], rd: Reading, day: str) -> dict[str, Any] | None:
+    """The Day's night (`health.nights` over `found`, the health lines of the day and the day before,
+    with the reading's retractions): the night that ends on `day` under the record's `day_start`, its
+    span with `start_local` and `end_local`, and under `training` the day's workouts
+    (`health.training`), None when it has none. None for a day no night ends on. Read time only."""
+    lines = [*found, *rd.retracted.values()]
+    tz, start = str(rd.tz), rd.day_start.text
+    night = health.nights(lines, tz, start).get(day)
+    if night is None:
+        return None
+    zone = ZoneInfo(tz)
+    return {
+        "start": night["start"],
+        "end": night["end"],
+        "start_local": _instant(night["start"]).astimezone(zone).isoformat(timespec="seconds"),
+        "end_local": _instant(night["end"]).astimezone(zone).isoformat(timespec="seconds"),
+        "asleep_s": night["asleep_s"],
+        "device": night["device"],
+        "lines": night["lines"],
+        "training": health.training(lines, tz, start).get(day),
+    }
+
+
 def _sources(lines: Sequence[Line]) -> list[dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for line in lines:
@@ -781,6 +807,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     yield head
     marks = _marks(data)
     yield _row("night before", night_text(data["nights"]["before"]))
+    if data.get("night"):  # the night that ended on the day, slept through the night before's place
+        yield _row("night", slept_text(data["night"], data["tz"]))
     yield _row("night after", night_text(data["nights"]["after"]))
     yield _row("country", country_text(data["country"]))
     if data["all_day"]:
@@ -815,7 +843,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         for i, item in enumerate(data["anniversaries"]):
             yield _row("anniversaries" if i == 0 else "", anniversary_text(item))
     yield ""
-    yield _row("health", health_text(data["health"]))
+    health_line = health_text(data["health"], sleep=not data.get("night"))
+    if health_line or not data.get("night"):  # a row of sleep alone is the night row's already
+        yield _row("health", health_line or "no lines")
     if data.get("spend"):
         yield _row("spend", ledger.spend_text(data["spend"]))
     if data.get("weather"):
@@ -1029,17 +1059,31 @@ def call_text(c: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def health_text(row: dict[str, Any] | None) -> str:
+def health_text(row: dict[str, Any] | None, sleep: bool = True) -> str:
+    """`sleep 7.0 h · 3,250 steps · resting 56 bpm`, `no lines` for a day with none; without `sleep`
+    (the Day, whose night row says it) the sleep is left out, and a row of sleep alone is empty."""
     if row is None:
-        return "no lines"
+        return "no lines" if sleep else ""
     parts = []
-    if row["sleep_h"] is not None:
+    if sleep and row["sleep_h"] is not None:
         parts.append(f"sleep {row['sleep_h']:.1f} h")
     if row["steps"] is not None:
         parts.append(f"{row['steps']:,} steps")
     if row["resting_hr"] is not None:
         parts.append(f"resting {row['resting_hr']} bpm")
-    return DOT.join(parts) if parts else "no lines"
+    return DOT.join(parts) if parts else ("no lines" if sleep else "")
+
+
+def slept_text(night: Mapping[str, Any], tz: str) -> str:
+    """`slept 23:10-06:40 · 7 h 20 min · training 45 min`: the night's first and last asleep minute on
+    the record's clock, how long asleep, and the day's training when it has some."""
+    zone = ZoneInfo(tz)
+    begun, ended = _instant(night["start"]).astimezone(zone), _instant(night["end"]).astimezone(zone)
+    parts = [f"slept {begun:%H:%M}{EN_DASH}{ended:%H:%M}", duration_text(int(night["asleep_s"]))]
+    training = night.get("training")
+    if training:
+        parts.append(f"training {duration_text(int(training['minutes']) * 60)}")
+    return DOT.join(parts)
 
 
 def _source_text(s: dict[str, Any], tz: ZoneInfo) -> str:

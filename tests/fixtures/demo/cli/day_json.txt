@@ -613,6 +613,29 @@
       "newest": "2026-06-08T08:00:00Z"
     }
   ],
+  "night": {
+    "start": "2026-06-07T23:23:00Z",
+    "end": "2026-06-08T06:02:00Z",
+    "start_local": "2026-06-08T01:23:00+02:00",
+    "end_local": "2026-06-08T08:02:00+02:00",
+    "asleep_s": 23760,
+    "device": "Watch",
+    "lines": [
+      "019ea465-9020-735e-bd11-6b957df5d9e6",
+      "019ea47f-32a0-7a40-8208-cdcbe1b41f4f",
+      "019ea48c-ee40-72f1-b8fe-19005511fd75",
+      "019ea4cd-0480-7e8f-828e-ffe7a2f2598a",
+      "019ea4ec-2540-7b6e-9a29-6f9b36a658b4",
+      "019ea4f8-0c20-7210-b687-c91d952e5bbb",
+      "019ea51b-c0c0-78b0-b2a0-98cbc8cdaf83",
+      "019ea52d-25e0-70e7-bf59-81fcc84408e2",
+      "019ea546-c860-7cb3-9547-085d27431f04",
+      "019ea582-4ac0-7561-a81c-9428bfeab612",
+      "019ea591-db20-7418-ae45-f96a05716ba6",
+      "019ea5a1-6b80-79ad-86b6-3422b91ab1fe"
+    ],
+    "training": null
+  },
   "signed": null,
   "readiness": {
     "window": {
