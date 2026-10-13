@@ -175,7 +175,10 @@ def test_no_dream_entry_refuses_and_sends_nothing(lb: Logbook, monkeypatch: pyte
     seen = _fake(monkeypatch)
     seq = lb.meta["seq"]
     code, _out, err = _cli("dream", "day", DAY)
-    assert code == 2 and "policy/crossing.json" in err and "'dream'" in err and "no day crosses" in err
+    # the refusal names the file as the policy module prints every path: the record's own, OS-native
+    assert (
+        code == 2 and str(policy.policy_path(lb.root)) in err and "'dream'" in err and "no day crosses" in err
+    )
     assert seen["calls"] == [] and lb.meta["seq"] == seq and no_network == []
 
 
