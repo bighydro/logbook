@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from . import flights as flight_lines
@@ -107,28 +107,30 @@ def trips(reading: Reading) -> tuple[list[Trip], str | None]:
     if not named_places.home_places(reading.places):
         return [], "no place of kind home in places.json: nothing is away from home, so there are no trips"
     found: list[Trip] = []
-    run: list[stays.Night] = []
-    for night in reading.nights:
+    run: list[tuple[str, stays.Night]] = []
+    for day in reading.days:  # each day with the night after it: at midnight, the night of the day
+        night = reading.night_after(day) or stays.Night(day, None)
         if night.home:
             found.extend(_trips_of(run, reading))
             run = []
         else:
-            run.append(night)
+            run.append((day, night))
     found.extend(_trips_of(run, reading))
     return found, None
 
 
-def _trips_of(run: Sequence[stays.Night], reading: Reading) -> list[Trip]:
-    """The trip a run of nights away makes: none when every night of it is in transit (a record
-    whose last day ends before the night, a gap in the track), since nothing places the owner
+def _trips_of(run: Sequence[tuple[str, stays.Night]], reading: Reading) -> list[Trip]:
+    """The trip a run of days with nights away makes: none when every night of it is in transit (a
+    record whose last day ends before the night, a gap in the track), since nothing places the owner
     anywhere."""
-    if not run or all(n.stay is None for n in run):
+    if not run or all(n.stay is None for _day, n in run):
         return []
     return [_trip(run, reading)]
 
 
-def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
-    start, end = nights[0].day, nights[-1].day
+def _trip(run: Sequence[tuple[str, stays.Night]], reading: Reading) -> Trip:
+    start, end = run[0][0], run[-1][0]
+    nights = [night for _day, night in run]
     until = (date.fromisoformat(end) + timedelta(days=1)).isoformat()
     visited = visited_stays(reading, start, until)
     route = route_of(
@@ -167,11 +169,11 @@ def _trip(nights: Sequence[stays.Night], reading: Reading) -> Trip:
 
 
 def visited_stays(reading: Reading, start: str, until: str) -> list[stays.Segment]:
-    """The owner's stays a trip visits: every one between the first day's midnight and the end of
-    the return day, the home stays either side of it included (they hold nothing of the trip's;
-    `places` and the people leave them out by `stays.is_home`)."""
-    first = datetime.combine(date.fromisoformat(start), datetime.min.time(), tzinfo=reading.tz)
-    last = datetime.combine(date.fromisoformat(until), datetime.max.time(), tzinfo=reading.tz)
+    """The owner's stays a trip visits: every one between the first day's start and the end of the
+    return day (midnight to midnight unless `day_start` says otherwise), the home stays either side of
+    it included (they hold nothing of the trip's; `places` and the people leave them out by
+    `stays.is_home`)."""
+    first, last = reading.day_start.span(start)[0], reading.day_start.span(until)[1]
     return [s for s in reading.owner_stays if s.start < last and s.end > first]
 
 

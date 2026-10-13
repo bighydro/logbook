@@ -94,7 +94,7 @@ def read_year(lb: Logbook, year: str, airports: Airports | None = None) -> dict[
     with lb.index() as idx:
         found = idx.by_kind(health.KIND, before, last)
         marks = idx.retractions()
-    periods = rollup.health([*found, *marks], str(rd.tz), first, last, "month")["periods"]
+    periods = rollup.health([*found, *marks], str(rd.tz), first, last, "month", rd.day_start.text)["periods"]
     health_of = {str(p["period"]): p for p in periods}
     flights: list[dict[str, Any]] = next(
         (y["flights"] for y in rollup.flights(rd)["years"] if y["year"] == year), []
@@ -188,7 +188,7 @@ def _lines_by_day(rd: Reading) -> dict[str, list[Line]]:
     for line in rd.lines:
         at = stays.instant(line.get("at"))
         if at is not None:
-            found.setdefault(at.astimezone(rd.tz).date().isoformat(), []).append(line)
+            found.setdefault(rd.day_start.day(at).isoformat(), []).append(line)
     return found
 
 

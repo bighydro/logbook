@@ -6,15 +6,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
 from ..contrib import gaps, people_drift, print_layout, print_page, questions, week_paper, year_poster
 from ..core import day as day_reader
+from ..core import day_start, flights, keepers, pages, policy, reading, search, signing, stays
 from ..core import days as days_reader
-from ..core import flights, keepers, pages, policy, reading, search, signing, stays
 from ..core import year as year_reader
 from ..core.export import parse_day
 from ..core.resolve import Ref, labels
@@ -163,7 +163,8 @@ def cmd_show(a: argparse.Namespace) -> None:
     if a.name is not None:
         print(f"show: {a.day!r} takes no name; a page is `show person|asset|place <name>`", file=sys.stderr)
         sys.exit(2)
-    day = date.today().isoformat() if a.day in (None, "today") else a.day
+    days = day_start.of(lb.meta)  # RFC 0036: a boundary this reader cannot parse is refused, here
+    day = days.today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
     tz = ZoneInfo(lb.meta["timezone"])
     with lb.index() as idx:
         # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
@@ -178,7 +179,8 @@ def cmd_show(a: argparse.Namespace) -> None:
     rows.sort(
         key=lambda line: (instant_of(line["at"]), line["seq"])
     )  # by the instant, then seq (SPEC §3.2, #123)
-    print(f"{day}  {signing.state_text(signing.signed_json(signature, str(tz), None))}")
+    head = f"{day}  {signing.state_text(signing.signed_json(signature, str(tz), None))}"
+    print(head if days.midnight else f"{head}{day_reader.DOT}{days.describe()}")
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
         print(f"  {hero}")
@@ -267,8 +269,8 @@ def cmd_day(a: argparse.Namespace) -> None:
         flags = f"{', '.join(SIGN_FLAGS[:-1])} and {SIGN_FLAGS[-1]}"
         print(f"day: {flags} belong to `day sign YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
-    day = date.today().isoformat() if a.day in (None, "today") else a.day
     try:
+        day = day_start.of(lb.meta).today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
         airports = _airports(a.airports)
         data = day_reader.read(lb, day, airports)
         if not a.no_anniversaries:
@@ -400,9 +402,7 @@ def _digest_paper(lb: Logbook, a: argparse.Namespace) -> None:
         if a.week:
             week = a.week
         elif a.day in (None, "today"):
-            week = week_paper.week_of(
-                gaps.now().astimezone(ZoneInfo(str(lb.meta["timezone"]))).date().isoformat()
-            )
+            week = week_paper.week_of(day_start.of(lb.meta).today(gaps.now()).isoformat())
         else:
             week = week_paper.week_of(a.day)
         data = week_paper.read(lb, week, _airports(a.airports))

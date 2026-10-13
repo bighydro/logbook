@@ -368,8 +368,8 @@ class _Company:
 
 def _local_days(stay: stays.Segment, reading: Reading) -> tuple[str, str]:
     return (
-        stay.start.astimezone(reading.tz).date().isoformat(),
-        stay.end.astimezone(reading.tz).date().isoformat(),
+        reading.day_start.day(stay.start).isoformat(),
+        reading.day_start.day(stay.end).isoformat(),
     )
 
 
@@ -627,7 +627,9 @@ def _where(stay: stays.Segment, reading: Reading) -> str:
 # -- health -------------------------------------------------------------------------------------------------
 
 
-def health(lines: Iterable[Line], tz: str, first: str, last: str, by: str = "month") -> dict[str, Any]:
+def health(
+    lines: Iterable[Line], tz: str, first: str, last: str, by: str = "month", start: object = None
+) -> dict[str, Any]:
     """Sleep, steps, resting heart rate and HRV per calendar month or ISO week of the window
     `[first, last]`, from the day rows of `health.summary` (RFC 0014 rules 4 and 5; a correction
     that `supersedes` a line wins, the latest when there are several; a retracted line is out;
@@ -637,11 +639,12 @@ def health(lines: Iterable[Line], tz: str, first: str, last: str, by: str = "mon
     hours and how many nights had a line; `steps` the mean of the days' counts and how many days;
     `resting_hr` the mean, lowest and highest of the days' resting rates in bpm and how many days;
     `hrv` the mean of the days' SDNN in ms and how many days. Every period the window touches is
-    listed, and a field no day of it has a line for is None — never a zero."""
+    listed, and a field no day of it has a line for is None — never a zero. A line's day is its local
+    day under `start`, the record's `day_start` (RFC 0036)."""
     if by not in PERIODS:
         raise ValueError(f"--by is month or week, not {by!r}")
     days = day_range(first, last)
-    rows = {row["day"]: row for row in health_lines.summary(lines, tz) if first <= row["day"] <= last}
+    rows = {row["day"]: row for row in health_lines.summary(lines, tz, start) if first <= row["day"] <= last}
     periods: dict[str, dict[str, Any]] = {}
     for day in days:
         key = _period(day, by)
@@ -694,6 +697,7 @@ def attention(
     last: str,
     by: str | None = None,
     table: app_table.Apps | None = None,
+    start: object = None,
 ) -> dict[str, Any]:
     """Hours by app and by category per year (`by` None), calendar month or ISO week of the window
     `[first, last]`, from the `app-use` lines standing: a retracted line is out, and so is one
@@ -721,7 +725,7 @@ def attention(
         bundle_id = str(extra.get("bundle_id") or payload.get("title") or "")
         if not bundle_id:
             continue
-        day = local_date(str(line["at"]), tz)
+        day = local_date(str(line["at"]), tz, start)  # under the record's day_start (RFC 0036)
         if not first <= day <= last:
             continue
         seconds = _seconds(line, extra)

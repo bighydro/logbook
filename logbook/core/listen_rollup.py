@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Iterator
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from .chain import Line
+from .day_start import lenient, local_day
 from .export import day_range
 from .store import RETRACTION, retractions
 
@@ -50,7 +51,7 @@ def standing(lines: Iterable[Line]) -> list[Line]:
     return out
 
 
-def listen(lines: Iterable[Line], tz: str, first: str, last: str) -> dict[str, Any]:
+def listen(lines: Iterable[Line], tz: str, first: str, last: str, start: object = None) -> dict[str, Any]:
     """Per calendar year of the window `[first, last]` (local days in `tz`): `listens`, the hours
     played (`played_s` summed; a line with no playhead is a listen with no hours, counted under
     `untimed`), `skipped` (lines whose `extra.skipped` is true), `by_service`, `episodes` (the
@@ -72,7 +73,7 @@ def listen(lines: Iterable[Line], tz: str, first: str, last: str) -> dict[str, A
             day[:7], {"month": day[:7], "listens": 0, "played_s": 0.0, "lines": []}
         )
     for line in standing(lines):
-        day = _local_day(str(line.get("at", "")), zone) or ""
+        day = _local_day(str(line.get("at", "")), zone, lenient(start)) or ""
         if not first <= day <= last or day[:4] not in years:
             continue
         payload = line.get("payload") or {}
@@ -189,14 +190,16 @@ def _number(value: object) -> float | None:
     return float(value)
 
 
-def _local_day(at: str, zone: ZoneInfo) -> str | None:
+def _local_day(at: str, zone: ZoneInfo, start: time) -> str | None:
+    """The local day of a stamp under the record's `day_start` (RFC 0036); None for a stamp that is
+    not an instant."""
     try:
         when = datetime.fromisoformat(at.replace("Z", "+00:00"))
     except ValueError:
         return None
     if when.tzinfo is None:
         return None
-    return when.astimezone(zone).date().isoformat()
+    return local_day(when, zone, start).isoformat()
 
 
 # -- text ----------------------------------------------------------------------------------------------------

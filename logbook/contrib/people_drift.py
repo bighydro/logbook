@@ -38,7 +38,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from ..core import people, present, reading, stays
@@ -102,7 +102,7 @@ def real_contacts(lb: Logbook, report: people.Report) -> dict[str, Contact]:
                 at = stays.instant(line.get("at"))
                 if id_ in retracted or id_ in superseded or at is None:
                     continue
-                day = at.astimezone(report.tz).date().isoformat()
+                day = report.days.day(at).isoformat()
                 payload = line.get("payload") or {}
                 if kind == "message":
                     _message(payload, day, id_, chats, report, saw)
@@ -277,7 +277,7 @@ def drift(
     if whole is None:
         return None
     report = people.read(lb, *whole, airports)
-    today = datetime.now(report.tz).date().isoformat()
+    today = report.days.today(datetime.now(UTC)).isoformat()
     until = min(whole[1], today)
     end = date.fromisoformat(until)
     contacts = real_contacts(lb, report)

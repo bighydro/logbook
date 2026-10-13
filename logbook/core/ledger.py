@@ -228,7 +228,7 @@ def _entry(
     filed = (
         payload.get("date") if isinstance(payload.get("date"), str) and _is_day(payload.get("date")) else None
     )
-    day = filed or (at.astimezone(reading.tz).date().isoformat() if at is not None else str(line["at"])[:10])
+    day = filed or (reading.day_start.day(at).isoformat() if at is not None else str(line["at"])[:10])
     where = _where(at, day, filed, reading, table)
     trip = next((t.id for t in found if t.start <= day <= t.until), None)
     cost = extra.get("cost")

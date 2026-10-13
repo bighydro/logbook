@@ -62,9 +62,8 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from ..core import people, policy, present, reading, resolve, stays
+from ..core import day_start, people, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
@@ -425,7 +424,7 @@ def build(lb: Logbook, idx: Index) -> list[Observed]:
     lines, streamed one kind at a time, keyed by the strongest identifier, the owner's own
     identities left out, each placed when the record resolves it."""
     meta = lb.meta
-    tz = ZoneInfo(str(meta["timezone"]))
+    days = day_start.of(meta)  # a line's day under the record's day_start (RFC 0036)
     marks, resolutions = idx.retractions(), idx.resolutions()
     retracted = frozenset(retractions(marks))
     identities = resolve.identities_from([*marks, *resolutions])
@@ -446,7 +445,7 @@ def build(lb: Logbook, idx: Index) -> list[Observed]:
             at = stays.instant(line.get("at"))
             if at is None:
                 continue
-            day = at.astimezone(tz).date().isoformat()
+            day = days.day(at).isoformat()
             source, tier = str(line.get("source") or ""), int(line.get("tier", 0))
             for seen in counterparts(kind, line.get("payload") or {}):
                 if _is_owner(seen, owner, identities):

@@ -10,7 +10,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
-from ..core import apps, drifting, flights, health, ledger, listen_rollup, reading, rollup, stays
+from ..core import apps, day_start, drifting, flights, health, ledger, listen_rollup, reading, rollup, stays
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import Logbook
@@ -119,14 +119,15 @@ def cmd_rollup(a: argparse.Namespace) -> None:
         elif window is None:
             data = listen_rollup.empty() if a.what == "listen" else rollup.empty(a.what, a.by)
         elif a.what == "health":
-            tz = str(lb.meta["timezone"])
-            data = rollup.health(_health_window(lb, *window), tz, *window, a.by or "month")
+            tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text
+            data = rollup.health(_health_window(lb, *window), tz, *window, a.by or "month", start)
         elif a.what == "listen":
-            data = listen_rollup.listen(_listen_window(lb, *window), str(lb.meta["timezone"]), *window)
+            tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text
+            data = listen_rollup.listen(_listen_window(lb, *window), tz, *window, start)
         elif a.what == "attention":
-            tz = str(lb.meta["timezone"])
+            tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text
             data = rollup.attention(
-                _kind_window(lb, apps.KIND, *window), tz, *window, a.by, apps.read(lb.root)
+                _kind_window(lb, apps.KIND, *window), tz, *window, a.by, apps.read(lb.root), start
             )
         else:
             read = reading.read(lb, window[0], window[1], _airports(a.airports))

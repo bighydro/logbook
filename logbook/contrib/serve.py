@@ -6,7 +6,9 @@ row's attachments and company folded under a toggle; `/days?from=&to=` is a wind
 day (`days.read`), each row a link to its Day; `/trips?year=` the trips of a year (`trips.trips`
 over one `reading.read`); `/places` the named places of `places.json`; `/assets` the registered
 assets and the last fix of each (`asset_status.read`); `/gaps` where each source went quiet
-(`gaps.report`); `/today` redirects to the Day of the current date in the record's timezone. Every
+(`gaps.report`); `/today` redirects to the Day the owner is in now: the current date in the
+record's timezone, the date before until the record's `day_start` (RFC 0036), whose Day then says
+where it begins. Every
 page is built from the index and the readers, so a Day renders in the time `logbook day` takes
 whatever the record's length, and nothing is written: every request is a GET answered from the
 record at its head.
@@ -55,7 +57,7 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
-from ..core import assets, places, reading, share, stays, trips, weather
+from ..core import assets, day_start, places, reading, share, stays, trips, weather
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core.export import parse_day
@@ -228,7 +230,7 @@ class Site:
             return Response(200, self._page(path, params).encode("utf-8"), etag=etag)
         except NotFound:
             return self._error(404, f"no page at {path}")
-        except (stays.SettingsError, places.PlaceError, assets.AssetError) as e:
+        except (stays.SettingsError, places.PlaceError, assets.AssetError, day_start.DayStartError) as e:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
@@ -279,9 +281,12 @@ class Site:
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
 
     def _today(self, meta: Mapping[str, Any]) -> Response:
-        """A redirect to the Day of the current date in the record's timezone; never kept, since
-        the date moves."""
-        day = self.now().astimezone(ZoneInfo(str(meta["timezone"]))).date().isoformat()
+        """A redirect to the Day the owner is in now: the current date in the record's timezone,
+        the date before until the record's `day_start` (RFC 0036); never kept, since it moves."""
+        try:
+            day = day_start.of(meta).today(self.now()).isoformat()
+        except day_start.DayStartError as e:
+            return self._error(500, str(e))
         body = f'<p><a href="/day/{day}">{day}</a></p>\n'
         return Response(302, self.document("today", body).encode("utf-8"), location=f"/day/{day}")
 
@@ -339,10 +344,10 @@ class Site:
         if whole is None or first is None or last is None:
             parts.append("<p>The record has no lines yet.</p>\n")
             return self.document("Logbook", "".join(parts))
-        tz = self.tz
+        days = day_start.of(self.lb.meta)
         parts.append(
-            f"<p>{total:,} lines, {escape(_local_day(first, tz))} {EN_DASH} {escape(_local_day(last, tz))}"
-            f" ({escape(str(tz))}).</p>\n"
+            f"<p>{total:,} lines, {escape(days.day_of(first))} {EN_DASH} {escape(days.day_of(last))}"
+            f" ({escape(str(days.zone))}{'' if days.midnight else f', the day begins at {days.text}'}).</p>\n"
         )
         a, b = _last_window(whole)
         year = whole[1][:4]
@@ -378,6 +383,11 @@ class Site:
             f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             '<dl class="header">\n',
+            *(
+                [_dt("the day", day_start.span_words(data["day_start"]))]
+                if data.get("day_start", day_start.MIDNIGHT) != day_start.MIDNIGHT
+                else []
+            ),
             _dt("night before", day_reader.night_text(data["nights"]["before"])),
             _dt("night after", day_reader.night_text(data["nights"]["after"])),
             _dt("country", day_reader.country_text(data["country"])),
@@ -819,10 +829,6 @@ def _instant(stamp: str) -> datetime:
 
 def _clock(stamp: str, tz: ZoneInfo) -> str:
     return _instant(stamp).astimezone(tz).strftime("%Y-%m-%d %H:%M")
-
-
-def _local_day(stamp: str, tz: ZoneInfo) -> str:
-    return _instant(stamp).astimezone(tz).date().isoformat()
 
 
 def _clip(day: str, days: int, whole: tuple[str, str]) -> str:

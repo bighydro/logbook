@@ -63,8 +63,9 @@ def ms(value: float, unit: object) -> float:
     return value * 1000 if unit == "s" else value
 
 
-def summary(lines: Iterable[Line], tz: str) -> list[dict[str, Any]]:
-    """The rows, oldest day first; see the module docstring."""
+def summary(lines: Iterable[Line], tz: str, start: object = None) -> list[dict[str, Any]]:
+    """The rows, oldest day first; see the module docstring. A line's day is its local day under
+    `start`, the record's `day_start` (RFC 0036; None is midnight), checked by the reader that asks."""
     steps: dict[str, dict[str, tuple[float, str]]] = {}  # day → bucket `at` → (the larger count, its line)
     sleep: dict[str, dict[str, list[tuple[datetime, datetime, str]]]] = {}  # day → device → asleep spans
     resting: dict[str, list[tuple[float, str]]] = {}
@@ -78,22 +79,22 @@ def summary(lines: Iterable[Line], tz: str) -> list[dict[str, Any]]:
         id_ = str(line.get("id", ""))
         try:
             if kind == "steps":
-                day = local_date(str(line["at"]), tz)
+                day = local_date(str(line["at"]), tz, start)
                 buckets = steps.setdefault(day, {})
                 kept = buckets.get(str(line["at"]))
                 if kept is None or float(value) > kept[0]:
                     buckets[str(line["at"])] = (float(value), id_)
             elif kind == "sleep" and payload.get("stage") in ASLEEP:
-                day = local_date(str(line.get("end") or line["at"]), tz)
+                day = local_date(str(line.get("end") or line["at"]), tz, start)
                 device = str(payload.get("device") or "-")
                 start, end = _sleep_span(line, float(value))
                 sleep.setdefault(day, {}).setdefault(device, []).append((start, end, id_))
             elif kind == "resting_hr":
                 reading = (bpm(float(value), payload.get("unit")), id_)
-                resting.setdefault(local_date(str(line["at"]), tz), []).append(reading)
+                resting.setdefault(local_date(str(line["at"]), tz, start), []).append(reading)
             elif kind == "hrv":
                 reading = (ms(float(value), payload.get("unit")), id_)
-                hrv.setdefault(local_date(str(line["at"]), tz), []).append(reading)
+                hrv.setdefault(local_date(str(line["at"]), tz, start), []).append(reading)
         except (KeyError, ValueError, TypeError):  # a stamp that does not parse is on no day
             continue
     rows: list[dict[str, Any]] = []

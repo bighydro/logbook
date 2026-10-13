@@ -61,6 +61,7 @@ def main(argv: list[str] | None = None) -> None:
         print(said, file=sys.stderr)
     a = build_parser().parse_args(argv)
     from .core import sealing, store  # the command just chosen has imported the store by now
+    from .core.day_start import DayStartError
     from .core.store import FormatError
 
     if a.identity_file:  # a path, in this process's environment only; a key is never in a variable
@@ -82,6 +83,9 @@ def main(argv: list[str] | None = None) -> None:
     except sealing.SealError as e:  # a sealed line or file that does not open: the record's error
         print(f"{a.cmd}: {e}", file=sys.stderr)
         sys.exit(1)
+    except DayStartError as e:  # RFC 0036: a boundary this reader cannot parse is said, never guessed
+        print(f"{a.cmd}: {e}", file=sys.stderr)
+        sys.exit(2)
     except zoneinfo.ZoneInfoNotFoundError as e:  # SPEC §2: a zone this host lacks is said, never swapped
         reason = e.args[0] if e.args else str(e)
         print(f"{a.cmd}: {reason}; this machine's zone database does not know it", file=sys.stderr)

@@ -31,7 +31,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..core import flights, people, places, reading, stays, trips
+from ..core import day_start, flights, people, places, reading, stays, trips
 from ..core.flights import Airport, Airports
 from ..core.index import local_date
 from ..core.store import Logbook, retractions
@@ -175,14 +175,14 @@ def journey(lb: Logbook, line_id: str, known: Sequence[places.Place], airports: 
     found = _of_line(line, known, airports)
     if found is None:
         raise NearbyError(f"the {line.get('kind')} line {line_id} names no place the record knows")
-    found.planned.append(_planned(line, str(lb.meta["timezone"]), found.label))
+    found.planned.append(_planned(line, str(lb.meta["timezone"]), found.label, lb.meta.get(day_start.KEY)))
     return found
 
 
-def _planned(line: Mapping[str, Any], tz: str, what: str) -> dict[str, Any]:
+def _planned(line: Mapping[str, Any], tz: str, what: str, start: object = None) -> dict[str, Any]:
     return {
         "kind": str(line.get("kind")),
-        "day": local_date(str(line["at"]), tz),
+        "day": local_date(str(line["at"]), tz, start),
         "line": str(line["id"]),
         "what": what,
     }
@@ -200,7 +200,7 @@ def planned(
     and the planned lines no rule places, as `unplaced`. Writes nothing."""
     if last < first:
         raise NearbyError(f"--days runs backwards: {first} is after {last}")
-    tz = str(lb.meta["timezone"])
+    tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text  # a line's day: RFC 0036
     candidates: list[tuple[Mapping[str, Any], Target | None, str]] = []
     with lb.index() as idx:
         marks = idx.retractions()
@@ -225,7 +225,7 @@ def planned(
         standing = flights.standing([*idx.by_kind(flights.KIND, first, last), *marks])
         for line in standing.values():
             payload = line.get("payload") or {}
-            day = str(payload.get("date") or local_date(str(line["at"]), tz))
+            day = str(payload.get("date") or local_date(str(line["at"]), tz, start))
             if payload.get("cancelled") is True or not first <= day <= last:
                 continue
             candidates.append((line, _of_line(line, known, airports), flights.designator_text(payload)))
@@ -246,7 +246,7 @@ def planned(
     unplaced: list[dict[str, Any]] = []
     for planned_line, target, what in candidates:
         if target is None:
-            unplaced.append(_planned(planned_line, tz, what))
+            unplaced.append(_planned(planned_line, tz, what, start))
             continue
         if any(places.distance_m(target.lat, target.lon, h.lat, h.lon) <= radius_km * 1000 for h in homes):
             continue
@@ -264,7 +264,7 @@ def planned(
             found.append(target)
         if what in JOURNEY_KINDS:
             what = f"{what} to {target.label}"
-        same.planned.append(_planned(planned_line, tz, what))
+        same.planned.append(_planned(planned_line, tz, what, start))
     return found, unplaced
 
 

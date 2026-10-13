@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..core import assets, flights, keepers, reading, stays
+from ..core.day_start import DayStart
 from ..core.export import parse_day
 from ..core.store import Logbook, dedupe_key, retractions
 from .common import EM_DASH, EN_DASH, Subparsers, _airports, _distance_text, _duration_text, _plural
@@ -309,8 +310,9 @@ def cmd_derive(a: argparse.Namespace) -> None:
         print(f"derive: {e}", file=sys.stderr)
         sys.exit(2)
     tz, days, settings, registered, derived = read.tz, read.days, read.settings, read.assets, read.derived
-    start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
-    _night_start, end = stays.night_window(last, tz, settings)
+    start = read.day_start.span(first)[0]  # the window the reading holds: from the first day's start …
+    _night_start, end = stays.night_window(read.day_start.night_after(last, settings.night[0]), tz, settings)
+    end = max(end, read.day_start.span(last)[1])  # … to the end of the last day or of its night after
     subjects = derived.subjects
     if a.subject:
         wanted = None if a.subject == "owner" else a.subject
@@ -338,7 +340,7 @@ def cmd_derive(a: argparse.Namespace) -> None:
         }
         print(json.dumps(out, indent=2))
         return
-    for text in _stays_rows(segments, nights, days, subjects, registered, tz):
+    for text in _stays_rows(segments, nights, days, subjects, registered, tz, read.day_start):
         print(text)
 
 
@@ -368,6 +370,7 @@ def _stays_rows(
     subjects: list[str | None],
     registered: Mapping[str, assets.Asset],
     tz: ZoneInfo,
+    bounds: DayStart,
 ) -> Iterator[str]:
     """One section per subject (the owner unheaded, an asset headed by its id and registry entry),
     each day's rows under its date, a stay aboard an asset with its run indented under it, the
@@ -380,7 +383,7 @@ def _stays_rows(
             yield f"{EM_DASH} {subject}" + (f" ({info.name}, {info.kind})" if info else "")
         by_day: dict[str, list[stays.Segment]] = {}
         for s in mine:
-            by_day.setdefault(s.start.astimezone(tz).date().isoformat(), []).append(s)
+            by_day.setdefault(bounds.day(s.start).isoformat(), []).append(s)
         for day in sorted(set(days) | set(by_day)):
             rows = by_day.get(day, [])
             if rows:

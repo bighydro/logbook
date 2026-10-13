@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import crossing, policy
+from . import crossing, day_start, policy
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -320,6 +320,8 @@ def share_day(
     seed, public = owner_key(lb)
     policy.write_default(lb.root)
     tz, head, owner_id = str(meta["timezone"]), str(meta["head"]), str(meta["owner_id"])
+    bounds = day_start.of(meta)  # the page is the day so defined; said when it is not midnight (RFC 0036)
+    boundary = {} if bounds.midnight else {day_start.KEY: bounds.text}
     created = created or now_utc()
     bundle_id = bundle_id or uuid7()
     sel = select(lb, day, max_tier)
@@ -328,6 +330,7 @@ def share_day(
         "schema": PACKAGE_SCHEMA,
         "date": day,
         "tz": tz,
+        **boundary,
         "owner_id": owner_id,
         "generated_at": created,
         "logbook_head": head,
@@ -343,6 +346,7 @@ def share_day(
         "to": to,
         "date": day,
         "tz": tz,
+        **boundary,
         "created": created,
         "max_tier": max_tier,
         "lines": len(sel.lines),
@@ -591,9 +595,19 @@ def _sender(manifest: dict[str, Any], circle: dict[str, str], sender: str | None
 
 def _checked_lines(raw: bytes, manifest: dict[str, Any]) -> list[Line]:
     """Every line of the page: the file hashes to what the manifest says, the count matches, each
-    line is a whole envelope at or under the page's tier, on the page's day, whose hash recomputes."""
+    line is a whole envelope at or under the page's tier, on the page's day — under the sender's
+    `day_start` when the manifest names one (RFC 0036), a value this reader cannot parse refused —
+    whose hash recomputes."""
     if hashlib.sha256(raw).hexdigest() != manifest["lines_sha256"]:
         raise ReceiveError(f"{LINES_FILE} does not hash to the manifest's lines_sha256")
+    start = manifest.get(day_start.KEY)
+    try:
+        day_start.clock(start)
+    except day_start.DayStartError as e:
+        raise ReceiveError(
+            f"{MANIFEST_FILE}: {day_start.KEY} {start!r} is not a clock from 00:00 to 23:59 written HH:MM;"
+            " the page is refused rather than its lines put on a guessed day"
+        ) from e
     lines: list[Line] = []
     for n, text in enumerate((s for s in raw.decode("utf-8").splitlines() if s.strip()), 1):
         try:
@@ -612,7 +626,7 @@ def _checked_lines(raw: bytes, manifest: dict[str, Any]) -> list[Line]:
         if not isinstance(line.get("payload"), dict) or "schema" not in line["payload"]:
             raise ReceiveError(f"line {n}: payload.schema missing")
         try:
-            on = local_date(str(line["at"]), str(manifest["tz"]))
+            on = local_date(str(line["at"]), str(manifest["tz"]), start)
         except (ValueError, KeyError) as e:
             raise ReceiveError(f"line {n}: at {line['at']!r} in {manifest['tz']!r}: {e}") from e
         if on != manifest["date"]:

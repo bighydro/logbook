@@ -128,7 +128,7 @@ def read(
     out["people"] = _people(rd, year)
     out["health"] = [
         {"month": p["period"], **{k: p[k] for k in ("sleep", "steps", "resting_hr", "hrv")}}
-        for p in rollup.health([*found, *marks], tz, first, last, "month")["periods"]
+        for p in rollup.health([*found, *marks], tz, first, last, "month", rd.day_start.text)["periods"]
     ]
     out["weather"] = weather.span(weather.by_day(rd.of_kind(weather.KIND)), rd.days)
     out["keepers"] = _keepers(rd)
@@ -272,7 +272,7 @@ def _lines_by_day(rd: Reading) -> dict[str, list[Line]]:
     for line in rd.lines:
         at = stays.instant(line.get("at"))
         if at is not None:
-            found.setdefault(at.astimezone(rd.tz).date().isoformat(), []).append(line)
+            found.setdefault(rd.day_start.day(at).isoformat(), []).append(line)
     return found
 
 
@@ -287,7 +287,7 @@ def new_place_days(rd: Reading) -> set[str]:
     for stay in sorted(rd.owner_stays, key=lambda s: (s.start, s.id)):
         if stays.is_home(stay, rd.places):
             continue
-        day = stay.start.astimezone(rd.tz).date().isoformat()
+        day = rd.day_start.day(stay.start).isoformat()
         if stay.place is not None:
             if stay.place in names:
                 continue

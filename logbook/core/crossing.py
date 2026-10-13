@@ -25,9 +25,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, policy, sealing, signing
+from . import attachments, day_start, policy, sealing, signing
 from .chain import Line, is_sealed
-from .index import local_date
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
 
@@ -226,7 +225,8 @@ class Selection:
 def select(lb: Logbook, req: Request) -> Selection:
     """The lines of `[since, until)` in the requested tiers and kinds, not retracted, on a signed
     day unless the request lifts that gate (RFC 0034 rule 5: a line's day is the local day of its
-    `at` in the record's zone; a `signed-day` line's day is the day it signs), in chain order; the
+    `at` in the record's zone, under its `day_start` (RFC 0036); a `signed-day` line's day is the day
+    it signs), in chain order; the
     resolution lines their refs walk through; the attachments they reference. The index says
     where; only the lines that cross are read from the files."""
     since, until = instant(req.since), instant(req.until)
@@ -243,11 +243,11 @@ def select(lb: Logbook, req: Request) -> Selection:
         if req.signed_only:
             meta = lb.meta
             signed, signs = signing.gate(idx, str(meta["owner_id"]))
-            tz = str(meta["timezone"])
+            days = day_start.of(meta)  # a line's day is its local day under the record's day_start
             kept = [
                 p
                 for p in wanted
-                if (signs.get(p.id) if p.kind == signing.KIND else local_date(p.at, tz)) in signed
+                if (signs.get(p.id) if p.kind == signing.KIND else days.day_of(p.at)) in signed
             ]
             unsigned_held = len(wanted) - len(kept)
             wanted = kept

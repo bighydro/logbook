@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
+from ..core import day_start
 from ..core.chain import Line
 from ..core.index import local_date
 from ..core.store import Logbook, retractions
@@ -359,7 +360,9 @@ def key_of(payload: Mapping[str, Any]) -> tuple[str, str] | None:
     return key, suffix
 
 
-def tasks_of(lines: Iterable[Line], retracted: Mapping[str, Line], tz: str) -> list[Task]:
+def tasks_of(
+    lines: Iterable[Line], retracted: Mapping[str, Line], tz: str, start: object = None
+) -> list[Task]:
     """The tasks the `task/v1` lines describe, one per source id, each as its latest standing
     snapshot (the newest suffix; the later line when two share it), a retracted line out and a line
     with no `raw_id` or no title skipped; in day order."""
@@ -391,7 +394,7 @@ def tasks_of(lines: Iterable[Line], retracted: Mapping[str, Line], tz: str) -> l
                 _text(payload.get("due")),
                 _text(payload.get("list")),
                 at,
-                local_date(at, tz),
+                local_date(at, tz, start),
                 seq,
                 str(line["id"]),
                 str(line.get("source") or ""),
@@ -408,7 +411,7 @@ def _text(value: object) -> str | None:
 # -- the candidates ------------------------------------------------------------------------------------
 
 
-def candidate_of(line: Line, tz: str) -> Candidate | None:
+def candidate_of(line: Line, tz: str, start: object = None) -> Candidate | None:
     """A standing mail, event or transaction line as a candidate, or None when it has no text to
     read (a mail with no subject, an entry with no title, a transaction with no merchant)."""
     kind = str(line.get("kind") or "")
@@ -430,7 +433,7 @@ def candidate_of(line: Line, tz: str) -> Candidate | None:
         kind,
         str(line.get("source") or ""),
         at,
-        local_date(at, tz),
+        local_date(at, tz, start),
         int(line.get("tier") or 1),
         " ".join(text.split()),
         sent,
@@ -503,7 +506,12 @@ class Report:
 def read(lb: Logbook) -> Report:
     """Every task as it stands, through the index, with no evidence read: `tasks` and `tasks done`."""
     with lb.index() as idx:
-        tasks = tasks_of(idx.by_kind(TASK), retractions(idx.retractions()), str(lb.meta["timezone"]))
+        tasks = tasks_of(
+            idx.by_kind(TASK),
+            retractions(idx.retractions()),
+            str(lb.meta["timezone"]),
+            day_start.of(lb.meta).text,
+        )
     return Report(tasks, [], {}, WINDOW.days)
 
 
@@ -512,10 +520,10 @@ def propose(lb: Logbook, matcher: Matcher = RULES, window: timedelta = WINDOW) -
     of the `window` after it that `matcher` reads as evidence; read through the index, nothing
     written. A calendar entry several sources carry (the same instants and the same text) is one
     proposal naming every line."""
-    tz = str(lb.meta["timezone"])
+    tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text  # a line's day: RFC 0036
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
-        tasks = tasks_of(idx.by_kind(TASK), retracted, tz)
+        tasks = tasks_of(idx.by_kind(TASK), retracted, tz, start)
         open_tasks = [t for t in tasks if t.open]
         candidates: list[Candidate] = []
         if open_tasks:
@@ -525,13 +533,14 @@ def propose(lb: Logbook, matcher: Matcher = RULES, window: timedelta = WINDOW) -
                     "%Y-%m-%dT%H:%M:%SZ"
                 ),
                 tz,
+                start,
             )
             for kind in KINDS:
                 superseded = idx.superseded(kind)
                 for line in idx.by_kind(kind, first, last):
                     if str(line["id"]) in retracted or str(line["id"]) in superseded:
                         continue
-                    found = candidate_of(line, tz)
+                    found = candidate_of(line, tz, start)
                     if found is not None:
                         candidates.append(found)
     candidates.sort(key=lambda c: (instant(c.at), c.seq))
