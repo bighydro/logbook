@@ -16,9 +16,10 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -38,6 +39,7 @@ MANIFEST_FILE = "manifest.json"
 ENTRIES_FILE = "entries.jsonl"
 RESOLUTION_FILE = "resolution.jsonl"
 OPEN_FIELD = "payload_open"  # a sealed line shipped opened: {payload, salt}, the digest's pre-image
+FILES_FIELD = "files"  # the manifest's list of every other file in the package: [{path, sha256, bytes}]
 ATTACHMENTS_DIR = "attachments"  # the SPEC §1.1 layout, so a verbatim `path` resolves in the bundle
 WATERMARK_FILE = PurePosixPath("exports/crossing.json")
 LAST = "last"  # `--since last`: from the watermark
@@ -353,14 +355,17 @@ class Result:
     line: Line  # the crossing/v1 line appended
 
 
-def export(lb: Logbook, req: Request, sel: Selection, out: Path, generated_at: str) -> Result:
+def export(
+    lb: Logbook, req: Request, sel: Selection, out: Path, generated_at: str, force: bool = False
+) -> Result:
     """Write the bundle, append the crossing line, move the watermark: in that order, so a crash
-    leaves at worst a bundle no line names, and the next `--since last` covers the window again."""
+    leaves at worst a bundle no line names, and the next `--since last` covers the window again.
+    The bundle replaces `out` whole; `force` lets it replace a folder that is not a bundle."""
     policy.write_default(lb.root)  # the first export writes the default; an existing file is kept
     head = str(lb.meta["head"])
     bundle_id = uuid7()
     manifest = build_manifest(lb, req, sel, generated_at, bundle_id, head)
-    package_sha256 = write_bundle(lb, sel, manifest, out, req)
+    package_sha256 = write_bundle(lb, sel, manifest, out, req, force=force)
     line = record(lb, req, sel, generated_at, bundle_id, head, package_sha256)
     write_watermark(lb, req.destination, req.until, generated_at, bundle_id)
     return Result(out, manifest, package_sha256, line)
@@ -460,30 +465,188 @@ def build_manifest(
 
 
 def write_bundle(
-    lb: Logbook, sel: Selection, manifest: dict[str, Any], out: Path, req: Request | None = None
+    lb: Logbook,
+    sel: Selection,
+    manifest: dict[str, Any],
+    out: Path,
+    req: Request | None = None,
+    *,
+    extra: Mapping[str, bytes] | None = None,
+    force: bool = False,
 ) -> str:
-    """The files under `out` in RFC 0005's layout; the manifest last, carrying the digest of each
-    other file. Returns the digest of manifest.json. Re-running into the same folder overwrites.
+    """The package in RFC 0005's layout, built in a fresh folder beside `out` and then put in its
+    place: the lines, the resolution overlay, the attachments and `extra` (a profile's own files by
+    name, a trip bundle's trip.json), then the manifest last, carrying the digest of each other file
+    and `files`, the list of them all. The folder is checked against that list (every file listed,
+    no file unlisted) before it replaces `out` whole, so nothing of an earlier export into the same
+    folder is left beside the new one; a target that holds anything but an earlier bundle is refused
+    unless `force` (`check_target`). Returns the digest of manifest.json.
     A line the record holds sealed crosses in its sealed form with `payload_enc` resealed to the
     destination's recipient, or, under `--open`, with `payload_open` in its place (RFC 0029 §7);
     its hashed fields are the owner's, verbatim, either way."""
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
+    out = _target(out)
+    check_target(out, force)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = _beside(out, "staging")
+    staging.mkdir()
+    try:
+        raw = _write_package(lb, sel, manifest, staging, req, dict(extra or {}))
+        verify_package(staging)
+        aside = _replace(staging, out)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    if aside is not None:
+        try:
+            _remove(aside)
+        except OSError as e:
+            raise CrossingError(
+                f"the bundle is at {out}, but the earlier one, moved aside to {aside}, could not be "
+                f"removed ({e}); delete that folder before you hand anything beside it over"
+            ) from e
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _write_package(
+    lb: Logbook,
+    sel: Selection,
+    manifest: dict[str, Any],
+    folder: Path,
+    req: Request | None,
+    extra: dict[str, bytes],
+) -> bytes:
+    """Every file of the package into the empty `folder`, the manifest last; its bytes."""
+    reserved = {ENTRIES_FILE, RESOLUTION_FILE, MANIFEST_FILE, ATTACHMENTS_DIR}
+    if clash := sorted(name for name in extra if PurePosixPath(name).parts[0] in reserved):
+        raise ValueError(f"a profile's own file cannot be named {clash[0]!r}: the package uses that name")
     carry = _carrier(lb, sel, req)
-    manifest["entries_sha256"] = _write_jsonl(out / ENTRIES_FILE, (carry(line) for line in sel.lines))
+    paths = [ENTRIES_FILE]
+    manifest["entries_sha256"] = _write_jsonl(folder / ENTRIES_FILE, (carry(line) for line in sel.lines))
     if sel.resolutions:
         resolutions = (carry(line) for line in sel.resolutions)
-        manifest["resolution_sha256"] = _write_jsonl(out / RESOLUTION_FILE, resolutions)
+        manifest["resolution_sha256"] = _write_jsonl(folder / RESOLUTION_FILE, resolutions)
+        paths.append(RESOLUTION_FILE)
     if sel.blobs:
-        (out / ATTACHMENTS_DIR).mkdir(exist_ok=True)
+        (folder / ATTACHMENTS_DIR).mkdir()
         for blob in sel.blobs:
             sha256 = str(blob["sha256"])
-            _copy_checked(lb, req, lb.root / ATTACHMENTS_DIR / sha256, out / ATTACHMENTS_DIR / sha256, sha256)
+            src = lb.root / ATTACHMENTS_DIR / sha256
+            _copy_checked(lb, req, src, folder / ATTACHMENTS_DIR / sha256, sha256)
+            paths.append(f"{ATTACHMENTS_DIR}/{sha256}")
+    for name, data in extra.items():
+        folder.joinpath(*PurePosixPath(name).parts).write_bytes(data)
+        paths.append(name)
+    manifest[FILES_FIELD] = _listing(folder, paths)
     # Encoded once and written as bytes: text mode would turn the newlines into CRLF on Windows
     # and the digest must name the bytes on disk, never the string that was formatted.
     raw = (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    (out / MANIFEST_FILE).write_bytes(raw)
-    return hashlib.sha256(raw).hexdigest()
+    (folder / MANIFEST_FILE).write_bytes(raw)
+    return raw
+
+
+def _listing(folder: Path, paths: Iterable[str]) -> list[dict[str, Any]]:
+    """`files`: every file of the package but the manifest, by its `/` path from the package's root,
+    with the SHA-256 and the length of the bytes on disk (a resealed attachment's are the sealed
+    file's, not the plaintext's that its name and `blobs` give)."""
+    listed = []
+    for path in sorted(paths):
+        sha256, size = attachments.digest_path(folder.joinpath(*PurePosixPath(path).parts))
+        listed.append({"path": path, "sha256": sha256, "bytes": size})
+    return listed
+
+
+def verify_package(folder: Path) -> dict[str, Any]:
+    """The package at `folder` against its own manifest: every file in the folder is the manifest or
+    is listed in `files`, and every listed file is there at the length the list gives; returns the
+    manifest. `CrossingError` names the first file that is not. Hashing each file is the reader's
+    part (RFC 0005)."""
+    folder = Path(folder)
+    manifest_file = folder / MANIFEST_FILE
+    try:
+        manifest = json.loads(manifest_file.read_bytes())
+    except (OSError, ValueError) as e:
+        raise CrossingError(f"{manifest_file} cannot be read: {e}") from e
+    if not isinstance(manifest, dict):
+        raise CrossingError(f"{manifest_file} is not a JSON object")
+    listed = manifest.get(FILES_FIELD)
+    if not isinstance(listed, list) or not all(
+        isinstance(f, dict) and isinstance(f.get("path"), str) and isinstance(f.get("bytes"), int)
+        for f in listed
+    ):
+        raise CrossingError(f"{manifest_file} has no `{FILES_FIELD}` list of {{path, sha256, bytes}}")
+    sizes = {PurePosixPath(f["path"]): int(f["bytes"]) for f in listed}
+    found = {PurePosixPath(*p.relative_to(folder).parts): p for p in folder.rglob("*") if not p.is_dir()}
+    unlisted = sorted(set(found) - set(sizes) - {PurePosixPath(MANIFEST_FILE)})
+    if unlisted:
+        raise CrossingError(f"{found[unlisted[0]]} is in the package and not in its manifest")
+    for path, size in sorted(sizes.items()):
+        if path not in found:
+            raise CrossingError(f"{folder.joinpath(*path.parts)} is in the manifest and not in the package")
+        if found[path].stat().st_size != size:
+            raise CrossingError(f"{found[path]} is not the {size} bytes its manifest gives")
+    return manifest
+
+
+def is_bundle(folder: Path) -> bool:
+    """Whether `folder` holds a crossing package: a manifest.json a JSON parser reads as one of ours
+    (any profile of it, a trip bundle too, and one written before `files` existed)."""
+    try:
+        manifest = json.loads((Path(folder) / MANIFEST_FILE).read_bytes())
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("schema") == SCHEMA
+
+
+def check_target(out: Path, force: bool = False) -> None:
+    """Refuse an output that exists and is not an earlier bundle, before anything is written: a file,
+    or a folder that holds anything and no manifest of ours. Such a folder is replaced, and all of
+    it removed, only under `force`. Nothing there, or an empty folder, is a fresh target."""
+    out = _target(out)
+    if force or not out.exists():
+        return
+    if out.is_dir() and (is_bundle(out) or not any(out.iterdir())):
+        return
+    what = "a file" if not out.is_dir() else f"a folder with no {MANIFEST_FILE} of a {SCHEMA}"
+    raise CrossingError(
+        f"{out} is {what}, not an earlier bundle, so it is not replaced; "
+        "choose another --out, or pass --force to replace it and everything in it with the bundle"
+    )
+
+
+def _target(out: Path) -> Path:
+    """`out`, or the folder it names when it is a symbolic link: that folder is what is replaced, so
+    the link names the new bundle after, and the staging folder is on the same file system."""
+    out = Path(out)
+    return out.resolve() if out.is_symlink() else out
+
+
+def _beside(out: Path, what: str) -> Path:
+    """A name next to `out`, on its file system, so a rename to `out` is one step: hidden, unique."""
+    return out.parent / f".{out.name}.{secrets.token_hex(4)}.{what}"
+
+
+def _replace(staging: Path, out: Path) -> Path | None:
+    """Rename the staged folder to `out`. What is at `out` is renamed aside first and put back if the
+    second rename fails, so `out` is at every moment the old one whole, nothing, or the new one whole;
+    returns where it went, for the caller to remove, or None when there was nothing."""
+    if not out.exists():
+        staging.rename(out)
+        return None
+    aside = _beside(out, "old")
+    out.rename(aside)
+    try:
+        staging.rename(out)
+    except BaseException:
+        aside.rename(out)
+        raise
+    return aside
+
+
+def _remove(path: Path) -> None:
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
 
 
 def _write_jsonl(path: Path, lines: Iterable[Line]) -> str:

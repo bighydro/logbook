@@ -104,6 +104,11 @@ def export_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="crossing: cross the lines of unsigned days too (default: signed days only; RFC 0034)",
     )
+    s.add_argument(
+        "--force",
+        action="store_true",
+        help="crossing, trip-bundle: replace an --out that is not an earlier bundle, and all in it",
+    )
     s.set_defaults(fn=cmd_export)
 
 
@@ -221,9 +226,10 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     """crossing --to DEST --since RFC3339|last [--until RFC3339] [--tier 1|1,2|1,2,3] [--kinds a,b]
-    [--unsigned] [--out DIR] [--dry-run]: one crossing-package/v1 (RFC 0005) under the destination's
-    ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless `--unsigned` (RFC
-    0034), recorded as a crossing/v1 line (RFC 0011)."""
+    [--unsigned] [--out DIR] [--force] [--dry-run]: one crossing-package/v1 (RFC 0005) under the
+    destination's ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless
+    `--unsigned` (RFC 0034), recorded as a crossing/v1 line (RFC 0011). The bundle replaces DIR
+    whole; a DIR that is not an earlier bundle is refused unless `--force` (docs/crossing.md)."""
     generated_at = now_utc()  # also the default window end, and the crossing line's `at`
     try:
         if not a.to or not a.since:
@@ -265,7 +271,12 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             _tier3_warning(req, sel)
         return
     try:
-        result = crossing.export(lb, req, sel, out, generated_at)
+        crossing.check_target(out, a.force)  # before the policy file or anything else is written
+    except crossing.CrossingError as e:
+        print(f"export crossing: {e}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        result = crossing.export(lb, req, sel, out, generated_at, force=a.force)
     except (crossing.CrossingError, OSError) as e:
         print(f"export crossing: {e}", file=sys.stderr)
         sys.exit(1)
@@ -359,8 +370,9 @@ def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
     """trip-bundle <trip-id-or-day> --to DEST [--tier 1|1,2|1,2,3] [--attachments] [--out DIR]
-    [--dry-run]: one crossing package cut to the trip (RFC 0030, profile trip-bundle/v1) under the
-    destination's ceiling in policy/crossing.json, recorded as a crossing/v1 line naming the trip."""
+    [--force] [--dry-run]: one crossing package cut to the trip (RFC 0030, profile trip-bundle/v1)
+    under the destination's ceiling in policy/crossing.json, recorded as a crossing/v1 line naming
+    the trip. It replaces DIR as a crossing does (docs/crossing.md)."""
     generated_at = now_utc()
     try:
         if not a.target or not a.to:
@@ -388,7 +400,12 @@ def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
             print(text)
         return
     try:
-        result = trip_bundle.export(lb, prepared, out, generated_at)
+        crossing.check_target(out, a.force)
+    except crossing.CrossingError as e:
+        print(f"export trip-bundle: {e}", file=sys.stderr)
+        sys.exit(2)
+    try:
+        result = trip_bundle.export(lb, prepared, out, generated_at, force=a.force)
     except (crossing.CrossingError, OSError) as e:
         print(f"export trip-bundle: {e}", file=sys.stderr)
         sys.exit(1)

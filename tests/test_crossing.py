@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from logbook import cli
-from logbook.core import signing
+from logbook.core import crossing, signing
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
@@ -620,7 +621,7 @@ def _matches_its_manifest(out: Path) -> dict[str, Any]:
 
 
 def test_the_manifest_lists_every_file_in_the_package(lb: Logbook, tmp_path: Path):
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     m = _matches_its_manifest(out)
     paths = [f["path"] for f in m["files"]]
@@ -637,7 +638,7 @@ def test_a_narrower_export_into_the_same_folder_leaves_nothing_of_the_broader_on
     """The reviewer's finding: a broad unsigned crossing into a folder, then a tier-1 crossing into the
     same folder, left the first one's resolution.jsonl and tier-2 attachment beside a manifest that
     said there were none. Handing the folder over would have disclosed what the second one excluded."""
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     broad = ("--tier", "1,2", "--unsigned")
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, *broad, "--out", str(out))
     assert (out / "resolution.jsonl").exists() and (out / "attachments" / SHA_PRESENT).exists()
@@ -647,14 +648,14 @@ def test_a_narrower_export_into_the_same_folder_leaves_nothing_of_the_broader_on
     assert not (out / "attachments").exists(), "not even the empty folder"
     assert m["counts"]["attachments"] == {"included": 0, "bytes": 0, "missing": 0}
     assert [e["seq"] for e in _jsonl(out / "entries.jsonl")] == [5, 11]
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"], "no staging folder left beside it"
+    assert sorted(p.name for p in out.parent.iterdir()) == ["out"], "no staging folder left beside it"
     payload = list(lb.lines())[-1]["payload"]
     assert payload["package_sha256"] == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
 
 
 def test_an_earlier_bundle_with_files_of_its_own_added_is_still_replaced_whole(lb: Logbook, tmp_path: Path):
     """A folder with a crossing manifest is ours to replace, whatever else was put in it since."""
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     (out / "attachments" / "notes.txt").write_bytes(b"Ola's list for the boat\n")
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
@@ -664,6 +665,7 @@ def test_an_earlier_bundle_with_files_of_its_own_added_is_still_replaced_whole(l
 
 def _foreign(out: Path, what: str) -> dict[str, bytes]:
     """A target that holds something other than a bundle of ours; what was there, to compare after."""
+    out.parent.mkdir()
     if what == "a file":
         out.write_bytes(b"Ines' packing list\n")
         return {".": out.read_bytes()}
@@ -683,7 +685,7 @@ FOREIGN = ["a file", "a folder of notes", "another manifest", "a manifest that i
 
 @pytest.mark.parametrize("what", FOREIGN)
 def test_a_target_that_is_not_a_bundle_of_ours_is_refused(lb: Logbook, tmp_path: Path, what: str, capsys):
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     before = _foreign(out, what)
     code = _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     assert code == 2
@@ -693,37 +695,37 @@ def test_a_target_that_is_not_a_bundle_of_ours_is_refused(lb: Logbook, tmp_path:
     assert after == before, "untouched"
     assert lb.meta["seq"] == 14, "no crossing line"
     assert not (lb.root / "exports").exists(), "no watermark"
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
+    assert sorted(p.name for p in out.parent.iterdir()) == ["out"]
 
 
 @pytest.mark.parametrize("what", FOREIGN)
 def test_force_replaces_a_target_that_is_not_a_bundle_of_ours(lb: Logbook, tmp_path: Path, what: str):
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     _foreign(out, what)
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force")
     assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(out)
     assert lb.meta["seq"] == 15
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
+    assert sorted(p.name for p in out.parent.iterdir()) == ["out"]
 
 
 def test_an_empty_folder_and_a_missing_one_are_written_as_before(lb: Logbook, tmp_path: Path):
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    deep = tmp_path / "a" / "b" / "out"  # its parents are made, as they always were
+    empty = tmp_path / "given" / "empty"
+    empty.mkdir(parents=True)
+    deep = tmp_path / "given" / "a" / "b" / "out"  # its parents are made, as they always were
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(empty))
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(deep))
     for out in (empty, deep):
         assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
         _matches_its_manifest(out)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["a", "empty", "lb"]
+    assert sorted(p.name for p in empty.parent.iterdir()) == ["a", "empty"]
     assert sorted(p.name for p in deep.parent.iterdir()) == ["out"]
 
 
 def test_a_failed_export_leaves_the_earlier_bundle_as_it_was(lb: Logbook, tmp_path: Path, capsys):
     """A store file that no longer hashes to its name stops the second export while it copies; the
     first bundle is still there byte for byte, nothing half-written beside it, no line appended."""
-    out = tmp_path / "out"
+    out = tmp_path / "given" / "out"
     _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     before, seq = _on_disk(out), lb.meta["seq"]
     (lb.root / "attachments" / SHA_PRESENT).write_bytes(b"thrEE")
@@ -732,4 +734,49 @@ def test_a_failed_export_leaves_the_earlier_bundle_as_it_was(lb: Logbook, tmp_pa
     assert "does not hash to its name" in capsys.readouterr().err
     assert _on_disk(out) == before
     assert lb.meta["seq"] == seq
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
+    assert sorted(p.name for p in out.parent.iterdir()) == ["out"]
+
+
+def test_a_package_that_does_not_match_its_manifest_is_never_put_in_place(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+):
+    """The staged folder is checked against its manifest before the rename: a list that leaves a file
+    out (here, by a fault put in on purpose) stops the export with the earlier bundle untouched."""
+    out = tmp_path / "given" / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    before, seq = _on_disk(out), lb.meta["seq"]
+    listing = crossing._listing
+    monkeypatch.setattr(crossing, "_listing", lambda folder, paths: listing(folder, list(paths)[1:]))
+    assert _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out)) == 1
+    assert "entries.jsonl is in the package and not in its manifest" in capsys.readouterr().err
+    assert _on_disk(out) == before and lb.meta["seq"] == seq
+    assert sorted(p.name for p in out.parent.iterdir()) == ["out"]
+
+
+def test_verify_package_names_a_file_missing_or_added(lb: Logbook, tmp_path: Path):
+    out = tmp_path / "given" / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    assert crossing.verify_package(out) == _manifest(out)
+    (out / "attachments" / "extra.bin").write_bytes(b"\x00")
+    with pytest.raises(crossing.CrossingError) as e:
+        crossing.verify_package(out)
+    assert str(out / "attachments" / "extra.bin") in str(e.value) and "not in its manifest" in str(e.value)
+    (out / "attachments" / "extra.bin").unlink()
+    (out / "resolution.jsonl").unlink()
+    with pytest.raises(crossing.CrossingError) as e:
+        crossing.verify_package(out)
+    assert str(out / "resolution.jsonl") in str(e.value) and "not in the package" in str(e.value)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a symlink needs a privilege on Windows")
+def test_a_link_to_an_earlier_bundle_still_names_the_new_one(lb: Logbook, tmp_path: Path):
+    """`--out` a symbolic link: the folder it names is replaced, beside that folder, and the link kept."""
+    real = tmp_path / "given" / "real"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(real))
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(link))
+    assert link.is_symlink() and link.resolve() == real.resolve()
+    assert sorted(_on_disk(real)) == ["entries.jsonl", "manifest.json"]
+    _matches_its_manifest(real)
+    assert sorted(p.name for p in real.parent.iterdir()) == ["real"]
