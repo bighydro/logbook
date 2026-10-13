@@ -164,8 +164,10 @@ logbook repair health-units             # per wrong line a corrected line and a 
     2026/09.jsonl
   inbox/            drop anything here. `logbook inbox list` says what was read; `inbox clean` moves or deletes it.
   notes/            what you write. plain Markdown, one file per day.
-  logbook.json      who this is, your timezone, the chain head.
-  policy/           crossing.json: the highest tier each circle member may receive. yours to edit.
+  logbook.json      who this is, your timezone, the chain head; `day_start` when your day does not begin at
+                    midnight ("06:00": a line at 02:00 belongs to the evening before; RFC 0036, draft).
+  policy/           crossing.json: the highest tier each circle member may receive, `until` when the access is
+                    lent for a while, `signed_within_days` when only days you signed lately may cross (RFC 0036, draft). yours to edit.
                     stays.json: how long a stay is, how far a place reaches. yours to edit.
                     import.json: the sources you switched off, each with a reason. yours to edit.
                     owner.json: your own other names, emails and phones, so you are never your own company. yours to edit.
