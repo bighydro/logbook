@@ -1,8 +1,10 @@
 """The Day: one calendar day of the record, read back — `logbook day YYYY-MM-DD [--json]`.
 
-A Day is the ordered list of the owner's stays and moves between 00:00 and 24:00 local, with what
-attached to each and who was there, framed by the night before and the night after. It is read,
-never written: `read(lb, day)` is a function of the record at one head, built from one
+A Day is the ordered list of the owner's stays and moves between 00:00 and 24:00 local (from the
+record's `day_start` to the same clock the next morning when it sets one, RFC 0036: the header then
+says so, and the JSON carries `day_start`), with what attached to each and who was there, framed by
+the night before and the night after (the nights whose windows hold the day's start and its end). It
+is read, never written: `read(lb, day)` is a function of the record at one head, built from one
 `reading.read` of the day and the day before (the night before is that day's night), located
 through the index, so a multi-million-line record reads a day in the time its day takes. Every
 number and name points at the lines it came from.
@@ -96,6 +98,7 @@ from . import (
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
+from .day_start import MIDNIGHT, span_words
 from .export import parse_day
 from .flights import Airports
 from .reading import Reading
@@ -162,14 +165,10 @@ def of_reading(
     lines standing (RFC 0028), of which the ones about the day are listed apart from the timeline,
     none when the caller read none."""
     d = parse_day(day)
-    before = (d - timedelta(days=1)).isoformat()
-    tz = rd.tz
-    day_start = datetime.combine(d, time.min, tzinfo=tz)
-    day_end = day_start + timedelta(days=1)
+    tz, bounds = rd.tz, rd.day_start
+    day_start, day_end = bounds.span(d)  # midnight to midnight, unless `day_start` says otherwise
     if lines is None:
-        lines = [
-            line for line in rd.lines if (at := stays.instant(line.get("at"))) and day_start <= at < day_end
-        ]
+        lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and bounds.day(at) == d]
     lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
     folded, stands_for = events.fold(lines, flight_lines.Airlines.load())  # one row per calendar entry
     owner = rd.owner
@@ -183,8 +182,9 @@ def of_reading(
         [*entries, *flights],
         key=lambda e: (e["within_day"]["start"] if "within_day" in e else e["start"], e["kind"] == FLIGHT),
     )
-    night_after = rd.night_of(day)
-    night_before = rd.night_of(before)
+    night_start = rd.settings.night[0]  # the nights that frame the day: RFC 0036, `day_start.DayStart`
+    night_after, after = rd.night_after(day), bounds.night_after(day, night_start)
+    night_before, before = rd.night_before(day), bounds.night_before(day, night_start)
     all_day = [
         {"title": _title(line), "line": str(line["id"]), **_stands_for(line, stands_for)}
         for line in folded
@@ -194,9 +194,10 @@ def of_reading(
         "day": day,
         "weekday": WEEKDAYS[d.weekday()],
         "tz": str(tz),
+        **({} if bounds.midnight else {"day_start": bounds.text}),  # RFC 0036: said only when not midnight
         "nights": {
             "before": _night_json(night_before, before, rd),
-            "after": _night_json(night_after, day, rd),
+            "after": _night_json(night_after, after, rd),
         },
         "country": _country(night_after, segments, day_start, day_end, rd),
         "all_day": all_day,
@@ -405,8 +406,9 @@ def _is_gap(s: stays.Segment, settings: stays.Settings) -> bool:
 
 
 def _within(start: datetime, end: datetime, day_start: datetime, day_end: datetime) -> dict[str, Any]:
-    """The part of a span that lies on the day: the Day runs from 00:00 to 24:00, so a stay that
-    began the evening before shows from midnight, and keeps its real span beside."""
+    """The part of a span that lies on the day: the Day runs from 00:00 to 24:00 (from `day_start` to
+    `day_start` the next morning when the record sets one), so a stay that began the evening before
+    shows from the day's start, and keeps its real span beside."""
     a, b = max(start, day_start), min(end, day_end)
     return {"start": _stamp(a), "end": _stamp(b), "duration_s": int((b - a).total_seconds())}
 
@@ -679,7 +681,7 @@ def health_rows(found: Iterable[Line], rd: Reading) -> dict[str, dict[str, Any]]
     """By day, the rows of `health.summary` over `found` — the health lines of the days asked for and
     the day before the first (the night's sleep starts then), from the index — with the reading's
     retractions, so a retracted line is out. A day with no health lines has no row."""
-    rows = health.summary([*found, *rd.retracted.values()], str(rd.tz))
+    rows = health.summary([*found, *rd.retracted.values()], str(rd.tz), rd.day_start.text)
     return {str(row["day"]): {k: v for k, v in row.items() if k not in ("day", "by")} for row in rows}
 
 
@@ -749,7 +751,11 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     On a signed day, the disposition's symbol before each line the signature gave one."""
     tz = ZoneInfo(data["tz"])
     head = f"{data['day']}  {data['weekday']}"
-    yield f"{head}{DOT}{signing.state_text(data['signed'])}" if "signed" in data else head
+    if "signed" in data:
+        head += f"{DOT}{signing.state_text(data['signed'])}"
+    if data.get("day_start", MIDNIGHT) != MIDNIGHT:  # the page's span, said when it is not the calendar day
+        head += f"{DOT}{span_words(data['day_start'])}"
+    yield head
     marks = _marks(data)
     yield _row("night before", night_text(data["nights"]["before"]))
     yield _row("night after", night_text(data["nights"]["after"]))

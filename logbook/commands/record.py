@@ -17,7 +17,7 @@ from typing import Any
 
 from .. import FORMAT
 from ..contrib import demo
-from ..core import health, repair, sealing
+from ..core import day_start, health, repair, sealing
 from ..core.index import Index
 from ..core.store import CodeCheckoutError, FormatError, Logbook
 from .common import Subparsers, _plural, _progress, _under_home
@@ -240,6 +240,7 @@ def cmd_stats(a: argparse.Namespace) -> None:
     index, one row per local day — sleep hours, steps, resting heart rate — and no device, no
     zone, no other field of any line."""
     lb = Logbook.find()
+    day_start.of(lb.meta)  # the years count local days: a boundary not a clock is refused (RFC 0036)
     if a.health:
         days = health_days(lb)
         if a.json:
@@ -289,9 +290,9 @@ def health_days(lb: Logbook) -> list[dict[str, Any]]:
     """One row per local day of the record's health lines, through `health.summary` (the rules are
     there): every `health` line streamed through the index, the retractions beside them; the
     `lines` each row carries are dropped here, since `stats` prints numbers and never ids."""
-    tz = str(lb.meta["timezone"])
+    tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text  # a line's day: RFC 0036
     with lb.index() as idx:
-        rows = health.summary([*idx.of_kind(health.KIND), *idx.retractions()], tz)
+        rows = health.summary([*idx.of_kind(health.KIND), *idx.retractions()], tz, start)
     return [{k: v for k, v in row.items() if k not in ("lines", "by")} for row in rows]
 
 
@@ -511,7 +512,7 @@ def setup_arguments(sub: Subparsers) -> None:
         description="the guided first run: where the record lives, your timezone, who you are, your home,"
         " what is"
         " on this machine to import; one question at a time, resumable; --yes takes every default."
-        " The record's settings: places, assets, questions",
+        " The record's settings: places, assets, questions, day_start",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
@@ -521,6 +522,7 @@ def setup_arguments(sub: Subparsers) -> None:
     places_arguments(settings)
     assets_arguments(settings)
     questions_arguments(settings)
+    day_start_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
@@ -531,6 +533,98 @@ def cmd_setup(a: argparse.Namespace) -> None:
     status = setup.run(a, os.environ)
     if status:
         sys.exit(status)
+
+
+def day_start_arguments(sub: Subparsers) -> None:
+    """`logbook setup day_start [HH:MM]`: where the owner's day begins (RFC 0036, docs/settings.md)."""
+    s = sub.add_parser(
+        "day_start",
+        aliases=["day-start"],
+        help="where your day begins (logbook.json day_start, default 00:00); a line before it is the day"
+        " before's",
+        description="where your day begins, HH:MM from 00:00 to 23:59 (logbook.json `day_start`, RFC 0036);"
+        " with 06:00 a line at 01:30 belongs to the day before. Without a value, says where it begins now."
+        " Setting it rebuilds the index when there is one, and says how many signed days no longer match"
+        " their page; no line is changed",
+    )
+    s.add_argument(
+        "value", nargs="?", metavar="HH:MM", help="the clock your day begins at; 00:00 is midnight"
+    )
+    s.set_defaults(fn=cmd_day_start)
+
+
+def cmd_day_start(a: argparse.Namespace) -> None:
+    """`logbook setup day_start`: where the day begins now. `logbook setup day_start HH:MM`: write it to
+    `logbook.json` under the writer lock (a setting, not a line: nothing is appended and no hash
+    changes), then rebuild the index under it when one exists, with progress, and count the signed days
+    whose page it moved (RFC 0036: they read as `page_matches` false until signed again). Without an
+    index nothing is built: the next reader builds it under the new boundary, or `logbook repair index`
+    does now."""
+    lb = Logbook.find()
+    current = lb.meta.get(day_start.KEY)
+    if a.value is None:
+        try:
+            found = day_start.clock(current)
+        except day_start.DayStartError as e:
+            print(f"setup day_start: {e}", file=sys.stderr)
+            sys.exit(2)
+        clock = f"{found.hour:02d}:{found.minute:02d}"
+        print(
+            f"the day begins at {clock}: a line before {clock} belongs to the day before"
+            " (logbook.json day_start)"
+            if current is not None and clock != day_start.MIDNIGHT
+            else "the day begins at midnight, 00:00 (no day_start in logbook.json); `logbook setup day_start"
+            " 06:00` moves it"
+        )
+        return
+    value = a.value.strip()
+    try:
+        day_start.clock(value)
+    except day_start.DayStartError:
+        print(
+            f"setup day_start: {a.value!r} is not a clock from 00:00 to 23:59 written HH:MM, e.g. 06:00;"
+            " nothing changed",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if day_start.text_of(current) == value:
+        print(f"the day already begins at {value}; nothing changed")
+        return
+    with lb.writer():
+        lb.set_meta(**{day_start.KEY: value})
+    print(
+        f"day_start: {day_start.text_of(current)} → {value} in logbook.json; a line before {value} now"
+        " belongs to the day before. No line changed"
+    )
+    if not lb.index_path.exists():
+        print("index: the next reader builds it under the new boundary, or `logbook repair index` now")
+        return
+    started = time.monotonic()
+    n = lb.index_rebuild(progress=_progress)
+    print(f"index: rebuilt, {n:,} lines in {time.monotonic() - started:,.1f}s, each on its day under {value}")
+    moved, signed = _signatures_moved(lb)
+    if moved:
+        print(
+            f"signed days: {moved} of {signed} no longer match their page, since lines moved between days;"
+            " read each again and sign it (`logbook day sign YYYY-MM-DD`), or set day_start back"
+        )
+    elif signed:
+        print(f"signed days: all {signed} still match their page")
+
+
+def _signatures_moved(lb: Logbook) -> tuple[int, int]:
+    """(how many standing signatures no longer digest to their page, how many there are)."""
+    from ..core import signing
+
+    tz, owner = str(lb.meta["timezone"]), str(lb.meta.get("owner_id") or "") or None
+    with lb.index() as idx:
+        standing = signing.standing(idx, owner)
+        moved = sum(
+            1
+            for day, line in standing.items()
+            if (signing.signed_json(line, tz, signing.page(idx, day), day) or {}).get("page_matches") is False
+        )
+    return moved, len(standing)
 
 
 def doctor_arguments(sub: Subparsers) -> None:

@@ -37,6 +37,8 @@ from zoneinfo import ZoneInfo
 from . import sealing
 from . import search as _search
 from .chain import Line, is_sealed
+from .day_start import KEY as DAY_START
+from .day_start import MIDNIGHT, lenient, local_day
 
 if TYPE_CHECKING:
     from .store import Logbook
@@ -148,10 +150,14 @@ EvidenceRow = tuple[str, str, str | None]
 _open: Counter[Path] = Counter()
 
 
-def local_date(at: str, tz: str) -> str:
-    """The calendar date of an RFC3339 UTC instant in the owner's timezone."""
+def local_date(at: str, tz: str, start: object = None) -> str:
+    """The local day of an RFC3339 UTC instant in the owner's timezone: its calendar date, or the date
+    before when its wall clock is earlier than `start`, the record's `day_start` (RFC 0036,
+    `day_start.local_day`; None is midnight). A value no reader accepts counts as midnight here: the
+    index is extended inside `add`, which never groups by day, and every reader refuses that value
+    before it reads the index (`day_start.of`)."""
     instant = datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(UTC)
-    return instant.astimezone(ZoneInfo(tz)).date().isoformat()
+    return local_day(instant, ZoneInfo(tz), lenient(start)).isoformat()
 
 
 def row(
@@ -161,6 +167,7 @@ def row(
     offset: int,
     payload: dict[str, Any] | None = None,
     blind: Callable[[str], str] | None = None,
+    start: object = None,
 ) -> Row:
     """The columns `stats` counts are kept as the payload gives them, never interpreted: the id a
     line `supersedes` (SPEC §3), the entity id a resolution mints (RFC 0006), and the digest of
@@ -169,7 +176,8 @@ def row(
     or not a string is the owner, NULL), its `lat` and `lon` when both are finite numbers (a bool
     or a string is not one, as `stays.derive` reads them, so a line without a point has NULL), and
     the line's `end`. For a sealed line `payload` is the opened payload (None when there is no
-    identity: every payload column NULL) and `raw_id` is stored through `blind`."""
+    identity: every payload column NULL) and `raw_id` is stored through `blind`. `day_local` is the
+    line's local day under the record's `day_start`, `start` (`local_date`)."""
     sealed = is_sealed(line)
     if payload is None:
         payload = {} if sealed else (line.get("payload") or {})
@@ -188,7 +196,7 @@ def row(
         int(line["seq"]),
         str(line["id"]),
         str(line["at"]),
-        local_date(line["at"], tz),
+        local_date(line["at"], tz, start),
         str(line["kind"]),
         str(line["source"]),
         int(line["tier"]),
@@ -310,6 +318,8 @@ class Index:
             "timezone": str(meta["timezone"]),
             "recipients": ",".join(sorted(sealing.recipients_of(meta))),
         }
+        if meta.get(DAY_START) not in (None, MIDNIGHT):  # the boundary `day_local` was derived under
+            found[DAY_START] = str(meta[DAY_START])
         if opened is not None:
             found["opened"] = "true" if opened else "false"
         return found
@@ -356,12 +366,12 @@ class Index:
         """The row of one line, and its search row when it carries words: a sealed line's payload
         columns come from its opened payload when the identity is here, its `raw_id` blinded, and
         it never has a search row (its words stay sealed)."""
-        tz = str(meta["timezone"])
+        tz, start = str(meta["timezone"]), meta.get(DAY_START)
         if not is_sealed(line):
-            line_row = row(line, tz, file, offset)
+            line_row = row(line, tz, file, offset, start=start)
             return line_row, text_row(line, self.lb.root, line_row)
         payload = self.lb.opened(line)["payload"] if self.lb.identities else None
-        return row(line, tz, file, offset, payload, self._blinder(meta)), None
+        return row(line, tz, file, offset, payload, self._blinder(meta), start), None
 
     def _forms(self, source: str, raw_id: str) -> tuple[str, str, str]:
         """(source, raw_id, blinded raw_id): what the (source, raw_id) index may hold for a line of

@@ -6,7 +6,10 @@ touched and no connection is opened."""
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+import types
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -188,11 +191,12 @@ def test_scheduled_takes_no_source_and_no_other_flag(
 
 def test_the_schedule_runs_the_scheduled_run(tmp_path: Path) -> None:
     plan = schedule.plan("linux", tmp_path / "home", "/opt/py", logbook_home=tmp_path / "lb")
-    [service] = [text for path, text in plan.files.items() if path.suffix == ".service"]
-    assert "ExecStart=/opt/py -m logbook.cli sync --scheduled\n" in service
+    runs, close = [text for path, text in plan.files.items() if path.suffix == ".service"]
+    assert "ExecStart=/opt/py -m logbook.cli sync --scheduled\n" in runs
+    assert "ExecStart=/opt/py -m logbook.cli sync --scheduled --close\n" in close
     plan = schedule.plan("darwin", tmp_path / "home", "/opt/py")
-    [text] = plan.files.values()
-    assert "-m logbook.cli sync --scheduled" in text and "sync --all" not in text
+    for text in plan.files.values():
+        assert "-m logbook.cli sync --scheduled" in text and "sync --all" not in text
 
 
 # -- the restore test on the first Sunday ----------------------------------------------------------------
@@ -239,3 +243,118 @@ def test_without_a_backup_the_first_sunday_records_a_skip_that_says_what_to_do(
     test = json.loads((lb.root / "state" / "last-restore-test.json").read_text(encoding="utf-8"))
     assert test["status"] == "skipped" and "logbook backup DEST" in test["reason"]
     assert "warn  restore-test" in out and "logbook backup DEST" in out
+
+
+# -- the 06:00 run: the close (RFC 0036) ---------------------------------------------------------------
+
+DREAM = "logbook.commands.dream"
+
+
+def _fake_dream(monkeypatch: pytest.MonkeyPatch, said: list[str], status: int = 0) -> None:
+    """A dream command as the dream's own branch declares it — `dream_arguments` and the `fn` it sets —
+    put where the close imports it from; it prints one line per day and records that it ran."""
+
+    def cmd_dream(a: argparse.Namespace) -> None:
+        said.append("--catch-up" if a.catch_up else "?")
+        print("2026-10-07  dreamed   1 segment")
+        print("1 dreamed")
+        if status:
+            sys.exit(status)
+
+    def dream_arguments(sub: Any) -> None:
+        s = sub.add_parser("dream")
+        s.add_argument("--catch-up", action="store_true")
+        s.add_argument("--days", type=int, default=14)
+        s.set_defaults(fn=cmd_dream)
+
+    module = types.ModuleType(DREAM)
+    module.dream_arguments = dream_arguments  # type: ignore[attr-defined]
+    module.cmd_dream = cmd_dream  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, DREAM, module)
+
+
+def _dream_entry(lb: Logbook) -> None:
+    path = lb.root / "policy" / "crossing.json"
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data["dream"] = {"max_tier": 2, "until": "2026-12-31"}
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_the_close_syncs_then_catches_the_dream_up_then_says_one_summary_line(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    said: list[str] = []
+    _fake_dream(monkeypatch, said)
+    _dream_entry(lb)
+    clock[0] = datetime(2026, 10, 8, 4, 0, 12, tzinfo=UTC)  # 06:00 in Oslo
+    status, out, _err = _scheduled(capsys, "--close")
+    assert status == 0
+    assert said == ["--catch-up"], "dream --catch-up, once"
+    synced, dreamed = out.index("sync --all: 1 source"), out.index("2026-10-07  dreamed")
+    summary = out.index("scheduled run, the close (dream caught up): ")
+    assert synced < dreamed < summary, "sync, then the catch-up, then the summary"
+    assert out.rstrip().splitlines()[-1].startswith("scheduled run, the close (dream caught up): ")
+    assert _last_run(lb)["sources"] == {"alpha": {"result": "ok", "lines": 1}}
+
+
+def test_the_close_without_a_dream_command_says_so_in_one_line_and_goes_on(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    monkeypatch.setitem(sys.modules, DREAM, None)  # this version has no dream: the import fails
+    _dream_entry(lb)
+    status, out, err = _scheduled(capsys, "--close")
+    assert status == 0, "absence is not an error"
+    notes = [line for line in out.splitlines() if line.startswith("dream:")]
+    assert notes == ["dream: this version has no dream command; nothing to catch up"]
+    assert out.index("sync --all: 1 source") < out.index(notes[0]) < out.index("scheduled run, the close")
+    assert "scheduled run, the close (no dream command): " in out and "Traceback" not in err
+
+
+def test_the_close_without_a_dream_entry_never_runs_the_dream(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    said: list[str] = []
+    _fake_dream(monkeypatch, said)
+    status, out, _err = _scheduled(capsys, "--close")
+    assert status == 0 and said == []
+    assert "dream: policy/crossing.json has no dream entry; nothing to catch up" in out
+    assert "scheduled run, the close (no dream entry): " in out
+
+
+def test_a_dream_that_refuses_a_day_does_not_fail_the_close(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    said: list[str] = []
+    _fake_dream(monkeypatch, said, status=1)
+    _dream_entry(lb)
+    status, out, _err = _scheduled(capsys, "--close")
+    assert status == 0, "a draft is a proposal: the run is the sync and the doctor"
+    assert "scheduled run, the close (dream --catch-up exit 1): " in out
+
+
+def test_the_runs_that_are_not_the_close_never_dream(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    said: list[str] = []
+    _fake_dream(monkeypatch, said)
+    _dream_entry(lb)
+    _status, out, _err = _scheduled(capsys)
+    assert said == [] and "dreamed" not in out
+    assert not any(line.startswith("dream:") for line in out.splitlines())
+    assert "scheduled run: " in out and "the close" not in out
+
+
+def test_close_goes_with_scheduled(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as e:
+        cli.main(["sync", "--close"])
+    assert e.value.code == 2 and "--scheduled" in capsys.readouterr().err

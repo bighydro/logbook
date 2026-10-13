@@ -9,6 +9,11 @@ The checks, in the order they print:
   hashed by another rule is a fail.
 - `index`: `index.sqlite` was built at the record's head (a stale or missing index is a warn: the
   next reader rebuilds it, `logbook index` shows progress).
+- `day-start`: where the owner's day begins, when `logbook.json` sets `day_start` to anything but
+  midnight (RFC 0036), as a pass; a warn when `index.sqlite` was built under another boundary (its
+  `day_local` puts lines on other days until the next reader rebuilds it); a fail when the value is
+  not a clock, which every reader that groups by day refuses. A record whose day begins at midnight,
+  with an index that agrees, has no such line.
 - `owner`: `policy/owner.json` is there and names at least one alias, so the owner is never listed
   as their own company (`present.owner_of`). Missing or empty is a warn, not JSON is a fail.
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
@@ -65,7 +70,7 @@ from pathlib import Path
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
-from ..core import assets, index, places, plausible, policy
+from ..core import assets, day_start, index, places, plausible, policy
 from ..core.store import FormatError, Logbook
 from . import adapters, home, last_run, schedule, serve
 from . import service as serve_service
@@ -160,6 +165,56 @@ def index_state(lb: Logbook) -> tuple[str, set[str]]:
         return "stale", set()
     finally:
         db.close()  # before anything could unlink it: Windows refuses to delete an open file
+
+
+def index_day_start(lb: Logbook) -> str | None:
+    """The `day_start` `index.sqlite` was built under (`00:00` when its meta names none), read-only;
+    None when there is no index or nothing SQLite can read."""
+    path = lb.index_path
+    if not path.exists():
+        return None
+    try:
+        db = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    except (sqlite3.DatabaseError, OSError):
+        return None
+    try:
+        found = db.execute("SELECT value FROM meta WHERE key = ?", (day_start.KEY,)).fetchone()
+        return day_start.MIDNIGHT if found is None else str(found[0])
+    except sqlite3.DatabaseError:  # no meta table, or nothing SQLite can read
+        return None
+    finally:
+        db.close()  # before anything could unlink it: Windows refuses to delete an open file
+
+
+def day_start_check(lb: Logbook) -> Check | None:
+    """`day_start` (RFC 0036): None for a day that begins at midnight with an index that agrees."""
+    value = lb.meta.get(day_start.KEY)
+    try:
+        found = day_start.of(lb.meta)
+    except day_start.DayStartError:
+        return Check(
+            "day-start",
+            "fail",
+            f"logbook.json day_start {value!r} is not a clock from 00:00 to 23:59 written HH:MM; every reader"
+            " that groups by day refuses it: `logbook setup day_start 06:00`, or remove the key for midnight",
+        )
+    built = index_day_start(lb)
+    if built is not None and built != found.text:
+        return Check(
+            "day-start",
+            "warn",
+            f"the day begins at {found.text} (logbook.json day_start) but index.sqlite was built with"
+            f" {built}, so its days are not yours yet: the next reader rebuilds it, or"
+            " `logbook repair index`",
+        )
+    if found.midnight:
+        return None
+    return Check(
+        "day-start",
+        "pass",
+        f"the day begins at {found.text}: a line before {found.text} belongs to the day before"
+        " (logbook.json day_start)",
+    )
 
 
 def index_check(state: str) -> Check:
@@ -377,7 +432,7 @@ def home_check(root: Path) -> Check:
 
 
 RESTORE_TEST_WITHIN = timedelta(days=35)  # the first Sundays of two months are at most five weeks apart
-INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` twice a day and writes it"
+INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it"
 RESTORE_TEST = (
     "`logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it;"
     " the schedule runs it on the first Sunday of the month"
@@ -385,15 +440,20 @@ RESTORE_TEST = (
 
 
 def schedule_installed(env: Mapping[str, str]) -> bool:
-    """Whether this machine has the agent or timer `sync --install-schedule` writes."""
+    """Whether this machine has the agents or timers `sync --install-schedule` writes, the user's or,
+    with `--system`, the system's copies."""
     xdg = env.get("XDG_CONFIG_HOME", "").strip()
+    config, root = (Path(xdg).expanduser() if xdg else None), serve_service.SYSTEM_ROOT
     try:
-        plan = schedule.plan(
-            schedule.system(), Path.home(), sys.executable, None, Path(xdg).expanduser() if xdg else None
-        )
+        plans = [  # the user's agents or timers, then the system's copies (whichever account they run as)
+            schedule.plan(
+                schedule.system(), Path.home(), sys.executable, None, config, user=user, system_root=root
+            )
+            for user in (None, "-")
+        ]
     except schedule.ScheduleError:
         return False
-    return schedule.installed(plan)
+    return any(schedule.installed(plan) for plan in plans)
 
 
 def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
@@ -405,7 +465,9 @@ def last_run_check(lb: Logbook, env: Mapping[str, str]) -> Check:
     if state is None:
         if schedule_installed(env):
             return Check(
-                "last-run", "warn", "the schedule is installed but has not run yet; wait for 07:00 or 19:00"
+                "last-run",
+                "warn",
+                "the schedule is installed but has not run yet; wait for 00:00, 06:00, 12:00 or 18:00",
             )
         return Check("last-run", "pass", f"no schedule on this machine; {INSTALL}")
     run = state.run
@@ -544,6 +606,9 @@ def run(
     checks.append(record_check(lb))
     state, sources = index_state(lb)
     checks.append(index_check(state))
+    boundary = day_start_check(lb)
+    if boundary is not None:
+        checks.append(boundary)
     checks.append(owner_check(lb.root))
     checks.append(places_check(lb.root))
     checks.append(assets_check(lb.root))

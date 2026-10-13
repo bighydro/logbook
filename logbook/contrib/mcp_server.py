@@ -38,15 +38,27 @@ import sys
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from .. import __version__
 from ..core import day as day_reader
+from ..core import (
+    day_start,
+    flights,
+    pages,
+    policy,
+    reading,
+    rollup,
+    sealing,
+    signing,
+    stays,
+    transcripts,
+    trips,
+)
 from ..core import days as days_reader
-from ..core import flights, pages, policy, reading, rollup, sealing, signing, stays, transcripts, trips
 from ..core.chain import Line, is_sealed
 from ..core.export import parse_day
 from ..core.flights import Airports
@@ -403,7 +415,9 @@ def _day(a: Arguments, key: str) -> str | None:
 
 
 def _today(lb: Logbook) -> str:
-    return datetime.now(ZoneInfo(str(lb.meta["timezone"]))).date().isoformat()
+    """The day the owner is in now: the record's zone and its `day_start` (RFC 0036); a tool's `day`
+    defaults to it. DayStartError (a ValueError, so the tool's error) for a boundary it cannot parse."""
+    return day_start.of(lb.meta).today(datetime.now(UTC)).isoformat()
 
 
 def _whole(lb: Logbook) -> tuple[str, str] | None:
@@ -494,6 +508,7 @@ def tool_gaps(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
 
 
 def tool_search(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    day_start.of(lb.meta)  # a hit is listed on its day: a boundary not a clock is refused (RFC 0036)
     text = (_string(a, "text", required=True) or "").strip()
     if not text:
         raise ToolError("text is empty")
@@ -659,6 +674,7 @@ def tool_day_lines(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     that reads nothing of them. A retracted line is left out and counted; a retraction is never a
     row. The names are the resolution lines under the ceiling, as every reader has them."""
     day = _day(a, "day") or _today(lb)
+    day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
     families = _families(a)
     kinds = None if families is None else [kind for family in families for kind in FAMILIES[family]]
     tz = ZoneInfo(str(lb.meta["timezone"]))
@@ -779,8 +795,7 @@ def tool_digest(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
         monday = d - timedelta(days=d.weekday())
         year, number, _weekday = d.isocalendar()
         week = f"{year}-W{number:02d}"
-        tz = ZoneInfo(str(lb.meta["timezone"]))
-        today = gaps.now().astimezone(tz).date()
+        today = day_start.of(lb.meta).today(gaps.now())
         days = [
             (monday + timedelta(days=n)).isoformat() for n in range(7) if monday + timedelta(days=n) <= today
         ]
@@ -877,7 +892,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     `signing.sign`, the one implementation, over the record itself and not through the gate, so the
     line is byte for byte what the command writes with the same flags and `--at`. Returns the line's
     envelope, the header the command prints, and counts."""
-    day = _write_day(lb, a)
+    day = _write_day(lb, a)  # `_today` under the record's day_start: a boundary not a clock is refused
     confirm = a.get("confirm")
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
@@ -917,15 +932,16 @@ def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     if kind not in NOTE_KINDS:
         raise ToolError(f"kind must be one of {', '.join(NOTE_KINDS)}")
     tz = str(lb.meta["timezone"])
+    days = day_start.of(lb.meta)  # the day so defined: from its day_start to the next (RFC 0036)
     at = _string(a, "at")
     if at is not None:
         stamp = signing.moment(at, day, tz)
-        if _instant(stamp).astimezone(ZoneInfo(tz)).date().isoformat() != day:
+        if days.day_of(stamp) != day:
             raise ToolError(f"at {at.strip()} is not on {day} in {tz}; a note on a day is written during it")
     elif day == _today(lb):
         stamp = now_utc()
-    else:
-        stamp = utc(datetime.combine(parse_day(day), time(23, 59), tzinfo=ZoneInfo(tz)).isoformat())
+    else:  # the day's last minute: 23:59, or 05:59 the next morning when the day begins at 06:00
+        stamp = utc((days.span(day)[1] - timedelta(minutes=1)).isoformat())
     line = Logbook(lb.root).append(
         at=stamp,
         source=NOTE_SOURCE,

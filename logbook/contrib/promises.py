@@ -36,9 +36,8 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import policy, present, signing
+from ..core import day_start, policy, present, signing
 from ..core.chain import Line
-from ..core.index import local_date
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
 from ..core.transcripts import SPEAKER, Turn, turns_of
@@ -685,7 +684,7 @@ def extract(
     superseded) whose local day is `since` or later, read through the index, or only the kinds
     `sources` names; closed ones carry the task line that closed them. Nothing is written."""
     kinds = tuple(k for k in SOURCES if sources is None or k in set(sources))
-    tz = str(lb.meta["timezone"])
+    days = day_start.of(lb.meta)  # a proposal's day, which "tomorrow" counts from (RFC 0036)
     with lb.index() as idx:
         marks = idx.retractions()
         retracted = retractions(marks)
@@ -751,7 +750,7 @@ def extract(
                 owner_label, None, next(iter(sorted(owner.entities)), None) or None, True
             )
         title = payload.get("title") if kind in (TRANSCRIPT, NOTE) else payload.get("subject")
-        day = local_date(str(line["at"]), tz)
+        day = days.day_of(str(line["at"]))
         names = _names(participants, spoken_by, identities, owner, owner_label)
         names = tuple(sorted({*names, *with_names}))
         said = [

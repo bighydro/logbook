@@ -1,4 +1,8 @@
-"""The day package: `logbook export --day` (ADR 0013 §4). A view of the log, never a replacement."""
+"""The day package: `logbook export --day` (ADR 0013 §4). A view of the log, never a replacement.
+
+A day is the record's local day under its `day_start` (RFC 0036); a package of a record whose day
+does not begin at midnight says where it begins (`day_start`, `HH:MM`), and one whose day does
+carries no such key, as every package before it."""
 
 from __future__ import annotations
 
@@ -6,6 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from . import day_start
 from .chain import Line, canonical_json
 from .index import local_date
 from .store import Logbook, now_utc, retractions
@@ -78,6 +83,7 @@ def day_packages(lb: Logbook, days: list[str], generated_at: str | None = None) 
     for day in days:
         parse_day(day)
     meta = lb.meta
+    bounds = day_start.of(meta)  # DayStartError for a boundary this reader cannot parse
     generated_at = generated_at or now_utc()
     by_day = entries_by_day(lb, min(days), max(days)) if days else {}
     return {
@@ -85,6 +91,7 @@ def day_packages(lb: Logbook, days: list[str], generated_at: str | None = None) 
             "schema": SCHEMA,
             "date": day,
             "tz": meta["timezone"],
+            **({} if bounds.midnight else {day_start.KEY: bounds.text}),
             "owner_id": meta["owner_id"],
             "generated_at": generated_at,
             "logbook_head": meta["head"],

@@ -46,7 +46,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..core import day as day_reader
-from ..core import days, events
+from ..core import day_start, days, events
 from ..core import flights as flight_lines
 from ..core.chain import Line
 from ..core.export import parse_day
@@ -78,8 +78,9 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     not come (after today in the record's zone); `stays.SettingsError` when the record's settings,
     places or assets file is not what it should be. Nothing is written."""
     d = parse_day(day)
-    tz = ZoneInfo(str(lb.meta["timezone"]))
-    today = gaps.now().astimezone(tz).date()
+    days_of = day_start.of(lb.meta)  # the day has come when its start has: RFC 0036
+    tz = days_of.zone
+    today = days_of.today(gaps.now())
     if d > today:
         raise ValueError(f"{day} is after today ({today.isoformat()}); a digest closes a day that has come")
     data = day_reader.read(lb, day, airports)

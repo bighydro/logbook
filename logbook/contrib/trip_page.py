@@ -157,7 +157,7 @@ def read(
         found = reading.crossing(idx.by_kind(health.KIND, before, trip.until), tiers)
     health_rows = [
         row
-        for row in health.summary([*found, *rd.retracted.values()], str(rd.tz))
+        for row in health.summary([*found, *rd.retracted.values()], str(rd.tz), rd.day_start.text)
         if trip.start <= str(row["day"]) <= trip.until
     ]
     health_of = {
@@ -214,7 +214,7 @@ def _lines_by_day(rd: Reading) -> dict[str, list[Line]]:
     for line in rd.lines:
         at = stays.instant(line.get("at"))
         if at is not None:
-            found.setdefault(at.astimezone(rd.tz).date().isoformat(), []).append(line)
+            found.setdefault(rd.day_start.day(at).isoformat(), []).append(line)
     return found
 
 

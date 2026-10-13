@@ -2,8 +2,17 @@
 
 `logbook doctor` is the check-up: one line per check, `pass`, `warn` or `fail`, and exit 1 when
 anything fails. It reads and never writes. The checks and their rules are listed in the module's
-own documentation (`logbook/contrib/doctor.py`); the schedule runs it twice a day
+own documentation (`logbook/contrib/doctor.py`); the schedule runs it four times a day
 ([The schedule](schedule.md)). `logbook doctor sources --gaps` says where each source went quiet.
+
+## Where the day begins
+
+A record whose day does not begin at midnight ([`day_start`](settings.md)) gets a `day-start` line
+after `index`: a pass naming the boundary (`pass  day-start  the day begins at 06:00: a line before 06:00
+belongs to the day before`); a **warn** when `index.sqlite` was built under another boundary, naming
+both (the next reader rebuilds it, or `logbook repair index` does now); a **fail** when the value is not
+a clock `HH:MM`, which every reader that groups by day refuses. A record whose day begins at midnight,
+with an index that agrees, has no such line.
 
 ## Implausible dates
 

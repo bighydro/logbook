@@ -31,6 +31,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "countries",
         "crossing",
         "day",
+        "day_start",
         "days",
         "drifting",
         "events",
@@ -122,6 +123,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
     {
         "home",
         "chapters",
+        "day_start",
         "fork",
         "introductions",
         "people_drift",

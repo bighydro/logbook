@@ -126,8 +126,8 @@ the summary names each folder's mark.
 **Errors are one sentence, never a value.** The login refused names `LOGBOOK_IMAP_USER` and
 `LOGBOOK_IMAP_PASSWORD`; TLS failed names `LOGBOOK_IMAP_HOST`; a folder not on the server names the
 folder and `LOGBOOK_IMAP_FOLDERS`. `doctor` shows `sync:mail` configured or unconfigured by the
-variables' names alone, and `sync --all` runs mail among the quick sources, so the 07:00 and 19:00
-schedule picks it up with no further configuration.
+variables' names alone, and `sync --all` runs mail among the quick sources, so the four runs of the
+schedule pick it up with no further configuration.
 
 ## What is counted, never dropped silently
 

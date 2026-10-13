@@ -134,7 +134,11 @@ def photo_id_of(line: Line) -> str | None:
 
 
 def people_by_month(
-    kept: Iterable[Line], photos: Mapping[str, Line], identities: Mapping[Ref, Identity], tz: str
+    kept: Iterable[Line],
+    photos: Mapping[str, Line],
+    identities: Mapping[Ref, Identity],
+    tz: str,
+    start: object = None,
 ) -> list[dict[str, Any]]:
     """Who appears on the keepers, per local month: one row per month and person — a person the
     record resolves (by the library's id through `provider_id`, or by a face's name that is exactly
@@ -150,7 +154,7 @@ def people_by_month(
         photo = photos.get(str(ref.get("line"))) if isinstance(ref, dict) else None
         if photo is None:
             continue
-        month = local_date(str(keeper["at"]), tz)[:7]
+        month = local_date(str(keeper["at"]), tz, start)[:7]  # under the record's day_start (RFC 0036)
         lane = str(payload.get("lane") or "")
         for person, name in _on_photo(photo, identities):
             key = (month, person, "" if person else name.casefold())

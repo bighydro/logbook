@@ -215,11 +215,11 @@ def _inside_any(line: Mapping[str, Any], visits: Sequence[stays.Segment]) -> boo
 
 
 def _day(stay: stays.Segment, reading: Reading) -> str:
-    return stay.start.astimezone(reading.tz).date().isoformat()
+    return reading.day_start.day(stay.start).isoformat()
 
 
 def _end_day(stay: stays.Segment, reading: Reading) -> str:
-    return stay.end.astimezone(reading.tz).date().isoformat()
+    return reading.day_start.day(stay.end).isoformat()
 
 
 def _where(stay: stays.Segment) -> str:

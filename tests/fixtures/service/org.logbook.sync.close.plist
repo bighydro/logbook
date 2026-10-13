@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.logbook.sync.close</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>if [ -r "$HOME/.config/logbook/sync.env" ]; then set -a; . "$HOME/.config/logbook/sync.env"; set +a; fi; exec /opt/logbook/venv/bin/python3 -m logbook.cli sync --scheduled --close</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>6</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardOutPath</key>
+	<string>@LOG@</string>
+	<key>StandardErrorPath</key>
+	<string>@LOG@</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>LOGBOOK_HOME</key>
+		<string>@LOGBOOK_HOME@</string>
+	</dict>
+</dict>
+</plist>

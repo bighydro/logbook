@@ -5,7 +5,8 @@ files, however long the log): the lines in the range, the first and last line's 
 silent stretch, and the local days of the range with no line from it, so a phone that stopped
 sending or a sync that died is seen on one screen.
 
-The range is [`since`, today] in the record's timezone; without `since` it starts, per source, on
+The range is [`since`, today] in the record's timezone, a day from its `day_start` to the next
+(RFC 0036; midnight unless the record sets one); without `since` it starts, per source, on
 the day of the source's first line, since a source is not silent before it began. A line dated
 after today (a calendar's future entries) is outside the range. The silent stretches are the gaps
 between consecutive lines, the stretch from the range's start to the first line when `since` names
@@ -24,6 +25,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
+from ..core import day_start
 from ..core.export import parse_day
 
 if TYPE_CHECKING:
@@ -43,9 +45,9 @@ def report(lb: Logbook, since: str | None = None, expect: Sequence[str] | None =
     None), `sources` (most lines first, or in `expect` order), `flagged` (the expected sources
     flagged, in that order; empty without `expect`). Raises ValueError for a `since` that is not a
     day or is after today."""
-    tz = ZoneInfo(str(lb.meta["timezone"]))
+    days = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse
     instant = now()
-    today = instant.astimezone(tz).date()
+    today = days.today(instant)
     start: date | None = None
     if since is not None:
         start = parse_day(since)
@@ -55,7 +57,7 @@ def report(lb: Logbook, since: str | None = None, expect: Sequence[str] | None =
         found = idx.activity("" if start is None else start.isoformat(), today.isoformat())
     by_source = {a["source"]: a for a in found}
     names = list(by_source) if expect is None else list(dict.fromkeys(expect))
-    sources = [_source(name, by_source.get(name), start, today, instant, tz) for name in names]
+    sources = [_source(name, by_source.get(name), start, today, instant, days) for name in names]
     return {
         "since": None if start is None else start.isoformat(),
         "today": today.isoformat(),
@@ -72,7 +74,7 @@ def _source(
     start: date | None,
     today: date,
     instant: datetime,
-    tz: ZoneInfo,
+    days: day_start.DayStart,
 ) -> dict[str, Any]:
     if activity is None:
         return {
@@ -90,12 +92,12 @@ def _source(
         a, b = activity["stretch"]
         candidates.append(((_instant(b) - _instant(a)).total_seconds(), a, b))
     if start is not None:
-        opening = datetime.combine(start, datetime.min.time(), tzinfo=tz)
+        opening = days.span(start)[0]
         candidates.append(((first - opening).total_seconds(), _stamp(opening), activity["first"]))
     quiet = max(0.0, (instant - last).total_seconds())  # the open stretch, still running
     candidates.append((quiet, activity["last"], None))
     seconds, gap_from, gap_to = max(candidates, key=lambda c: c[0])
-    range_start = start or first.astimezone(tz).date()
+    range_start = start or days.day(first)
     present = set(activity["days"])
     missing = [
         day.isoformat()

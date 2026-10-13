@@ -1,7 +1,8 @@
 """One reading of the record over a window of local days, for every reader that derives from it.
 
-`read(lb, first, last)` loads the window's lines through the index (from the first day's local
-midnight to the end of the night after the last day, so the last night is inside it), the
+`read(lb, first, last)` loads the window's lines through the index (from the first day's start, its
+local midnight unless `day_start` says otherwise (RFC 0036), to the end of the last day or of the
+night after it, whichever is later, so the last night is inside it), the
 settings, places and assets of the record, derives the stays (`stays.derive`) and the night of
 each day, resolves the names of the record's refs (`resolve`) and the owner's own identities
 (`present.owner_of`). Readers — `rollup`, `trips`, the pages — take a `Reading` and compute; none
@@ -31,11 +32,12 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import assets, places, policy, present, resolve, stays
+from . import assets, day_start, places, policy, present, resolve, stays
 from .chain import Line
+from .day_start import DayStart
 from .export import day_range
 from .flights import Airports
-from .index import EvidenceRow, LocationRow, local_date
+from .index import EvidenceRow, LocationRow
 from .places import TimelineVisit
 from .store import RETRACTION, Logbook, retractions
 
@@ -60,9 +62,13 @@ class Reading:
     names: dict[resolve.Ref, str]
     identities: dict[resolve.Ref, resolve.Identity]
     airports: Airports
+    day_start: DayStart  # the record's zone and where its day begins (RFC 0036)
     owner: present.Owner = field(default_factory=lambda: present.Owner(frozenset(), frozenset(), frozenset()))
     retracted: dict[str, Line] = field(default_factory=dict)
     tiers: tuple[int, ...] | None = None  # the gate the reading was read through; None is every tier
+    # the night after the last day when it is not the last day's own (a day that begins at or after the
+    # night's start, RFC 0036): not one of `nights`, which are the window's days', and empty at midnight
+    nights_after: list[stays.Night] = field(default_factory=list)
 
     @property
     def owner_stays(self) -> list[stays.Segment]:
@@ -73,10 +79,20 @@ class Reading:
         return self.derived.segments
 
     def night_of(self, day: str) -> stays.Night | None:
-        return next((n for n in self.nights if n.day == day), None)
+        """The night whose window starts on `day` (`stays.night_window`)."""
+        return next((n for n in (*self.nights, *self.nights_after) if n.day == day), None)
+
+    def night_after(self, day: str) -> stays.Night | None:
+        """The night that follows `day` under the record's `day_start`: the night of `day` unless the
+        day begins at or after the night's start (`day_start.DayStart.night_after`)."""
+        return self.night_of(self.day_start.night_after(day, self.settings.night[0]))
+
+    def night_before(self, day: str) -> stays.Night | None:
+        return self.night_of(self.day_start.night_before(day, self.settings.night[0]))
 
     def day_of(self, line: Line) -> str:
-        return local_date(str(line["at"]), str(self.tz))
+        """The local day of a line under the record's `day_start`."""
+        return self.day_start.day_of(str(line["at"]))
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
@@ -97,6 +113,7 @@ class OwnerTrack:
     stays: list[stays.Segment]  # the owner's stays, in time order (stops and moves left out)
     timeline_visits: list[TimelineVisit]
     noise_points: int
+    day_start: DayStart  # the record's zone and where its day begins (RFC 0036)
     retracted: frozenset[str] = frozenset()  # the ids of the retracted lines of the record
 
 
@@ -126,16 +143,15 @@ def read(
     """The reading of `[first, last]` (local days, inclusive); through the gate `tiers` when given
     (the module's docstring). Raises `stays.SettingsError` when the settings, the places or the
     assets file is not what it should be. The settings file is never written here."""
-    tz = ZoneInfo(str(lb.meta["timezone"]))
+    bounds = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse (RFC 0036)
+    tz = bounds.zone
     settings = stays.read_settings(lb.root)
     known = stays.read_places(lb.root, settings.radius_m)
     registered = stays.read_assets(lb.root)
     airports = airports or Airports.load()
     days = day_range(first, last)
-    start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
-    _night_start, end = stays.night_window(last, tz, settings)
+    start, end, spill, nights_of = _window(bounds, first, last, settings)
     with lb.index() as idx:
-        spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
         found = crossing((line for _day, line in idx.between(first, spill)), tiers)
         marks = idx.retractions()  # from every file: a retraction applies wherever its line is
         resolutions = idx.resolutions()
@@ -157,6 +173,9 @@ def read(
         airports,
     )
     nights = [stays.night(derived.segments, day, tz, settings, known) for day in days]
+    nights_after = [
+        stays.night(derived.segments, day, tz, settings, known) for day in nights_of if day > last
+    ]
     standing = [line for line in window if str(line["id"]) not in retracted]
     identities = resolve.identities_from([*marks, *resolutions])
     names = {ref: who.label for ref, who in identities.items() if who.label}
@@ -181,9 +200,11 @@ def read(
         names=names,
         identities=identities,
         airports=airports,
+        day_start=bounds,
         owner=owner,
         retracted=retracted,
         tiers=None if tiers is None else tuple(int(t) for t in tiers),
+        nights_after=nights_after,
     )
 
 
@@ -192,14 +213,13 @@ def owner_track(lb: Logbook, first: str, last: str, airports: Airports | None = 
     the index alone. The points are the owner's and those of every asset `assets.json` names, so a
     stay aboard one says so; another subject's track is not read (it has no stays here and names
     nothing the owner can be aboard). Raises `stays.SettingsError` as `read` does; writes nothing."""
-    tz = ZoneInfo(str(lb.meta["timezone"]))
+    bounds = day_start.of(lb.meta)
+    tz = bounds.zone
     settings = stays.read_settings(lb.root)
     known = stays.read_places(lb.root, settings.radius_m)
     registered = stays.read_assets(lb.root)
     days = day_range(first, last)
-    start = datetime.combine(date.fromisoformat(first), datetime.min.time(), tzinfo=tz)
-    _night_start, end = stays.night_window(last, tz, settings)
-    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    start, end, spill, _nights = _window(bounds, first, last, settings)
     with lb.index() as idx:
         tracks = {
             subject: _track(idx.locations(first, spill, subject), subject, start, end)
@@ -241,8 +261,26 @@ def owner_track(lb: Logbook, first: str, last: str, airports: Airports | None = 
         ],
         timeline_visits=places.timeline_visits(standing),
         noise_points=derived.noise_points,
+        day_start=bounds,
         retracted=retracted,
     )
+
+
+def _window(
+    bounds: DayStart, first: str, last: str, settings: stays.Settings
+) -> tuple[datetime, datetime, str, list[str]]:
+    """The instants a reading of `[first, last]` holds — from the first day's start to the end of the
+    last day or of the night after it, whichever is later — the last local day the index is asked for
+    (the one that holds that end: the points after it are there for `_first_points_after`), and the
+    nights to derive, the night after the last day among them. Under midnight that is the first day's
+    midnight, the morning after the last day and the nights of the window's days, as it always was."""
+    start = bounds.span(first)[0]
+    night = bounds.night_after(last, settings.night[0])
+    _night_start, night_end = stays.night_window(night, bounds.zone, settings)
+    end = max(night_end, bounds.span(last)[1])
+    spill = max(bounds.day(end), date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    nights = day_range(first, max(last, night))
+    return start, end, spill, nights
 
 
 def _track(rows: list[LocationRow], subject: str | None, start: datetime, end: datetime) -> list[stays.Point]:

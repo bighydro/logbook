@@ -21,8 +21,8 @@ from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from typing import Any
 
+from ..core import day_start, keepers
 from ..core import days as days_reader
-from ..core import keepers
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.index import local_date
@@ -72,7 +72,7 @@ def read(lb: Logbook, week: str, airports: Airports | None = None) -> dict[str, 
     not what it should be."""
     week, first, last = parse_week(week)
     airports = airports or Airports.load()
-    tz = str(lb.meta["timezone"])
+    tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text  # a line's day: RFC 0036
     rows = [{**r, "line": days_reader.row(r)} for r in days_reader.read(lb, first, last, airports)]
     together: Counter[str] = Counter()
     for r in rows:
@@ -86,7 +86,7 @@ def read(lb: Logbook, week: str, airports: Airports | None = None) -> dict[str, 
     found_keepers = sorted(
         (
             {
-                "day": local_date(str(line["at"]), tz),
+                "day": local_date(str(line["at"]), tz, start),
                 "lane": str((line.get("payload") or {}).get("lane") or ""),
                 "name": keepers.name_of(line),
             }
@@ -109,18 +109,18 @@ def read(lb: Logbook, week: str, airports: Airports | None = None) -> dict[str, 
         ],
         "keepers": found_keepers,
         "promises": [p.to_json() for p in due],
-        "read": titles(browsed, tz),
+        "read": titles(browsed, tz, start),
     }
 
 
-def titles(lines: Sequence[Mapping[str, Any]], tz: str) -> list[dict[str, str]]:
+def titles(lines: Sequence[Mapping[str, Any]], tz: str, start: object = None) -> list[dict[str, str]]:
     """The browse lines as (day, title) in time order, a title once a day, a line with no title
     left out; never the URL, never the source."""
     out: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for line in sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"]))):
         title = " ".join(str((line.get("payload") or {}).get("title") or "").split())
-        day = local_date(str(line["at"]), tz)
+        day = local_date(str(line["at"]), tz, start)
         if title and (day, title) not in seen:
             seen.add((day, title))
             out.append({"day": day, "title": title})

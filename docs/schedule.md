@@ -1,23 +1,78 @@
 # The schedule
 
-`logbook sync --install-schedule` makes the machine run `logbook sync --scheduled` at 07:00 and 19:00
-local: a launchd agent on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer
-on Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printed before it is
-written, nothing is written outside that directory, and `--uninstall-schedule` removes it again. The
-agent runs the Python that installed it and points at the record found at install time; the keys your
-sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
-and the command never does.
+`logbook sync --install-schedule` makes the machine run the record four times a day, at 00:00, 06:00,
+12:00 and 18:00 local: `logbook sync --scheduled` at 00:00, 12:00 and 18:00, and `logbook sync
+--scheduled --close` at 06:00, the run that closes the day (below). That is two jobs: two launchd agents
+on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist` and `org.logbook.sync.close.plist`), two
+systemd user timers on Linux (`~/.config/systemd/user/logbook-sync.timer` and `logbook-sync-close.timer`,
+each with its service). The plists or units are printed before they are written, nothing is written
+outside that directory, and `--uninstall-schedule` removes them again, all four runs. The agents run the
+Python that installed them and point at the record found at install time; the keys your sources need
+they read from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write and the
+command never does.
 
 ```bash
-logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
+logbook sync --install-schedule                   # 00:00, 06:00, 12:00 and 18:00 local
+logbook sync --install-schedule --system          # a machine nobody logs in to: prints two sudo commands
 logbook sync --scheduled                          # what the schedule runs, by hand
+logbook sync --scheduled --close                  # what it runs at 06:00
 logbook doctor                                    # the last-run and restore-test lines
-logbook sync --uninstall-schedule
+logbook sync --uninstall-schedule [--system]
 ```
+
+A schedule installed before the four runs (one agent or timer at 07:00 and 19:00, under the same name)
+moves to them when you run `logbook sync --install-schedule` again: the files are written over, the
+agents loaded again, and a timer restarted so it takes the new times. `--uninstall-schedule` removes it
+whichever it is.
+
+## The four runs, and the 06:00 close
+
+The day ends at your `day_start` (midnight unless you set one, [the record's settings](settings.md)). The
+06:00 run is the one after it for most settings, so it closes the day: `sync --scheduled --close` is the
+scheduled run below with one step more, in this order:
+
+1. **the sync**: `sync --all`, as at every run;
+2. **the dream's catch-up**: `dream --catch-up`, the drafts of the last days that have none or whose
+   lines changed, when this version of logbook has the dream command and `policy/crossing.json` has a
+   `dream` entry (sending a day to a model is a crossing like any other). When it has not, one line
+   says why (`dream: this version has no dream command; nothing to catch up`, or `dream:
+   policy/crossing.json has no dream entry; nothing to catch up`) and the run goes on: absence is not an
+   error. A draft is a proposal, so what the dream does never changes the run's exit status;
+3. **the rest of the run**: the restore test on the first Sunday of the month, `doctor`, the outcome
+   in `state/last-run.json`, the message when something is wrong;
+4. **one summary line**: `scheduled run, the close (dream caught up): clean; state/last-run.json`, or
+   `(no dream command)`, `(no dream entry)`, `(dream --catch-up exit 1)`.
+
+The runs at 00:00, 12:00 and 18:00 never dream. If your day begins later than 06:00, the close still
+runs at 06:00: the catch-up drafts the days that have ended, and the one that has not waits for the
+next morning.
+
+## On a machine nobody logs in to: `--system`
+
+An agent runs while you are logged in. The record's home (ADR 0022) is often a machine nobody logs in to,
+where an agent never loads. `--system` writes the schedule for the system domain instead, as `logbook
+serve --install-service --system` does for the pages: two launchd daemons (`UserName` you, `HOME` your
+home directory) or two pairs of system units (`User=` you, `EnvironmentFile=` your `sync.env` by its
+path), with the same four times, written to your home directory, and the two `sudo` commands that copy
+them into `/Library/LaunchDaemons` (or `/etc/systemd/system`) and start them printed, never run:
+
+```
+$ logbook sync --install-schedule --system
+…
+written: 2 files for the system domain, running as ines from boot: …; nothing runs until you install
+them, as an administrator:
+  sudo cp /Users/ines/org.logbook.sync.plist /Users/ines/org.logbook.sync.close.plist /Library/LaunchDaemons
+  sudo launchctl bootstrap system /Library/LaunchDaemons/org.logbook.sync.plist /Library/LaunchDaemons/org.logbook.sync.close.plist
+```
+
+Installing again over copies already there prints the commands that stop and replace them; run as root,
+it is refused (the jobs would run as root, with root's home). `--uninstall-schedule --system` removes the
+copies in your home directory and prints the commands that stop the jobs and remove the system's.
 
 ## What the scheduled run does
 
-`sync --scheduled` is `sync --all` followed by `doctor`, and nothing you could not run by hand:
+`sync --scheduled` is `sync --all` followed by `doctor`, and nothing you could not run by hand (the 06:00
+run adds the dream's catch-up after the sync, above):
 
 1. **`sync --all`**: every configured live source in turn, each from its own watermark, a failure in one
    never stopping the next, printed exactly as `sync --all` prints it ([the tour](tour.md#keep-it-flowing)).
@@ -60,12 +115,12 @@ record without its identity skips the restore test, and the scheduler's log hold
 Two lines, in every `logbook doctor`, wherever it runs:
 
 ```
-pass  last-run      2026-10-08 19:00 (2 h ago): immich 12, gcal 3 lines; doctor 14 pass, 0 warn, 0 fail
+pass  last-run      2026-10-08 18:00 (2 h ago): immich 12, gcal 3 lines; doctor 14 pass, 0 warn, 0 fail
 pass  restore-test  passed 2026-10-04 (2026-10-04T030000Z, 12,772 lines)
 ```
 
-- `last-run` is a **warn** when the last scheduled run is older than 26 hours (the schedule is twice a
-  day, so a day and a little means a run was missed: the machine was off, or the agent is gone), or when
+- `last-run` is a **warn** when the last scheduled run is older than 26 hours (the schedule runs four
+  times a day, so a day and a little means the machine was off or the agents are gone), or when
   it failed (a source failed, or a check failed), with the first failing line. No scheduled run yet is a
   pass on a machine with no schedule, saying how to install one, and a warn where one is installed and
   has not run.
@@ -87,14 +142,14 @@ Without them nothing is sent and nothing is said about it. With them, the run se
 only when**:
 
 - **something is wrong**: a source failed, or `doctor` warned or failed; or
-- **it is Sunday evening** (the 19:00 run, or any run on a Sunday at or after 12:00 local in the
+- **it is Sunday evening** (the 18:00 run, or any run on a Sunday at or after 18:00 local in the
   record's timezone), once a week, with the week's counts.
 
 Nothing is sent when nothing is wrong and it is not Sunday evening. The format is fixed. The first block
 is the alert, the second the week; both in one message when both apply:
 
 ```
-logbook 2026-10-08 19:00: something is wrong
+logbook 2026-10-08 18:00: something is wrong
 sync: 5 sources: 3 ok, 1 failed (gcal), 1 skipped
 doctor: 12 pass, 1 warn, 1 fail; fail: record; warn: sync:gcal
 

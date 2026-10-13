@@ -34,9 +34,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 LAST_RUN_FILE = PurePosixPath("state/last-run.json")  # record-relative
-STALE_AFTER = timedelta(hours=26)  # twice a day is the schedule; a day and a little is a missed run
+STALE_AFTER = timedelta(hours=26)  # four runs a day is the schedule; a day and a little is the machine off
 WEEK = timedelta(days=7)
-WEEKLY_HOUR = 12  # the Sunday run at or after this local hour is the evening one, which sends the week
+WEEKLY_HOUR = 18  # the Sunday run at or after this local hour is the evening one, which sends the week
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 
 

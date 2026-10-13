@@ -7,7 +7,7 @@ import json
 import sys
 from zoneinfo import ZoneInfo
 
-from ..core import keepers
+from ..core import day_start, keepers
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.index import Index, local_date
@@ -30,15 +30,15 @@ def cmd_keepers(a: argparse.Namespace) -> None:
             except ValueError as e:
                 print(f"keepers: {e}", file=sys.stderr)
                 sys.exit(2)
-    tz = str(lb.meta["timezone"])
+    tz, start = str(lb.meta["timezone"]), day_start.of(lb.meta).text  # a keeper's day: RFC 0036
     with lb.index() as idx:
         found = keepers.standing([*idx.by_kind(keepers.KIND, a.since, a.until), *idx.retractions()])
         if a.lane is not None:
             found = [line for line in found if (line.get("payload") or {}).get("lane") == a.lane]
         if a.people:
-            _keepers_people(lb, idx, found, tz, a)
+            _keepers_people(lb, idx, found, tz, a, start)
             return
-    rows = [keepers.summary(line, local_date(str(line["at"]), tz)) for line in found]
+    rows = [keepers.summary(line, local_date(str(line["at"]), tz, start)) for line in found]
     rows.sort(key=lambda r: (r["day"], r["at"], r["lane"]))
     if a.json:
         print(json.dumps({"keepers": rows}, indent=2, ensure_ascii=False))
@@ -58,7 +58,9 @@ def _no_keepers(a: argparse.Namespace) -> str:
     return f"no keepers{lane}; `logbook infer keepers` reads the marks"
 
 
-def _keepers_people(lb: Logbook, idx: Index, found: list[Line], tz: str, a: argparse.Namespace) -> None:
+def _keepers_people(
+    lb: Logbook, idx: Index, found: list[Line], tz: str, a: argparse.Namespace, start: str | None = None
+) -> None:
     """`keepers --people`: the keepers' photo lines by id and the identities through the index, then
     `keepers.people_by_month`; a table by month, or `{"people": [...]}`."""
     photo_ids = {
@@ -68,7 +70,7 @@ def _keepers_people(lb: Logbook, idx: Index, found: list[Line], tz: str, a: argp
     }
     photos = idx.by_ids(photo_ids)
     identities = identities_from([*idx.retractions(), *idx.resolutions()])
-    rows = keepers.people_by_month(found, photos, identities, tz)
+    rows = keepers.people_by_month(found, photos, identities, tz, start)
     if a.json:
         print(json.dumps({"people": rows}, indent=2, ensure_ascii=False))
         return

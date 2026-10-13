@@ -40,9 +40,10 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import day_start, policy, present, reading, resolve, stays, trips
 from . import places as named_places
-from . import policy, present, reading, resolve, stays, trips
 from .chain import Line
+from .day_start import DayStart
 from .export import day_range
 from .flights import Airports
 from .index import Index
@@ -223,6 +224,11 @@ class Report:
     known: dict[str, Person]  # every person the record names, heard or not, by entity id
     owner: present.Owner
     identities: dict[Ref, Identity]
+    day_start: DayStart | None = None  # where the record's day begins (RFC 0036); None is midnight in `tz`
+
+    @property
+    def days(self) -> DayStart:
+        return self.day_start or DayStart(self.tz)
 
     @property
     def tier(self) -> int | None:
@@ -247,7 +253,8 @@ def empty() -> dict[str, Any]:
 def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -> Report:
     """The people of `[first, last]` (local days, inclusive). Raises `stays.SettingsError` or
     `policy.PolicyError` as the readers it builds on do; writes nothing."""
-    tz = ZoneInfo(str(lb.meta["timezone"]))
+    days = day_start.of(lb.meta)  # a line's day under the record's day_start (RFC 0036)
+    tz = days.zone
     airports = airports or Airports.load()
     spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()  # a stay's night runs into it
     track = reading.owner_track(lb, first, last, airports)
@@ -263,7 +270,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
             identities,
         )
         known = _people_of(identities, resolve.standing([*marks, *resolutions]), owner)
-        gather = _Gather(known, identities, owner, tz, first, last)
+        gather = _Gather(known, identities, owner, days, first, last)
         evidence: list[Line] = []
         for channel in CHANNELS:
             kind = KIND_OF[channel]
@@ -275,7 +282,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         (p for p in known.values() if p.heard),
         key=lambda p: (-len(p.days), _desc(p.last_contact), p.name.casefold()),
     )
-    return Report(first, last, tz, heard, known, owner, identities)
+    return Report(first, last, tz, heard, known, owner, identities, days)
 
 
 def _desc(day: str | None) -> str:
@@ -339,14 +346,14 @@ class _Gather:
         people: dict[str, Person],
         identities: Mapping[Ref, Identity],
         owner: present.Owner,
-        tz: ZoneInfo,
+        days: DayStart,
         first: str,
         last: str,
     ):
         self.people = people
         self.identities = identities
         self.owner = owner
-        self.tz = tz
+        self.days = days
         self.first, self.last = first, last
         self.chats: dict[str, _Chat] = {}
 
@@ -356,7 +363,7 @@ class _Gather:
             at = stays.instant(line.get("at"))
             if at is None:
                 continue
-            day = at.astimezone(self.tz).date().isoformat()
+            day = self.days.day(at).isoformat()
             keep = channel in ("calendar", "transcripts", "faces", "notes")
             if keep and _names_someone(line):
                 kept.append(line)
@@ -535,14 +542,14 @@ def _together(
     the person was confirmed at on that day (`rollup people`'s rule)."""
     lines = list(evidence)
     days_of = {
-        str(line["id"]): at.astimezone(tz).date().isoformat()
+        str(line["id"]): track.day_start.day(at).isoformat()
         for line in lines
         if (at := stays.instant(line.get("at"))) is not None
     }
     tiers = {str(line["id"]): int(line.get("tier", 0)) for line in lines}
     near = present.Evidence(lines, tz)
     for stay in track.stays:
-        stay_day = stay.start.astimezone(tz).date().isoformat()
+        stay_day = track.day_start.day(stay.start).isoformat()
         where = None
         for p in present.present(stay, near.near(stay), identities, track.places, owner):
             if p.status != present.CONFIRMED or p.person is None or p.person not in people:

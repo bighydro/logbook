@@ -95,7 +95,8 @@ def sync_arguments(sub: Subparsers) -> None:
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
         " gtasks, granola, mail, notion, ais, adsb, weather); safe to re-run; --all for every configured"
-        " source, --install-schedule for twice a day."
+        " source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the 06:00 run"
+        " closes the day)."
         " drive and gtasks: a Google Workspace service account with domain-wide delegation, read-only"
         " (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address it reads as); a token per"
         " run, never stored."
@@ -128,10 +129,21 @@ def sync_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--install-schedule",
         action="store_true",
-        help="run `sync --scheduled` at 07:00 and 19:00 local: a launchd agent (macOS) or a systemd user"
-        " timer (Linux), printed before it is written under your LaunchAgents or systemd user directory",
+        help="run `sync --scheduled` at 00:00, 12:00 and 18:00 local and `sync --scheduled --close` at 06:00:"
+        " two launchd agents (macOS) or two systemd user timers (Linux), printed before they are written"
+        " under your LaunchAgents or systemd user directory; installing again moves an older schedule to"
+        " these four runs",
     )
-    s.add_argument("--uninstall-schedule", action="store_true", help="remove that agent or timer")
+    s.add_argument(
+        "--uninstall-schedule", action="store_true", help="remove those agents or timers, all four runs"
+    )
+    s.add_argument(
+        "--system",
+        action="store_true",
+        help="with --install-schedule or --uninstall-schedule: daemons (macOS) or system units (Linux) that"
+        " run as you from boot, for a machine nobody logs in to: written to your home directory, with the"
+        " sudo commands that install them printed, never run",
+    )
     s.add_argument(
         "--scheduled",
         action="store_true",
@@ -139,6 +151,13 @@ def sync_arguments(sub: Subparsers) -> None:
         " restore test on the first Sunday of the month; one Telegram message when something is wrong or"
         " on Sunday evening, with LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT set"
         " (never prompts)",
+    )
+    s.add_argument(
+        "--close",
+        action="store_true",
+        help="with --scheduled: the 06:00 run, which closes the day: the scheduled run's sync, then `dream"
+        " --catch-up` when this version has the dream and policy/crossing.json a dream entry (else one line"
+        " saying why not), then the rest of the run and one summary line",
     )
     s.add_argument(
         "--since",
@@ -176,16 +195,22 @@ def sync_arguments(sub: Subparsers) -> None:
 def cmd_sync(a: argparse.Namespace) -> None:
     """`sync <source>`: pull from a live source since its stored watermark (or --since), append,
     advance the watermark. `sync --all`: every configured source in turn (`_sync_all`). `sync
-    --install-schedule` / `--uninstall-schedule`: `sync --all` twice a day by the machine's own
+    --install-schedule` / `--uninstall-schedule`: `sync --all` four times a day by the machine's own
     scheduler (`_sync_schedule`, `logbook.contrib.schedule`)."""
     from ..contrib import adapters
 
     if a.install_schedule or a.uninstall_schedule:
         _sync_schedule(a)
         return
+    if getattr(a, "system", False):
+        print("sync: --system goes with --install-schedule or --uninstall-schedule", file=sys.stderr)
+        sys.exit(2)
     if getattr(a, "scheduled", False):  # `setup` builds its own namespace without the flag
         _sync_scheduled(a)
         return
+    if getattr(a, "close", False):
+        print("sync: --close goes with --scheduled: the 06:00 run of the schedule", file=sys.stderr)
+        sys.exit(2)
     if a.all:
         _sync_all(a)
         return
@@ -297,7 +322,11 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     own `last-run` line reads this run, and once at the end with the doctor's counts. Then one
     message when something is wrong or on Sunday evening, if the notifier is configured
     (`logbook.contrib.notify`); nothing is sent and nothing said about it when it is not. Exit 1
-    when a source failed or a check failed, as `sync --all` and `doctor` would. It never prompts."""
+    when a source failed or a check failed, as `sync --all` and `doctor` would. It never prompts.
+
+    `--close` (the 06:00 run, which closes the day, RFC 0036): after the sync and before the rest,
+    `dream --catch-up` (`_dream_catch_up`), and the summary line names what it did. The dream never
+    changes the run's exit status: a draft is a proposal, and a day it refused is in its own lines."""
     from ..contrib import backup, doctor, notify
 
     others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
@@ -316,6 +345,7 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     first = next((f"{r.name}  {r.result}" for r in runs if r.failed), None)
     run = last_run.Run(started, tuple(runs), None, first)
     last_run.write(lb.root, last_run.State(run, week, weekly_sent))
+    closed = _dream_catch_up(lb) if getattr(a, "close", False) and not interrupted else None
     if last_run.is_first_sunday(local):
         tested = _restore_test_state(lb)
         if tested is None or tested.at.astimezone(zone).date() != local.date():
@@ -336,7 +366,8 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     if weekly:
         weekly_sent = local.date()
     path = last_run.write(lb.root, last_run.State(run, week, weekly_sent))
-    print(f"scheduled run: {'clean' if run.clean else 'not clean'}; {_under_root(lb, path)}")
+    what = "scheduled run" if closed is None else f"scheduled run, the close ({closed})"
+    print(f"{what}: {'clean' if run.clean else 'not clean'}; {_under_root(lb, path)}")
     config = notify.configure(os.environ, say=lambda line: print(line, file=sys.stderr))
     if config is not None and text is not None:
         try:
@@ -349,6 +380,47 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
         sys.exit(130)
     if run.failed:
         sys.exit(1)
+
+
+DREAM_COMMAND = "logbook.commands.dream"  # the dream (RFC 0036): a command of its own, not in every version
+DREAM_ENTRY = "dream"  # its entry in policy/crossing.json: sending a day to a model is a crossing
+
+
+def _dream_catch_up(lb: Logbook) -> str:
+    """The close's second step: `dream --catch-up`, run in this process through the dream command's
+    own arguments, when this version has the command and `policy/crossing.json` has a `dream` entry.
+    The command is imported here and nowhere else, so a version without it, or a record whose policy
+    names no dream, is one line saying so and never an error. What it did, in a few words, for the
+    summary line."""
+    import importlib
+
+    try:
+        command = importlib.import_module(DREAM_COMMAND)
+    except ModuleNotFoundError as e:
+        if e.name != DREAM_COMMAND:
+            raise
+        print("dream: this version has no dream command; nothing to catch up")
+        return "no dream command"
+    try:
+        named = DREAM_ENTRY in policy.read(lb.root)
+    except policy.PolicyError as e:
+        print(f"dream: {e}; nothing caught up")
+        return "policy unreadable"
+    if not named:
+        print(f"dream: {policy.POLICY_FILE.as_posix()} has no {DREAM_ENTRY} entry; nothing to catch up")
+        return f"no {DREAM_ENTRY} entry"
+    parser = argparse.ArgumentParser(prog="logbook")
+    command.dream_arguments(parser.add_subparsers(dest="cmd"))
+    args = parser.parse_args(["dream", "--catch-up"])
+    try:
+        args.fn(args)
+    except SystemExit as e:
+        status = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        return "dream caught up" if status == 0 else f"dream --catch-up exit {status}"
+    except Exception as e:  # the close goes on: a draft is a proposal, never the run's failure
+        print(f"dream: --catch-up: {e}", file=sys.stderr)
+        return "dream --catch-up failed"
+    return "dream caught up"
 
 
 def _under_root(lb: Logbook, path: Path) -> str:
@@ -408,43 +480,56 @@ def _unconfigured(adapter: adapters.LiveAdapter) -> str | None:
 
 
 def _sync_schedule(a: argparse.Namespace) -> None:
-    """`sync --install-schedule`: a launchd agent (macOS) or a systemd user timer (Linux) running
-    `logbook sync --scheduled` at 07:00 and 19:00 local, the plist or units printed before they are
-    written, nothing written outside that one directory, then handed to the scheduler (or, when it
-    is not on PATH, the command to run said). `--uninstall-schedule`: the reverse. The record found
-    now is the one the agent is pointed at (`LOGBOOK_HOME`). Installing names this machine the
-    record's home in `state/home.json` (ADR 0022: the one machine that writes; `doctor` reads it);
-    uninstalling leaves that as it is, since home moves by copying the record, not by a flag."""
+    """`sync --install-schedule`: `logbook sync --scheduled` at 00:00, 12:00 and 18:00 local and `sync
+    --scheduled --close` at 06:00, as two launchd agents (macOS) or two systemd user timers (Linux), the
+    plists or units printed before they are written, nothing written outside that one directory, then
+    handed to the scheduler (or, when it is not on PATH, the commands to run said); installing again
+    moves an older schedule to the four runs. `--uninstall-schedule`: the reverse, every file of the
+    schedule. With `--system`, daemons or system units that run as this user from boot, written to the
+    home directory, the sudo commands that install or remove them printed and never run, as `serve
+    --install-service --system` does; refused as root. The record found now is the one the jobs are
+    pointed at (`LOGBOOK_HOME`). Installing names this machine the record's home in `state/home.json`
+    (ADR 0022: the one machine that writes; `doctor` reads it); uninstalling leaves that as it is,
+    since home moves by copying the record, not by a flag."""
+    from ..contrib import service
+
     if a.install_schedule and a.uninstall_schedule:
         print("sync: --install-schedule or --uninstall-schedule, not both", file=sys.stderr)
         sys.exit(2)
     flag = "--install-schedule" if a.install_schedule else "--uninstall-schedule"
     others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
-    if any(x is not None for x in others) or getattr(a, "scheduled", False):
+    if any(x is not None for x in others) or getattr(a, "scheduled", False) or getattr(a, "close", False):
         print(f"sync: {flag} takes no source and no other option", file=sys.stderr)
+        sys.exit(2)
+    system_wide = bool(getattr(a, "system", False))
+    if system_wide and service.running_as_root():
+        print(
+            f"sync: {flag} --system: run it as the user the schedule is to run as, not as root; it prints"
+            " the sudo commands itself",
+            file=sys.stderr,
+        )
         sys.exit(2)
     lb = Logbook.find()
     xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
     try:
         plan = schedule.plan(
-            schedule.system(), Path.home(), sys.executable, lb.root, Path(xdg).expanduser() if xdg else None
+            schedule.system(),
+            Path.home(),
+            sys.executable,
+            lb.root,
+            Path(xdg).expanduser() if xdg else None,
+            user=service.user_name() if system_wide else None,
+            system_root=service.SYSTEM_ROOT,
         )
     except schedule.ScheduleError as e:
         print(f"sync: {flag}: {e}", file=sys.stderr)
         sys.exit(2)
     if a.uninstall_schedule:
-        if not any(path.exists() for path in plan.files):
-            print(f"no schedule installed ({plan.directory})")
-            return
-        problem = schedule.run(plan.deactivate, plan.tool, print)
-        for path in schedule.uninstall(plan):
-            print(f"removed {path}")
-        if problem is not None:
-            print(f"sync: {flag}: {problem}", file=sys.stderr)
-            sys.exit(1)
+        _uninstall_schedule(plan, flag)
         return
+    replacing = schedule.installed(plan)
     schedule.install(plan, print)
-    for text in schedule.summary(plan):
+    for text in schedule.summary(plan, replacing=replacing):
         print(text)
     now, before = home.write(lb.root)
     moved = (
@@ -453,7 +538,38 @@ def _sync_schedule(a: argparse.Namespace) -> None:
         else ""
     )
     print(f"home: this machine ({now.host}) is the record's home since {now.since}{moved}; state/home.json")
+    if plan.system_wide:
+        return
     problem = schedule.run(plan.activate, plan.tool, print)
+    if problem is not None:
+        print(f"sync: {flag}: {problem}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _uninstall_schedule(plan: schedule.Plan, flag: str) -> None:
+    """The user's agents or timers: stopped by the scheduler, their files unlinked, whichever of them
+    are there (an older schedule had the runs' file alone). For `--system`: the files in the home
+    directory unlinked, and the sudo commands that stop the jobs and remove the system's copies printed,
+    never run."""
+    if plan.system_wide:
+        removed = schedule.uninstall(plan)
+        for path in removed:
+            print(f"removed {path}")
+        if not any(path.exists() for path in plan.copies):
+            if not removed:
+                print(f"no schedule installed ({plan.copies[0].parent})")
+            return
+        where = plan.copies[0].parent
+        print(f"the schedule is installed in {where}; to stop and remove it, as an administrator:")
+        for command in plan.remove_by_hand:
+            print(f"  {command.text}")
+        return
+    if not any(path.exists() for path in plan.files):
+        print(f"no schedule installed ({plan.directory})")
+        return
+    problem = schedule.run(plan.deactivate, plan.tool, print)
+    for path in schedule.uninstall(plan):
+        print(f"removed {path}")
     if problem is not None:
         print(f"sync: {flag}: {problem}", file=sys.stderr)
         sys.exit(1)

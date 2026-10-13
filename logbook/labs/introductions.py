@@ -110,7 +110,7 @@ def _appearances(reading: Reading) -> dict[tuple[Key, str], _Seen]:
     days_of = {str(line["id"]): reading.day_of(line) for line in reading.lines}
     seen: dict[tuple[Key, str], _Seen] = {}
     for stay in sorted(reading.owner_stays, key=lambda s: s.start):
-        stay_day = stay.start.astimezone(reading.tz).date().isoformat()
+        stay_day = reading.day_start.day(stay.start).isoformat()
         found = present.present(stay, evidence.near(stay), reading.identities, reading.places, reading.owner)
         for p in found:
             if p.status != present.CONFIRMED:

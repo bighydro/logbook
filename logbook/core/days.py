@@ -92,12 +92,13 @@ def read(
 
 
 def _by_day(rd: Reading) -> dict[str, list[Line]]:
-    """The reading's lines by local day, in chain order, so each day's are picked once."""
+    """The reading's lines by local day (under the record's `day_start`), in chain order, so each
+    day's are picked once."""
     out: dict[str, list[Line]] = {}
     for line in rd.lines:
         at = stays.instant(line.get("at"))
         if at is not None:
-            out.setdefault(at.astimezone(rd.tz).date().isoformat(), []).append(line)
+            out.setdefault(rd.day_start.day(at).isoformat(), []).append(line)
     return out
 
 

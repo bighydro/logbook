@@ -30,7 +30,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
 
 `/` is the front page: how many lines the record holds and the days it covers, and a link to each page.
-`/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), whatever
+`/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
+before until the record's `day_start` when it sets one (at 05:59 under `06:00`, yesterday's Day), whatever
 the clock of the device that asks: the page to bookmark on a phone.
 `/day/YYYY-MM-DD?open=1` is the Day with every toggle open, for printing or saving whole; the page's
 *expand all* link is that.

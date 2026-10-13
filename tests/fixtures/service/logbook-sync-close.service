@@ -1,0 +1,8 @@
+[Unit]
+Description=logbook sync --scheduled --close: the run that closes the day, then the dream's catch-up
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/logbook/sync.env
+Environment=LOGBOOK_HOME=@LOGBOOK_HOME@
+ExecStart=/opt/logbook/venv/bin/python3 -m logbook.cli sync --scheduled --close

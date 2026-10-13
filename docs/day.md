@@ -27,7 +27,8 @@ it writes one line. On a signed day a symbol stands before each line the signatu
 
 The record's atom is the line. The reader's atom is the **stay**: a span at one place, as
 `derive stays` finds it. A **Day** is the ordered list of stays and moves between 00:00 and 24:00
-in the record's zone, with everything else — calendar entries, transcripts, notes, mail, calls,
+in the record's zone (between your `day_start` and the same clock the next morning when you set
+one, below), with everything else — calendar entries, transcripts, notes, mail, calls,
 messages, photos, keepers — attached to the stay or move it falls inside. The **night** of a day is
 the longest stay in the night window (22:00 to 08:00 by default), and it decides home or away; a
 night with no such stay is in transit.
@@ -37,6 +38,29 @@ your position matches the asset's own track, the run of stays and moves aboard i
 `aboard <asset>`, and inside it the same grammar runs on the asset's position — a berth, a
 passage, an anchorage. The asset's movement never fragments the stay. The rule is below, under
 *Aboard an asset*.
+
+## The day begins at…
+
+…midnight, unless you say otherwise. `logbook setup day_start 06:00` writes `"day_start": "06:00"` to
+`logbook.json` ([the record's settings](settings.md)), and from then on a line whose local clock is
+before 06:00 belongs to the day before: the concert that ended at 01:30 on the 13th is on the Day of
+the 12th, the coffee at 07:00 on the 13th's. The Day of the 12th then runs from 06:00 on the 12th to
+06:00 on the 13th, and its header says so:
+
+```
+2026-10-12  Monday · unsigned · 06:00 to 06:00 the next day
+```
+
+Everything on the page follows: the timeline is clipped to that span (a stay that began the evening
+before shows from 06:00), the lines attached and unplaced are the ones on the day so defined, the
+sources and the health line count them, and the signed day's page is that page. The nights keep their
+window (22:00 to 08:00, `policy/stays.json`); the night after is the one that holds the day's end, the
+stay you were at at 06:00 the next morning, and the night before the one that holds its start. With
+`06:00` those are the nights they are at midnight; a boundary at or after the night's start, 23:00
+say, ends the day inside the next date's night, and that night is the night after. The comparison is
+on your wall clock, so the night the clocks change moves no line. A `day_start` that is not a clock
+`HH:MM` (`"6am"`) is refused, naming it, and nothing is guessed. At midnight the header and the JSON
+are as they always were.
 
 ## What it shows, in order
 
@@ -48,7 +72,8 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    airport's zone), from the longest stay of the day when the night is in transit; the day's
    all-day calendar entries.
 2. **Timeline** — one row per stay, stop, move and flight that touches the day, in time order.
-   A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`;
+   A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`
+   (from and to the day's start under `day_start`);
    the duration printed is the part on the day, and `--json` keeps the real span beside it. An
    unnamed stay at an airport is the airport's code and city (`ZRH, Zurich`: within 3.5 km of the
    reference point of an airport with scheduled traffic, 2 km of any other); else its coordinates,
@@ -218,9 +243,10 @@ own, and nothing says aboard.
 
 ## The JSON
 
-`--json` prints one object: `day`, `weekday`, `tz`; `nights.before` and `nights.after` (`where`,
-`home`, `aboard`, `in_transit`, `position` — the night's `lat` and `lon`, the asset's for a night
-aboard — the stay's id and its first and last location line); `country`
+`--json` prints one object: `day`, `weekday`, `tz`; `day_start` (`HH:MM`) only when the record's day
+does not begin at midnight; `nights.before` and `nights.after` (`day`, the date the night's window
+starts on, `where`, `home`, `aboard`, `in_transit`, `position` — the night's `lat` and `lon`, the
+asset's for a night aboard — the stay's id and its first and last location line); `country`
 (`code`, `method`, `by`, `from`); `all_day`; `timeline`, one entry per row — a stay, stop or move
 as `derive stays --json` gives it plus `within_day` (the part on the day), `gap`, `attached`
 (`events`, `transcripts`, `notes`, `mail`, `calls`, `keepers` with their line ids; `messages` and
