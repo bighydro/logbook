@@ -29,11 +29,13 @@ __all__ = ["__version__", "main"]
 
 FAMILIES = (
     "add",
+    "chapters",
     "common",
     "day",
     "derive",
     "dream",
     "export",
+    "goals",
     "keepers",
     "lab",
     "parser",

@@ -1,4 +1,4 @@
-"""`logbook --help` is one screen (the October 2026 audit, Decision 1): 40 lines at most, the 23
+"""`logbook --help` is one screen (the October 2026 audit, Decision 1): 42 lines at most, the 25
 commands in their groups, one line per command, no prose paragraph; and the groups in `parser.py`
 name exactly the commands the parser has."""
 
@@ -11,8 +11,8 @@ import re
 from logbook import cli
 from logbook.commands import parser
 
-TOP_LEVEL = 23
-MAX_LINES = 41
+TOP_LEVEL = 25
+MAX_LINES = 43  # 40 until `goal` and `chapter` (RFC 0036), a line each
 MAX_WIDTH = 80
 
 
@@ -28,7 +28,7 @@ def _commands() -> list[str]:
     return list(sub.choices)
 
 
-def test_there_are_twenty_three_commands() -> None:
+def test_there_are_twenty_five_commands() -> None:
     assert len(_commands()) == TOP_LEVEL, _commands()
 
 
