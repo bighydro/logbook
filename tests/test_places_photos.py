@@ -386,6 +386,15 @@ def test_name_asks_nothing_and_limit_zero_asks_about_no_photo(
 # -- without the flag -------------------------------------------------------------------------------------
 
 
+def _lf(text: str) -> str:
+    """`text` with every line ending as `\\n`: a Windows checkout gives the fixture CRLF."""
+    return text.replace("\r\n", "\n")
+
+
+def _fixture_text(name: str) -> str:
+    return _lf((FIXTURES / name).read_text(encoding="utf-8"))
+
+
 def test_without_the_flag_the_review_is_byte_for_byte_what_it_was(
     lb: Logbook,
     server: Server,
@@ -395,9 +404,9 @@ def test_without_the_flag_the_review_is_byte_for_byte_what_it_was(
 ) -> None:
     """`tests/fixtures/places-review/` is what #255 printed for this record, before --ask-photos was."""
     out, err = _review(capsys)
-    assert out.encode("utf-8") == (FIXTURES / "review.txt").read_bytes() and err == ""
+    assert _lf(out) == _fixture_text("review.txt") and err == ""
     out, err = _review(capsys, "--near", "55.61,4.335", "--top", "2")
-    assert out.encode("utf-8") == (FIXTURES / "review-near-top.txt").read_bytes() and err == ""
+    assert _lf(out) == _fixture_text("review-near-top.txt") and err == ""
     data = json.loads(_review(capsys, "--json")[0])
     data.pop("head")
     for p in data["proposals"]:
