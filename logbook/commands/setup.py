@@ -81,6 +81,8 @@ KEY_SOURCES = {
     "granola": "Granola → Connectors → API keys (Business and Enterprise plans)",
     "beeper": "Beeper Desktop → Settings → Developers → Approved connections (+); the token reads every chat"
     " and can send as you, so it is a password; the app must be running, Remote Access off",
+    "notion": "Notion → Settings → Connections → Develop or manage integrations → New integration (internal,"
+    " Read content only), then share each top-level page with it (••• → Connections)",
     "ais": "a free key from aisstream.io, for the vessels registered in assets.json",
     "adsb": "an account at opensky-network.org (optional: anonymous access works, with a lower rate)",
 }

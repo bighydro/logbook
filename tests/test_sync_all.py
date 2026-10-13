@@ -281,6 +281,7 @@ def test_the_real_adapters_run_immich_last_under_all() -> None:
         "mail",
         "apple-podcasts",
         "beeper",
+        "notion",
         "weather",
         "immich",
     ]

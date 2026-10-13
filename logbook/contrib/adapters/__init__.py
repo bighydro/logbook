@@ -58,7 +58,10 @@ record's dedupe by (source, raw_id) stays the safety net. `pull` may also take `
 record's own addresses, as a file adapter's `run` may), `existing(keys) -> set` (which of a batch of
 (source, raw_id) keys the record already holds, one SELECT, so a source that can name its items before
 fetching them never fetches what would be refused) and `notice(text)` (one line of its own on stderr,
-for a progress line that says what is true: fetched, new, already in the record, never a guessed total).
+for a progress line that says what is true: fetched, new, already in the record, never a guessed total),
+and `previous(prefixes) -> {prefix: [payload]}` (the payloads of the record's lines of its source and KIND
+under each raw_id prefix, in chain order, so a source that keeps no history of its own — `notion` — can
+tell a move or a changed property from the line before).
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
 reads a phone backup's sms.db and the Mac's own chat.db; `mail` reads a Takeout mbox and pulls the
@@ -142,6 +145,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "splitwise",
     "beeper",
     "beeper_live",
+    "notion",
     "line",
     "twitter",
     "apple_books",
