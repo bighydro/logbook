@@ -28,7 +28,7 @@ import math
 import sqlite3
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, NamedTuple
@@ -48,8 +48,10 @@ FILE_NAME = "index.sqlite"
 # (ADR 0018), for `assets status`; 5: lat, lon and end, the columns `places propose` clusters from,
 # and the (kind, day_local) index that cuts a window; 6: the `search` FTS5 table, the words of every
 # line that carries any, for `logbook search`; 7: sealed lines (RFC 0029) — opened payload columns,
-# a blinded raw_id, the index key and `opened` in meta, the file in the cache directory
-SCHEMA_VERSION = "7"
+# a blinded raw_id, the index key and `opened` in meta, the file in the cache directory; 8:
+# `observed_entities`, what the sources saw of every kind (RFC 0037), and `observed_people` and
+# `observed_places` its views (`OBSERVED`)
+SCHEMA_VERSION = "8"
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
 
@@ -92,6 +94,66 @@ SCHEMA = (
         if HAS_FTS5
         else ()
     ),
+)
+# What the sources saw, one table for every kind (RFC 0037, decision 7): a row per observed person,
+# org, idea, asset or place, keyed by the kind and its strongest identifier, built by the review that
+# reads it (`logbook.contrib.people_review`, `places_review`, `entity_review`) and stamped per kind in
+# `observed_entities_meta`, never a line. `ord` is the row's place in its kind's queue order; `hint`
+# an org's guess at what it is (company, brand, community, personal), for ranking only; `labels`,
+# `refs`, `sources`, `kinds`, `days` and `samples` JSON, their shape the kind's; `lat` to `aboard` a
+# place's own. `observed_people` and `observed_places` are the person and place rows under the
+# columns those tables had until 0.7 (one release), so a reader of the old tables reads on unchanged.
+OBSERVED = "observed_entities"
+OBSERVED_META = "observed_entities_meta"
+OBSERVED_VIEWS = ("observed_people", "observed_places")
+OBSERVED_LEGACY = ("observed_meta", "observed_places_meta")  # the old stamp tables, dropped at rebuild
+OBSERVED_COLUMNS = (
+    "kind",
+    "ord",
+    "key_kind",
+    "key_value",
+    "name",
+    "entity",
+    "hint",
+    "labels",
+    "refs",
+    "sources",
+    "kinds",
+    "days",
+    "first",
+    "last",
+    "count",
+    "tier",
+    "samples",
+    "lat",
+    "lon",
+    "nights",
+    "hours",
+    "spread_m",
+    "aboard",
+)
+HINTS = ("company", "brand", "community", "personal")
+OBSERVED_SCHEMA = (
+    f"CREATE TABLE {OBSERVED} (kind TEXT NOT NULL, ord INTEGER NOT NULL, key_kind TEXT NOT NULL,"
+    " key_value TEXT NOT NULL, name TEXT, entity TEXT, hint TEXT, labels TEXT NOT NULL DEFAULT '{}',"
+    " refs TEXT NOT NULL DEFAULT '[]', sources TEXT NOT NULL DEFAULT '{}', kinds TEXT NOT NULL DEFAULT '{}',"
+    " days TEXT NOT NULL DEFAULT '[]', first TEXT, last TEXT, count INTEGER NOT NULL DEFAULT 0,"
+    " tier INTEGER NOT NULL DEFAULT 0, samples TEXT NOT NULL DEFAULT '[]', lat REAL, lon REAL,"
+    " nights INTEGER, hours REAL, spread_m REAL, aboard TEXT)",
+    f"CREATE INDEX {OBSERVED}_key ON {OBSERVED} (kind, key_kind, key_value)",
+    f"CREATE TABLE {OBSERVED_META} (kind TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,"
+    " PRIMARY KEY (kind, key))",
+    "CREATE VIEW observed_people AS SELECT key_kind, key_value, entity, labels, refs AS identifiers,"
+    " sources, kinds, days, first, last, count AS lines, tier, samples"
+    f" FROM {OBSERVED} WHERE kind = 'person'",
+    # `rowid` is the queue's order, as the table's own rowid was
+    "CREATE VIEW observed_places AS SELECT ord AS rowid, 'place:' || key_value AS id, lat, lon,"
+    " count AS visits, nights, hours, first, last, spread_m, entity AS place, aboard, labels AS names,"
+    f" samples AS lines FROM {OBSERVED} WHERE kind = 'place'",
+)
+INSERT_OBSERVED = (
+    f"INSERT INTO {OBSERVED} ({', '.join(OBSERVED_COLUMNS)})"
+    f" VALUES ({', '.join('?' * len(OBSERVED_COLUMNS))})"
 )
 INDEX_KEY = "index_key"  # meta: the blinding key, sealed to the recipients (RFC 0029 §8)
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -397,6 +459,7 @@ class Index:
                 *SCHEMA,
             ):
                 self.db.execute(statement)
+            self._observed_schema()
             for file, offset, line in self.lb.located_lines():
                 line_row, words = self.rows_of(line, meta, file, offset)
                 batch.append(line_row)
@@ -418,6 +481,80 @@ class Index:
             self.db.execute("ROLLBACK")
             raise
         return n
+
+    # -- observed entities (RFC 0037): derived per kind by the reviews, stamped per kind ------------------
+    def _observed_schema(self) -> None:
+        """Drop what the observed tables were (the views, the table, its stamps, the tables of 0.6
+        under the views' names) and create them again, empty, inside the caller's transaction."""
+        found = dict(self.db.execute("SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view')"))
+        for name in (*OBSERVED_VIEWS, OBSERVED, OBSERVED_META, *OBSERVED_LEGACY):
+            if found.get(name) in ("table", "view"):
+                self.db.execute(f"DROP {'VIEW' if found[name] == 'view' else 'TABLE'} {name}")
+        for statement in OBSERVED_SCHEMA:
+            self.db.execute(statement)
+
+    def observed_shape(self) -> bool:
+        """Whether `observed_entities` is there with every column this code writes (`PRAGMA
+        table_info`), and the two views beside it; a table of another shape is built again, never read."""
+        try:
+            columns = {str(row[1]) for row in self.db.execute(f"PRAGMA table_info({OBSERVED})")}
+            views = {
+                str(row[0]) for row in self.db.execute("SELECT name FROM sqlite_master WHERE type = 'view'")
+            }
+        except sqlite3.DatabaseError:
+            return False
+        return set(OBSERVED_COLUMNS) <= columns and set(OBSERVED_VIEWS) <= views
+
+    def observed_stamp(self, kind: str) -> dict[str, str]:
+        """The stamp the rows of `kind` were built under (the head, and what else their builder
+        names); empty when there are none, or the table is not of this shape."""
+        if not self.observed_shape():
+            return {}
+        try:
+            return dict(self.db.execute(f"SELECT key, value FROM {OBSERVED_META} WHERE kind = ?", (kind,)))
+        except sqlite3.DatabaseError:
+            return {}
+
+    def store_observed(self, kind: str, rows: Sequence[Mapping[str, Any]], stamp: Mapping[str, str]) -> None:
+        """Replace the rows of `kind` and their stamp, in one transaction: each row a mapping of
+        `OBSERVED_COLUMNS` (`kind` and `ord`, the row's place in the order given, filled in here; a
+        column not given is its default). A table of another shape is made again first."""
+        self.db.execute("BEGIN")
+        try:
+            if not self.observed_shape():
+                self._observed_schema()
+            self.db.execute(f"DELETE FROM {OBSERVED} WHERE kind = ?", (kind,))
+            self.db.execute(f"DELETE FROM {OBSERVED_META} WHERE kind = ?", (kind,))
+            defaults = {"labels": "{}", "refs": "[]", "sources": "{}", "kinds": "{}", "days": "[]",
+                        "count": 0, "tier": 0, "samples": "[]"}  # fmt: skip
+            self.db.executemany(
+                INSERT_OBSERVED,
+                [
+                    tuple(
+                        kind
+                        if column == "kind"
+                        else n
+                        if column == "ord"
+                        else row.get(column, defaults.get(column))
+                        for column in OBSERVED_COLUMNS
+                    )
+                    for n, row in enumerate(rows)
+                ],
+            )
+            self.db.executemany(
+                f"INSERT INTO {OBSERVED_META} VALUES (?, ?, ?)", [(kind, k, v) for k, v in stamp.items()]
+            )
+            self.db.execute("COMMIT")
+        except BaseException:
+            self.db.execute("ROLLBACK")
+            raise
+
+    def observed(self, kind: str) -> list[dict[str, Any]]:
+        """The rows of `kind`, in their order, as mappings of `OBSERVED_COLUMNS`."""
+        cursor = self.db.execute(
+            f"SELECT {', '.join(OBSERVED_COLUMNS)} FROM {OBSERVED} WHERE kind = ? ORDER BY ord", (kind,)
+        )
+        return [dict(zip(OBSERVED_COLUMNS, row, strict=True)) for row in cursor.fetchall()]
 
     def add(self, rows: Iterable[Row], meta: dict[str, Any], texts: Iterable[TextRow] = ()) -> None:
         """Lines just appended, the search rows of those that carry words (`text_row`), and the
