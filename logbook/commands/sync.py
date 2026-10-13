@@ -94,13 +94,13 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, granola, mail, gmail, notion, ais, adsb, weather); safe to re-run; --all for every"
-        " configured source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the"
+        " gtasks, meet, gaudit, granola, mail, gmail, notion, ais, adsb, weather); safe to re-run; --all for"
+        " every configured source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the"
         " 06:00 run closes the day)."
-        " gmail, gcal, drive and gtasks: one Google Workspace service account with domain-wide delegation,"
-        " read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address"
-        " it reads as); a token per run, never stored; gcal reads its iCal feeds (LOGBOOK_GCAL_URLS) only"
-        " without the two."
+        " gmail, gcal, drive, gtasks, meet and gaudit: one Google Workspace service account with domain-wide"
+        " delegation, read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER,"
+        " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
+        " (LOGBOOK_GCAL_URLS) only without the two."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
         " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
@@ -116,11 +116,12 @@ def sync_arguments(sub: Subparsers) -> None:
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
         " bridges, through its local API), gcal (Google Calendar), drive (what happened to your Google Drive"
         " files: created, edited, renamed, moved, shared, commented, trashed, restored), gtasks (your Google"
-        " Tasks, each as it stands, the lines a Takeout export gives), granola, mail (a mailbox over IMAP,"
-        " any provider), gmail (a Gmail mailbox over the Gmail API, the line IMAP writes), notion (pages"
-        " created, edited, moved, archived; never their text), ais (your vessels via aisstream.io), adsb"
-        " (your aircraft via OpenSky),"
-        " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
+        " Tasks, each as it stands, the lines a Takeout export gives), meet (your Google Meet calls, and"
+        " their transcripts when Meet made one), gaudit (your own sign-ins from the Workspace's login audit"
+        " log, never the address they came from), granola, mail (a mailbox over IMAP, any provider), gmail"
+        " (a Gmail mailbox over the Gmail API, the line IMAP writes), notion (pages created, edited, moved,"
+        " archived; never their text), ais (your vessels via aisstream.io), adsb (your aircraft via"
+        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",

@@ -1,7 +1,10 @@
 """An in-process fake of the Google endpoints the sources on the one service-account key call: the OAuth
 token endpoint (a service account's signed assertion in, an access token out), the Drive Activity API v2
 (`activity:query`), the Drive API v3's file metadata (`files.get`), the Tasks API v1 (task lists, tasks),
-the Gmail API v1 (profile, labels, messages, history) and the Calendar API v3 (calendar list, events).
+the Gmail API v1 (profile, labels, messages, history), the Calendar API v3 (calendar list, events), the
+People API v1 (the owner's contacts and other contacts), the Meet REST API v2 (conference records, their
+participants, transcripts and transcript entries, spaces) and the Admin SDK Reports API v1 (the login
+audit log).
 Nothing listens on a socket: the fake is a function with the shape of `service_account.send`, which a
 test puts in its place, and every request it answers is recorded so a test can say what was asked.
 
@@ -40,10 +43,27 @@ TASKS_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 METADATA_SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly"
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
-SCOPES = {DRIVE_SCOPE, TASKS_SCOPE, METADATA_SCOPE, GMAIL_SCOPE, CALENDAR_SCOPE}  # what the owner delegated
+CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.readonly"
+OTHER_CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.other.readonly"
+MEET_SCOPE = "https://www.googleapis.com/auth/meetings.space.readonly"
+AUDIT_SCOPE = "https://www.googleapis.com/auth/admin.reports.audit.readonly"
+SCOPES = {  # what the owner delegated
+    DRIVE_SCOPE,
+    TASKS_SCOPE,
+    METADATA_SCOPE,
+    GMAIL_SCOPE,
+    CALENDAR_SCOPE,
+    CONTACTS_SCOPE,
+    OTHER_CONTACTS_SCOPE,
+    MEET_SCOPE,
+    AUDIT_SCOPE,
+}
 GMAIL = "gmail.googleapis.com/gmail/v1/users/me"
 CALENDAR = "www.googleapis.com/calendar/v3"
 FILES = "www.googleapis.com/drive/v3/files/"
+PEOPLE = "people.googleapis.com/v1/"
+MEET = "meet.googleapis.com/v2/"
+LOGINS = "admin.googleapis.com/admin/reports/v1/activity/users/"
 OLA, PER = "people/1001", "people/1002"  # as the Activity API names a person: a People API resource
 
 
@@ -88,8 +108,11 @@ class Fake:
     `history_floor` being too old (404, as Gmail says it); `calendars` the calendar list and `events`
     each calendar's events, an `updatedMin` before `updated_min_floor` being too long ago (410). `page`
     is how many items one page holds whatever the client asks, so paging shows with a handful of items.
-    `failures` are answered, in order, to the next API calls (never to the token endpoint): `(status,
-    headers, body)`."""
+    `contacts` and `other_contacts` are People API person objects (`connections`, `otherContacts`);
+    `conferences` Meet conference records, with `participants`, `transcripts` (per record name) and
+    `entries` (per transcript name) below them and `spaces` by name; `logins` the login audit log's
+    activities, every user's, the client asking for one user by address. `failures` are answered, in
+    order, to the next API calls (never to the token endpoint): `(status, headers, body)`."""
 
     key: rsa.RSAPrivateKey
     delegated: set[str] = field(default_factory=lambda: set(SCOPES))
@@ -105,6 +128,14 @@ class Fake:
     calendars: list[dict[str, Any]] = field(default_factory=list)
     events: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     updated_min_floor: str | None = None
+    contacts: list[dict[str, Any]] = field(default_factory=list)
+    other_contacts: list[dict[str, Any]] = field(default_factory=list)
+    conferences: list[dict[str, Any]] = field(default_factory=list)
+    participants: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    transcripts: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    entries: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    spaces: dict[str, dict[str, Any]] = field(default_factory=dict)
+    logins: list[dict[str, Any]] = field(default_factory=list)
     page: int = 3
     failures: list[tuple[int, dict[str, str], bytes]] = field(default_factory=list)
     requests: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
@@ -190,6 +221,13 @@ class Fake:
             return self._calendar(scope, path.removeprefix(CALENDAR + "/"), params)
         if path.startswith(FILES):
             return self._file(scope, path.removeprefix(FILES))
+        if path.startswith(PEOPLE):
+            return self._people(scope, path.removeprefix(PEOPLE), params)
+        if path.startswith(MEET):
+            return self._meet(scope, path.removeprefix(MEET), params)
+        if path.startswith(LOGINS) and path.endswith("/applications/login"):
+            user = path.removeprefix(LOGINS).removesuffix("/applications/login")
+            return self._logins(scope, user, params)
         if path == "tasks.googleapis.com/tasks/v1/users/@me/lists" and method == "GET":
             return self._paged(scope, self.lists, params, "tasks#taskLists")
         if (
@@ -423,6 +461,87 @@ class Fake:
             return _json(404, {"error": {"code": 404, "message": f"File not found: {file_id}."}})
         return _json(200, dict(found))
 
+    # -- People ---------------------------------------------------------------------------------
+
+    def _people(self, scope: str, rest: str, params: dict[str, Any]) -> service_account.Response:
+        if rest == "people/me/connections":
+            if scope != CONTACTS_SCOPE:
+                return _insufficient()
+            if not params.get("personFields"):
+                return _json(400, {"error": {"code": 400, "message": "personMask is required."}})
+            return self._listed(self.contacts, params, "connections", {"totalPeople": len(self.contacts)})
+        if rest == "otherContacts":
+            if scope != OTHER_CONTACTS_SCOPE:
+                return _insufficient()
+            if not params.get("readMask"):
+                return _json(400, {"error": {"code": 400, "message": "readMask is required."}})
+            extra = {"totalSize": len(self.other_contacts)}
+            return self._listed(self.other_contacts, params, "otherContacts", extra)
+        return _json(404, {"error": {"code": 404, "message": f"no such endpoint: {rest}"}})
+
+    def _listed(
+        self,
+        items: list[dict[str, Any]],
+        params: dict[str, Any],
+        key: str,
+        extra: dict[str, Any] | None = None,
+    ) -> service_account.Response:
+        """A page of `items` under `key`, the key left out when the page is empty, as Google's newer
+        APIs answer."""
+        start = int(params.get("pageToken") or 0)
+        page: dict[str, Any] = dict(extra or {})
+        if items[start : start + self.page]:
+            page[key] = items[start : start + self.page]
+        if start + self.page < len(items):
+            page["nextPageToken"] = str(start + self.page)
+        return _json(200, page)
+
+    # -- Meet -----------------------------------------------------------------------------------
+
+    def _meet(self, scope: str, rest: str, params: dict[str, Any]) -> service_account.Response:
+        if scope != MEET_SCOPE:
+            return _insufficient()
+        parts = rest.split("/")
+        if rest == "conferenceRecords":
+            since = _start_filter(str(params.get("filter") or ""))
+            found = [
+                c
+                for c in sorted(self.conferences, key=lambda c: _instant(c["startTime"]), reverse=True)
+                if since is None or _instant(c["startTime"]) >= since
+            ]
+            return self._listed(found, params, "conferenceRecords")
+        if len(parts) == 2 and parts[0] == "spaces":
+            space = self.spaces.get(rest)
+            if space is None:
+                return _json(404, {"error": {"code": 404, "message": "Requested entity was not found."}})
+            return _json(200, dict(space))
+        record = "/".join(parts[:2])
+        if parts[0] != "conferenceRecords" or not any(c["name"] == record for c in self.conferences):
+            return _json(404, {"error": {"code": 404, "message": "Requested entity was not found."}})
+        if len(parts) == 3 and parts[2] == "participants":
+            return self._listed(self.participants.get(record, []), params, "participants")
+        if len(parts) == 3 and parts[2] == "transcripts":
+            return self._listed(self.transcripts.get(record, []), params, "transcripts")
+        if len(parts) == 5 and parts[2] == "transcripts" and parts[4] == "entries":
+            return self._listed(self.entries.get("/".join(parts[:4]), []), params, "transcriptEntries")
+        return _json(404, {"error": {"code": 404, "message": f"no such endpoint: {rest}"}})
+
+    # -- Reports: the login audit log ----------------------------------------------------------------
+
+    def _logins(self, scope: str, user: str, params: dict[str, Any]) -> service_account.Response:
+        if scope != AUDIT_SCOPE:
+            return _insufficient()
+        since = _instant(params["startTime"]) if params.get("startTime") else None
+        found = [
+            a
+            for a in sorted(
+                self.logins, key=lambda a: _instant(a["id"]["time"]), reverse=True
+            )  # newest first
+            if (user == "all" or a.get("actor", {}).get("email") == user)
+            and (since is None or _instant(a["id"]["time"]) >= since)
+        ]
+        return self._listed(found, params, "items", {"kind": "admin#reports#activities"})
+
 
 def _insufficient() -> service_account.Response:
     return _json(403, {"error": {"code": 403, "message": "Request had insufficient authentication scopes."}})
@@ -435,6 +554,15 @@ def _json(status: int, data: dict[str, Any]) -> service_account.Response:
 def _activity_time(activity: dict[str, Any]) -> datetime:
     when = activity.get("timestamp") or activity["timeRange"]["startTime"]
     return _instant(str(when))
+
+
+def _start_filter(text: str) -> datetime | None:
+    """The bound a Meet filter may carry: `start_time>="…"`."""
+    for clause in text.split(" AND "):
+        clause = clause.strip().replace(" ", "")
+        if clause.startswith("start_time>="):
+            return _instant(clause.removeprefix("start_time>=").strip('"'))
+    return None
 
 
 def _window(text: str) -> tuple[datetime | None, datetime | None]:

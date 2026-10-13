@@ -152,6 +152,9 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "held_open_hour": "in an hour not over yet, written by a later run",
     "no_folder_path": "with no folder path (the file is gone, or in no folder of yours)",
     "already_in_lines": "already in a line of the record",
+    "held_ongoing": "still going on, written by the run after it ends",
+    "transcript_pending": "with a transcript not generated yet, written by a later run",
+    "conference_in_record": "already in the record, not asked about again",
 }
 
 

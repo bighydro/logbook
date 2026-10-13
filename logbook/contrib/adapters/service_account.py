@@ -2,12 +2,12 @@
 
 The owner runs his own Google Workspace. A service account in its Cloud project, allowed by the Workspace
 admin console to act as a user of the domain for named scopes (domain-wide delegation), reads that user's
-mail, calendars, Drive activity and file metadata, and tasks with no browser, no consent screen and
-nothing that expires: each run signs a short assertion with the account's key and trades it for an access
-token valid an hour, held in memory for that run and never written anywhere. There is no refresh token to
-rot in a scheduled job, which is how an OAuth client signed in once by hand ends (the token is revoked,
-expires unused, or is rotated out from under the job). What can stop it is the owner: a key deleted, the
-delegation withdrawn, the user suspended.
+mail, calendars, Drive activity and file metadata, tasks, Meet calls, sign-ins and contacts with no
+browser, no consent screen and nothing that expires: each run signs a short assertion with the account's
+key and trades it for an access token valid an hour, held in memory for that run and never written
+anywhere. There is no refresh token to rot in a scheduled job, which is how an OAuth client signed in once
+by hand ends (the token is revoked, expires unused, or is rotated out from under the job). What can stop
+it is the owner: a key deleted, the delegation withdrawn, the user suspended.
 
 The sources on the key (`SOURCES`), configured by the environment alone, in one place:
 
@@ -22,9 +22,12 @@ config's repr shows neither the path, the user nor the account, and no error ech
 
 Each call asks for one scope, read-only, and nothing else (`SCOPES`): `gmail.readonly` for `sync gmail`,
 `calendar.readonly` for `sync gcal`, `drive.activity.readonly` for `sync drive` and
-`drive.metadata.readonly` for the folder paths its lines carry, `tasks.readonly` for `sync gtasks`. A
-`Session` is one scope's calls, its token minted on the first. A scope the delegation does not grant is
-Google's `unauthorized_client`, which `ScopeRefused` turns into where to grant it.
+`drive.metadata.readonly` for the folder paths its lines carry, `tasks.readonly` for `sync gtasks`,
+`meetings.space.readonly` for `sync meet`, `admin.reports.audit.readonly` for `sync gaudit`, and
+`contacts.readonly` and `contacts.other.readonly` for `people review --from-google`, which reads the
+owner's contacts as names for the review and writes no line of them. A `Session` is one scope's calls, its
+token minted on the first. A scope the delegation does not grant is Google's `unauthorized_client`, which
+`ScopeRefused` turns into where to grant it.
 
 Signing is RS256, PKCS#1 v1.5 over SHA-256, done by `cryptography` (the `crypto` extra, which the
 encrypted iOS backup and the signed page already use); without it a run says which extra to install.
@@ -59,6 +62,7 @@ __all__ = [
     "ENV",
     "GRANT",
     "KEY_ENV",
+    "NAMES",
     "RETRIES",
     "SCOPES",
     "SOURCES",
@@ -79,7 +83,15 @@ __all__ = [
 KEY_ENV = "LOGBOOK_DRIVE_SA_KEY"
 USER_ENV = "LOGBOOK_DRIVE_USER"
 ENV = (KEY_ENV, USER_ENV)
-SOURCES = ("gmail", "gcal", "drive", "gtasks")  # the sources that sign in here, in `sync --all`'s order
+SOURCES = (
+    "gmail",
+    "gcal",
+    "drive",
+    "gtasks",
+    "meet",
+    "gaudit",
+)  # the sources on the key, in `sync --all`'s order
+NAMES = ("contacts", "other contacts")  # what `people review --from-google` reads: names, never lines
 AUTH = "https://www.googleapis.com/auth/"
 SCOPES = {  # one read-only scope per call; what the Workspace's domain-wide delegation must grant
     "gmail": f"{AUTH}gmail.readonly",
@@ -87,6 +99,10 @@ SCOPES = {  # one read-only scope per call; what the Workspace's domain-wide del
     "drive": f"{AUTH}drive.activity.readonly",
     "drive paths": f"{AUTH}drive.metadata.readonly",
     "gtasks": f"{AUTH}tasks.readonly",
+    "meet": f"{AUTH}meetings.space.readonly",
+    "gaudit": f"{AUTH}admin.reports.audit.readonly",
+    "contacts": f"{AUTH}contacts.readonly",
+    "other contacts": f"{AUTH}contacts.other.readonly",
 }
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
