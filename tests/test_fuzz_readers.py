@@ -16,6 +16,7 @@ import contextlib
 import io
 import json
 import random
+import uuid
 from collections.abc import Callable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
@@ -143,6 +144,9 @@ OPTIONAL: dict[str, tuple[str, ...]] = {
     "highlight/v1": ("title", "author", "asset_id", "note", "location", "page", "modified_at", "extra"),
     "voice-memo/v1": ("title", "duration_s", "file_name", "media", "folder", "extra"),
     "keeper/v1": ("marked_at", "supersedes"),
+    "goal/v1": ("until", "supersedes"),
+    "review/v1": ("note",),
+    "chapter/v1": ("to", "supersedes"),
 }
 
 # IANA-shaped, in no edition of the zone database: a name a newer edition has and this host lacks.
@@ -187,7 +191,55 @@ def tier_3_day(drafts: list[Draft], rng: random.Random) -> None:
             d["tier"] = 3
 
 
+def goals_and_chapters(drafts: list[Draft], rng: random.Random) -> None:
+    """The owner's lines of RFC 0036 on the record's days: a goal and the goal reworded, a review of
+    each line of it (one backfilled, one for another period on the same day), a review of a goal the
+    record does not hold, a goal with no text, a chapter closed and one open, and two chapters that
+    hold the same days (two writers' record: the reader shows the later and says so). Added first,
+    so `optional-fields` may take their MAY fields away."""
+    days = sorted({local_date(d["at"], demo.TZ) for d in drafts})
+    first, last = days[0], days[-1]
+    middle = days[len(days) // 2]
+    goal, reworded = str(uuid.UUID(int=rng.getrandbits(128))), str(uuid.UUID(int=rng.getrandbits(128)))
+
+    def line(at_day: str, kind: str, payload: dict[str, Any], id_: str | None = None) -> Draft:
+        draft: Draft = {
+            "at": f"{at_day}T18:00:00Z",
+            "source": "manual",
+            "kind": kind,
+            "tier": 2,
+            "payload": payload,
+        }
+        if id_ is not None:
+            draft["id"] = id_
+        return draft
+
+    opening = {"schema": "goal/v1", "text": "Sail to the islands and back.", "horizon": "year", "from": first}
+    drafts.extend(
+        [
+            line(first, "goal", opening, goal),
+            line(middle, "goal", {"schema": "goal/v1", "text": "Sail there, at anchor.", "horizon": "year",
+                 "from": first, "until": last, "supersedes": goal}, reworded),
+            line(rng.choice(days), "review", {"schema": "review/v1", "goal": goal, "disposition": "advancing",
+                 "period": "month", "note": "Two nights out."}),
+            line(last, "review", {"schema": "review/v1", "goal": reworded, "disposition": "let go",
+                 "period": "month"}) | {"recorded_at": "2026-10-11T18:30:00Z"},
+            line(last, "review", {"schema": "review/v1", "goal": reworded, "disposition": "stalled",
+                 "period": "year"}),
+            line(rng.choice(days), "review", {"schema": "review/v1", "goal": "elsewhere",
+                 "disposition": "done", "period": "week"}),
+            line(rng.choice(days), "goal", {"schema": "goal/v1", "horizon": "quarter"}),
+            line(middle, "chapter", {"schema": "chapter/v1", "name": "Aboard", "from": first, "to": middle,
+                 "rules": "Nights at anchor count."}),
+            line(middle, "chapter", {"schema": "chapter/v1", "name": "Ashore", "from": middle, "rules": ""}),
+            line(last, "chapter", {"schema": "chapter/v1", "name": "The yard", "from": rng.choice(days),
+                 "rules": ""}),
+        ]
+    )  # fmt: skip
+
+
 MUTATIONS: dict[str, Mutation | None] = {
+    "goals-and-chapters": goals_and_chapters,
     "optional-fields": drop_optional_fields,
     "string-chat": string_chat,
     "unknown-line-tz": unknown_line_tz,
@@ -330,6 +382,10 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["people", "nearby", "Home", "--json"],
     ["people", "review"],
     ["people", "review", "--json"],
+    ["goal", "list"],
+    ["goal", "list", "--open", "--json"],
+    ["chapter", "list"],
+    ["chapter", "list", "--json"],
     ["verify"],
 ]
 
