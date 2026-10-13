@@ -400,7 +400,9 @@ def test_the_owner_is_never_with_themselves_by_address_or_policy_alias(
     (lb.root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     owner_file = lb.root / "policy" / "owner.json"
     empty = json.loads(owner_file.read_text(encoding="utf-8"))
-    assert empty == {"names": [], "emails": [], "phones": []}, "init writes the empty aliases file"
+    assert empty == {"names": [], "emails": [], "phones": [], "handles": []}, (
+        "init writes the empty aliases file"
+    )
     owner_file.write_text(json.dumps({"names": ["Nordmann"], "emails": [], "phones": []}), encoding="utf-8")
     [trip] = _json(capsys, "--since", "2026-06-10", "--until", "2026-06-13")["trips"]
     assert [p["name"] for p in trip["people"]] == ["Ola Nordmann"]
