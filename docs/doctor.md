@@ -14,6 +14,17 @@ both (the next reader rebuilds it, or `logbook repair index` does now); a **fail
 a clock `HH:MM`, which every reader that groups by day refuses. A record whose day begins at midnight,
 with an index that agrees, has no such line.
 
+## The Google key
+
+When either variable of the Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
+`LOGBOOK_DRIVE_USER`), one `google` line comes before the `sync:` lines of the sources it covers: the key
+file present and a service-account key, the user an address, and which of `gmail`, `gcal`, `drive` and
+`gtasks` are on it, a source switched off in `policy/import.json` named as disabled —
+`pass  google  key present, user set; sources on the key: gmail, gcal, drive, gtasks`. A key not set,
+not readable or not a service-account key, or a user that is not an address, is a warn naming the
+variable. The line reads the key on this machine and asks Google nothing, and never prints the path or
+the address ([the tour, *Google, on one key*](tour.md#google-on-one-key)).
+
 ## Implausible dates
 
 A calendar entry a parser placed in 1948, or a mail a sender's broken clock dated 2612, is not a

@@ -2,9 +2,11 @@
 
 One line per message. `logbook add mail` reads a Google Takeout `Mail/` export — `All mail Including
 Spam and Trash.mbox`, twenty gigabytes for a mailbox that has been running for fifteen years — or any
-mbox file or folder of them, and `logbook sync mail` reads the same mailbox live over IMAP
-([below](#mail-imap)); either writes one `mail/v1` line per message (RFC 0015): who, when, the
-subject, the thread, the labels, the body as text, the attachments by name and size. Tier 2 by default.
+mbox file or folder of them; `logbook sync mail` reads the same mailbox live over IMAP
+([below](#mail-imap)), and `logbook sync gmail` a Gmail mailbox over the Gmail API on the one Google
+key ([below](#gmail-over-the-api)). Each writes one `mail/v1` line per message (RFC 0015): who, when,
+the subject, the thread, the labels, the body as text, the attachments by name and size. Tier 2 by
+default. All three write the same line for the same message, so they dedupe each other.
 
 ```bash
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # the whole export
@@ -129,6 +131,65 @@ folder and `LOGBOOK_IMAP_FOLDERS`. `doctor` shows `sync:mail` configured or unco
 variables' names alone, and `sync --all` runs mail among the quick sources, so the four runs of the
 schedule pick it up with no further configuration.
 
+## Gmail over the API
+
+`logbook sync gmail` reads a Gmail mailbox over the Gmail API, read-only (`gmail.readonly`), with the
+Google Workspace service account every Google source shares: the two variables `LOGBOOK_DRIVE_SA_KEY`
+and `LOGBOOK_DRIVE_USER`, set up once as [the tour's *Google, on one key*](../tour.md#google-on-one-key)
+says, with the Gmail scope among those delegated. No password and no app password; each run mints an
+hour's token and keeps it in memory, and nothing it can store goes stale.
+
+```bash
+logbook sync gmail --dry-run                        # list and read, count, write nothing
+logbook sync gmail --since 2026-03-01T00:00:00Z     # what Gmail received from then on, for this run
+logbook sync gmail                                  # what is new since the last run
+logbook sync gmail --restart                        # every message again (the record refuses the overlap)
+```
+
+**The same line as IMAP.** Each message is fetched whole, the bytes the mailbox stores, and goes
+through the same `parse_message` the Takeout import and `sync mail` use: the same fields, the same
+64 KB body cap, the same `raw_id`, `<account>:<Message-ID>`, with `LOGBOOK_DRIVE_USER` as the account.
+So a mailbox synced over IMAP yesterday and over the API today is written once, and a Takeout imported
+with `--account <the same address>` dedupes against both. Gmail's internal date stands where IMAP's
+`INTERNALDATE` would, for a message whose `Date` header is missing. Attachments are named, sized and
+digested and never stored.
+
+**Labels in the profile's slot.** `labels` is spelled as IMAP's `X-GM-LABELS` gives it: `Inbox`,
+`Sent`, `Important`, `Starred` and your own labels by name (`Boat/Engine` for a nested one); the
+thread id is `extra.gmail_thread_id`, in decimal as IMAP and Takeout write it. Dropped, because IMAP
+never shows them and the line would differ: `UNREAD` (a flag, not a label) and the category tabs
+(`CATEGORY_UPDATES`, `CATEGORY_PROMOTIONS`, …). Labels are a snapshot at ingest, as over IMAP.
+
+**Not a line.** A draft (neither sent nor received; its `Message-ID` is often the one the sent message
+will carry, which would then be refused), a message in Spam or Trash, and one deleted between being
+listed and being read: each is counted.
+
+**Headers first, history next.** Each page of message ids is read as metadata (the `Message-ID` header
+alone), the record is asked which it holds, and only the other bodies are fetched: after a Takeout
+import or an IMAP sync, the first run costs one small request per message and no body. The state in
+`state/gmail.json` is Gmail's **history id**, taken before anything is listed, and the newest
+**internal date** handled, written once the lines are in the record. A run reads the history since the
+id and lists nothing; when Gmail no longer keeps that history (about a week) the run says so and lists
+what Gmail received from a day before the newest message. The first run lists every message; `--since`
+gives a shorter one, which then leaves a mark, and on a later run lists from that time for that run
+alone, the mark left as it was. Rate limits and server errors are retried with a doubling wait; anything
+else stops the run on one line, exit 1, the mark where it was.
+
+### IMAP or the API
+
+- **A mailbox that is not Google's** — Fastmail, iCloud, a provider's own, your own server: `sync mail`,
+  IMAP. It is the standard every server speaks.
+- **A Gmail address on your own Google Workspace**, where you can create a service account and delegate
+  to it: `sync gmail`. No app password (which needs 2-step verification and can be revoked from the
+  account page), one key for mail, calendars, Drive and tasks, Gmail's history in place of a
+  per-folder mark, and drafts, Spam and Trash left out.
+- **A personal `@gmail.com` account** has no Workspace to delegate from: `sync mail` with an app
+  password.
+- **Both, for one mailbox**, is harmless: the lines are the same, and `sync --all` runs `mail` before
+  `gmail`, so whichever reads a message first writes it and the other is refused it. To keep one, unset
+  the `LOGBOOK_IMAP_*` variables, or switch `gmail` off in `policy/import.json` (its key stays for the
+  other Google sources).
+
 ## What is counted, never dropped silently
 
 `add` reports: messages without a `Message-ID` (keyed by digest), timed by the mbox separator (no
@@ -139,6 +200,8 @@ attachments referenced or stored, and messages skipped by label. A message with 
 `sync mail` reports, besides these: messages already in the record by `Message-ID`, whose bodies
 were never fetched, and folders read from the first message again because their `UIDVALIDITY`
 changed.
+`sync gmail` reports messages already in the record by `Message-ID`, whose bodies were never fetched,
+drafts, messages in Spam or Trash, and messages deleted before they could be read.
 
 `show` prints `✉ subject — from → to (n attachments)`, never the body; `show --raw` prints the body
 under the row.

@@ -32,7 +32,9 @@ or component it does not know is passed over. Names are case-insensitive. A file
 calendar export is megabytes, not gigabytes. Also reads a folder of such files (the Takeout `Calendar/`
 folder among them), each in name order. Pure: no network, the source is never written. `lines` reads the
 same text from memory: the `gcal` live mode fetches Google Calendar's private feeds and hands them here, so
-a feed and its export are the same lines.
+a feed and its export are the same lines. `components_lines` reads components already built: `gcal` on the
+service account turns each Calendar API event into the VEVENT its feed would carry (`content_line` reads
+a recurrence rule the API gives as text) and hands it here, so the API and the feed are one mapping too.
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ from __future__ import annotations
 import math
 import re
 import zoneinfo
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
@@ -184,9 +186,17 @@ def lines(
     text, for a feed that never touched the disk (`logbook sync gcal`). `name` stands in for the file
     name as the calendar's id when the text has no X-WR-CALNAME, so the same calendar read either way
     is the same lines. `counts` and `timezone` as for `run`."""
+    yield from components_lines(parse(text), name, counts, timezone)
+
+
+def components_lines(
+    roots: Iterable[Component], name: str, counts: dict[str, int] | None = None, timezone: str | None = None
+) -> Iterator[dict[str, Any]]:
+    """`lines` on components already parsed, or built: one event/v1 line per VEVENT of each VCALENDAR
+    (or of a bare VEVENT), in order. `name`, `counts` and `timezone` as for `lines`."""
     counts = counts if counts is not None else {}
     record_zone = _zone(timezone)
-    for root in parse(text):
+    for root in roots:
         if root.name == "VCALENDAR":
             calendar, components = _calendar(root, name), root.children
         else:  # a bare component with no VCALENDAR around it
@@ -525,6 +535,12 @@ def _unfold(text: str) -> Iterator[str]:
         current = raw
     if current is not None:
         yield current
+
+
+def content_line(line: str) -> Property | None:
+    """One unfolded content line as a property (`RRULE:FREQ=WEEKLY`, `EXDATE;TZID=Europe/Oslo:2026…`),
+    or None for one the parser would skip."""
+    return _content_line(line)
 
 
 def _content_line(line: str) -> Property | None:

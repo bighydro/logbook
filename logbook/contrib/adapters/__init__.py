@@ -45,6 +45,11 @@ and optionally:
                                                 # kept under `resume` in the state file, never dropped
                                                 # when a run completes; `describe(checkpoint)` then
                                                 # says what it holds, one line per folder, after the summary
+    needs(env) -> str                           # what to set, in words, for a source with two ways in
+                                                # (`gcal`: the feeds, or the service account); without
+                                                # it, every variable of ENV still unset, joined by `and`
+    SOURCE: str                                 # the `source` its lines carry when it is not NAME
+                                                # (`gmail` writes `mail` lines), for what `sync` counts
 
 `pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may), `assets`
 (the registry, as `run` may) and `failed: list[str]`: a source made of several feeds appends one line per
@@ -68,8 +73,12 @@ reads a phone backup's sms.db and the Mac's own chat.db; `mail` reads a Takeout 
 mailbox over IMAP through the one parser); they write the same lines, so either dedupes the other. A
 live source need not be a service: `imessage` reads a file on this machine and `ENV` names only
 optional overrides, so its `configure` never returns None. Nor need it share the NAME: `gcal` pulls
-Google Calendar's feeds through the `ics` reader and writes `ics` lines, so a feed and an export of the
-same calendar dedupe each other.
+Google Calendar's feeds, or its API, through the `ics` reader and writes `ics` lines, so a feed, the API
+and an export of the same calendar dedupe each other; `gmail` reads the Gmail API through the `mail`
+parser and writes `mail` lines, so it, the IMAP source and a Takeout export of one mailbox dedupe each
+other. A pull may also take `cache`, a JSON object of its own that `sync` keeps in
+`state/<name>-cache.json` between runs (written after a run that is not a dry run): what a source
+looked up and need not ask again (`drive`: the names and parents of folders), never part of the record.
 
 `since` and the watermark are in the *source's* clock (when it received or last changed the item),
 not the event's: `logbook sync` stores the largest watermark of a completed pull and passes it back
@@ -138,6 +147,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "adsb",
     "mail",
     "mail_imap",
+    "gmail",
     "safari",
     "shazam",
     "apple_podcasts",
@@ -281,6 +291,15 @@ def named(name: str) -> Adapter | None:
     """The file adapter called `name` (or by an alias in `ALIASES`), or None."""
     name = ALIASES.get(name, name)
     return next((a for a in file_adapters() if name == a.NAME), None)
+
+
+def needs(adapter: LiveAdapter, env: Mapping[str, str]) -> str:
+    """What to set before `adapter` runs, in words: its own `needs(env)` when it has one, else every
+    variable of its ENV still unset, joined by `and`. Names only, never a value."""
+    own = getattr(adapter, "needs", None)
+    if callable(own):
+        return str(own(env))
+    return " and ".join(v for v in adapter.ENV if not env.get(v, "").strip())
 
 
 def live(name: str) -> LiveAdapter | None:

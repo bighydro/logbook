@@ -77,6 +77,9 @@ SKIP_PHRASES = {
     "skipped_over_cap": "over the one-per-minute heart-rate cap",
     "skipped_reading_position": "reading positions",
     "skipped_deleted": "deleted",
+    "skipped_draft": "drafts (neither sent nor received)",
+    "skipped_spam_or_trash": "in Spam or Trash",
+    "skipped_gone": "deleted before they could be read",
     "skipped_trashed": "in the trash",
     "skipped_relayed": "relayed from another app",
     "skipped_daily_total": "daily totals",
@@ -147,6 +150,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "body_withheld": "pages with blocks the API withholds",
     "body_not_found": "pages with a block deleted while they were read",
     "held_open_hour": "in an hour not over yet, written by a later run",
+    "no_folder_path": "with no folder path (the file is gone, or in no folder of yours)",
     "already_in_lines": "already in a line of the record",
 }
 

@@ -1,13 +1,18 @@
-"""An in-process fake of the three Google endpoints `sync drive` and `sync gtasks` call: the OAuth token
-endpoint (a service account's signed assertion in, an access token out), the Drive Activity API v2
-(`activity:query`) and the Tasks API v1 (task lists, tasks). Nothing listens on a socket: the fake is a
-function with the shape of `service_account.send`, which a test puts in its place, and every request it
-answers is recorded so a test can say what was asked.
+"""An in-process fake of the Google endpoints the sources on the one service-account key call: the OAuth
+token endpoint (a service account's signed assertion in, an access token out), the Drive Activity API v2
+(`activity:query`), the Drive API v3's file metadata (`files.get`), the Tasks API v1 (task lists, tasks),
+the Gmail API v1 (profile, labels, messages, history) and the Calendar API v3 (calendar list, events).
+Nothing listens on a socket: the fake is a function with the shape of `service_account.send`, which a
+test puts in its place, and every request it answers is recorded so a test can say what was asked.
 
 The token endpoint checks what Google checks: the assertion is an RS256 JWT signed by the key the fake
 was given, issued by the key's client email for the user it impersonates, for a scope the domain-wide
 delegation grants, addressed to the token endpoint and valid for an hour at most. A scope not granted is
 `unauthorized_client`, as Google says it. Every API call must carry a token the fake issued.
+
+Every API answers only a token minted for its own scope, as Google does (`Request had insufficient
+scopes`), and only GET, except the one POST the Activity API takes: a test reads `methods()` to see the
+client never asked for anything else.
 
 Everything is synthetic: the persona is Ines Nordmann of Oslo, `ines@example.org`; the people who share
 her files are `people/1001` and `people/1002` as the API would name them; the service account is
@@ -32,6 +37,13 @@ CLIENT_EMAIL = "logbook-sync@example.org"
 USER = "ines@example.org"
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.activity.readonly"
 TASKS_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
+METADATA_SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly"
+GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+SCOPES = {DRIVE_SCOPE, TASKS_SCOPE, METADATA_SCOPE, GMAIL_SCOPE, CALENDAR_SCOPE}  # what the owner delegated
+GMAIL = "gmail.googleapis.com/gmail/v1/users/me"
+CALENDAR = "www.googleapis.com/calendar/v3"
+FILES = "www.googleapis.com/drive/v3/files/"
 OLA, PER = "people/1001", "people/1002"  # as the Activity API names a person: a People API resource
 
 
@@ -69,16 +81,30 @@ def _instant(text: str) -> datetime:
 
 @dataclass
 class Fake:
-    """The three endpoints with their data. `drive` holds DriveActivity objects as the API returns
-    them; `lists` the task lists and `tasks` each list's tasks. `page` is how many items one page
-    holds whatever the client asks, so paging shows with a handful of items. `failures` are answered,
-    in order, to the next API calls (never to the token endpoint): `(status, headers, body)`."""
+    """The endpoints with their data. `drive` holds DriveActivity objects as the API returns them and
+    `files` the Drive items by id (`{id, name, mimeType, parents}`); `lists` the task lists and `tasks`
+    each list's tasks; `mail` the Gmail messages (`deliver` adds one, with its history record),
+    `labels` the mailbox's labels and `history` its history records, oldest first, a start before
+    `history_floor` being too old (404, as Gmail says it); `calendars` the calendar list and `events`
+    each calendar's events, an `updatedMin` before `updated_min_floor` being too long ago (410). `page`
+    is how many items one page holds whatever the client asks, so paging shows with a handful of items.
+    `failures` are answered, in order, to the next API calls (never to the token endpoint): `(status,
+    headers, body)`."""
 
     key: rsa.RSAPrivateKey
-    delegated: set[str] = field(default_factory=lambda: {DRIVE_SCOPE, TASKS_SCOPE})
+    delegated: set[str] = field(default_factory=lambda: set(SCOPES))
     drive: list[dict[str, Any]] = field(default_factory=list)
+    files: dict[str, dict[str, Any]] = field(default_factory=dict)
     lists: list[dict[str, Any]] = field(default_factory=list)
     tasks: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    mail: list[dict[str, Any]] = field(default_factory=list)
+    labels: list[dict[str, Any]] = field(default_factory=list)
+    history: list[dict[str, Any]] = field(default_factory=list)
+    history_id: int = 1000
+    history_floor: int = 0
+    calendars: list[dict[str, Any]] = field(default_factory=list)
+    events: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    updated_min_floor: str | None = None
     page: int = 3
     failures: list[tuple[int, dict[str, str], bytes]] = field(default_factory=list)
     requests: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
@@ -94,6 +120,37 @@ class Fake:
     def methods(self) -> set[tuple[str, str]]:
         """Every (method, host) asked: what the client may do to Google, in one set."""
         return {(m, p.split("/")[0]) for m, p, _ in self.requests}
+
+    def deliver(
+        self,
+        raw: bytes,
+        when: datetime,
+        labels: tuple[str, ...] = ("INBOX",),
+        thread: int | None = None,
+    ) -> str:
+        """A message arriving in the mailbox: its id (hex, as Gmail's are), a history record that adds
+        it, and the mailbox's history id moved on. `thread` is the thread's number (the API spells it
+        in hex, IMAP's X-GM-THRID in decimal); the message's own when not given."""
+        self.history_id += 1
+        number = 0x18E0_0000_0000_0000 + len(self.mail) + 1
+        message = {
+            "id": f"{number:x}",
+            "threadId": f"{thread if thread is not None else number:x}",
+            "labelIds": list(labels),
+            "internalDate": str(int(when.timestamp() * 1000)),
+            "historyId": str(self.history_id),
+            "sizeEstimate": len(raw),
+            "raw": raw,
+        }
+        self.mail.append(message)
+        self.history.append(
+            {
+                "id": str(self.history_id),
+                "messages": [{"id": message["id"], "threadId": message["threadId"]}],
+                "messagesAdded": [{"message": {k: message[k] for k in ("id", "threadId", "labelIds")}}],
+            }
+        )
+        return str(message["id"])
 
     def fail(self, status: int, retry_after: str | None = None, reason: str | None = None) -> None:
         headers = {"retry-after": retry_after} if retry_after is not None else {}
@@ -125,6 +182,14 @@ class Fake:
             return _json(401, {"error": {"code": 401, "message": "Request had invalid authentication."}})
         if path == "driveactivity.googleapis.com/v2/activity:query" and method == "POST":
             return self._activity(scope, params)
+        if method != "GET":
+            return _json(405, {"error": {"code": 405, "message": f"{method} is not allowed here"}})
+        if path.startswith(GMAIL + "/"):
+            return self._gmail(scope, path.removeprefix(GMAIL + "/"), params)
+        if path.startswith(CALENDAR + "/"):
+            return self._calendar(scope, path.removeprefix(CALENDAR + "/"), params)
+        if path.startswith(FILES):
+            return self._file(scope, path.removeprefix(FILES))
         if path == "tasks.googleapis.com/tasks/v1/users/@me/lists" and method == "GET":
             return self._paged(scope, self.lists, params, "tasks#taskLists")
         if (
@@ -206,6 +271,161 @@ class Fake:
             and (params.get("showCompleted", "true") == "true" or t.get("status") != "completed")
         ]
         return self._paged(scope, shown, params, "tasks#tasks")
+
+    # -- Gmail ----------------------------------------------------------------------------------
+
+    def _gmail(self, scope: str, rest: str, params: dict[str, Any]) -> service_account.Response:
+        if scope != GMAIL_SCOPE:
+            return _insufficient()
+        if rest == "profile":
+            return _json(
+                200,
+                {
+                    "emailAddress": USER,
+                    "messagesTotal": len(self.mail),
+                    "threadsTotal": len({m["threadId"] for m in self.mail}),
+                    "historyId": str(self.history_id),
+                },
+            )
+        if rest == "labels":
+            return _json(200, {"labels": list(self.labels)})
+        if rest == "messages":
+            return self._messages(params)
+        if rest.startswith("messages/"):
+            return self._message(rest.removeprefix("messages/"), params)
+        if rest == "history":
+            return self._history(params)
+        return _json(404, {"error": {"code": 404, "message": f"no such endpoint: {rest}"}})
+
+    def _messages(self, params: dict[str, Any]) -> service_account.Response:
+        after = None
+        for term in str(params.get("q") or "").split():
+            if term.startswith("after:"):
+                after = int(term.removeprefix("after:"))
+        hidden = set() if params.get("includeSpamTrash") == "true" else {"SPAM", "TRASH"}
+        found = [
+            m
+            for m in sorted(self.mail, key=lambda m: int(m["internalDate"]), reverse=True)  # newest first
+            if not hidden & set(m["labelIds"]) and (after is None or int(m["internalDate"]) // 1000 > after)
+        ]
+        start = int(params.get("pageToken") or 0)
+        page: dict[str, Any] = {"resultSizeEstimate": len(found)}
+        if found[start : start + self.page]:
+            page["messages"] = [
+                {"id": m["id"], "threadId": m["threadId"]} for m in found[start : start + self.page]
+            ]
+        if start + self.page < len(found):
+            page["nextPageToken"] = str(start + self.page)
+        return _json(200, page)
+
+    def _message(self, message_id: str, params: dict[str, Any]) -> service_account.Response:
+        message = next((m for m in self.mail if m["id"] == message_id), None)
+        if message is None:
+            return _json(404, {"error": {"code": 404, "message": "Requested entity was not found."}})
+        shown = {
+            k: message[k] for k in ("id", "threadId", "labelIds", "historyId", "internalDate", "sizeEstimate")
+        }
+        raw = bytes(message["raw"])
+        if params.get("format") == "raw":
+            shown["raw"] = base64.urlsafe_b64encode(raw).decode("ascii")
+        elif params.get("format") == "metadata":
+            wanted = {str(params.get("metadataHeaders") or "").lower()}
+            head = raw.split(b"\r\n\r\n", 1)[0].decode("utf-8", "replace")
+            headers = [
+                {"name": name.strip(), "value": value.strip()}
+                for name, _, value in (line.partition(":") for line in head.split("\r\n"))
+                if name.strip().lower() in wanted
+            ]
+            shown["payload"] = {"mimeType": "multipart/mixed", "headers": headers}
+        else:
+            return _json(
+                400, {"error": {"code": 400, "message": "the fake answers format=raw and format=metadata"}}
+            )
+        return _json(200, shown)
+
+    def _history(self, params: dict[str, Any]) -> service_account.Response:
+        start = int(params["startHistoryId"])
+        if start < self.history_floor:
+            return _json(
+                404,
+                {"error": {"code": 404, "message": "Requested entity was not found.", "status": "NOT_FOUND"}},
+            )
+        types = str(params.get("historyTypes") or "")
+        records = [
+            r
+            if types != "messageAdded"
+            else {k: v for k, v in r.items() if k in ("id", "messages", "messagesAdded")}
+            for r in self.history
+            if int(r["id"]) > start
+        ]
+        offset = int(params.get("pageToken") or 0)
+        page: dict[str, Any] = {"historyId": str(self.history_id)}
+        if records[offset : offset + self.page]:
+            page["history"] = records[offset : offset + self.page]
+        if offset + self.page < len(records):
+            page["nextPageToken"] = str(offset + self.page)
+        return _json(200, page)
+
+    # -- Calendar -------------------------------------------------------------------------------
+
+    def _calendar(self, scope: str, rest: str, params: dict[str, Any]) -> service_account.Response:
+        if scope != CALENDAR_SCOPE:
+            return _insufficient()
+        if rest == "users/me/calendarList":
+            shown = [
+                c
+                for c in self.calendars
+                if params.get("minAccessRole") != "owner" or c.get("accessRole") == "owner"
+            ]
+            return self._page(shown, params, "calendar#calendarList")
+        parts = rest.split("/")
+        if len(parts) == 3 and parts[0] == "calendars" and parts[2] == "events":
+            return self._events(parts[1], params)
+        return _json(404, {"error": {"code": 404, "message": f"no such endpoint: {rest}"}})
+
+    def _events(self, calendar_id: str, params: dict[str, Any]) -> service_account.Response:
+        if calendar_id not in self.events:
+            return _json(404, {"error": {"code": 404, "message": "Not Found"}})
+        since = params.get("updatedMin")
+        if since and self.updated_min_floor and _instant(since) < _instant(self.updated_min_floor):
+            reason = "updatedMinTooLongAgo"
+            message = "The requested minimum modification time lies too far in the past."
+            error = {
+                "code": 410,
+                "message": message,
+                "errors": [{"domain": "calendar", "reason": reason, "message": message}],
+            }
+            return _json(410, {"error": error})
+        shown = [
+            e
+            for e in self.events[calendar_id]
+            if (not since or _instant(e["updated"]) >= _instant(since))
+            and (since or params.get("showDeleted") == "true" or e.get("status") != "cancelled")
+        ]
+        return self._page(shown, params, "calendar#events")
+
+    def _page(
+        self, items: list[dict[str, Any]], params: dict[str, Any], kind: str
+    ) -> service_account.Response:
+        start = int(params.get("pageToken") or 0)
+        page: dict[str, Any] = {"kind": kind, "items": items[start : start + self.page]}
+        if start + self.page < len(items):
+            page["nextPageToken"] = str(start + self.page)
+        return _json(200, page)
+
+    # -- Drive metadata -------------------------------------------------------------------------
+
+    def _file(self, scope: str, file_id: str) -> service_account.Response:
+        if scope != METADATA_SCOPE:
+            return _insufficient()
+        found = self.files.get(file_id)
+        if found is None:
+            return _json(404, {"error": {"code": 404, "message": f"File not found: {file_id}."}})
+        return _json(200, dict(found))
+
+
+def _insufficient() -> service_account.Response:
+    return _json(403, {"error": {"code": 403, "message": "Request had insufficient authentication scopes."}})
 
 
 def _json(status: int, data: dict[str, Any]) -> service_account.Response:

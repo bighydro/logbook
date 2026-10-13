@@ -155,7 +155,7 @@ def test_registry_has_gcal_as_a_live_adapter_writing_ics_lines():
 
 
 def test_configure_reads_a_comma_separated_list_of_urls():
-    assert gcal.ENV == (URLS_ENV,)
+    assert gcal.ENV == (URLS_ENV, "LOGBOOK_DRIVE_SA_KEY", "LOGBOOK_DRIVE_USER")  # feeds, or the account
     config = gcal.configure(
         {URLS_ENV: " https://calendar.example.org/a/basic.ics , https://calendar.example.org/b/basic.ics,"}
     )
