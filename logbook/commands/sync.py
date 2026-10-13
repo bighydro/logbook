@@ -567,6 +567,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["previous"] = _previous(lb, adapter)
     if _takes(adapter, "recorded", live=True):
         options["recorded"] = _recorded(lb, adapter)
+    if _takes(adapter, "held", live=True):
+        options["held"] = _held(lb)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
@@ -1112,6 +1114,19 @@ def _previous(
             }
 
     return previous
+
+
+def _held(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], dict[tuple[str, str], dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `held`: the lines the record holds under a batch of
+    (source, raw_id) keys, one SELECT through the index and read from the files, so a source can use
+    what it wrote before (`gtasks`: when a task's `created` line was written, for how long it was open).
+    A sealed line comes back opened when the identity is here; its `at` is always plain."""
+
+    def held(keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
+        with lb.index() as idx:
+            return idx.lines_of(keys)
+
+    return held
 
 
 def _recorded(lb: Logbook, adapter: adapters.LiveAdapter) -> Callable[[str | None], list[dict[str, Any]]]:
