@@ -156,6 +156,23 @@ def test_pixels_cross_only_with_attachments(
     assert (out / "attachments" / PIXELS_SHA).read_bytes() == PIXELS
 
 
+def test_a_second_bundle_into_the_same_folder_carries_nothing_of_the_first(
+    ola: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The bundle is built fresh and replaces the folder: the pixels of an earlier `--attachments` run
+    do not stay behind a manifest that says none were included, and trip.json is listed with the rest."""
+    out, _text = _bundle(ola, tmp_path, monkeypatch, capsys, "--attachments")
+    out, _text = _bundle(ola, tmp_path, monkeypatch, capsys)
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    on_disk = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert on_disk == ["entries.jsonl", "manifest.json", "resolution.jsonl", "trip.json"]
+    assert [f["path"] for f in manifest["files"]] == ["entries.jsonl", "resolution.jsonl", "trip.json"]
+    by_path = {f["path"]: f for f in manifest["files"]}
+    assert by_path["trip.json"]["sha256"] == manifest["trip_sha256"]
+    assert manifest["attachments_included"] is False and manifest["blobs"] == []
+    assert trip_bundle.read_bundle(out).manifest == manifest
+
+
 def test_tier_1_alone_holds_back_the_people_and_the_overlay(
     ola: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

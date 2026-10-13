@@ -595,3 +595,141 @@ def test_a_signature_that_confirms_nothing_still_opens_the_gate_and_crosses(lb: 
     assert entries[15]["payload"]["confirmed"] == []
     assert signing.validate(entries[15]["payload"]) == []
     assert _manifest(out)["counts"]["held_back_unsigned"] == 0
+
+
+# -- the output directory: every bundle is built fresh, and only what the selection names is in it -----
+
+
+def _on_disk(folder: Path) -> dict[str, bytes]:
+    """Every file under `folder` by its path relative to it, `/`-separated whatever the platform."""
+    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+
+
+def _matches_its_manifest(out: Path) -> dict[str, Any]:
+    """The folder holds exactly the files its manifest lists, each with the digest and size it names,
+    and the manifest itself; nothing else."""
+    m = _manifest(out)
+    files = _on_disk(out)
+    listed = {f["path"]: f for f in m["files"]}
+    assert set(files) == {"manifest.json", *listed}, "a file the manifest does not list, or one missing"
+    assert [f["path"] for f in m["files"]] == sorted(listed), "listed once each, in path order"
+    for path, entry in listed.items():
+        assert entry["bytes"] == len(files[path])
+        assert entry["sha256"] == hashlib.sha256(files[path]).hexdigest()
+    return m
+
+
+def test_the_manifest_lists_every_file_in_the_package(lb: Logbook, tmp_path: Path):
+    out = tmp_path / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    m = _matches_its_manifest(out)
+    paths = [f["path"] for f in m["files"]]
+    assert paths == [f"attachments/{SHA_PRESENT}", "entries.jsonl", "resolution.jsonl"]
+    by_path = {f["path"]: f for f in m["files"]}
+    assert by_path["entries.jsonl"]["sha256"] == m["entries_sha256"]
+    assert by_path["resolution.jsonl"]["sha256"] == m["resolution_sha256"]
+    assert by_path[f"attachments/{SHA_PRESENT}"]["sha256"] == SHA_PRESENT
+
+
+def test_a_narrower_export_into_the_same_folder_leaves_nothing_of_the_broader_one(
+    lb: Logbook, tmp_path: Path
+):
+    """The reviewer's finding: a broad unsigned crossing into a folder, then a tier-1 crossing into the
+    same folder, left the first one's resolution.jsonl and tier-2 attachment beside a manifest that
+    said there were none. Handing the folder over would have disclosed what the second one excluded."""
+    out = tmp_path / "out"
+    broad = ("--tier", "1,2", "--unsigned")
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, *broad, "--out", str(out))
+    assert (out / "resolution.jsonl").exists() and (out / "attachments" / SHA_PRESENT).exists()
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    m = _matches_its_manifest(out)
+    assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
+    assert not (out / "attachments").exists(), "not even the empty folder"
+    assert m["counts"]["attachments"] == {"included": 0, "bytes": 0, "missing": 0}
+    assert [e["seq"] for e in _jsonl(out / "entries.jsonl")] == [5, 11]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"], "no staging folder left beside it"
+    payload = list(lb.lines())[-1]["payload"]
+    assert payload["package_sha256"] == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
+
+
+def test_an_earlier_bundle_with_files_of_its_own_added_is_still_replaced_whole(lb: Logbook, tmp_path: Path):
+    """A folder with a crossing manifest is ours to replace, whatever else was put in it since."""
+    out = tmp_path / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    (out / "attachments" / "notes.txt").write_bytes(b"Ola's list for the boat\n")
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
+    _matches_its_manifest(out)
+
+
+def _foreign(out: Path, what: str) -> dict[str, bytes]:
+    """A target that holds something other than a bundle of ours; what was there, to compare after."""
+    if what == "a file":
+        out.write_bytes(b"Ines' packing list\n")
+        return {".": out.read_bytes()}
+    out.mkdir()
+    if what == "a folder of notes":
+        (out / "notes").mkdir()
+        (out / "notes" / "harbour.md").write_bytes(b"# Aker brygge\n")
+    elif what == "another manifest":
+        (out / "manifest.json").write_bytes(b'{"name": "a web app"}\n')
+    elif what == "a manifest that is not JSON":
+        (out / "manifest.json").write_bytes(b"not json\n")
+    return _on_disk(out)
+
+
+FOREIGN = ["a file", "a folder of notes", "another manifest", "a manifest that is not JSON"]
+
+
+@pytest.mark.parametrize("what", FOREIGN)
+def test_a_target_that_is_not_a_bundle_of_ours_is_refused(lb: Logbook, tmp_path: Path, what: str, capsys):
+    out = tmp_path / "out"
+    before = _foreign(out, what)
+    code = _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    assert code == 2
+    err = capsys.readouterr().err
+    assert str(out) in err and "--force" in err
+    after = {".": out.read_bytes()} if out.is_file() else _on_disk(out)
+    assert after == before, "untouched"
+    assert lb.meta["seq"] == 14, "no crossing line"
+    assert not (lb.root / "exports").exists(), "no watermark"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
+
+
+@pytest.mark.parametrize("what", FOREIGN)
+def test_force_replaces_a_target_that_is_not_a_bundle_of_ours(lb: Logbook, tmp_path: Path, what: str):
+    out = tmp_path / "out"
+    _foreign(out, what)
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force")
+    assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
+    _matches_its_manifest(out)
+    assert lb.meta["seq"] == 15
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
+
+
+def test_an_empty_folder_and_a_missing_one_are_written_as_before(lb: Logbook, tmp_path: Path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    deep = tmp_path / "a" / "b" / "out"  # its parents are made, as they always were
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(empty))
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(deep))
+    for out in (empty, deep):
+        assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
+        _matches_its_manifest(out)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["a", "empty", "lb"]
+    assert sorted(p.name for p in deep.parent.iterdir()) == ["out"]
+
+
+def test_a_failed_export_leaves_the_earlier_bundle_as_it_was(lb: Logbook, tmp_path: Path, capsys):
+    """A store file that no longer hashes to its name stops the second export while it copies; the
+    first bundle is still there byte for byte, nothing half-written beside it, no line appended."""
+    out = tmp_path / "out"
+    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    before, seq = _on_disk(out), lb.meta["seq"]
+    (lb.root / "attachments" / SHA_PRESENT).write_bytes(b"thrEE")
+    again = ("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    assert _fails(*again) == 1
+    assert "does not hash to its name" in capsys.readouterr().err
+    assert _on_disk(out) == before
+    assert lb.meta["seq"] == seq
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["lb", "out"]
