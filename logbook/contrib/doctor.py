@@ -39,6 +39,11 @@ The checks, in the order they print:
 - `restore-test`: the last `backup --restore-test` (`state/last-restore-test.json`) passed within 35
   days (the schedule runs it on the first Sunday of the month); none, older, or skipped is a warn saying
   what to do; failed is a fail with the reason.
+- `serve`: whether this machine keeps the pages served (`serve --install-service`, docs/serve.md): no
+  service is a pass saying how to install one; one installed (the user's agent or unit, or the
+  system's daemon or unit) passes when a logbook server answers on its port, and is a warn naming
+  where its output goes when nothing does; two on one port are a warn. The one request is a HEAD to
+  127.0.0.1, made only when a service is installed.
 - `disk`: free space on the volume the record is on (under 5 GiB a warn, under 512 MiB a fail).
 - `folder`: the record is not under a folder a sync client owns — iCloud Drive, Dropbox, OneDrive,
   Google Drive — by any part of its path, its resolved path, or the `OneDrive` variable Windows
@@ -62,7 +67,8 @@ from zoneinfo import ZoneInfo
 
 from ..core import assets, index, places, plausible, policy
 from ..core.store import FormatError, Logbook
-from . import adapters, home, last_run, schedule
+from . import adapters, home, last_run, schedule, serve
+from . import service as serve_service
 
 Status = Literal["pass", "warn", "fail"]
 Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, as shutil.disk_usage
@@ -446,6 +452,37 @@ def restore_test_check(lb: Logbook) -> Check:
     return Check("restore-test", "pass", f"passed {when} ({name}, {test.seq or 0:,} lines)")
 
 
+SERVE_INSTALL = (
+    f"`logbook serve --install-service` keeps the pages at http://{serve.HOST}:{serve.PORT}/ from load"
+    " (docs/serve.md)"
+)
+
+
+def serve_check(env: Mapping[str, str]) -> Check:
+    """The serve services this machine has (`service.find`) and whether a logbook server answers on
+    the port of each; nothing is asked when none is installed."""
+    xdg = env.get("XDG_CONFIG_HOME", "").strip()
+    home_dir = Path.home()
+    found = serve_service.find(serve_service.system(), home_dir, Path(xdg).expanduser() if xdg else None)
+    if not found:
+        return Check("serve", "pass", f"no serve service on this machine; {SERVE_INSTALL}")
+    status: Status = "pass"
+    parts: list[str] = []
+    for item in found:
+        named = f"{item.kind} ({serve_service.shown(item.path, home_dir)})"
+        address = f"http://{serve.HOST}:{item.port}/"
+        if serve_service.answering(item.port):
+            parts.append(f"{named} answering at {address}")
+        else:
+            status = "warn"
+            parts.append(f"{named} installed, but nothing answers at {address}; its output: {item.log}")
+    ports = [item.port for item in found]
+    if len(set(ports)) < len(ports):
+        status = "warn"
+        parts.append("two services on one port: remove one (`logbook serve --uninstall-service [--system]`)")
+    return Check("serve", status, "; ".join(parts))
+
+
 def cloud_folder(root: Path, env: Mapping[str, str]) -> str | None:
     """The sync service whose folder holds `root`, by a part of its path (as given and resolved,
     so a symlink into the folder is seen) or the OneDrive variable; None for a plain folder."""
@@ -516,6 +553,7 @@ def run(
     checks.append(home_check(lb.root))
     checks.append(last_run_check(lb, env))
     checks.append(restore_test_check(lb))
+    checks.append(serve_check(env))
     checks.append(disk_check(lb.root, usage))
     checks.append(folder_check(lb.root, env))
     return checks
