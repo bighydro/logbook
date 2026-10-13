@@ -30,6 +30,7 @@ from typing import Any, NamedTuple
 
 from .chain import Line
 from .flights import distance_km
+from .store import Logbook, now_utc
 
 PLACES_FILE = "places.json"
 KINDS = ("home", "asset-berth", "other")
@@ -187,6 +188,20 @@ def parse_stay_id(text: str) -> tuple[float, float]:
     if not (-90 <= lat <= 90 and -180 <= lon <= 180):
         raise ValueError(f"{text!r}: coordinates off the earth")
     return lat, lon
+
+
+def name(lb: Logbook, place: Place) -> Line:
+    """Name a place: add it to places.json (`add`, which refuses a name already taken) and put the
+    naming in the record as one `note/v1` line, "named <lat>,<lon> as <name>", through
+    `Logbook.append`. Every naming goes this way: `places name`, `propose --write`, `review`."""
+    add(lb.root, place)
+    return lb.append(
+        at=now_utc(),
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={"schema": "note/v1", "text": naming_text(place.lat, place.lon, place.name)},
+    )
 
 
 def naming_text(lat: float, lon: float, name: str) -> str:

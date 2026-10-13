@@ -464,6 +464,22 @@ class Index:
         found = self.db.execute("SELECT file, offset FROM lines WHERE seq = ?", (seq,)).fetchall()
         return self._read(found)[0] if found else None
 
+    def by_seqs(self, seqs: Iterable[int]) -> dict[int, Line]:
+        """seq → line for these seqs, read from the files (the primary key; a few hundred per
+        statement); a seq the record has no line for is absent. For the few lines a reader joins
+        by seq: the first and last point of each of the owner's stays (`places review`)."""
+        wanted: list[int] = sorted(set(seqs))
+        found: dict[int, Line] = {}
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            places = self.db.execute(
+                f"SELECT file, offset FROM lines WHERE seq IN ({', '.join('?' * len(chunk))}) ORDER BY seq",
+                chunk,
+            ).fetchall()
+            for line in self._read(places):
+                found[int(line["seq"])] = line
+        return found
+
     def by_id(self, line_id: str) -> Line | None:
         """The line with this id, or None; the first in chain order when the record holds the id
         twice (`id` is outside the hash, SPEC §2, so a writer could repeat one)."""
