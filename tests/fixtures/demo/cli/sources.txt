@@ -10,6 +10,7 @@ apple-wallet         file       enabled
 beeper               file+live  enabled
 copilot              file       enabled
 dawarich             file+live  enabled
+drive                live       enabled
 easypark             file       enabled
 flighty              file       enabled
 gcal                 live       enabled
@@ -29,6 +30,7 @@ google-takeout-photos file       enabled
 google-takeout-tasks file       enabled
 google-takeout-youtube file       enabled
 granola              live       enabled
+gtasks               live       enabled
 ics                  file       enabled
 imessage             file+live  enabled
 immich               live       enabled
@@ -56,4 +58,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-58 adapters, 2 disabled; the list is <root>/policy/import.json
+60 adapters, 2 disabled; the list is <root>/policy/import.json

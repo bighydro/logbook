@@ -77,6 +77,8 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "imessage",
         "granola",
         "gcal",
+        "drive",
+        "gtasks",
         "ais",
         "adsb",
         "mail",
