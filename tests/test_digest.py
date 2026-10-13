@@ -20,7 +20,6 @@ import pytest
 from persona import HOME, KARI, OLA_ID, TZ, attendee, dwell, event, note, persona_record, resolution, utc
 
 from logbook import cli
-from logbook.commands import day as day_commands
 from logbook.contrib import digest, gaps, promises, questions
 from logbook.core.store import Logbook
 
@@ -417,7 +416,7 @@ def test_the_command_refuses_a_day_that_is_not_one_or_has_not_come(
 def test_today_is_the_default_and_markdown_is_the_same_lines(
     lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(day_commands, "_today", lambda: "2026-06-13")
+    monkeypatch.setattr(gaps, "now", lambda: datetime(2026, 6, 13, 19, 0, tzinfo=UTC))  # 21:00 in Oslo
     text = _run(capsys)
     assert text.splitlines()[0] == "2026-06-13  Saturday"
     markdown = _run(capsys, "2026-06-13", "--markdown")

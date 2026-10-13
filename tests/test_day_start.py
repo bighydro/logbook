@@ -526,3 +526,16 @@ def test_doctor_fails_a_boundary_no_reader_accepts(lb: Logbook) -> None:
     lb.set_meta(day_start="half past five")
     status, detail = _checks(lb)["day-start"]
     assert status == "fail" and "'half past five'" in detail and "setup day_start" in detail
+
+
+def test_the_digest_by_default_is_of_the_day_the_owner_is_in(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from logbook.contrib import gaps
+
+    lb.set_meta(day_start="06:00")
+    monkeypatch.setattr(gaps, "now", lambda: datetime(2026, 10, 13, 3, 59, tzinfo=UTC))  # 05:59 on the 13th
+    cli.main(["digest", "--json"])
+    assert json.loads(capsys.readouterr().out)["day"] == "2026-10-12"
+    cli.main(["show", "--raw"])
+    assert capsys.readouterr().out.startswith("2026-10-12 "), "show's today too"

@@ -19,7 +19,7 @@ from ..core import year as year_reader
 from ..core.export import parse_day
 from ..core.resolve import Ref, labels
 from ..core.store import RETRACTION, Logbook, retractions
-from .common import Subparsers, _airports, _csv, _print_target, _today, _under_home
+from .common import Subparsers, _airports, _csv, _print_target, _under_home
 from .rows import _day_rows, _line_row, _line_text, by_photo
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
@@ -374,8 +374,8 @@ def cmd_digest(a: argparse.Namespace) -> None:
     if a.week or a.html:
         print("digest: --week and --html belong to --paper; give it too", file=sys.stderr)
         sys.exit(2)
-    day = _today() if a.day in (None, "today") else a.day
-    try:
+    try:  # today is the day the owner is in: under the record's day_start, at 05:59 still yesterday
+        day = day_start.of(lb.meta).today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
         data = digest_reader.read(lb, day, _airports(a.airports))
     except (ValueError, stays.SettingsError) as e:
         print(f"digest: {e}", file=sys.stderr)
