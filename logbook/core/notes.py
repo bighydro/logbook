@@ -1,11 +1,13 @@
 """A note on a day: one `note/v1` line (RFC 0010) in the owner's words, put on a given local day, its
 kind in the profile's `labels`. The one note path for a write that names a day: the MCP tool
-`note_day` (ADR 0022) and `logbook day reflect` both append through `write`, and nowhere else.
+`note_day` (ADR 0022), `logbook day reflect` and a journey's name (`logbook.contrib.journeys.name`)
+append through `write`, and nowhere else.
 
 The line is what RFC 0010 says a note is: kind `note`, tier 2 whoever writes it, the text as given
 and never filtered, the kind as the one label (`note`, `proposal` or `reflection` through the door;
-`reflection` and `delegation` from `day reflect`), and `extra` when the writer has something to add.
-`source` is the writer's: `mcp` through the door, `reflect` from the command. `at` is checked by the
+`reflection` and `delegation` from `day reflect`, `name` from `add --trip` and the Journeys page), and
+`extra` when the writer has something to add. `source` is the writer's: `mcp` through the door,
+`reflect` from the command, `manual` for a journey's name. `at` is checked by the
 rules of `day sign --at` (`signing.moment`: an RFC 3339 moment with an offset or Z, not ahead of this
 clock, not before the day) and must fall on the day as the record defines it, its zone and its
 `day_start` (RFC 0036), since a note on a day is written during it; without it the note is now when
@@ -31,6 +33,7 @@ KIND = "note"
 SCHEMA = "note/v1"
 TIER = 2  # RFC 0010: a note/v1 line is tier 2, whoever writes it
 NOTE, PROPOSAL, REFLECTION, DELEGATION = "note", "proposal", "reflection", "delegation"
+NAME = "name"  # the captain names a journey (ADR 0019): `add --trip`, the Journeys page
 
 
 class NoteError(ValueError):

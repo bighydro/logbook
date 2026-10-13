@@ -119,6 +119,8 @@ SHA256_HEX = 64
 NOT_ON_DAY = "evidence names a line that is not on the day"
 NOT_THE_TRANSCRIPT = "evidence names a line that is not the transcript"
 WHOLE = "the transcript"  # a segment that rests on the transcript line and on no utterance of it
+NOT_ON_JOURNEY = "evidence names a line that is not of the journey"
+UNIT_JOURNEY = "journey"
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
 DOT = " · "
@@ -322,6 +324,27 @@ def by_day(lines: Iterable[Line], retracted: Collection[str]) -> dict[str, list[
     return found
 
 
+def by_unit(lines: Iterable[Line], retracted: Collection[str], unit: str) -> dict[str, list[Line]]:
+    """The draft lines of another unit than the day (`by_day`'s), not retracted, by each subject
+    they name, each subject's in `at` then `seq` order: a `subject` that is a string is one, an
+    array names every entry in it (a journey's draft names the lines or the derived id it is about,
+    `trip:<first day>:<last day>`, RFC 0036); a line whose payload is not a draft's is left out."""
+    found: dict[str, list[Line]] = {}
+    for line in lines:
+        payload = line.get("payload") or {}
+        if line.get("kind") != KIND or payload.get("schema") != SCHEMA or payload.get("unit") != unit:
+            continue
+        if str(line["id"]) in retracted:
+            continue
+        named = payload.get("subject")
+        subjects = [named] if isinstance(named, str) else named if isinstance(named, list) else []
+        for subject in dict.fromkeys(s for s in subjects if isinstance(s, str)):
+            found.setdefault(subject, []).append(line)
+    for subject in found:
+        found[subject].sort(key=lambda line: (str(line["at"]), int(line["seq"])))
+    return found
+
+
 def standing(found: Sequence[Line]) -> Line | None:
     """Rule 2: the latest draft not named in a later draft's `supersedes`; None when there is none."""
     if not found:
@@ -443,16 +466,21 @@ def day_json(
     on_day: Collection[str] | None,
     names: Mapping[str, str] | None = None,
     confirmed: Mapping[int, dict[str, Any]] | None = None,
+    not_on: str = NOT_ON_DAY,
 ) -> dict[str, Any]:
     """The standing draft as the Day carries it: the line, its source and model, when it was
     written, what it read, its segments each with `supported` and, when a reader holding the
     record found the evidence not on the day, `why`; its proposals (`proposals_json`, the people by
     `names`, each with the event line that `confirmed` it); the ids of the earlier drafts newest
-    first, how many times the day was dreamed and the day it was last."""
+    first, how many times the day was dreamed and the day it was last. Another unit's page reads its
+    draft the same way, `on_day` the unit's lines and `not_on` its own words for an id outside
+    them (`NOT_ON_JOURNEY`)."""
     payload = line.get("payload") or {}
     tz = ZoneInfo(str(line.get("tz") or "UTC"))
     problems = validate(payload)
-    segments = [segment_json(s, on_day) for s in (payload.get("segments") or []) if isinstance(s, dict)]
+    segments = [
+        segment_json(s, on_day, not_on) for s in (payload.get("segments") or []) if isinstance(s, dict)
+    ]
     parts = (payload.get("extra") or {}).get("parts") if isinstance(payload.get("extra"), dict) else None
     if isinstance(parts, list) and len(parts) == len(segments):
         for segment, part in zip(segments, parts, strict=True):
@@ -474,7 +502,7 @@ def day_json(
         "language": payload.get("language"),
         "segments": segments,
         "unsupported": sum(1 for s in segments if not s["supported"]),
-        "proposals": proposals_json(payload, on_day, tz, names or {}, confirmed or {}),
+        "proposals": proposals_json(payload, on_day, tz, names or {}, confirmed or {}, not_on),
         "supersedes": payload.get("supersedes"),
         "earlier": earlier,
         "dreamed": len(found),
@@ -508,19 +536,20 @@ def proposals_json(
     tz: ZoneInfo,
     names: Mapping[str, str],
     confirmed: Mapping[int, dict[str, Any]],
+    not_on: str = NOT_ON_DAY,
 ) -> list[dict[str, Any]]:
     """The draft's event proposals as a reader shows them, each numbered by its place in the list
     (a malformed one is left out, and its number with it): the title, the span in UTC and in `tz`,
     the place and where that is in words, the people by id and name, the evidence, `supported` when
-    every evidence id is a line of the day (when the reader holds the day), else `why`; and
-    `confirmed`, the event line that confirmed it, or None."""
+    every evidence id is a line of the day (when the reader holds the day), else `why` (`not_on`);
+    and `confirmed`, the event line that confirmed it, or None."""
     found = payload.get(PROPOSALS)
     out: list[dict[str, Any]] = []
     for n, proposal in enumerate(found if isinstance(found, list) else [], 1):
         if not proposal_shape(proposal):
             continue
         evidence = [str(e) for e in proposal["evidence"]]
-        missing = on_day is not None and any(e not in on_day for e in evidence)
+        outside = on_day is not None and any(e not in on_day for e in evidence)
         place = proposal.get("place")
         out.append(
             {
@@ -535,8 +564,8 @@ def proposals_json(
                 "where": where_of(place),
                 "people": [{"id": p, "name": names.get(p)} for p in proposal["people"]],
                 "evidence": evidence,
-                "supported": not missing,
-                "why": NOT_ON_DAY if missing else None,
+                "supported": not outside,
+                "why": not_on if outside else None,
                 "confirmed": confirmed.get(n),
             }
         )
