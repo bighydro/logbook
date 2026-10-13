@@ -40,6 +40,7 @@ library with no `ZPERSON`) is a line without that field, never an error. Nothing
 | `albums` | the titles of the owner's own albums (`ZGENERICALBUM.ZKIND` 2, not trashed) the asset is in, sorted; smart albums, memories, shared streams and folders are not albums |
 | `extra.faces` | the names of the people under `people`, as the People album shows them (the full name, else the display name; a merged person under its target's name), sorted |
 | `extra.uti`, `extra.imported_by`, `extra.imported_by_bundle` | the type identifier, the importing route and app |
+| `extra.place` | the place Photos itself named the picture's spot on the phone (`ZADDITIONALASSETATTRIBUTES.ZREVERSELOCATIONDATA`, an archived `PLRevGeoLocationInfo`): `address`, `city` and `names` (the areas it lies in), whichever the store has; none when the store marks it not valid or has no such column. Nothing is looked up here; `setup places review` reads it ([places](../places.md#review)) |
 
 Trashed assets and assets with no capture date are skipped and counted. Tier 1 (metadata;
 `--tier` overrides). A synthetic line, the Oslo persona's:
