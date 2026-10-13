@@ -286,6 +286,8 @@ def windowed_readers(
         ["doctor", "sources", "--gaps", "--since", since, "--json"],
         ["promises", "--all", "--since", since],
         ["promises", "--all", "--since", since, "--json"],
+        ["people", "nearby", "--days", since, until],
+        ["people", "nearby", "--days", since, until, "--json"],
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
         ["doctor"],
@@ -312,6 +314,10 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["promises", "--open", "--json"],
     ["derive", "flights", "--dry-run"],
     ["show", "stats", "--json"],
+    ["people", "drift"],
+    ["people", "drift", "--show", "--json"],
+    ["people", "drift", "--quiet-days", "0", "--min-days", "1", "--show"],
+    ["people", "nearby", "Home", "--json"],
     ["verify"],
 ]
 
@@ -511,6 +517,8 @@ def test_a_record_timezone_the_host_lacks_is_said_never_a_traceback(
         ["doctor", "sources", "--gaps", "--json"],
         ["promises", "--all", "--json"],
         ["setup", "assets", "status", "--json"],
+        ["people", "drift", "--json"],
+        ["people", "nearby", "Home", "--json"],
     ]
     for args in readers:
         code, out, err = run("unknown record timezone", args)

@@ -6,7 +6,9 @@ of the days you spent together. Both are readers (ADR 0013): derived from the re
 every time, and never written. The owner is never listed: the record is yours, and you are not
 your own company. `people merge` finds the same person named twice, `people review` finds the people
 the sources saw that the record has not placed, and `people --priority` ranks everyone by a plain
-score; each writes only when you say so, and only through the record's own lines.
+score; each writes only when you say so, and only through the record's own lines. `people drift`
+answers "who did I use to see and have drifted from?" and `people nearby` "who is where I am about
+to go?", from the record, with the evidence, by rules alone; neither writes anything.
 
 ```bash
 logbook people                          # everyone with evidence in the record, most days together first
@@ -18,6 +20,9 @@ logbook person +447700900001            # a phone number
 logbook person provider_id:immich:f_01  # any ref as kind:value; the entity id works too
 logbook people --priority               # everyone heard in the last year, ranked, with the score
 logbook people review                   # who the sources saw that the record has not placed
+logbook people drift                    # many days together once, no real contact for a year
+logbook people nearby Bergen            # who has been seen within 50 km of Bergen
+logbook people nearby --days 2026-12-19 2026-12-23   # who is where you have planned to be
 ```
 
 ## Who is a person
@@ -292,6 +297,93 @@ priority · 2025-06-22 – 2026-06-21 · 11 people
 
 Under `--json`: `window` and `people`, each `id`, `name`, `score`, `days`, `messages` (`them`, `me`),
 `meetings`, `last_real_contact` and `recency`. Nothing is written.
+
+## Drift
+
+`logbook people drift [--min-days N] [--quiet-days M] [--year YYYY] [--show] [--json]` lists the
+people you used to see and have drifted from: the canonical people with at least **N days together
+in one calendar year** (default 20) whose **last real contact** is more than **M days** before the
+record's last day (default 365; today, when the record runs past it, since a planned entry has not
+happened). Their best year counts, the year with most days together; `--year` counts that year
+instead. Most days together first, then the longest silence, then the name.
+
+A **real contact** is one of four things, and nothing else:
+
+- **together**: a day together, as above: the with module confirmed them at one of your stays;
+- **meeting**: a timed calendar entry they attended and did not decline, wherever it was held (a
+  video call too), or a recording they spoke in;
+- **call**: a call with them that was answered, whichever way it went;
+- **message**: a message in a **direct** chat with them, theirs or yours.
+
+A mail is never one, sent or received: a newsletter is a mail, and so is your note to forty people
+about moving house, and the record cannot tell either from a letter. A line in a group chat is the
+group's, not a contact with whoever wrote it, so a "happy new year" to the crew keeps nobody close.
+A missed call, a tagged face and an all-day entry are not one either. On one day, a day together is
+named before a meeting, a meeting before a call, a call before a message. This is stricter than the
+`last real contact` of `people` and `--priority`, which count any message of theirs, in a group too.
+
+```
+drift · 4 people · 20+ days together in a year · no real contact in over 365 days · to 2025-12-31
+  Elin Moe      2022: 25 days · last real contact 2022-06-12 (together, 1298 days ago)
+  Astrid Bakke  2022: 24 days · last real contact 2022-03-13 (together, 1389 days ago)
+  Dag Solberg   2023: 22 days · last real contact 2023-07-04 (together, 911 days ago)
+  Bjørn Lie     2023: 22 days · last real contact 2024-03-10 (message, 661 days ago) · promises open: you owe 1, they owe 1
+```
+
+Each row: the name, the best year and its days together, the last real contact with what it was and
+how long ago, and the **open promises** with them both ways, from `logbook promises`: what you
+promised them and what they asked of you is **you owe**, what they promised you is **they owe**. A
+promise is theirs when its speaker resolves to them, else when its counterpart is their name and
+nobody else in the list has it. `--show` adds, under each row, the days together by year and the id
+of the line of the last real contact: days, never a word of a message. Under `--json`: `window`,
+`until`, `min_days`, `quiet_days`, `year` and `people`, each `id`, `name`, `best_year` (`year`,
+`days`), `days` (in all), `last_real_contact` (`day`, `via`, `line`), `silent_days` and `promises`
+(`you_owe`, `they_owe`); `--show` adds `days_together`, each `day`, `where` and the evidence `lines`.
+
+Only canonical people are listed; an observed person, however many entries they attended, is
+waiting in `people review`, not here.
+
+## Nearby
+
+`logbook people nearby PLACE | --journey ID | --days FROM TO [--radius KM] [--json]` is a list for a
+trip: in this city, these people, last seen then. A person is **seen at** a place on a day together
+at one of your stays whose centre lies within the **radius** of it (`--radius`, default 50 km).
+Per place they are ranked by days together there, then days together anywhere, then the latest real
+contact (as drift defines it), then the name.
+
+```
+Bergen · 60.2934,5.2181 · within 50 km · 3 people
+  Astrid Bakke  24 days there, last seen 2022-03-13 · 24 days in all · last real contact 2022-03-13 (together)
+  Dag Solberg   22 days there, last seen 2023-07-04 · 22 days in all · last real contact 2023-07-04 (together)
+  Ingrid Aas    20 days there, last seen 2022-03-01 · 20 days in all · last real contact 2025-09-01 (meeting)
+```
+
+The place is one of three:
+
+- **`PLACE`**, tried in this order: `lat,lon`; a place of `places.json` by its name, case aside; a
+  city of the airports table (`logbook/tables/airports.csv`, the record's own gazetteer), by the
+  city a row's municipality names, case and accents aside, at the airport's reference point
+  (Bergen is Flesland, 12 km out, which the radius covers); an IATA or ICAO code of it. A name none
+  of them knows is refused, exit 2.
+- **`--journey ID`**: a `journey/v1` (or `trip/v1`) line, where its `to` is (its `from` for a
+  parking), by coordinates when it has them, else by name as above; or a `flight/v1` line, its
+  destination airport.
+- **`--days FROM TO`**: the places you have planned on those days — every standing calendar entry
+  with a location (its coordinates, else the location text, whole or any comma-separated part:
+  `Solsiden, Trondheim` is Trondheim), every standing flight dated in them (its destination; a
+  cancelled one left out), every standing journey line. A planned place within the radius of a home
+  place of `places.json` is home, not a trip, and is left out. Two that share a name or lie within
+  5 km are one place, listed with every line that planned it; the places come in the order planned.
+  A location no rule places is listed as `unplaced`.
+
+Under `--json`: `radius_km`, `days` (`since`, `until`, or `null`), `places`, each `label`, `lat`,
+`lon`, `by` (`coordinates`, `places`, `airports`), `radius_km`, `from` (the planning lines: `kind`,
+`day`, `line`, `what`) and `people`, each `id`, `name`, `days_there`, `last_there`, `days` and
+`last_real_contact`; and `unplaced`.
+
+What it cannot see: a day together is a stay of yours with evidence the person was there, so a
+friend you met in Bergen with no calendar entry, no recording and no note saying "with" them was
+never there as far as the record knows.
 
 ## The window
 

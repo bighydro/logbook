@@ -9,6 +9,7 @@ and never written. Nothing is appended, and not even `policy/stays.json` is crea
 ```bash
 logbook day 2026-06-13          # a Saturday, as text
 logbook day 2026-06-13 --json   # the same Day as one JSON object, every row with its line ids
+logbook day 2026-06-13 --no-anniversaries   # without the days together years ago
 logbook day                     # today
 logbook day sign 2026-06-13     # sign it: you read the page and these are the day's facts (RFC 0034)
 logbook day sign 2026-06-13 --kept 4181 --carried 4183   # and what became of the commitments on it
@@ -82,6 +83,14 @@ passage, an anchorage. The asset's movement never fragments the stay. The rule i
    it is never in the timeline of the day it is about, because the timeline is what was observed
    and a story is what someone said. A story whose time is a phrase (`before the war`) is about no
    day. The section is absent when no story is about the day.
+   Then **anniversaries**: the days together exactly 1, 2, 3, 5 and 10 years before, with the same
+   canonical person — a stay together, and so a day of a journey together, by the rule `people`
+   counts a day together with (the with module's confirmed set) — one row each, the nearest years
+   first, then by name, five at most: `1 year ago, 2024-11-03: Kari Nordmann · Office`. A person
+   only the sources saw, never named by a resolution line, is never one. Under `--json` it is
+   `anniversaries` (`years`, `day`, `id`, `name`, `where`, `lines`), a key present only on a day
+   that has one, so the Day's object is otherwise the one SPEC §3.2.7 gives.
+   `--no-anniversaries` leaves them out. See [people](people.md#drift).
 4. **Health** — the night's sleep in hours (the asleep stages of the night that ends on the day,
    per device the union of their spans, the longest device), the day's steps (the larger device per
    quarter hour, summed), the resting heart rate (the day's mean), from the `health-sample/v1`
