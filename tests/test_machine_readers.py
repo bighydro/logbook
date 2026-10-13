@@ -178,9 +178,12 @@ def test_promises_reads_only_the_owners_words_in_a_conversation_with_an_agent(lb
 
 
 def test_promises_counts_what_it_left_out_as_an_agents(lb: Logbook):
-    skipped = promise_reader.extract(lb).skipped
-    assert skipped["messages_by_an_agent"] == 4  # the bots' four lines, one of them a document
-    assert skipped["forwarded_messages"] == 1
+    report = promise_reader.extract(lb)
+    assert report.skipped["messages_by_an_agent"] == 4  # the bots' four lines, one of them a document
+    assert report.skipped["forwarded_messages"] == 1
+    text = promise_reader.rows(report, report.proposals, lambda at: at)
+    assert "  4 messages an agent wrote skipped: an agent's words are nobody's promise" in text
+    assert "  1 forwarded message skipped: someone else's words" in text
 
 
 # -- the dream's material ------------------------------------------------------------------------------

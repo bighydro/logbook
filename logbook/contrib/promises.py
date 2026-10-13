@@ -1282,6 +1282,13 @@ def rows(
         if missing:
             where = "whose text is not in the attachment store" if kind == TRANSCRIPT else "without text"
             out.append(f"  {_plural(missing, noun)} {where} skipped")
+    by_agent, forwarded = report.skipped.get(AGENT_MESSAGES, 0), report.skipped.get(FORWARDED, 0)
+    if by_agent:
+        out.append(
+            f"  {_plural(by_agent, 'message')} an agent wrote skipped: an agent's words are nobody's promise"
+        )
+    if forwarded:
+        out.append(f"  {_plural(forwarded, 'forwarded message')} skipped: someone else's words")
     if judge is not None and judge.get("unparsed"):
         out.append(
             f"  {_plural(int(judge['unparsed']), 'candidate')} could not be judged (no verdict in the"
