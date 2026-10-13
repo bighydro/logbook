@@ -1165,6 +1165,8 @@ def _take_lock(path: Path, command: str, wait: bool, notice: Callable[[str], Non
         path.parent.mkdir(parents=True, exist_ok=True)  # each time: a release may have removed it
         try:
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileNotFoundError:  # a release removed the folder after the mkdir: not ours, go round
+            continue
         except FileExistsError:
             holder = _read_lock(path)
             if holder is None:  # being written this instant, or a crash between create and write

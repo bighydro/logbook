@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -213,6 +213,68 @@ def test_the_lock_is_released_on_the_way_out_and_re_entered_in_process(root: Pat
     with pytest.raises(RuntimeError), lb.writer("add"):
         raise RuntimeError("the command failed")
     assert not lock.exists()
+
+
+# -- the folder vanishes mid-wait --------------------------------------------------------------------------
+
+
+def _release_between_mkdir_and_open(
+    monkeypatch: pytest.MonkeyPatch, lock: Path, then: Callable[[], None] | None = None
+) -> list[str]:
+    """Make the race Windows CI hit once happen every time: the first exclusive open of `lock` finds
+    its folder gone, removed as another writer's release removes it, after this writer's mkdir.
+    `then` runs once that open has failed (another writer getting in first). The opens are counted."""
+    real_open = os.open
+    opens: list[str] = []
+
+    def racing_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if Path(path) != lock:
+            return real_open(path, flags, *args, **kwargs)
+        opens.append(str(path))
+        if len(opens) > 1:
+            return real_open(path, flags, *args, **kwargs)
+        lock.parent.rmdir()
+        try:
+            return real_open(path, flags, *args, **kwargs)
+        finally:
+            if then is not None:
+                then()
+
+    monkeypatch.setattr(store.os, "open", racing_open)
+    return opens
+
+
+def test_a_lock_folder_removed_between_mkdir_and_open_is_made_again(root: Path, monkeypatch):
+    lb = Logbook(root)
+    lock = lb._lock_path()
+    opens = _release_between_mkdir_and_open(monkeypatch, lock)
+    said: list[str] = []
+    with lb.writer("add", wait=False, notice=said.append):  # the lock is free: no-wait takes it too
+        holder = json.loads(lock.read_text(encoding="utf-8"))
+        assert (holder["pid"], holder["command"]) == (os.getpid(), "add")
+    assert len(opens) == 2 and said == []  # one retry, nothing to say
+    assert not lock.exists()
+
+
+def test_a_vanished_folder_is_never_taken_as_acquired(root: Path, monkeypatch):
+    lb = Logbook(root)
+    lock = lb._lock_path()
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    holder = {"pid": other.pid, "command": "sync immich", "since": "2026-09-10T06:00:00Z"}
+
+    def other_takes_it() -> None:
+        lock.parent.mkdir()
+        lock.write_text(json.dumps(holder), encoding="utf-8")
+
+    try:
+        opens = _release_between_mkdir_and_open(monkeypatch, lock, then=other_takes_it)
+        with pytest.raises(store.Locked, match=r"sync immich.*not waiting"), lb.writer("add", wait=False):
+            pass
+        assert len(opens) == 2
+        assert json.loads(lock.read_text(encoding="utf-8")) == holder  # the other writer's, untouched
+    finally:
+        other.kill()
+        other.wait()
 
 
 def test_no_wait_is_a_global_flag(root: Path, capsys: pytest.CaptureFixture[str], monkeypatch):
