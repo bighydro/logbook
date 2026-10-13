@@ -137,6 +137,16 @@ are as they always were.
    notes, mail and calls, one per row. The page is read from the folder it was kept in, never from
    the chain; under `--json` it is `received`, each named line with its id. A day nobody shared
    has no such section.
+7. **The draft** â€” printed between the header and the timeline, above every note of the day: the
+   standing `draft/v1` line a model wrote about the day ([the dream](dream.md), RFC 0036), headed
+   `draft` with the model's name, the head and how many lines it read, how many times the day was
+   dreamed and when last, and how many segments are unsupported; then one row per segment with the
+   part it belongs to (day, thread, question, people, promise), its text and its evidence ids
+   shortened. An unsupported segment starts with `~` and ends with `unsupported` (and why, when the
+   reader found an id that is not on the day), never run into the prose around it and never as a
+   fact. The draft is a proposal; your signature and your notes are the facts. `--no-dream` leaves it
+   out. An earlier draft of the day stays in the record, listed by id under `--json`, and `show` lists
+   every draft line on the day it was written.
 
 ## One event from several calendars
 
@@ -261,9 +271,13 @@ the flight line's fields and `line`; a move lists the `flights` that cover it â€
 `teller`, `listener`, `confidence`, `source`), `health` (with the ids of the lines each number came
 from), `sources`, and `received`, one object per page the circle shared for the day (`from`,
 `owner_id`, `created`, `max_tier`, `lines`, `held_back`, `by_kind`, `named` with each line's id,
-`attachments`). On a day with a reflection (`day reflect`, or a note labelled `reflection` through the
-MCP door) the object carries `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`,
-`source` and `text`; the key is absent on every other day.
+`attachments`); and, only on a day a model has dreamed, `draft`, the standing draft (`line`,
+`seq`, `source`, `model`, `tier`, `at`, `read_head`, `read_count`, `language`, `segments` each with
+`text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `supersedes`, `earlier`
+newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`. On a day with a
+reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the object carries
+`reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and `text`; the key
+is absent on every other day.
 
 ## A window of days
 

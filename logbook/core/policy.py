@@ -45,6 +45,8 @@ VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on t
 VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 SITE_DESTINATION = "site"  # `logbook export site`: a folder of static HTML the owner may publish anywhere
 SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
+DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and drafts it (RFC 0036)
+MODEL = "model"  # an entry's optional key: the one model the destination is
 DEFAULT_POLICY: dict[str, Any] = {
     DEFAULT_DESTINATION: {"max_tier": 2},
     MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
@@ -123,6 +125,7 @@ class Ceiling:
     expired: bool
     write: tuple[str, ...] = ()  # the write tools the file names, expired or not
     window_days: int = WRITE_WINDOW_DAYS
+    model: str | None = None  # the `model` the entry names, when it names one (`dream`)
 
     @property
     def max_tier(self) -> int:
@@ -171,6 +174,9 @@ def _window(path: Path, destination: str, entry: dict[str, Any]) -> int:
 def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
     """`entry` as a Ceiling held against the day `on`; the shape is the caller's to have checked."""
     until = _until(path, destination, entry)
+    model = entry.get(MODEL)
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        raise PolicyError(f"{path}: {destination!r} has a model that is not a name; write the model's name")
     return Ceiling(
         destination,
         int(entry["max_tier"]),
@@ -178,6 +184,7 @@ def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
         until is not None and on > until,
         _write(path, destination, entry),
         _window(path, destination, entry),
+        model,
     )
 
 
@@ -286,6 +293,32 @@ def _ceiling_or_default(root: Path, destination: str, default: int) -> int:
             f'{path} names {destination!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": {default}}}'
         )
     return _entry(path, destination, entry, today()).max_tier
+
+
+def dream_entry(root: Path) -> Ceiling:
+    """The `dream` entry of the policy, held against today (RFC 0036; `logbook dream`): sending a
+    day to a model is a crossing like any other, so a record whose file does not name the
+    destination, or whose entry has expired, lets nothing cross. The message says what to write.
+    An entry may name the one `model` the day may go to."""
+    path = policy_path(root)
+    entry = read(root).get(DREAM_DESTINATION)
+    if entry is None:
+        raise PolicyError(
+            f"{path} names no {DREAM_DESTINATION!r} entry, so no day crosses to a model; add "
+            f'{{"{DREAM_DESTINATION}": {{"max_tier": 2, "until": "YYYY-MM-DD"}}}} to it to allow the dream'
+        )
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        raise PolicyError(
+            f'{path}: {DREAM_DESTINATION!r} must be {{"max_tier": 1, 2 or 3}}, with an optional'
+            ' "until" date and an optional "model"'
+        )
+    found = _entry(path, DREAM_DESTINATION, entry, today())
+    if found.expired and found.until is not None:
+        raise PolicyError(
+            f"{path}: the {DREAM_DESTINATION!r} entry expired on {found.until.isoformat()} and counts as"
+            " max_tier 0, so no day crosses to a model; write a new until there or remove the entry"
+        )
+    return found
 
 
 def import_path(root: Path) -> Path:

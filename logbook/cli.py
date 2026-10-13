@@ -32,6 +32,7 @@ FAMILIES = (
     "common",
     "day",
     "derive",
+    "dream",
     "export",
     "keepers",
     "lab",

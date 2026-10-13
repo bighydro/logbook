@@ -134,7 +134,9 @@ reaches the record only through this ceiling and the few write tools you allow b
 service that may see record content gets its own entry in the file, and a temporary one an `until` date:
 `{"cloud-model": {"max_tier": 2, "until": "2026-12-31"}}` holds through that day and counts as tier 0 from
 the next, so nothing crosses until you write a new date or remove the line; `logbook doctor` names an
-entry that has expired.
+entry that has expired. The `dream` entry is one of these: `logbook dream` sends a day to a model only
+through `{"dream": {"max_tier": 2, "until": "2026-12-31", "model": "qwen2.5-7b-instruct"}}`, the one
+model named there when it names one ([the dream](dream.md)).
 
 What the ceiling means in practice:
 

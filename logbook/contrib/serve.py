@@ -56,7 +56,7 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
-from ..core import assets, day_start, places, reading, share, stays, trips, weather
+from ..core import assets, day_start, drafts, places, reading, share, stays, trips, weather
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core.export import parse_day
@@ -398,6 +398,8 @@ class Site:
         parts.append("</dl>\n")
         if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
             parts.append(_reflection_html(data["reflection"], tz))
+        if data.get("draft"):
+            parts.append(_draft_html(data["draft"]))
         parts.append("<h2>Timeline</h2>\n")
         if data["timeline"]:
             parts.append('<ol class="timeline">\n')
@@ -732,6 +734,36 @@ def _reflection_html(item: Mapping[str, Any], tz: ZoneInfo) -> str:
         f'<h2>Reflection</h2>\n<div class="reflection" title="line {escape(str(item["line"]))}">\n'
         f'<p class="mute">{escape(when)}</p>\n{paragraphs}</div>\n'
     )
+
+
+def _draft_html(draft: Mapping[str, Any]) -> str:
+    """The standing draft of the day (RFC 0036) above the timeline: headed as a draft, one
+    paragraph per segment with its evidence ids (the whole id on hover), an unsupported segment a
+    muted block marked with the word, never run into the prose around it."""
+    parts = [
+        "<h2>Draft</h2>\n",
+        f'<p class="mute">{escape(drafts.head_text(draft))}</p>\n<div class="draft">\n',
+    ]
+    for segment in draft["segments"]:
+        label = escape(drafts.PART_LABELS.get(str(segment.get("part")), "")) if segment.get("part") else ""
+        head = f'<span class="kind">{label}</span> ' if label else ""
+        if segment["supported"]:
+            ids = ", ".join(
+                f'<span class="id" title="line {escape(e)}">{escape(drafts.short_id(e))}</span>'
+                for e in segment["evidence"]
+            )
+            parts.append(f'<p class="segment">{head}{escape(segment["text"])} <small>[{ids}]</small></p>\n')
+        else:
+            why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
+            parts.append(
+                f'<p class="segment unsupported mute">{head}~ {escape(segment["text"])}'
+                f" <small>{drafts.UNSUPPORTED}{why}</small></p>\n"
+            )
+    if draft.get("earlier"):
+        earlier = ", ".join(escape(drafts.short_id(e)) for e in draft["earlier"])
+        parts.append(f'<p class="mute">earlier drafts: {earlier}</p>\n')
+    parts.append("</div>\n")
+    return "".join(parts)
 
 
 def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:

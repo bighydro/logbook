@@ -66,6 +66,13 @@ What a Day shows, in order:
    verified (`share.pages`, RFC 0025), a `from <name>` section — how many lines, by kind, the tier
    it was shared at and when, and the titles of its events, transcripts, notes, mail and calls.
    A received page is read from `<root>/circle/<from>/<date>/`, never from the chain.
+7. The draft (RFC 0036, `drafts.for_day`): the standing `draft/v1` line a model wrote about the
+   day (`logbook dream`), printed between the header and the timeline, above every note of the
+   day, headed as a draft with the model's name, the head and count it read, how many times the
+   day was dreamed and when last; one row per segment with its evidence ids, an unsupported
+   segment set apart with `~` and the word, never as a fact. The JSON carries it under `draft`, the
+   key there only on a day that has one (SPEC §3.2.7's object is otherwise unchanged); `day
+   --no-dream` leaves it out.
 
 Thresholds are the record's (`policy/stays.json`), places and assets its own; nothing here is a
 setting of the Day. ADR 0013: derived is disposable."""
@@ -81,6 +88,7 @@ from zoneinfo import ZoneInfo
 
 from . import countries as country_table
 from . import (
+    drafts,
     events,
     health,
     keepers,
@@ -145,11 +153,14 @@ def read(
         )
         page = signing.page(idx, day, on_day) if tiers is None else None
         retracted = retractions(idx.retractions())
+        draft = drafts.for_day(idx, day, tiers)
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["signed"] = signing.signed_json(signature, tz, page, day)
     reflected = notes.standing(on_day, notes.REFLECTION, retracted)
     if reflected:  # under --json only on a day that has one: the Day's object is otherwise unchanged
         data["reflection"] = reflection_json(reflected[-1], tz)
+    if draft is not None:
+        data["draft"] = draft  # only on a day a model dreamed: the Day's object is otherwise unchanged
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
@@ -775,6 +786,10 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     if data.get("reflection"):
         yield ""
         yield from reflection_rows(data["reflection"], tz)
+    if data.get("draft"):
+        yield ""
+        yield _row("draft", drafts.head_text(data["draft"], word=False))
+        yield from drafts.rows(data["draft"])
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")

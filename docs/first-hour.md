@@ -345,7 +345,7 @@ a line's text. `verify` recomputes every hash and says *valid*; it will say so e
 changes.
 
 Then, at your pace: [Try it](try-it.md) runs every command on a demo record of a person who does not
-exist; [the 22 commands](commands.md) are one page, with the older names each still answers to; the
+exist; [the 23 commands](commands.md) are one page, with the older names each still answers to; the
 README's *Sources* lists every export the adapters read, with the command for each; and
 `logbook doctor` is there whenever something feels off.
 
