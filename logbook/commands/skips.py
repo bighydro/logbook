@@ -91,6 +91,13 @@ SKIP_PHRASES = {
     "skipped_merged_chat": "merged chats, whose member chats carry the messages",
     "skipped_outside_roots": "outside LOGBOOK_NOTION_ROOTS",
     "skipped_not_a_file": "not a file",
+    "skipped_not_a_bot_chat": "chats that are not with a bot, never read",
+    "skipped_service": "service messages (a pin, a cleared history)",
+    "skipped_not_owner": "from someone other than the owner, never written as theirs",
+    "skipped_not_private": "outside a private chat",
+    "skipped_other_update": "updates that are not messages",
+    "skipped_subagent": "subagent sessions, whose user is the main agent",
+    "skipped_sidechain": "sidechain entries, a subagent's conversation",
 }
 
 
@@ -155,6 +162,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "held_ongoing": "still going on, written by the run after it ends",
     "transcript_pending": "with a transcript not generated yet, written by a later run",
     "conference_in_record": "already in the record, not asked about again",
+    "grown": "grown since the last import (the line before is superseded)",
 }
 
 

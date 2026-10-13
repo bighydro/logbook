@@ -161,6 +161,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "beeper_live",
     "telegram",
     "telegram_live",
+    "claude_code",
     "notion",
     "line",
     "twitter",
@@ -289,6 +290,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     **{f"takeout-{short}": f"google-takeout-{short}" for short in TAKEOUT},
     "music": "apple-music",
     "telegram-export": "telegram",  # `add telegram-export <folder>`: Telegram Desktop's JSON export
+    "claude-sessions": "claude-code",  # `add claude-sessions <folder>`: Claude Code's session transcripts
 }
 
 
