@@ -65,6 +65,14 @@ an IANA name (`Europe/Oslo`; the store also writes `GMT+0200`, which is not one)
 line for the same asset carries too, so a reader folds the two by equal name (ignoring case) and
 instants within a second; this adapter writes its own line and never looks the other up.
 
+**The places of assets already in the record.** `places` reads, for the UUIDs it is given, the place
+Photos named as `run` keeps it under `extra.place`, from the library on this machine
+(`~/Pictures/Photos Library.photoslibrary`, `library_store`); `logbook setup places review
+--ask-photos` asks it about photo lines written before the place was kept. It confirms the tables
+and columns it needs with `PRAGMA table_info` first: a store without the reverse-location columns
+names no place, one without `ZASSET.ZUUID` or `ZADDITIONALASSETATTRIBUTES` is one `LibraryError`
+naming it.
+
 Trashed assets and assets without a capture date are skipped and counted. Every line is tier 1
 (metadata; `logbook add --tier` overrides). Pure: opened `mode=ro`, `immutable=1`; albums, faces and
 people are read once into memory (a library of a few hundred thousand assets fits), then one SELECT
@@ -75,7 +83,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -101,6 +109,9 @@ CAMERA_IMPORTS = frozenset({1, 2})  # ZIMPORTEDBY: back camera, front camera
 RECEIVED_IMPORTS = frozenset({3, 8, 13})  # another app, AirDrop or sharing, shared with you
 CAMERA_BUNDLE = "com.apple.camera"
 JOIN_TABLE = re.compile(r"^Z_\d+ASSETS$")
+DEFAULT_LIBRARY = ("Pictures", "Photos Library.photoslibrary")  # under the home folder, on a Mac
+LIBRARY_STORE = ("database", "Photos.sqlite")  # inside a `.photoslibrary` folder
+STORE_NAME = "Photos.sqlite"
 
 ASSET_COLUMNS = (
     "Z_PK",
@@ -130,6 +141,10 @@ ATTRIBUTE_COLUMNS = (
     "ZREVERSELOCATIONDATA",
     "ZREVERSELOCATIONDATAISVALID",
 )
+
+
+class LibraryError(ValueError):
+    """A Photos store `places` cannot read: a table or column it needs is not there."""
 
 
 def sniff(path: Path) -> bool:
@@ -205,6 +220,58 @@ def run(
             if line is None or (since and line["at"] < since):
                 continue
             yield line
+    finally:
+        con.close()
+
+
+def library_store(path: Path) -> Path:
+    """The `Photos.sqlite` of a library: inside a `.photoslibrary` folder (or any folder holding
+    `database/Photos.sqlite`), in a folder holding it, or the path itself."""
+    path = Path(path)
+    if path.is_dir():
+        for inside in (path.joinpath(*LIBRARY_STORE), path / STORE_NAME):
+            if inside.is_file():
+                return inside
+        return path.joinpath(*LIBRARY_STORE)
+    return path
+
+
+def places(path: Path, uuids: Iterable[str]) -> dict[str, dict[str, Any] | None]:
+    """UUID → the place Photos named for that asset, as `run` keeps it under `extra.place`, or None
+    when the library holds the asset and no valid place for it; a UUID the library does not hold is
+    absent. Read-only and immutable; the schema confirmed first (the module docstring)."""
+    wanted = sorted(set(uuids))
+    if not wanted:
+        return {}
+    path = Path(path)
+    con = _open(path)
+    try:
+        tables = _tables(con)
+        for table in REQUIRED_TABLES:
+            if table not in tables:
+                raise LibraryError(f"{path}: no {table} table; not a Photos library this version reads")
+        assets = set(_columns(con, "ZASSET"))
+        attributes = set(_columns(con, "ZADDITIONALASSETATTRIBUTES"))
+        if not {"Z_PK", "ZUUID"} <= assets or "ZASSET" not in attributes:
+            raise LibraryError(
+                f"{path}: no ZASSET.ZUUID or ZADDITIONALASSETATTRIBUTES.ZASSET; no asset can be found by UUID"
+            )
+        blob = "b.ZREVERSELOCATIONDATA" if "ZREVERSELOCATIONDATA" in attributes else "NULL"
+        valid = "b.ZREVERSELOCATIONDATAISVALID" if "ZREVERSELOCATIONDATAISVALID" in attributes else "NULL"
+        found: dict[str, dict[str, Any] | None] = {}
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            rows = con.execute(
+                f"SELECT a.ZUUID, {blob}, {valid} FROM ZASSET a"
+                " LEFT JOIN ZADDITIONALASSETATTRIBUTES b ON b.ZASSET = a.Z_PK"
+                f" WHERE a.ZUUID IN ({', '.join('?' * len(chunk))})",
+                chunk,
+            )
+            for uuid, data, is_valid in rows:
+                key = _text(uuid)
+                if key and found.get(key) is None:
+                    found[key] = _place(data) if is_valid != 0 else None
+        return found
     finally:
         con.close()
 

@@ -1,0 +1,6 @@
+12 places observed · 0 named · 12 to review, by nights then hours
+  1  55.6000,4.4000 · 6 visits · 6 nights · 91.5 h · 2026-02-02 – 2026-02-14 → Hytta på banken
+         google-takeout timeline: "Hytta på banken" (3 visits) · google-takeout timeline: "Home" (3 visits, type) · immich: "Nordsjøen" (1 photo, city)
+  5  55.6100,4.4000 · 5 visits · 0 nights · 20.0 h · 2026-02-03 – 2026-02-11 → Fyrlykta
+         apple-photos: "Fyrlykta" (2 photos)
+nothing written: `setup places review --accept N[,N]`, `--name N "…"`, or `--reject N[,N]`

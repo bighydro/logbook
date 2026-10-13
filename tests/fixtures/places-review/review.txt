@@ -1,0 +1,26 @@
+12 places observed · 0 named · 12 to review, by nights then hours
+   1  55.6000,4.4000 · 6 visits · 6 nights · 91.5 h · 2026-02-02 – 2026-02-14 → Hytta på banken
+          google-takeout timeline: "Hytta på banken" (3 visits) · google-takeout timeline: "Home" (3 visits, type) · immich: "Nordsjøen" (1 photo, city)
+   2  55.6000,4.4180 · 3 visits · 3 nights · 48.0 h · 2026-02-04 – 2026-02-13 → Verkstedet
+          google-takeout timeline: "Verkstedet" (2 visits)
+   3  55.6000,4.4360 · 2 visits · 2 nights · 30.5 h · 2026-02-07 – 2026-02-12 → ____
+          no source names it
+   4  55.6000,4.4540 · 1 visit · 1 night · 15.5 h · 2026-02-09 – 2026-02-10 → Sjøbua
+          google-takeout timeline: "Sjøbua" (1 visit)
+   5  55.6100,4.4000 · 5 visits · 0 nights · 20.0 h · 2026-02-03 – 2026-02-11 → Fyrlykta
+          apple-photos: "Fyrlykta" (2 photos)
+   6  55.6100,4.4180 · 5 visits · 0 nights · 15.0 h · 2026-02-04 – 2026-02-12 → Klubbhuset
+          ios-calendar: "Klubbhuset" (1 event)
+   7  55.6100,4.4360 · 4 visits · 0 nights · 12.0 h · 2026-02-03 – 2026-02-12 → ____
+          no source names it
+   8  55.6100,4.4540 · 5 visits · 0 nights · 10.0 h · 2026-02-04 – 2026-02-13 → ____
+          no source names it
+   9  55.6200,4.4000 · 4 visits · 0 nights · 8.0 h · 2026-02-05 – 2026-02-14 → ____
+          no source names it
+  10  55.6200,4.4180 · 3 visits · 0 nights · 6.0 h · 2026-02-06 – 2026-02-14 → ____
+          no source names it
+  11  55.6200,4.4360 · 2 visits · 0 nights · 4.0 h · 2026-02-08 – 2026-02-13 → ____
+          no source names it
+  12  55.6200,4.4540 · 1 visit · 0 nights · 3.0 h · 2026-02-14 – 2026-02-14 → ____
+          no source names it
+nothing written: `setup places review --accept N[,N]`, `--name N "…"`, or `--reject N[,N]`

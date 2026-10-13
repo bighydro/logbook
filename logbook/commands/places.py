@@ -104,8 +104,10 @@ def places_arguments(sub: Subparsers) -> None:
         help="the places you return to, with the names the record already holds; accept, name or reject",
         description="The observed places (clusters of your stays), ranked by nights then hours, each"
         " proposed with the name the record's sources gave it and who said it, or a blank. Nothing is"
-        " looked up and nothing leaves this machine. Nothing is written unless told; on a terminal it"
-        " asks for each: y, n, or a name.",
+        " looked up and nothing leaves this machine, unless you add --ask-photos: then the asset ids of"
+        " the record's photos at each blank go to your own Immich server, and nothing else does (never a"
+        " coordinate, never a geocoder), and the Photos library on this machine is read. Nothing is"
+        " written unless told; on a terminal it asks for each: y, n, or a name.",
     )
     v.add_argument("--top", type=int, metavar="N", help="only the first N")
     v.add_argument("--near", metavar="PLACE", help="only those within 5 km of a named place, or of lat,lon")
@@ -123,6 +125,26 @@ def places_arguments(sub: Subparsers) -> None:
         "--reject", action="append", metavar="N[,N]", help="never propose this name for this spot again"
     )
     v.add_argument("--radius", type=float, metavar="M", help="metres: one spot (default 75)")
+    v.add_argument(
+        "--ask-photos",
+        action="store_true",
+        help="ask your photo libraries what they call each blank: your own Immich server, by the asset ids"
+        " of the record's photos there and nothing else, and the Photos library on this machine; the"
+        " answers are kept 30 days in state/places-photos.json",
+    )
+    v.add_argument("--all", action="store_true", help="with --ask-photos: the places that have a name too")
+    v.add_argument(
+        "--limit",
+        type=int,
+        metavar="N",
+        help="with --ask-photos: the N photos nearest each place's centre, from each library (default 50)",
+    )
+    v.add_argument(
+        "--photos-library",
+        metavar="PATH",
+        help="with --ask-photos: the Photos library to read"
+        " (default ~/Pictures/Photos Library.photoslibrary)",
+    )
     v.add_argument("--json", action="store_true", help="the queue, or what was written, as one JSON object")
     v.set_defaults(fn=cmd_places)
 
@@ -322,16 +344,20 @@ def _ask_name(p: places.Proposal) -> str | None:
 
 def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     """`places review [--top N] [--near PLACE] [--accept N[,N]] [--name N NAME] [--reject N[,N]]
-    [--radius M] [--json]`: the observed places at no named place, ranked and numbered, each with the
-    name the record's sources gave it and the evidence (`logbook.contrib.places_review`). Nothing is
-    written unless told: `--accept` and `--name` write places.json and one naming note each,
-    `--reject` the pair into `state/places-review.json`; every number is checked before anything is
-    written. On a terminal, with nothing told, it asks for each proposal shown."""
+    [--radius M] [--ask-photos [--all] [--limit N] [--photos-library PATH]] [--json]`: the observed
+    places at no named place, ranked and numbered, each with the name the record's sources gave it and
+    the evidence (`logbook.contrib.places_review`). Nothing is written unless told: `--accept` and
+    `--name` write places.json and one naming note each, `--reject` the pair into
+    `state/places-review.json`; every number is checked before anything is written. On a terminal,
+    with nothing told, it asks for each proposal shown. `--ask-photos` adds what the photo libraries
+    say about the blanks shown, or the proposals told (`logbook.contrib.places_photos`), before any
+    of that; the queue and its numbers are the same without it."""
     from ..contrib import places_review
 
     radius = places_review.CLUSTER_M if a.radius is None else float(a.radius)
     if a.top is not None and a.top < 0:
         raise places_review.ReviewError(f"--top takes a number from 0, not {a.top}")
+    _check_ask_photos(a)
     report = places_review.read(lb, radius)
     accepted = places_review.numbers(a.accept)
     rejected = places_review.numbers(a.reject)
@@ -355,6 +381,9 @@ def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
             f"proposal {', '.join(map(str, twice))} is given --accept and --name, or --name twice; say one"
         )
     if told or rejected:
+        if a.ask_photos and (accepted or rejected):  # `--name` gives its own name: nothing to ask for it
+            places_review.pick(report, told)  # every number checked before anything is asked
+            report, _asked = _ask_photos(lb, report, places_review.pick(report, [*accepted, *rejected]), a)
         chosen: list[tuple[places_review.Proposal, str | None]] = [
             (p, None) for p in places_review.pick(report, accepted)
         ]
@@ -375,14 +404,50 @@ def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     shown = places_review.near(report, a.near) if a.near else report.proposals
     if a.top is not None:
         shown = shown[: a.top]
+    asked: list[Any] | None = None
+    if a.ask_photos:
+        report, asked = _ask_photos(lb, report, shown, a)
+        numbers = {p.number for p in shown}
+        shown = [p for p in report.proposals if p.number in numbers]
     if a.json:
-        print(json.dumps(report.to_json(shown), indent=2, ensure_ascii=False))
+        data = report.to_json(shown)
+        if asked is not None:
+            data["asked_photos"] = [o.to_json() for o in asked]
+        print(json.dumps(data, indent=2, ensure_ascii=False))
         return
     if shown and _on_a_tty():
         _review_on_a_tty(lb, report, shown)
         return
     for text in places_review.rows(report, shown):
         print(text)
+
+
+def _check_ask_photos(a: argparse.Namespace) -> None:
+    """`--all`, `--limit` and `--photos-library` go with `--ask-photos`; `--limit` from 0."""
+    from ..contrib import places_review
+
+    flags = (("--all", a.all), ("--limit", a.limit), ("--photos-library", a.photos_library))
+    given = [flag for flag, value in flags if value not in (None, False)]
+    if given and not a.ask_photos:
+        raise places_review.ReviewError(f"{', '.join(given)} goes with --ask-photos")
+    if a.limit is not None and a.limit < 0:
+        raise places_review.ReviewError(f"--limit takes a number from 0, not {a.limit}")
+
+
+def _ask_photos(lb: Logbook, report: Any, shown: list[Any], a: argparse.Namespace) -> tuple[Any, list[Any]]:
+    """What the photo libraries say about the proposals `shown` (`places_photos.ask`): the cost and
+    what came back on stderr, so the queue on stdout, and its JSON, stay as they are."""
+    from ..contrib import places_photos
+
+    return places_photos.ask(
+        lb,
+        report,
+        shown,
+        every=a.all,
+        limit=places_photos.LIMIT if a.limit is None else a.limit,
+        library=a.photos_library,
+        say=lambda text: print(text, file=sys.stderr),
+    )
 
 
 def _on_a_tty() -> bool:

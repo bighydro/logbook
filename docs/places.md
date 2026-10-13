@@ -21,7 +21,7 @@ near Hytta på banken, 1.1 km`. Name a place and the next page you open says it.
 | `logbook setup places add NAME --lat --lon [--radius M] [--kind] [--tags]` | add one, by hand; appends nothing |
 | `logbook setup places name LAT,LON NAME` | add one and put the naming in the record |
 | `logbook setup places propose` | your unnamed stays grouped and ranked by hours, with what is near; `--write` asks for a name for each |
-| `logbook setup places review` | the places you return to, each with the name the record already holds for it, to accept, name or reject (below) |
+| `logbook setup places review` | the places you return to, each with the name the record already holds for it, to accept, name or reject (below); `--ask-photos` asks your photo libraries too ([below](#ask-the-photos)) |
 | `logbook setup places import-takeout PATH` | Google Maps' saved and starred places as entries, written only with `--write` |
 
 `logbook places …` still works for each of these, with one line saying the new name.
@@ -95,7 +95,77 @@ one.** `review` reads the record and writes `places.json`; it opens no connectio
 to that with the network guard on. A spot has a name here only when a source already wrote one into a
 line: Google's when you exported your Timeline, your calendar's when you typed it, your photo library's
 when it named the picture on your phone or your Immich server, Dawarich's when your own server
-geocoded the point. Everything else is a blank, and the name is yours to give.
+geocoded the point. Everything else is a blank, and the name is yours to give. The one exception is
+yours to make, each time you want it: `--ask-photos` asks your own Immich server about your own photos,
+by asset id ([Ask the photos](#ask-the-photos)).
+
+### Ask the photos
+
+A record that has synced a photo library for years holds hundreds of thousands of photo lines, and
+most carry no place name: they were imported before the Immich and Photos adapters kept the place their
+library named, and the record never rewrites a line, so syncing again adds nothing to them. Your
+libraries still know where each photo was taken. `--ask-photos` asks them about the photos already in
+the record, and offers what they say as evidence like any other source.
+
+**Your photos' asset ids go to your own Immich server, and nothing else leaves your machine: no
+coordinate, no name, no photo, and never a geocoder.** Immich answers with the city it named on your
+server when the photo was uploaded; Photos is read from the library on this machine.
+
+```
+$ logbook setup places review --ask-photos
+asking the photos about 7 places: up to 50 photos at each from each library, the nearest its centre first
+  immich: 13 photos; sending 13 asset ids to immich.example.org, nothing else, at most 10 a second (about 2 s)
+  photos: 4 photos; reading their places from the library at ~/Pictures/Photos Library.photoslibrary/database/Photos.sqlite, on this machine
+  immich: 12 named a place, 1 not on the server
+  photos: 3 named a place, 1 not in the library
+12 places observed · 0 named · 12 to review, by nights then hours
+   …
+   3  55.6000,4.4360 · 2 visits · 2 nights · 30.5 h · 2026-02-07 – 2026-02-12 → Havbyen
+          immich ×12: Havbyen
+   …
+   7  55.6100,4.4360 · 4 visits · 0 nights · 12.0 h · 2026-02-03 – 2026-02-12 → Plattformen
+          photos ×3: Plattformen
+   8  55.6100,4.4540 · 5 visits · 0 nights · 10.0 h · 2026-02-04 – 2026-02-13 → ____
+          no source names it
+   …
+```
+
+(The same synthetic record at sea; the server and every name are invented.)
+
+- **Which places.** The blanks among the proposals shown — after `--near` and `--top` — or the ones you
+  `--accept` or `--reject`. `--all` asks about the proposals that already have a name too. The queue and
+  its numbers are the same with the flag and without it.
+- **Which photos.** Your `immich` and `apple-photos` photo lines that have coordinates and no place name
+  of their own, at the observed place nearest them within 150 m. Of each place, the **50 photos nearest
+  its centre from each library** (`--limit N` to ask about more or fewer).
+- **Immich** is asked through the same client `sync immich` uses: your `LOGBOOK_IMMICH_URL`, your key
+  (the `asset.read` permission it already has), one `GET /api/assets/{id}` per photo, one at a time and
+  at most 10 a second. Its answer is the city, state and country your server named.
+- **Photos** is the library a Mac keeps at `~/Pictures/Photos Library.photoslibrary`, or the one
+  `--photos-library PATH` names, read only: the address and the area names Photos gave each picture.
+- **The cost first.** Before anything is sent, one line per library says how many photos it will be
+  asked about, how many the cache answers, and where the rest go. The lines go to stderr, so `--json`
+  stays one object; with `--json` the object also carries `asked_photos`, the same counts.
+- **The cache.** Every answer — a place, no place, a photo the library no longer has — is kept in
+  `state/places-photos.json` beside the record, by asset id, for **30 days**. A second review within them
+  asks nothing again; after them, it asks again. Deleting the file only means the next review asks.
+- **When a library cannot answer.** An Immich without its two variables, a library that is not there,
+  and a source you disabled in `policy/import.json` are said and passed over. A server that fails is said
+  once, with how many photos were not asked, and the review goes on with the other sources; a failure is
+  never cached, so the next review asks again.
+
+What a photo's library says weighs as a photo line's place does: Photos' area name or address 2 a photo,
+a city (all Immich gives) 1. With `--all`, a dozen photos' city can outweigh a few Timeline visits'
+name; the evidence line shows both, and the choice is yours.
+
+Nothing is written: the photo names are evidence, and accepting one is `--accept` as before. Give
+`--ask-photos` with it, so the review sees the name it proposed (the cache answers, so nothing is asked
+twice):
+
+```bash
+logbook setup places review --ask-photos --accept 3     # Havbyen, from the photos, into places.json
+logbook setup places review --ask-photos --reject 7     # never propose Plattformen for that spot again
+```
 
 ### Your say
 

@@ -4,7 +4,6 @@ it with the Immich line for the same asset."""
 
 from __future__ import annotations
 
-import plistlib
 import sqlite3
 import sys
 from contextlib import closing
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from photos_library import reverse_location
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import cli
@@ -462,53 +462,12 @@ def test_add_photos_dry_run_counts_the_keepers_too_and_writes_nothing(lb, tmp_pa
 # -- the place Photos named --------------------------------------------------------------------------------
 
 
-def _reverse_location(address: str, city: str, names: list[str]) -> bytes:
-    """A `PLRevGeoLocationInfo` as Photos archives it in ZREVERSELOCATIONDATA (NSKeyedArchiver):
-    `addressString`, a `postalAddress` (`CNPostalAddress`, `_city`) and a `mapItem` whose
-    `sortedPlaceInfos` carry the names of the areas the point lies in. Invented, every word."""
-    uid = plistlib.UID
-    objects: list[Any] = ["$null"]
-
-    def put(value: Any) -> plistlib.UID:
-        objects.append(value)
-        return uid(len(objects) - 1)
-
-    def cls(name: str) -> plistlib.UID:
-        return put({"$classname": name, "$classes": [name, "NSObject"]})
-
-    infos = [
-        put({"$class": cls("PLRevGeoMapItemAdditionalPlaceInfo"), "name": put(n), "placeType": 4})
-        for n in names
-    ]
-    array = put({"$class": cls("NSArray"), "NS.objects": infos})
-    map_item = put({"$class": cls("PLRevGeoMapItem"), "sortedPlaceInfos": array})
-    postal = put(
-        {"$class": cls("CNPostalAddress"), "_city": put(city), "_street": put(address.split(",")[0])}
-    )
-    root = put(
-        {
-            "$class": cls("PLRevGeoLocationInfo"),
-            "addressString": put(address),
-            "postalAddress": postal,
-            "mapItem": map_item,
-            "isHome": False,
-        }
-    )
-    archive = {
-        "$archiver": "NSKeyedArchiver",
-        "$version": 100000,
-        "$top": {"root": root},
-        "$objects": objects,
-    }
-    return plistlib.dumps(archive, fmt=plistlib.FMT_BINARY)
-
-
 def test_the_place_photos_named_is_kept_from_its_reverse_location_archive(tmp_path):
     """Photos names a picture's place itself, on the phone; the line keeps what the store had
     under `extra.place` (`places review` reads it). A row Photos marks not valid, a blob that is
     no archive and a store without the column carry none."""
     store = _store(tmp_path / "photos")
-    blob = _reverse_location("Fyrveien 3, Nordsjøen", "Nordsjøen", ["Fyrlykta", "Nordsjøen"])
+    blob = reverse_location("Fyrveien 3, Nordsjøen", "Nordsjøen", ["Fyrlykta", "Nordsjøen"])
     with closing(sqlite3.connect(store)) as con:
         con.execute("ALTER TABLE ZADDITIONALASSETATTRIBUTES ADD COLUMN ZREVERSELOCATIONDATA BLOB")
         con.execute("ALTER TABLE ZADDITIONALASSETATTRIBUTES ADD COLUMN ZREVERSELOCATIONDATAISVALID INTEGER")
@@ -528,3 +487,61 @@ def test_the_place_photos_named_is_kept_from_its_reverse_location_archive(tmp_pa
     assert "place" not in lines["IMG_0004.MOV"]["payload"]["extra"]
     assert "place" not in lines["IMG_0008.JPG"]["payload"]["extra"]
     assert all("place" not in line["payload"].get("extra", {}) for line in _lines(tmp_path / "plain"))
+
+
+# -- the places Photos named, by asset: `places review --ask-photos` -------------------------------------
+
+
+def test_places_reads_the_place_photos_named_for_each_asset_asked(tmp_path):
+    from photos_library import library
+
+    blob = reverse_location("Plattformveien 7, Nordsjøen", "Nordsjøen", ["Plattformen", "Nordsjøen"])
+    root = library(tmp_path, [("A1", blob, 1), ("A2", blob, 0), ("A3", None, None), ("A4", b"junk", 1)])
+    store = apple_photos.library_store(root)
+    assert store == root / "database" / "Photos.sqlite"
+    assert apple_photos.library_store(store) == store
+    found = apple_photos.places(store, ["A1", "A2", "A3", "A4", "A9"])
+    assert found == {
+        "A1": {
+            "address": "Plattformveien 7, Nordsjøen",
+            "city": "Nordsjøen",
+            "names": ["Plattformen", "Nordsjøen"],
+        },
+        "A2": None,
+        "A3": None,
+        "A4": None,
+    }, "a row marked not valid, none, junk: no place; an asset the library lacks: absent"
+    assert apple_photos.places(store, []) == {}
+
+
+def test_places_tolerates_a_library_without_the_reverse_location_columns(tmp_path):
+    store = _store(tmp_path / "photos")  # the adapter's fixture: no ZREVERSELOCATIONDATA at all
+    found = apple_photos.places(store, [U + "1", U + "4"])
+    assert found == {U + "1": None, U + "4": None}
+
+
+def test_places_names_the_store_when_a_table_it_needs_is_missing(tmp_path):
+    store = tmp_path / "Photos.sqlite"
+    with closing(sqlite3.connect(store)) as con:
+        con.execute("CREATE TABLE ZASSET (Z_PK INTEGER PRIMARY KEY, ZUUID VARCHAR)")
+        con.commit()
+    with pytest.raises(apple_photos.LibraryError, match="ZADDITIONALASSETATTRIBUTES") as e:
+        apple_photos.places(store, ["A1"])
+    assert str(store) in str(e.value)
+    with closing(sqlite3.connect(store)) as con:
+        con.execute("DROP TABLE ZASSET")
+        con.execute("CREATE TABLE ZASSET (Z_PK INTEGER PRIMARY KEY)")
+        con.execute("CREATE TABLE ZADDITIONALASSETATTRIBUTES (Z_PK INTEGER PRIMARY KEY, ZASSET INTEGER)")
+        con.commit()
+    with pytest.raises(apple_photos.LibraryError, match="ZUUID"):
+        apple_photos.places(store, ["A1"])
+
+
+def test_places_never_writes_the_library(tmp_path):
+    from photos_library import library
+
+    root = library(tmp_path, [("A1", None, None)])
+    store = apple_photos.library_store(root)
+    before = sorted((p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in store.parent.iterdir())
+    apple_photos.places(store, ["A1"])
+    assert sorted((p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in store.parent.iterdir()) == before
