@@ -757,7 +757,7 @@ class Wizard:
                 optional = " and ".join(missing)
                 rows.append(f"  {adapter.NAME}: works without a key; optional {optional} — {where}")
             else:
-                rows.append(f"  {adapter.NAME}: set {' and '.join(missing)} — {where}")
+                rows.append(f"  {adapter.NAME}: set {adapters.needs(adapter, self.env)} — {where}")
         if not rows:
             return
         c.say("Live sources pull on their own with `logbook sync <name>`; each needs a variable set:")

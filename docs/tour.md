@@ -590,37 +590,31 @@ The watermark is the recording's end; each sync looks back 24 hours (`LOGBOOK_GR
 the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
 written: a batch is all or nothing.
 
-`logbook sync gcal` pulls your Google calendars from their private iCal addresses (Google Calendar →
-Settings → the calendar → *Integrate calendar* → *Secret address in iCal format*), one whole calendar per
-URL, and reads each with the same reader `logbook add` uses for an `.ics` export, so a calendar you
-imported from a Takeout or settings-page export and the same calendar pulled by URL are one line per
-event (same `raw_id`, the event's UID and last-modified time; ADR 0017). Name a feed with `name=url` when it has no
-name of its own. The watermark is the newest last-modified time seen; each run keeps the events changed
-in the 24 hours before it (`LOGBOOK_GCAL_LOOKBACK_H`) and reports, per calendar, how many it saw and how
-many were new. A calendar that fails (an expired secret address is a 404) is one line on stderr, the others
-are still written, the watermark stays put and the exit is 1.
+### Google, on one key
 
-```bash
-export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/private-…/basic.ics,https://…'
-logbook sync gcal --dry-run                                # counts per calendar, nothing written
-logbook sync gcal
-```
+Four sources read your Google account: `sync gmail` (your mail), `sync gcal` (your calendars), `sync drive`
+(what happened to your Drive files) and `sync gtasks` (your tasks). All four sign in the same way, with
+one **service account** of your own Google Workspace that the Workspace allows to act as you
+(*domain-wide delegation*), configured by the same two variables, read-only, one scope each. A service
+account signs in with a key file and nothing that expires: every run signs a short request with the key
+and gets an access token good for an hour, which it keeps in memory for that run and never writes
+anywhere. There is no refresh token to go stale in a scheduled job, which is how a sign-in done once in a
+browser dies months later. Only you can stop it: by deleting the key or withdrawing the delegation.
 
-### Google Drive
-
-`logbook sync drive` writes down what happened to your Drive files each day: created, edited, renamed,
-moved, shared, commented on, trashed, deleted, restored. It reads the Drive Activity API, read-only, as
-you, through a **service account** of your own Google Workspace that is allowed to act as you
-(*domain-wide delegation*). A service account signs in with a key file and nothing that expires: every
-run signs a short request with the key and gets an access token for that run alone, which is never
-written anywhere. There is no refresh token to go stale in a scheduled job. Only you can stop it: by
-deleting the key or withdrawing the delegation. `logbook sync gtasks` uses the same account and the
-same two variables.
+| Source | Scope it asks for, read-only | What it covers |
+|---|---|---|
+| `sync gmail` | `https://www.googleapis.com/auth/gmail.readonly` | every message, as `mail/v1` lines ([the mail page](adapters/mail.md#gmail-over-the-api)) |
+| `sync gcal` | `https://www.googleapis.com/auth/calendar.readonly` | the calendars you own, as `event/v1` lines |
+| `sync drive` | `https://www.googleapis.com/auth/drive.activity.readonly` | what happened to your files |
+| `sync drive` | `https://www.googleapis.com/auth/drive.metadata.readonly` | the folder path each Drive line names |
+| `sync gtasks` | `https://www.googleapis.com/auth/tasks.readonly` | your tasks, created and done |
 
 **Setting it up**, once, as the Workspace's administrator:
 
 1. In the Google Cloud console, in a project of your own (create one if you have none), open *APIs &
-   Services → Library* and enable the **Google Drive Activity API** and the **Google Tasks API**.
+   Services → Library* and enable the **Gmail API**, the **Google Calendar API**, the **Google Drive
+   API**, the **Google Drive Activity API** and the **Google Tasks API**: the ones for the sources you
+   want.
 2. *IAM & Admin → Service accounts → Create service account*. Call it `logbook-sync`; it needs no role
    in the project. Open it and copy its **Unique ID** (the client ID, a long number).
 3. On the same page, *Keys → Add key → Create new key → JSON*. The browser downloads one file: that
@@ -628,24 +622,91 @@ same two variables.
    creation* (`iam.disableServiceAccountKeyCreation`, on by default in organisations made since 2024)
    is in the way: turn it off for this one project under *IAM & Admin → Organization policies*.
 4. In the Workspace admin console, *Security → Access and data control → API controls → Manage
-   Domain Wide Delegation → Add new*. Paste the client ID and, as the OAuth scopes, exactly these two,
-   comma-separated, both read-only:
-   `https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/tasks.readonly`.
-   Authorize. A new delegation can take a few minutes, sometimes longer, before Google honours it.
+   Domain Wide Delegation → Add new*. Paste the client ID and, as the OAuth scopes, the scopes of the
+   table above, comma-separated, all read-only:
+   `https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/drive.metadata.readonly,https://www.googleapis.com/auth/tasks.readonly`.
+   Authorize. A new delegation can take a few minutes, sometimes longer, before Google honours it. A
+   scope you leave out is a source that cannot run: leave out `gmail.readonly` and `sync gmail` says so
+   and exits 1 (switch it off in `policy/import.json` if you mean it); leave out
+   `drive.metadata.readonly` and Drive lines carry no folder path, said once per run.
 5. Move the key out of your downloads to `~/.config/logbook/google-sa.json` and make it yours alone:
    `chmod 600 ~/.config/logbook/google-sa.json`. **Never commit it**, and never put it in the record's
-   folder, a cloud folder, a repository or a message: whoever holds it reads your Drive activity and
-   your tasks for as long as the delegation stands.
+   folder, a cloud folder, a repository or a message: whoever holds it reads your mail, your calendars,
+   your Drive's activity and your tasks for as long as the delegation stands.
 6. Name it in the environment, in your shell profile and in `~/.config/logbook/sync.env`, the file the
-   schedule reads (docs/schedule.md); the schedule then runs both sources with nothing more to set:
+   schedule reads (docs/schedule.md); the schedule then runs all four with nothing more to set:
 
    ```
    LOGBOOK_DRIVE_SA_KEY=~/.config/logbook/google-sa.json
    LOGBOOK_DRIVE_USER=ines@example.org
    ```
 
-7. `logbook doctor` now shows `sync:drive` and `sync:gtasks` as configured; it reads the key and checks
-   that no one else on the machine can, and asks Google nothing. Then:
+   (The names say *Drive* because Drive came first; every Google source reads the same two.)
+7. `logbook doctor` now shows one `google` line — the key present, the user set, and which sources are on
+   the key, a source switched off in `policy/import.json` named as disabled — and a `sync:<name>` line for
+   each source. It reads the key and checks that no one else on the machine can, and asks Google nothing:
+
+   ```
+   pass  google       key present, user set; sources on the key: gmail, gcal, drive, gtasks
+   ```
+
+`unauthorized_client` means the delegation does not yet grant the scope named in the message (step 4);
+`invalid_grant` that the key was deleted, this machine's clock is wrong, or `LOGBOOK_DRIVE_USER` is not a
+user of the domain. Signing needs the `crypto` extra (`pip install "openlogbook[crypto]"`); without it a
+sync says so. Every request is retried with a doubling wait on a rate limit or a server error, and stops
+on one plain line, exit 1, the watermark where it was, when that does not pass. `sync --all` runs the
+four in the order mail, gmail, gcal, drive, gtasks are registered: `mail` (IMAP) before `gmail`, so a
+mailbox you read both ways is written once by whichever comes first.
+
+### Gmail
+
+`logbook sync gmail` reads your mailbox over the Gmail API with the key above, and writes exactly the
+line `logbook sync mail` (IMAP) writes for the same message: the same parser, the same fields, the same
+dedupe key, the account and the `Message-ID`. A mailbox you synced over IMAP yesterday and over the API
+today is written once. The mail page has what a line holds, what is left out (drafts, Spam, Trash) and
+when to use which ([Gmail over the API](adapters/mail.md#gmail-over-the-api)).
+
+```bash
+logbook sync gmail --dry-run                               # counts, nothing written
+logbook sync gmail --since 2026-01-01T00:00:00Z            # a first run from a day you choose
+logbook sync gmail                                         # then from Gmail's history id
+```
+
+### Google Calendar
+
+`logbook sync gcal` reads the calendars you own. With the two variables above set it reads them over
+the Calendar API (`calendar.readonly`): every calendar whose owner you are, your primary first, never
+one shared with you or a subscribed one such as a holidays calendar. Without them it reads the private
+iCal addresses you list (Google Calendar → Settings → the calendar → *Integrate calendar* → *Secret
+address in iCal format*), one whole calendar per URL; with both, the key wins and the URLs are not read.
+Either way each event goes through the reader `logbook add` uses for an `.ics` export, so a calendar
+you imported from a Takeout or settings-page export, the same calendar pulled by URL and the same
+calendar read over the API are one line per event (same `raw_id`, the event's UID and last-modified
+time; ADR 0017). The API has no field for an event's GEO coordinates or an attendee's *delegated*
+answer, so a line read over the API lacks those two where a feed had them; the record keeps the line it
+has. The watermark is the newest last-modified time seen; each run keeps the events changed in the 24
+hours before it (`LOGBOOK_GCAL_LOOKBACK_H`) and reports, per calendar, how many it saw and how many were
+new. A calendar that fails (an expired secret address is a 404) is one line on stderr, the others are
+still written, the watermark stays put and the exit is 1.
+
+```bash
+export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/private-…/basic.ics,https://…'
+logbook sync gcal --dry-run                                # counts per calendar, nothing written
+logbook sync gcal
+```
+
+**Moving from the feeds to the key.** Set the two variables and run `sync gcal` as before; nothing else
+changes. The watermark in `state/gcal.json` is the same clock either way (the API's `updated` time is
+the feed's `LAST-MODIFIED`), so the first run on the key carries on from where the feeds stopped, less
+the lookback, and writes nothing twice: the events it reads again are already in the record by their
+`raw_id`. You can then delete `LOGBOOK_GCAL_URLS`, and reset the secret addresses in Google Calendar,
+since nothing reads them any more.
+
+### Google Drive
+
+`logbook sync drive` writes down what happened to your Drive files each day: created, edited, renamed,
+moved, shared, commented on, trashed, deleted, restored. It reads the Drive Activity API, read-only, as
+you, with the key of [Google, on one key](#google-on-one-key).
 
 ```bash
 logbook sync drive --dry-run                               # counts per activity, nothing written
@@ -653,30 +714,31 @@ logbook sync drive --since 2026-01-01T00:00:00Z            # a first run from a 
 logbook sync drive                                         # then from where it left off
 ```
 
-A first run without `--since` reads all the activity Google keeps. `unauthorized_client` means the
-delegation does not yet grant the scope named in the message (step 4); `invalid_grant` that the key was
-deleted, this machine's clock is wrong, or `LOGBOOK_DRIVE_USER` is not a user of the domain. Signing
-needs the `crypto` extra (`pip install "openlogbook[crypto]"`); without it the sync says so.
+A first run without `--since` reads all the activity Google keeps.
 
 **What a line holds.** One `event/v1` line per file, per hour and per kind of activity, so an afternoon
 of editing is a handful of lines with a count, `Edited Budget 2027 ×14`, not hundreds. It holds the
-file's name, its type, its id and a link that opens it in Drive; who acted, you as `owner` and anyone
-else as Google names them (`people/…`, a person's account, not their address); for a share, with whom
-(a person's `people/…` name, a group's address, a domain, or anyone with the link) and the role; for a
-move, the folder it went to and came from, the only folders Google names; for a rename, the old name and
-the new. An hour is written once it is over, so a run at 07:00 leaves 06:00–07:00 for the next. Someone
-else's activity on someone else's file that was shared with you is left out and counted.
+file's name, its type, its id and a link that opens it in Drive; the folders it is in, root first
+(`["My Drive", "Boat"]`), read with the metadata scope, each folder's name asked once and kept in
+`state/drive-cache.json` for a week (never in the record) and asked again when an activity renames or
+moves it; who acted, you as `owner` and anyone else as Google names them (`people/…`, a person's
+account, not their address); for a share, with whom (a person's `people/…` name, a group's address, a
+domain, or anyone with the link) and the role; for a move, the folder it went to and came from; for a
+rename, the old name and the new. An hour is written once it is over, so a run at 07:00 leaves
+06:00–07:00 for the next. Someone else's activity on someone else's file that was shared with you is
+left out and counted.
 
-**What a line never holds.** The file's content, a comment's words, the file's size or modified time
-(they would need a wider scope than this source asks for). Lines are **tier 1**, like calendar entries,
-whoever acted: the tier says where a line may travel, and a file's name and what happened to it are the
-same fact whoever did it.
+**What a line never holds.** The file's content, a comment's words, the file's size or modified time.
+The path is where the file is when its line is written; a line already in the record is never
+rewritten, so lines written before the metadata scope was delegated keep no path. Lines are **tier
+1**, like calendar entries, whoever acted: the tier says where a line may travel, and a file's name and
+what happened to it are the same fact whoever did it.
 
 ### Google Tasks
 
-`logbook sync gtasks` reads your Google Tasks, read-only, with the account and the two variables above
-(the Tasks scope in step 4). A task is an idea or a promise you made yourself, so two things are worth a
-line: that it was made, and that it was done.
+`logbook sync gtasks` reads your Google Tasks, read-only, with the key of [Google, on one
+key](#google-on-one-key) (the Tasks scope in step 4). A task is an idea or a promise you made yourself,
+so two things are worth a line: that it was made, and that it was done.
 
 ```bash
 logbook sync gtasks --dry-run                              # counts per list, nothing written

@@ -28,7 +28,7 @@ KEY_ENV, USER_ENV = service_account.KEY_ENV, service_account.USER_ENV
 URLS_ENV = "LOGBOOK_GCAL_URLS"
 SAILING_ID = "c_sailing1@group.calendar.google.com"
 WORK_ID = "c_3f1a@group.calendar.google.com"
-HOLIDAYS_ID = "en.norwegian#holiday@group.v.calendar.google.com"
+HOLIDAYS_ID = "c_holidays1@group.calendar.google.com"  # subscribed to, not hers
 EVENTS = "www.googleapis.com/calendar/v3/calendars/{id}/events"
 OSLO = "Europe/Oslo"
 
