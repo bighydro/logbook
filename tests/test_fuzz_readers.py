@@ -255,6 +255,9 @@ def assert_reads_cleanly(label: str, args: list[str]) -> None:
             raise AssertionError(f"{command} printed invalid JSON: {e}\n{out[:300]}") from e
 
 
+REFLECTION = "The photos went out. I'll call the yard tomorrow. Ola should book the ferry."  # `day reflect`
+
+
 def windowed_readers(
     since: str, until: str, day: str, person: str, kind: str, by: str, lane: str, subject: str, top: int
 ) -> list[list[str]]:
@@ -266,6 +269,7 @@ def windowed_readers(
         ["show", "place", "Home", "--json"],
         ["day", day],
         ["day", day, "--json"],
+        ["day", "reflect", day, "--text", REFLECTION, "--dry-run"],
         ["show", "days", "--from", since, "--to", until],
         ["show", "days", "--from", since, "--to", until, "--json"],
         ["show", "trips", "--since", since, "--until", until],

@@ -679,10 +679,12 @@ def extract(
     since: str | None = None,
     extractor: Extractor = RULES,
     sources: Iterable[str] | None = None,
+    until: str | None = None,
 ) -> Report:
     """Every proposal in the mail, message, transcript and note lines standing (not retracted, not
-    superseded) whose local day is `since` or later, read through the index, or only the kinds
-    `sources` names; closed ones carry the task line that closed them. Nothing is written."""
+    superseded) whose local day is `since` or later (and `until` or earlier, when given), read
+    through the index, or only the kinds `sources` names; closed ones carry the task line that
+    closed them. Nothing is written."""
     kinds = tuple(k for k in SOURCES if sources is None or k in set(sources))
     days = day_start.of(lb.meta)  # a proposal's day, which "tomorrow" counts from (RFC 0036)
     with lb.index() as idx:
@@ -693,7 +695,7 @@ def extract(
         lines = [
             line
             for kind in kinds
-            for line in idx.by_kind(kind, since, None)
+            for line in idx.by_kind(kind, since, until)
             if str(line["id"]) not in retracted and str(line["id"]) not in superseded
         ]
         closed = closes(idx.by_kind(TASK), retracted)

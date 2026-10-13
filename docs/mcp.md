@@ -234,7 +234,9 @@ given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer 
 written). `kind` is one of `note` (the default), `proposal` and `reflection`, carried in the profile's own
 slot for a label, `labels: [kind]` (RFC 0010), so a proposal an agent made and the note it came with are told
 apart without a new profile. `at`, when given, follows `--at`'s rules and must fall on `day` in the record's
-zone; without it the note is now for today and 23:59 of the day for an earlier one. The answer is the line's
+zone; without it the note is now for today and 23:59 of the day for an earlier one. It writes through the
+same note path as `logbook day reflect` (`logbook/core/notes.py`), so a reflection carried through the door and
+one said at the command line are the same kind of line, but for `source`. The answer is the line's
 envelope with `readable` (false at a ceiling of 1: the agent wrote a note it cannot read back), `label` and
 `chars`.
 

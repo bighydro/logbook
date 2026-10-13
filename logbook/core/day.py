@@ -72,6 +72,7 @@ setting of the Day. ADR 0013: derived is disposable."""
 
 from __future__ import annotations
 
+import textwrap
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime, time, timedelta
@@ -84,6 +85,7 @@ from . import (
     health,
     keepers,
     ledger,
+    notes,
     policy,
     present,
     readiness,
@@ -103,13 +105,14 @@ from .export import parse_day
 from .flights import Airports
 from .reading import Reading
 from .resolve import Ref
-from .store import Logbook
+from .store import Logbook, retractions
 
 ABOARD, FLIGHT, GAP = "aboard", "flight", "gap"
 NAMED = ("event", "transcript", "note", "mail", "call", keepers.KIND)  # attachments listed by name
 COUNTED = ("message", "photo")  # attachments counted
 PLACED = ("event", "transcript", "note", "mail", "call")  # the kinds `unplaced` lists
 NOTE_CHARS = 72
+REFLECTION_WIDTH = 76  # the reflection's words, wrapped under its label
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 EN_DASH = "\u2013"
 ARROW = "\u2192"
@@ -141,8 +144,12 @@ def read(
             (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), day, readiness.KINDS, tiers
         )
         page = signing.page(idx, day, on_day) if tiers is None else None
+        retracted = retractions(idx.retractions())
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["signed"] = signing.signed_json(signature, tz, page, day)
+    reflected = notes.standing(on_day, notes.REFLECTION, retracted)
+    if reflected:  # under --json only on a day that has one: the Day's object is otherwise unchanged
+        data["reflection"] = reflection_json(reflected[-1], tz)
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
@@ -765,6 +772,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             "all day",
             ", ".join(signing.mark(marks, a["line"]) + a["title"] + sources_text(a) for a in data["all_day"]),
         )
+    if data.get("reflection"):
+        yield ""
+        yield from reflection_rows(data["reflection"], tz)
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
@@ -798,6 +808,32 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row(f"from {page['from']}", received_text(page))
         for item in page["named"]:
             yield f"      {item['kind']:<10} {item['title']}"
+
+
+def reflection_json(line: Line, tz: str) -> dict[str, Any]:
+    """The Day's `reflection`: the latest standing note of the day labelled `reflection` (`logbook day
+    reflect`, or `note_day` through the door), its line, when it was recorded, by which source, and
+    the words in full."""
+    at = str(line["at"])
+    return {
+        "line": str(line["id"]),
+        "seq": int(line["seq"]),
+        "at": at,
+        "at_local": _instant(at).astimezone(ZoneInfo(tz)).isoformat(timespec="seconds"),
+        "source": str(line.get("source") or ""),
+        "text": str((line.get("payload") or {}).get("text") or ""),
+    }
+
+
+def reflection_rows(item: Mapping[str, Any], tz: ZoneInfo) -> Iterator[str]:
+    """The reflection in the owner's words, below the header and above the record: the label with the
+    moment it was recorded and its source, then the text, each paragraph wrapped under the label's
+    column, never cut inside a word."""
+    yield _row("reflection", f"{_clock(str(item['at']), tz)}{DOT}{item['source']}")
+    for paragraph in str(item["text"]).splitlines():
+        wrapped = textwrap.wrap(paragraph, REFLECTION_WIDTH, break_long_words=False, break_on_hyphens=False)
+        for text in wrapped or [""]:
+            yield _row("", text).rstrip()
 
 
 def anniversary_text(item: Mapping[str, Any]) -> str:
