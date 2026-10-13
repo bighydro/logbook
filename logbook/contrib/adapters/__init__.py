@@ -132,6 +132,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "transcript",
     "granola",
     "gcal",
+    "drive",
     "ais",
     "adsb",
     "mail",

@@ -565,6 +565,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["existing"] = _existing(lb)
     if _takes(adapter, "previous", live=True):
         options["previous"] = _previous(lb, adapter)
+    if _takes(adapter, "recorded", live=True):
+        options["recorded"] = _recorded(lb, adapter)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
@@ -1110,6 +1112,25 @@ def _previous(
             }
 
     return previous
+
+
+def _recorded(lb: Logbook, adapter: adapters.LiveAdapter) -> Callable[[str | None], list[dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `recorded`: the lines of its own source and KIND from the
+    local day before `since` on (every one when None), read through the index, so a source that folds
+    several items into one line (`drive`: a file's activities in an hour) leaves out the items a line
+    already holds and never writes one twice."""
+    kind = str(getattr(adapter, "KIND", ""))
+
+    def recorded(since: str | None) -> list[dict[str, Any]]:
+        first = "0001-01-01"
+        if since is not None:
+            zone = ZoneInfo(str(lb.meta["timezone"]))
+            local = datetime.fromisoformat(since.replace("Z", "+00:00")).astimezone(zone)
+            first = (local - timedelta(days=1)).date().isoformat()
+        with lb.index() as idx:
+            return idx.of_source(kind, adapter.NAME, first, "9999-12-31")
+
+    return recorded
 
 
 def _start(
