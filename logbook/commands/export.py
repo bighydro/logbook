@@ -20,7 +20,7 @@ def export_arguments(sub: Subparsers) -> None:
     """`logbook export`."""
     s = sub.add_parser(
         "export",
-        help=".jsonl, day packages, crossing, vault, site, trip-bundle, share day",
+        help=".jsonl, day package, crossing, vault, site, trip-bundle, share day",
         description="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a"
         " crossing-package/v1,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
