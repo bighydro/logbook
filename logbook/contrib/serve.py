@@ -537,6 +537,8 @@ class Site:
             parts.append(_reflection_html(data["reflection"], tz))
         if data.get("draft"):
             parts.append(_draft_html(data["draft"]))
+        if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
+            parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
         if data["timeline"]:
             parts.append('<ol class="timeline">\n')
@@ -1042,6 +1044,15 @@ def _draft_html(draft: Mapping[str, Any]) -> str:
         parts.append(f'<p class="mute">earlier drafts: {earlier}</p>\n')
     parts.append("</div>\n")
     return "".join(parts)
+
+
+def _withheld_html(row: Mapping[str, Any], heading: bool = True) -> str:
+    """A standing draft the `dream` entry no longer allows (`drafts.withheld_json`): one muted line
+    that says so and why, and nothing of what the draft says; under the Draft heading of an earlier
+    draft the entry does allow, when the Day shows one."""
+    line = escape(str(row["line"]))
+    head = "<h2>Draft</h2>\n" if heading else ""
+    return f'{head}<p class="mute" title="line {line}">{escape(drafts.withheld_text(row))}</p>\n'
 
 
 def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:

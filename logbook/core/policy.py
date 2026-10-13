@@ -8,7 +8,10 @@ holds through that day and from the next counts as `max_tier` 0, so nothing cros
 writes a new date or removes the line. `doctor` names an expired entry. The `mcp` entry may also
 name the write tools the owner lets through the door by name (ADR 0022), `"write": ["sign_day",
 "note_day"]`, and how far back they may write, `"write_window_days": 60` (`WRITE_WINDOW_DAYS`); none
-is allowed by default, and none once the entry has expired.
+is allowed by default, and none once the entry has expired. An entry has a version (`version`): the
+SHA-256 of the three things that decide what crosses, `max_tier`, `until` and `model`, which a line
+derived through the crossing records (`draft/v1` `extra.policy_version`), so a reader can tell the
+material was made under another entry: derived material follows the policy, not the head.
 
 `import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
@@ -30,12 +33,15 @@ and so does the first reading of a record made before it existed."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from .chain import canonical_json
 
 POLICY_FILE = PurePosixPath("policy/crossing.json")  # record-relative, as the manifest names it
 DEFAULT_DESTINATION = "hermes"
@@ -135,6 +141,20 @@ class Ceiling:
     def writes(self) -> tuple[str, ...]:
         """The write tools allowed today: those the file names, none once the entry has expired."""
         return () if self.expired else self.write
+
+
+def version(entry: Ceiling) -> str:
+    """The version of an entry, which a line derived through it records (`draft/v1`
+    `extra.policy_version`): the SHA-256, lowercase hex, of the RFC 8785 JSON of `{"max_tier": <as
+    written>, "model": <name or null>, "until": "YYYY-MM-DD" or null}`. The same three values give
+    the same version however the file spells them and whatever else the entry says (`write`,
+    `recipient`); a ceiling lowered or raised, an `until` moved or a model changed gives another."""
+    held = {
+        "max_tier": entry.written,
+        "model": entry.model,
+        "until": entry.until.isoformat() if entry.until is not None else None,
+    }
+    return hashlib.sha256(canonical_json(held).encode("utf-8")).hexdigest()
 
 
 def _until(path: Path, destination: str, entry: dict[str, Any]) -> date | None:
@@ -295,28 +315,39 @@ def _ceiling_or_default(root: Path, destination: str, default: int) -> int:
     return _entry(path, destination, entry, today()).max_tier
 
 
+def dream_today(root: Path) -> Ceiling | None:
+    """The `dream` entry as it counts today, expired or not; None when the file names none. What a
+    reader of the drafts holds them against (`drafts.allowed`), since what the dream wrote follows
+    the entry, not the head. An entry that is not the documented shape is refused naming the file."""
+    path = policy_path(root)
+    entry = read(root).get(DREAM_DESTINATION)
+    if entry is None:
+        return None
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        raise PolicyError(
+            f'{path}: {DREAM_DESTINATION!r} must be {{"max_tier": 1, 2 or 3}}, with an optional'
+            ' "until" date and an optional "model"'
+        )
+    return _entry(path, DREAM_DESTINATION, entry, today())
+
+
 def dream_entry(root: Path) -> Ceiling:
     """The `dream` entry of the policy, held against today (RFC 0036; `logbook dream`): sending a
     day to a model is a crossing like any other, so a record whose file does not name the
     destination, or whose entry has expired, lets nothing cross. The message says what to write.
     An entry may name the one `model` the day may go to."""
     path = policy_path(root)
-    entry = read(root).get(DREAM_DESTINATION)
-    if entry is None:
+    found = dream_today(root)
+    if found is None:
         raise PolicyError(
             f"{path} names no {DREAM_DESTINATION!r} entry, so no day crosses to a model; add "
             f'{{"{DREAM_DESTINATION}": {{"max_tier": 2, "until": "YYYY-MM-DD"}}}} to it to allow the dream'
         )
-    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
-        raise PolicyError(
-            f'{path}: {DREAM_DESTINATION!r} must be {{"max_tier": 1, 2 or 3}}, with an optional'
-            ' "until" date and an optional "model"'
-        )
-    found = _entry(path, DREAM_DESTINATION, entry, today())
     if found.expired and found.until is not None:
         raise PolicyError(
             f"{path}: the {DREAM_DESTINATION!r} entry expired on {found.until.isoformat()} and counts as"
-            " max_tier 0, so no day crosses to a model; write a new until there or remove the entry"
+            " max_tier 0, so no day crosses to a model and no reader shows a draft above it; write a new"
+            " until there or remove the entry"
         )
     return found
 

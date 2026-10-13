@@ -40,6 +40,12 @@ The checks, in the order they print:
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
   it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
+- `drafts`: a warn naming the days whose standing draft (RFC 0036) is above what the `dream` entry
+  allows today, lowered, expired or removed since the day was dreamed: every reader withholds it
+  (derived material follows the policy, not the head), and `dream --catch-up` dreams the day again
+  under the entry when it is in force. A record with no such day has no line. Read from the index
+  when it is current, opened read-only, else from the month files; a sealed draft this machine has
+  no identity to open is counted, not named.
 - `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
   names this machine, or no home is set (a pass either way); another machine is a warn: writers
   belong on the home.
@@ -78,8 +84,9 @@ from pathlib import Path
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
-from ..core import assets, day_start, index, places, plausible, policy
-from ..core.store import FormatError, Logbook
+from ..core import assets, day_start, drafts, index, places, plausible, policy, sealing
+from ..core.chain import Line, is_sealed
+from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
 from . import adapters, home, last_run, schedule, serve
 from . import service as serve_service
 from .adapters import service_account
@@ -452,6 +459,70 @@ def crossing_check(root: Path) -> Check:
     return Check("crossing", "pass", listed)
 
 
+def draft_lines(lb: Logbook, state: str) -> list[Line]:
+    """The record's draft and retraction lines, opened where this machine has the identity: from
+    the index when it is `current` (opened read-only, the lines read at the places it names), else
+    from the month files."""
+    kinds = (drafts.KIND, RETRACTION)
+    if state == "current":
+        db = sqlite3.connect(f"{lb.index_path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            places = db.execute(
+                "SELECT file, offset FROM lines WHERE kind IN (?, ?) ORDER BY seq", kinds
+            ).fetchall()
+        finally:
+            db.close()  # before anything could unlink it: Windows refuses to delete an open file
+        found = []
+        for file, offset in places:
+            with (lb.root / str(file)).open("rb") as fh:
+                found.append(read_line_at(fh, int(offset)))
+    else:
+        found = [line for line in lb.lines_unsorted() if line.get("kind") in kinds]
+    return [_opened(lb, line) for line in found]
+
+
+def _opened(lb: Logbook, line: Line) -> Line:
+    try:
+        return lb.opened(line)
+    except (sealing.SealError, sealing.MissingExtra, OSError, ValueError):
+        return line  # a line that will not open is `record`'s to report; here it stays sealed
+
+
+def drafts_check(lb: Logbook, state: str) -> Check | None:
+    """None unless a day's standing draft is above what the `dream` entry allows today."""
+    allowed = drafts.allowed(lb.root)
+    if allowed.max_tier >= policy.TIERS[-1]:
+        return None  # no draft is above tier 3
+    lines = draft_lines(lb, state)
+    retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
+    above = drafts.withheld(lines, retracted, allowed)
+    sealed = sum(
+        1
+        for line in lines
+        if line.get("kind") == drafts.KIND and is_sealed(line) and not allowed.allows(line)
+    )
+    if not above and not sealed:
+        return None
+    named = ", ".join(
+        f"{(line.get('payload') or {}).get('subject')} (#{line['seq']}, tier {line['tier']})"
+        for line in above
+    )
+    why = (
+        allowed.reason
+        if allowed.reason is not None
+        else f"the {policy.DREAM_DESTINATION!r} entry allows max_tier {allowed.max_tier} now;"
+        " `logbook dream --catch-up` dreams them again under it"
+    )
+    counted = f"{len(above)} day(s) whose draft is" + (f" {named}" if named else "")
+    if sealed:
+        counted += f"; {sealed} sealed draft(s) above it this machine has no identity to open"
+    return Check(
+        "drafts",
+        "warn",
+        f"{counted}: above what the dream entry allows, so no reader shows them; {why}",
+    )
+
+
 def _ceiling_text(c: policy.Ceiling) -> str:
     """`hermes 2`, `cloud-model 2 until 2026-12-31`, `mcp 2 write sign_day,note_day`,
     `dream 2 until 2026-12-31 model qwen2.5-7b-instruct`: the ceiling as it counts today, the write
@@ -693,6 +764,9 @@ def run(
         checks.append(google)
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
+    withheld = drafts_check(lb, state)
+    if withheld is not None:
+        checks.append(withheld)
     checks.append(home_check(lb.root))
     checks.append(last_run_check(lb, env))
     checks.append(restore_test_check(lb))
