@@ -351,7 +351,10 @@ def day_arguments(sub: Subparsers) -> None:
         help="leave out the days together 1, 2, 3, 5 and 10 years ago (`anniversaries`)",
     )
     s.add_argument(
-        "--no-dream", action="store_true", help="leave out the draft a model wrote about the day (`dream`)"
+        "--no-dream",
+        action="store_true",
+        help="leave out what a model drafted: the day's draft (`dream`) and its calls' syntheses"
+        " (`transcript synthesize`)",
     )
     s.set_defaults(fn=cmd_day)
 
@@ -402,6 +405,7 @@ def cmd_day(a: argparse.Namespace) -> None:
         if a.no_dream:
             data.pop("draft", None)
             data.pop("draft_withheld", None)
+            data.pop("syntheses", None)
         if not a.no_anniversaries:
             found = people_drift.anniversaries(lb, day, airports)
             if found:

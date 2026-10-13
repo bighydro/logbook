@@ -683,26 +683,36 @@ def synthesis_summary(block: Mapping[str, Any]) -> str:
 
 def synthesis_rows(segments: Sequence[Mapping[str, Any]], indent: str = "    ") -> Iterator[str]:
     """The segments of a synthesis, one per row: the part's word, the text, an action's assignee and
-    due hint (`→ Ola Nordmann · due by Friday (2026-06-12?)`, the date a reading of the words), then
-    where in the call it rests (`[02:10, 20:05]`, `[u3, u17]` when the recording gives no time, `[the
-    transcript]` for the line alone); an unsupported one starts with `~` and ends with the word."""
+    due hint (`assignment_text`), then where in the call it rests (`where_text`); an unsupported one
+    starts with `~` and ends with the word."""
     for segment in segments:
         label = SYNTHESIS_LABELS.get(str(segment.get("part")), "")
         mark = "  " if segment["supported"] else "~ "
-        who = ""
-        if segment.get("assignee"):
-            who += f"  → {segment['assignee']}"
-        due = segment.get("due")
-        if due:
-            when = f" ({due['date']}?)" if due.get("date") else ""
-            who += f"{DOT if who else '  '}due {due['phrase']}{when}"
+        assigned = assignment_text(segment)
+        who = f"  {assigned}" if assigned else ""
         if segment["supported"]:
-            tail = (
-                "[" + (", ".join(utterance_text(u) for u in segment.get("utterances") or []) or WHOLE) + "]"
-            )
+            tail = f"[{where_text(segment)}]"
         else:
             tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
         yield f"{indent}{mark}{label:<9} {segment['text']}{who}  {tail}"
+
+
+def assignment_text(segment: Mapping[str, Any]) -> str:
+    """`→ Ola Nordmann · due by Friday (2026-06-12?)`: an action's assignee and due hint, the date a
+    reading of the words (SPEC §3.2.10 rule 4); empty when the segment names neither."""
+    parts = []
+    if segment.get("assignee"):
+        parts.append(f"→ {segment['assignee']}")
+    due = segment.get("due")
+    if due:
+        parts.append(f"due {due['phrase']}" + (f" ({due['date']}?)" if due.get("date") else ""))
+    return DOT.join(parts)
+
+
+def where_text(segment: Mapping[str, Any]) -> str:
+    """Where in the call a segment rests: `02:10, 20:05`, `u3, u17` when the recording gives no time,
+    `the transcript` when it rests on the line and no utterance of it."""
+    return ", ".join(utterance_text(u) for u in segment.get("utterances") or []) or WHOLE
 
 
 def utterance_text(utterance: Mapping[str, Any]) -> str:

@@ -85,6 +85,11 @@ What a Day shows, in order:
    head (`drafts.allowed`): one above the entry's `max_tier` today is not shown, and when the
    day's standing draft is one, the Day says `superseded by policy` and why in one row, the JSON
    under `draft_withheld` (a key there only then), and nothing of its text.
+8. The syntheses (RFC 0036, `drafts.for_transcripts`): the standing `draft/v1` line a model wrote
+   about each transcript of the day (`logbook transcript synthesize`), one row under the
+   transcript's own row, collapsed (`synthesis · 1 action, 2 topics … · model:…`); every segment,
+   actions on top, with the utterances it rests on is in the JSON under `syntheses`, a list in the
+   day's order with the key there only on a day that has one; `day --no-dream` leaves it out.
 
 Thresholds are the record's (`policy/stays.json`), places and assets its own; nothing here is a
 setting of the Day. ADR 0013: derived is disposable."""
@@ -170,6 +175,12 @@ def read(
         draft, withheld = drafts.for_day(idx, day, tiers, drafts.allowed(lb.root))
         chapters = reading.crossing(idx.by_kind(chapter.KIND), tiers)  # RFC 0036: a handful, read whole
         goal_lines = reading.crossing(idx.by_kind(goals.KIND), tiers) if _owner_lines(on_day) else []
+        calls = [
+            str(line["id"])
+            for line in sorted(on_day, key=lambda line: (str(line["at"]), int(line["seq"])))
+            if line.get("kind") == "transcript" and str(line["id"]) not in retracted
+        ]
+        syntheses = drafts.for_transcripts(idx, calls, tiers)
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     night = night_row(found, rd, day)
     if night is not None:  # only on a day a night ends on: the Day's object is otherwise unchanged
@@ -182,6 +193,8 @@ def read(
         data["draft"] = draft  # only on a day a model dreamed: the Day's object is otherwise unchanged
     if withheld is not None:
         data["draft_withheld"] = withheld  # only on a day whose draft the policy no longer allows
+    if syntheses:
+        data["syntheses"] = syntheses  # only on a day with a synthesized call, as `draft`
     data.update(owner_lines(day, on_day, chapters, goal_lines, retracted, tz))
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
@@ -887,16 +900,20 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield ""
         yield from owned
     yield ""
+    syntheses = syntheses_of(data)
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
     for entry in data["timeline"]:
-        yield from _entry_rows(entry, tz, indent="  ", marks=marks)
+        yield from _entry_rows(entry, tz, indent="  ", marks=marks, syntheses=syntheses)
     if data["unplaced"]:
         yield ""
         for item in data["unplaced"]:
             span = span_text(item["at"], item["end"], tz)
             mark = signing.mark(marks, item["line"])
-            yield _row("unplaced", f"{span}  {item['kind']:<6} {mark}{item['title']}{sources_text(item)}")
+            lead = f"{span}  {item['kind']:<6} {mark}"
+            yield _row("unplaced", f"{lead}{item['title']}{sources_text(item)}")
+            if item["kind"] == "transcript" and item["line"] in syntheses:  # its synthesis, under the title
+                yield _row("", " " * len(lead) + drafts.synthesis_summary(syntheses[item["line"]]))
     yield from story.rows(data.get("stories") or (), tz)
     if data.get("anniversaries"):
         yield ""
@@ -933,6 +950,11 @@ def owner_rows(data: Mapping[str, Any]) -> Iterator[str]:
         yield _row("goal", goals.goal_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
     for row in data.get("chapters") or ():
         yield _row("chapter", chapter.row_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
+
+
+def syntheses_of(data: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    """The Day's syntheses by the transcript line each is of; empty on a day with none."""
+    return {str(block["transcript"]): block for block in data.get("syntheses") or []}
 
 
 def reflection_json(line: Line, tz: str) -> dict[str, Any]:
@@ -1030,11 +1052,13 @@ def _entry_rows(
     indent: str,
     inside: bool = False,
     marks: Mapping[str, str] | None = None,
+    syntheses: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Iterator[str]:
     """One row for the entry, then its inner rows (an `aboard` entry's), then one row per named
     attachment and one for its company. `inside` rows are an asset's own grammar and do not repeat
     the asset's name. `marks` are the signed day's dispositions by line id: a named line that has
-    one prints its symbol first."""
+    one prints its symbol first. `syntheses` are the day's by transcript line: a transcript that has
+    one gets the synthesis's collapsed row under its own."""
     if entry["kind"] == FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = span_text(entry["start"], entry["end"], tz)
@@ -1079,7 +1103,10 @@ def _entry_rows(
             span = span_text(e["start"], e["end"], tz)
             yield f"{inner}{'event':<12} {signing.mark(marks, e['line'])}{e['title']} {span}{sources_text(e)}"
         for t in attached["transcripts"]:
-            yield f"{inner}{'transcript':<12} {signing.mark(marks, t['line'])}{t['title']}"
+            mark = signing.mark(marks, t["line"])
+            yield f"{inner}{'transcript':<12} {mark}{t['title']}"
+            if syntheses and t["line"] in syntheses:
+                yield f"{inner}{'':<12} {' ' * len(mark)}{drafts.synthesis_summary(syntheses[t['line']])}"
         for n in attached["notes"]:
             yield f"{inner}{'note':<12} {signing.mark(marks, n['line'])}{n['text']}"
         for m in attached["mail"]:
