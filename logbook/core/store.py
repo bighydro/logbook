@@ -45,10 +45,17 @@ def now_utc() -> str:
 
 
 def utc(stamp: str) -> str:
-    """`stamp` as SPEC §2 wants it written: RFC 3339 in UTC with a literal Z. A stamp that already
-    ends in Z is kept verbatim (it is hashed as written); a numeric offset is converted, keeping
-    the fractional seconds as given; a stamp with no zone at all is refused."""
+    """`stamp` as SPEC §2 wants it written: an RFC 3339 instant in UTC with a literal Z. A stamp that
+    already ends in Z is kept verbatim when it is an instant (`chain.is_instant`: it is hashed as
+    written) and refused when it is not, as `not-a-dateZ` or `2026-02-30T07:30:00Z` are; a numeric
+    offset is converted, keeping the fractional seconds as given; a stamp with no zone at all is
+    refused. What this returns is always an instant, so no line is written that `verify` reports."""
+    from .chain import is_instant
+
+    not_one = f"timestamp {stamp!r} is not an RFC 3339 instant in UTC, e.g. 2026-03-01T07:30:00Z"
     if stamp.endswith("Z"):
+        if not is_instant(stamp):
+            raise ValueError(not_one)
         return stamp
     try:
         parsed = datetime.fromisoformat(stamp)
@@ -57,8 +64,14 @@ def utc(stamp: str) -> str:
     if parsed.tzinfo is None:
         raise ValueError(f"timestamp {stamp!r} has no zone; SPEC §2 wants UTC, e.g. 2026-03-01T07:30:00Z")
     fraction = FRACTION.search(stamp)
-    seconds = parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
-    return seconds + (fraction.group(0) if fraction else "") + "Z"
+    try:
+        seconds = parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+    except OverflowError:  # an offset that carries the year 1 or 9999 out of range
+        raise ValueError(not_one) from None
+    written = seconds + (fraction.group(0) if fraction else "") + "Z"
+    if not is_instant(written):  # a year before 1000, which strftime does not pad on every platform
+        raise ValueError(not_one)
+    return written
 
 
 FRACTION = re.compile(r"\.\d+(?=[+-]\d\d:?\d\d$)")  # the fractional seconds before a numeric offset

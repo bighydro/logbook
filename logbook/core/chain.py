@@ -6,7 +6,9 @@ import base64
 import hashlib
 import json
 import math
+import re
 from collections.abc import Callable, Iterable
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 Line = dict[str, Any]
@@ -194,6 +196,45 @@ def compute_hash(line: Line) -> str:
 
 TIMESTAMP_FIELDS = ("at", "end", "recorded_at")
 OFFSET_WARNING = "is not UTC with a literal Z (SPEC §2); a warning in this release, an error in the next"
+NOT_AN_INSTANT = "is not an RFC 3339 instant (SPEC §2)"
+
+# RFC 3339 §5.6 `date-time` in ASCII digits; its note lets `T` and `Z` be lower case
+_DATE_TIME = re.compile(
+    r"([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?"
+    r"(?:[Zz]|([+-])([0-9]{2}):([0-9]{2}))"
+)
+
+
+def is_instant(stamp: object) -> bool:
+    """Whether `stamp` is an RFC 3339 `date-time` (§5.6) that names an instant: the grammar, and a
+    date and clock that exist (§5.7): a day the month has, hour 00 to 23, minute and second 00 to
+    59, an offset under 24 hours whose minutes are 00 to 59. A leap second (`:60`) and the year 0000
+    are refused too: no reader here can place them on a day. `verify` reports a stamp that is not
+    one and `append` refuses it (SPEC §2); one that is stands as written, since the string is hashed
+    verbatim."""
+    if not isinstance(stamp, str):
+        return False
+    m = _DATE_TIME.fullmatch(stamp)
+    if m is None:
+        return False
+    try:
+        year, month, day, hour, minute, second = (int(g) for g in m.group(1, 2, 3, 4, 5, 6))
+        moment = datetime(year, month, day, hour, minute, second)
+        if m.group(7) is not None:  # a numeric offset: the instant must exist in UTC too
+            hours, minutes = int(m.group(8)), int(m.group(9))
+            if minutes > 59:
+                return False
+            offset = timedelta(hours=hours, minutes=minutes) * (-1 if m.group(7) == "-" else 1)
+            moment.replace(tzinfo=timezone(offset)).astimezone(UTC)
+    except (ValueError, OverflowError):  # no such day or clock, an offset of 24 hours, out of range
+        return False
+    return True
+
+
+def _shown(value: object) -> str:
+    """A field's value as an error quotes it, cut short: a stamp that is not one may be anything."""
+    text = repr(value)
+    return text if len(text) <= 40 else text[:39] + "…"
 
 
 # For a sealed line: None when it opened and its bytes hash to its digest, else what went wrong.
@@ -209,7 +250,9 @@ def verify_lines(
     """Walk lines in order. Returns (count, head, errors); what this release only warns about is
     appended to `warnings` when a list is given. A sealed line is checked by the envelope rule
     whatever the key, and opened through `opener` when one is given: its error is the record's
-    error (SPEC §3). `counts`, when given, is told how many lines were `sealed`, how many of those
+    error (SPEC §3). `at`, `recorded_at` and an `end` that is not null must each be an RFC 3339
+    instant (`is_instant`), else the line is in error; one that is but is not written with a literal Z
+    is a warning. `counts`, when given, is told how many lines were `sealed`, how many of those
     were `opened`, and how many tier 2 or 3 lines are `plain` (RFC 0029 §5 rule 1)."""
     errors: list[str] = []
     prev, seq, head = GENESIS, 0, GENESIS
@@ -231,11 +274,14 @@ def verify_lines(
                     errors.append(f"line {n}: {opened}")
         elif line.get("tier") in (2, 3):
             tally["plain"] += 1
-        if warnings is not None:
-            for k in TIMESTAMP_FIELDS:
-                stamp = line.get(k)
-                if isinstance(stamp, str) and not stamp.endswith("Z"):
-                    warnings.append(f"line {n}: {k} {stamp!r} {OFFSET_WARNING}")
+        for k in TIMESTAMP_FIELDS:
+            if k not in line or (k == "end" and line[k] is None):
+                continue  # a missing field is reported above; `end` is null when there is none
+            stamp = line[k]
+            if not is_instant(stamp):
+                errors.append(f"line {n}: {k} {_shown(stamp)} {NOT_AN_INSTANT}")
+            elif warnings is not None and not stamp.endswith("Z"):
+                warnings.append(f"line {n}: {k} {stamp!r} {OFFSET_WARNING}")
         if line.get("seq") != seq + 1:
             errors.append(f"line {n}: seq {line.get('seq')} expected {seq + 1}")
         if line.get("prev") != prev:
