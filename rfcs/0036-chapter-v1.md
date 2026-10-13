@@ -1,6 +1,6 @@
 # RFC 0036 — payload profile `chapter/v1`: a named stretch of the record
 
-Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md)
+Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md) · amendment 1 (the writers) 2026-10-13
 
 A stretch of life the owner names: a sabbatical, a passage, the year after a move. Not a trip (ADR 0019: a trip is derived, never written) and not a goal (a goal is wanted; a chapter is lived). It has a name, a first day, a last day when the owner has closed it, and the chapter's rules in plain text: what counts in this stretch, and what the owner is for in it. A day belongs to the chapter open on that day, and the Day's header says which.
 
@@ -51,6 +51,16 @@ and the open chapter after it, named the same evening:
 {"at":"2026-09-06T17:25:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"chapter","tier":2,
  "payload":{"schema":"chapter/v1","name":"Ashore, fixing things","from":"2026-08-10",
  "rules":"What counts: the engine rebuilt, the mooring sorted, one weekend a month on the water anyway."}}
+```
+
+## Writers (amendment 1)
+
+`logbook chapter open NAME --from YYYY-MM-DD [--to YYYY-MM-DD] [--rules TEXT]` appends one line, `at` now, `rules` empty when not given: open without `--to`, or a stretch already lived written closed in one line with it. `logbook chapter close [NAME] --to YYYY-MM-DD` appends one line that supersedes the standing open chapter, with `to` and every other field again; NAME, when given, must be the open chapter's, and is required when the record holds two open anyway (rule 4's clash). Both hold the writer lock from their first read to the append and read the head again before they append, as `day sign` does: a head that moved is `HeadMoved`, one sentence, exit 2, nothing written. Refused in one sentence, nothing written: `--to` before `from`; a stretch that overlaps a standing chapter's, naming it (rule 4), which includes opening one while another is open; `close` with no open chapter or a NAME that is not one. A chapter the key of rule 1 already holds writes nothing and says so. Renaming, moving `from` and reopening have no command yet; no tool through the door writes a chapter (RFC 0036 amendment 1).
+
+In December, Ines closes the open chapter above, writing a third line that supersedes the second:
+
+```
+logbook chapter close --to 2026-11-29
 ```
 
 ## What a Day page shows
