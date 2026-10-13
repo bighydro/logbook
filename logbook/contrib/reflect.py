@@ -38,7 +38,12 @@ no model, and three kinds of proposal are printed, numbered, each with its evide
   words left out), at `MATCH` or above, the best match winning. Accepted, it goes into the signature.
 
 A sentence is a delegation or a commitment, never both, and may also be a disposition. Every proposal
-is a guess until the owner accepts it (rule 6), with `--accept N,N` or one y/n each on a terminal."""
+is a guess until the owner accepts it (rule 6), with `--accept N,N` or one y/n each on a terminal.
+
+**One path.** `write` puts the reflection on the day and `close` signs it with the proposals accepted;
+`day reflect` and the Day page of `logbook serve` (its Reflect and Sign) both call them, and the page
+shows the proposals in `proposal_words`, as the command prints them. There is no second
+implementation."""
 
 from __future__ import annotations
 
@@ -46,11 +51,12 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from ..core import notes, sealing, signing
 from ..core.chain import Line
@@ -178,6 +184,34 @@ def dictated(d: Dictation, text: str | None = None) -> Reflection:
 def sentences(text: str) -> list[str]:
     """The reflection a sentence a line, as `promises` reads it (`promises.sentences`)."""
     return promises.sentences(text)
+
+
+def on_or_before(day: str, today: str, tz: str) -> None:
+    """A reflection is of today or a day before it: `ReflectError` for a day ahead of `today`."""
+    if day > today:
+        raise ReflectError(f"{day} is ahead of today in {tz}; a reflection is of today or a day before it")
+
+
+def write(lb: Logbook, day: str, r: Reflection, at: str | None, today: str) -> Line:
+    """The reflection as one note/v1 line on the day (`notes.write`): at `at` when given, else when
+    the dictation was spoken, else the note's own default."""
+    return notes.write(
+        lb,
+        day,
+        r.text,
+        notes.REFLECTION,
+        SOURCE,
+        at=at if at is not None else r.at,
+        today=today,
+        extra=r.extra,
+    )
+
+
+def wrote_text(note: Line, zone: ZoneInfo) -> str:
+    """What `day reflect` prints when it has written the reflection."""
+    clock = _instant(str(note["at"])).astimezone(zone).strftime("%H:%M")
+    where = f"(source {SOURCE}, tier {notes.TIER})"
+    return f"wrote the reflection as #{note['seq']} {notes.SCHEMA} {where} at {clock}"
 
 
 def delegate(lb: Logbook, day: str, proposal: Proposal, reflection: Line, today: str) -> Line:
@@ -365,6 +399,18 @@ def propose(text: str, day: str, found: Sequence[Commitment]) -> list[Proposal]:
                 )
             )
     return [replace(p, number=i) for i, p in enumerate([*made, *asked, *disposed], 1)]
+
+
+def proposal_words(p: Proposal) -> tuple[str, str]:
+    """A proposal as `day reflect` prints it and the Day page shows it: the word (`commitment`,
+    `delegation`, or a disposition's own word) and the evidence (the sentence, the cue, a due day; a
+    disposition's commitment and the overlap)."""
+    due = f" · due {p.due}" if p.due else (f" · {p.due_phrase}" if p.due_phrase else "")
+    if p.kind == DISPOSITION:
+        return str(p.value), f"#{p.seq} “{p.target}” · {p.cue} · overlap {p.score or 0:.2f}"
+    if p.kind == DELEGATION:
+        return p.kind, f"to {p.counterpart}: “{p.quote}” · {p.cue}{due}"
+    return p.kind, f"“{p.quote}” · {p.cue}{due} · `promises` reads it from the reflection"
 
 
 def _due(phrase: str | None, when: date) -> tuple[str | None, str | None]:
@@ -689,6 +735,70 @@ def signature(
         if value in disposed.values()
     }
     return Signature(confirm, by_word, note, kept)
+
+
+@dataclass(frozen=True)
+class Closed:
+    """What `close` wrote: the signature, the reflection it confirmed (`written` when it was written
+    by this close, not on the day already), the accepted delegations as their notes, and what the
+    signature kept from the one it supersedes."""
+
+    signature: Line
+    reflection: Line
+    written: bool
+    delegations: tuple[Line, ...]
+    kept: str | None
+
+
+def _quiet(_text: str) -> None:
+    return None
+
+
+def close(
+    lb: Logbook,
+    day: str,
+    today: str,
+    r: Reflection,
+    accepted: Sequence[Proposal],
+    at: str | None = None,
+    say: Callable[[str], None] = _quiet,
+) -> Closed:
+    """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
+    writer lock: the page read again (a disposition's line retracted since the proposals were read
+    is refused, nothing written), the reflection written when it is new (`write`), the accepted
+    delegations written as notes (`delegate`), then the signature through `signing.sign` with what
+    `signature` says, at `at` or now. `say` hears what the command prints as it goes. HeadMoved and
+    another writer are the store's own errors; nothing is retried."""
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    with lb.writer():
+        lines, retracted = day_lines(lb, day)
+        page = on_page(lines, retracted)
+        gone = [p for p in accepted if p.kind == DISPOSITION and p.line not in page]
+        if gone:
+            raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
+        with lb.index() as idx:
+            earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
+        note = r.note
+        if note is None:
+            note = write(lb, day, r, at, today)
+            say(wrote_text(note, zone))
+        joined = [str(note["id"])]
+        delegations: list[Line] = []
+        for p in accepted:
+            if p.kind == COMMITMENT:
+                say(f"commitment {p.number}: nothing to write; `promises` lists it from the reflection")
+            elif p.kind == DELEGATION:
+                line = delegate(lb, day, p, note, today)
+                joined.append(str(line["id"]))
+                delegations.append(line)
+                say(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
+        args = signature(earlier, page | set(joined), joined, accepted)
+        if args.kept is not None:
+            say(f"  {args.kept}")
+        line = signing.sign(
+            lb, day, confirm=args.confirm, note=args.note, at=at, dispositions=args.dispositions
+        )
+    return Closed(line, note, r.note is None, tuple(delegations), args.kept)
 
 
 # -- the microphone ----------------------------------------------------------------------------------------

@@ -60,7 +60,9 @@ def cmd_serve(a: argparse.Namespace) -> None:
     Server-rendered pages from the index and the readers — the Day as a timeline, a window one row
     per day, the trips of a year, the places, the assets and their last fix, where each source went
     quiet — at http://127.0.0.1:8765/. Any other host is refused before a socket is opened; no page
-    references a URL outside itself; nothing is written. `--install-service`, `--uninstall-service`
+    references a URL outside itself; nothing is written but what the owner names on the Places page
+    and reflects and signs on a Day, each through the CLI's own function, from this machine only; a
+    Day hears a recording when this machine can (`day.voice`). `--install-service`, `--uninstall-service`
     and `--status`: the same server kept running by the machine's service manager (`_service`)."""
     if a.host != serve.HOST:
         print(
@@ -71,9 +73,11 @@ def cmd_serve(a: argparse.Namespace) -> None:
     if a.install_service or a.uninstall_service or a.status or a.system:
         _service(a)
         return
+    from .day import voice  # whether a Day can hear a recording: asked once, now (labs, so here)
+
     lb = Logbook.find()
     try:
-        serve.serve(lb, host=a.host, port=a.port, airports=_airports(a.airports))
+        serve.serve(lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice())
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
         sys.exit(2)
