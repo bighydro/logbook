@@ -17,10 +17,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from persona import HOME, dwell, utc
 
 from logbook import cli
-from logbook.contrib import model_client, synthesis
+from logbook.contrib import model_client, serve, synthesis
 from logbook.contrib.adapters import granola
+from logbook.core import day as day_reader
 from logbook.core import drafts, policy
 from logbook.core.store import Logbook
 
@@ -518,3 +520,119 @@ def test_dream_catch_up_counts_a_transcript_above_the_ceiling_and_sends_nothing_
     code, out, _err = _cli("dream", "--catch-up", "--days", "3")
     assert code == 0 and seen["calls"] == [] and _drafts(lb) == []
     assert out.splitlines()[-1] == "3 empty · 1 transcript held back above max_tier 2"
+
+
+# -- the Day -------------------------------------------------------------------------------------------------
+
+SUMMARY = f"synthesis · 1 action, 2 topics, 1 decision, 1 open thread, 1 personal · model:{MODEL}"
+
+
+def test_the_day_shows_the_synthesis_collapsed_under_the_transcripts_row(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """A call the track does not place is unplaced; its synthesis is one row under it, collapsed: the
+    counts and the model, never the items, which `--json`, `serve` and `transcript synthesize` give."""
+    call = _transcript(lb)
+    _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (line,) = _drafts(lb)
+    code, out, _err = _cli("day", DAY, "--no-anniversaries")
+    assert code == 0
+    rows = out.splitlines()
+    at = next(i for i, row in enumerate(rows) if row.startswith("  unplaced") and "Yard plans" in row)
+    assert rows[at + 1].strip() == SUMMARY
+    assert rows[at + 1].index("synthesis") == rows[at].index("Yard plans")  # under the title
+    assert "Send the survey report" not in out
+    data = json.loads(_cli("day", DAY, "--json", "--no-anniversaries")[1])
+    (block,) = data["syntheses"]
+    assert block["transcript"] == call["id"] and block["line"] == line["id"] and block["unsupported"] == 0
+    assert block["counts"] == {"actions": 1, "topics": 2, "decisions": 1, "open_threads": 1, "personal": 1}
+    first = block["segments"][0]
+    assert first["part"] == "actions" and first["assignee"] == OLA and first["supported"] is True
+    assert first["due"] == {"phrase": "by Friday", "date": "2026-06-12"}
+    assert [u["offset"] for u in first["utterances"]] == ["46:30", "47:00"]
+    assert "syntheses" not in json.loads(_cli("day", DAY, "--json", "--no-dream")[1])
+    assert "synthesis" not in _cli("day", DAY, "--no-anniversaries", "--no-dream")[1]
+    assert "syntheses" not in json.loads(_cli("day", "2026-06-11", "--json", "--no-anniversaries")[1])
+
+
+def test_a_placed_call_carries_its_synthesis_under_its_row_in_the_stay(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    lb.append_many(dwell(DAY, "09:00", "12:00", HOME, every_min=20))
+    (lb.root / "places.json").write_text(
+        json.dumps({"Home": {"lat": HOME[0], "lon": HOME[1], "radius_m": 120, "kind": "home"}}),
+        encoding="utf-8",
+    )
+    call = _transcript(lb)
+    _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    rows = _cli("day", DAY, "--no-anniversaries")[1].splitlines()
+    at = next(i for i, row in enumerate(rows) if row.strip().startswith("transcript") and "Yard plans" in row)
+    assert rows[at + 1].strip() == SUMMARY
+    assert rows[at + 1].index("synthesis") == rows[at].index("Yard plans")
+
+
+def test_serve_shows_the_synthesis_behind_a_toggle_under_the_call(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb)
+    _fake(monkeypatch, lambda m: _answer(m, personal=[{"text": "Something personal.", "unsupported": True}]))
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    site = serve.Site(lb)
+    html = site.page_day(DAY)
+    toggle = html.index('<details class="synthesis">')
+    assert html.index("Yard plans") < toggle and "<summary>synthesis · 1 action" in html
+    body = html[toggle : html.index("</details>", toggle)]
+    assert body.index("Send the survey report to Ines.") < body.index("Hull survey:")  # actions on top
+    assert "→ Ola Nordmann · due by Friday (2026-06-12?)" in body and "02:00, 20:00, 45:00" in body
+    assert 'class="segment unsupported mute"' in body and "~ Something personal." in body
+    assert '<details class="synthesis" open>' in site.page_day(DAY, expanded=True)
+
+
+def test_a_synthesis_above_the_gate_is_not_on_a_gated_day(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb, tier=2)
+    _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0  # tier 2: what it read
+    assert "syntheses" not in day_reader.read(lb, DAY, tiers=(1,))
+    assert day_reader.read(lb, DAY, tiers=(1, 2))["syntheses"][0]["transcript"] == call["id"]
+
+
+def test_evidence_that_is_not_the_transcript_is_shown_unsupported_and_said_why(lb: Logbook) -> None:
+    """A synthesis some other writer made, citing a line that is not its call (rule 6): the reader marks
+    the segment and says."""
+    call = _transcript(lb)
+    other = lb.append(utc(DAY, "09:00"), "manual", "note", 2, {"schema": "note/v1", "text": "A note."})
+    payload = {
+        "schema": drafts.SCHEMA,
+        "unit": "event",
+        "subject": [call["id"]],
+        "read_head": lb.meta["head"],
+        "read_count": 1,
+        "language": "en",
+        "segments": [
+            {"text": "Send the report.", "evidence": [call["id"]]},
+            {"text": "Elsewhere.", "evidence": [other["id"]]},
+        ],
+        "extra": {"segments": [{"part": "actions", "utterances": [{"n": 10}]}, {"part": "topics"}]},
+    }
+    lb.append("2026-06-11T04:00:00Z", "model:x", "draft", 3, payload)
+    (block,) = day_reader.read(lb, DAY)["syntheses"]
+    assert block["segments"][0]["supported"] is True and block["segments"][0]["utterances"] == [
+        {"n": 10, "offset": None}
+    ]
+    assert block["segments"][1] | {"utterances": []} == {
+        "text": "Elsewhere.",
+        "evidence": [other["id"]],
+        "supported": False,
+        "why": drafts.NOT_THE_TRANSCRIPT,
+        "part": "topics",
+        "utterances": [],
+        "assignee": None,
+        "due": None,
+    }
+    assert (
+        "synthesis · 1 action, 1 topic · 1 unsupported · model:x" in _cli("day", DAY, "--no-anniversaries")[1]
+    )
