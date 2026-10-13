@@ -128,9 +128,16 @@ def rows(found: Sequence[Proposed]) -> Iterator[str]:
         yield f"  {p.number:>3}  {drafts.EVENT:<11} {drafts.proposal_text(p.item)}{state}"
 
 
-def write(lb: Logbook, proposal: Proposed) -> Line:
-    """The proposal as one event/v1 line (`event_line`), appended through `Logbook.append`."""
-    line = event_line(lb, proposal)
+def prepared(
+    lb: Logbook, day: str, taken: Sequence[Proposed], first: int = 1
+) -> list[tuple[Proposed, dict[str, Any]]]:
+    """`taken` read again (`again`) and each made into its line (`event_line`), every one of them
+    before the first is written, so that a refusal leaves nothing behind. Under the writer lock."""
+    return [(p, event_line(lb, p)) for p in again(lb, day, taken, first)]
+
+
+def write(lb: Logbook, line: dict[str, Any]) -> Line:
+    """An event line `event_line` made, appended through `Logbook.append`."""
     return lb.append(
         at=line["at"],
         source=line["source"],
@@ -142,7 +149,6 @@ def write(lb: Logbook, proposal: Proposed) -> Line:
     )
 
 
-
 def wrote_text(proposal: Proposed, line: Line) -> str:
     """`wrote proposed event 2 as #31 event/v1 (source owner, tier 1)`: what a command says for each
     event it wrote."""
@@ -150,6 +156,7 @@ def wrote_text(proposal: Proposed, line: Line) -> str:
         f"wrote proposed event {proposal.number} as #{line['seq']} event/v1"
         f" (source {line['source']}, tier {line['tier']})"
     )
+
 
 def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
     """The line `--accept` writes for `proposal`: the calendar adapter's for the VEVENT of its fields

@@ -1,8 +1,8 @@
 # The dream
 
 Every morning a model reads yesterday and writes one line about it: the day in a paragraph, the threads
-it moved, two questions for your reflection, and proposals, the people it thinks were there and the
-promises it thinks were made. Every sentence points at the lines it came from. The line is a `draft/v1`
+it moved, two questions for your reflection, and proposals, the people it thinks were there, the
+promises it thinks were made and the events it thinks the day held. Every sentence points at the lines it came from. The line is a `draft/v1`
 ([RFC 0036](rfcs/0036-goals-reviews-drafts-chapters.md), [the profile](https://github.com/bighydro/logbook/blob/main/rfcs/0036-draft-v1.md)),
 and the Day shows it above your note, labelled as a draft.
 
@@ -113,6 +113,9 @@ flights, what the calendar planned where the track has nothing, the health line 
 then the day's messages by counterpart, how many and, since a message in the reading is under the
 ceiling, their text; the notes in full; the commitments on the day; and the note you wrote when you
 signed it. Every item carries a reference (`L1`, `L2`, ...) that stands for one line id of the day.
+Each stay carries its `place`, the id a proposed event names it by, and the material ends with
+`people`: the canonical people the day names, by `id` and `name`, the only people a proposed event
+may hold.
 
 `--show-prompt` prints what is sent: the prompt ([docs/dream-prompt.md](dream-prompt.md) explains it)
 and the material as JSON. The prompt says which language to write in: the language most of the day's
@@ -133,7 +136,8 @@ unsupported. Before anything is written:
   nothing is written. A model that mostly makes things up writes nothing into the record.
 
 The draft line holds the segments and the ids, never the prompt, the material or the day's text the
-model was shown. Its `extra` says which prompt wrote it (`dream-day/1`), which part of the dream each
+model was shown. Its `extra` says which prompt wrote it (`dream-day/2`; `dream-day/1` drafts asked for
+no events), which part of the dream each
 segment belongs to (`day`, `threads`, `questions`, `people`, `promises`) and the digest of the ids it
 read, which `--catch-up` compares.
 
@@ -156,6 +160,70 @@ day that has one (and the entry allows, *When the entry changes*), so the Day's 
 `evidence`, its `part` and `why` when a reader found it wanting, `supersedes`, the `earlier` drafts'
 ids newest first, how many times the day was `dreamed` and the day it was `last`. `serve` shows the
 same above the timeline, an unsupported segment a muted block marked with the word.
+
+## Proposed events
+
+The record should be able to guess what you did and fill the calendar afterwards: a stay at a
+restaurant from 19:30 to 22:10 with two photos and a recording Kari spoke in is a dinner with Kari. The
+dream proposes such events beside its segments, and nothing more: a proposal is kept inside the draft
+line, never written as an event line, and becomes one only when you accept it.
+
+**What the model gives.** A sixth key of its answer, `events`, each `{title, start, end, place, people,
+evidence}`: `start` and `end` as the material writes times, `place` the `place` of the stay it happened
+at (a named place of `places.json` by its name, or an observed place by its id, `place:<lat>,<lon>`, as
+`places review` names a cluster) or null, `people` ids from the material's `people`, `evidence` the
+references it rests on.
+
+**The check.** A proposal has no unsupported form, so where a segment would be marked a proposal is
+dropped, and the drops are counted by why under the draft's `extra.dropped`:
+
+| Dropped as | When |
+|---|---|
+| `unresolved person` | a person who is not one of the day's canonical people: a name instead of an id, an id the record does not resolve to a person (or no longer does, after a merge), the owner |
+| `a time not on the day` | a start that is not on the day, an end not after the start, an event of 24 hours or more, a time that is not one |
+| `a place not on the day` | a place the material did not give |
+| `evidence not on the day` | a reference the day does not have, or none at all |
+| `no title`, `not an event` | an empty title, an item that is not an object |
+
+What holds is kept in the draft under `proposals`, kind `event`, the times in UTC, the references
+turned into line ids ([the profile](https://github.com/bighydro/logbook/blob/main/rfcs/0036-draft-v1.md)):
+
+```json
+"proposals": [{"kind": "event", "title": "Dinner with Kari Nordmann",
+               "start": "2026-06-10T17:30:00Z", "end": "2026-06-10T20:10:00Z", "place": "Bistro Eksempel",
+               "people": ["019cadd3-6bc0-7dcd-9133-000000000001"],
+               "evidence": ["019cadd3-…-0000000000b1", "019cadd3-…-0000000000b2", "019cadd3-…-0000000000b3"]}]
+```
+
+`dream day` prints them after the segments, numbered, and says how many were dropped and why:
+
+```
+  ? event 1   19:30–22:10  Dinner with Kari Nordmann · Bistro Eksempel · with Kari Nordmann  proposed  […000000b1, …000000b2, …000000b3]
+  1 proposed event dropped: unresolved person 1
+```
+
+**Confirming one.** `day sign DAY` lists the standing draft's proposed events, numbered from 1, and
+`day sign DAY --accept 1` writes the first: one `event/v1` line, the profile every calendar adapter
+writes ([RFC 0009](https://github.com/bighydro/logbook/blob/main/rfcs/0009-event-v1.md)), made by the
+calendar adapter's own mapping from the entry a calendar named `logbook` would hold for its fields: the
+UID `<draft id>/<number>` (the line's `raw_id`), the span in the record's zone, the title, the place's
+name and its coordinates (`extra.location`; an observed place gives the coordinates alone), and each
+person as an accepted attendee by their email address, their label as the name. So the line is byte for
+byte what the calendar adapter writes for those fields, but for two things: `source` is `owner`, since
+you confirmed it and the model only proposed it, and `extra.from` names the draft it came from. A person
+the record knows by no address is an attendee by the ref it does know. The tier is the profile's, 1, as
+every calendar entry's. The event and the signature are written under one hold of the writer lock, the
+proposals read again inside it. `day reflect DAY --sign --accept N` does the same, the events numbered
+after the reflection's own proposals ([the signed day](signed-day.md#events-the-dream-proposed)).
+Nothing is written without `--accept`: not by `dream`, not by `day`, not by `serve`.
+
+**On the Day.** A proposed event is a row of the draft, `?` and `proposed` in text, greyed on the
+`serve` page; once accepted it says `confirmed as #seq`, and the event itself sits among the day's
+events in the timeline, where it places its attendees as any calendar entry held at the stay does. A
+proposal whose lines were retracted since is marked unsupported and cannot be accepted. Dreaming the day
+again proposes afresh; an event you confirmed stays in the record whatever the next draft says.
+
+Sending a confirmed event to an external calendar would be a crossing, and nothing does it yet.
 
 ## The re-dream rule
 
@@ -191,5 +259,5 @@ $ logbook dream --catch-up
 ```
 
 Then `logbook day 2026-06-14` shows the draft above the timeline; read it, write your own note, and
-sign the day. The schedule change that runs this at 06:00 is a separate change; until then, run it by
+sign the day, with `--accept N` for each proposed event that happened. The schedule change that runs this at 06:00 is a separate change; until then, run it by
 hand or from your own schedule.

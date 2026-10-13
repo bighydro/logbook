@@ -236,6 +236,23 @@ them, is unchanged. The latest reflection standing is the one shown; retract it 
 stands. The reflection is still a note of the day like any other: `show` lists it, and the MCP tool
 `day_lines` returns it as it returns every note, under the ceiling.
 
+## Events the dream proposed
+
+When the morning's dream proposed events for the day ([the dream](dream.md#proposed-events)), `day sign`
+and `day reflect` list them, numbered: from 1 under `day sign`, after the reflection's own proposals
+under `day reflect`. Nothing of them is written until you say so:
+
+```
+logbook day sign 2026-06-10 --accept 1                       # write the dinner, then sign
+logbook day reflect 2026-06-10 --text "..." --sign --accept 2,4
+```
+
+Each one you accept is one `event/v1` line, source `owner`, written before the signature and under the
+same hold of the writer lock, and confirmed in it. A number that names no proposal, a proposal confirmed
+already, one whose lines left the page since the dream, and `--confirm none` beside an accepted event are
+refused before anything is written. On a terminal, `day reflect --sign` asks y or n for each open
+proposal, the events among them.
+
 ## Readiness: is the day all in?
 
 Before signing you want to know whether everything that usually arrives has arrived. The Day's
