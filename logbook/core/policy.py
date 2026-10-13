@@ -26,10 +26,15 @@ one, once; `logbook receive` verifies a page's signature under the key held here
 the page brought. Nothing else writes it.
 
 `owner.json` lists the owner's own aliases beyond what the record resolves: `{"names": [...], "emails":
-[...], "phones": [...]}`. The with module (`present.owner_of`) joins them with `owner_id` and `owner_emails`
-from `logbook.json` and every resolution line that names the owner, so the owner is never listed as their
-own company. The file lives in the record, never in the repository; `logbook init` writes the empty one,
-and so does the first reading of a record made before it existed."""
+[...], "phones": [...], "handles": [...]}`. `handles` are the logins a service shows for the owner
+(`ines-example`, `@ines-example`; `github:ines-example` for GitHub's alone): `sync github` and `add
+github-export` mark the owner's own commits, issues and comments by them, and a handle listed here is
+never an observed person (`handle` spells one as a ref carries it). Every key is optional: a file
+written before `handles` existed lists none. The with module (`present.owner_of`) joins them with
+`owner_id` and `owner_emails` from `logbook.json` and every resolution line that names the owner, so
+the owner is never listed as their own company. The file lives in the record, never in the
+repository; `logbook init` writes the empty one, and so does the first reading of a record made
+before it existed."""
 
 from __future__ import annotations
 
@@ -80,7 +85,7 @@ DEFAULT_IMPORT: dict[str, Any] = {
 }
 CIRCLE_FILE = PurePosixPath("policy/circle.json")  # name → the sharing key a received page must verify under
 OWNER_FILE = PurePosixPath("policy/owner.json")
-OWNER_KEYS = ("names", "emails", "phones")
+OWNER_KEYS = ("names", "emails", "phones", "handles")
 DEFAULT_OWNER: dict[str, list[str]] = {key: [] for key in OWNER_KEYS}
 
 
@@ -423,11 +428,14 @@ def write_default_owner(root: Path) -> Path:
 
 
 def owner_aliases(root: Path) -> dict[str, list[str]]:
-    """The owner's extra aliases as `{"names": [...], "emails": [...], "phones": [...]}`, every key
-    present (an absent one is empty). A record without the file gets the empty one; a file that is
-    not the documented shape raises PolicyError naming it."""
+    """The owner's extra aliases as `{"names": [...], "emails": [...], "phones": [...], "handles":
+    [...]}`, every key present (an absent one is empty). A record without the file gets the empty
+    one; a file that is not the documented shape raises PolicyError naming it."""
     path = write_default_owner(root)
-    shape = f'{path} must be {{"names": [...], "emails": [...], "phones": [...]}}, each a list of strings'
+    shape = (
+        f'{path} must be {{"names": [...], "emails": [...], "phones": [...], "handles": [...]}}, each a list'
+        " of strings"
+    )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except ValueError as e:
@@ -441,6 +449,14 @@ def owner_aliases(root: Path) -> dict[str, list[str]]:
             raise PolicyError(shape)
         out[key] = [v.strip() for v in values if v.strip()]
     return out
+
+
+def handle(text: str) -> str | None:
+    """A handle as a ref carries it (RFC 0006 `handle`): stripped, without a leading `@`, case aside,
+    since the services that show one (GitHub, X) read it so; a service prefix (`github:`) is kept.
+    None for a blank one."""
+    spelled = text.strip().removeprefix("@").strip().casefold()
+    return spelled or None
 
 
 def circle_path(root: Path) -> Path:
