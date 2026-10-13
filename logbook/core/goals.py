@@ -30,6 +30,7 @@ it) and `goal_row` (a goal line listed on the day of its `at`); `logbook goal li
 
 from __future__ import annotations
 
+import contextlib
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -502,14 +503,15 @@ def import_goals(
     `word` is given, one `review/v1` line per goal with that verdict, `period`, `note` and `at`, as
     `review` would write it. Every line is checked before any is written, and all of them are
     appended in one batch under the writer lock (`Logbook.append_many`, which reads the head again
-    before it writes): a refusal writes nothing. `dry_run` checks and writes nothing."""
+    before it writes): a refusal writes nothing. `dry_run` checks and writes nothing, and takes no
+    lock."""
     value = disposition(word) if word is not None else None
     if value is None and (period is not None or note is not None or at is not None):
         raise GoalError("--period, --note and --at go with --review DISPOSITION")
     if period is not None and period not in PERIODS:
         raise GoalError(f"--period {period!r} is not one of {', '.join(PERIODS)}")
     said = (note or "").strip() or None
-    with lb.writer():
+    with contextlib.nullcontext() if dry_run else lb.writer():  # a dry run reads, and a reader never locks
         meta = lb.meta
         days, instant = day_start.of(meta), now()
         first = day_of(start, "--from") if start is not None else days.today(instant).isoformat()

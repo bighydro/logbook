@@ -541,6 +541,11 @@ def test_goal_import_dry_run_prints_and_writes_nothing(
 ):
     path = tmp_path / "goals.txt"
     path.write_text(GOALS_FILE, encoding="utf-8")
+
+    def no_lock(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("a dry run took the writer lock; a reader never does")
+
+    monkeypatch.setattr(Logbook, "writer", no_lock)
     pin(monkeypatch, "2026-10-11T18:30:00Z")
     code, out, err = run(
         "goal", "import", str(path), "--horizon", "year", "--from", "2026-01-01", "--review", "done",
