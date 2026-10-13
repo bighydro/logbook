@@ -5,9 +5,10 @@ place is a spot the owner's track comes back to: a cluster of the owner's stays.
 is one the owner has given a name, an entry of `places.json`. Nothing here invents a third store:
 the named places are read as every reader reads them, and a naming is what `places name` writes.
 
-**The table.** Observed places are a derived table in the index, `observed_places` in
-`index.sqlite`. The owner's stays of the whole record (`reading.owner_track`: from the index alone,
-so two million points are read in seconds) are taken in order of hours, most first; a stay joins the
+**The table.** Observed places are the place rows of the index's derived table,
+`observed_entities` in `index.sqlite` (RFC 0037), read through its view `observed_places`. The
+owner's stays of the whole record (`reading.owner_track`: from the index alone, so two million
+points are read in seconds) are taken in order of hours, most first; a stay joins the
 nearest cluster whose anchor — its first stay, the one with the most hours — lies within
 `CLUSTER_M`, **75 m** by default (`--radius`), else it anchors a cluster of its own. An anchor, not
 a running centre, as the stays themselves are clustered, so a row of stays along a quay does not
@@ -17,10 +18,10 @@ stay's start, the last stay's end), its total **hours**, its centre (the mean of
 weighted by hours), its **spread** (the distance from the centre within which 95% of its hours
 lie), the named place it lies in (the one most of its hours were at, else the one whose radius holds
 its centre), the asset most of its hours were aboard, and the **names** the record holds for the
-spot. The table is built from the lines, stamped with the head, the zone, the radius and the digests
-of `places.json`, `assets.json` and `policy/stays.json`, served while the stamp holds and built
-again when it does not; its shape is checked with `PRAGMA table_info` and a table of another shape
-is built again. Nothing is stored in the record.
+spot. The rows are built from the lines, stamped with the head, the zone, the radius and the digests
+of `places.json`, `assets.json` and `policy/stays.json` (in `observed_entities_meta`), served while
+the stamp holds and built again when it does not; its shape is checked with `PRAGMA table_info`
+and a table of another shape is built again. Nothing is stored in the record.
 
 **The names.** Only what the record already holds, from any source; each name counts under the
 source that said it:
@@ -94,6 +95,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import assets, places, reading, stays
 from ..core.chain import Line
+from ..core.index import Index
 from ..core.places import Place
 from ..core.store import RETRACTION, Logbook, now_utc
 
@@ -103,8 +105,8 @@ EVENT_NEAR_M = 1000.0  # a calendar entry located farther than this from the clu
 SPREAD_SHARE = 0.95  # the spread: the distance within which this share of a cluster's hours lie
 FIT_MARGIN_M, FIT_STEP_M, FIT_MIN_M, FIT_MAX_M, FIT_FLOOR_M = 75.0, 5.0, 75.0, 300.0, 50.0
 NEAR_KM = 5.0  # `--near`: within this of the place
-TABLE = "observed_places"
-TABLE_META = "observed_places_meta"
+TABLE = "observed_places"  # the view of the place rows of `observed_entities` (RFC 0037)
+OBSERVED_KIND = "place"
 TABLE_VERSION = "1"
 COLUMNS = (
     "id",
@@ -226,22 +228,26 @@ class Observed:
             "lines": list(self.lines),
         }
 
-    def _row(self) -> tuple[Any, ...]:
-        return (
-            self.id,
-            self.lat,
-            self.lon,
-            self.visits,
-            self.nights,
-            self.hours,
-            self.first,
-            self.last,
-            self.spread_m,
-            self.place,
-            self.aboard,
-            json.dumps([n.to_json() for n in self.names], ensure_ascii=False),
-            json.dumps(self.lines),
-        )
+    def _row(self) -> dict[str, Any]:
+        """The row of `observed_entities` (`Index.store_observed`) the view reads back as `COLUMNS`:
+        the spot's centre is its key, the named place it lies in its entity."""
+        return {
+            "key_kind": "centre",
+            "key_value": self.id.removeprefix("place:"),
+            "name": self.names[0].name if self.names else None,
+            "entity": self.place,
+            "labels": json.dumps([n.to_json() for n in self.names], ensure_ascii=False),
+            "first": self.first,
+            "last": self.last,
+            "count": self.visits,
+            "samples": json.dumps(self.lines),
+            "lat": self.lat,
+            "lon": self.lon,
+            "nights": self.nights,
+            "hours": self.hours,
+            "spread_m": self.spread_m,
+            "aboard": self.aboard,
+        }
 
     @classmethod
     def _from_row(cls, row: Sequence[Any]) -> Observed:
@@ -268,12 +274,12 @@ def observed(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     holds, built from the lines and stored otherwise. Writes nothing to the record."""
     stamp = _stamp(lb, cluster_m)
     with lb.index() as idx:
-        if _table_current(idx.db, stamp):
+        if _table_current(idx, stamp):
             rows = idx.db.execute(f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY rowid").fetchall()
             return [Observed._from_row(row) for row in rows]
     found = build(lb, cluster_m)
     with lb.index() as idx:
-        _store(idx.db, found, stamp)
+        idx.store_observed(OBSERVED_KIND, [o._row() for o in found], stamp)
     return found
 
 
@@ -297,39 +303,13 @@ def _digest(path: Path) -> str:
         return ""
 
 
-def _table_current(db: sqlite3.Connection, stamp: Mapping[str, str]) -> bool:
-    """Whether the table is there, of the shape this module writes, and stamped as asked."""
+def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
+    """Whether the view is there, of the shape this module reads, and its rows stamped as asked."""
     try:
-        columns = {str(row[1]) for row in db.execute(f"PRAGMA table_info({TABLE})")}
-        if not set(COLUMNS) <= columns:
-            return False
-        stored = dict(db.execute(f"SELECT key, value FROM {TABLE_META}"))
+        columns = {str(row[1]) for row in idx.db.execute(f"PRAGMA table_info({TABLE})")}
     except sqlite3.DatabaseError:
         return False
-    return stored == dict(stamp)
-
-
-def _store(db: sqlite3.Connection, found: Sequence[Observed], stamp: Mapping[str, str]) -> None:
-    db.execute("BEGIN")
-    try:
-        db.execute(f"DROP TABLE IF EXISTS {TABLE}")
-        db.execute(f"DROP TABLE IF EXISTS {TABLE_META}")
-        db.execute(
-            f"CREATE TABLE {TABLE} (id TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL,"
-            " visits INTEGER NOT NULL, nights INTEGER NOT NULL, hours REAL NOT NULL, first TEXT NOT NULL,"
-            " last TEXT NOT NULL, spread_m REAL NOT NULL, place TEXT, aboard TEXT, names TEXT NOT NULL,"
-            " lines TEXT NOT NULL)"
-        )
-        db.execute(f"CREATE TABLE {TABLE_META} (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany(
-            f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
-            [o._row() for o in found],
-        )
-        db.executemany(f"INSERT INTO {TABLE_META} VALUES (?, ?)", list(stamp.items()))
-        db.execute("COMMIT")
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
+    return set(COLUMNS) <= columns and idx.observed_stamp(OBSERVED_KIND) == dict(stamp)
 
 
 def build(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
