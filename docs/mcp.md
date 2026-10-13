@@ -210,7 +210,9 @@ Neither is allowed until the `mcp` entry of `policy/crossing.json` names it unde
 
 - No `write`, an empty one, or no `mcp` entry at all: no write tool is allowed. Each is refused with one
   sentence, `sign_day is not allowed through the door: the mcp entry of policy/crossing.json does not name it
-  under "write"`, and nothing is written.
+  under "write"`, and nothing is written. An empty list is a fine place to stay: your own way to reflect and
+  sign is the Day page of `logbook serve` ([Reflect and Sign](serve.md#reflect-and-sign)), which never reads
+  this file; the door is for an orchestrator elsewhere.
 - An entry past its `until` day allows none, whatever it names.
 - `write` names only `sign_day` and `note_day`; anything else in it is one error naming the file, for every
   call, as a broken ceiling is.
