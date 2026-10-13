@@ -83,6 +83,9 @@ def cmd_dream(a: argparse.Namespace) -> None:
     n = len(p["segments"])
     unsupported = sum(1 for s in p["segments"] if s.get("unsupported"))
     counts = f"{n} segment{'s' if n != 1 else ''}" + (f", {unsupported} unsupported" if unsupported else "")
+    if found.proposals:
+        k = len(found.proposals)
+        counts += f"{drafts.DOT}{k} proposed event{'s' if k != 1 else ''}"
     if found.line is None:
         print(f"{found.day}: dry run, nothing written{drafts.DOT}tier {found.tier}{drafts.DOT}{counts}")
     else:
@@ -96,12 +99,19 @@ def cmd_dream(a: argparse.Namespace) -> None:
             print(f"  dreamed again: supersedes {p['supersedes']}")
     shown = {
         "segments": [drafts.segment_json(s, None) for s in p["segments"]],
+        "proposals": found.proposals,
     }
     parts = p["extra"]["parts"]
     for segment, part in zip(shown["segments"], parts, strict=True):
         segment["part"] = part
     for text in drafts.rows(shown, indent="  "):
         print(text)
+    if found.dropped:
+        k = sum(found.dropped.values())
+        why = ", ".join(f"{reason} {count}" for reason, count in found.dropped.items())
+        print(f"  {k} proposed event{'s' if k != 1 else ''} dropped: {why}")
+    if found.proposals and found.line is not None:
+        print(f"  `logbook day sign {found.day} --accept N` writes a proposed event into the record")
     print("  a draft is a proposal: your signature and your notes are the facts (`day sign`)")
 
 
