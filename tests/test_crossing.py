@@ -782,14 +782,19 @@ def test_a_link_to_an_earlier_bundle_still_names_the_new_one(lb: Logbook, tmp_pa
     assert sorted(p.name for p in real.parent.iterdir()) == ["real"]
 
 
-@pytest.mark.parametrize("where", ["the record", "its attachment store", "its log", "a folder that holds it"])
+WHERE = ["the record", "its attachment store", "its log", "a new folder in it", "a folder that holds it"]
+
+
+@pytest.mark.parametrize("where", WHERE)
 def test_the_record_is_never_replaced_even_under_force(lb: Logbook, tmp_path: Path, where: str, capsys):
-    """Replacing a target removes what was there, so the record, a folder of it outside `export/`,
-    and a folder that holds it are refused whatever the flags; nothing of the record is touched."""
+    """Replacing a target removes what was there, so the record, a folder of it outside `export/` (one
+    not there yet too, so that a second run is not the first to be refused), and a folder that holds it
+    are refused whatever the flags; nothing of the record is touched."""
     out = {
         "the record": lb.root,
         "its attachment store": lb.root / "attachments",
         "its log": lb.root / "logbook",
+        "a new folder in it": lb.root / "handover",
         "a folder that holds it": tmp_path,
     }[where]
     (lb.root / "manifest.json").write_bytes(  # an export into the root before this fix left one there

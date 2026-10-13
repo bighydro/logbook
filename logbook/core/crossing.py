@@ -41,6 +41,7 @@ RESOLUTION_FILE = "resolution.jsonl"
 OPEN_FIELD = "payload_open"  # a sealed line shipped opened: {payload, salt}, the digest's pre-image
 FILES_FIELD = "files"  # the manifest's list of every other file in the package: [{path, sha256, bytes}]
 ATTACHMENTS_DIR = "attachments"  # the SPEC §1.1 layout, so a verbatim `path` resolves in the bundle
+EXPORT_DIR = "export"  # in the record: the default `--out` is under it, the one part a bundle may replace
 WATERMARK_FILE = PurePosixPath("exports/crossing.json")
 LAST = "last"  # `--since last`: from the watermark
 TIER_SETS = {"1": (1,), "1,2": (1, 2), "1,2,3": (1, 2, 3)}
@@ -601,14 +602,12 @@ def check_target(out: Path, force: bool = False, root: Path | None = None) -> No
     """Refuse an output that exists and is not an earlier bundle, before anything is written: a file,
     or a folder that holds anything and no manifest of ours. Such a folder is replaced, and all of
     it removed, only under `force`. Nothing there, or an empty folder, is a fresh target. Whatever
-    the flags, the record at `root` is never replaced, nor a folder that holds it, nor one inside
-    it but under `export/` (where the default `--out` is)."""
+    the flags, the record at `root` is never replaced, nor a folder that holds it, nor one inside it
+    anywhere but under `export/` (`_outside_the_record`)."""
     out = _target(out)
-    if not out.exists():
-        return
     if root is not None:
         _outside_the_record(out, Path(root))
-    if force:
+    if force or not out.exists():
         return
     if out.is_dir() and (is_bundle(out) or not any(out.iterdir())):
         return
@@ -620,18 +619,22 @@ def check_target(out: Path, force: bool = False, root: Path | None = None) -> No
 
 
 def _outside_the_record(out: Path, root: Path) -> None:
-    """Refuse an existing `out` that is the record, holds it, or is inside it but outside `export/`.
-    Compared by file identity, not by name: a case-insensitive disk has `~/logbook` and `~/Logbook`
-    as one folder, and a link is another name for its folder."""
-    export = root / "export"
+    """Refuse an `out` that is the record, holds it, or is inside it anywhere but under `export/`,
+    whether it is there yet or not, so that a second run is never the first one refused. A folder
+    that exists is compared by file identity, not by name: a case-insensitive disk has `~/logbook`
+    and `~/Logbook` as one folder, and a link is another name for its folder."""
+    export = root / EXPORT_DIR
     if any(_same(out, folder) for folder in (root, *root.resolve().parents)):
         raise CrossingError(f"{out} holds the record at {root}; a bundle never replaces it, --force or not")
     around = [out.resolve(), *out.resolve().parents]
     inside = next((i for i, folder in enumerate(around) if _same(folder, root)), None)
-    if inside is not None and not any(_same(folder, export) for folder in around[:inside]):
+    if not inside:  # None: outside the record; 0, the record itself, is refused above
+        return
+    top = around[inside - 1]  # the entry of the record that `out` is, or is in
+    if not (_same(top, export) or (top.name == EXPORT_DIR and not top.exists())):
         raise CrossingError(
-            f"{out} is a part of the record at {root}; a bundle never replaces it, --force or not: "
-            f"give an --out outside the record, or one under {export}"
+            f"{out} is in the record at {root}; a bundle never goes there, --force or not, but under "
+            f"{export}: give an --out there or outside the record"
         )
 
 
@@ -749,4 +752,4 @@ def write_watermark(lb: Logbook, destination: str, until: str, exported_at: str,
 def default_out(lb: Logbook, destination: str, generated_at: str) -> Path:
     """`<root>/export/crossing/<destination>/<generated_at, compact>`: one folder per run."""
     stamp = generated_at.replace("-", "").replace(":", "")
-    return lb.root / "export" / KIND / destination / stamp
+    return lb.root / EXPORT_DIR / KIND / destination / stamp

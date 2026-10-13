@@ -60,10 +60,11 @@ What DIR may be:
 - **Anything else.** A file, or a folder that holds anything and no such manifest, is refused (exit 2)
   before anything is written: no crossing line, no watermark, no policy file. `--force` replaces it and
   removes everything in it.
-- **The record, or a part of it.** The record's own folder, a folder that holds it, and anything inside it
-  but under `<root>/export/` (where the default `--out` is) are refused whatever the flags, `--force`
-  included. They are told apart by the disk, not by the name, so `~/logbook` on a disk that ignores case
-  is the record at `~/Logbook`.
+- **The record, or a part of it.** The record's own folder, a folder that holds it, and any path inside it
+  that is not under `<root>/export/` (where the default `--out` is) are refused whatever the flags,
+  `--force` included, and a path inside it is refused even before it exists, so a second run is never the
+  first refused. Folders are told apart by the disk, not by the name, so `~/logbook` on a disk that
+  ignores case is the record at `~/Logbook`.
 
 A symbolic link at DIR is followed: the folder it names is replaced, and the link names the new bundle.
 
