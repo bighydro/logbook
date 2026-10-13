@@ -3,9 +3,10 @@
 **The People page** ranks the canonical people heard in a year (default the year of the record's
 today, or its last year when the record ended before it), the people `people` reads over that
 year: by days together that year, most first, then by the last real contact (later first), then by
-name. Only canonical people: a person the record's resolution lines name, never the owner. What a
-source saw and the record has not placed is an observed person (`people_review`), shown on the page
-only in its review queue, never in the list.
+name; each with the channels they were heard through that year, each channel's lines counted and
+its last line named. Only canonical people: a person the record's resolution lines name, never the
+owner. What a source saw and the record has not placed is an observed person (`people_review`),
+shown on the page only in its review queue, never in the list.
 
 **One person's page** reads the whole record (`people.read`) and composes, for the person:
 
@@ -74,6 +75,7 @@ def ranked(
             "nights": p.nights,
             "last_real_contact": None if (c := contacts.get(p.entity)) is None else c.to_json(),
             "together": people_drift.days_together(p),
+            "channels": {name: p.channels[name].to_json() for name in people.CHANNELS if name in p.channels},
         }
         for p in report.people
     ]
