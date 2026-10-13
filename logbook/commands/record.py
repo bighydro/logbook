@@ -19,7 +19,7 @@ from .. import FORMAT
 from ..contrib import demo
 from ..core import day_start, health, repair, sealing
 from ..core.index import Index
-from ..core.store import CodeCheckoutError, FormatError, Logbook
+from ..core.store import CodeCheckoutError, FormatError, Logbook, NotIntact
 from .common import Subparsers, _plural, _progress, _under_home
 
 _LOCALTIME = "/etc/localtime"
@@ -854,6 +854,14 @@ def cmd_migrate(a: argparse.Namespace) -> None:
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     try:
         result = lb.migrate(progress=_progress)
+    except NotIntact as e:  # the gate: no line is rehashed until every 0.1 hash and link verifies
+        print(f"migrate: {e}", file=sys.stderr)
+        print(
+            "a 0.1 record that does not verify under the 0.1 rule is restored from a backup before it is"
+            " migrated; docs/recovery.md says how, and no line is ever edited in place",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     except (FormatError, FileExistsError, ValueError) as e:
         print(f"migrate: {e}", file=sys.stderr)
         sys.exit(2)
@@ -1019,6 +1027,14 @@ def cmd_seal(a: argparse.Namespace) -> None:
         sys.exit(2)
     try:
         result = lb.seal_all(progress=_progress)
+    except NotIntact as e:  # the gate: no line is rehashed until every hash and link verifies
+        print(f"seal: {e}", file=sys.stderr)
+        print(
+            "a record is sealed only when it verifies: `logbook verify` names every line that does not,"
+            " and docs/recovery.md says what to do (restore the line from a backup, never edit it)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     except ValueError as e:
         print(f"seal: {e}", file=sys.stderr)
         sys.exit(2)
