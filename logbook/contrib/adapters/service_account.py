@@ -1,34 +1,41 @@
-"""The Google sign-in `sync drive` and `sync gtasks` share: one service account with domain-wide delegation.
+"""The one Google sign-in every Google source shares: one service account with domain-wide delegation.
 
 The owner runs his own Google Workspace. A service account in its Cloud project, allowed by the Workspace
 admin console to act as a user of the domain for named scopes (domain-wide delegation), reads that user's
-Drive activity and tasks with no browser, no consent screen and nothing that expires: each run signs a
-short assertion with the account's key and trades it for an access token valid an hour, used for that run
-and never written anywhere. There is no refresh token to rot in a scheduled job, which is how an OAuth
-client signed in once by hand ends (the token is revoked, expires unused, or is rotated out from under the
-job). What can stop it is the owner: a key deleted, the delegation withdrawn, the user suspended.
+mail, calendars, Drive activity and file metadata, and tasks with no browser, no consent screen and
+nothing that expires: each run signs a short assertion with the account's key and trades it for an access
+token valid an hour, held in memory for that run and never written anywhere. There is no refresh token to
+rot in a scheduled job, which is how an OAuth client signed in once by hand ends (the token is revoked,
+expires unused, or is rotated out from under the job). What can stop it is the owner: a key deleted, the
+delegation withdrawn, the user suspended.
 
-One place to configure both sources, by the environment alone:
+The sources on the key (`SOURCES`), configured by the environment alone, in one place:
 
     LOGBOOK_DRIVE_SA_KEY   the key file, JSON, as the Cloud console downloads it (`~` is expanded)
     LOGBOOK_DRIVE_USER     the address of the user to read as: the owner
+
+(The names say Drive because `sync drive` came first; every Google source reads the same two.)
 
 The key is a password for everything the delegation grants. It stays outside the record and outside
 any repository, at mode 600; `describe` (doctor's check) says when the file is readable by others. The
 config's repr shows neither the path, the user nor the account, and no error echoes a value.
 
-Each source asks for its own scope, read-only, and nothing else: `drive.activity.readonly` for Drive,
-`tasks.readonly` for Tasks. A scope the delegation does not grant is Google's `unauthorized_client`,
-which the error turns into where to grant it.
+Each call asks for one scope, read-only, and nothing else (`SCOPES`): `gmail.readonly` for `sync gmail`,
+`calendar.readonly` for `sync gcal`, `drive.activity.readonly` for `sync drive` and
+`drive.metadata.readonly` for the folder paths its lines carry, `tasks.readonly` for `sync gtasks`. A
+`Session` is one scope's calls, its token minted on the first. A scope the delegation does not grant is
+Google's `unauthorized_client`, which `ScopeRefused` turns into where to grant it.
 
 Signing is RS256, PKCS#1 v1.5 over SHA-256, done by `cryptography` (the `crypto` extra, which the
 encrypted iOS backup and the signed page already use); without it a run says which extra to install.
 
-Every request goes through `send`, the only network call in this module and the two sources, which `pull`
-alone reaches (ADR 0012). A 429, a 500, 502, 503 or 504, a 403 whose reason is a rate limit and a lost
-connection are retried after a wait that doubles from one second (`Retry-After`, when the server sends
-one, is honoured up to `BACKOFF_MAX_S`), `RETRIES` times; then the run stops with the last error. A 401
-mints the token again, once. Tests put an in-process fake in place of `send` and of `sleep`."""
+Every request goes through `send`, the only network call in this module and the sources on it, which
+their `pull` alone reaches (ADR 0012). A 429, a 500, 502, 503 or 504, a 403 whose reason is a rate limit
+and a lost connection are retried after a wait that doubles from one second (`Retry-After`, when the
+server sends one, is honoured up to `BACKOFF_MAX_S`), `RETRIES` times; then the run stops with the last
+error. A 401 mints the token again, once. Any other answer that is not a success is an `ApiError`
+carrying the status and Google's reasons, so a source can tell a history too old to read (404) or a
+start too long ago (410) from a failure. Tests put an in-process fake in place of `send` and of `sleep`."""
 
 from __future__ import annotations
 
@@ -53,19 +60,34 @@ __all__ = [
     "GRANT",
     "KEY_ENV",
     "RETRIES",
+    "SCOPES",
+    "SOURCES",
     "TOKEN_URL",
     "USER_ENV",
     "Account",
+    "ApiError",
     "GoogleError",
     "Response",
+    "ScopeRefused",
     "Session",
     "configure",
     "describe",
+    "is_address",
+    "read_key",
 ]
 
 KEY_ENV = "LOGBOOK_DRIVE_SA_KEY"
 USER_ENV = "LOGBOOK_DRIVE_USER"
 ENV = (KEY_ENV, USER_ENV)
+SOURCES = ("gmail", "gcal", "drive", "gtasks")  # the sources that sign in here, in `sync --all`'s order
+AUTH = "https://www.googleapis.com/auth/"
+SCOPES = {  # one read-only scope per call; what the Workspace's domain-wide delegation must grant
+    "gmail": f"{AUTH}gmail.readonly",
+    "gcal": f"{AUTH}calendar.readonly",
+    "drive": f"{AUTH}drive.activity.readonly",
+    "drive paths": f"{AUTH}drive.metadata.readonly",
+    "gtasks": f"{AUTH}tasks.readonly",
+}
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 LIFETIME_S = 3600  # the longest an assertion may ask for, and what the token then lasts
@@ -84,6 +106,27 @@ USER_AGENT = "logbook"
 class GoogleError(OSError):
     """A call to Google that did not succeed, in words that carry no token, key or assertion. An OSError,
     so `sync` says it on one line and exits 1, as for any source that could not be reached."""
+
+
+class ApiError(GoogleError):
+    """An API's answer that was neither a success nor worth retrying, with its status and Google's
+    reasons (`updatedMinTooLongAgo`, `notFound`), for a source that has something better to do with one
+    than stop: a Gmail history id too old to read is a 404, a calendar's `updatedMin` too long ago a 410."""
+
+    def __init__(self, message: str, status: int, reasons: frozenset[str] = frozenset()) -> None:
+        super().__init__(message)
+        self.status = status
+        self.reasons = reasons
+
+
+class ScopeRefused(GoogleError):
+    """Google would not mint a token for the scope: the delegation does not grant it (`unauthorized_client`).
+    The message says where to grant it; `scope` is the one refused, so a source that can do without it
+    (the Drive folder paths) carries on."""
+
+    def __init__(self, message: str, scope: str) -> None:
+        super().__init__(message)
+        self.scope = scope
 
 
 @dataclass(frozen=True)
@@ -111,18 +154,19 @@ def configure(env: Mapping[str, str]) -> Account | None:
     if not raw_key or not user:
         return None
     path = Path(raw_key).expanduser()
-    key = _read_key(path)
-    if not _is_address(user):
+    key = read_key(path)
+    if not is_address(user):
         raise ValueError(f"{USER_ENV} must be the address of the Workspace user to read as (name@domain)")
     return Account(key_file=path, client_email=str(key["client_email"]), user=user)
 
 
-def _is_address(text: str) -> bool:
+def is_address(text: str) -> bool:
+    """Whether the text reads as one address, `name@domain`."""
     local, at, domain = text.partition("@")
     return bool(at and local and domain) and "@" not in domain and not any(c.isspace() for c in text)
 
 
-def _read_key(path: Path) -> dict[str, Any]:
+def read_key(path: Path) -> dict[str, Any]:
     """The key file's JSON, checked to be a service-account key; ValueError naming the variable."""
     try:
         text = path.read_text(encoding="utf-8")
@@ -148,7 +192,7 @@ def _read_key(path: Path) -> dict[str, Any]:
 def describe(account: Account) -> str:
     """Doctor's check, local only: the key file still reads, signing can load it, and no other user of
     this machine can read it. ValueError says what is wrong; nothing is sent anywhere."""
-    key = _read_key(account.key_file)
+    key = read_key(account.key_file)
     with contextlib.suppress(OSError):
         if os.name == "posix" and stat.S_IMODE(account.key_file.stat().st_mode) & 0o077:
             raise ValueError("the key file is readable by other users of this machine: chmod 600 it")
@@ -184,7 +228,7 @@ def _private_key(pem: str) -> Any:
 def assertion(account: Account, scope: str, now: float) -> str:
     """The signed JWT the token endpoint takes: the account asking, as the user, for one scope, for an
     hour from `now`."""
-    key_data = _read_key(account.key_file)
+    key_data = read_key(account.key_file)
     key = _private_key(str(key_data["private_key"]))  # first: it names the extra when it is missing
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import padding
@@ -263,7 +307,7 @@ class Session:
             if response is not None and 200 <= response.status < 300:
                 return _parse(response)
             if response is not None and not _retryable(response):
-                raise GoogleError(_api_error(response))
+                raise ApiError(_api_error(response), response.status, frozenset(_reasons(response)))
             if response is not None:
                 problem = _api_error(response)
             if tries > RETRIES:
@@ -291,15 +335,16 @@ class Session:
                 lifetime = data.get("expires_in")
                 return token, now + (float(lifetime) if isinstance(lifetime, int | float) else LIFETIME_S)
             if response is not None and response.status not in RETRY_STATUS:
-                raise GoogleError(self._refused(response))
+                message, refused = self._refused(response)
+                raise ScopeRefused(message, self.scope) if refused else GoogleError(message)
             if response is not None:
                 problem = f"token endpoint: HTTP {response.status}"
             if tries > RETRIES:
                 raise GoogleError(f"{problem} (gave up after {tries} tries)")
             sleep(_wait(response, tries - 1))
 
-    def _refused(self, response: Response) -> str:
-        """Why Google would not mint a token, with what to do about it."""
+    def _refused(self, response: Response) -> tuple[str, bool]:
+        """Why Google would not mint a token, with what to do about it, and whether it is the scope."""
         try:
             data = json.loads(response.body)
         except ValueError:
@@ -310,13 +355,13 @@ class Session:
                 f"Google refused the service account (unauthorized_client): domain-wide delegation does not"
                 f" grant {self.scope} to this key's client id; add it in the Workspace admin console,"
                 " Security → Access and data control → API controls → Domain-wide delegation"
-            )
+            ), True
         if error == "invalid_grant":
             return (
                 "Google refused the service account (invalid_grant): the key may be deleted or disabled, the"
                 f" clock of this machine wrong, or {USER_ENV} not a user of the domain"
-            )
-        return f"Google refused the service account ({error})"
+            ), False
+        return f"Google refused the service account ({error})", False
 
 
 def _attempt(

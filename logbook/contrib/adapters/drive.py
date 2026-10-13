@@ -96,7 +96,7 @@ KIND = "event"
 TIER = 1
 SCHEMA = "event/v1"
 UNIT = "activities"  # what `sync` counts in its progress lines
-SCOPE = "https://www.googleapis.com/auth/drive.activity.readonly"
+SCOPE = service_account.SCOPES["drive"]
 QUERY_URL = "https://driveactivity.googleapis.com/v2/activity:query"
 FILE_URL = "https://drive.google.com/open?id={id}"
 PAGE_SIZE = 100

@@ -27,10 +27,16 @@ The checks, in the order they print:
   from the month files. A settings file that is not the shape is a fail naming it.
 - `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed, with its
   install line when not (a warn).
+- `google`: when either variable of the one Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
+  `LOGBOOK_DRIVE_USER`), whether the key file is there and is a service-account key, whether the user
+  is an address, and which of the sources on the key (gmail, gcal, drive, gtasks) are enabled, a
+  disabled one named as such. Read from this machine alone: Google is asked nothing, and neither the
+  path nor the address is printed. Something missing or wrong is a warn.
 - `sync:<name>`: for each live source the record uses — a `state/<name>.json` watermark, or lines of
   that source when the index is current — the variables its adapter reads are set. Names only,
   never a value: a missing one is a warn naming it, a set one the adapter refuses says to run
-  `logbook sync <name>`. A source `policy/import.json` disables needs nothing.
+  `logbook sync <name>`, a configured one names the variables it reads. A source `policy/import.json`
+  disables needs nothing.
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
   it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
@@ -74,6 +80,7 @@ from ..core import assets, day_start, index, places, plausible, policy
 from ..core.store import FormatError, Logbook
 from . import adapters, home, last_run, schedule, serve
 from . import service as serve_service
+from .adapters import service_account
 
 Status = Literal["pass", "warn", "fail"]
 Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, as shutil.disk_usage
@@ -322,17 +329,23 @@ def extras_checks(installed: Callable[[str], bool] = module_installed) -> Iterat
             yield Check(f"extra:{extra}", "warn", f"{wanted} not installed: {PIP.format(extra=extra)}")
 
 
+def disabled_sources(lb: Logbook) -> set[str]:
+    """The sources `policy/import.json` switches off, aliases resolved; none when there is no file
+    (`policy.disabled` would write the empty one, and doctor never writes) or it is not the shape."""
+    listed: dict[str, str] = {}
+    if policy.import_path(lb.root).exists():
+        with contextlib.suppress(policy.PolicyError):
+            listed = policy.disabled(lb.root)
+    return {adapters.ALIASES.get(name, name) for name in listed}
+
+
 def syncs_used(
     lb: Logbook, sources: set[str], env: Mapping[str, str] | None = None
 ) -> list[adapters.LiveAdapter]:
     """The live adapters the record uses: a watermark under `state/`, lines of that source, or one
     of its variables set in `env`; never one `policy/import.json` disables (`sync` would not run
     it, so it needs no variables)."""
-    listed: dict[str, str] = {}
-    if policy.import_path(lb.root).exists():  # `disabled` would write the empty file; doctor never writes
-        with contextlib.suppress(policy.PolicyError):
-            listed = policy.disabled(lb.root)
-    disabled = {adapters.ALIASES.get(name, name) for name in listed}
+    disabled = disabled_sources(lb)
     marks = {p.stem for p in (lb.root / "state").glob("*.json")}
     given = env if env is not None else {}
     return [
@@ -341,6 +354,38 @@ def syncs_used(
         if (a.NAME in marks or a.NAME in sources or any(given.get(v, "").strip() for v in a.ENV))
         and a.NAME not in disabled
     ]
+
+
+def google_check(lb: Logbook, env: Mapping[str, str]) -> Check | None:
+    """The one Google key, when either of its variables is set: the key file there and a service-account
+    key, the user an address, and the sources on the key that are enabled. Nothing is sent anywhere and
+    no value is printed; None when neither variable is set."""
+    raw_key = env.get(service_account.KEY_ENV, "").strip()
+    user = env.get(service_account.USER_ENV, "").strip()
+    if not raw_key and not user:
+        return None
+    said: list[str] = []
+    if not raw_key:
+        said.append(f"{service_account.KEY_ENV} not set")
+    else:
+        try:
+            service_account.read_key(Path(raw_key).expanduser())
+        except ValueError as e:
+            said.append(str(e))
+        else:
+            said.append("key present")
+    if not user:
+        said.append(f"{service_account.USER_ENV} not set")
+    elif not service_account.is_address(user):
+        said.append(f"{service_account.USER_ENV} is not an address")
+    else:
+        said.append("user set")
+    status: Status = "pass" if said[0] == "key present" and said[1] == "user set" else "warn"
+    disabled = disabled_sources(lb)
+    on = [name for name in service_account.SOURCES if name not in disabled] or ["none"]
+    off = [name for name in service_account.SOURCES if name in disabled]
+    sources = ", ".join(on) + (f" ({', '.join(off)} disabled)" if off else "")
+    return Check("google", status, f"{', '.join(said)}; sources on the key: {sources}")
 
 
 def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterator[Check]:
@@ -614,6 +659,9 @@ def run(
     checks.append(assets_check(lb.root))
     checks.append(dates_check(lb, state, now or last_run.now()))
     checks.extend(extras_checks(installed))
+    google = google_check(lb, env)
+    if google is not None:
+        checks.append(google)
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
     checks.append(home_check(lb.root))
