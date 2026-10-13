@@ -17,7 +17,7 @@ from typing import Any
 
 from .. import FORMAT
 from ..contrib import demo
-from ..core import day_start, health, repair, sealing
+from ..core import attachments, day_start, health, repair, sealing
 from ..core.index import Index
 from ..core.store import CodeCheckoutError, FormatError, Logbook, NotIntact
 from .common import Subparsers, _plural, _progress, _under_home
@@ -439,20 +439,30 @@ def verify_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--keyless", action="store_true", help="never open a sealed line, even when the identity is here"
     )
+    s.add_argument(
+        "--no-attachment-digests",
+        action="store_true",
+        help="look for every file the lines name but leave a present plain one unhashed (SPEC §1.1: by"
+        " default each is hashed against its name); a sealed one is still opened with the identity",
+    )
     s.set_defaults(fn=cmd_verify)
 
 
 def cmd_verify(a: argparse.Namespace) -> None:
     """Files only, never the index (ADR 0001). An invalid record still prints the seq and head of
-    the lines read: a crash-torn month file reports the last line written whole (SPEC §3)."""
+    the lines read: a crash-torn month file reports the last line written whole (SPEC §3). The
+    attachment references are walked (SPEC §1.1): a missing file is listed and is not an error, a
+    present one that does not hash to its name is."""
     lb = Logbook(Path(a.root).expanduser()) if a.root else Logbook.find()
     warnings: list[str] = []
     counts: dict[str, int] = {}
+    walk = attachments.Walk(hash_plain=not a.no_attachment_digests)
     seq, head, errors = lb.verify(
         warnings,
         progress=_file_progress(len(lb.files())) if a.progress else None,
         counts=counts,
         keyed=False if a.keyless else None,
+        walk=walk,
     )
     if a.expect:
         exp = json.loads(Path(a.expect).read_text(encoding="utf-8"))
@@ -466,7 +476,7 @@ def cmd_verify(a: argparse.Namespace) -> None:
             print("  " + e)
         sys.exit(1)
     print(f"valid — {seq} lines, head {head}")
-    for text in _sealed_report(lb, counts):
+    for text in (*_sealed_report(lb, counts), *_attachment_report(lb, walk, a.keyless)):
         print("  " + text)
     if warnings:
         print(f"WARNING — {len(warnings)} timestamp(s) the next release will reject:")
@@ -490,6 +500,38 @@ def _sealed_report(lb: Logbook, counts: Mapping[str, int]) -> Iterator[str]:
             f"recipients: {len(lb.recipients)}; a record seals to two at least (RFC 0029 §6.1): this one"
             " and a recovery one: `logbook key add-recipient --recipient age1…`"
         )
+
+
+SHOWN_MISSING = 20  # missing attachments `verify` lists by name; the rest are counted
+
+
+def _attachment_report(lb: Logbook, walk: attachments.Walk, keyless: bool) -> Iterator[str]:
+    """What `verify` says of the files the lines name (SPEC §1.1): how many are present and how they
+    were checked, then the missing ones by name and first line, which are reported and are not an
+    error. Nothing when no line names a file."""
+    if not walk.named:
+        return
+    why = "--keyless" if keyless else f"no identity at {lb.identity_file}"
+    kinds = [
+        (walk.checked, f"checked against {'its' if walk.checked == 1 else 'their'} name"),
+        (walk.unhashed, "not hashed (--no-attachment-digests)"),
+        (walk.unopened, f"sealed and not opened ({why})"),
+    ]
+    found = [(n, what) for n, what in kinds if n]
+    present = f"{walk.present:,} present"
+    if len(found) == 1 and found[0][0] == walk.present:
+        present += f", {found[0][1]}"
+    elif found:
+        present += ": " + ", ".join(f"{n:,} {what}" for n, what in found)
+    text = f"attachments: {_plural(len(walk.named), 'file')} named by the lines; {present}"
+    if walk.missing:
+        text += f"; {len(walk.missing):,} missing, reported and not an error (SPEC §1.1):"
+    yield text
+    for sha256, n in walk.missing[:SHOWN_MISSING]:
+        yield f"  {attachments.DIR}/{sha256} (line {n})"
+    more = len(walk.missing) - SHOWN_MISSING
+    if more > 0:
+        yield f"  …and {more:,} more; `logbook attach status` counts them by source"
 
 
 # The steps `setup --step` names in its help. `logbook.commands.setup` owns the tuple and is imported only

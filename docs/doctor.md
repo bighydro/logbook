@@ -7,6 +7,19 @@ runs it four times a day ([The schedule](schedule.md)). `logbook doctor sources 
 each source went quiet; `logbook doctor --packet` is the diagnostic to send a collaborator ([Sending
 a diagnostic](#sending-a-diagnostic)).
 
+## The files the lines name
+
+The `record` line is `verify` on the files, and looks for every attachment a line names as `verify` does
+([When verify fails](recovery.md#the-files-the-lines-name)). The missing ones are counted in the pass and
+are not a warn, since SPEC §1.1 allows them:
+
+```
+pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing (SPEC §1.1 allows it; `logbook attach status`); /Users/ines/Logbook
+```
+
+Their bytes are not hashed here, nor a sealed one opened: the doctor runs four times a day, and a store of
+photos is read by `logbook verify` by hand, or by `logbook backup --verify`.
+
 ## Where the day begins
 
 A record whose day does not begin at midnight ([`day_start`](settings.md)) gets a `day-start` line
