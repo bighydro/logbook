@@ -30,6 +30,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
+| `/world?from=&to=` | the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page `export world` writes by default ([the world](world.md)) | `logbook export world` |
 
 `/` is the front page: how many lines the record holds and the days it covers, and a link to each page.
 `/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
@@ -56,15 +57,15 @@ carries `--host`. To read the record from another device, see
 
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
 font, no image, no stylesheet link, no frame, no script fetched; every link, form and tooltip points
-at the server's own paths. A script is inline on two pages, each named by its hash in that page's
-`Content-Security-Policy` and by nothing else: a dozen lines for the Places page's three keys, and,
-on a Day when this machine can hear a recording, a score of lines for its *Record* button, which
-records with the browser's own recorder and sends the recording with the form, never by a fetch (the
-policy has no `connect-src`). Every other page's policy (`default-src 'none'`) allows no script at
-all. The header tells the browser what the
-markup already does, so a payload that carried markup could not make a page fetch from elsewhere
-even if the escaping here were wrong (every value is escaped). The test renders every page and checks
-each attribute that can hold a URL, the inline style, the one script and the headers.
+at the server's own paths. A script is inline on three pages, each named by its hash in that page's
+`Content-Security-Policy` and by nothing else: a dozen lines for the Places page's three keys; on a
+Day when this machine can hear a recording, a score of lines for its *Record* button, which records
+with the browser's own recorder and sends the recording with the form, never by a fetch (the policy
+has no `connect-src`); and the World page's canvas, whose data are two JSON blocks a browser never
+runs. Every other page's policy (`default-src 'none'`) allows no script at all. The header tells the
+browser what the markup already does, so a payload that carried markup could not make a page fetch
+from elsewhere even if the escaping here were wrong (every value is escaped). The test renders every
+page and checks each attribute that can hold a URL, the inline style, each script and the headers.
 
 **Read-only, but for the forms you click.** Every GET is answered from the record at its head
 through the readers, and the readers never write, not even `policy/stays.json`. The test takes the
@@ -87,7 +88,7 @@ read ([docs/day.md](day.md), *Performance*). `/days` reads the window in chunks 
 command does; a year is a dozen readings. The airports table is loaded once, when the server starts.
 
 A reload at the same head costs nothing. Every page that is the record's and nothing else (`/`, a
-Day, `/days`, `/trips`, `/places`) carries an `ETag`: the first twelve characters of the head, then a
+Day, `/days`, `/trips`, `/places`, `/world`) carries an `ETag`: the first twelve characters of the head, then a
 digest of the request and of what else the page reads (the rest of `logbook.json`, `places.json`,
 `assets.json`, `policy/`, `state/places-review.json`, the pages received from the circle) and of
 the server's start; a Day's also of the day you are in, since its forms are there from that day on. It is sent

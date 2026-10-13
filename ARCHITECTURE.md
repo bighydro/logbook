@@ -42,7 +42,7 @@ confirmation or a visibility decision — that stays with the human, enforced in
 | 1 | the format (SPEC.md); `logbook add/show/verify/export` | `logbook/core/`, `logbook/commands/` |
 | 2 | `run(input_path, since) -> iterator[Observation]`; fixture-tested; no network by default | `logbook/contrib/adapters/`, one module per source (ADR 0012); a third-party adapter is a package that registers the `logbook.adapters` entry point |
 | 3 | a reader: `read(logbook, window) -> derived rows`, idempotent, stable derived IDs, never a line (ADR 0013, ADR 0019) | `logbook/core/` (frozen by SPEC §3.2), `logbook/contrib/` (a reader's own) |
-| 4 | reads derived rows + notes; writes only notes and confirmations (as tier-2 lines) | `logbook serve`, `year --html`, `--print`, `export vault`, the shared page and trip bundle |
+| 4 | reads derived rows + notes; writes only notes and confirmations (as tier-2 lines) | `logbook serve`, `year --html`, `--print`, `export vault`, `export world`, the shared page and trip bundle |
 | 5 | MCP server exposing the record's readers over stdio | `logbook mcp` (`logbook/contrib/mcp_server.py`) |
 
 Every layer ships in this one package. The second implementation, [logbook-ts](https://github.com/bighydro/logbook-ts), is a separate repository built from SPEC.md alone (CONTRIBUTING, the clean-room rule).
