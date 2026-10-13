@@ -116,9 +116,10 @@ def sync_arguments(sub: Subparsers) -> None:
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
         " bridges, through its local API), gcal (Google Calendar), drive (what happened to your Google Drive"
         " files: created, edited, renamed, moved, shared, commented, trashed, restored), gtasks (your Google"
-        " Tasks, created and done), granola, mail (a mailbox over IMAP, any provider), gmail (a Gmail"
-        " mailbox over the Gmail API, the line IMAP writes), notion (pages created, edited, moved, archived;"
-        " never their text), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky),"
+        " Tasks, each as it stands, the lines a Takeout export gives), granola, mail (a mailbox over IMAP,"
+        " any provider), gmail (a Gmail mailbox over the Gmail API, the line IMAP writes), notion (pages"
+        " created, edited, moved, archived; never their text), ais (your vessels via aisstream.io), adsb"
+        " (your aircraft via OpenSky),"
         " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
@@ -663,7 +664,7 @@ def _sync_one(a: argparse.Namespace) -> None:
     walk: WalkState | None = None
     if walks:  # before the walk: how many there are, how many are here, and where it resumes
         total = _total(adapter, config)
-        source = str(getattr(adapter, "SOURCE", adapter.NAME))  # `gmail` writes `mail` lines
+        source = _source(adapter)  # `gmail` writes `mail` lines
         with lb.index() as idx:
             in_record = next((int(s["lines"]) for s in idx.sources() if s["source"] == source), 0)
         if resumes:  # the source never claims a total: what it holds is said per folder as it goes
@@ -691,8 +692,6 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["previous"] = _previous(lb, adapter)
     if _takes(adapter, "recorded", live=True):
         options["recorded"] = _recorded(lb, adapter)
-    if _takes(adapter, "held", live=True):
-        options["held"] = _held(lb)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
@@ -1228,10 +1227,11 @@ def _previous(
     lb: Logbook, adapter: adapters.LiveAdapter
 ) -> Callable[[Iterable[str]], dict[str, list[dict[str, Any]]]]:
     """For a live adapter whose `pull` takes `previous`: per raw_id prefix of a batch, the payloads
-    of the lines of its source and KIND the record holds under that prefix, in chain order, through
-    the index, one opening per batch. What the record already says about an item, for a source that
-    keeps no history of its own (`notion`: a page's parent, words and properties before this edit).
-    Plain lines only: a sealed line's raw_id is blinded in the index, and no prefix finds it."""
+    of the lines of its source (`_source`) and KIND the record holds under that prefix, in chain
+    order, through the index, one opening per batch. What the record already says about an item,
+    for a source that keeps no history of its own (`notion`: a page's parent, words and properties
+    before this edit). Plain lines only: a sealed line's raw_id is blinded in the index, and no
+    prefix finds it."""
     kind = str(getattr(adapter, "KIND", ""))
 
     def previous(prefixes: Iterable[str]) -> dict[str, list[dict[str, Any]]]:
@@ -1239,7 +1239,7 @@ def _previous(
             return {
                 prefix: [
                     dict(line["payload"])
-                    for line in idx.of_source(kind, adapter.NAME, "0000-01-01", "9999-12-31", prefix)
+                    for line in idx.of_source(kind, _source(adapter), "0000-01-01", "9999-12-31", prefix)
                 ]
                 for prefix in prefixes
             }
@@ -1247,24 +1247,12 @@ def _previous(
     return previous
 
 
-def _held(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], dict[tuple[str, str], dict[str, Any]]]:
-    """For a live adapter whose `pull` takes `held`: the lines the record holds under a batch of
-    (source, raw_id) keys, one SELECT through the index and read from the files, so a source can use
-    what it wrote before (`gtasks`: when a task's `created` line was written, for how long it was open).
-    A sealed line comes back opened when the identity is here; its `at` is always plain."""
-
-    def held(keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
-        with lb.index() as idx:
-            return idx.lines_of(keys)
-
-    return held
-
-
 def _recorded(lb: Logbook, adapter: adapters.LiveAdapter) -> Callable[[str | None], list[dict[str, Any]]]:
-    """For a live adapter whose `pull` takes `recorded`: the lines of its own source and KIND from the
-    local day before `since` on (every one when None), read through the index, so a source that folds
-    several items into one line (`drive`: a file's activities in an hour) leaves out the items a line
-    already holds and never writes one twice."""
+    """For a live adapter whose `pull` takes `recorded`: the lines of its own source (`_source`) and
+    KIND from the local day before `since` on (every one when None), read through the index, so a
+    source that folds several items into one line (`drive`: a file's activities in an hour) leaves out
+    the items a line already holds and never writes one twice, and one that writes snapshots (`gtasks`)
+    finds a task's earlier ones. A sealed line comes back opened when the identity is here."""
     kind = str(getattr(adapter, "KIND", ""))
 
     def recorded(since: str | None) -> list[dict[str, Any]]:
@@ -1274,9 +1262,17 @@ def _recorded(lb: Logbook, adapter: adapters.LiveAdapter) -> Callable[[str | Non
             local = datetime.fromisoformat(since.replace("Z", "+00:00")).astimezone(zone)
             first = (local - timedelta(days=1)).date().isoformat()
         with lb.index() as idx:
-            return idx.of_source(kind, adapter.NAME, first, "9999-12-31")
+            return idx.of_source(kind, _source(adapter), first, "9999-12-31")
 
     return recorded
+
+
+def _source(adapter: adapters.LiveAdapter) -> str:
+    """The `source` a live adapter's lines carry: its `SOURCE` when it writes under the name of the
+    file adapter it shares a mapping with (ADR 0017: `gtasks` writes `google-takeout`, as the Takeout
+    Tasks adapter does, and `gmail` writes `mail`, so each dedupes against its file side), else its
+    NAME."""
+    return str(getattr(adapter, "SOURCE", None) or adapter.NAME)
 
 
 def _start(
@@ -1296,7 +1292,7 @@ def _start(
     if stored is not None:
         return str(resume(config, stored)), None
     with lb.index() as idx:
-        newest = idx.newest(adapter.NAME, str(getattr(adapter, "KIND", "")))
+        newest = idx.newest(_source(adapter), str(getattr(adapter, "KIND", "")))
     if newest is None:
         return None, None
     return str(resume(config, newest)), newest

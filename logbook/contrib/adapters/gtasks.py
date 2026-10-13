@@ -1,63 +1,67 @@
-"""Google Tasks → event/v1 (RFC 0009), live: a task created, a task done, as the events they are.
+"""Google Tasks → task/v1 (RFC 0016), live: each task as it stands, mapped as the Takeout export maps it.
 
 Google Tasks is the owner's quick-capture inbox: a task is an idea, or a promise to himself, and ticking
-one off is a small event worth a line. `logbook sync gtasks` asks the Tasks API v1 (read-only scope
-`tasks.readonly`) as the owner, through the service account `sync drive` uses (`service_account`:
-LOGBOOK_DRIVE_SA_KEY, LOGBOOK_DRIVE_USER; one place to configure both).
+one off is worth knowing. `logbook sync gtasks` asks the Tasks API v1 (read-only scope `tasks.readonly`) as
+the owner, through the service account `sync drive` uses (`service_account`: LOGBOOK_DRIVE_SA_KEY,
+LOGBOOK_DRIVE_USER; one place to configure both).
 
 **What is asked.** Every task list (`users/@me/lists`), then every task of each changed since `since`
 (`updatedMin`; all of them without one), done, hidden (done and cleared from the list) and deleted
 included, a page of `PAGE_SIZE` at a time, retried with backoff by the session. A page of tasks read is
 a progress line.
 
-**What is a line.** Two events, each at most once per task (`raw_id` `<task id>/created`,
-`<task id>/completed`; the record's dedupe keeps the first):
+**One mapping, two entrances (ADR 0017).** The API answers with the task objects Takeout writes into
+`Tasks/Tasks.json`, so a line is the Takeout Tasks adapter's own (`takeout.tasks.draft`): kind `task`,
+tier 2 (RFC 0016: MUST), source `google-takeout`, `raw_id` `<task id>@<updated>`. The record's dedupe on
+`(source, raw_id)` then makes a task seen live and the same task in a Takeout export imported later one
+line, and the other way round: a backfill writes nothing for what `sync` already saw.
 
-- `created`, for a task the record sees open for the first time: `at` its `updated` time, which is when
-  it was created for a task nobody touched since, and later for one edited before the record first saw
-  it (Google Tasks keeps no creation time; RFC 0016 says as much). A task first seen already done has no
-  `created` line: the record never saw it open and will not invent when it was. Nor has one reopened
-  after the record saw it done.
-- `completed`, for a task done: `at` its completion time; `extra.open_for_s` the seconds since its
-  `created` line (read back from the record), null when the record has none.
+**A snapshot (RFC 0016 rule 2).** One line per task as it stands: `at` its `updated` time (Google keeps no
+creation time), `status` `open` or `done`, `completed_at` on a done one, `due` as a day (rule 4: Google
+spells a due day as a midnight instant), `list` (its title), `parent` for a subtask, `modified_at`, and
+under `extra` `hidden`, `deleted` and `links` as the export has them. A task changed since the record
+last saw it — ticked off, renamed, reopened, deleted — is a new line; an unchanged one appends nothing,
+and no line is ever rewritten. A deleted task is still a line (`extra.deleted`, rule 5, counted); a task
+with no title or no time is skipped and counted.
 
-A due day passing without the task done is no event: the record holds what happened. An edit is no
-event either: a task changed after its `created` line appends nothing, and the line is never rewritten.
-A deleted task writes nothing new (`skipped_deleted`); a task with no title is skipped and counted.
+**What the record adds.** Two things only the record knows, from `recorded`: the task lines of this
+source it holds (every one, read once a pull). `supersedes` is the id of the task's newest earlier
+snapshot there (rule 2: set when the adapter can find the earlier line). On a done snapshot,
+`extra.open_for_s` is how long the task was open as far as the record saw: the seconds from the first of
+the open snapshots since its last done one to `completed_at`; null when the record never saw it open.
+The profile has no field for it, so it is kept under `extra`, as the profile keeps what it does not name.
+A sealed snapshot is read when the identity is here; without it no earlier snapshot is found, and the
+line has neither.
 
-The line: kind `event`, `end` null, `tz` the record's zone; `title` the task's title, whitespace
-collapsed; `calendar` `{google-tasks, Google Tasks}`, `all_day` false, `modified_at` the task's
-`updated` (the watermark); under `extra` the `activity` (`created`, `completed`), the `list` (its
-title), the `task` (`id`, `list_id`, and `url` when the API gives a link), `due` as a day (RFC 0016
-rule 4: Google spells a due day as a midnight instant), `parent` for a subtask, `open_for_s` on a
-completed line, and `notes` as `{sha256, words}`: the digest of the notes' text (CRLF as LF) and how
-many words it has, never the words.
+**The notes, never the words.** RFC 0016 keeps `notes` verbatim; this source keeps none: `extra.notes`
+is `{sha256, words}`, the digest of the notes' text (CRLF as LF) and how many words it has. This is the
+one way a live line differs from the export's, and the first to arrive is the line: an export imported
+before `sync` keeps the words it carries.
 
-**Tier 2.** RFC 0009 makes a calendar entry tier 1, a SHOULD; SPEC §4 lets a producer write a higher
-tier for a reason it states, and this is one: the line's title is a task's title, an idea or a promise
-in the owner's words, the very text RFC 0016 puts at tier 2 when Takeout carries it as `task/v1`. The
-tier is where a line may travel; the same words do not travel further because they arrive by another
-road.
-
-**Watermark.** The task's `updated` time; a pull without `--since` starts `LOOKBACK_H` before it."""
+**Watermark.** The task's `updated` time; a pull without `--since` starts `LOOKBACK_H` before it, and
+the first `sync` after a Takeout backfill starts a day before the newest task the export holds."""
 
 from __future__ import annotations
 
 import hashlib
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
 from . import service_account
 from .service_account import Account
+from .takeout import tasks as takeout_tasks
 
 __all__ = [
     "ENV",
     "KIND",
     "NAME",
+    "SCHEMA",
     "SCOPE",
+    "SOURCE",
     "TIER",
     "check",
     "configure",
@@ -69,19 +73,32 @@ __all__ = [
 
 NAME = "gtasks"
 ENV = service_account.ENV
-KIND = "event"
-TIER = 2
-SCHEMA = "event/v1"
+SOURCE = takeout_tasks.SOURCE  # the Takeout Tasks adapter's: the two dedupe on (source, raw_id)
+KIND = takeout_tasks.KIND
+TIER = takeout_tasks.TIER
+SCHEMA = takeout_tasks.SCHEMA
 UNIT = "tasks"  # what `sync` counts in its progress lines
 SCOPE = service_account.SCOPES["gtasks"]
 LISTS_URL = "https://tasks.googleapis.com/tasks/v1/users/@me/lists"
 TASKS_URL = "https://tasks.googleapis.com/tasks/v1/lists/{list}/tasks"
 PAGE_SIZE = 100
 LOOKBACK_H = 24.0
-CALENDAR = {"id": "google-tasks", "name": "Google Tasks"}
-CREATED, COMPLETED = "created", "completed"
+OPEN, DONE = "open", "done"
+UNTITLED_LIST = "untitled list"
 
-Held = Callable[[Iterable[tuple[str, str]]], Mapping[tuple[str, str], dict[str, Any]]]
+Recorded = Callable[[str | None], Iterable[dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    """One task line the record holds, as far as this source needs it."""
+
+    suffix: str  # the `raw_id` after its last `@`: the modification time, which orders snapshots
+    seq: int
+    id: str
+    at: datetime
+    status: str
+
 
 configure = service_account.configure
 
@@ -104,7 +121,7 @@ def watermark(draft: dict[str, Any]) -> str | None:
 
 def group(draft: dict[str, Any]) -> str:
     """The list, so `sync` says seen and new per list."""
-    return str(draft["payload"]["extra"].get("list") or draft["payload"]["extra"]["task"]["list_id"])
+    return str(draft["payload"].get("list") or UNTITLED_LIST)
 
 
 def pull(
@@ -113,25 +130,23 @@ def pull(
     progress: Callable[[int, float], None] | None = None,
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
-    held: Held | None = None,
+    recorded: Recorded | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """The created and completed events of every task changed since `since` (RFC3339; None for all),
-    as event/v1 line drafts, oldest first. `held(keys)` gives the lines the record holds under these
-    (source, raw_id) keys: a completed task's `created` line, for how long it was open, and whether a
-    task now open was seen done before. Skips are tallied in `counts`; `progress(tasks_so_far,
-    elapsed_seconds)` after each page. Raises service_account.GoogleError (an OSError) when Google
-    cannot be read; nothing is yielded before every list is in."""
+    """A task/v1 line draft for every task changed since `since` (RFC3339; None for all), oldest first.
+    `recorded(None)` gives every task line of this source the record holds, for `supersedes` and how
+    long a done task was open. Skips are tallied in `counts`; `progress(tasks_so_far, elapsed_seconds)`
+    after each page. Raises service_account.GoogleError (an OSError) when Google cannot be read; nothing
+    is yielded before every list is in."""
     counts = counts if counts is not None else {}
     session = service_account.Session(config, SCOPE)
     tasks = list(_read(session, since, progress, counts))
-    keys = [(NAME, f"{task['id']}/{event}") for task, _list in tasks for event in (CREATED, COMPLETED)]
-    record = dict(held(keys)) if held is not None and keys else {}
+    history = _history(recorded(None)) if recorded is not None and tasks else {}
     tz = timezone or "UTC"
     drafts: list[dict[str, Any]] = []
     for task, task_list in tasks:
-        draft = _event(task, task_list, record, tz)
+        draft = takeout_tasks.draft(task, " ".join(str(task_list.get("title") or "").split()), tz, counts)
         if draft is not None:
-            drafts.append(draft)
+            drafts.append(_live(draft, history))
     yield from sorted(drafts, key=lambda d: (d["at"], d["payload"]["raw_id"]))
 
 
@@ -145,8 +160,8 @@ def _read(
     progress: Callable[[int, float], None] | None,
     counts: dict[str, int],
 ) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
-    """(task, its list) for every task changed since `since` that can be a line: deleted ones and those
-    with no title are counted and left out."""
+    """(task, its list) for every task changed since `since`; one with no id is counted and left out,
+    the rest are the mapping's to keep or skip."""
     started = time.monotonic()
     seen = 0
     for task_list in _pages(session, LISTS_URL, {"maxResults": str(PAGE_SIZE)}):
@@ -164,12 +179,8 @@ def _read(
         for page in _pages_of(session, url, params):
             for task in page:
                 seen += 1
-                if not task.get("id") or not _instant_or_none(task.get("updated")):
-                    _count(counts, "skipped_no_date")
-                elif task.get("deleted") is True:
-                    _count(counts, "skipped_deleted")
-                elif not _title(task):
-                    _count(counts, "skipped_no_title")
+                if not task.get("id"):
+                    _count(counts, "skipped_no_id")
                 else:
                     yield task, task_list
             if progress is not None:
@@ -195,80 +206,62 @@ def _pages_of(
         asked = {**params, "pageToken": token}
 
 
-def _event(
-    task: dict[str, Any], task_list: dict[str, Any], record: Mapping[tuple[str, str], dict[str, Any]], tz: str
-) -> dict[str, Any] | None:
-    """The one event this snapshot of the task can still add: `completed` for a done task, `created`
-    for an open one the record has not seen done."""
-    task_id = str(task["id"])
-    completed = _instant_or_none(task.get("completed"))
-    if task.get("status") == "completed" and completed is not None:
-        created = record.get((NAME, f"{task_id}/{CREATED}"))
-        opened = _instant_or_none(created.get("at")) if created is not None else None
-        open_for = int((completed - opened).total_seconds()) if opened is not None else None
-        return _draft(
-            task, task_list, COMPLETED, completed, tz, open_for if open_for is None or open_for >= 0 else None
+def _history(lines: Iterable[dict[str, Any]]) -> dict[str, list[Snapshot]]:
+    """The record's snapshots per task id (the `raw_id` before its last `@`), oldest first; a line whose
+    payload does not say (sealed with no identity here, or not a task) is left out."""
+    found: dict[str, list[Snapshot]] = {}
+    for line in lines:
+        payload = line.get("payload")
+        if not isinstance(payload, dict) or payload.get("schema") != SCHEMA:
+            continue
+        raw_id, at = payload.get("raw_id"), _instant_or_none(line.get("at"))
+        if not isinstance(raw_id, str) or at is None:
+            continue
+        key, sep, suffix = raw_id.rpartition("@")
+        if not sep:
+            continue
+        snapshot = Snapshot(
+            suffix, int(line.get("seq") or 0), str(line.get("id") or ""), at, str(payload.get("status"))
         )
-    if task.get("status") == "completed" or (NAME, f"{task_id}/{COMPLETED}") in record:
-        return None  # done with no time, or reopened after the record saw it done: no creation to tell
-    updated = _instant_or_none(task.get("updated"))
-    return None if updated is None else _draft(task, task_list, CREATED, updated, tz)
+        found.setdefault(key, []).append(snapshot)
+    for snapshots in found.values():
+        snapshots.sort(key=lambda s: (s.suffix, s.seq))
+    return found
 
 
-def _draft(
-    task: dict[str, Any],
-    task_list: dict[str, Any],
-    event: str,
-    at: datetime,
-    tz: str,
-    open_for_s: int | None = None,
-) -> dict[str, Any]:
-    """One event's line draft; `open_for_s` is a completed line's, seconds since its created line."""
-    task_id = str(task["id"])
-    ref: dict[str, Any] = {"id": task_id, "list_id": str(task_list["id"])}
-    if isinstance(task.get("webViewLink"), str) and task["webViewLink"]:
-        ref["url"] = task["webViewLink"]
-    extra: dict[str, Any] = {"activity": event}
-    list_title = " ".join(str(task_list.get("title") or "").split())
-    if list_title:
-        extra["list"] = list_title
-    extra["task"] = ref
-    due = _instant_or_none(task.get("due"))
-    if due is not None:
-        extra["due"] = due.date().isoformat()  # a day, never the midnight instant Google spells (RFC 0016)
-    if task.get("parent"):
-        extra["parent"] = str(task["parent"])
-    notes = str(task.get("notes") or "").replace("\r\n", "\n")
-    if notes.strip():
+def _live(draft: dict[str, Any], history: dict[str, list[Snapshot]]) -> dict[str, Any]:
+    """The mapping's draft as this source writes it: the notes as a digest, and what the record adds —
+    `supersedes`, and on a done snapshot how long the task was open."""
+    payload = draft["payload"]
+    extra = dict(payload.pop("extra", None) or {})
+    notes = payload.pop("notes", None)
+    if isinstance(notes, str) and notes.strip():
         extra["notes"] = {
             "sha256": hashlib.sha256(notes.encode("utf-8")).hexdigest(),
             "words": len(notes.split()),
         }
-    if event == COMPLETED:
-        extra["open_for_s"] = open_for_s
-    updated = _instant_or_none(task.get("updated"))
-    payload: dict[str, Any] = {
-        "schema": SCHEMA,
-        "raw_id": f"{task_id}/{event}",
-        "title": _title(task),
-        "calendar": dict(CALENDAR),
-        "all_day": False,
-        "modified_at": _z(updated if updated is not None else at),
-        "extra": extra,
-    }
-    return {
-        "at": _z(at),
-        "end": None,
-        "tz": tz,
-        "source": NAME,
-        "kind": KIND,
-        "tier": TIER,
-        "payload": payload,
-    }
+    key, _sep, suffix = str(payload["raw_id"]).rpartition("@")
+    earlier = [s for s in history.get(key, []) if s.suffix < suffix]
+    if earlier and earlier[-1].id:
+        payload["supersedes"] = earlier[-1].id
+    if payload.get("status") == DONE:
+        extra["open_for_s"] = _open_for(earlier, _instant_or_none(payload.get("completed_at")))
+    if extra:
+        payload["extra"] = extra
+    return draft
 
 
-def _title(task: dict[str, Any]) -> str:
-    return " ".join(str(task.get("title") or "").split())
+def _open_for(earlier: list[Snapshot], completed: datetime | None) -> int | None:
+    """Seconds from the first of the open snapshots since the task was last done to `completed`; None
+    when the record saw it open in none, or the time would be negative."""
+    opened: datetime | None = None
+    for snapshot in reversed(earlier):
+        if snapshot.status != OPEN:
+            break
+        opened = snapshot.at
+    if opened is None or completed is None or completed < opened:
+        return None
+    return int((completed - opened).total_seconds())
 
 
 def _instant(text: str) -> datetime:

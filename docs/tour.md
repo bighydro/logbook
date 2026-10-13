@@ -402,7 +402,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values; never the text ([Notion](#notion)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 | `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
-| `gtasks` | the same two; [Google Tasks](#google-tasks) | one `event/v1` line when a task is first seen open and one when it is done, with how long it was open; the title, never the notes; tier 2 |
+| `gtasks` | the same two; [Google Tasks](#google-tasks) | one `task/v1` line per task each time it changes, the line a Takeout export gives (`source` `google-takeout`), so `logbook tasks` reads it and a later export writes nothing twice; a done one says how long it was open; never the notes; tier 2 |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -607,7 +607,7 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 | `sync gcal` | `https://www.googleapis.com/auth/calendar.readonly` | the calendars you own, as `event/v1` lines |
 | `sync drive` | `https://www.googleapis.com/auth/drive.activity.readonly` | what happened to your files |
 | `sync drive` | `https://www.googleapis.com/auth/drive.metadata.readonly` | the folder path each Drive line names |
-| `sync gtasks` | `https://www.googleapis.com/auth/tasks.readonly` | your tasks, created and done |
+| `sync gtasks` | `https://www.googleapis.com/auth/tasks.readonly` | your tasks, each as it stands (`task/v1`) |
 
 **Setting it up**, once, as the Workspace's administrator:
 
@@ -737,25 +737,29 @@ what happened to it are the same fact whoever did it.
 ### Google Tasks
 
 `logbook sync gtasks` reads your Google Tasks, read-only, with the key of [Google, on one
-key](#google-on-one-key) (the Tasks scope in step 4). A task is an idea or a promise you made yourself,
-so two things are worth a line: that it was made, and that it was done.
+key](#google-on-one-key) (the Tasks scope in step 4). A task is an idea or a promise you made yourself;
+the record keeps each one as it stands, the way a Takeout export of your tasks would, and `logbook
+tasks` reads them back.
 
 ```bash
 logbook sync gtasks --dry-run                              # counts per list, nothing written
 logbook sync gtasks
 ```
 
-**What a line holds.** A task seen open for the first time is a `created` line, titled with the task's
-own words, with its list, its due day if it has one, its parent for a subtask and a reference to it;
-Google keeps no creation time, so the line is dated when the task last changed before the record first
-saw it, which for a task captured and left alone is when you wrote it down. A task done is a `completed`
-line, dated when you ticked it, with how long it was open (from its `created` line; unknown when the
-record never saw it open). A due day passing is no event, an edit is no second line, and a deleted task
-writes nothing new: the record holds what happened, and never rewrites what it wrote.
+**What a line holds.** One `task/v1` line (RFC 0016) per task as it stands: its title in your own
+words, `open` or `done`, its list, its due day if it has one, its parent for a subtask, and when it was
+done. Google keeps no creation time, so a line is dated when the task last changed, which for a task
+captured and left alone is when you wrote it down, and for one ticked off is when you ticked it. A task
+that changes — ticked off, renamed, reopened, deleted — is a new line beside the old one, which it
+supersedes; an unchanged task writes nothing, and nothing is ever rewritten. A done task says how long it
+was open, from the first time the record saw it open (unknown when it never did). It is the line the
+Takeout Tasks adapter writes for the same task, with the same `source` (`google-takeout`) and the same
+`raw_id`, so a Takeout export imported later adds nothing `sync` already wrote, and a `sync` after an
+export carries on where it ended.
 
 **What a line never holds.** The task's notes: only their digest and how many words they have. Lines
-are **tier 2**, as a task's words are when a Takeout brings them (RFC 0016): sealed at rest when the
-record seals, and crossing only after review.
+are **tier 2**, as RFC 0016 makes every task: sealed at rest when the record seals, and crossing only
+after review.
 
 Your boat, your aircraft and your car are *subjects* with tracks of their own, not places (ADR 0018). Register
 each once in `assets.json`, then let `sync` ask the receivers that hear them:
