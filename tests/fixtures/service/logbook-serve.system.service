@@ -1,0 +1,13 @@
+[Unit]
+Description=logbook serve: the record's pages at http://127.0.0.1:8765/, from this machine only
+
+[Service]
+User=ines
+Environment=LOGBOOK_HOME=@LOGBOOK_HOME@
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/logbook/venv/bin/python3 -m logbook.cli serve --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
