@@ -195,7 +195,7 @@ def sync_arguments(sub: Subparsers) -> None:
 def cmd_sync(a: argparse.Namespace) -> None:
     """`sync <source>`: pull from a live source since its stored watermark (or --since), append,
     advance the watermark. `sync --all`: every configured source in turn (`_sync_all`). `sync
-    --install-schedule` / `--uninstall-schedule`: `sync --all` twice a day by the machine's own
+    --install-schedule` / `--uninstall-schedule`: `sync --all` four times a day by the machine's own
     scheduler (`_sync_schedule`, `logbook.contrib.schedule`)."""
     from ..contrib import adapters
 

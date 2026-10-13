@@ -532,7 +532,8 @@ def test_install_system_writes_to_the_home_directory_prints_the_sudo_commands_an
     }
     assert not root.exists() or _tree(root) == set(), "the system's folders are the administrator's to write"
     units = root / "etc" / "systemd" / "system"
-    assert f"  sudo cp {' '.join(str(home / name) for name in names)} {units}" in out
+    copy = schedule.Command(("sudo", "cp", *(str(home / name) for name in names), str(units)))
+    assert f"  {copy.text}" in out, "quoted as the shell reads it, on every platform"
     assert "  sudo systemctl enable --now logbook-sync.timer logbook-sync-close.timer" in out
     assert "running as ines from boot" in out
     units.mkdir(parents=True)
@@ -560,7 +561,13 @@ def test_uninstall_system_removes_the_home_copies_and_prints_how_to_remove_the_s
         not (home / "org.logbook.sync.plist").exists()
         and not (home / "org.logbook.sync.close.plist").exists()
     )
-    assert f"  sudo rm {daemons / 'org.logbook.sync.plist'} {daemons / 'org.logbook.sync.close.plist'}" in out
+    remove = (
+        "sudo",
+        "rm",
+        str(daemons / "org.logbook.sync.plist"),
+        str(daemons / "org.logbook.sync.close.plist"),
+    )
+    assert f"  {schedule.Command(remove).text}" in out
     assert (daemons / "org.logbook.sync.plist").exists(), "never removed by this command"
 
 
