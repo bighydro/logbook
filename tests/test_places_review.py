@@ -353,8 +353,10 @@ def test_the_table_is_served_while_the_record_stands_and_rebuilt_when_it_moves(
               payload={"schema": "note/v1", "text": "a later note"})  # fmt: skip
     places_review.observed(Logbook(lb.root))
     assert len(built) == 3, "the head moved: rebuilt"
-    with sqlite3.connect(lb.index_path) as db:
-        db.execute(f"ALTER TABLE {places_review.TABLE} DROP COLUMN names")
+    with sqlite3.connect(lb.index_path) as db:  # the view of a table of another shape
+        db.execute(f"DROP VIEW {places_review.TABLE}")
+        db.execute("DROP VIEW observed_people")
+        db.execute("ALTER TABLE observed_entities DROP COLUMN labels")
     places_review.observed(Logbook(lb.root))
     assert len(built) == 4, "a table of another shape: rebuilt"
 

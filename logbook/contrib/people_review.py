@@ -16,16 +16,18 @@ An address seen under three display names is one observed person with three name
 `+447700900101` and as `447700900101@s.whatsapp.net` is one. The other way, one person explodes
 into a row per observation.
 
-**The table.** Observed people are a derived table in the index, `observed_people` in
-`index.sqlite`, keyed by (kind, value) of the strongest identifier, with the display names and the
-identifiers as the lines wrote them, counts per source and per kind, the days seen, first and last
+**The table.** Observed people are the person rows of the index's derived table,
+`observed_entities` in `index.sqlite` (RFC 0037), read through its view `observed_people`, keyed
+by (kind, value) of the strongest identifier, with the display names and the identifiers as the
+lines wrote them, counts per source and per kind, the days seen, first and last
 seen, the tier, a few line ids as evidence, and the canonical person the observation resolves to
 when one of its identifiers has a resolution standing (as written: the readers look a ref up as the
 line carries it) or, for a name alone, when the people reader would place it by that name. The table
 is built from the lines through the index (`Index.of_kind`, mail, message, transcript and event,
-standing lines only, the owner's own identities left out), stamped with the head it was built at,
-served while the head stands and rebuilt when the record grows; its shape is checked with
-`PRAGMA table_info` and a table of another shape is built again. Nothing is stored in the record.
+standing lines only, the owner's own identities left out), stamped with the head it was built at (in
+`observed_entities_meta`), served while the head stands and rebuilt when the record grows; its shape
+is checked with `PRAGMA table_info` and a table of another shape is built again. Nothing is stored
+in the record.
 
 **The queue.** `people review` proposes each observed person not yet placed against each canonical
 person, ranked by the evidence, numbered from 1: the **same email** (an identifier of the observed
@@ -81,8 +83,8 @@ SOURCE = people_merge.SOURCE
 METHOD = people_merge.METHOD
 KINDS = ("mail", "message", "transcript", "event")  # the lines a counterpart is observed on
 REF_KINDS = ("email", "phone", "handle", "provider_id")  # an identifier a resolution line can carry
-TABLE = "observed_people"
-TABLE_META = "observed_meta"
+TABLE = "observed_people"  # the view of the person rows of `observed_entities` (RFC 0037)
+OBSERVED_KIND = "person"
 TABLE_VERSION = "1"
 COLUMNS = (
     "key_kind",
@@ -318,22 +320,24 @@ class Observed:
             "entity": self.entity,
         }
 
-    def _row(self) -> tuple[Any, ...]:
-        return (
-            self.key[0],
-            self.key[1],
-            self.entity,
-            json.dumps(dict(self.labels), ensure_ascii=False),
-            json.dumps([[k, v, n] for (k, v), n in self.identifiers.items()], ensure_ascii=False),
-            json.dumps(dict(self.sources), ensure_ascii=False),
-            json.dumps(dict(self.kinds), ensure_ascii=False),
-            json.dumps(sorted(self.days)),
-            self.first,
-            self.last,
-            self.lines,
-            self.tier,
-            json.dumps(self.samples),
-        )
+    def _row(self) -> dict[str, Any]:
+        """The row of `observed_entities` (`Index.store_observed`) the view reads back as `COLUMNS`."""
+        return {
+            "key_kind": self.key[0],
+            "key_value": self.key[1],
+            "name": self.name,
+            "entity": self.entity,
+            "labels": json.dumps(dict(self.labels), ensure_ascii=False),
+            "refs": json.dumps([[k, v, n] for (k, v), n in self.identifiers.items()], ensure_ascii=False),
+            "sources": json.dumps(dict(self.sources), ensure_ascii=False),
+            "kinds": json.dumps(dict(self.kinds), ensure_ascii=False),
+            "days": json.dumps(sorted(self.days)),
+            "first": self.first,
+            "last": self.last,
+            "count": self.lines,
+            "tier": self.tier,
+            "samples": json.dumps(self.samples),
+        }
 
     @classmethod
     def _from_row(cls, row: Sequence[Any]) -> Observed:
@@ -379,49 +383,23 @@ def observed(lb: Logbook) -> list[Observed]:
 def observed_in(lb: Logbook, idx: Index) -> list[Observed]:
     meta = lb.meta
     stamp = {"head": str(meta["head"]), "timezone": str(meta["timezone"]), "version": TABLE_VERSION}
-    if _table_current(idx.db, stamp):
+    if _table_current(idx, stamp):
         rows = idx.db.execute(
             f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY key_kind, key_value"
         ).fetchall()
         return [Observed._from_row(row) for row in rows]
     found = build(lb, idx)
-    _store(idx.db, found, stamp)
+    idx.store_observed(OBSERVED_KIND, [o._row() for o in found], stamp)
     return found
 
 
-def _table_current(db: sqlite3.Connection, stamp: Mapping[str, str]) -> bool:
-    """Whether the table is there, of the shape this module writes, and stamped with this head."""
+def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
+    """Whether the view is there, of the shape this module reads, and its rows stamped with this head."""
     try:
-        columns = {str(row[1]) for row in db.execute(f"PRAGMA table_info({TABLE})")}
-        if not set(COLUMNS) <= columns:
-            return False
-        stored = dict(db.execute(f"SELECT key, value FROM {TABLE_META}"))
+        columns = {str(row[1]) for row in idx.db.execute(f"PRAGMA table_info({TABLE})")}
     except sqlite3.DatabaseError:
         return False
-    return stored == dict(stamp)
-
-
-def _store(db: sqlite3.Connection, found: Sequence[Observed], stamp: Mapping[str, str]) -> None:
-    db.execute("BEGIN")
-    try:
-        db.execute(f"DROP TABLE IF EXISTS {TABLE}")
-        db.execute(f"DROP TABLE IF EXISTS {TABLE_META}")
-        db.execute(
-            f"CREATE TABLE {TABLE} (key_kind TEXT NOT NULL, key_value TEXT NOT NULL, entity TEXT,"
-            " labels TEXT NOT NULL, identifiers TEXT NOT NULL, sources TEXT NOT NULL, kinds TEXT NOT NULL,"
-            " days TEXT NOT NULL, first TEXT, last TEXT, lines INTEGER NOT NULL, tier INTEGER NOT NULL,"
-            " samples TEXT NOT NULL, PRIMARY KEY (key_kind, key_value))"
-        )
-        db.execute(f"CREATE TABLE {TABLE_META} (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany(
-            f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
-            [o._row() for o in found],
-        )
-        db.executemany(f"INSERT INTO {TABLE_META} VALUES (?, ?)", list(stamp.items()))
-        db.execute("COMMIT")
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
+    return set(COLUMNS) <= columns and idx.observed_stamp(OBSERVED_KIND) == dict(stamp)
 
 
 def build(lb: Logbook, idx: Index) -> list[Observed]:
