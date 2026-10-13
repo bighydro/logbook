@@ -94,6 +94,30 @@ def test_a_path_with_a_space_is_quoted_for_both_schedulers(tmp_path: Path) -> No
     assert 'ExecStart="/Users/kari/My Tools/venv/bin/python3" -m logbook.cli sync --scheduled\n' in service
 
 
+FIXTURES = Path(__file__).parent / "fixtures" / "service"
+
+
+def _fixture(name: str, **paths: Path) -> str:
+    """A rendered file as committed, each `@NAME@` filled with the path the test rendered it for."""
+    text = (FIXTURES / name).read_text(encoding="utf-8")
+    for key, path in paths.items():
+        text = text.replace(f"@{key}@", str(path))
+    return text
+
+
+def test_the_agent_and_the_units_are_the_files_committed(tmp_path: Path) -> None:
+    """The plist and the units byte for byte, so the renderer `serve --install-service` shares with
+    this command cannot change what the schedule writes."""
+    home, record = tmp_path / "home", tmp_path / "Logbook"
+    mac = schedule.plan("darwin", home, PYTHON, logbook_home=record)
+    [plist] = mac.files.values()
+    log = home / "Library" / "Logs" / "logbook-sync.log"
+    assert plist == _fixture("org.logbook.sync.plist", LOG=log, LOGBOOK_HOME=record)
+    linux = schedule.plan("linux", home, PYTHON, logbook_home=record)
+    for name in ("logbook-sync.service", "logbook-sync.timer"):
+        assert linux.files[linux.directory / name] == _fixture(name, LOGBOOK_HOME=record), name
+
+
 def test_another_platform_has_no_scheduler_here(tmp_path: Path) -> None:
     with pytest.raises(schedule.ScheduleError, match="win32"):
         schedule.plan("win32", tmp_path / "home", PYTHON)
