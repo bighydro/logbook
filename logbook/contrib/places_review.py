@@ -834,11 +834,6 @@ def refused_at(rejected: Iterable[Rejection], lat: float, lon: float, cluster_m:
     return {r.name for r in rejected if places.distance_m(lat, lon, r.lat, r.lon) <= cluster_m}
 
 
-def rejections(root: Path) -> list[Rejection]:
-    """Every pair the owner rejected, from `state/places-review.json`."""
-    return _rejected(root)
-
-
 def choose(names: Sequence[Name], taken: set[str], refused: set[str | None]) -> str | None:
     """The name the evidence weighs most (`Name.weight` a line), a name taken or refused passed
     over; spelled as its weightiest source spelt it. None when there is none left."""

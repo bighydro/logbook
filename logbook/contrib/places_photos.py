@@ -403,7 +403,7 @@ def _with_photos(
     if not said:
         return report
     taken = {p.name.casefold() for p in report.places}
-    rejected = places_review.rejections(lb.root)
+    rejected = places_review._rejected(lb.root)
     asked = {p.number for p in targets}
     proposals = []
     for p in report.proposals:
