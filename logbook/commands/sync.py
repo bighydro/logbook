@@ -94,8 +94,10 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola,"
-        " mail, ais, adsb, weather); safe to re-run; --all for every configured source, --install-schedule"
-        " for twice a day."
+        " mail, notion, ais, adsb, weather); safe to re-run; --all for every configured source,"
+        " --install-schedule for twice a day."
+        " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
+        " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
         " from the last batch written; --restart reads every folder from its first message again."
         " immich: the first run walks the whole library and says how many assets the server holds before it"
@@ -108,7 +110,8 @@ def sync_arguments(sub: Subparsers) -> None:
         nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
         " bridges, through its local API), gcal (Google Calendar), granola, mail (a mailbox over IMAP, Gmail"
-        " with an app password), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky),"
+        " with an app password), notion (pages created, edited, moved, archived; never their text), ais (your"
+        " vessels via aisstream.io), adsb (your aircraft via OpenSky),"
         " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
@@ -560,6 +563,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["lookup"] = _lookup(lb)
     if _takes(adapter, "existing", live=True):
         options["existing"] = _existing(lb)
+    if _takes(adapter, "previous", live=True):
+        options["previous"] = _previous(lb, adapter)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
@@ -1082,6 +1087,29 @@ def _existing(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], set[tuple[st
             return idx.existing(keys)
 
     return existing
+
+
+def _previous(
+    lb: Logbook, adapter: adapters.LiveAdapter
+) -> Callable[[Iterable[str]], dict[str, list[dict[str, Any]]]]:
+    """For a live adapter whose `pull` takes `previous`: per raw_id prefix of a batch, the payloads
+    of the lines of its source and KIND the record holds under that prefix, in chain order, through
+    the index, one opening per batch. What the record already says about an item, for a source that
+    keeps no history of its own (`notion`: a page's parent, words and properties before this edit).
+    Plain lines only: a sealed line's raw_id is blinded in the index, and no prefix finds it."""
+    kind = str(getattr(adapter, "KIND", ""))
+
+    def previous(prefixes: Iterable[str]) -> dict[str, list[dict[str, Any]]]:
+        with lb.index() as idx:
+            return {
+                prefix: [
+                    dict(line["payload"])
+                    for line in idx.of_source(kind, adapter.NAME, "0000-01-01", "9999-12-31", prefix)
+                ]
+                for prefix in prefixes
+            }
+
+    return previous
 
 
 def _start(

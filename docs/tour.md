@@ -205,6 +205,7 @@ logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   #
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message
 logbook sync granola                              # every Granola recording, and its summary as a derived note
 logbook sync mail                                 # the same mailbox live over IMAP, read-only; dedupes against the Takeout import
+logbook sync notion                               # what happened in Notion each day: pages created, edited, moved, archived; never their text
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook add story ~/Stories/lake.md --teller ola@example.org --listener kari.nordmann@example.org --refers-to 1961   # a told story (RFC 0028): on the day it was told, about the time it names
@@ -392,6 +393,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
 | `beeper` | `LOGBOOK_BEEPER_TOKEN` (`LOGBOOK_BEEPER_URL`, default `http://localhost:23373`; `LOGBOOK_BEEPER_ALLOW_REMOTE=1` to read a Beeper on another machine, which the design says not to) | one `message/v1` line per message of every chat Beeper Desktop bridges, `source` `beeper-<network>`; attachments referenced by asset id, never fetched; `--networks` chooses, default every one but imessage |
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
+| `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values; never the text ([Notion](#notion)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
@@ -473,6 +475,90 @@ own database (`sync imessage`), a WhatsApp message from a chat export or the pho
 cache in an iPhone backup (the `beeper` file adapter). Those lines carry other sources and raw ids, so the
 record does not deduplicate them against the Beeper lines. `--networks` is how you choose; the default
 pulls every network but imessage, which the local source has.
+
+### Notion
+
+`logbook sync notion` keeps what happened in your Notion workspace — a page created, edited, moved or
+archived, a task's status changed — as one `event/v1` line per page, day and action, so the Day can say
+*worked on Sail plan, +340 words* or *Book the ferry: Doing → Done*. It is a record of events, never a
+mirror: a line points at the page by its id and link and holds no word of what the page says.
+
+```bash
+export LOGBOOK_NOTION_TOKEN=ntn_...                         # the integration's secret: a password
+export LOGBOOK_NOTION_OWNER_ID=...                          # optional: your Notion user id, to mark your own actions
+export LOGBOOK_NOTION_ROOTS='https://www.notion.so/…/Research-…, …'   # optional: only what is under these
+logbook sync notion --dry-run                               # count, write nothing
+logbook sync notion                                         # then twice a day with the schedule
+logbook sync notion --since 2026-01-01T00:00:00Z            # every page edited since then, once
+```
+
+**The token.** In Notion, *Settings → Connections → Develop or manage integrations → New integration*,
+type *Internal*, for your workspace. Under *Capabilities* leave **Read content** on and switch *Update
+content*, *Insert content* and the comment capabilities off; for user information choose *Read user
+information without email addresses*, which gives the names of the people who edit (without it a line
+names them by id). Copy the *Internal Integration Secret* into `LOGBOOK_NOTION_TOKEN` in your shell
+profile, never in a file of the record. **Then share the pages**: an integration sees nothing until
+you add it to a page. Open each top-level page you want kept (your ideas, research, notes, tasks and
+contacts), choose *••• → Connections*, and add the integration; it then reads that page and everything
+under it, and nothing else. `LOGBOOK_NOTION_ROOTS` narrows that further to the pages and databases you
+name, by id or by the link *Copy link* gives. The sync only reads (`GET`, and `POST` only to Notion's
+search, which changes nothing), and a test holds it to that.
+
+**Who acted.** Each line names the person (or the integration) who made the page, for `created`, or
+who edited it last, for the other actions, by Notion user id and name, and marks them `owner` or
+`other`. Notion does not say which user is you: set `LOGBOOK_NOTION_OWNER_ID` to your user id, or
+the sync uses the user who owns the integration when Notion names one, which for an internal
+integration it does not. Without either, the lines say who acted and mark no one, and the run lists
+the people it saw with their ids, so run `logbook sync notion --dry-run` first and set yours before
+anything is written: a line is never rewritten. The owner id marks; it decides nothing else.
+
+| On the line | What it holds |
+|---|---|
+| `at` | the page's creation time for `created`; its last edit otherwise. The day is the record's own local day |
+| `title` | the page's title, verbatim; a database row's name |
+| `raw_id` | `<page id>/<day>/<action>`: the dedupe key, so a page edited twice on one day is one line |
+| `modified_at` | the page's last edit as the sync saw it, which is also the watermark |
+| `extra.action` | `created`, `edited`, `moved` or `archived` |
+| `extra.page` | the page's `id` and `url` (the private link, which opens only for people the page is shared with) |
+| `extra.path`, `extra.parent` | the titles above the page, the top first, as far as the integration can see; the parent's type and id |
+| `extra.actor` | `id`, `name`, `type` (`person` or `bot`) and `role` (`owner` or `other`) |
+| `extra.body` | `sha256` and `bytes` of the page's text, `words`, and `words_delta` since the page's previous line: a digest, never the text |
+| `extra.properties` | a database row's status, select, multi-select, date and checkbox values, by name |
+| `extra.changed` | each of those that changed since the page's previous line, `{name, old, new}` |
+| `extra.moved_from` | on a move, the parent and path the page had |
+
+**What a line never holds.** The page's text, its comments, its files, its cover or icon, its public
+link, anyone's email or avatar, and every property but the few above: no text, number, person, phone,
+email, url, file, formula or relation value, so a contacts database gives the names of its pages and
+none of their details. The digest lets you check a copy of the text against the line; a very short
+body could be guessed from it, as from its word count.
+
+**The tier.** Every line is tier 1: SPEC §4 and RFC 0009 give `event/v1` tier 1, and a Notion line is
+an event with a title, a place in a tree and who acted, as a calendar entry is a title, a place and an
+organizer. The tier says where a line may travel (tier 1 crosses by default, ADR 0016), never who wrote
+it: a line Ola's edit made is tier 1 exactly as one of yours is. A note's own words are tier 2
+(RFC 0010); a Notion line holds none, which is why it can be tier 1.
+
+**Which lines.** A run lists the pages edited since the watermark, newest first, by Notion's cursor,
+and asks the record what it already holds of each. A page made since the watermark gives `created`
+on the day it was made; its last edit gives `archived` when the page is archived or in the trash,
+`moved` when its parent is not the one on its previous line, else `edited` — unless the record already
+holds the page at that edit. An edit on the day the page was made, seen in the same run, is the
+`created` line, which then holds the body and properties. Notion keeps no history the API shows, so a
+line records the page as the sync saw it: two edits between two syncs are one, an old → new value is
+against the page's previous line, and an edit later on a day that already has its line is not written
+again. A page Notion stops listing — deleted for good, or no longer shared — leaves no line.
+
+**The watermark** is the newest last-edit time seen (`state/notion.json`); each run reads back two
+hours before it, because Notion stamps an edit to the minute and its search lists a fresh edit late,
+and the record refuses what it already holds. `--since` reads from an exact time; `--dry-run` counts
+and writes nothing. The first run reads every page once, its blocks included, to count its words: at
+three requests a second a workspace of a few thousand pages takes a quarter of an hour or more, and
+says how far it is every hundred pages; later runs read only what changed. The sync stays under Notion's rate limit — at most three requests a second; a 429
+waits as long as Notion's `Retry-After` says, a server error is tried again after 1, 2, 4… seconds —
+and when the limit does not lift it stops on one line, exit 1, the watermark where it was, so the next
+run carries on. `logbook doctor` lists `sync:notion` once the token is set, by name only, and asks
+Notion nothing; `sync --all` and the schedule run it with no more configuration.
 
 Granola works the same way (ADR 0017: backfill and live share one mapping). Create the key under *Settings →
 Connectors → API keys* (Business and Enterprise plans; scope it to your personal notes), export it as

@@ -86,6 +86,7 @@ SKIP_PHRASES = {
     "skipped_hidden": "hidden in the app",
     "skipped_no_id": "without a message id",
     "skipped_merged_chat": "merged chats, whose member chats carry the messages",
+    "skipped_outside_roots": "outside LOGBOOK_NOTION_ROOTS",
 }
 
 
@@ -140,6 +141,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "from_last_message": "from a room's last-message row (not in the event cache)",
     "owner_guessed": "owner taken as the person on most expenses (no owner_emails matched)",
     "no_title": "without a title",
+    "actor_unmarked": "with the actor marked neither owner nor other (set LOGBOOK_NOTION_OWNER_ID)",
+    "actor_unnamed": "with the actor named by id only (the integration may not read user information)",
 }
 
 
