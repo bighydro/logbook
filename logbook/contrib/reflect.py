@@ -62,7 +62,7 @@ from ..core import notes, sealing, signing
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import RETRACTION, Logbook, retractions
-from . import promises
+from . import dream_events, promises
 
 SOURCE = "reflect"  # the `source` of the lines `day reflect` writes
 CUE = "reflect"  # the word a Wispr Flow dictation begins with when it is the reflection
@@ -740,14 +740,16 @@ def signature(
 @dataclass(frozen=True)
 class Closed:
     """What `close` wrote: the signature, the reflection it confirmed (`written` when it was written
-    by this close, not on the day already), the accepted delegations as their notes, and what the
-    signature kept from the one it supersedes."""
+    by this close, not on the day already), the accepted delegations as their notes, what the
+    signature kept from the one it supersedes, and the dream's proposed events accepted, as their
+    event lines."""
 
     signature: Line
     reflection: Line
     written: bool
     delegations: tuple[Line, ...]
     kept: str | None
+    events: tuple[Line, ...] = ()
 
 
 def _quiet(_text: str) -> None:
@@ -762,13 +764,17 @@ def close(
     accepted: Sequence[Proposal],
     at: str | None = None,
     say: Callable[[str], None] = _quiet,
+    events: Sequence[dream_events.Proposed] = (),
+    first: int = 1,
 ) -> Closed:
     """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
     writer lock: the page read again (a disposition's line retracted since the proposals were read
-    is refused, nothing written), the reflection written when it is new (`write`), the accepted
-    delegations written as notes (`delegate`), then the signature through `signing.sign` with what
-    `signature` says, at `at` or now. `say` hears what the command prints as it goes. HeadMoved and
-    another writer are the store's own errors; nothing is retried."""
+    is refused, nothing written), the dream's proposed events accepted read again, numbered from
+    `first` (`dream_events.again`), the reflection written when it is new (`write`), the accepted
+    delegations written as notes (`delegate`), the accepted events as event lines
+    (`dream_events.write`), then the signature through `signing.sign` with what `signature` says, at
+    `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
+    the store's own errors; nothing is retried."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with lb.writer():
         lines, retracted = day_lines(lb, day)
@@ -776,6 +782,7 @@ def close(
         gone = [p for p in accepted if p.kind == DISPOSITION and p.line not in page]
         if gone:
             raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
+        taken = dream_events.again(lb, day, events, first)
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
         note = r.note
@@ -792,13 +799,19 @@ def close(
                 joined.append(str(line["id"]))
                 delegations.append(line)
                 say(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
+        written: list[Line] = []
+        for e in taken:
+            line = dream_events.write(lb, e)
+            joined.append(str(line["id"]))
+            written.append(line)
+            say(dream_events.wrote_text(e, line))
         args = signature(earlier, page | set(joined), joined, accepted)
         if args.kept is not None:
             say(f"  {args.kept}")
         line = signing.sign(
             lb, day, confirm=args.confirm, note=args.note, at=at, dispositions=args.dispositions
         )
-    return Closed(line, note, r.note is None, tuple(delegations), args.kept)
+    return Closed(line, note, r.note is None, tuple(delegations), args.kept, tuple(written))
 
 
 # -- the microphone ----------------------------------------------------------------------------------------
