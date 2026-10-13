@@ -377,6 +377,8 @@ def load(lb: Logbook, person: str) -> Derived | None:
         }
         rows = (where / "messages.jsonl").read_text(encoding="utf-8").splitlines()
         messages = [json.loads(row) for row in rows if row.strip()]
+        if not all(isinstance(m, dict) for m in messages):
+            raise ValueError("a message that is not an object")
         lines = {
             str(k): str(v) for k, v in json.loads((where / "lines.json").read_text(encoding="utf-8")).items()
         }
@@ -387,6 +389,8 @@ def load(lb: Logbook, person: str) -> Derived | None:
         raise RelationshipError(
             f"{where} is not a store this reader wrote ({e}); remove it and ingest again"
         ) from None
+    if manifest.get("person") != person:  # a case-insensitive disk folds two ids into one folder
+        raise RelationshipError(f"{where} holds another person's store; remove it and ingest again")
     return Derived(where, manifest, peers, messages, lines)
 
 
