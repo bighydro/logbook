@@ -93,9 +93,12 @@ def sync_arguments(sub: Subparsers) -> None:
     s = sub.add_parser(
         "sync",
         help="pull new items from a live source; --all for every configured one",
-        description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola,"
-        " mail, notion, ais, adsb, weather); safe to re-run; --all for every configured source,"
-        " --install-schedule for twice a day."
+        description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
+        " gtasks, granola, mail, notion, ais, adsb, weather); safe to re-run; --all for every configured"
+        " source, --install-schedule for twice a day."
+        " drive and gtasks: a Google Workspace service account with domain-wide delegation, read-only"
+        " (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address it reads as); a token per"
+        " run, never stored."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
         " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
@@ -109,7 +112,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "name",
         nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
-        " bridges, through its local API), gcal (Google Calendar), granola, mail (a mailbox over IMAP, Gmail"
+        " bridges, through its local API), gcal (Google Calendar), drive (what happened to your Google Drive"
+        " files: created, edited, renamed, moved, shared, commented, trashed, restored), gtasks (your Google"
+        " Tasks, created and done), granola, mail (a mailbox over IMAP, Gmail"
         " with an app password), notion (pages created, edited, moved, archived; never their text), ais (your"
         " vessels via aisstream.io), adsb (your aircraft via OpenSky),"
         " weather (the places of your days, one decimal of latitude, from Open-Meteo)",
@@ -565,6 +570,10 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["existing"] = _existing(lb)
     if _takes(adapter, "previous", live=True):
         options["previous"] = _previous(lb, adapter)
+    if _takes(adapter, "recorded", live=True):
+        options["recorded"] = _recorded(lb, adapter)
+    if _takes(adapter, "held", live=True):
+        options["held"] = _held(lb)
     if _takes(adapter, "timezone", live=True):
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
@@ -1110,6 +1119,38 @@ def _previous(
             }
 
     return previous
+
+
+def _held(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], dict[tuple[str, str], dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `held`: the lines the record holds under a batch of
+    (source, raw_id) keys, one SELECT through the index and read from the files, so a source can use
+    what it wrote before (`gtasks`: when a task's `created` line was written, for how long it was open).
+    A sealed line comes back opened when the identity is here; its `at` is always plain."""
+
+    def held(keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
+        with lb.index() as idx:
+            return idx.lines_of(keys)
+
+    return held
+
+
+def _recorded(lb: Logbook, adapter: adapters.LiveAdapter) -> Callable[[str | None], list[dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `recorded`: the lines of its own source and KIND from the
+    local day before `since` on (every one when None), read through the index, so a source that folds
+    several items into one line (`drive`: a file's activities in an hour) leaves out the items a line
+    already holds and never writes one twice."""
+    kind = str(getattr(adapter, "KIND", ""))
+
+    def recorded(since: str | None) -> list[dict[str, Any]]:
+        first = "0001-01-01"
+        if since is not None:
+            zone = ZoneInfo(str(lb.meta["timezone"]))
+            local = datetime.fromisoformat(since.replace("Z", "+00:00")).astimezone(zone)
+            first = (local - timedelta(days=1)).date().isoformat()
+        with lb.index() as idx:
+            return idx.of_source(kind, adapter.NAME, first, "9999-12-31")
+
+    return recorded
 
 
 def _start(
