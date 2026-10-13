@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook import cli
 from logbook.contrib import adapters
 from logbook.contrib.adapters import transcript
-from logbook.core import attachments
+from logbook.core import attachments, transcripts
 from logbook.core.store import Logbook
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +130,32 @@ def test_an_explicit_start_beats_the_file_name(tmp_path):
     copy = tmp_path / "2026-03-01T13-00-00Z tromso.vtt"
     shutil.copy(FIX / "tromso.vtt", copy)
     assert _one(copy, source="zoom", at="2026-04-01T08:00:00Z")["at"] == "2026-04-01T08:00:00Z"
+
+
+def test_a_cue_turn_carries_its_start_into_the_recording_and_equality_ignores_it():
+    """`Turn.start_s`, the cue's start in seconds from the recording's start: what a reader that
+    points into a transcript (`transcript synthesize`) shows as `00:04`. Two turns with the same
+    speaker and words are equal whatever their start, so every reader that compares turns is
+    unchanged."""
+    parsed = transcript.parse(FIX / "tromso.vtt")
+    assert [t.start_s for t in parsed.turns] == [0.0, 4.5, 9.0, 15.25]
+    assert parsed.turns[0] == transcripts.Turn("Kari Nordmann", "Hei Ola, hører du meg?")
+    srt = transcript.parse(FIX / "tromso.srt")
+    assert [t.start_s for t in srt.turns] == [0.0, 4.5, 9.0]
+    assert all(t.start_s is None for t in transcript.parse(FIX / "tromso.md").turns)
+
+
+def test_granola_segments_carry_their_start_from_the_first_segments_time():
+    text = json.dumps(
+        [
+            {"speaker": {"name": "Ines Nordmann"}, "text": "Hei.", "start_time": "2026-06-10T08:00:00Z"},
+            {"speaker": {"name": "Ola Nordmann"}, "text": "Hallo.", "start_time": "2026-06-10T08:02:10.500Z"},
+            {"speaker": {"name": "Ola Nordmann"}, "text": "Ingen tid."},
+            {"speaker": "Ines Nordmann", "text": "Sekunder.", "start": 2700},
+        ]
+    )
+    turns = transcripts._json_turns(text)
+    assert [t.start_s for t in turns] == [0.0, 130.5, None, 2700.0]
 
 
 # -- SRT ----------------------------------------------------------------------------------------
