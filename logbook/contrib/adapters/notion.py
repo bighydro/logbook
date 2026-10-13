@@ -251,6 +251,9 @@ def pull(
             )
         if notice is not None and len(pages) > BATCH:
             notice(f"{n + len(batch):,} of {len(pages):,} pages read")
+    if owner is None and notice is not None and people.seen:  # so a dry run tells the owner their id
+        named = ", ".join(f"{name or 'unnamed'} ({user_id})" for user_id, name in people.seen.items())
+        notice(f"no owner known; the people who acted: {named}; set {OWNER_ENV} to yours")
 
 
 def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
@@ -591,6 +594,7 @@ class _People:
         self.owner = owner
         self.users: dict[str, dict[str, Any] | None] = {}
         self.forbidden = False
+        self.seen: dict[str, str | None] = {}  # every person who acted this run, with their name
 
     def actor(self, ref: object, counts: dict[str, int]) -> dict[str, Any] | None:
         user_id = _id(ref.get("id")) if isinstance(ref, dict) else None
@@ -603,6 +607,7 @@ class _People:
             actor["name"] = name
         else:
             _count(counts, "actor_unnamed")
+        self.seen.setdefault(user_id, name)
         kind = user.get("type") if user is not None else None
         if kind in ("person", "bot"):
             actor["type"] = kind

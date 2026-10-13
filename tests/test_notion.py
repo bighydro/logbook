@@ -364,6 +364,12 @@ def test_a_workspace_integration_without_the_variable_marks_no_one_and_says_so(
     lb: Logbook, fake: FakeNotion, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.delenv(OWNER_ENV)
+    assert _sync("--dry-run") == 0
+    err = capsys.readouterr().err
+    assert (
+        f"no owner known; the people who acted: Ines Nordmann ({INES}), Ola Nordmann ({OLA}); set {OWNER_ENV}"
+        " to yours"
+    ) in err, "a dry run tells the owner their id before anything is written"
     assert _sync() == 0
     assert all("role" not in line["payload"]["extra"]["actor"] for line in _lines(lb))
     out = capsys.readouterr().out
