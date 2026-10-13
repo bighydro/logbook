@@ -759,7 +759,7 @@ def test_a_drive_edit_by_another_actor_does_not_promote_the_stop(
 @pytest.mark.parametrize(
     "where",
     [
-        {"location": "Kaffebrenneriet, Storgata 1"},
+        {"location": "Kafé Solvind, Storgata 1"},
         {"attendees": [{"ref": {"kind": "email", "value": "ola@example.org"}, "name": "Ola Nordmann"}]},
     ],
     ids=["location", "attendees"],
