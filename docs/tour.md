@@ -249,10 +249,14 @@ quick sources go first and `immich` last, and the first line says the order, so 
 never holds up the messages, the calendar, the positions or the weather. Each
 source prints its own summary as it runs, then one line per source closes the run (`ok`, `failed
 (status 1)`, `skipped (LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed.
-`logbook sync --install-schedule` makes the machine run `sync --scheduled` at 07:00 and 19:00 local: a
-launchd agent on macOS (`~/Library/LaunchAgents/org.logbook.sync.plist`), a systemd user timer on
-Linux (`~/.config/systemd/user/logbook-sync.timer`). The plist or unit is printed before it is
-written, nothing is written outside that directory, and `--uninstall-schedule` removes it again.
+`logbook sync --install-schedule` makes the machine run `sync --scheduled` at 00:00, 12:00 and 18:00
+local and `sync --scheduled --close` at 06:00, the run that closes the day (the dream's catch-up after
+the sync, when the dream is there and allowed): two launchd agents on macOS
+(`~/Library/LaunchAgents/org.logbook.sync.plist` and `org.logbook.sync.close.plist`), two systemd user
+timers on Linux (`~/.config/systemd/user/logbook-sync.timer` and `logbook-sync-close.timer`). The plists
+or units are printed before they are written, nothing is written outside that directory, and
+`--uninstall-schedule` removes them again; `--system` writes daemons for a machine nobody logs in to and
+prints the two sudo commands that install them.
 Installing also names this machine the record's home in `state/home.json` ([ADR
 0022](adr/0022-the-records-home.md)): the one machine that writes, which `logbook doctor` checks on
 every machine and warns about on any other. The
@@ -269,7 +273,7 @@ environment) says `LOGBOOK_WEATHER=1`.
 logbook sync --all                                # every configured source, one after the other
 logbook sync --all --dry-run                      # count per source, write nothing
 logbook sync weather --since 2026-06-01           # the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)
-logbook sync --install-schedule                   # 07:00 and 19:00 local, by launchd or systemd
+logbook sync --install-schedule                   # 00:00, 06:00 (the close), 12:00 and 18:00 local
 logbook sync --scheduled                          # what the schedule runs: sync --all, then doctor
 logbook sync --uninstall-schedule
 ```
@@ -492,7 +496,7 @@ export LOGBOOK_NOTION_TOKEN=ntn_...                         # the integration's 
 export LOGBOOK_NOTION_OWNER_ID=...                          # optional: your Notion user id, to mark your own actions
 export LOGBOOK_NOTION_ROOTS='https://www.notion.so/…/Research-…, …'   # optional: only what is under these
 logbook sync notion --dry-run                               # count, write nothing
-logbook sync notion                                         # then twice a day with the schedule
+logbook sync notion                                         # then four times a day with the schedule
 logbook sync notion --since 2026-01-01T00:00:00Z            # every page edited since then, once
 ```
 
