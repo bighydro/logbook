@@ -380,6 +380,14 @@ def test_without_a_failed_list_a_refused_token_raises_after_the_others(api: BotA
     assert "not-a-real-token" not in str(e.value)
 
 
+def test_a_message_with_neither_text_nor_media_is_counted_not_written(api: BotAPI):
+    api.bots[tp.NORDLYS_TOKEN]["updates"] = [
+        {"update_id": 1, "message": _msg(3001, 1, dice={"emoji": "x", "value": 3})}
+    ]
+    counts: dict[str, int] = {}
+    assert _pull(_config(api), counts=counts) == [] and counts["skipped_empty"] == 1
+
+
 def test_since_leaves_out_what_came_before(api: BotAPI):
     lines = _pull(_config(api), since=tp.at(50))
     assert sorted(_by_id(lines)) == [2012, 2015]

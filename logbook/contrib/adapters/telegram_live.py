@@ -138,8 +138,8 @@ def pull(
     yielded. A bot that cannot be read (a refused token, a webhook, the API not answering) is one
     line in `failed`, naming the bot and never its token; without a list, OSError carries those
     lines after the other bots' messages. `since` (RFC3339 UTC) leaves out what came before it.
-    `counts` tallies `skipped_not_owner`, `skipped_not_private`, `skipped_other_update` and
-    `skipped_bad_date`; `progress(messages, elapsed)` after each bot."""
+    `counts` tallies `skipped_not_owner`, `skipped_not_private`, `skipped_other_update`,
+    `skipped_empty` and `skipped_bad_date`; `progress(messages, elapsed)` after each bot."""
     counts = counts if counts is not None else {}
     problems: list[str] = []
     started = time.monotonic()
@@ -216,6 +216,9 @@ def _lines(
             continue
         text = _text(message.get("text")) or _text(message.get("caption"))
         kind, media = _media(message)
+        if text is None and kind is None:
+            _count(counts, "skipped_empty")  # a dice, a game: neither words nor media, as the export
+            continue
         base = key(bot.id, date, True, text, kind is not None)
         mid = message.get("message_id")
         raw_id = minted.get((mid, base)) or keys.mint(base)

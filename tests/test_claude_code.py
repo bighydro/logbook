@@ -185,6 +185,12 @@ def test_a_sealed_line_this_machine_cannot_open_is_never_written_again(folder: P
     assert "grown" not in counts
 
 
+def test_a_stray_file_in_the_projects_folder_hides_no_project(folder: Path):
+    (folder / "notes.jsonl").write_text('{"anything": 1}\n', encoding="utf-8")
+    sessions = sorted(line["payload"]["extra"]["session"] for line, _data in _run(folder))
+    assert sessions == [cs.SESSION, cs.SECOND]
+
+
 def test_a_session_file_alone_is_read(folder: Path):
     ((line, _data),) = _run(folder / cs.PROJECT / f"{cs.SECOND}.jsonl")
     assert line["payload"]["extra"]["session"] == cs.SECOND

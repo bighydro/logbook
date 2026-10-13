@@ -11,12 +11,14 @@ one piece. A chat's own export (⋮ → Export chat history) has the same shape 
 `logbook add telegram-export <folder>` (or the folder, or its `result.json`, sniffed) reads every
 chat of type `bot_chat` and nothing else: a personal chat, a group, a channel or the saved messages
 are counted (`skipped_not_a_bot_chat`) and never read, so no person's words come in through here.
-One line per message; a service message (a pin, a cleared history) is skipped and counted.
+One line per message; a service message (a pin, a cleared history) is skipped and counted, and so
+is a message with neither words nor media (a dice, a game: `skipped_empty`).
 
 Kind `message`, tier 2 (RFC 0008, MUST), source `telegram`, `at` the message's `date_unixtime`
 (an export older than that field gives only a local time without an offset, read in the record's
 zone). The chat is `{id: <the bot's user id>, type: direct, name: <the bot's name>}`. A private
-chat with a bot has two sides: a message from the bot (`from_id` `user<chat id>`) has `from_me`
+chat with a bot has two sides: a message from the bot (`from_id` `user<chat id>`, or the bare
+number an older export wrote) has `from_me`
 false, `sender` `{provider_id, telegram:<bot id>, name}` and `extra.machine` true; every other
 message is the owner's (`from_me` true), unless the export names its owner
 (`personal_information.user_id`) and the sender is someone else, which is counted
@@ -320,13 +322,16 @@ def _chat(
         if unix is None or at is None:
             _count(counts, "skipped_bad_date")
             continue
-        sender = str(message.get("from_id") or "")
+        sender = _peer(message.get("from_id"))
         from_me = sender != f"user{bot_id}"
         if from_me and owner is not None and sender and sender != f"user{owner}":
             _count(counts, "skipped_not_owner")
             continue
         text = flatten(message.get("text"))
         kind = _media_kind(message)
+        if not normal_text(text) and kind is None:
+            _count(counts, "skipped_empty")  # a dice, a game: neither words nor media
+            continue
         raw_id = keys.mint(key(bot_id, unix, from_me, text, kind is not None))
         by_id[message.get("id")] = raw_id
         if since and at < since:
@@ -355,6 +360,14 @@ def _chat(
             edited_at=edited,
             extra=extra,
         )
+
+
+def _peer(value: object) -> str:
+    """A sender as the export names it, `user<id>`: older exports wrote the bare number."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return f"user{value}"
+    text = str(value or "").strip()
+    return f"user{text}" if text.isdigit() else text
 
 
 def flatten(text: object) -> str:

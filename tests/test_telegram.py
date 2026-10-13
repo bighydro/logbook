@@ -177,6 +177,23 @@ def test_an_old_export_without_unix_times_is_read_in_the_records_zone(tmp_path: 
     assert line["at"] == tp.at(15)  # 11:15 in Oslo is 10:15 UTC
 
 
+def test_an_old_export_with_numeric_sender_ids_still_tells_the_bot_from_the_owner(tmp_path: Path):
+    old = [dict(m) for m in tp.NORDLYS_MESSAGES[1:3]]
+    for message in old:
+        message["from_id"] = int(str(message["from_id"]).removeprefix("user"))
+    doc = tp.document([{"name": "Nordlys", "type": "bot_chat", "id": tp.NORDLYS_ID, "messages": old}])
+    own, bot = _lines(tp.export(tmp_path / "numeric", doc))
+    assert own["payload"]["from_me"] is True and not machine.is_machine(own["payload"])
+    assert bot["payload"]["from_me"] is False and machine.is_machine(bot["payload"])
+
+
+def test_a_message_with_neither_text_nor_media_is_counted_not_written(tmp_path: Path):
+    dice = tp.mine(411, 50, "")
+    doc = tp.document([{"name": "Nordlys", "type": "bot_chat", "id": tp.NORDLYS_ID, "messages": [dice]}])
+    counts: dict[str, int] = {}
+    assert _lines(tp.export(tmp_path / "dice", doc), counts) == [] and counts["skipped_empty"] == 1
+
+
 def test_since_leaves_out_what_came_before(folder: Path):
     lines = _lines(folder, since=tp.at(60))
     assert {line["payload"]["extra"]["message_id"] for line in lines} == {501, 502}

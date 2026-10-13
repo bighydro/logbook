@@ -165,7 +165,8 @@ def _files(path: Path, counts: dict[str, int]) -> Iterator[Path]:
         candidates = [path]
     else:
         candidates = _session_files(path)
-        if not candidates:
+        if not any(_is_session(f) for f in candidates):  # the projects folder: a stray file hides nothing
+            candidates = []
             for folder in sorted(p for p in path.iterdir() if p.is_dir() and not p.name.startswith(".")):
                 candidates.extend(_session_files(folder))
     for file in candidates:
@@ -181,7 +182,6 @@ class _Session:
     def __init__(self) -> None:
         self.turns: list[Turn] = []
         self.stamps: list[str] = []
-        self.ids: list[str] = []
         self.cwd: str | None = None
         self.branch: str | None = None
         self.version: str | None = None
@@ -216,7 +216,7 @@ def _session(file: Path, counts: dict[str, int], tier: int) -> tuple[dict[str, A
     if not held.turns or not held.stamps:
         _count(counts, "skipped_empty")
         return None
-    session = _session_id(file, held)
+    session = _session_id(file)
     data = json.dumps(
         {"turns": [{"speaker": t.speaker, "text": t.text} for t in held.turns]},
         ensure_ascii=False,
@@ -272,8 +272,6 @@ def _entry(entry: Mapping[str, Any], held: _Session, counts: dict[str, int]) -> 
     stamp = _stamp(entry.get("timestamp"))
     if stamp is not None:
         held.stamps.append(stamp)
-    if isinstance(entry.get("sessionId"), str) and entry["sessionId"] not in held.ids:
-        held.ids.append(entry["sessionId"])
     held.cwd = held.cwd or _text(entry.get("cwd"))
     held.branch = held.branch or _text(entry.get("gitBranch"))
     held.version = held.version or _text(entry.get("version"))
@@ -330,9 +328,9 @@ def _words(text: str) -> bool:
     return bool(stripped) and not stripped.startswith(NOT_WORDS)
 
 
-def _session_id(file: Path, held: _Session) -> str:
-    """The file's own name, which Claude Code names after the session; the first id inside else."""
-    return file.stem if file.stem else (held.ids[0] if held.ids else file.name)
+def _session_id(file: Path) -> str:
+    """The file's own name, which Claude Code names after the session."""
+    return file.stem
 
 
 def _first_words(turns: list[Turn]) -> str | None:

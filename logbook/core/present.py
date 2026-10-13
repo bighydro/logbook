@@ -36,10 +36,10 @@ and has no display name is a bare address and is dropped, and a calendar system 
 
 *** Only a participant the record resolves to a person: by email, phone or provider id, else by
 the spoken name matching a label. A diarization label (`Speaker A`), `me`, `them`, `Unknown` or
-a name no resolution knows is not company, and neither is a participant marked `machine` (an agent,
-`logbook.core.machine`), whatever name it was given. A note's name follows the same rule: "with Ola" names
-Ola Nordmann when a resolution line gives a person that label (`_by_name`); "with US", "with
-XYZ", a country, an acronym or a name the record does not know names nobody.
+a name no resolution knows is not company, and neither is a participant marked `machine` (an
+agent, `logbook.core.machine`), whatever name it was given. A note's name follows the same rule:
+"with Ola" names Ola Nordmann when a resolution line gives a person that label (`_by_name`); "with
+US", "with XYZ", a country, an acronym or a name the record does not know names nobody.
 
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
 guess, by id or by name, and stays proposed until the owner says otherwise, and so are the
