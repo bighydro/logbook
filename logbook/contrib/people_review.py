@@ -10,8 +10,10 @@ writes.
 **The strongest-identifier rule.** An observed person's id is derived from the strongest identifier
 the observation carries — an **email** address (case aside), else a **phone** number (E.164, a
 WhatsApp JID read as the number it spells, a number entered without a country code read with
-`LOGBOOK_DIAL_PREFIX` as the adapters read it), else the **name** as shown, its words folded and
-sorted — never from the per-observation id a source gives (a speaker id, a chat guid, a line id).
+`LOGBOOK_DIAL_PREFIX` as the adapters read it), else a **handle** a service names (`HANDLE_SERVICES`:
+`github:<login>`, the organizer of a GitHub line, case aside), else the **name** as shown, its words
+folded and sorted — never from the per-observation id a source gives (a speaker id, a chat guid, a
+line id).
 An address seen under three display names is one observed person with three names; a number seen as
 `+447700900101` and as `447700900101@s.whatsapp.net` is one. The other way, one person explodes
 into a row per observation.
@@ -81,9 +83,11 @@ SOURCE = people_merge.SOURCE
 METHOD = people_merge.METHOD
 KINDS = ("mail", "message", "transcript", "event")  # the lines a counterpart is observed on
 REF_KINDS = ("email", "phone", "handle", "provider_id")  # an identifier a resolution line can carry
+HANDLE_SERVICES = ("github",)  # `<service>:<login>` handles: a person's own, keyed as a number is
 TABLE = "observed_people"
 TABLE_META = "observed_meta"
-TABLE_VERSION = "2"  # 2: an agent is never observed (`logbook.core.machine`)
+# 2: an agent is never observed (`logbook.core.machine`); 3: a service's handle is a key (`github:<login>`)
+TABLE_VERSION = "3"
 COLUMNS = (
     "key_kind",
     "key_value",
@@ -136,7 +140,8 @@ class Seen:
 def counterparts(kind: str, payload: Mapping[str, Any]) -> list[Seen]:
     """The people one line names, source-native: a mail's addresses, a message's sender (or, for
     the owner's own line in a direct chat, the person the chat's id names), a transcript's
-    participants, a calendar entry's attendees who did not decline and its organizer. An agent
+    participants, a calendar entry's attendees who did not decline and its organizer, named by the
+    line's `extra.actor.name` when the line says who acted (`github`: a commit's author). An agent
     names nobody (`logbook.core.machine`): no line of a conversation with one, and no transcript
     participant marked machine."""
     if kind == "mail":
@@ -191,7 +196,7 @@ def counterparts(kind: str, payload: Mapping[str, Any]) -> list[Seen]:
                 found.append(Seen((ref,), _text(attendee.get("name"))))
         organizer = _ref(payload.get("organizer"))
         if organizer is not None:
-            found.append(Seen((organizer,), None))
+            found.append(Seen((organizer,), _actor_name(payload)))
         return found
     return []
 
@@ -208,6 +213,10 @@ def key_of(seen: Seen, prefix: str) -> Ref | None:
         phone = _phone_key(ref, prefix)
         if phone is not None:
             return phone
+    for ref in seen.refs:
+        handle = _handle_key(ref)
+        if handle is not None:
+            return handle
     words = sorted(people_merge._words(seen.label or ""))
     return ("name", " ".join(words)) if words else None
 
@@ -229,6 +238,28 @@ def _phone_key(ref: Ref, prefix: str) -> Ref | None:
         jid = WHATSAPP_JID.match(value)
         return ("phone", f"+{jid.group(1)}") if jid else None
     return None
+
+
+def _handle_key(ref: Ref) -> Ref | None:
+    """A `handle` a service names (`github:<login>`), case aside: a person's own identifier on that
+    service, as a number is on the phone network; None for any other handle (a chat's own id)."""
+    kind, value = ref
+    service, sep, login = value.strip().partition(":")
+    if kind != "handle" or not sep or service.casefold() not in HANDLE_SERVICES or not login.strip():
+        return None
+    return ("handle", value.strip().casefold())
+
+
+def _bare_handle(ref: Ref) -> Ref | None:
+    """A service's handle without its service (`github:ines` → `ines`), as `policy/owner.json` may list it."""
+    return ("handle", ref[1].partition(":")[2].casefold()) if _handle_key(ref) is not None else None
+
+
+def _actor_name(payload: Mapping[str, Any]) -> str | None:
+    """The name a line gives who acted, `extra.actor.name` (`github`: a commit's author name)."""
+    extra = payload.get("extra")
+    actor = extra.get("actor") if isinstance(extra, Mapping) else None
+    return _text(actor.get("name")) if isinstance(actor, Mapping) else None
 
 
 def _chat_ref(chat_id: str) -> Ref | None:
@@ -470,7 +501,7 @@ def build(lb: Logbook, idx: Index) -> list[Observed]:
 
 def _is_owner(seen: Seen, owner: present.Owner, identities: Mapping[Ref, Identity]) -> bool:
     for ref in seen.refs:
-        if ref in owner.refs:
+        if ref in owner.refs or _bare_handle(ref) in owner.refs:
             return True
         entity, _label = present.resolve_ref(ref, identities)
         if entity is not None and entity in owner.entities:

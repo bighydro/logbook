@@ -606,3 +606,60 @@ def test_sync_all_runs_github_among_the_quick_sources(
     out = capsys.readouterr().out
     assert any(line.split() == ["github", "ok"] for line in out.splitlines())
     assert len(_lines(lb)) == FIRST_RUN
+
+
+# -- handles are people to review ----------------------------------------------------------------------
+
+
+def _observed(lb: Logbook) -> dict[tuple[str, str], Any]:
+    from logbook.contrib import people_review
+
+    return {row.key: row for row in people_review.observed(lb)}
+
+
+def test_a_handle_is_an_observed_person_as_a_number_is(lb: Logbook, fake: FakeGitHub) -> None:
+    assert _sync() == 0
+    rows = _observed(lb)
+    ola = rows[("handle", "github:ola-example")]
+    assert ola.sources == {"github": 7} and ola.kinds == {"event": 7}
+    assert ola.labels == {"Ola Nordmann": 1}, "the name his commit gave, as a contact's name"
+    assert ("handle", "github:ines-example") not in rows, "the owner is never their own company"
+    assert not any("example-ci" in key[1] for key in rows), "a bot is no person"
+    assert ("name", "nordmann ola") not in rows, "one person, keyed by the handle"
+
+
+def test_handles_listed_after_the_lines_were_written_still_leave_the_owner_out(
+    lb: Logbook, fake: FakeGitHub
+) -> None:
+    _owner(lb)
+    assert _sync() == 0
+    assert ("handle", "github:ines-example") in _observed(lb), "nothing tells the owner yet"
+    _owner(lb, handles=["@ines-example"])
+    lb.append("2026-03-09T08:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "a synthetic note"})
+    assert ("handle", "github:ines-example") not in _observed(lb)
+
+
+def test_people_review_proposes_a_handle_to_the_person_of_that_name(
+    lb: Logbook, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lb.append(
+        "2026-01-01T09:00:00Z",
+        "ios-contacts",
+        "resolution",
+        2,
+        {
+            "schema": "resolution/v1",
+            "ref": {"kind": "email", "value": "ola@example.org"},
+            "entity": {"type": "person", "id": "019cadd3-6bc0-7dcd-9133-043f5aabf2a9", "registry": "logbook"},
+            "label": "Ola Nordmann",
+            "method": "exact",
+        },
+    )
+    assert _sync() == 0
+    capsys.readouterr()
+    try:
+        cli.main(["people", "review"])
+    except SystemExit as e:
+        assert e.code in (0, None)
+    out = capsys.readouterr().out
+    assert "github:ola-example (Ola Nordmann; event 7) → Ola Nordmann: same name Ola Nordmann" in out
