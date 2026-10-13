@@ -141,6 +141,23 @@ def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
         return idx.span(kind)
 
 
+# the kinds of line that are about the record, not about a day: a crossing (the line each export appends,
+# dated the day it ran), a retraction, a resolution (the name overlay) and a migration
+BOOKKEEPING = frozenset({"crossing", RETRACTION, "resolution", "migration"})
+
+
+def record_span(lb: Logbook) -> tuple[str, str] | None:
+    """The first and last local day with a line that observes a day — every kind but the record's
+    own bookkeeping (`BOOKKEEPING`) — so that an export's run does not move the window of the next
+    (`export site`, `export world`). None when the record has no such line."""
+    with lb.index() as idx:
+        spans = [idx.span(str(row["kind"])) for row in idx.kinds() if row["kind"] not in BOOKKEEPING]
+    found = [span for span in spans if span is not None]
+    if not found:
+        return None
+    return min(a for a, _b in found), max(b for _a, b in found)
+
+
 def crossing(lines: Iterable[Line], tiers: Sequence[int] | None) -> list[Line]:
     """The lines whose tier is in `tiers`; every line when `tiers` is None."""
     if tiers is None:

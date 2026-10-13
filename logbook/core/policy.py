@@ -51,6 +51,8 @@ VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on t
 VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 SITE_DESTINATION = "site"  # `logbook export site`: a folder of static HTML the owner may publish anywhere
 SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
+WORLD_DESTINATION = "world"  # `logbook export world`: one page you can scrub, for the owner and the circle
+WORLD_DEFAULT_TIER = 2  # the ceiling for a record whose file does not name it
 DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and drafts it (RFC 0036)
 MODEL = "model"  # an entry's optional key: the one model the destination is
 DEFAULT_POLICY: dict[str, Any] = {
@@ -301,6 +303,14 @@ def site_ceiling(root: Path) -> int:
     when the file does not name it, as the vault. A site is pages the owner may publish anywhere, so
     tier 1 is what crosses on its own (ADR 0016) and `--tier 1,2` needs the entry; tier 3 never."""
     return _ceiling_or_default(root, SITE_DESTINATION, SITE_DEFAULT_TIER)
+
+
+def world_ceiling(root: Path) -> int:
+    """The highest tier `logbook export world` and the Library's `/world` may put in the page: the
+    `world` entry of the policy, or tier 2 when the file does not name it. The page is where the
+    owner was, how they moved and what their boat did, for the owner and the people they hand it
+    to: tier 2 (their stays, their chapters) is its own, and tier 3 needs the entry."""
+    return _ceiling_or_default(root, WORLD_DESTINATION, WORLD_DEFAULT_TIER)
 
 
 def _ceiling_or_default(root: Path, destination: str, default: int) -> int:

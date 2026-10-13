@@ -42,7 +42,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import crossing, policy, stays
+from ..core import crossing, policy, reading, stays
 from ..core import year as year_reader
 from ..core.chain import Line
 from ..core.flights import Airports
@@ -66,7 +66,7 @@ PAGE_NOUNS = {  # a kind of page, singular and plural, for the console
 }
 UNNAMED = "unnamed"
 RETRACTION = "retraction"
-BOOKKEEPING = frozenset({crossing.KIND, RETRACTION, "resolution", "migration"})  # lines about the record
+BOOKKEEPING = reading.BOOKKEEPING  # lines about the record, not a day (`reading.record_span`)
 EN_DASH, ARROW, DOT = year_reader.EN_DASH, year_reader.ARROW, year_reader.DOT
 
 
@@ -108,7 +108,7 @@ def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
     has its Days index, and its Year page says what the Year reader says of it), held against the
     policy: a tier above the ceiling for `site` is refused naming the file. None when the record has
     no day at all."""
-    whole = record_span(lb)
+    whole = reading.record_span(lb)
     if whole is None:
         return None
     try:
@@ -123,19 +123,6 @@ def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
             f'add {{"{DESTINATION}": {{"max_tier": {max(tiers)}}}}} to it if that is what you want'
         )
     return Request(whole[0], whole[1], tiers, max_tier)
-
-
-def record_span(lb: Logbook) -> tuple[str, str] | None:
-    """The first and last local day with a line that observes a day — every kind but the record's
-    own bookkeeping: a crossing (the line each export appends, dated the day it ran), a retraction, a
-    resolution (the name overlay) and a migration — so that a run does not move the window of the
-    next. None when the record has no such line."""
-    with lb.index() as idx:
-        spans = [idx.span(str(row["kind"])) for row in idx.kinds() if row["kind"] not in BOOKKEEPING]
-    found = [span for span in spans if span is not None]
-    if not found:
-        return None
-    return min(a for a, _b in found), max(b for _a, b in found)
 
 
 # -- names: file stems and relative paths -------------------------------------------------------------------

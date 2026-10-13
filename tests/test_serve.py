@@ -20,7 +20,7 @@ import pytest
 from persona import note, persona_record, utc
 
 from logbook import cli
-from logbook.contrib import serve
+from logbook.contrib import serve, world
 from logbook.core import index
 from logbook.core.store import Logbook
 
@@ -37,6 +37,7 @@ PAGES = (
     "/places?page=2",
     "/assets",
     "/gaps",
+    "/world",
 )
 REFERENCE = re.compile(
     r"""(?:href|src|action|formaction|poster|data|srcset|cite)\s*=\s*["']([^"']*)["']""", re.I
@@ -87,12 +88,13 @@ def test_refuses_to_bind_anything_but_loopback(
 
 def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Every link, form and image on every page points inside the server: a path from `/`, never
-    a scheme, a host or a protocol-relative `//`. No script fetched (the Places page carries one
-    inline, for its keys, and a Day one, for its record button, when the server can hear a
-    recording; each named by its hash in that page's policy and by nothing else; every other page
-    has none and a policy that allows none), no stylesheet link, no frame, no `url()` or `@import`
-    in the inline style, and a Content-Security-Policy that would stop a browser following any of
-    those even if one slipped in."""
+    a scheme, a host or a protocol-relative `//`. No script fetched (three pages carry one inline:
+    the Places page for its keys, a Day for its record button when the server can hear a recording,
+    and the World page for its canvas, whose data is in two JSON blocks a browser never runs; each
+    script is named by its hash in that page's policy and by nothing else; every other page has none
+    and a policy that allows none), no stylesheet link, no frame, no `url()` or `@import` in the
+    inline style, and a Content-Security-Policy that would stop a browser following any of those
+    even if one slipped in."""
     lb, site = _open(tmp_path, monkeypatch)
     voiced = serve.Site(lb, voice=serve.Voice(lambda path: None))  # type: ignore[arg-type, return-value]
     days = [page for page in PAGES if page.startswith("/day/")]
@@ -110,12 +112,17 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
         script = (
             serve.PLACES_SCRIPT_HASH
             if path == "/places"
+            else world.SCRIPT_HASH
+            if path == "/world"
             else serve.DAY_SCRIPT_HASH
             if server is voiced
             else None
         )
         if script is not None:
-            assert text.count("<script") == 1 and "<script src" not in low and "<script>" in text, page
+            data = 2 if path == "/world" else 0  # the World's bundle and its land, which no browser runs
+            assert text.count("<script>") == 1 and "<script src" not in low, page
+            assert text.count('<script type="application/json"') == data, page
+            assert text.count("<script") == 1 + data, page
             assert f"script-src '{script}'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
             assert "connect-src" not in csp, page
         else:

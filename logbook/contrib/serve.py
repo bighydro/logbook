@@ -6,11 +6,12 @@ row's attachments and company folded under a toggle; `/days?from=&to=` is a wind
 day (`days.read`), each row a link to its Day; `/trips?year=` the trips of a year (`trips.trips`
 over one `reading.read`); `/places` the named places of `places.json`; `/assets` the registered
 assets and the last fix of each (`asset_status.read`); `/gaps` where each source went quiet
-(`gaps.report`); `/today` redirects to the Day the owner is in now: the current date in the
-record's timezone, the date before until the record's `day_start` (RFC 0036), whose Day then says
-where it begins. Every page is built from the index and the readers, so a Day renders in the time
-`logbook day` takes whatever the record's length, and nothing is written by a GET: every page is
-answered from the record at its head.
+(`gaps.report`); `/world?from=&to=` the page `logbook export world` writes (`world.py`): the
+globe, the places, the assets on their tracks, the stays, the journeys and a time scrubber; `/today`
+redirects to the Day the owner is in now: the current date in the record's timezone, the date before
+until the record's `day_start` (RFC 0036), whose Day then says where it begins. Every page is built
+from the index and the readers, so a Day renders in the time `logbook day` takes whatever the
+record's length, and nothing is written by a GET: every page is answered from the record at its head.
 
 Two pages write, on a POST. `/places` carries the review queue of `setup places review`
 (`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
@@ -47,10 +48,11 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
   name, not even its own.
 - A page is one HTML document with one inline stylesheet: no font, no image, no stylesheet link,
   no script fetched, and no reference to any URL but the server's own paths. A script is inline on
-  two pages, each named in that page's Content-Security-Policy by its hash and by nothing else: the
-  Places page's keys (`PLACES_SCRIPT`: Enter, n and Space) and the Day page's record button
+  three pages, each named in that page's Content-Security-Policy by its hash and by nothing else: the
+  Places page's keys (`PLACES_SCRIPT`: Enter, n and Space), the Day page's record button
   (`DAY_SCRIPT`, only where the server can hear a recording: it records with the browser's own
-  MediaRecorder and sends the recording with the form, never by a fetch); every other page's policy
+  MediaRecorder and sends the recording with the form, never by a fetch) and the World page's canvas
+  (`world.SCRIPT`, its data in two JSON blocks a browser never runs); every other page's policy
   allows no script. The header tells the browser what the markup already does, so nothing a
   payload carried could make a page fetch from elsewhere even if the escaping here were wrong.
 - Read-only but for the POSTs above. The pages call the readers; the readers never write (not
@@ -109,7 +111,7 @@ from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook
-from . import asset_status, dream, gaps, places_review, reflect
+from . import asset_status, dream, gaps, places_review, reflect, world
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
@@ -118,7 +120,7 @@ HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
-RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places"})  # and every Day: the record's, not the clock's
+RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places", "/world"})  # and every Day: not the clock's
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
@@ -187,6 +189,7 @@ recorder.start();button.textContent="Stop, and hear it";
 """
 DAY_SCRIPT_HASH = "sha256-" + base64.b64encode(hashlib.sha256(DAY_SCRIPT.encode("utf-8")).digest()).decode()
 DAY_CSP = CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
+WORLD_CSP = CSP.replace("style-src", f"script-src '{world.SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
@@ -278,6 +281,7 @@ footer .footnote{display:inline-block;margin-top:.3rem}
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a><a href="/trips">trips</a>'
     '<a href="/places">places</a><a href="/assets">assets</a><a href="/gaps">gaps</a>'
+    '<a href="/world">world</a>'
 )
 
 
@@ -435,7 +439,7 @@ class Site:
         if etag is not None and if_none_match is not None and _matches(if_none_match, etag):
             return Response(304, b"", etag=etag)
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
-        csp = PLACES_CSP if path == "/places" else CSP
+        csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None and self._records():
             csp = DAY_CSP
         try:
@@ -753,6 +757,8 @@ class Site:
             return self.page_assets()
         if path == "/gaps":
             return self.page_gaps(params.get("since") or None)
+        if path == "/world":
+            return self.page_world(params.get("from") or None, params.get("to") or None)
         raise NotFound(path)
 
     def _error(self, status: int, message: str) -> Response:
@@ -1329,6 +1335,17 @@ class Site:
             rows,
         )
         return self.document("assets", body)
+
+    def page_world(self, first: str | None, last: str | None) -> str:
+        """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
+        the policy, the record's days or `from` and `to`): the same JSON, the same script, the
+        Library's navigation above it and the policy in the header, not in the page."""
+        found = world.library_page(self.lb, first, last, self.nav, self.airports)
+        if found is None:
+            return self.document(
+                "world", "<h1>The world</h1>\n<p>the record has no day yet: nothing to draw</p>\n"
+            )
+        return found
 
     def page_gaps(self, since: str | None) -> str:
         data = gaps.report(self.lb, since=since)
