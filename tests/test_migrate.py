@@ -1,7 +1,8 @@
 """`logbook migrate`: a logbook/0.1 record (hashed with the pre-RFC 8785 canonicalisation) becomes
 logbook/0.2. Content is untouched; prev and hash are recomputed; lineage is kept (SPEC §3.1, ADR 0014).
 
-The 0.1 serialiser lives only here: the code carries one canonicalisation (ADR 0014)."""
+The 0.1 serialiser lives here and in `store.hash_0_1`, which `migrate`'s gate reads the old hashes with
+before it replaces them; the code writes and verifies a record by one canonicalisation (ADR 0014)."""
 
 from __future__ import annotations
 

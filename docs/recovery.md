@@ -2,7 +2,10 @@
 
 `logbook verify` reads the files alone and says one of a few things. Each has one answer; none of them
 is "edit a month file". The chain is the record, so every repair below moves lines, appends lines or
-brings `logbook.json` forward, and never rewrites a line in place.
+brings `logbook.json` forward, and never rewrites a line in place. The two commands that give every line
+a new hash, `repair migrate` and `key seal --all`, verify the whole record first, every hash under the rule
+it was written with and every link, and refuse with the first failing line and its id when it does not, so
+a record in this table is put right before it is migrated or sealed and never by being migrated or sealed.
 
 | `verify` says | What happened | What to run |
 |---|---|---|
