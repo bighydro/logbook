@@ -7,16 +7,21 @@ itself. Synthetic Oslo persona, who does not exist."""
 from __future__ import annotations
 
 import html
+import http.client
+import json
 import re
 import threading
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
-from persona import persona_record
+from persona import note, persona_record, utc
 
 from logbook import cli
 from logbook.contrib import serve
+from logbook.core import index
 from logbook.core.store import Logbook
 
 PAGES = (
@@ -216,6 +221,134 @@ def test_serving_writes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert lb.meta["head"] == head and _files(lb.root) == before
 
 
+# -- a record that moves while it is served ---------------------------------------------------------------
+
+
+def _sync(lb: Logbook, text: str) -> None:
+    """What a sync does while the server runs: another writer appends to the record (here a note at
+    noon on the last day), and the head moves."""
+    Logbook(lb.root).append_many([note(utc("2026-06-21", "12:00"), text)])
+
+
+def test_a_page_is_read_again_when_the_head_has_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No restart after a sync: the next request reads the record at its new head."""
+    lb, site = _open(tmp_path, monkeypatch)
+    before = site.respond("/day/2026-06-21", "")
+    assert "a synthetic note from the marina" not in before.body.decode("utf-8")
+    _sync(lb, "a synthetic note from the marina")
+    after = site.respond("/day/2026-06-21", "")
+    assert "a synthetic note from the marina" in after.body.decode("utf-8")
+    assert before.etag != after.etag
+
+
+def test_the_index_is_brought_to_a_moved_head_once_whatever_asks_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The head moved and the index is not current (the writer found it stale and dropped it): the
+    first request rebuilds it, once, and the requests that arrive with it wait for that rebuild
+    instead of starting their own on the same file."""
+    lb, site = _open(tmp_path, monkeypatch)
+    site.respond("/", "")
+    _sync(lb, "a synthetic note about the mooring")
+    lb.index_path.unlink()
+    rebuilds: list[int] = []
+    original = index.Index.rebuild
+
+    def counted(self: index.Index, *args: Any, **kwargs: Any) -> Any:
+        rebuilds.append(1)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(index.Index, "rebuild", counted)
+    pages = ["/", "/day/2026-06-21", "/days", "/trips", "/places", "/day/2026-06-20"] * 2
+    statuses: list[int] = []
+    threads = [
+        threading.Thread(target=lambda p=p: statuses.append(site.respond(p, "").status)) for p in pages
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert statuses == [200] * len(pages)
+    assert len(rebuilds) == 1
+    assert "a synthetic note about the mooring" in site.respond("/day/2026-06-21", "").body.decode("utf-8")
+
+
+def test_the_etag_is_the_head_and_a_reload_at_the_same_head_is_a_304_without_a_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb, site = _open(tmp_path, monkeypatch)
+    first = site.respond("/day/2026-06-10", "")
+    etag = first.etag
+    assert etag is not None and etag.startswith(f'"{lb.meta["head"][:12]}')
+    assert first.headers["ETag"] == etag
+    assert first.headers["Cache-Control"] == "no-cache", "kept by the browser, asked again every time"
+    assert site.respond("/day/2026-06-10", "").etag == etag, "the same head, the same tag"
+
+    monkeypatch.setattr(site, "_page", lambda *a: pytest.fail("a 304 renders nothing"))
+    again = site.respond("/day/2026-06-10", "", if_none_match=etag)
+    assert again.status == 304 and again.body == b"" and again.headers["ETag"] == etag
+    assert "Content-Length" not in again.headers
+    assert site.respond("/day/2026-06-10", "", if_none_match=f'"other", W/{etag}').status == 304
+    monkeypatch.undo()
+    assert site.respond("/day/2026-06-11", "", if_none_match=etag).status == 200, "one page's tag only"
+
+    assert site.respond("/day/2026-06-10", "", if_none_match='"stale"').status == 200
+    _sync(lb, "a synthetic note")
+    moved = site.respond("/day/2026-06-10", "", if_none_match=etag)
+    assert moved.status == 200 and moved.etag != etag, "the head moved: the page again"
+
+
+def test_the_etag_moves_with_the_settings_the_pages_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A place renamed in places.json changes the pages without moving the head: so does the tag."""
+    lb, site = _open(tmp_path, monkeypatch)
+    etag = site.respond("/places", "").etag
+    path = lb.root / "places.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["Harbour"] = data.pop("Marina")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    renamed = site.respond("/places", "", if_none_match=etag)
+    assert renamed.status == 200 and "<td>Harbour</td>" in renamed.body.decode("utf-8")
+    assert renamed.etag != etag
+
+
+def test_pages_the_clock_moves_and_errors_carry_no_etag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _lb, site = _open(tmp_path, monkeypatch)
+    for path in ("/assets", "/gaps", "/nowhere", "/day/2026-13-45"):
+        response = site.respond(path, "")
+        assert response.etag is None and "ETag" not in response.headers, path
+        assert response.headers["Cache-Control"] == "no-store", path
+        for tag in ("*", site.respond("/day/2026-06-10", "").etag or ""):
+            assert site.respond(path, "", if_none_match=tag).status == response.status, (path, tag)
+
+
+def test_today_is_the_current_day_in_the_records_timezone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Oslo in June is UTC+2: 21:59:59 UTC is still Sunday 21 June there, 22:00:00 is Monday."""
+    lb = persona_record(tmp_path, monkeypatch)
+    clock = [datetime(2026, 6, 21, 21, 59, 59, tzinfo=UTC)]
+    site = serve.Site(lb, now=lambda: clock[0])
+    late = site.respond("/today", "")
+    assert late.status == 302 and late.headers["Location"] == "/day/2026-06-21"
+    assert late.headers["Cache-Control"] == "no-store" and late.etag is None
+    assert 'href="/day/2026-06-21"' in late.body.decode("utf-8")
+    clock[0] = datetime(2026, 6, 21, 22, 0, 0, tzinfo=UTC)
+    assert site.respond("/today", "").headers["Location"] == "/day/2026-06-22"
+    assert 'href="/today"' in site.respond("/", "").body.decode("utf-8"), "in the navigation"
+
+
+def test_today_west_of_utc_is_still_yesterday_there(tmp_path: Path) -> None:
+    lb = Logbook.init(tmp_path / "ny", "America/New_York")
+    site = serve.Site(lb, now=lambda: datetime(2026, 6, 22, 3, 30, tzinfo=UTC))  # 23:30 EDT on the 21st
+    assert site.respond("/today", "").headers["Location"] == "/day/2026-06-21"
+
+
 # -- the socket ---------------------------------------------------------------------------------------------
 
 
@@ -234,6 +367,39 @@ def test_the_server_answers_over_loopback(tmp_path: Path, monkeypatch: pytest.Mo
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(f"http://127.0.0.1:{port}/nowhere", timeout=10)
         assert e.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_a_reload_over_the_socket_is_a_304_and_today_a_redirect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb, _site = _open(tmp_path, monkeypatch)
+    server = serve.make_server(lb, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
+        connection.request("GET", "/day/2026-06-10")
+        reply = connection.getresponse()
+        assert reply.status == 200 and reply.read()
+        etag = reply.getheader("ETag")
+        assert etag is not None
+        connection.request("GET", "/day/2026-06-10", headers={"If-None-Match": etag})
+        reply = connection.getresponse()
+        assert reply.status == 304 and reply.read() == b"" and reply.getheader("ETag") == etag
+        connection.request("HEAD", "/day/2026-06-10", headers={"If-None-Match": etag})
+        reply = connection.getresponse()
+        assert reply.status == 304 and reply.read() == b""
+        connection.request("GET", "/today")
+        reply = connection.getresponse()
+        assert reply.status == 302 and re.fullmatch(
+            r"/day/\d{4}-\d{2}-\d{2}", reply.getheader("Location") or ""
+        )
+        reply.read()
+        connection.close()
     finally:
         server.shutdown()
         server.server_close()
