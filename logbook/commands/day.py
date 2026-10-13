@@ -308,6 +308,9 @@ def day_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="leave out the days together 1, 2, 3, 5 and 10 years ago (`anniversaries`)",
     )
+    s.add_argument(
+        "--no-dream", action="store_true", help="leave out the draft a model wrote about the day (`dream`)"
+    )
     s.set_defaults(fn=cmd_day)
 
 
@@ -354,6 +357,8 @@ def cmd_day(a: argparse.Namespace) -> None:
         day = day_start.of(lb.meta).today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
         airports = _airports(a.airports)
         data = day_reader.read(lb, day, airports)
+        if a.no_dream:
+            data.pop("draft", None)
         if not a.no_anniversaries:
             found = people_drift.anniversaries(lb, day, airports)
             if found:
