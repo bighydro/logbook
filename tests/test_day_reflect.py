@@ -19,7 +19,7 @@ import pytest
 
 from logbook import cli
 from logbook.commands import day as day_command
-from logbook.contrib import mcp_server, reflect
+from logbook.contrib import mcp_server, promises, reflect
 from logbook.contrib import serve as serve_module
 from logbook.core import attachments, notes, policy, signing, store
 from logbook.core.store import Logbook
@@ -270,6 +270,15 @@ def test_mic_refuses_plainly_off_macos_and_without_ffmpeg(
     assert lb.meta["seq"] == 5
 
 
+def test_mic_takes_one_second_to_half_an_hour(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], engine: FakeEngine
+):
+    monkeypatch.setattr(reflect, "_platform", lambda: "darwin")
+    assert "from 1 to 1800" in _fails(capsys, "day", "reflect", DAY, "--mic", "0.5")
+    assert "from 1 to 1800" in _fails(capsys, "day", "reflect", DAY, "--mic", "3600")
+    assert lb.meta["seq"] == 5
+
+
 def test_mic_refuses_when_no_microphone_answers(
     lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], engine: FakeEngine
 ):
@@ -431,6 +440,14 @@ def test_proposals_of_all_three_kinds(lb: Logbook, capsys: pytest.CaptureFixture
     assert "    6  kept" in out and "#2" in out and "went out" in out
     assert "    7  carried" in out and "#3" in out and "next week" in out
     assert "    8  dropped" in out and "#4" in out
+
+
+def test_the_commitments_are_read_from_the_day_alone(lb: Logbook):
+    lb.append(**_note("2026-03-04T08:00:00Z", "I'll send the mooring photos again tomorrow."))  # the 4th
+    found = promises.extract(lb, since=DAY, until=DAY)
+    assert {p.seq for p in found.proposals} == {2, 3, 4}
+    assert {c.seq for c in reflect.commitments(lb, DAY)} == {2, 3, 4}
+    assert {p.seq for p in promises.extract(lb, since=DAY).proposals} == {2, 3, 4, 6}
 
 
 @pytest.mark.parametrize(

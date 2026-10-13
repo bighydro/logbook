@@ -318,7 +318,7 @@ def commitments(lb: Logbook, day: str, exclude: Collection[str] = ()) -> list[Co
     """The commitments on the day's page: every sentence `promises` reads as owed by the owner (a
     promise of theirs, or a request made of them) in a line of the day, but the lines `exclude`
     names (the reflection itself, the dictation it was taken from), in the day's order."""
-    report = promises.extract(lb, since=day)
+    report = promises.extract(lb, since=day, until=day)
     return [
         Commitment(p.line, p.seq, p.match.quote, tokens(p.match.quote))
         for p in report.proposals
@@ -704,7 +704,7 @@ def record(seconds: float, folder: Path) -> Path:
     ffmpeg on the PATH, and when no microphone answers. Nothing leaves the machine."""
     if _platform() != "darwin":
         raise ReflectError("--mic records on macOS only; give --audio FILE with a recording, or --text")
-    if not 0 < seconds <= MIC_MAX_S:
+    if not 1 <= seconds <= MIC_MAX_S:
         raise ReflectError(f"--mic takes seconds from 1 to {MIC_MAX_S:g}, not {seconds:g}")
     ffmpeg = shutil.which(FFMPEG)
     if ffmpeg is None:
