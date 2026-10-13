@@ -43,10 +43,14 @@ EMAIL_IN = re.compile(r"^(.*?)\s*[<(]\s*([^\s<>()]+@[^\s<>()]+)\s*[>)]\s*$")
 
 @dataclass(frozen=True)
 class Turn:
-    """One speaker turn as the source labels it; `speaker` None when the source names nobody."""
+    """One speaker turn as the source labels it; `speaker` None when the source names nobody.
+    `start_s` is where the turn starts, in seconds from the start of the recording, when the source
+    says (a cue's timing, a segment's `start_time`); it is outside equality, so two turns are the
+    same turn when their speaker and words are."""
 
     speaker: str | None
     text: str
+    start_s: float | None = field(default=None, compare=False)
 
 
 @dataclass
@@ -108,7 +112,7 @@ def _cues(text: str, fmt: str) -> Parsed:
         timing = next((i for i, line in enumerate(lines) if ARROW in line), None)
         if timing is None:
             continue
-        end_offset = _end_offset(lines[timing])
+        start_offset, end_offset = _offsets(lines[timing])
         if end_offset is not None and (last_end is None or end_offset > last_end):
             last_end = end_offset
         body = " ".join(line.strip() for line in lines[timing + 1 :])
@@ -120,15 +124,19 @@ def _cues(text: str, fmt: str) -> Parsed:
         else:
             speaker, body = _split_speaker(body)
         if body:
-            parsed.turns.append(Turn(speaker, body))
+            parsed.turns.append(Turn(speaker, body, start_offset))
     parsed.duration_s = last_end
     return parsed
 
 
-def _end_offset(timing: str) -> float | None:
-    """The cue's end, in seconds from the start of the recording."""
-    _start, _, rest = timing.partition(ARROW)
-    m = TIMING.search(rest)
+def _offsets(timing: str) -> tuple[float | None, float | None]:
+    """The cue's start and end, in seconds from the start of the recording."""
+    start, _, rest = timing.partition(ARROW)
+    return _offset(start), _offset(rest)
+
+
+def _offset(stamp: str) -> float | None:
+    m = TIMING.search(stamp)
     if m is None:
         return None
     hours, minutes, seconds, fraction = m.groups()
@@ -266,8 +274,9 @@ def turns_of(lb: Logbook, line: Line) -> list[Turn] | None:
 
 
 def _json_turns(text: str) -> list[Turn]:
-    """Granola's segments (`{speaker: {name|diarization_label|attribution}, text}`), or any JSON
-    object carrying such a list under `segments` or `turns`; anything else has no turns."""
+    """Granola's segments (`{speaker: {name|diarization_label|attribution}, text, start_time}`), or
+    any JSON object carrying such a list under `segments` or `turns`; anything else has no turns. A
+    turn's start is its `start_time` counted from the earliest one, or a `start` already in seconds."""
     try:
         data = json.loads(text)
     except ValueError:
@@ -276,15 +285,34 @@ def _json_turns(text: str) -> list[Turn]:
         data = data.get("segments") or data.get("turns") or []
     if not isinstance(data, list):
         return []
+    segments = [s for s in data if isinstance(s, dict)]
+    stamps = [_instant_of(s.get("start_time")) for s in segments]
+    first = min((stamp for stamp in stamps if stamp is not None), default=None)
     turns = []
-    for segment in data:
-        if not isinstance(segment, dict):
-            continue
+    for segment, stamp in zip(segments, stamps, strict=True):
         said = segment.get("text")
         if not isinstance(said, str) or not said.strip():
             continue
-        turns.append(Turn(_json_label(segment.get("speaker")), said))
+        start: float | None = None
+        if stamp is not None and first is not None:
+            start = (stamp - first).total_seconds()
+        else:
+            seconds = segment.get("start", segment.get("start_time"))
+            if isinstance(seconds, int | float) and not isinstance(seconds, bool):
+                start = float(seconds)
+        turns.append(Turn(_json_label(segment.get("speaker")), said, start))
     return turns
+
+
+def _instant_of(value: object) -> datetime | None:
+    """An RFC 3339 instant as a datetime, None for anything else."""
+    if not isinstance(value, str):
+        return None
+    try:
+        found = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return found if found.tzinfo is not None else found.replace(tzinfo=UTC)
 
 
 def _json_label(speaker: object) -> str | None:
