@@ -18,7 +18,12 @@ offset to begin at and `cursor.reached(file, ordinal, offset)` is told, before e
 file is read, so an interrupted import resumes at the last draft the record holds; `places: list[Place]`, the
 record's named places (`places.json`), for a source that positions a place by its name; or
 `report: list[str]`, lines `logbook add` prints after the counts, for what a count cannot say (the
-names of the places `passages` could not position).
+names of the places `passages` could not position); or `owner_aliases`, the owner's `handles`,
+`emails` and `names` (`policy/owner.json`, its emails joined by `owner_emails` from `logbook.json`),
+for a source that marks the owner's own acts (`github`). A `run` that meets an input it does not
+read raises `Unreadable`, one sentence `add` says before exiting 2; an adapter whose input is a
+working copy rather than an export (`KEEPS_INPUT = True`: `github`'s clone) is never said to be
+deletable once imported.
 
 A *live* adapter pulls from a service you run, and only when `logbook sync <NAME>` asks it to:
 
@@ -60,7 +65,8 @@ saved last time — a JSON object of its own making, with `fetched`, the count p
 or None, and `walk.reached(ordinal, checkpoint)` after a page says: once draft `ordinal` is in the
 record, `checkpoint` is where to resume. An interrupted run then carries on where it stopped; the
 record's dedupe by (source, raw_id) stays the safety net. `pull` may also take `owner_emails` (the
-record's own addresses, as a file adapter's `run` may), `existing(keys) -> set` (which of a batch of
+record's own addresses, as a file adapter's `run` may), `owner_aliases` (as `run` may),
+`existing(keys) -> set` (which of a batch of
 (source, raw_id) keys the record already holds, one SELECT, so a source that can name its items before
 fetching them never fetches what would be refused) and `notice(text)` (one line of its own on stderr,
 for a progress line that says what is true: fetched, new, already in the record, never a guessed total),
@@ -163,6 +169,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "telegram_live",
     "claude_code",
     "notion",
+    "github",
     "github_live",
     "line",
     "twitter",
@@ -178,6 +185,11 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "screentime",
     "weather",
 )
+
+
+class Unreadable(ValueError):
+    """The input is not what the adapter reads, or cannot be read: one sentence naming it, which
+    `add` says before exiting 2 (`github`: a folder that is no clone and no account export)."""
 
 
 @runtime_checkable
@@ -292,6 +304,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "music": "apple-music",
     "telegram-export": "telegram",  # `add telegram-export <folder>`: Telegram Desktop's JSON export
     "claude-sessions": "claude-code",  # `add claude-sessions <folder>`: Claude Code's session transcripts
+    "github-export": "github",  # `add github-export DIR`: a clone or an account export (the export's word)
 }
 
 

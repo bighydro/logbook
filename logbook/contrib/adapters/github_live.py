@@ -59,7 +59,7 @@ from datetime import UTC, datetime, timedelta
 from http.client import HTTPException
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import unquote, urlencode, urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from ... import __version__
@@ -106,8 +106,6 @@ GONE = frozenset({404, 409, 410, 451})  # not there, empty, switched off, withhe
 TIMEOUT_S = 60
 MAX_PAGES = 100_000  # a list longer than this many pages is a cursor that stopped moving
 BATCH = 500  # keys per question to the record
-OWNER_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
-REPO_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 NEXT = re.compile(r'<([^>]+)>\s*;\s*rel="?next"?')
 TOKEN_HINT = (
     f"check {TOKEN_ENV}: a fine-grained token under GitHub → Settings → Developer settings → Personal"
@@ -162,7 +160,7 @@ def _repos(text: str) -> tuple[list[str], bool]:
         if part == EVERY:
             every = True
             continue
-        name = repo_name(part)
+        name = github.repo_name(part)
         if name is None:
             raise ValueError(
                 f"{REPOS_ENV} names repos as owner/name or by the link GitHub copies, and {part!r} is neither"
@@ -172,27 +170,6 @@ def _repos(text: str) -> tuple[list[str], bool]:
     if every and names:
         raise ValueError(f"{REPOS_ENV} is a list of owner/name or {EVERY}, not both")
     return names, every
-
-
-def repo_name(text: str) -> str | None:
-    """`owner/name` from itself, from a web or clone link (`https://<host>/<owner>/<name>.git`) or
-    from an SSH one (`git@<host>:<owner>/<name>.git`); None for anything else."""
-    text = text.strip().split("?", 1)[0].split("#", 1)[0]
-    if "://" in text:
-        path = urlsplit(text).path
-    elif re.match(r"^[\w.-]+@[\w.-]+:", text):
-        path = text.split(":", 1)[1]
-    else:
-        path = text
-    segments = [unquote(s) for s in path.strip("/").split("/") if s]
-    if len(segments) < 2:
-        return None
-    owner, name = segments[-2], segments[-1].removesuffix(".git")
-    if not OWNER_NAME.match(owner) or not REPO_NAME.match(name) or name in (".", ".."):
-        return None
-    if "://" not in text and "@" not in text and len(segments) != 2:
-        return None
-    return f"{owner}/{name}"
 
 
 def watermark(draft: dict[str, Any]) -> str | None:
