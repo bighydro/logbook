@@ -48,6 +48,7 @@ FAMILIES = (
     "serve",
     "skips",
     "sync",
+    "transcript",
     "trips",
 )
 

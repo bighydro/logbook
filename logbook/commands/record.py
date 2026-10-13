@@ -132,7 +132,7 @@ def repair_arguments(sub: Subparsers) -> None:
     by rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
     s = sub.add_parser(
         "repair",
-        help="put the record right, rewriting nothing: retract, index, tail, fork…",
+        help="put the record right, rewrite nothing: retract, index, tail, fork…",
         description="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`),"
         " bring a"
         " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), bring logbook.json forward"

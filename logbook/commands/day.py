@@ -62,7 +62,7 @@ def show_arguments(sub: Subparsers) -> None:
     until 0.6 (`show year`, `show trip`, `show trips`, `show days`, `show keepers`, `show stats`)."""
     s = sub.add_parser(
         "show",
-        help="one day's lines, a page, or year, trip, trips, days, keepers, stats",
+        help="one day's lines, a page; year, trip, trips, days, keepers, stats",
         description="one day's lines (default today), a page (person, asset, place), or a reader: year, trip,"
         " trips, days, keepers, stats",
     )
