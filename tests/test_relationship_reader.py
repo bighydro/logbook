@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 from circle import OWNER, mail, message
-from logbook.contrib.relationship import ask, reader
 from persona import attendee, event, note, resolution, transcript, utc
 
 from logbook import cli
+from logbook.contrib.relationship import ask, reader
 from logbook.core import policy
 from logbook.core.store import Logbook, uuid7
 
@@ -431,7 +431,11 @@ def test_wipe_and_rebuild_recovers_the_same_input_set_and_id_map(
     assert "7 lines" in capsys.readouterr().out
     lines, peers = _id_map(lb), _peers(lb)
     shutil.rmtree(_store(lb))
+    stub = Stub([{"text": "Ola said yes to Saturday.", "evidence": [ids["his"]]}])
+    monkeypatch.setattr(ask, "MODEL", stub)
     assert "no derived store" in _refused(capsys, "ask", "Ola Nordmann", "What did we plan?")
+    assert not stub.asked
     _ingest(lb)
     assert _id_map(lb) == lines and _peers(lb) == peers
+    assert _ask(capsys, monkeypatch, stub)["answer"][0]["supported"] is True
     assert sorted(lines.values()) == sorted(ids[n] for n in HIS)

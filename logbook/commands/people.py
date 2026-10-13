@@ -1,5 +1,5 @@
 """The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`,
-`people review`, `people drift` and `people nearby`."""
+`people review`, `people drift`, `people nearby`, and the experimental `people ingest` and `people ask`."""
 
 from __future__ import annotations
 
@@ -22,6 +22,8 @@ MERGE = "merge"  # `people merge`: never a person's name
 REVIEW = "review"  # `people review`: nor this
 DRIFT = "drift"  # `people drift`
 NEARBY = "nearby"  # `people nearby`
+INGEST = "ingest"  # `people ingest NAME --window FROM TO`: the relationship reader, experimental
+ASK = "ask"  # `people ask NAME QUESTION`: the same
 MERGE_FLAGS = ("propose", "apply", "export_review", "apply_review")
 REVIEW_FLAGS = ("accept", "reject", "all_above", "from_google")
 DRIFT_FLAGS = ("min_days", "quiet_days", "show")
@@ -29,30 +31,41 @@ NEARBY_FLAGS = ("journey", "days", "radius")
 
 
 def people_arguments(sub: Subparsers) -> None:
-    """`logbook people [NAME|merge|review]`."""
+    """`logbook people [NAME|merge|review|drift|nearby|ingest|ask]`."""
     s = sub.add_parser(
         "people",
         help="everyone the record names; NAME, merge, review, drift, nearby",
         description="everyone the record names, never the owner: channels, days together, last real contact;"
         " --priority: ranked by a plain score; NAME: one person's page; merge: the same person named twice;"
         " review: who the sources saw that the record has not placed, proposed against the people it names;"
-        " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go",
+        " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go;"
+        " ingest NAME, ask NAME QUESTION: the relationship reader, experimental, no model wired yet",
     )
     s.add_argument(
         "name",
         nargs="?",
-        metavar="NAME|merge|review|drift|nearby",
+        metavar="NAME|merge|review|drift|nearby|ingest|ask",
         help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
         " `merge`: the same person named twice or more, proposals with the evidence, merged only when told;"
         " `review`: the observed people not yet placed, proposed against the canonical ones, numbered,"
         " accepted or rejected only when told; `drift`: many days together in a year, no real contact"
-        " for long; `nearby PLACE`: the people seen at or near a place",
+        " for long; `nearby PLACE`: the people seen at or near a place; `ingest NAME`: one person's"
+        " lines read into the relationship reader's store; `ask NAME QUESTION`: a question answered"
+        " from it, every cited line resolved (experimental)",
     )
     s.add_argument(
         "place",
         nargs="?",
         metavar="PLACE",
-        help="nearby: lat,lon, a name of places.json, a city of the airports table, or an airport code",
+        help="nearby: lat,lon, a name of places.json, a city of the airports table, or an airport code;"
+        " ingest, ask: the person, as `people NAME` finds them",
+    )
+    s.add_argument("question", nargs="?", metavar="QUESTION", help="ask: the question about the person")
+    s.add_argument(
+        "--window",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        help="ingest: the local days read, both inclusive",
     )
     s.add_argument(
         "--year",
@@ -149,6 +162,12 @@ def cmd_people(a: argparse.Namespace) -> None:
     the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written. `people NAME` is one person's page (`cmd_person`);
     `people merge` the duplicates (`_people_merge`)."""
+    if a.name in (INGEST, ASK):
+        _relationship(Logbook.find(), a)
+        return
+    if a.question is not None or a.window is not None:
+        print("people: QUESTION goes with `people ask`, --window with `people ingest`", file=sys.stderr)
+        sys.exit(2)
     if a.place is not None and a.name != NEARBY:
         print(f"people: {a.place!r}: a second word goes with `people nearby PLACE` only", file=sys.stderr)
         sys.exit(2)
@@ -349,6 +368,56 @@ def _google_contacts(lb: Logbook) -> google_contacts.Book:
             file=sys.stderr,
         )
     return book
+
+
+def _relationship(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people ingest NAME --window FROM TO [--json]` and `people ask NAME QUESTION [--json]`, the
+    relationship reader (EXPERIMENTAL, `logbook/contrib/relationship/README.md`), under the
+    `relationship` entry of `policy/crossing.json`. `ingest` reads the person's authorized input set
+    and writes their store under `state/relationship/`, never a line; `ask` answers from the store with
+    every cited id resolved against the record, or marked unsupported, and writes nothing."""
+    from ..contrib.relationship import ask, reader
+
+    word = a.name
+    try:
+        if a.place is None:
+            raise reader.RelationshipError(f"say whom: `people {word} NAME`")
+        if word == INGEST:
+            if a.question is not None or a.window is None:
+                raise reader.RelationshipError("say the window, and only the window: --window FROM TO")
+            found, where = reader.ingest(lb, a.place, *a.window)
+            if a.json:
+                print(
+                    json.dumps(
+                        {
+                            "person": found.person,
+                            "read_count": len(found.items),
+                            "held_back": found.held_back,
+                            "peers": len(found.peers),
+                        },
+                        indent=2,
+                    )
+                )
+                return
+            held = f", {found.held_back} held back above the ceiling" if found.held_back else ""
+            print(
+                f"{found.label} · {found.span} · {_plural(len(found.items), 'line')}{held}"
+                f" · {_plural(len(found.peers), 'peer')} · {where.relative_to(lb.root).as_posix()}"
+            )
+            return
+        if a.window is not None:
+            raise reader.RelationshipError("--window goes with `people ingest`; ask reads the store's window")
+        if a.question is None:
+            raise reader.RelationshipError("say the question: `people ask NAME QUESTION`")
+        answer = ask.ask(lb, a.place, a.question)
+    except (ValueError, stays.SettingsError, policy.PolicyError) as e:
+        print(f"people {word}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(answer.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in ask.rows(answer):
+        print(text)
 
 
 def people_drift_default(what: str) -> str:
