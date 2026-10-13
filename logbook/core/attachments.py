@@ -29,7 +29,7 @@ import re
 import tempfile
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 from . import sealing
@@ -259,7 +259,7 @@ def references(obj: object) -> Iterator[str]:
         if (
             isinstance(sha256, str)
             and is_digest(sha256)
-            and (obj.get("path") == f"{DIR}/{sha256}" or isinstance(obj.get("local_path"), str))
+            and (_in_store(obj.get("path"), sha256) or isinstance(obj.get("local_path"), str))
         ):
             yield sha256
         for child in obj.values():
@@ -267,6 +267,12 @@ def references(obj: object) -> Iterator[str]:
     elif isinstance(obj, list):
         for child in obj:
             yield from references(child)
+
+
+def _in_store(path: object, sha256: str) -> bool:
+    """Whether a reference's `path`, relative to the record root and `/`-separated (SPEC §1.1), is
+    `attachments/<sha256>`, by its parts."""
+    return isinstance(path, str) and PurePosixPath(path).parts == (DIR, sha256)
 
 
 SHOWN_ERRORS = 20  # attachment errors `Walk.check` lists one by one; the rest are counted
