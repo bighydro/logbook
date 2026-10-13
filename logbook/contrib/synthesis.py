@@ -417,9 +417,9 @@ def _due_date(phrase: str, day: date) -> str | None:
 # -- the synthesis ------------------------------------------------------------------------------------------
 
 
-def standing_of(idx: Index, line: Line) -> tuple[Line | None, list[Line]]:
-    """The transcript's standing synthesis, None when it has none, and all of them; `DreamError` for a
-    transcript that is retracted or superseded, which is not the call as the record stands."""
+def standing_of(idx: Index, line: Line) -> Line | None:
+    """The transcript's standing synthesis, None when it has none; `DreamError` for a transcript that
+    is retracted or superseded, which is not the call as the record stands."""
     transcript = str(line["id"])
     retracted = retractions(idx.retractions())
     if transcript in retracted:
@@ -427,8 +427,7 @@ def standing_of(idx: Index, line: Line) -> tuple[Line | None, list[Line]]:
     by = idx.superseded(KIND).get(transcript)
     if by is not None:
         raise DreamError(f"the transcript is superseded by #{by}; synthesize that one")
-    found = drafts.of_transcript(idx.by_kind(drafts.KIND), retracted, transcript)
-    return drafts.standing(found), found
+    return drafts.standing(drafts.of_transcript(idx.by_kind(drafts.KIND), retracted, transcript))
 
 
 def synthesize(
@@ -452,7 +451,7 @@ def synthesize(
     with lb.writer():
         with lb.index() as idx:
             current = idx.by_id(str(line["id"])) or line
-            latest, _all = standing_of(idx, current)
+            latest = standing_of(idx, current)
         gate(current, found)
         if latest is not None and not again and _same(latest, source):
             kept = latest.get("payload") or {}
@@ -574,7 +573,7 @@ def catch_up(
                     continue
                 with lb.index() as idx:
                     try:
-                        latest, _all = standing_of(idx, line)
+                        latest = standing_of(idx, line)
                     except DreamError:
                         continue
                 if latest is not None:
