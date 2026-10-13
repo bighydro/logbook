@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
 from ..contrib import (
+    dream_events,
     gaps,
     people_drift,
     print_layout,
@@ -27,6 +28,7 @@ from ..contrib import (
 from ..core import (
     chapter,
     day_start,
+    drafts,
     flights,
     goals,
     keepers,
@@ -251,7 +253,8 @@ def day_arguments(sub: Subparsers) -> None:
         description="one day read back: nights, country, stays and moves with who and what, flights, health,"
         " whether every usual source is in, and whether you have signed it; `day sign YYYY-MM-DD` signs"
         " it: one tier-1 line saying you read the page and these are the day's facts (RFC 0034), and"
-        " what became of each commitment on it: --kept, --missed, --dropped, --carried (amendment 1);"
+        " what became of each commitment on it: --kept, --missed, --dropped, --carried (amendment 1),"
+        " and the events the dream proposed that you --accept, each written as an event line;"
         " `day reflect YYYY-MM-DD` closes it in your words: a reflection typed, heard or dictated becomes"
         " one note on the day, its commitments, delegations and dispositions proposed, and --sign signs"
         " the day with the ones you --accept",
@@ -315,7 +318,8 @@ def day_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--accept",
         metavar="N,N|none",
-        help="reflect, with --sign: the proposals you accept, by the numbers printed; on a terminal it asks",
+        help="sign, and reflect with --sign: the proposals you accept, by the numbers printed, a proposed"
+        " event of the dream written as an event line; on a terminal reflect asks",
     )
     s.add_argument(
         "--dry-run",
@@ -445,20 +449,59 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
-    reflecting = _reflect_flags(a)
+    reflecting = [flag for flag in _reflect_flags(a) if flag != "--accept"]
     if reflecting:
         print(f"day sign: {_listed(reflecting)} belong to `day reflect YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
     try:
         day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
-        line = signing.sign(
-            lb, a.signed_day, confirm=_confirm(a), note=a.note, at=a.at, dispositions=_dispositions(a)
-        )
-    except ValueError as e:  # SignError, a day that is not one, a day_start that is not a clock
+        day = parse_day(a.signed_day).isoformat()
+        wanted = [] if a.accept is None else reflect.numbers(a.accept)
+        confirm, dispositions = _confirm(a), _dispositions(a)
+        found = dream_events.listed(lb, day)
+        taken = dream_events.chosen(found, wanted, day)
+        if taken:  # every flag checked before an event is written
+            dream_events.check_signature(lb, day, confirm, dispositions, a.at, a.note)
+        for text in dream_events.rows(found):
+            print(text)
+        line = _sign_with_events(lb, day, taken, confirm, a.note, a.at, dispositions)
+    except ValueError as e:  # SignError, EventError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
     for text in signing.summary(line):
         print(text)
+    left = [p for p in found if p.pending and p not in taken]
+    if left:
+        n = len(left)
+        print(
+            f"  {n} proposed event{'s' if n != 1 else ''} not written; `logbook day sign {day} --accept N`"
+            " writes one into the record"
+        )
+
+
+def _sign_with_events(
+    lb: Logbook,
+    day: str,
+    taken: Sequence[dream_events.Proposed],
+    confirm: list[str] | None,
+    note: str | None,
+    at: str | None,
+    dispositions: dict[str, list[str]],
+) -> Line:
+    """Under one hold of the writer lock: the proposals read again (`dream_events.again`), each
+    accepted one written as an event line, then the signature through `signing.sign`, the events
+    among the lines confirmed."""
+    with lb.writer():
+        written = [_write_event(lb, p) for p in dream_events.again(lb, day, taken)]
+        if confirm:
+            confirm = [*confirm, *written]
+        return signing.sign(lb, day, confirm=confirm, note=note, at=at, dispositions=dispositions)
+
+
+def _write_event(lb: Logbook, proposal: dream_events.Proposed) -> str:
+    line = dream_events.write(lb, proposal)
+    print(dream_events.wrote_text(proposal, line))
+    return str(line["id"])
 
 
 # -- day reflect ---------------------------------------------------------------------------------------------
@@ -569,9 +612,12 @@ def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: l
         str(line["id"]) for line in (r.note, r.dictation.line if r.dictation else None) if line is not None
     }
     proposals = reflect.propose(r.text, day, reflect.commitments(lb, day, exclude))
+    events = dream_events.listed(lb, day, first=len(proposals) + 1)  # numbered after the reflection's
     if not shown:
         _print_reflection(day, r, zone)
     for text in _proposal_rows(proposals):
+        print(text)
+    for text in dream_events.rows(events):
         print(text)
     if a.dry_run:
         print("dry run: nothing was written")
@@ -583,33 +629,47 @@ def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: l
         )
         return
     askable = [p for p in proposals if p.kind != reflect.COMMITMENT]
+    open_events = [e for e in events if e.pending]
+    asking = [(p.number, str(p.value if p.kind == reflect.DISPOSITION else p.kind)) for p in askable]
+    asking += [(e.number, drafts.EVENT) for e in open_events]
     if not a.sign:
         if r.note is None:
             _write_reflection(lb, day, r, a.at, today, zone)
         else:
             print(f"nothing was written: the reflection #{r.note['seq']} is on the day already")
-        accept = " --accept N,N" if askable else ""
+        accept = " --accept N,N" if asking else ""
         print(
             f"nothing else was written; `logbook day reflect {day} --sign{accept}` signs the day"
-            + (" with the proposals you accept" if askable else "")
+            + (" with the proposals you accept" if asking else "")
         )
         return
     if wanted is not None:
-        accepted = reflect.chosen(proposals, wanted)
-    elif not askable:
-        accepted = []
+        chosen = wanted
+    elif not asking:
+        chosen = []
     elif _on_a_tty():
-        answered = _ask_each(askable)
+        answered = _ask_each(asking)
         if answered is None:
             print("stopped: nothing was written")
             return
-        accepted = reflect.chosen(proposals, answered)
+        chosen = answered
     else:
         raise reflect.ReflectError(
             "not at a terminal, so say which proposals you accept: --accept N,N, or --accept none;"
             " nothing was written"
         )
-    _reflect_sign(lb, a, day, today, r, accepted, zone)
+    known = {p.number for p in proposals} | {e.number for e in events}
+    missing = [str(n) for n in chosen if n not in known]
+    if missing:
+        have = f"{len(proposals)} proposal{'s' if len(proposals) != 1 else ''}"
+        if events:
+            have += f" and the dream {len(events)} proposed event{'s' if len(events) != 1 else ''}"
+        raise reflect.ReflectError(
+            f"no proposal {', '.join(missing)}; the reflection has {have}, numbered above"
+        )
+    accepted = reflect.chosen(proposals, [n for n in chosen if n <= len(proposals)])
+    taken = dream_events.chosen(events, [n for n in chosen if n > len(proposals)], day)
+    _reflect_sign(lb, a, day, today, r, accepted, zone, taken, first=len(proposals) + 1)
 
 
 def _reflection(
@@ -770,15 +830,14 @@ def _confirm_draft() -> tuple[bool, str | None]:
     return (True, "\n".join(typed)) if typed else (False, None)
 
 
-def _ask_each(askable: Sequence[reflect.Proposal]) -> list[int] | None:
-    """On a terminal, one y or n per proposal that would write something; q or the end of input
-    stops, and then nothing is written. The numbers accepted."""
+def _ask_each(asking: Sequence[tuple[int, str]]) -> list[int] | None:
+    """On a terminal, one y or n per proposal that would write something, (number, word) as printed;
+    q or the end of input stops, and then nothing is written. The numbers accepted."""
     accepted: list[int] = []
-    for p in askable:
-        word = p.value if p.kind == reflect.DISPOSITION else p.kind
+    for number, word in asking:
         while True:
             try:
-                answer = input(f"      {p.number} {word}: accept? y/n, q stops: ").strip().casefold()
+                answer = input(f"      {number} {word}: accept? y/n, q stops: ").strip().casefold()
             except EOFError:
                 print()
                 return None
@@ -787,7 +846,7 @@ def _ask_each(askable: Sequence[reflect.Proposal]) -> list[int] | None:
             if answer in ("y", "n"):
                 break
         if answer == "y":
-            accepted.append(p.number)
+            accepted.append(number)
     return accepted
 
 
@@ -809,13 +868,17 @@ def _reflect_sign(
     r: reflect.Reflection,
     accepted: Sequence[reflect.Proposal],
     zone: ZoneInfo,
+    taken: Sequence[dream_events.Proposed] = (),
+    first: int = 1,
 ) -> None:
     """The day closed through `reflect.close`, the code the Day page's Sign runs too: under one hold
     of the writer lock, the page read again (a disposition's line retracted while the owner answered
-    is refused, nothing written), the reflection written when it is new, the accepted delegations
-    written as notes, then the signature through `signing.sign`; each step printed as it is done.
-    HeadMoved and another writer are the store's own errors, said by `cli.main`; nothing is retried."""
-    closed = reflect.close(lb, day, today, r, accepted, a.at, say=print)
+    is refused, nothing written), the proposed events accepted read again (`dream_events.again`),
+    the reflection written when it is new, the accepted delegations written as notes, the accepted
+    events as event lines, then the signature through `signing.sign`; each step printed as it is
+    done. HeadMoved and another writer are the store's own errors, said by `cli.main`; nothing is
+    retried."""
+    closed = reflect.close(lb, day, today, r, accepted, a.at, say=print, events=taken, first=first)
     for text in signing.summary(closed.signature):
         print(text)
 

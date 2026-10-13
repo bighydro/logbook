@@ -316,7 +316,7 @@ def test_mic_records_then_hears_the_recording(
 def test_one_input_at_a_time_and_the_flags_belong_to_reflect(lb: Logbook, capsys: pytest.CaptureFixture[str]):
     assert "one of" in _fails(capsys, "day", "reflect", DAY, "--text", "a", "--audio", "b.m4a")
     assert "day reflect" in _fails(capsys, "day", DAY, "--text", "a")
-    assert "day reflect" in _fails(capsys, "day", "sign", DAY, "--accept", "1")
+    assert "no proposed event 1" in _fails(capsys, "day", "sign", DAY, "--accept", "1")
     assert "--accept" in _fails(capsys, "day", "reflect", DAY, "--text", "a", "--accept", "1")
     assert "day sign" in _fails(capsys, "day", "reflect", DAY, "--text", "a", "--sign", "--kept", "2")
     assert "the day" in _fails(capsys, "day", "reflect")
