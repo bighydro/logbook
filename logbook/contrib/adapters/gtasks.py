@@ -207,7 +207,7 @@ def _event(
         opened = _instant_or_none(created.get("at")) if created is not None else None
         open_for = int((completed - opened).total_seconds()) if opened is not None else None
         return _draft(
-            task, task_list, COMPLETED, completed, tz, open_for_s=open_for if (open_for or 0) >= 0 else None
+            task, task_list, COMPLETED, completed, tz, open_for if open_for is None or open_for >= 0 else None
         )
     if task.get("status") == "completed" or (NAME, f"{task_id}/{COMPLETED}") in record:
         return None  # done with no time, or reopened after the record saw it done: no creation to tell
@@ -221,8 +221,9 @@ def _draft(
     event: str,
     at: datetime,
     tz: str,
-    **more: Any,
+    open_for_s: int | None = None,
 ) -> dict[str, Any]:
+    """One event's line draft; `open_for_s` is a completed line's, seconds since its created line."""
     task_id = str(task["id"])
     ref: dict[str, Any] = {"id": task_id, "list_id": str(task_list["id"])}
     if isinstance(task.get("webViewLink"), str) and task["webViewLink"]:
@@ -244,7 +245,7 @@ def _draft(
             "words": len(notes.split()),
         }
     if event == COMPLETED:
-        extra["open_for_s"] = more.get("open_for_s")
+        extra["open_for_s"] = open_for_s
     updated = _instant_or_none(task.get("updated"))
     payload: dict[str, Any] = {
         "schema": SCHEMA,

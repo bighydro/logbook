@@ -78,6 +78,9 @@ KEY_SOURCES = {
     "dawarich": "Dawarich → Settings → Account → API key; the URL is your Dawarich's address",
     "immich": "Immich → Account settings → API keys, with only the asset.read permission; the URL is yours",
     "gcal": "Google Calendar → Settings → the calendar → Integrate calendar → Secret address in iCal format",
+    "drive": "a Workspace service account with domain-wide delegation (the tour, Google Drive): its JSON key"
+    " file, kept at mode 600 outside the record, and the address it reads as",
+    "gtasks": "the same service account and address as drive, with the Tasks read-only scope delegated too",
     "granola": "Granola → Connectors → API keys (Business and Enterprise plans)",
     "beeper": "Beeper Desktop → Settings → Developers → Approved connections (+); the token reads every chat"
     " and can send as you, so it is a password; the app must be running, Remote Access off",

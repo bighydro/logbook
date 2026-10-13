@@ -290,7 +290,8 @@ def syncs_used(
 
 def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterator[Check]:
     """Names only, never a value: a missing variable is named; one the adapter refuses is not echoed.
-    An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers."""
+    An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers; `drive`
+    and `gtasks` read their service-account key here and ask Google nothing."""
     for adapter in syncs_used(lb, sources, env):
         name = f"sync:{adapter.NAME}"
         try:

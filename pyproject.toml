@@ -20,7 +20,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# `openlogbook[crypto]`: import-backup on an encrypted iOS backup; share and receive a signed page (Ed25519)
+# `openlogbook[crypto]`: import-backup on an encrypted iOS backup; share and receive a signed page (Ed25519);
+# sync drive and sync gtasks sign in with a Google service-account key (RS256)
 crypto = ["cryptography>=42"]
 sealed = ["pyrage>=1.2"]          # `openlogbook[sealed]`: tiers 2–3 sealed at rest with age (SPEC §4, RFC 0029)
 # `openlogbook[stream]`: ijson, streaming JSON, for the five adapters that read a multi-gigabyte export

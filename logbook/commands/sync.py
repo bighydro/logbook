@@ -93,9 +93,12 @@ def sync_arguments(sub: Subparsers) -> None:
     s = sub.add_parser(
         "sync",
         help="pull new items from a live source; --all for every configured one",
-        description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, granola,"
-        " mail, notion, ais, adsb, weather); safe to re-run; --all for every configured source,"
-        " --install-schedule for twice a day."
+        description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
+        " gtasks, granola, mail, notion, ais, adsb, weather); safe to re-run; --all for every configured"
+        " source, --install-schedule for twice a day."
+        " drive and gtasks: a Google Workspace service account with domain-wide delegation, read-only"
+        " (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER, the address it reads as); a token per"
+        " run, never stored."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
         " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
@@ -109,7 +112,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "name",
         nargs="?",
         help="the source: immich, dawarich, imessage (this Mac's Messages), beeper (every chat Beeper Desktop"
-        " bridges, through its local API), gcal (Google Calendar), granola, mail (a mailbox over IMAP, Gmail"
+        " bridges, through its local API), gcal (Google Calendar), drive (what happened to your Google Drive"
+        " files: created, edited, renamed, moved, shared, commented, trashed, restored), gtasks (your Google"
+        " Tasks, created and done), granola, mail (a mailbox over IMAP, Gmail"
         " with an app password), notion (pages created, edited, moved, archived; never their text), ais (your"
         " vessels via aisstream.io), adsb (your aircraft via OpenSky),"
         " weather (the places of your days, one decimal of latitude, from Open-Meteo)",

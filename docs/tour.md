@@ -395,6 +395,8 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
 | `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values; never the text ([Notion](#notion)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
+| `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
+| `gtasks` | the same two; [Google Tasks](#google-tasks) | one `event/v1` line when a task is first seen open and one when it is done, with how long it was open; the title, never the notes; tier 2 |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -593,6 +595,95 @@ export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/
 logbook sync gcal --dry-run                                # counts per calendar, nothing written
 logbook sync gcal
 ```
+
+### Google Drive
+
+`logbook sync drive` writes down what happened to your Drive files each day: created, edited, renamed,
+moved, shared, commented on, trashed, deleted, restored. It reads the Drive Activity API, read-only, as
+you, through a **service account** of your own Google Workspace that is allowed to act as you
+(*domain-wide delegation*). A service account signs in with a key file and nothing that expires: every
+run signs a short request with the key and gets an access token for that run alone, which is never
+written anywhere. There is no refresh token to go stale in a scheduled job. Only you can stop it: by
+deleting the key or withdrawing the delegation. `logbook sync gtasks` uses the same account and the
+same two variables.
+
+**Setting it up**, once, as the Workspace's administrator:
+
+1. In the Google Cloud console, in a project of your own (create one if you have none), open *APIs &
+   Services → Library* and enable the **Google Drive Activity API** and the **Google Tasks API**.
+2. *IAM & Admin → Service accounts → Create service account*. Call it `logbook-sync`; it needs no role
+   in the project. Open it and copy its **Unique ID** (the client ID, a long number).
+3. On the same page, *Keys → Add key → Create new key → JSON*. The browser downloads one file: that
+   file is the key. If the console refuses, the organisation policy *Disable service account key
+   creation* (`iam.disableServiceAccountKeyCreation`, on by default in organisations made since 2024)
+   is in the way: turn it off for this one project under *IAM & Admin → Organization policies*.
+4. In the Workspace admin console, *Security → Access and data control → API controls → Manage
+   Domain Wide Delegation → Add new*. Paste the client ID and, as the OAuth scopes, exactly these two,
+   comma-separated, both read-only:
+   `https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/tasks.readonly`.
+   Authorize. A new delegation can take a few minutes, sometimes longer, before Google honours it.
+5. Move the key out of your downloads to `~/.config/logbook/google-sa.json` and make it yours alone:
+   `chmod 600 ~/.config/logbook/google-sa.json`. **Never commit it**, and never put it in the record's
+   folder, a cloud folder, a repository or a message: whoever holds it reads your Drive activity and
+   your tasks for as long as the delegation stands.
+6. Name it in the environment, in your shell profile and in `~/.config/logbook/sync.env`, the file the
+   schedule reads (docs/schedule.md); the schedule then runs both sources with nothing more to set:
+
+   ```
+   LOGBOOK_DRIVE_SA_KEY=~/.config/logbook/google-sa.json
+   LOGBOOK_DRIVE_USER=ines@example.org
+   ```
+
+7. `logbook doctor` now shows `sync:drive` and `sync:gtasks` as configured; it reads the key and checks
+   that no one else on the machine can, and asks Google nothing. Then:
+
+```bash
+logbook sync drive --dry-run                               # counts per activity, nothing written
+logbook sync drive --since 2026-01-01T00:00:00Z            # a first run from a day you choose
+logbook sync drive                                         # then from where it left off
+```
+
+A first run without `--since` reads all the activity Google keeps. `unauthorized_client` means the
+delegation does not yet grant the scope named in the message (step 4); `invalid_grant` that the key was
+deleted, this machine's clock is wrong, or `LOGBOOK_DRIVE_USER` is not a user of the domain. Signing
+needs the `crypto` extra (`pip install "openlogbook[crypto]"`); without it the sync says so.
+
+**What a line holds.** One `event/v1` line per file, per hour and per kind of activity, so an afternoon
+of editing is a handful of lines with a count, `Edited Budget 2027 ×14`, not hundreds. It holds the
+file's name, its type, its id and a link that opens it in Drive; who acted, you as `owner` and anyone
+else as Google names them (`people/…`, a person's account, not their address); for a share, with whom
+(a person's `people/…` name, a group's address, a domain, or anyone with the link) and the role; for a
+move, the folder it went to and came from, the only folders Google names; for a rename, the old name and
+the new. An hour is written once it is over, so a run at 07:00 leaves 06:00–07:00 for the next. Someone
+else's activity on someone else's file that was shared with you is left out and counted.
+
+**What a line never holds.** The file's content, a comment's words, the file's size or modified time
+(they would need a wider scope than this source asks for). Lines are **tier 1**, like calendar entries,
+whoever acted: the tier says where a line may travel, and a file's name and what happened to it are the
+same fact whoever did it.
+
+### Google Tasks
+
+`logbook sync gtasks` reads your Google Tasks, read-only, with the account and the two variables above
+(the Tasks scope in step 4). A task is an idea or a promise you made yourself, so two things are worth a
+line: that it was made, and that it was done.
+
+```bash
+logbook sync gtasks --dry-run                              # counts per list, nothing written
+logbook sync gtasks
+```
+
+**What a line holds.** A task seen open for the first time is a `created` line, titled with the task's
+own words, with its list, its due day if it has one, its parent for a subtask and a reference to it;
+Google keeps no creation time, so the line is dated when the task last changed before the record first
+saw it, which for a task captured and left alone is when you wrote it down. A task done is a `completed`
+line, dated when you ticked it, with how long it was open (from its `created` line; unknown when the
+record never saw it open). A due day passing is no event, an edit is no second line, and a deleted task
+writes nothing new: the record holds what happened, and never rewrites what it wrote.
+
+**What a line never holds.** The task's notes: only their digest and how many words they have. Lines
+are **tier 2**, as a task's words are when a Takeout brings them (RFC 0016): sealed at rest when the
+record seals, and crossing only after review.
 
 Your boat, your aircraft and your car are *subjects* with tracks of their own, not places (ADR 0018). Register
 each once in `assets.json`, then let `sync` ask the receivers that hear them:

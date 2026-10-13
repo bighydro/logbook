@@ -265,6 +265,8 @@ Live sources pull on their own with `logbook sync <name>`; each needs a variable
   dawarich: set LOGBOOK_DAWARICH_URL and LOGBOOK_DAWARICH_KEY — Dawarich → Settings → Account → API key; the URL is your Dawarich's address
   granola: set LOGBOOK_GRANOLA_KEY — Granola → Connectors → API keys (Business and Enterprise plans)
   gcal: set LOGBOOK_GCAL_URLS — Google Calendar → Settings → the calendar → Integrate calendar → Secret address in iCal format
+  drive: set LOGBOOK_DRIVE_SA_KEY and LOGBOOK_DRIVE_USER — a Workspace service account with domain-wide delegation (the tour, Google Drive): its JSON key file, kept at mode 600 outside the record, and the address it reads as
+  gtasks: set LOGBOOK_DRIVE_SA_KEY and LOGBOOK_DRIVE_USER — the same service account and address as drive, with the Tasks read-only scope delegated too
   ais: set LOGBOOK_AISSTREAM_KEY — a free key from aisstream.io, for the vessels registered in assets.json
   adsb: works without a key; optional LOGBOOK_OPENSKY_USER and LOGBOOK_OPENSKY_PASS — an account at opensky-network.org (optional: anonymous access works, with a lower rate)
 A key goes in the variable in your shell profile, never in a file of the record, never here.
