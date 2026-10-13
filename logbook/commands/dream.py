@@ -7,6 +7,7 @@ import sys
 from datetime import date, timedelta
 
 from ..contrib import dream as dreaming
+from ..contrib import synthesis
 from ..core import drafts, flights, stays
 from ..core.store import HeadMoved, Logbook
 from .common import Subparsers, _airports
@@ -24,7 +25,8 @@ def dream_arguments(sub: Subparsers) -> None:
         " policy/crossing.json and writes one draft/v1 line, the day in a paragraph, the threads it moved,"
         " two questions, the people and promises it proposes, every sentence pointing at the lines it came"
         " from; a proposal, never a fact, shown on the Day above your note. `dream --catch-up` dreams each"
-        " of the last N days that has no draft or whose lines changed. The model is LOGBOOK_DREAM_ENDPOINT,"
+        " of the last N days that has no draft or whose lines changed, then synthesizes each transcript of"
+        " those days that has none (`transcript synthesize`). The model is LOGBOOK_DREAM_ENDPOINT,"
         " LOGBOOK_DREAM_MODEL and, for a cloud model, LOGBOOK_DREAM_KEY (docs/dream.md)",
     )
     s.add_argument("verb", nargs="?", metavar="day", help="`day`, then the local day to dream")
@@ -34,7 +36,8 @@ def dream_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--catch-up",
         action="store_true",
-        help="dream each of the last N days that needs it, one line per day",
+        help="dream each of the last N days that needs it, then synthesize their transcripts that have no"
+        " draft; one line each",
     )
     s.add_argument(
         "--days",
@@ -106,18 +109,31 @@ def cmd_dream(a: argparse.Namespace) -> None:
 
 
 def _catch_up(lb: Logbook, a: argparse.Namespace) -> None:
+    """The days, one row each; then each transcript of those days that no model has synthesized,
+    one row each sent (`synthesis.catch_up`); then the count, with the transcripts the ceiling held
+    back and those without their text. Exit 1 when a day or a transcript was refused."""
     if a.days < 1:
         print("dream: --days N is at least 1", file=sys.stderr)
         sys.exit(2)
+    today = dreaming.today()
     try:
-        outcomes = dreaming.catch_up(lb, a.days)
+        outcomes = dreaming.catch_up(lb, a.days, today=today)
+        caught = synthesis.catch_up(lb, dreaming.days_to_catch_up(today, a.days))
     except dreaming.DreamError as e:
         print(f"dream: {e}", file=sys.stderr)
         sys.exit(2)
+    outcomes += caught.outcomes
     for row in outcomes:
         print(f"{row.day}  {row.state:<9} {row.detail}")
-    states = ("dreamed", "unchanged", "empty", "refused")
+    states = ("dreamed", "unchanged", "empty", synthesis.SYNTHESIZED, "refused")
     counted = {state: sum(1 for row in outcomes if row.state == state) for state in states}
-    print(drafts.DOT.join(f"{n} {state}" for state, n in counted.items() if n) or "no days")
+    said = [f"{n} {state}" for state, n in counted.items() if n]
+    if caught.held_back:
+        n = caught.held_back
+        said.append(f"{n} transcript{'s' if n != 1 else ''} held back above max_tier {caught.max_tier}")
+    if caught.no_text:
+        n = caught.no_text
+        said.append(f"{n} transcript{'s' if n != 1 else ''} without their text")
+    print(drafts.DOT.join(said) or "no days")
     if counted["refused"]:
         sys.exit(1)

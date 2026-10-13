@@ -473,3 +473,48 @@ def test_a_head_that_moved_under_the_reading_writes_nothing(
     _fake(monkeypatch, answer)
     code, _out, err = _cli("transcript", "synthesize", call["id"])
     assert code == 2 and "head moved" in err and "nothing was written" in err and _drafts(lb) == []
+
+
+# -- catch-up ------------------------------------------------------------------------------------------------
+
+
+def _either(material: dict[str, Any]) -> dict[str, Any]:
+    """The answer to whichever the model is asked: a call (it has utterances) or a day."""
+    if "utterances" in material:
+        return _answer(material)
+    return {"day": [{"text": "A call about the yard.", "evidence": material["unplaced"][0]["ref"]}]}
+
+
+def test_dream_catch_up_synthesizes_the_transcripts_that_have_no_draft(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """`dream --catch-up` is what the 06:00 close runs: after the days, each transcript of those days
+    that no model has synthesized yet; one already synthesized is left alone, by any model."""
+    from logbook.contrib import dream
+
+    _transcript(lb)
+    seen = _fake(monkeypatch, _either)
+    monkeypatch.setattr(dream, "date", type("D", (), {"today": staticmethod(lambda: date(2026, 6, 12))}))
+    code, out, err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0, out + err
+    rows = out.splitlines()
+    assert rows[1].startswith(f"{DAY}  dreamed   #")
+    assert rows[3].startswith(f"{DAY}  synthesized #") and "“Yard plans” · 6 segments" in rows[3]
+    assert rows[4] == "1 dreamed · 2 empty · 1 synthesized" and len(seen["calls"]) == 2
+    code, out, _err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0 and len(seen["calls"]) == 2  # the day unchanged, the call synthesized already
+    assert out.splitlines()[-1] == "1 unchanged · 2 empty"
+
+
+def test_dream_catch_up_counts_a_transcript_above_the_ceiling_and_sends_nothing_of_it(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    from logbook.contrib import dream
+
+    _transcript(lb)  # tier 3
+    _policy(lb, {"max_tier": 2})
+    seen = _fake(monkeypatch, _either)
+    monkeypatch.setattr(dream, "date", type("D", (), {"today": staticmethod(lambda: date(2026, 6, 12))}))
+    code, out, _err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0 and seen["calls"] == [] and _drafts(lb) == []
+    assert out.splitlines()[-1] == "3 empty · 1 transcript held back above max_tier 2"

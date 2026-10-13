@@ -547,6 +547,7 @@ class CaughtUp:
     held back by the ceiling or had no text."""
 
     outcomes: list[Outcome]
+    max_tier: int
     held_back: int = 0
     no_text: int = 0
 
@@ -585,7 +586,7 @@ def catch_up(
                     outcomes.append(Outcome(day, SYNTHESIZED, detail_of(tried.synthesis)))
                 else:
                     outcomes.append(Outcome(day, REFUSED, f"“{title_of(line)}”: {tried.detail}"))
-    return CaughtUp(outcomes, held, missing)
+    return CaughtUp(outcomes, found.max_tier, held, missing)
 
 
 def detail_of(made: Synthesis) -> str:
