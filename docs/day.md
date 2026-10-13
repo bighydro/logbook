@@ -169,9 +169,9 @@ An event counts only when it happened somewhere:
 
 A Notion page edited, a Drive file changed — by the owner or by someone else on the owner's file —
 happen nowhere: they carry no location and no attendees, and their sources are not physical. Inside a
-stop they do not make it a stay, and `attached` does not count them (`stays.somewhere`). SPEC §3.2.3
-rule 5 does not yet say this of events; the reference reads it so, and the spec follows in a change of
-its own. The Day still shows them under the row their time falls in (`Boat
+stop they do not make it a stay, and `attached` does not count them (`stays.somewhere`). SPEC 0.4
+§3.2.3 rule 5 says the same, test for test, and [ADR 0023](adr/0023-digital-events-do-not-make-a-stay.md)
+says why. The Day still shows them under the row their time falls in (`Boat
 jobs`, `Edited Crew list ×3`), as it does any event; they are simply not evidence of where the owner
 was. A task (`task/v1`, `sync gtasks`) is not an event and was never evidence.
 
