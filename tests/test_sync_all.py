@@ -286,6 +286,7 @@ def test_the_real_adapters_run_immich_last_under_all() -> None:
         "gmail",
         "apple-podcasts",
         "beeper",
+        "telegram",
         "notion",
         "weather",
         "immich",

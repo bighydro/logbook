@@ -160,6 +160,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "beeper",
     "beeper_live",
     "telegram",
+    "telegram_live",
     "notion",
     "line",
     "twitter",

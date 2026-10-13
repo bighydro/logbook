@@ -94,9 +94,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, meet, gaudit, granola, mail, gmail, notion, ais, adsb, weather); safe to re-run; --all for"
-        " every configured source, --install-schedule for four times a day (00:00, 06:00, 12:00, 18:00; the"
-        " 06:00 run closes the day)."
+        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, ais, adsb, weather); safe to re-run;"
+        " --all for every configured source, --install-schedule for four times a day (00:00, 06:00, 12:00,"
+        " 18:00; the 06:00 run closes the day)."
         " gmail, gcal, drive, gtasks, meet and gaudit: one Google Workspace service account with domain-wide"
         " delegation, read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER,"
         " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
@@ -120,8 +120,9 @@ def sync_arguments(sub: Subparsers) -> None:
         " their transcripts when Meet made one), gaudit (your own sign-ins from the Workspace's login audit"
         " log, never the address they came from), granola, mail (a mailbox over IMAP, any provider), gmail"
         " (a Gmail mailbox over the Gmail API, the line IMAP writes), notion (pages created, edited, moved,"
-        " archived; never their text), ais (your vessels via aisstream.io), adsb (your aircraft via"
-        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo)",
+        " archived; never their text), telegram (what you sent your own bots, from what the Bot API still"
+        " holds, read-only), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky), weather"
+        " (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",
