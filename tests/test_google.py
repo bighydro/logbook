@@ -180,3 +180,56 @@ def test_doctor_says_when_the_key_file_is_not_a_service_account_key(lb: Logbook,
     check = _google(lb, {KEY_ENV: str(other), USER_ENV: USER})
     assert check is not None and check.status == "warn"
     assert check.detail.startswith(f"{KEY_ENV}: the file is not a service-account key")
+
+
+# -- every source on the key, one run --------------------------------------------------------------
+
+
+def test_every_source_on_the_key_runs_and_no_token_is_ever_written(
+    lb: Logbook, fake: Fake, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    """`sync --all` with the four sources on the key, against a mailbox, two calendars, a Drive and a
+    task list; then every file under the test's temporary root — the record, its state, the home
+    directory the index lives under — is read for the tokens the run was given: none is there, nor
+    any word of one, and the home holds no credential file."""
+    import copy
+
+    from test_drive import DRIVE_FILES, _activities
+    from test_gcal_account import CALENDARS, SAILING_EVENTS, SAILING_ID, WORK_EVENTS, WORK_ID
+    from test_gmail import _mailbox
+    from test_gtasks import LISTS, _tasks
+
+    from logbook import cli
+    from logbook.contrib import adapters
+    from logbook.contrib.adapters import drive, gcal, gmail, gtasks
+
+    _mailbox(fake)
+    fake.calendars = [c for c in copy.deepcopy(CALENDARS) if c["id"] in (SAILING_ID, WORK_ID)]
+    fake.events = {SAILING_ID: copy.deepcopy(SAILING_EVENTS), WORK_ID: copy.deepcopy(WORK_EVENTS)}
+    fake.drive, fake.files = _activities(), copy.deepcopy(DRIVE_FILES)
+    fake.lists, fake.tasks = [dict(x) for x in LISTS], _tasks()
+    monkeypatch.setattr(adapters, "live_adapters", lambda: [gmail, gcal, drive, gtasks])
+    try:
+        cli.main(["sync", "--all"])
+    except SystemExit as e:
+        assert e.code in (0, None)
+    out = capsys.readouterr().out
+    assert out.splitlines()[0] == "running gmail, gcal, drive, gtasks"
+    summary = out[out.index("sync --all:") :].splitlines()[1:]
+    assert [line.split()[:2] for line in summary] == [[name, "ok"] for name in service_account.SOURCES]
+    assert {line["source"] for line in lb.lines()} == {"mail", "ics", "drive", "gtasks"}
+    scopes = set(fake.issued.values())
+    assert scopes == set(service_account.SCOPES.values()), "a token per scope, each minted once"
+    secrets = [t.encode() for t in fake.issued] + [b"access_token", b"refresh_token", b"Bearer "]
+    for path in (p for p in tmp_path.rglob("*") if p.is_file()):
+        data = path.read_bytes()
+        assert not any(secret in data for secret in secrets), path.relative_to(tmp_path)
+    home = Path.home()
+    assert tmp_path in home.parents, "the test's own home"
+    names = [p.relative_to(home) for p in home.rglob("*") if p.is_file()]
+    assert not any(
+        word in part.lower()
+        for name in names
+        for part in name.parts
+        for word in ("token", "credential", "oauth")
+    ), names

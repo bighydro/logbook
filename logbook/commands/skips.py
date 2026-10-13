@@ -150,6 +150,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "body_withheld": "pages with blocks the API withholds",
     "body_not_found": "pages with a block deleted while they were read",
     "held_open_hour": "in an hour not over yet, written by a later run",
+    "no_folder_path": "with no folder path (the file is gone, or in no folder of yours)",
     "already_in_lines": "already in a line of the record",
 }
 

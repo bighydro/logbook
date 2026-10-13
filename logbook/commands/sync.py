@@ -697,6 +697,11 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
         options["owner_emails"] = list(lb.meta.get("owner_emails") or [])
+    cache: dict[str, Any] | None = None  # what the source looked up and need not ask again; not the record
+    cache_path = state_path.with_name(f"{a.name}-cache.json")
+    if _takes(adapter, "cache", live=True):
+        cache = _read_cache(cache_path)
+        options["cache"] = cache
     if _takes(adapter, "notice", live=True):  # a line of its own on stderr, under the progress lines
         options["notice"] = lambda text: print(f"  {text}", file=sys.stderr)
     failed: list[str] = []  # one line per feed the adapter could not read, the others still pulled
@@ -758,6 +763,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         sys.exit(1)
     if walk is not None and not a.dry_run:
         walk.finish()  # the walk completed: the checkpoint goes, the watermark below takes over
+    if cache is not None and not a.dry_run:
+        _write_state(cache_path, cache)
     for problem in failed:
         print(f"sync: {a.name}: {problem}", file=sys.stderr)
     where = f"since {since}" if since else "from the beginning"
@@ -1335,6 +1342,16 @@ def _read_state(path: Path) -> dict[str, Any]:
         return {}
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return data
+
+
+def _read_cache(path: Path) -> dict[str, Any]:
+    """A source's cache, `state/<name>-cache.json`; empty when there is none or it is not a JSON object
+    (it is only what the source would otherwise ask again)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _write_state(path: Path, state: dict[str, Any]) -> None:

@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from google_fake import (
     DRIVE_SCOPE,
+    METADATA_SCOPE,
     OLA,
     PER,
     USER,
@@ -117,6 +118,18 @@ def _activities() -> list[dict[str, Any]]:
 
 LINES = 12  # the twenty activities above, folded per file, hour and activity, less the three left out
 
+FOLDER = "application/vnd.google-apps.folder"
+DRIVE_FILES = {
+    "0Root": {"id": "0Root", "name": "My Drive", "mimeType": FOLDER},
+    "1Money": {"id": "1Money", "name": "Money", "mimeType": FOLDER, "parents": ["0Root"]},
+    "1Boat": {"id": "1Boat", "name": "Boat", "mimeType": FOLDER, "parents": ["0Root"]},
+    "1Inbox": {"id": "1Inbox", "name": "Inbox", "mimeType": FOLDER, "parents": ["0Root"]},
+    "1BudgetSheet": {"id": "1BudgetSheet", "name": "Budget 2027", "parents": ["1Money"]},
+    "1CrewDoc": {"id": "1CrewDoc", "name": "Crew list", "parents": ["1Boat"]},
+    "1PackingDoc": {"id": "1PackingDoc", "name": "Per's packing list"},  # shared with her: no parent of hers
+    # 1OldNotes was deleted for good: the API no longer knows it
+}
+
 
 @pytest.fixture(scope="module")
 def key() -> Any:
@@ -125,7 +138,7 @@ def key() -> Any:
 
 @pytest.fixture
 def fake(tmp_path: Path, key: Any, monkeypatch: pytest.MonkeyPatch, no_network: list[str]) -> Any:
-    server = Fake(key, drive=_activities())
+    server = Fake(key, drive=_activities(), files=json.loads(json.dumps(DRIVE_FILES)))
     server.waits = []  # type: ignore[attr-defined]
     monkeypatch.setattr(service_account, "send", server)
     monkeypatch.setattr(service_account, "sleep", server.waits.append)  # type: ignore[attr-defined]
@@ -188,7 +201,12 @@ def test_pull_writes_one_line_per_file_per_hour_per_activity_oldest_first(fake: 
     drafts, counts = _pull()
     assert len(drafts) == LINES
     assert [d["at"] for d in drafts] == sorted(d["at"] for d in drafts)
-    assert counts == {"skipped_other_activity": 1, "skipped_not_a_file": 1, "skipped_not_involved": 1}
+    assert counts == {
+        "skipped_other_activity": 1,
+        "skipped_not_a_file": 1,
+        "skipped_not_involved": 1,
+        "no_folder_path": 4,  # the notes deleted for good, Per's list in no folder of hers
+    }
     assert {d["source"] for d in drafts} == {"drive"} and {d["kind"] for d in drafts} == {"event"}
     assert {d["tz"] for d in drafts} == {"Europe/Oslo"}
     assert len({d["payload"]["raw_id"] for d in drafts}) == LINES
@@ -276,6 +294,7 @@ def test_a_line_names_and_references_the_file_and_never_holds_its_content(fake: 
         "name": "Budget 2027",
         "mime_type": SHEET,
         "url": "https://drive.google.com/open?id=1BudgetSheet",
+        "path": ["My Drive", "Money"],  # the folders' names, from the metadata scope; never the content
     }
     assert (
         payload["calendar"] == {"id": "google-drive", "name": "Google Drive"} and payload["all_day"] is False
@@ -345,8 +364,12 @@ def test_pull_backs_off_on_429_and_5xx_and_carries_on(fake: Fake) -> None:
 
 def test_the_client_only_reads(fake: Fake) -> None:
     _pull()
-    assert fake.methods() == {("POST", "oauth2.googleapis.com"), ("POST", "driveactivity.googleapis.com")}
-    assert {c["scope"] for c in fake.assertions} == {DRIVE_SCOPE}
+    assert fake.methods() == {
+        ("POST", "oauth2.googleapis.com"),
+        ("POST", "driveactivity.googleapis.com"),
+        ("GET", "www.googleapis.com"),  # the folders' names, for the path
+    }
+    assert {c["scope"] for c in fake.assertions} == {DRIVE_SCOPE, METADATA_SCOPE}
 
 
 def test_watermark_is_the_newest_activity_of_the_line_and_resume_looks_back_a_day(fake: Fake) -> None:

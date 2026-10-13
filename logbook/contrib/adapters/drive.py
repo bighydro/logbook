@@ -44,8 +44,19 @@ activities wait for the next run and are counted (`held_open_hour`). The line:
   removed, `role` as the API spells it, lower case, `with` `{user}` a `people/…` name, `{group}` an
   address, `{domain}`, `{anyone}`, `{owner}`) and `comments` (`{"post:added": n, …}`).
 
-No content, no comment text, no size and no modified time: the Activity API gives none of them, and a
-size or a time would need the Drive API's metadata scope, which this source does not ask for.
+**The folder path.** With the Drive API's metadata scope (`drive.metadata.readonly`, delegated to the
+same key) `file` also carries `path`, the names of the folders the file is in, root first (`["My
+Drive", "Boat"]`; a shared drive's name at the root of a file on one): the file's parent is asked once
+per sync (`files.get`, `fields=id,name,parents`: names and ids, never content), each folder's name and
+parent once, and then kept in `state/drive-cache.json` (`cache`, which `sync` keeps between runs and never
+writes into the record) for `FOLDER_TTL`; a folder an activity of this pull renamed or moved is asked
+again. The path is where the file is when its line is written, which for a line written within the hour
+is where it was. A file deleted for good, or one shared with the owner from a folder that is not theirs,
+has none (counted `no_folder_path`). Without the scope delegated, the lines carry no path and the run
+says so once; lines already written are never rewritten to add one, the record being appended to only.
+
+No content, no comment text, no size and no modified time: neither the Activity API nor the metadata
+this source asks for gives them.
 
 **Tier 1, whoever acted.** RFC 0009 makes an entry tier 1 (SPEC §4: calendar, public activity), and these
 lines are the same kind of fact: a file's name, its type, when it changed and who touched it, never
@@ -74,7 +85,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from . import service_account
-from .service_account import Account
+from .service_account import Account, ApiError, ScopeRefused
 
 __all__ = [
     "ENV",
@@ -98,6 +109,15 @@ SCHEMA = "event/v1"
 UNIT = "activities"  # what `sync` counts in its progress lines
 SCOPE = service_account.SCOPES["drive"]
 QUERY_URL = "https://driveactivity.googleapis.com/v2/activity:query"
+METADATA_SCOPE = service_account.SCOPES["drive paths"]
+FILES_URL = "https://www.googleapis.com/drive/v3/files/{id}"
+FIELDS = "id,name,parents"
+FOLDER_TTL = timedelta(days=7)  # a folder's name and parent are asked again after this long
+MAX_DEPTH = 64  # folders above a file, at most: a loop in what the API says ends here
+NO_PATHS = (
+    f"folder paths: {METADATA_SCOPE} is not delegated to this key; these lines carry none"
+    " (the tour, Google, on one key)"
+)
 FILE_URL = "https://drive.google.com/open?id={id}"
 PAGE_SIZE = 100
 LOOKBACK_H = 24.0
@@ -179,12 +199,16 @@ def pull(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     recorded: Callable[[str | None], Iterable[dict[str, Any]]] | None = None,
+    cache: dict[str, Any] | None = None,
+    notice: Callable[[str], None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Every activity from `since` (RFC3339; None for all the API keeps) folded per file, hour and
-    activity into event/v1 line drafts, oldest first. Skips and held activities are tallied in `counts`;
-    `progress(activities_so_far, elapsed_seconds)` after each page; `recorded(since)` gives the lines the
-    record already holds, whose activities are not written again. Raises service_account.GoogleError
-    (an OSError) when Google cannot be read; nothing is yielded before every page is in."""
+    activity into event/v1 line drafts, oldest first, each with its file's folder path when the metadata
+    scope is delegated. Skips and held activities are tallied in `counts`; `progress(activities_so_far,
+    elapsed_seconds)` after each page; `recorded(since)` gives the lines the record already holds, whose
+    activities are not written again; `cache` holds the folders between runs; `notice` says once that
+    the paths are missing for want of the scope. Raises service_account.GoogleError (an OSError) when
+    Google cannot be read; nothing is yielded before every page is in and every path resolved."""
     counts = counts if counts is not None else {}
     session = service_account.Session(config, SCOPE)
     raw = _query(session, since, progress)
@@ -203,6 +227,8 @@ def pull(
         hours.setdefault(key, []).append(activity)
     tz = timezone or "UTC"
     drafts = [_draft(file_id, word, hour, folded, tz) for (file_id, word, hour), folded in hours.items()]
+    if drafts:
+        _paths(config, drafts, _touched(raw), cache if cache is not None else {}, counts, notice)
     yield from sorted(drafts, key=lambda d: (d["at"], d["payload"]["raw_id"]))
 
 
@@ -550,6 +576,120 @@ def _title(word: str, name: str, extra: Mapping[str, Any]) -> str:
         text = f"{VERBS[word]} {name}"
     count = int(extra.get("count") or 1)
     return f"{text} ×{count}" if count > 1 else text
+
+
+# -- the folder path ------------------------------------------------------------------------------------
+
+
+def _paths(
+    config: Account,
+    drafts: list[dict[str, Any]],
+    touched: set[str],
+    cache: dict[str, Any],
+    counts: dict[str, int],
+    notice: Callable[[str], None] | None,
+) -> None:
+    """Each draft's `file.path`, the folders above it root first: the file's parent asked once this run,
+    each folder from the cache or asked once and put there. Without the metadata scope delegated, no
+    path and one notice."""
+    now = _now()
+    folders = _folders(cache, now, touched)
+    session = service_account.Session(config, METADATA_SCOPE)
+    parents: dict[str, str | None] = {}
+    try:
+        for draft in drafts:
+            file = draft["payload"]["extra"]["file"]
+            file_id = str(file["id"])
+            if file_id not in parents:
+                parents[file_id] = _parent(session, file_id)
+            path = _path(session, parents[file_id], folders, now)
+            if path:
+                file["path"] = path
+            else:
+                _count(counts, "no_folder_path")
+    except ScopeRefused:
+        for draft in drafts:
+            draft["payload"]["extra"]["file"].pop("path", None)
+        counts.pop("no_folder_path", None)
+        if notice is not None:
+            notice(NO_PATHS)
+    cache["folders"] = dict(sorted(folders.items()))
+
+
+def _folders(cache: dict[str, Any], now: datetime, touched: set[str]) -> dict[str, dict[str, Any]]:
+    """The cached folders still good: the shape, resolved within FOLDER_TTL, not renamed or moved by an
+    activity of this pull."""
+    stored = cache.get("folders")
+    found: dict[str, dict[str, Any]] = {}
+    for folder_id, entry in stored.items() if isinstance(stored, dict) else []:
+        if folder_id in touched or not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            continue
+        parent = entry.get("parent")
+        try:
+            resolved = _instant(str(entry.get("resolved_at")))
+        except ValueError:
+            continue
+        if now - resolved <= FOLDER_TTL and (parent is None or isinstance(parent, str)):
+            found[str(folder_id)] = {"name": entry["name"], "parent": parent, "resolved_at": _z(resolved)}
+    return found
+
+
+def _touched(raw: list[dict[str, Any]]) -> set[str]:
+    """The items a rename or a move of this pull changed: a folder among them is asked again."""
+    found: set[str] = set()
+    for entry in raw:
+        actions = [a for a in entry.get("actions") or [] if isinstance(a, dict)] or [
+            {"detail": entry.get("primaryActionDetail")}
+        ]
+        if not any(
+            isinstance(a.get("detail"), dict) and ({"rename", "move"} & set(a["detail"])) for a in actions
+        ):
+            continue
+        for target in entry.get("targets") or []:
+            if isinstance(target, dict) and isinstance(target.get("driveItem"), dict):
+                found.add(_item_id(target["driveItem"]))
+    return found
+
+
+def _get(session: service_account.Session, item_id: str) -> dict[str, Any] | None:
+    """The item's id, name and parents; None when the owner cannot see it (gone, or not shared)."""
+    try:
+        return session.get_json(FILES_URL.format(id=item_id), {"fields": FIELDS, "supportsAllDrives": "true"})
+    except ApiError as e:
+        if e.status in (403, 404):
+            return None
+        raise
+
+
+def _parent(session: service_account.Session, file_id: str) -> str | None:
+    found = _get(session, file_id)
+    parents = found.get("parents") if found is not None else None
+    return str(parents[0]) if isinstance(parents, list) and parents else None
+
+
+def _path(
+    session: service_account.Session, folder_id: str | None, folders: dict[str, dict[str, Any]], now: datetime
+) -> list[str]:
+    """The names from the root down to `folder_id`, as far up as the owner can see."""
+    names: list[str] = []
+    current, seen = folder_id, set()
+    while current and current not in seen and len(names) < MAX_DEPTH:
+        seen.add(current)
+        entry = folders.get(current)
+        if entry is None:
+            found = _get(session, current)
+            if found is None:
+                break
+            parents = found.get("parents")
+            entry = {
+                "name": " ".join(str(found.get("name") or "").split()),
+                "parent": str(parents[0]) if isinstance(parents, list) and parents else None,
+                "resolved_at": _z(now),
+            }
+            folders[current] = entry
+        names.append(str(entry["name"]))
+        current = entry.get("parent")
+    return list(reversed(names))
 
 
 def _instant(text: str) -> datetime:
