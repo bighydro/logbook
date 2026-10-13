@@ -65,6 +65,19 @@ def _say_disabled(lb: Logbook, name: str) -> bool:
     return True
 
 
+def _owner_aliases(lb: Logbook, command: str) -> dict[str, list[str]]:
+    """What an adapter that tells the owner's own acts by their handles, addresses or names
+    (`owner_aliases`: `github`) is given: `policy/owner.json`'s lists, its emails joined by
+    `owner_emails` from `logbook.json`. A malformed file exits 2 naming it."""
+    try:
+        aliases = policy.owner_aliases(lb.root)
+    except policy.PolicyError as e:
+        print(f"{command}: {e}", file=sys.stderr)
+        sys.exit(2)
+    emails = [*aliases["emails"], *(str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str))]
+    return {**aliases, "emails": emails}
+
+
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: bool = False) -> bool:
     """Whether the adapter's `run` (or, for `sync`, its `pull`: `live`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose
@@ -76,7 +89,8 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     import resumes), or one of
     `assets` (the asset registry, ADR 0018), `places` (the record's named places), `report` (lines
     `add` prints after the counts), `listen_s`, `notice` and `status` (a source that listens
-    to a stream, `ais`), or one of `add`'s own options. A module can be both a file and a live
+    to a stream, `ais`), `owner_aliases` (`_owner_aliases`: the owner's handles, addresses and names),
+    or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
     from ..contrib import adapters
 

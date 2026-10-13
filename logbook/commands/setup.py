@@ -91,6 +91,9 @@ KEY_SOURCES = {
     "telegram": "@BotFather → /mybots → each bot of yours → API Token, comma-separated (each reads and"
     " sends as its bot, so it is a password); your numeric user id is personal_information.user_id in"
     " Telegram Desktop's export",
+    "github": "GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens:"
+    " read-only Metadata, Contents, Issues and Pull requests on the repos LOGBOOK_GITHUB_REPOS names"
+    " (owner/name, or --all); your logins go under handles in policy/owner.json",
     "ais": "a free key from aisstream.io, for the vessels registered in assets.json",
     "adsb": "an account at opensky-network.org (optional: anonymous access works, with a lower rate)",
 }

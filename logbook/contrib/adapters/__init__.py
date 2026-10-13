@@ -163,6 +163,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "telegram_live",
     "claude_code",
     "notion",
+    "github_live",
     "line",
     "twitter",
     "apple_books",

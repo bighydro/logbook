@@ -98,6 +98,8 @@ SKIP_PHRASES = {
     "skipped_other_update": "updates that are not messages",
     "skipped_subagent": "subagent sessions, whose user is the main agent",
     "skipped_sidechain": "sidechain entries, a subagent's conversation",
+    "skipped_fork": "repos that are forks (--all leaves them out; LOGBOOK_GITHUB_REPOS may name one)",
+    "skipped_pending_review": "reviews still pending, never submitted",
 }
 
 
@@ -163,6 +165,9 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "transcript_pending": "with a transcript not generated yet, written by a later run",
     "conference_in_record": "already in the record, not asked about again",
     "grown": "grown since the last import (the line before is superseded)",
+    "github_unmarked": "with the actor marked neither owner nor other (list handles in policy/owner.json)",
+    "github_issues_off": "repos with their issues switched off",
+    "github_part_unreadable": "lists the token may not read",
 }
 
 
