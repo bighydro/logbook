@@ -487,3 +487,61 @@ def test_the_place_photos_named_is_kept_from_its_reverse_location_archive(tmp_pa
     assert "place" not in lines["IMG_0004.MOV"]["payload"]["extra"]
     assert "place" not in lines["IMG_0008.JPG"]["payload"]["extra"]
     assert all("place" not in line["payload"].get("extra", {}) for line in _lines(tmp_path / "plain"))
+
+
+# -- the places Photos named, by asset: `places review --ask-photos` -------------------------------------
+
+
+def test_places_reads_the_place_photos_named_for_each_asset_asked(tmp_path):
+    from photos_library import library
+
+    blob = reverse_location("Plattformveien 7, Nordsjøen", "Nordsjøen", ["Plattformen", "Nordsjøen"])
+    root = library(tmp_path, [("A1", blob, 1), ("A2", blob, 0), ("A3", None, None), ("A4", b"junk", 1)])
+    store = apple_photos.library_store(root)
+    assert store == root / "database" / "Photos.sqlite"
+    assert apple_photos.library_store(store) == store
+    found = apple_photos.places(store, ["A1", "A2", "A3", "A4", "A9"])
+    assert found == {
+        "A1": {
+            "address": "Plattformveien 7, Nordsjøen",
+            "city": "Nordsjøen",
+            "names": ["Plattformen", "Nordsjøen"],
+        },
+        "A2": None,
+        "A3": None,
+        "A4": None,
+    }, "a row marked not valid, none, junk: no place; an asset the library lacks: absent"
+    assert apple_photos.places(store, []) == {}
+
+
+def test_places_tolerates_a_library_without_the_reverse_location_columns(tmp_path):
+    store = _store(tmp_path / "photos")  # the adapter's fixture: no ZREVERSELOCATIONDATA at all
+    found = apple_photos.places(store, [U + "1", U + "4"])
+    assert found == {U + "1": None, U + "4": None}
+
+
+def test_places_names_the_store_when_a_table_it_needs_is_missing(tmp_path):
+    store = tmp_path / "Photos.sqlite"
+    with closing(sqlite3.connect(store)) as con:
+        con.execute("CREATE TABLE ZASSET (Z_PK INTEGER PRIMARY KEY, ZUUID VARCHAR)")
+        con.commit()
+    with pytest.raises(apple_photos.LibraryError, match="ZADDITIONALASSETATTRIBUTES") as e:
+        apple_photos.places(store, ["A1"])
+    assert str(store) in str(e.value)
+    with closing(sqlite3.connect(store)) as con:
+        con.execute("DROP TABLE ZASSET")
+        con.execute("CREATE TABLE ZASSET (Z_PK INTEGER PRIMARY KEY)")
+        con.execute("CREATE TABLE ZADDITIONALASSETATTRIBUTES (Z_PK INTEGER PRIMARY KEY, ZASSET INTEGER)")
+        con.commit()
+    with pytest.raises(apple_photos.LibraryError, match="ZUUID"):
+        apple_photos.places(store, ["A1"])
+
+
+def test_places_never_writes_the_library(tmp_path):
+    from photos_library import library
+
+    root = library(tmp_path, [("A1", None, None)])
+    store = apple_photos.library_store(root)
+    before = sorted((p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in store.parent.iterdir())
+    apple_photos.places(store, ["A1"])
+    assert sorted((p.name, p.stat().st_size, p.stat().st_mtime_ns) for p in store.parent.iterdir()) == before

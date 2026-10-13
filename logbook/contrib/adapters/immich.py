@@ -26,8 +26,16 @@ One line per asset. The pixels stay in Immich; the line points at them by asset 
 are never logged, only Immich's person ids. The place Immich gave the photo — `exifInfo.city`, `state`
 and `country`, which the server reverse-geocodes from the coordinates with a table it ships, offline —
 is kept under `extra.place` when the server had one; nothing here looks a place up. Network happens
-only inside `total` and `pull`, which only `logbook sync immich` calls (ADR 0012: no network on a file
-adapter's default path; a live adapter has no default path).
+only inside `total` and `pull`, which only `logbook sync immich` calls, and `place` and `places`, which
+only `logbook setup places review --ask-photos` calls (ADR 0012: no network on a file adapter's default
+path; a live adapter has no default path).
+
+**One asset's place.** A photo synced before the place was kept carries none, and a re-sync writes
+no line twice. `place` asks the server for one asset by its id, `GET /api/assets/{id}`, under the same
+key and the same `asset.read` permission as the walk, and keeps from the answer what `extra.place`
+would have: Immich's city, state and country, which the server named itself. The id is the request:
+no coordinate, no name, nothing else is sent. `places` asks for many, one at a time and never more
+than `LOOKUPS_PER_S` a second.
 """
 
 from __future__ import annotations
@@ -35,10 +43,12 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 if TYPE_CHECKING:
@@ -55,6 +65,12 @@ TIMEOUT_S = 60
 STATISTICS = ("/api/assets/statistics", "/api/server/statistics")  # the key's own count, then the server's
 # the place Immich named from the photo's coordinates with its own bundled table, on the owner's server
 PLACE_FIELDS = ("city", "state", "country")
+ASSET = "/api/assets/"  # `place`: one asset by id, under the walk's own `asset.read`
+LOOKUPS_PER_S = 10.0  # `places`: one asset a request, never more than this many a second
+NO_SUCH_ASSET = frozenset({400, 404})  # an id the server does not hold (or would not take as one)
+
+_sleep: Callable[[float], None] = time.sleep  # the tests replace both: a wait is recorded, never slept
+_clock: Callable[[], float] = time.monotonic
 
 # -- provenance rule (RFC 0002, ADR 0011): data, so it can be reconsidered ----------------------
 # A camera file: HEIC/RAW/JPEG stills, or a video, with make/model and an original capture time.
@@ -261,6 +277,35 @@ def pull(
             )
 
 
+def place(config: Config, asset_id: str) -> dict[str, str] | None:
+    """The place the server holds for one asset (`GET /api/assets/{id}`, the module docstring): its
+    city, state and country as `extra.place` keeps them, `{}` when it has none, None when the server
+    holds no such asset (400, 404). Any other failure raises OSError, and an answer about another
+    asset ValueError: the caller says the server failed and asks it nothing more."""
+    try:
+        doc = _get(config, ASSET + quote(asset_id, safe=""))
+    except HTTPError as e:
+        e.close()
+        if e.code in NO_SUCH_ASSET:
+            return None
+        raise
+    if str(doc.get("id")) != asset_id:
+        raise ValueError(f"immich answered about another asset than {asset_id}")
+    return _place(doc.get("exifInfo") or {})
+
+
+def places(config: Config, asset_ids: Iterable[str]) -> Iterator[tuple[str, dict[str, str] | None]]:
+    """`(asset id, place)` for each id in turn, `place` one request at a time, the next never sooner
+    than `1 / LOOKUPS_PER_S` seconds after the last began. The first failure ends the iteration."""
+    gap = 1.0 / LOOKUPS_PER_S
+    last: float | None = None
+    for asset_id in asset_ids:
+        if last is not None and (waited := _clock() - last) < gap:
+            _sleep(gap - waited)
+        last = _clock()
+        yield asset_id, place(config, asset_id)
+
+
 def _metadata_pending(asset: dict[str, Any]) -> bool:
     """True for an upload Immich's metadata job has not reached: no dimensions on the asset and
     an EXIF row holding nothing but the file size (or no EXIF row at all). After the job every
@@ -291,7 +336,7 @@ def _post(config: Config, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _get(config: Config, path: str) -> dict[str, Any]:
-    """One GET of a statistics endpoint (`total`)."""
+    """One GET: a statistics endpoint (`total`), or one asset (`place`)."""
     req = Request(
         f"{config.url.rstrip('/')}{path}",
         headers={"x-api-key": config.key, "Accept": "application/json"},
@@ -363,15 +408,20 @@ def _payload(asset: dict[str, Any], exif: dict[str, Any]) -> dict[str, Any]:
     description = (exif.get("description") or "").strip()
     if description:
         extra["description"] = description
-    place = {
-        key: value.strip()
-        for key in PLACE_FIELDS
-        if isinstance(value := exif.get(key), str) and value.strip()
-    }
+    place = _place(exif)
     if place:
         extra["place"] = place
     payload["extra"] = extra
     return payload
+
+
+def _place(exif: Mapping[str, Any]) -> dict[str, str]:
+    """The place Immich named, from an asset's `exifInfo`: its non-empty city, state and country."""
+    return {
+        key: value.strip()
+        for key in PLACE_FIELDS
+        if isinstance(value := exif.get(key), str) and value.strip()
+    }
 
 
 def _camera(exif: dict[str, Any]) -> str | None:

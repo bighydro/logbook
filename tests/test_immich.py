@@ -611,3 +611,77 @@ def test_sync_prints_a_progress_line_per_page_to_stderr(lb, server, capsys, dry_
         "  3 of 6 assets in 0s",
         "  6 of 6 assets in 0s",
     ]
+
+
+# -- one asset's place, by id: `places review --ask-photos` ---------------------------------------
+
+
+def _asset_server(answers: dict[str, dict[str, Any] | int]) -> tuple[list[str], Callable[..., Any]]:
+    """`GET /api/assets/{id}`: the asset's document, or an HTTP status to answer; every path asked
+    recorded. Nothing else is answered."""
+    asked: list[str] = []
+
+    def get(config: immich.Config, path: str) -> dict[str, Any]:
+        from email.message import Message
+        from urllib.error import HTTPError
+
+        assert config == CONFIG
+        asked.append(path)
+        answer = answers[path.removeprefix("/api/assets/")]
+        if isinstance(answer, int):
+            raise HTTPError(config.url + path, answer, "synthetic", Message(), None)
+        return answer
+
+    return asked, get
+
+
+def test_place_asks_one_asset_by_id_and_keeps_what_extra_place_would(monkeypatch):
+    asked, get = _asset_server(
+        {
+            P17: {"id": P17, "exifInfo": {"city": " Havbyen ", "state": "", "country": "Nordsjøen"}},
+            P42: {"id": P42, "exifInfo": {"city": None}},
+            "0000be0b-0000-4000-8000-000000000404": 404,
+            "not-a-uuid": 400,
+        }
+    )
+    monkeypatch.setattr(immich, "_get", get)
+    assert immich.place(CONFIG, P17) == {"city": "Havbyen", "country": "Nordsjøen"}
+    assert immich.place(CONFIG, P42) == {}, "the server has the asset and no place for it"
+    assert immich.place(CONFIG, "0000be0b-0000-4000-8000-000000000404") is None, "gone from the server"
+    assert immich.place(CONFIG, "not-a-uuid") is None
+    assert asked[0] == f"/api/assets/{P17}"
+
+
+def test_place_refuses_an_answer_about_another_asset_and_a_server_that_fails(monkeypatch):
+    _asked, get = _asset_server({P17: {"id": P42, "exifInfo": {"city": "Havbyen"}}, P42: 500})
+    monkeypatch.setattr(immich, "_get", get)
+    with pytest.raises(ValueError, match="another asset"):
+        immich.place(CONFIG, P17)
+    with pytest.raises(OSError):
+        immich.place(CONFIG, P42)
+
+
+def test_place_quotes_the_id_so_it_stays_one_path_segment(monkeypatch):
+    asked, get = _asset_server({"..%2F..%2Fserver%2Fstatistics": 404})
+    monkeypatch.setattr(immich, "_get", get)
+    assert immich.place(CONFIG, "../../server/statistics") is None
+    assert asked == ["/api/assets/..%2F..%2Fserver%2Fstatistics"]
+
+
+def test_places_asks_one_at_a_time_never_faster_than_the_pace(monkeypatch):
+    ids = [f"0000a5e7-0000-4000-8000-{n:012x}" for n in range(4)]
+    _asked, get = _asset_server({i: {"id": i, "exifInfo": {"city": "Havbyen"}} for i in ids})
+    monkeypatch.setattr(immich, "_get", get)
+    now = [100.0]
+    waits: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        waits.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr(immich, "_clock", lambda: now[0])
+    monkeypatch.setattr(immich, "_sleep", sleep)
+    found = list(immich.places(CONFIG, ids))
+    assert found == [(i, {"city": "Havbyen"}) for i in ids]
+    gap = 1 / immich.LOOKUPS_PER_S
+    assert waits == pytest.approx([gap] * 3), "the first at once, then one per gap"
