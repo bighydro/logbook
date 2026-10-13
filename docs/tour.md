@@ -552,7 +552,9 @@ again. A page Notion stops listing — deleted for good, or no longer shared —
 **The watermark** is the newest last-edit time seen (`state/notion.json`); each run reads back two
 hours before it, because Notion stamps an edit to the minute and its search lists a fresh edit late,
 and the record refuses what it already holds. `--since` reads from an exact time; `--dry-run` counts
-and writes nothing. The sync stays under Notion's rate limit — at most three requests a second; a 429
+and writes nothing. The first run reads every page once, its blocks included, to count its words: at
+three requests a second a workspace of a few thousand pages takes a quarter of an hour or more, and
+says how far it is every hundred pages; later runs read only what changed. The sync stays under Notion's rate limit — at most three requests a second; a 429
 waits as long as Notion's `Retry-After` says, a server error is tried again after 1, 2, 4… seconds —
 and when the limit does not lift it stops on one line, exit 1, the watermark where it was, so the next
 run carries on. `logbook doctor` lists `sync:notion` once the token is set, by name only, and asks
