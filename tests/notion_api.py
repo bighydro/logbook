@@ -6,7 +6,10 @@ It serves the calls the source makes, in the shapes Notion's public API (version
 /v1/blocks/{id}/children` (paged). Every request is recorded with its method, path, query and body;
 anything else (a PATCH, a DELETE, a POST that is not a search) is answered 405 and never acted on, so
 a test can hold the client to reading. `throttle` answers 429 with `Retry-After` to the next N
-requests of a path. Pages are served `page_size` at a time, at most `PAGE` here, so every walk pages.
+requests of a path; `refuse` answers a path with one error every time. Pages are served `page_size`
+at a time, at most `PAGE` here, so every walk pages. A block of a type Notion withholds from
+integrations (`WITHHELD`, such as `ai_block`) is never served: the page of children that would hold
+it answers 400 `validation_error`, as Notion does.
 
 Everything is synthetic: Ines Nordmann of Oslo, her brother Ola, their pages. Nobody in it is real.
 """
@@ -25,6 +28,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 TOKEN = "ntn_synthetic_token_not_a_real_one"
 VERSION = "2022-06-28"
 PAGE = 2  # results per page the fake serves, whatever the client asks: every list is paged
+WITHHELD = frozenset({"ai_block"})  # block types Notion refuses to give an integration
 
 
 def uid(n: int) -> str:
@@ -181,6 +185,7 @@ class FakeNotion:
     throttle: dict[str, int] = field(default_factory=dict)  # path → how many more refusals it answers
     throttle_status: int = 429  # the refusal: 429, or a 5xx
     retry_after: str = "7"
+    refuse: dict[str, tuple[int, str, str]] = field(default_factory=dict)  # path → (status, code, message)
 
     def __post_init__(self) -> None:
         fake = self
@@ -226,6 +231,10 @@ class FakeNotion:
                         _error(fake.throttle_status, "rate_limited", "You have been rate limited."),
                         {"Retry-After": fake.retry_after},
                     )
+                    return
+                if url.path in fake.refuse:
+                    refused, name, message = fake.refuse[url.path]
+                    self._send(refused, _error(refused, name, message))
                     return
                 code, doc = fake.answer(self.command, url.path, query, body)
                 self._send(code, doc)
@@ -292,7 +301,15 @@ class FakeNotion:
             if parts[1] not in self.pages and parts[1] not in self.blocks:
                 return 404, _not_found("block", parts[1])
             rows = self.children.get(parts[1], [])
-            return 200, _page_of(rows, query.get("start_cursor"), int(query.get("page_size") or 100), "block")
+            served = _page_of(rows, query.get("start_cursor"), int(query.get("page_size") or 100), "block")
+            for row in served["results"]:
+                if row["type"] in WITHHELD:
+                    return 400, _error(
+                        400,
+                        "validation_error",
+                        f"Block type {row['type']} is not supported via the API for your bot type.",
+                    )
+            return 200, served
         return 404, _error(404, "invalid_request_url", "Invalid request URL.")
 
     def _search(self, body: dict[str, Any]) -> dict[str, Any]:

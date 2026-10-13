@@ -556,6 +556,10 @@ holds the page at that edit. An edit on the day the page was made, seen in the s
 line records the page as the sync saw it: two edits between two syncs are one, an old → new value is
 against the page's previous line, and an edit later on a day that already has its line is not written
 again. A page Notion stops listing — deleted for good, or no longer shared — leaves no line.
+Notion's API withholds some block types from integrations, such as an AI block: a page that holds
+one is still written, with `extra.body` `{"unavailable": "withheld"}` in place of the digest and
+word count (`"not_found"` when a block is deleted while the sync reads the page), and the run counts
+those pages, names the block type once, never the page, and goes on.
 
 **The watermark** is the newest last-edit time seen (`state/notion.json`); each run reads back two
 hours before it, because Notion stamps an edit to the minute and its search lists a fresh edit late,

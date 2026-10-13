@@ -27,8 +27,11 @@ read people. Requests start at least a third of a second apart (Notion's documen
 a second); a 429 or a 503 waits what `Retry-After` says, one without a usable one and any other
 5xx wait 1 s doubling to 60 s, up to `RETRIES` times, then the pull fails with one sentence and
 `sync` keeps the watermark it had. A connection that fails is tried `CONNECT_RETRIES` more times.
-Network happens only inside `pull`, which only `logbook sync notion` calls; `doctor` asks Notion
-nothing.
+Reading a page's blocks, a 400 `validation_error` naming a block type the API withholds from
+integrations (`ai_block`) or a 404 (a block deleted while the page is read) marks that page's body
+unavailable and the run goes on; the block type is said once a run, never the page; any other 400
+stops the run. Network happens only inside `pull`, which only `logbook sync notion` calls; `doctor`
+asks Notion nothing.
 
 A line: `kind` `event`, `tier` 1 — SPEC §4 and RFC 0009 give `event/v1` tier 1, and a line here
 carries a title, the titles above it and who acted, as a calendar entry carries a title and its
@@ -46,11 +49,14 @@ last editor otherwise; `moved_from` (`parent`, `path`) on a move; and on the lin
 as it is now (the action at its last edit; a `created` line only when it is that edit too) `body` —
 `sha256` and `bytes` of the text in UTF-8, `media_type` text/plain and no `path`, the record holds a
 digest, not the text (SPEC §1.1) — `words` (whitespace-separated) and `words_delta` against the
-page's previous line; `properties`, a database row's `status`, `select`, `multi_select`, `date` and
-`checkbox` values by name (never text, a number, a person, a phone, an email, a url, a file, a
-formula or a relation); and `changed`, `[{name, old, new}]` for those that differ from the page's
-previous line. Notion's API keeps no history of a page, so the record is its history: `pull` takes
-`previous`, which hands it the lines the record holds for a page, and compares with them.
+page's previous line that has a count; or, when the blocks cannot all be read, `{unavailable:
+withheld}` (the API withholds a block type the page holds) or `{unavailable: not_found}` (a block was
+deleted while the page was read), never a digest of part of the text; `properties`, a database
+row's `status`, `select`, `multi_select`, `date` and `checkbox` values by name (never text, a number,
+a person, a phone, an email, a url, a file, a formula or a relation); and `changed`, `[{name, old,
+new}]` for those that differ from the page's previous line. Notion's API keeps no history of a page,
+so the record is its history: `pull` takes `previous`, which hands it the lines the record holds for
+a page, and compares with them.
 
 Which lines a page gives, per run: `created` when its `created_time` is at or after `since` (every
 page on a first run); then, unless the record already holds the page at this `last_edited_time`,
@@ -120,12 +126,14 @@ MAX_DEPTH = 32  # blocks within blocks, and pages above pages
 BATCH = 100  # pages per question to the record
 CALENDAR = {"id": "notion", "name": "Notion"}
 CREATED, EDITED, MOVED, ARCHIVED = "created", "edited", "moved", "archived"
+WITHHELD, NOT_FOUND = "withheld", "not_found"  # why a page's body is unavailable
 OWNER, OTHER = "owner", "other"
 PROPERTY_TYPES = frozenset({"status", "select", "multi_select", "date", "checkbox"})
 UNTITLED = "Untitled"  # an untitled page above another, as Notion shows it
 ID = re.compile(
     r"(?<![0-9a-f])([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", re.I
 )
+WITHHELD_BLOCK = re.compile(r"\bblock type [`'\"]?(\w+)[`'\"]? is not supported\b", re.I)
 TOKEN_HINT = (
     f"check {TOKEN_ENV}: the internal integration's secret, under Notion → Settings → Connections →"
     " Develop or manage integrations"
@@ -241,13 +249,14 @@ def pull(
     _count(counts, "skipped_bad_date", len(listed) - len(pages))
     tree = _Tree(client, pages)
     people = _People(client, owner)
+    bodies = _Bodies(client, notice)
     pages.sort(key=lambda p: (p.edited, p.id))
     for n in range(0, len(pages), BATCH):
         batch = pages[n : n + BATCH]
         held = previous([f"{p.id}/" for p in batch]) if previous is not None else {}
         for p in batch:
             yield from _drafts(
-                p, _Seen.of(held.get(f"{p.id}/", [])), floor, zone, config, tree, people, client, counts
+                p, _Seen.of(held.get(f"{p.id}/", [])), floor, zone, config, tree, people, bodies, counts
             )
         if notice is not None and len(pages) > BATCH:
             notice(f"{n + len(batch):,} of {len(pages):,} pages read")
@@ -280,6 +289,14 @@ class _Unreachable(OSError):
     def __init__(self, status: int, message: str) -> None:
         super().__init__(message)
         self.status = status
+
+
+class _Withheld(OSError):
+    """400 `validation_error`: the API withholds a block type from integrations (`ai_block`)."""
+
+    def __init__(self, block_type: str, message: str) -> None:
+        super().__init__(message)
+        self.block_type = block_type
 
 
 class _Client:
@@ -356,6 +373,9 @@ class _Client:
                 raise OSError(f"Notion refused the token (401): {TOKEN_HINT}") from None
             if e.code in (403, 404):
                 raise _Unreachable(e.code, f"Notion API {method} {path} answered {e.code}: {said}") from None
+            withheld = _withheld_type(said) if e.code == 400 else None
+            if withheld is not None:
+                raise _Withheld(withheld, f"Notion API {method} {path} answered 400: {said}") from None
             raise OSError(f"Notion API {method} {path} answered {e.code}: {said}") from None
         except (URLError, TimeoutError, OSError, HTTPException) as e:  # refused, reset, timed out, cut off
             reason = e.reason if isinstance(e, URLError) else (str(e) or type(e).__name__)
@@ -406,6 +426,15 @@ def _error_text(e: HTTPError) -> str:
     if isinstance(doc, dict) and isinstance(doc.get("message"), str):
         return f"{doc.get('code', 'error')}: {doc['message']}"
     return str(e.reason)
+
+
+def _withheld_type(said: str) -> str | None:
+    """The block type a 400 says the API withholds from integrations (`validation_error: Block type
+    ai_block is not supported via the API for your bot type.`); None for any other 400."""
+    if not said.startswith("validation_error: "):
+        return None
+    found = WITHHELD_BLOCK.search(said)
+    return found.group(1) if found is not None else None
 
 
 def _retry_after(value: str | None) -> float | None:
@@ -680,7 +709,7 @@ def _drafts(
     config: Config,
     tree: _Tree,
     people: _People,
-    client: _Client,
+    bodies: _Bodies,
     counts: dict[str, int],
 ) -> Iterator[dict[str, Any]]:
     """The page's lines this run: `created`, then the action at its last edit (module docstring)."""
@@ -705,12 +734,12 @@ def _drafts(
     if folded:
         action = None  # the creation day's edit: the created line holds the page as it is
     if with_created:
-        state = _state(client, page, seen) if folded else None
+        state = _state(bodies, page, seen, counts) if folded else None
         actor = people.actor(page.created_by, counts)
         yield _line(page, CREATED, page.created, created_day, path, parent, actor, state, counts)
     if action is not None:
         known = _raw_id(page.id, edited_day, action) in seen.keys  # the record refuses it: fetch nothing
-        state = None if known else _state(client, page, seen)
+        state = None if known else _state(bodies, page, seen, counts)
         actor = people.actor(page.edited_by, counts)
         line = _line(page, action, page.edited, edited_day, path, parent, actor, state, counts)
         if action == MOVED:
@@ -718,12 +747,12 @@ def _drafts(
         yield line
 
 
-def _state(client: _Client, page: _Page, seen: _Seen) -> dict[str, Any]:
+def _state(bodies: _Bodies, page: _Page, seen: _Seen, counts: dict[str, int]) -> dict[str, Any]:
     """The page as it is now: its body's digest and word count, its properties, what changed."""
     state: dict[str, Any] = {}
-    body = _body(client, page.id)
+    body = bodies.of(page.id, counts)
     if body is not None:
-        if seen.words is not None:
+        if seen.words is not None and "words" in body:
             body["words_delta"] = body["words"] - seen.words
         state["body"] = body
     if page.properties:
@@ -817,19 +846,42 @@ def _properties(raw: object) -> dict[str, Any]:
     return dict(sorted(found.items()))
 
 
-def _body(client: _Client, page_id: str) -> dict[str, Any] | None:
-    """The digest of the page's text and its words; None when the blocks cannot be read."""
-    try:
-        text = "\n".join(_text_of(client, page_id, 0))
-    except _Unreachable:
-        return None
-    data = text.encode("utf-8")
-    return {
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "bytes": len(data),
-        "media_type": "text/plain",
-        "words": len(text.split()),
-    }
+class _Bodies:
+    """A page's text as its digest and word count, read through its blocks and never kept; each
+    block type the API withholds is said once a run, by type, never by page."""
+
+    def __init__(self, client: _Client, notice: Callable[[str], None] | None) -> None:
+        self.client = client
+        self.notice = notice
+        self.withheld: set[str] = set()
+
+    def of(self, page_id: str, counts: dict[str, int]) -> dict[str, Any] | None:
+        """The digest of the page's text and its words; `{unavailable: ...}` when a block is withheld
+        or deleted while the page is read; None when the integration may not read the blocks."""
+        try:
+            text = "\n".join(_text_of(self.client, page_id, 0))
+        except _Withheld as e:
+            _count(counts, "body_withheld")
+            if e.block_type not in self.withheld:
+                self.withheld.add(e.block_type)
+                if self.notice is not None:
+                    self.notice(
+                        f"Notion's API withholds {e.block_type} blocks from integrations: a page that"
+                        " holds one is written with its body unavailable"
+                    )
+            return {"unavailable": WITHHELD}
+        except _Unreachable as e:
+            if e.status != 404:
+                return None
+            _count(counts, "body_not_found")
+            return {"unavailable": NOT_FOUND}
+        data = text.encode("utf-8")
+        return {
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data),
+            "media_type": "text/plain",
+            "words": len(text.split()),
+        }
 
 
 def _text_of(client: _Client, block_id: str, depth: int) -> list[str]:

@@ -144,6 +144,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_title": "without a title",
     "actor_unmarked": "with the actor marked neither owner nor other (set LOGBOOK_NOTION_OWNER_ID)",
     "actor_unnamed": "with the actor named by id only (the integration may not read user information)",
+    "body_withheld": "pages with blocks the API withholds",
+    "body_not_found": "pages with a block deleted while they were read",
     "held_open_hour": "in an hour not over yet, written by a later run",
     "already_in_lines": "already in a line of the record",
 }
