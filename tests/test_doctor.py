@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from logbook import cli
-from logbook.contrib import adapters, backup, doctor, home, last_run, schedule
+from logbook.contrib import adapters, backup, doctor, home, last_run, schedule, service
 from logbook.core import policy
 from logbook.core.store import Logbook
 
@@ -423,6 +423,77 @@ def test_a_restore_test_file_that_is_not_the_shape_is_a_warning_naming_it(
     path.write_text('{"status": "maybe"}', encoding="utf-8")
     check = _run(lb)["restore-test"]
     assert check.status == "warn" and str(path) in check.detail
+
+
+# -- the serve service ----------------------------------------------------------------------------------
+
+
+def _install(system: str, port: int = 8765, system_wide: bool = False) -> Path:
+    """What `serve --install-service` leaves on this machine: the file where the service manager
+    reads it (for a system service, as the owner's `sudo cp` put it there)."""
+    svc = service.plan(
+        system,
+        Path.home(),
+        "/opt/logbook/venv/bin/python3",
+        port=port,
+        system_wide=system_wide,
+        user="ines" if system_wide else None,
+    )
+    [text] = svc.plan.files.values()
+    svc.path.parent.mkdir(parents=True, exist_ok=True)
+    svc.path.write_text(text, encoding="utf-8")
+    return svc.path
+
+
+def test_no_serve_service_passes_and_says_how_to_install_one(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(service, "system", lambda: "linux")
+    monkeypatch.setattr(service, "answering", lambda port: pytest.fail("nothing installed, nothing asked"))
+    check = _run(lb)["serve"]
+    assert check.status == "pass"
+    assert "no serve service" in check.detail and "logbook serve --install-service" in check.detail
+
+
+def test_a_serve_service_that_answers_passes(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "system", lambda: "linux")
+    _install("linux", port=8080)
+    asked: list[int] = []
+    monkeypatch.setattr(service, "answering", lambda port: asked.append(port) is None)
+    check = _run(lb)["serve"]
+    assert check.status == "pass" and asked == [8080]
+    assert "systemd user service" in check.detail and "answering at http://127.0.0.1:8080/" in check.detail
+
+
+def test_a_serve_service_that_does_not_answer_warns_with_its_log(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(service, "system", lambda: "darwin")
+    _install("darwin", system_wide=True)
+    monkeypatch.setattr(service, "answering", lambda port: False)
+    check = _run(lb)["serve"]
+    assert check.status == "warn"
+    assert "launchd daemon" in check.detail and "nothing answers at http://127.0.0.1:8765/" in check.detail
+    assert "~/Library/Logs/logbook-serve.log" in check.detail
+
+
+def test_two_serve_services_on_one_port_warn(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "system", lambda: "darwin")
+    _install("darwin")
+    _install("darwin", system_wide=True)
+    monkeypatch.setattr(service, "answering", lambda port: True)
+    check = _run(lb)["serve"]
+    assert check.status == "warn"
+    assert "launchd agent" in check.detail and "launchd daemon" in check.detail and "one port" in check.detail
+
+
+def test_the_serve_line_prints_between_the_restore_test_and_the_disk(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(shutil, "disk_usage", _usage(200 * GIB))
+    _status, out = _cli(capsys)
+    names = [line.split()[1] for line in out.splitlines()[:-1]]
+    assert names.index("restore-test") + 1 == names.index("serve") == names.index("disk") - 1
 
 
 # -- disk and folder ------------------------------------------------------------------------------------

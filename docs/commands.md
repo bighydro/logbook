@@ -19,7 +19,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `init` | create a logbook (default `~/Logbook`) |
 | `setup` | the guided first run, one question at a time, resumable; and the record's settings: `setup places`, `setup assets`, `setup questions` |
-| `doctor` | the check-up, one line per check, exit 1 on a fail, the crossing ceilings, the record's home (ADR 0022), the last scheduled run and the last restore test among them, and lines dated outside their source's plausible range (`--implausible` lists them, [The doctor](doctor.md)); `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
+| `doctor` | the check-up, one line per check, exit 1 on a fail, the crossing ceilings, the record's home (ADR 0022), the last scheduled run, the last restore test and the serve service among them, and lines dated outside their source's plausible range (`--implausible` lists them, [The doctor](doctor.md)); `doctor sources` lists every adapter and, with `--gaps`, where each went quiet |
 
 ## Write
 
@@ -39,7 +39,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 | `search` | full-text search through the index: words, `"a phrase"`, `kar*` |
 | `people` | everyone the record names, never the owner; `people --priority` ranks them by a plain score; `people NAME` is one person's page; `people merge` the same person named twice; `people review` who the sources saw that the record has not placed, proposed against the people it names, accepted or rejected only when told; `people drift [--min-days N] [--quiet-days M] [--year YYYY] [--show]` who you used to see and have drifted from; `people nearby PLACE \| --journey ID \| --days FROM TO [--radius KM]` who has been seen where you are about to go ([people](people.md)) |
 | `rollup` | the record per year: countries, flights, nights, places, people, listen, attention, money; per month or week: health, attention; `rollup ledger` the transactions in context |
-| `serve` | the record in a browser, from this machine only; `serve mcp` serves it to an MCP host |
+| `serve` | the record in a browser, from this machine only (`/today` is today's Day); `--install-service [--system]` keeps it running by launchd or systemd, `--status` says whether it answers; `serve mcp` serves it to an MCP host |
 
 ## Derive
 

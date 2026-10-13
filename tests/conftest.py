@@ -63,6 +63,17 @@ def _logbook_home_is_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         monkeypatch.delenv(variable, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _system_folders_are_temporary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/Library/LaunchDaemons` and `/etc/systemd/system`, where `serve --install-service --system`
+    tells the owner to copy the service, are the machine's own: `doctor` and `serve --status` look
+    there, and what this machine has installed must never change what a test sees. Every test gets
+    an empty root of its own for them."""
+    from logbook.contrib import service
+
+    monkeypatch.setattr(service, "SYSTEM_ROOT", tmp_path / "system-root")
+
+
 # set by the fixtures above, or read once at collection (`OPT_IN`)
 KEPT = frozenset({"LOGBOOK_HOME", "LOGBOOK_SLOW", "LOGBOOK_STRESS"})
 

@@ -14,8 +14,10 @@ whose variables are not set is one `sync --all` skips, so the schedule is harmle
 exists.
 
 `plan` is pure: the files and the scheduler's commands for a platform, a home directory and an
-interpreter. `install` prints and writes; `uninstall` unlinks what `plan` names and nothing else;
-`run` hands the commands to the scheduler and reports, or says what to run when it is not on PATH.
+interpreter. The plist is `launchd_plist`'s and the units `unit_file`'s, the one renderer of each,
+which `serve --install-service` (`logbook.contrib.service`) uses too. `install` prints and writes;
+`uninstall` unlinks what `plan` names and nothing else; `run` hands the commands to the scheduler and
+reports, or says what to run when it is not on PATH.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -95,22 +97,53 @@ def _launchd(home: Path, python: str, logbook_home: Path | None) -> Plan:
         f"if [ -r {env_file} ]; then set -a; . {env_file}; set +a; fi; "
         f"exec {shlex.quote(python)} {' '.join(ARGS)}"
     )
-    data: dict[str, object] = {
-        "Label": LABEL,
-        "ProgramArguments": ["/bin/sh", "-c", script],
-        "StartCalendarInterval": [{"Hour": hour, "Minute": 0} for hour in HOURS],
-        "RunAtLoad": False,
-        "StandardOutPath": str(home.joinpath(*LOG)),
-        "StandardErrorPath": str(home.joinpath(*LOG)),
-    }
-    if logbook_home is not None:
-        data["EnvironmentVariables"] = {"LOGBOOK_HOME": str(logbook_home)}
-    text = plistlib.dumps(data, sort_keys=False).decode("utf-8")
+    text = launchd_plist(
+        LABEL,
+        ("/bin/sh", "-c", script),
+        home.joinpath(*LOG),
+        {"LOGBOOK_HOME": str(logbook_home)} if logbook_home is not None else {},
+        calendar=[{"Hour": hour, "Minute": 0} for hour in HOURS],
+    )
+    activate, deactivate = agent_commands(path)
+    return Plan("darwin", directory, {path: text}, activate, deactivate)
+
+
+def launchd_plist(
+    label: str,
+    arguments: Sequence[str],
+    log: Path,
+    environment: Mapping[str, str],
+    *,
+    calendar: Sequence[Mapping[str, int]] = (),
+    keep_alive: bool = False,
+    user: str | None = None,
+) -> str:
+    """A launchd job, the one renderer for every plist the package writes (this schedule, `serve
+    --install-service`): `arguments` run as given, stdout and stderr to `log` (launchd creates it).
+    With `calendar` the job runs at those local times and not at load; with `keep_alive` it starts
+    at load and launchd starts it again whenever it exits unsuccessfully. `user` is the account a
+    daemon of the system domain runs as (`UserName`); an agent runs as the user who loaded it."""
+    data: dict[str, object] = {"Label": label}
+    if user is not None:
+        data["UserName"] = user
+    data["ProgramArguments"] = list(arguments)
+    if calendar:
+        data["StartCalendarInterval"] = [dict(c) for c in calendar]
+    data["RunAtLoad"] = keep_alive
+    if keep_alive:
+        data["KeepAlive"] = {"SuccessfulExit": False}
+    data["StandardOutPath"] = str(log)
+    data["StandardErrorPath"] = str(log)
+    if environment:
+        data["EnvironmentVariables"] = dict(environment)
+    return plistlib.dumps(data, sort_keys=False).decode("utf-8")
+
+
+def agent_commands(path: Path) -> tuple[tuple[Command, ...], tuple[Command, ...]]:
+    """(activate, deactivate) for a launchd agent of this user's login session: unloaded first, so
+    an agent installed again is loaded as now written."""
     domain = f"gui/{os.getuid() if hasattr(os, 'getuid') else 501}"
-    return Plan(
-        "darwin",
-        directory,
-        {path: text},
+    return (
         (
             Command(("launchctl", "bootout", domain, str(path)), required=False),
             Command(("launchctl", "bootstrap", domain, str(path))),
@@ -121,29 +154,36 @@ def _launchd(home: Path, python: str, logbook_home: Path | None) -> Plan:
 
 def _systemd(home: Path, python: str, logbook_home: Path | None, config_home: Path | None) -> Plan:
     directory = (config_home or home / ".config") / "systemd" / "user"
-    exec_start = f"{_unit_quote(python)} {' '.join(ARGS)}"
-    environment = f"Environment=LOGBOOK_HOME={logbook_home}\n" if logbook_home is not None else ""
-    service = (
-        "[Unit]\n"
-        "Description=logbook sync --scheduled: every configured live source, then doctor, twice a day\n"
-        "\n"
-        "[Service]\n"
-        "Type=oneshot\n"
-        f"EnvironmentFile=-%h/{ENV_FILE}\n"
-        f"{environment}"
-        f"ExecStart={exec_start}\n"
+    environment = [environment_line("LOGBOOK_HOME", str(logbook_home))] if logbook_home is not None else []
+    service = unit_file(
+        (
+            "Unit",
+            ["Description=logbook sync --scheduled: every configured live source, then doctor, twice a day"],
+        ),
+        (
+            "Service",
+            [
+                "Type=oneshot",
+                f"EnvironmentFile=-%h/{ENV_FILE}",
+                *environment,
+                f"ExecStart={exec_line((python, *ARGS))}",
+            ],
+        ),
     )
-    timer = (
-        "[Unit]\n"
-        f"Description=logbook sync --scheduled at {' and '.join(f'{h:02d}:00' for h in HOURS)} local\n"
-        "\n"
-        "[Timer]\n"
-        f"OnCalendar=*-*-* {','.join(f'{h:02d}' for h in HOURS)}:00:00\n"
-        "Persistent=true\n"
-        f"Unit={UNIT}.service\n"
-        "\n"
-        "[Install]\n"
-        "WantedBy=timers.target\n"
+    timer = unit_file(
+        (
+            "Unit",
+            [f"Description=logbook sync --scheduled at {' and '.join(f'{h:02d}:00' for h in HOURS)} local"],
+        ),
+        (
+            "Timer",
+            [
+                f"OnCalendar=*-*-* {','.join(f'{h:02d}' for h in HOURS)}:00:00",
+                "Persistent=true",
+                f"Unit={UNIT}.service",
+            ],
+        ),
+        ("Install", ["WantedBy=timers.target"]),
     )
     return Plan(
         "linux",
@@ -157,9 +197,24 @@ def _systemd(home: Path, python: str, logbook_home: Path | None, config_home: Pa
     )
 
 
-def _unit_quote(path: str) -> str:
-    """A path in `ExecStart=`: double-quoted when it holds whitespace (systemd's own quoting)."""
-    return f'"{path}"' if any(c.isspace() for c in path) else path
+def unit_file(*sections: tuple[str, Sequence[str]]) -> str:
+    """A systemd unit, the one renderer for every unit the package writes: each `[Section]` with its
+    `Key=value` lines, a blank line between sections."""
+    return "\n".join(f"[{name}]\n" + "".join(f"{line}\n" for line in lines) for name, lines in sections)
+
+
+def exec_line(arguments: Sequence[str]) -> str:
+    """`ExecStart=`'s value: each argument double-quoted when it holds whitespace (systemd's own
+    quoting)."""
+    return " ".join(f'"{a}"' if any(c.isspace() for c in a) else a for a in arguments)
+
+
+def environment_line(key: str, value: str) -> str:
+    """`Environment=KEY=value`, the assignment double-quoted when the value holds whitespace."""
+    assignment = f"{key}={value}"
+    return (
+        f'Environment="{assignment}"' if any(c.isspace() for c in assignment) else f"Environment={assignment}"
+    )
 
 
 def install(plan: Plan, say: Callable[[str], None]) -> None:

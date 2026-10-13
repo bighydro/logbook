@@ -1,0 +1,10 @@
+[Unit]
+Description=logbook sync --scheduled at 07:00 and 19:00 local
+
+[Timer]
+OnCalendar=*-*-* 07,19:00:00
+Persistent=true
+Unit=logbook-sync.service
+
+[Install]
+WantedBy=timers.target

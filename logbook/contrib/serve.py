@@ -6,9 +6,18 @@ row's attachments and company folded under a toggle; `/days?from=&to=` is a wind
 day (`days.read`), each row a link to its Day; `/trips?year=` the trips of a year (`trips.trips`
 over one `reading.read`); `/places` the named places of `places.json`; `/assets` the registered
 assets and the last fix of each (`asset_status.read`); `/gaps` where each source went quiet
-(`gaps.report`). Every page is built from the index and the readers, so a Day renders in the time
-`logbook day` takes whatever the record's length, and nothing is written: every request is a GET
-answered from the record at its head.
+(`gaps.report`); `/today` redirects to the Day of the current date in the record's timezone. Every
+page is built from the index and the readers, so a Day renders in the time `logbook day` takes
+whatever the record's length, and nothing is written: every request is a GET answered from the
+record at its head.
+
+The server keeps nothing between requests but the head it last saw. When a sync moves the head
+while it runs, the next request brings the index to the new head first (`Site.current`: once,
+under a lock, so requests that arrive together wait for one rebuild instead of racing their own on
+one file) and every page reads the new lines; no restart. A page that is the record's and nothing
+else carries an ETag made from the head and what else it reads (`Site.etag`), sent with
+`Cache-Control: no-cache`, so a browser keeps it and asks again each time, and a reload at the same
+head is a 304 that renders nothing. `/assets` and `/gaps`, which the clock moves, carry none.
 
 Three rules, each enforced here and tested in `tests/test_serve.py`:
 
@@ -31,8 +40,12 @@ page has nothing to submit to. The rendering is this module's either way."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import secrets
 import socketserver
+import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from html import escape
@@ -42,7 +55,7 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs
 from zoneinfo import ZoneInfo
 
-from ..core import assets, places, reading, stays, trips, weather
+from ..core import assets, places, reading, share, stays, trips, weather
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core.export import parse_day
@@ -56,6 +69,8 @@ WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
+TODAY = "/today"
+RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places"})  # and every Day: the record's, not the clock's
 YEAR = re.compile(r"^\d{4}$")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
@@ -107,7 +122,7 @@ p.pager,p.mute,.mute{color:var(--mute)}
 """
 
 NAV = (
-    '<a href="/">Logbook</a><a href="/days">days</a><a href="/trips">trips</a>'
+    '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a><a href="/trips">trips</a>'
     '<a href="/places">places</a><a href="/assets">assets</a><a href="/gaps">gaps</a>'
 )
 
@@ -124,17 +139,23 @@ class Response(NamedTuple):
     status: int
     body: bytes
     content_type: str = HTML
+    etag: str | None = None  # a page of the record at its head: kept by the browser, asked again
+    location: str | None = None  # a redirect's target
 
     @property
     def headers(self) -> dict[str, str]:
         found = {
             "Content-Type": self.content_type,
             "Content-Security-Policy": CSP,
-            "Cache-Control": "no-store",
+            "Cache-Control": "no-store" if self.etag is None else "no-cache",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
         }
-        if self.status != 204:
+        if self.etag is not None:
+            found["ETag"] = self.etag
+        if self.location is not None:
+            found["Location"] = self.location
+        if self.status not in (204, 304):
             found["Content-Length"] = str(len(self.body))
         return found
 
@@ -169,6 +190,9 @@ class Site:
         self.static = href is not None
         self.nav = nav
         self.footer = footer
+        self._lock = threading.Lock()
+        self._head: str | None = None  # the head the index was last brought to by `current`
+        self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
 
     def href(self, path: str) -> str | None:
         """The link to write for a server path: the path itself, or what `href` makes of it."""
@@ -186,18 +210,80 @@ class Site:
     def tz(self) -> ZoneInfo:
         return ZoneInfo(str(self.lb.meta["timezone"]))
 
-    def respond(self, path: str, query: str = "") -> Response:
+    def respond(self, path: str, query: str = "", if_none_match: str | None = None) -> Response:
+        """The page at `path`. `if_none_match` is the request's header: when it names the page's
+        tag, a 304 and nothing rendered. The tag is taken before the page is read, so a head that
+        moves in between makes the tag older than the page, never newer: the next reload reads it
+        again rather than keeping a stale page."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
+        meta = self.current()
+        if path == TODAY:
+            return self._today(meta)
+        etag = self.etag(path, query, meta)
+        if etag is not None and if_none_match is not None and _matches(if_none_match, etag):
+            return Response(304, b"", etag=etag)
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
         try:
-            return Response(200, self._page(path, params).encode("utf-8"))
+            return Response(200, self._page(path, params).encode("utf-8"), etag=etag)
         except NotFound:
             return self._error(404, f"no page at {path}")
         except (stays.SettingsError, places.PlaceError, assets.AssetError) as e:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
+
+    def current(self) -> dict[str, Any]:
+        """`logbook.json` as it is now. When its head has moved since the last request (a sync
+        appended while the server runs), the index is brought to the new head here, once, under a
+        lock, before any page reads it: the requests that arrive together wait for that one rebuild
+        instead of each starting its own on the same file."""
+        meta = self.lb.meta
+        head = str(meta.get("head"))
+        if head != self._head:
+            with self._lock:
+                if head != self._head:
+                    with self.lb.index():
+                        pass
+                    self._head = head
+        return meta
+
+    def etag(self, path: str, query: str, meta: Mapping[str, Any]) -> str | None:
+        """The tag of a page that is the record's and nothing else: the head, then a digest of the
+        request and what else the pages read — the rest of `logbook.json`, the settings beside the
+        chain (`places.json`, `assets.json`, `policy/`), the pages received from the circle, and
+        this server's start. One page's tag never stands for another's, and a request that is an
+        error is given none. None for a page the clock moves (`/assets`, `/gaps`) or a path with no
+        page."""
+        if path not in RECORD_PAGES and DAY_PATH.match(path) is None:
+            return None
+        root = self.lb.root
+        circle = root / share.CIRCLE_DIR
+        senders = sorted(p for p in circle.iterdir() if p.is_dir()) if circle.is_dir() else []
+        read = [
+            root / places.PLACES_FILE,
+            root / assets.ASSETS_FILE,
+            *sorted((root / "policy").glob("*.json")),
+            circle,
+            *senders,
+        ]
+        parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
+        for file in read:
+            try:
+                st = file.stat()
+            except OSError:
+                parts.append(f"{file.relative_to(root).as_posix()} -")
+                continue
+            parts.append(f"{file.relative_to(root).as_posix()} {st.st_mtime_ns} {st.st_size} {st.st_ino}")
+        digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+        return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
+
+    def _today(self, meta: Mapping[str, Any]) -> Response:
+        """A redirect to the Day of the current date in the record's timezone; never kept, since
+        the date moves."""
+        day = self.now().astimezone(ZoneInfo(str(meta["timezone"]))).date().isoformat()
+        body = f'<p><a href="/day/{day}">{day}</a></p>\n'
+        return Response(302, self.document("today", body).encode("utf-8"), location=f"/day/{day}")
 
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
@@ -720,6 +806,13 @@ def _metres(m: float) -> str:
     return f"{m:.0f} m" if m < 1000 else f"{m / 1000:.1f} km"
 
 
+def _matches(header: str, etag: str) -> bool:
+    """`If-None-Match` names `etag` among its tags, weak or strong (the weak comparison RFC 9110
+    asks of a GET). `*` is not honoured: it would answer 304 for a request that is an error, and a
+    browser revalidates with the tag it was given."""
+    return etag in {tag.strip().removeprefix("W/") for tag in header.split(",")}
+
+
 def _instant(stamp: str) -> datetime:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
@@ -759,12 +852,12 @@ class Handler(BaseHTTPRequestHandler):
     def _answer(self, body: bool) -> None:
         assert isinstance(self.server, Server)
         path, _, query = self.path.partition("?")
-        response = self.server.site.respond(path, query)
+        response = self.server.site.respond(path, query, self.headers.get("If-None-Match"))
         self.send_response(response.status)
         for name, value in response.headers.items():
             self.send_header(name, value)
         self.end_headers()
-        if body and response.status != 204:
+        if body and response.status not in (204, 304):
             self.wfile.write(response.body)
 
 
