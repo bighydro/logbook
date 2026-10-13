@@ -328,6 +328,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["people", "drift", "--show", "--json"],
     ["people", "drift", "--quiet-days", "0", "--min-days", "1", "--show"],
     ["people", "nearby", "Home", "--json"],
+    ["people", "review"],
+    ["people", "review", "--json"],
     ["verify"],
 ]
 

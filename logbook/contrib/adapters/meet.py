@@ -7,8 +7,9 @@ service account the other Google sources share (`service_account`: LOGBOOK_DRIVE
 **What is asked.** The conference records the API lists for the owner that started from `since` on (the
 filter `start_time>="…"`; all it keeps without one), a page of `PAGE_SIZE` at a time, retried with backoff
 by the session; a page read is a progress line. For each conference that has ended and that the record does
-not hold yet: its participants, its space (for the meeting code) and its transcripts, and the entries of a
-transcript Google has finished (`FILE_GENERATED`). Nothing else: no recording, no chat, no Smart Notes.
+not hold whole: its transcripts first, then, when there is a line to write, its participants, its space
+(for the meeting code) and the entries of a transcript Google has finished (`FILE_GENERATED`). Nothing
+else: no recording, no chat, no Smart Notes.
 
 **One event per conference.** `at` the conference's start, `end` its end, `tz` the record's zone, tier 1
 (RFC 0009: the owner's own time, as a calendar entry; the tier says where a line may travel, never who
@@ -155,15 +156,19 @@ def pull(
             _count(counts, "conference_in_record")
             continue
         name = str(record["name"])
+        found = _all(session, f"{API}{name}/transcripts", "transcripts") if want_transcript else []
+        ready = bool(found) and all(t.get("state") == GENERATED for t in found)
+        if found and not ready:
+            _count(counts, "transcript_pending")
+        if not want_event and not ready:
+            continue  # the call is written and nothing new is ready: nothing more to ask
         people = _all(session, f"{API}{name}/participants", "participants")
         space = _space(session, str(record.get("space") or ""), spaces)
         title = f"Meet {space['meetingCode']}" if space and space.get("meetingCode") else UNTITLED
         if want_event:
             out.append((_event(record, rid, start, people, space, title, tz), None))
-        if want_transcript:
-            made = _transcript(session, record, rid, people, title, counts)
-            if made is not None:
-                out.append(made)
+        if ready:
+            out.append(_transcript(session, record, rid, found, people, title))
     out.sort(key=lambda pair: (_instant(str(pair[0]["at"])), pair[0]["kind"] != KIND))
     for draft, data in out:
         if data is not None and store is not None:
@@ -302,20 +307,14 @@ def _transcript(
     session: service_account.Session,
     record: dict[str, Any],
     rid: str,
+    found: list[dict[str, Any]],
     people: list[dict[str, Any]],
     title: str,
-    counts: dict[str, int],
-) -> tuple[dict[str, Any], bytes] | None:
-    """The conference's transcript line and the bytes to store, or None when it has none or one Google
-    has not finished (counted)."""
+) -> tuple[dict[str, Any], bytes]:
+    """The conference's transcript line, from its transcripts (every one finished), and the bytes to
+    store."""
     name = str(record["name"])
-    found = _all(session, f"{API}{name}/transcripts", "transcripts")
-    if not found:
-        return None
-    if any(t.get("state") != GENERATED for t in found):
-        _count(counts, "transcript_pending")
-        return None
-    found.sort(key=lambda t: (_instant_or_min(t.get("startTime")), str(t.get("name") or "")))
+    found = sorted(found, key=lambda t: (_instant_or_min(t.get("startTime")), str(t.get("name") or "")))
     names = {str(p.get("name")): _participant(p) for p in people}
     entries: list[dict[str, Any]] = []
     for t in found:

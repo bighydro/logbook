@@ -475,3 +475,12 @@ def test_people_review_sees_a_participant_by_the_account_the_api_names(lb: Logbo
     assert ("provider_id", "users/1001") in ola.identifiers and ola.entity is None
     assert set(ola.kinds) == {"event", "transcript"} and ola.writable == [("provider_id", "users/1001")]
     assert rows[("name", "guest")].writable == [], "a guest is a display name alone: listed, never proposed"
+
+
+def test_a_written_call_with_nothing_new_costs_one_question(lb: Logbook, fake: Fake) -> None:
+    _sync()
+    before = len(fake.calls(f"meet.googleapis.com/v2/{B}/participants"))
+    assert _sync() == 0
+    assert len(fake.calls(f"meet.googleapis.com/v2/{B}/participants")) == before, (
+        "a call already written whose transcript is not there is asked for its transcripts only"
+    )

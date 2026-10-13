@@ -13,6 +13,7 @@ dawarich             file+live  enabled
 drive                live       enabled
 easypark             file       enabled
 flighty              file       enabled
+gaudit               live       enabled
 gcal                 live       enabled
 gmail                live       enabled
 google-takeout-access-log file       disabled (every sign-in to every Google service; opt in)
@@ -41,6 +42,7 @@ ios-contacts         file       enabled
 ios-notes            file       enabled
 line                 file       enabled
 mail                 file+live  enabled
+meet                 live       enabled
 myfitnesspal         file       enabled
 notion               live       enabled
 passages             file       enabled
@@ -59,4 +61,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-61 adapters, 2 disabled; the list is <root>/policy/import.json
+63 adapters, 2 disabled; the list is <root>/policy/import.json

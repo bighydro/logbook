@@ -277,6 +277,71 @@ A second `people review` after accepting is shorter by what was accepted, number
 `people` rows of the people already placed do not change: a review adds refs to a person, never a
 person to the list.
 
+## Names from Google contacts
+
+A review can only propose what the record already says. Your address book knows more: who
+`jakob.holm@example.org` is, that the number a message came from belongs to someone whose address
+you already have. `logbook people review --from-google` reads your **Google contacts** and your
+**other contacts** (the ones Google saved for you from mail exchanged) as a **name source** for the
+review: names, addresses, phone numbers and the photo as a reference. A name source gives names to
+the review, never lines to the record.
+
+```bash
+logbook people review --from-google                     # the queue, with what your contacts say
+logbook people review --from-google --accept 4 --reject 9
+logbook people review --from-google --json
+```
+
+It reads them with the one Google key ([the tour, *Google, on one key*](tour.md#google-on-one-key)),
+read-only, through the People API: `contacts.readonly` for your contacts and
+`contacts.other.readonly` for the other ones. A book whose scope the delegation does not grant is
+left out and said on stderr; neither granted is one line and exit 1. Without the key's two
+variables the command says what to set and exits 2.
+
+What a contact does in the queue:
+
+- **It links a pair.** A contact that holds an observed person's address or number *and* one of a
+  canonical person's own adds 50 points to that pair, in words: `Google contact Maren Eide has
+  maren.eide@example.org and +447700900119`. Its name alone, when it is the canonical person's, adds
+  20: `Google contact Maren Eide has maren.eide@example.org`. The pair keeps its id, so accepting it
+  writes what an accept always writes.
+- **It names a new person.** A contact that touches no one the record names (none of its addresses
+  or numbers is a canonical person's, its name is none of theirs) proposes to name the observed
+  people it holds an address or a number of, or whose shown name is its own, scored as a pair is:
+  same email 60, same phone 50, same name 20 (and 5 per further source). The line reads
+  `→ Jakob Holm, new (Google contacts)`. Accepting it mints one person: one `resolution/v1` line per
+  identifier the record saw, `entity` a new id, `label` the contact's name, `method` `owner`,
+  `source` `manual`, tier 2 at least (the name is your address book's), `extra.named_from`
+  `google contacts`. Two proposals of one contact accepted in one run are one person. Nothing else of
+  the contact is written: not its other addresses or numbers, not its photo, not its id in Google.
+- **It is proposed with its duplicates.** Contacts that share an address or a number are listed as
+  one group with what they share, `J. Holm ↔ Jakob Holm: same email jakob.holm@example.org`, to merge
+  in Google Contacts (*Merge & fix*): the key only reads, and a contact is not the record's to merge.
+
+Nothing is merged on its own: every proposal waits for `--accept`, `--all-above` or `--reject`, as
+any other does. Rejecting a contact's proposal writes no line, since the contact is not in the
+record: its id, a digest that names no one, is kept in `state/google-contacts-review.json` and it is
+not proposed again; delete the file and it comes back.
+
+**The cache.** The contacts read are kept in `state/google-contacts.json`, the record's bookkeeping
+like the sync watermarks, never the record, readable by you alone (mode 600), for **24 hours** and for
+the user they were read as. Within that time `--from-google` asks Google nothing, so the numbers a
+listing shows are the numbers an `--accept` that follows acts on; give `--from-google` to both. After
+it, the next run reads the books again; delete the file to read them sooner. The cache is never
+printed: the review shows a contact's name, the one identifier a proposal matched, the book and
+whether it has a photo, and a count of what was read:
+
+```
+google contacts: 412 contacts, 1,038 other contacts, read 2026-10-13T18:02:00Z, kept 24 h in state/google-contacts.json
+2 groups of duplicate contacts, to merge in Google Contacts (Merge & fix; the key only reads):
+  J. Holm ↔ Jakob Holm: same email jakob.holm@example.org
+  Nora Aas ↔ Nora Aas: same phone +447700900125
+```
+
+Under `--json` the report gains `contacts` (`read_at`, `cached`, `ttl_hours`, `books`, `refused`,
+`duplicates`), and a proposal from a contact has `canonical` null and `contact` (`name`, `book`,
+`photo`). Without `--from-google` the review is what it was, and Google is not asked.
+
 ## Priority
 
 `logbook people --priority [--year YYYY] [--json]` ranks the canonical people heard in the last year

@@ -404,6 +404,8 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 | `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
 | `gtasks` | the same two; [Google Tasks](#google-tasks) | one `task/v1` line per task each time it changes, the line a Takeout export gives (`source` `google-takeout`), so `logbook tasks` reads it and a later export writes nothing twice; a done one says how long it was open; never the notes; tier 2 |
+| `meet` | the same two; [Google Meet](#google-meet) | one `event/v1` line per call that has ended, tier 1: when, the meeting code, who joined as Meet names them; and when Meet transcribed it, one `transcript/v1` line as Granola's is, tier 3, the words in `attachments/` |
+| `gaudit` | the same two; [Google sign-ins](#google-sign-ins) | one `event/v1` line per sign-in event of yours in the Workspace's login audit log, tier 1: when, what happened, how, and the place Google derived from the address; never the address |
 
 Create the Immich key under *Account settings → API keys* with only the **asset.read** permission.
 The logbook only ever reads; a key that cannot write is a key that cannot do harm if it leaks.
@@ -593,10 +595,12 @@ written: a batch is all or nothing.
 
 ### Google, on one key
 
-Four sources read your Google account: `sync gmail` (your mail), `sync gcal` (your calendars), `sync drive`
-(what happened to your Drive files) and `sync gtasks` (your tasks). All four sign in the same way, with
-one **service account** of your own Google Workspace that the Workspace allows to act as you
-(*domain-wide delegation*), configured by the same two variables, read-only, one scope each. A service
+Six sources read your Google account: `sync gmail` (your mail), `sync gcal` (your calendars), `sync drive`
+(what happened to your Drive files), `sync gtasks` (your tasks), `sync meet` (your Meet calls) and `sync
+gaudit` (your sign-ins); and `people review --from-google` reads your contacts, as names for the review
+and never as lines ([the people page](people.md#names-from-google-contacts)). All of them sign in the
+same way, with one **service account** of your own Google Workspace that the Workspace allows to act as
+you (*domain-wide delegation*), configured by the same two variables, read-only, one scope each. A service
 account signs in with a key file and nothing that expires: every run signs a short request with the key
 and gets an access token good for an hour, which it keeps in memory for that run and never writes
 anywhere. There is no refresh token to go stale in a scheduled job, which is how a sign-in done once in a
@@ -609,12 +613,17 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 | `sync drive` | `https://www.googleapis.com/auth/drive.activity.readonly` | what happened to your files |
 | `sync drive` | `https://www.googleapis.com/auth/drive.metadata.readonly` | the folder path each Drive line names |
 | `sync gtasks` | `https://www.googleapis.com/auth/tasks.readonly` | your tasks, each as it stands (`task/v1`) |
+| `sync meet` | `https://www.googleapis.com/auth/meetings.space.readonly` | your Meet calls and their transcripts |
+| `sync gaudit` | `https://www.googleapis.com/auth/admin.reports.audit.readonly` | your own sign-ins, from the login audit log |
+| `people review --from-google` | `https://www.googleapis.com/auth/contacts.readonly` | your contacts, as names for the review |
+| `people review --from-google` | `https://www.googleapis.com/auth/contacts.other.readonly` | your other contacts, the same |
 
 **Setting it up**, once, as the Workspace's administrator:
 
 1. In the Google Cloud console, in a project of your own (create one if you have none), open *APIs &
    Services → Library* and enable the **Gmail API**, the **Google Calendar API**, the **Google Drive
-   API**, the **Google Drive Activity API** and the **Google Tasks API**: the ones for the sources you
+   API**, the **Google Drive Activity API**, the **Google Tasks API**, the **Google Meet REST API**, the
+   **Admin SDK API** (the audit log) and the **People API** (the contacts): the ones for the sources you
    want.
 2. *IAM & Admin → Service accounts → Create service account*. Call it `logbook-sync`; it needs no role
    in the project. Open it and copy its **Unique ID** (the client ID, a long number).
@@ -625,17 +634,21 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 4. In the Workspace admin console, *Security → Access and data control → API controls → Manage
    Domain Wide Delegation → Add new*. Paste the client ID and, as the OAuth scopes, the scopes of the
    table above, comma-separated, all read-only:
-   `https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/drive.metadata.readonly,https://www.googleapis.com/auth/tasks.readonly`.
+   `https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/drive.activity.readonly,https://www.googleapis.com/auth/drive.metadata.readonly,https://www.googleapis.com/auth/tasks.readonly,https://www.googleapis.com/auth/meetings.space.readonly,https://www.googleapis.com/auth/admin.reports.audit.readonly,https://www.googleapis.com/auth/contacts.readonly,https://www.googleapis.com/auth/contacts.other.readonly`.
    Authorize. A new delegation can take a few minutes, sometimes longer, before Google honours it. A
    scope you leave out is a source that cannot run: leave out `gmail.readonly` and `sync gmail` says so
    and exits 1 (switch it off in `policy/import.json` if you mean it); leave out
-   `drive.metadata.readonly` and Drive lines carry no folder path, said once per run.
+   `drive.metadata.readonly` and Drive lines carry no folder path, said once per run. A key set up
+   before `sync meet` and `sync gaudit` existed has neither scope: `sync --all` then runs both and
+   both fail, each on one line, until you add the two scopes here or switch the two sources off in
+   `policy/import.json`.
 5. Move the key out of your downloads to `~/.config/logbook/google-sa.json` and make it yours alone:
    `chmod 600 ~/.config/logbook/google-sa.json`. **Never commit it**, and never put it in the record's
    folder, a cloud folder, a repository or a message: whoever holds it reads your mail, your calendars,
-   your Drive's activity and your tasks for as long as the delegation stands.
+   your Drive's activity, your tasks, your calls and their transcripts, your sign-ins and your contacts
+   for as long as the delegation stands.
 6. Name it in the environment, in your shell profile and in `~/.config/logbook/sync.env`, the file the
-   schedule reads (docs/schedule.md); the schedule then runs all four with nothing more to set:
+   schedule reads (docs/schedule.md); the schedule then runs all six with nothing more to set:
 
    ```
    LOGBOOK_DRIVE_SA_KEY=~/.config/logbook/google-sa.json
@@ -643,12 +656,13 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
    ```
 
    (The names say *Drive* because Drive came first; every Google source reads the same two.)
-7. `logbook doctor` now shows one `google` line — the key present, the user set, and which sources are on
-   the key, a source switched off in `policy/import.json` named as disabled — and a `sync:<name>` line for
-   each source. It reads the key and checks that no one else on the machine can, and asks Google nothing:
+7. `logbook doctor` now shows one `google` line — the key present, the user set, which sources are on
+   the key, a source switched off in `policy/import.json` named as disabled, and what `people review
+   --from-google` reads on it — and a `sync:<name>` line for each source. It reads the key and checks
+   that no one else on the machine can, and asks Google nothing:
 
    ```
-   pass  google       key present, user set; sources on the key: gmail, gcal, drive, gtasks
+   pass  google       key present, user set; sources on the key: gmail, gcal, drive, gtasks, meet, gaudit; people review --from-google: contacts, other contacts
    ```
 
 `unauthorized_client` means the delegation does not yet grant the scope named in the message (step 4);
@@ -656,8 +670,8 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 user of the domain. Signing needs the `crypto` extra (`pip install "openlogbook[crypto]"`); without it a
 sync says so. Every request is retried with a doubling wait on a rate limit or a server error, and stops
 on one plain line, exit 1, the watermark where it was, when that does not pass. `sync --all` runs the
-four in the order mail, gmail, gcal, drive, gtasks are registered: `mail` (IMAP) before `gmail`, so a
-mailbox you read both ways is written once by whichever comes first.
+six in the order mail, gmail, gcal, drive, gtasks, meet, gaudit are registered: `mail` (IMAP) before
+`gmail`, so a mailbox you read both ways is written once by whichever comes first.
 
 ### Gmail
 
@@ -761,6 +775,71 @@ export carries on where it ended.
 **What a line never holds.** The task's notes: only their digest and how many words they have. Lines
 are **tier 2**, as RFC 0016 makes every task: sealed at rest when the record seals, and crossing only
 after review.
+
+### Google Meet
+
+`logbook sync meet` writes down the Meet calls you were in, read from the Meet REST API with the key
+of [Google, on one key](#google-on-one-key) (`meetings.space.readonly`, read-only, as you).
+
+```bash
+logbook sync meet --dry-run                                # counts, nothing written
+logbook sync meet --since 2026-09-01T00:00:00Z             # a first run from a day you choose
+logbook sync meet                                          # then from where it left off
+```
+
+**The call.** One `event/v1` line per call, once it has ended (a call still going on is counted and
+written by the next run): when it started and ended, and who joined as Meet names them — a signed-in
+participant is a Google account, `users/…`, kept as an attendee (never turned into a name here:
+`people review` sees them, and so does a review with your contacts), a guest by the name they typed, a
+caller by the number Meet shows, partly hidden. Meet keeps no title for a call, so the line is titled
+by its meeting code, `Meet abc-mnop-xyz`; the calendar entry you planned it in is a line of its own,
+from `sync gcal`. The conference record's name (`conferenceRecords/…`) is the line's reference back.
+Lines are **tier 1**, like the calendar's.
+
+**The transcript.** When Meet transcribed the call, one `transcript/v1` line more, built exactly as a
+Granola recording's is — the same mapping, the same profile, **tier 3**: who spoke, how many turns,
+the language, a link to the transcript's Google Doc, and the words themselves in `attachments/`,
+named by their digest, never in the line. A call transcribed in several sittings is one line. Google
+finishes a transcript a while after the call; until it has, the call is written without it and the
+transcript comes with a later run.
+
+**Granola too?** If Granola also recorded the call, its transcript stays a line of its own beside
+Meet's. They are two transcripts, by two providers, with their own words, speakers and ids; that
+they are of one call is for a reader to see from the times, not for a source to decide by joining
+them.
+
+Each call is keyed by its conference record (`meet:<id>`, and `meet:<id>:transcript`), so a re-run
+writes nothing twice, and a call already in the record is not asked about again. The watermark is the
+newest call's start; each run looks back a day before it, for a call that ended or a transcript Google
+finished since.
+
+### Google sign-ins
+
+`logbook sync gaudit` writes down your own sign-ins to your Google Workspace, from its login audit log
+(the Admin SDK Reports API, `admin.reports.audit.readonly`, with the key of [Google, on one
+key](#google-on-one-key)). It asks for your sign-ins only, never the other users of the Workspace;
+Google answers it only for an administrator, which you are of your own Workspace.
+
+```bash
+logbook sync gaudit --dry-run                              # counts per kind of sign-in, nothing written
+logbook sync gaudit
+```
+
+**What a line holds.** One `event/v1` line per sign-in event, **tier 1**: when, what happened
+(`Signed in`, `Sign-in failed`, `Signed out`, `Sign-in challenge`, …), how (`login_type`, the
+challenges asked and how they went, why one failed, whether Google thought it suspicious), and where,
+as Google derived it from the address: a country, a subdivision and, when the log says one, a city
+(`Oslo, NO-03, NO`).
+
+**What a line never holds: the address.** The IP address a sign-in came from is never written — not in
+the line, not in its key, not as a digest, since a digest of an address hides nothing (there are only
+four billion of them to try) — and neither is the network it came through. What may travel with a
+line is the place Google made of the address, coarse, never a coordinate. (A Takeout export's *Access
+Log Activity* is another file, every access to every service, read by the `google-takeout-access-log`
+adapter, off by default.)
+
+Each event is keyed by the log's own id for it, so a re-run writes nothing twice; each run looks back
+a day before the newest sign-in seen, since Google can add one to the log hours later.
 
 Your boat, your aircraft and your car are *subjects* with tracks of their own, not places (ADR 0018). Register
 each once in `assets.json`, then let `sync` ask the receivers that hear them:
