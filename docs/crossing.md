@@ -64,9 +64,10 @@ What DIR may be:
 A symbolic link at DIR is followed: the folder it names is replaced, and the link names the new bundle.
 
 An export that fails, for example on a store file that no longer hashes to its name or a full disk,
-removes its staging folder and leaves DIR as it was, and appends no line. A crash between the two renames
-can leave DIR missing, with `.DIR.<random>.staging` (the new bundle) and `.DIR.<random>.old` (the earlier
-one) beside it. Nothing reads either: delete both, and run the export again.
+removes its staging folder and leaves DIR as it was, and appends no line. A crash part of the way can
+leave `.DIR.<random>.staging` (a bundle not yet in place) or `.DIR.<random>.old` (the earlier one) beside
+DIR, and, between the two renames, DIR itself missing. Nothing reads either folder: delete them, and run
+the export again.
 
 Before this, a second export into the same DIR overwrote the files it wrote and left the rest. A folder
 that more than one export was written into may hold files its manifest does not name: an
