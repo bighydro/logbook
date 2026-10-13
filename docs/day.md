@@ -152,8 +152,8 @@ are as they always were.
 
 A short cluster of points — the ten minutes at the cafe — is a **stop** unless something of the
 owner's falls inside it: an event, a transcript, a note, a call, a message or a photo (SPEC §3.2.3
-rule 5, `stays.somewhere`). Then it is a **stay**, marked `promoted`: the evidence says the owner
-was there, and duration is only the fallback.
+rule 5). Then it is a **stay**, marked `promoted`: the evidence says the owner was there, and
+duration is only the fallback.
 
 An event counts only when it happened somewhere:
 
@@ -166,7 +166,9 @@ An event counts only when it happened somewhere:
 
 A Notion page edited, a Drive file changed — by the owner or by someone else on the owner's file —
 happen nowhere: they carry no location and no attendees, and their sources are not physical. Inside a
-stop they do not make it a stay. The Day still shows them under the row their time falls in (`Boat
+stop they do not make it a stay, and `attached` does not count them (`stays.somewhere`). SPEC §3.2.3
+rule 5 does not yet say this of events; the reference reads it so, and the spec follows in a change of
+its own. The Day still shows them under the row their time falls in (`Boat
 jobs`, `Edited Crew list ×3`), as it does any event; they are simply not evidence of where the owner
 was. A task (`task/v1`, `sync gtasks`) is not an event and was never evidence.
 

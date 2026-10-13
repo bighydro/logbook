@@ -90,7 +90,7 @@ from .store import RETRACTION, retractions
 SETTINGS_FILE = PurePosixPath("policy/stays.json")  # record-relative
 PLACES_FILE = registry_of_places.PLACES_FILE
 EVIDENCE = ("event", "transcript", "note", "call", "message", "photo")
-# The sources whose events are the owner somewhere whatever the line carries (SPEC §3.2.3 rule 5): a
+# The sources whose events are the owner somewhere whatever the line carries (docs/day.md): a
 # calendar entry is a plan for a place and a time (`ics` is also what Google Calendar's feed and
 # Takeout's Calendar/ write), and an arrival in Google Home's history is the household at the door,
 # written by Takeout's Home App under the shared `google-takeout` source with a calendar id of its own.
@@ -445,11 +445,12 @@ def _split(lines: Iterable[Line]) -> tuple[dict[str | None, list[Point]], list[E
 
 def somewhere(line: Line) -> bool:
     """Whether an `event/v1` line happened somewhere, and so is evidence that promotes a stop
-    (rule 5): its payload carries a `location` (a string with a word in it) or `attendees` (a list
-    with someone in it), or its source is a calendar (`CALENDARS`) or Google Home's history
-    (`HOME_HISTORY`, by the calendar id the line gives). A Notion page or a Drive file changed —
-    by the owner or by anyone else — carries neither and comes from neither: it happened nowhere.
-    A payload the reader cannot open carries nothing, so only its source can say."""
+    (SPEC §3.2.3 rule 5, narrowed for events; docs/day.md): its payload carries a `location` (a
+    string with a word in it) or `attendees` (a list with someone in it), or its source is a
+    calendar (`CALENDARS`) or Google Home's history (`HOME_HISTORY`, by the calendar id the line
+    gives). A Notion page or a Drive file changed — by the owner or by anyone else — carries neither
+    and comes from neither: it happened nowhere. A payload the reader cannot open carries nothing,
+    so only its source can say."""
     source = line.get("source")
     if isinstance(source, str) and source in CALENDARS:
         return True
