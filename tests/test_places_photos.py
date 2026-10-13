@@ -414,7 +414,7 @@ def test_without_the_flag_the_review_is_byte_for_byte_what_it_was(
         for e in p["evidence"]:
             e.pop("lines")
     text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-    assert text.encode("utf-8") == (FIXTURES / "review.json").read_bytes()
+    assert _lf(text) == _fixture_text("review.json")
     assert server.asked == [] and no_network == []
     assert not places_photos.cache_path(lb.root).exists()
 
