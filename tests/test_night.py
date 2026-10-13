@@ -139,7 +139,11 @@ def test_a_night_across_the_boundary_is_the_day_it_ends_in(
     assert labels.index("night") == labels.index("night before") + 1, "the night ended on the day"
     [health_row] = [row for row in rows if row.startswith("  health")]
     assert health_row == "  health        700 steps", "the night's sleep is said once, on the night row"
-    assert _night_rows(_text(capsys, "2026-10-12")) == []
+    twelfth = _text(capsys, "2026-10-12")
+    assert _night_rows(twelfth) == []
+    assert not any("sleep" in row for row in twelfth), (
+        "the stages before 06:00 are the 13th's night: the 12th's page counts none of them as sleep"
+    )
 
 
 def test_at_midnight_the_same_night_is_the_same_days(lb: Logbook) -> None:

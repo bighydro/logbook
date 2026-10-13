@@ -219,7 +219,8 @@ def _stamp(instant: datetime) -> str:
 
 
 def _sleep_span(line: Line, seconds: float) -> tuple[datetime, datetime]:
-    """A sleep stage's span: `at` to `end`, or `at` plus its `value` when `end` is missing."""
+    """A span's extent (a sleep stage, a workout): `at` to `end`, or `at` plus its `value` when `end`
+    is missing."""
     start = datetime.fromisoformat(str(line["at"]).replace("Z", "+00:00"))
     end = line.get("end")
     if isinstance(end, str):

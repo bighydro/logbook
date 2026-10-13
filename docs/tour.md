@@ -266,13 +266,14 @@ and the command never does. The scheduled run is `sync --all`, then `doctor`, wi
 `state/last-run.json`, the restore test on the first Sunday of the month, and, with
 `LOGBOOK_NOTIFY_TELEGRAM_TOKEN` and `LOGBOOK_NOTIFY_TELEGRAM_CHAT` in that file, one Telegram message
 when something is wrong or on Sunday evening ([the schedule](schedule.md)). `sync weather` is the one
-source that asks a third party about your days: it is left out of `--all` unless that file (or the
-environment) says `LOGBOOK_WEATHER=1`.
+source that asks a third party about your days: it asks nothing, by name or in `--all`, unless that
+file (or the environment) says `LOGBOOK_WEATHER=1`, and then each run asks about the days since the
+last, yesterday on the first.
 
 ```bash
 logbook sync --all                                # every configured source, one after the other
 logbook sync --all --dry-run                      # count per source, write nothing
-logbook sync weather --since 2026-06-01           # the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)
+LOGBOOK_WEATHER=1 logbook sync weather --since 2026-06-01   # the weather of your days' places, one decimal of latitude (docs/adapters/weather.md)
 logbook sync --install-schedule                   # 00:00, 06:00 (the close), 12:00 and 18:00 local
 logbook sync --scheduled                          # what the schedule runs: sync --all, then doctor
 logbook sync --uninstall-schedule

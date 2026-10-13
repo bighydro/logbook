@@ -30,6 +30,7 @@ the same gate for the lines a reader takes beside the reading (health, stories).
 
 from __future__ import annotations
 
+import functools
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -101,6 +102,16 @@ class Reading:
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
+
+    @functools.cached_property
+    def by_kind(self) -> Mapping[str, tuple[Line, ...]]:
+        """The window's lines by kind, in chain order, grouped once: a reader that asks each day of a
+        long reading for one kind (the Day's weather, under a `day_start` on the day before's page)
+        walks the lines once, not once a day."""
+        found: dict[str, list[Line]] = {}
+        for line in self.lines:
+            found.setdefault(str(line.get("kind")), []).append(line)
+        return {kind: tuple(lines) for kind, lines in found.items()}
 
 
 @dataclass(frozen=True)

@@ -2,8 +2,8 @@
 
 `logbook day YYYY-MM-DD [--json]` reads one calendar day back from the record: where you slept
 either side of it, which country it counts for, how you moved and where you stayed, what attached
-to each stay and who was there, the flights, the night's sleep and the day's steps, and which
-sources spoke. It is a reader (ADR 0013): a function of the record at its head, derived every time
+to each stay and who was there, the flights, when you slept and the day's steps, the weather, and
+which sources spoke. It is a reader (ADR 0013): a function of the record at its head, derived every time
 and never written. Nothing is appended, and not even `policy/stays.json` is created by it.
 
 ```bash
@@ -74,7 +74,29 @@ are as they always were.
    `away`; `in transit` when no stay reaches the minimum); the country, from the night's position
    by the same rule `rollup countries` uses (a place's own country, else the nearest large
    airport's zone), from the longest stay of the day when the night is in transit; the day's
-   all-day calendar entries.
+   all-day calendar entries. Beside the night after's place, the day's weather in short, `4° ·
+   rain`, when the day has a [weather](adapters/weather.md) line of that place.
+
+   Under the night before, **the Night line**, when a night ends on the day:
+
+   ```
+     night before  Home · home
+     night         slept 23:10–06:40 · 7 h 20 min · training 45 min
+     night after   Home · home · 4° · rain
+   ```
+
+   When you slept — the first and the last minute asleep, on the record's clock — how long asleep
+   (never in bed or awake), and the day's training when it has some. It is derived when the Day is
+   read, from the `health-sample/v1` lines already in the record (Apple Health's sleep stages and
+   workouts), and nothing is written. A night is one device's asleep stages with no gap over two
+   hours between them; it belongs to the day its last stage ends in, under your `day_start`, so with
+   `06:00` a night from 23:10 to 06:40 is one night of the 13th, never split between the 12th and the
+   13th. Of the nights that end on a day (a nap is one) the longest is its night, and of two devices
+   the longer, never their sum. Training is the union of the day's workout spans (on the day they
+   start), so a run the watch and a phone app both recorded counts once. A day no night ends on has
+   no row; under `--json` it is `night` (`start`, `end`, `start_local`, `end_local`, `asleep_s`,
+   `device`, `lines` — the stages — and `training`: `minutes` and `lines`, or `null`), a key present
+   only on such a day, so the Day's object is otherwise the one SPEC §3.2.7 gives.
 2. **Timeline** — one row per stay, stop, move and flight that touches the day, in time order.
    A stay that began the evening before shows from `00:00` and one that runs on shows to `24:00`
    (from and to the day's start under `day_start`);
@@ -123,7 +145,9 @@ are as they always were.
 4. **Health** — the night's sleep in hours (the asleep stages of the night that ends on the day,
    per device the union of their spans, the longest device), the day's steps (the larger device per
    quarter hour, summed), the resting heart rate (the day's mean), from the `health-sample/v1`
-   lines standing. A correction that `supersedes` a line wins over it.
+   lines standing. A correction that `supersedes` a line wins over it. The text says the sleep once,
+   on the Night line, so the health row prints the steps and the resting heart rate, and a day whose
+   health lines were only sleep has no health row; the JSON keeps `sleep_h` as SPEC §3.2.7 gives it.
 5. **Weather** — when the day has `weather/v1` lines (RFC 0026, `logbook sync weather`,
    `adapters/weather.md`), one row: the lowest and highest temperature, the precipitation, the
    strongest wind, the weather in a word, sunrise and sunset, for the place of the night when the day

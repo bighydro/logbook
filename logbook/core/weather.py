@@ -15,7 +15,8 @@ the cluster of the night when the night has one, else the first, with every clus
 `places` — and `span` for a window (`year`, `trips`): the coldest and warmest day, the precipitation
 summed over the days (the wettest cluster of a day, so two clusters never count one rain twice), the
 wet days (1 mm or more), the strongest wind, and how many of the window's days have a line. `text`
-and `span_text` are the one-line forms. Nothing here opens the network or writes."""
+and `span_text` are the one-line forms, and `short_text` the Day header's (`4° · rain`, beside the
+place of the night). Nothing here opens the network or writes."""
 
 from __future__ import annotations
 
@@ -70,6 +71,21 @@ CODES: dict[int, str] = {
     96: "thunderstorm with hail",
     99: "thunderstorm with heavy hail",
 }
+
+
+# The same codes in one word each, for the Day's header beside the place (`short_text`).
+WORDS: tuple[tuple[range, str], ...] = (
+    (range(0, 2), "clear"),
+    (range(2, 3), "cloudy"),
+    (range(3, 4), "overcast"),
+    (range(45, 49), "fog"),
+    (range(51, 58), "drizzle"),
+    (range(61, 68), "rain"),
+    (range(71, 78), "snow"),
+    (range(80, 83), "rain"),
+    (range(85, 87), "snow"),
+    (range(95, 100), "thunder"),
+)
 
 
 class Cluster(NamedTuple):
@@ -262,6 +278,21 @@ def text(row: Mapping[str, Any], tz: str) -> str:
     if len(places) > 1:
         parts.append(f"{len(places)} places")
     return DOT.join(parts) if parts else "no values"
+
+
+def short_text(row: Mapping[str, Any]) -> str:
+    """`4° · rain`: the day's high (the low when the high is unknown) and the WMO code in one word, what
+    the Day's header says beside the place of the night; a part with no value is left out, and a row
+    with neither is empty."""
+    parts = []
+    degrees = row.get("t_max_c") if _number(row.get("t_max_c")) else row.get("t_min_c")
+    if _number(degrees):
+        parts.append(_degrees(degrees))
+    code = row.get("weather_code")
+    word = next((w for codes, w in WORDS if int(code) in codes), None) if _number(code) else None
+    if word:
+        parts.append(word)
+    return DOT.join(parts)
 
 
 def span_text(summary: Mapping[str, Any]) -> str:
