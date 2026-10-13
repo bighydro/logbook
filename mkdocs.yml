@@ -94,6 +94,8 @@ nav:
       - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
   - The signed day: signed-day.md
+  - The dream: dream.md
+  - The dream's prompt: dream-prompt.md
   - In a browser: serve.md
   - The rollups: rollups.md
   - The lab: labs.md

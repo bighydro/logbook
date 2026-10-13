@@ -1,6 +1,6 @@
 # The commands
 
-`logbook` has 22 commands, grouped here by what you are doing. `logbook --help` is this list on one
+`logbook` has 23 commands, grouped here by what you are doing. `logbook --help` is this list on one
 screen; `logbook <command> --help` has a command's arguments. Everything that was a command of its
 own before 0.6 still answers to its old name: it prints one line saying the new one and runs it (the
 table at the end, generated from the code by `scripts/command_aliases.py`).
@@ -47,6 +47,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `derive` | `derive stays` reads the record into stays and moves, appending nothing; `derive flights` and `derive keepers` infer lines; `derive transcripts voice-memos` and `derive descriptions keepers` run a local model, nothing leaving the machine |
 | `promises` | what you promised and what you were asked, from mail, messages, transcripts and notes, by rules, as proposals, in two sections with the line id a signed day confirms; `promises done ID` closes one; `promises tasks` the tasks, each as it stands |
+| `dream` | `dream day YYYY-MM-DD [--dry-run] [--show-prompt]`: a model reads the day under the `dream` entry of `policy/crossing.json` and writes one `draft/v1` line, the day in a paragraph, the threads it moved, two questions, the people and promises it proposes, every sentence with the lines it came from or marked unsupported; a proposal, shown on the Day above your note, never a fact; `dream --catch-up [--days N]` dreams each of the last N days that has no draft or whose lines changed, one line per day ([the dream](dream.md)) |
 
 ## Keep
 
