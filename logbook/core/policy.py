@@ -5,7 +5,10 @@ circumstances change, so the ceiling is theirs to raise. `logbook init` and the 
 default; nothing else writes it. Read-only from here on. An entry may carry an `until` date (ADR 0022:
 a ceiling lent to a cloud model or service for a while, `{"max_tier": 2, "until": "2026-12-31"}`); it
 holds through that day and from the next counts as `max_tier` 0, so nothing crosses until the owner
-writes a new date or removes the line. `doctor` names an expired entry.
+writes a new date or removes the line. `doctor` names an expired entry. The `mcp` entry may also
+name the write tools the owner lets through the door by name (ADR 0022), `"write": ["sign_day",
+"note_day"]`, and how far back they may write, `"write_window_days": 60` (`WRITE_WINDOW_DAYS`); none
+is allowed by default, and none once the entry has expired.
 
 `import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
@@ -49,6 +52,10 @@ DEFAULT_POLICY: dict[str, Any] = {
 TIERS = (1, 2, 3)
 UNTIL = "until"  # the last day an entry holds, `YYYY-MM-DD`; absent: for good
 EXPIRED_TIER = 0  # what an entry past its `until` day counts as: nothing crosses
+WRITE = "write"  # the write tools an entry lets through the door by name (ADR 0022); absent: none
+WRITE_TOOLS = ("sign_day", "note_day")  # the tools `write` may name: the day's signature and its note
+WINDOW = "write_window_days"  # how many days before today a write tool may still write to
+WRITE_WINDOW_DAYS = 60  # the window when the entry does not set one
 KEY = re.compile(r"[0-9a-fA-F]{64}")  # an Ed25519 public key as the circle file spells it
 IMPORT_FILE = PurePosixPath("policy/import.json")
 # Switched off until the owner says otherwise: the two Takeout products that record every sign-in
@@ -114,10 +121,17 @@ class Ceiling:
     written: int
     until: date | None
     expired: bool
+    write: tuple[str, ...] = ()  # the write tools the file names, expired or not
+    window_days: int = WRITE_WINDOW_DAYS
 
     @property
     def max_tier(self) -> int:
         return EXPIRED_TIER if self.expired else self.written
+
+    @property
+    def writes(self) -> tuple[str, ...]:
+        """The write tools allowed today: those the file names, none once the entry has expired."""
+        return () if self.expired else self.write
 
 
 def _until(path: Path, destination: str, entry: dict[str, Any]) -> date | None:
@@ -135,10 +149,36 @@ def _until(path: Path, destination: str, entry: dict[str, Any]) -> date | None:
         ) from None
 
 
+def _write(path: Path, destination: str, entry: dict[str, Any]) -> tuple[str, ...]:
+    found = entry.get(WRITE, [])
+    if not isinstance(found, list) or not all(
+        isinstance(name, str) and name in WRITE_TOOLS for name in found
+    ):
+        raise PolicyError(
+            f"{path}: {destination!r} has a write that is not a list of write tools;"
+            f" the tools it may name are {', '.join(WRITE_TOOLS)}"
+        )
+    return tuple(dict.fromkeys(found))
+
+
+def _window(path: Path, destination: str, entry: dict[str, Any]) -> int:
+    found = entry.get(WINDOW, WRITE_WINDOW_DAYS)
+    if isinstance(found, bool) or not isinstance(found, int) or found < 0:
+        raise PolicyError(f"{path}: {destination!r} has a {WINDOW} that is not a whole number of days")
+    return found
+
+
 def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
     """`entry` as a Ceiling held against the day `on`; the shape is the caller's to have checked."""
     until = _until(path, destination, entry)
-    return Ceiling(destination, int(entry["max_tier"]), until, until is not None and on > until)
+    return Ceiling(
+        destination,
+        int(entry["max_tier"]),
+        until,
+        until is not None and on > until,
+        _write(path, destination, entry),
+        _window(path, destination, entry),
+    )
 
 
 def ceilings(root: Path) -> list[Ceiling]:
@@ -205,6 +245,21 @@ def mcp_ceiling(root: Path) -> int:
     agent on the owner's own machine and tier 1 is what crosses on its own (ADR 0016). An entry
     that is there but not a tier of 1, 2 or 3 is refused naming the file, never read as a default."""
     return _ceiling_or_default(root, MCP_DESTINATION, MCP_DEFAULT_TIER)
+
+
+def mcp_door(root: Path) -> Ceiling | None:
+    """The `mcp` entry as it counts today, for the write tools (ADR 0022): which it allows by name
+    (`Ceiling.writes`) and how far back (`window_days`); None when the file does not name `mcp`,
+    which allows no write tool. An entry that is not the documented shape is refused naming the file."""
+    path = policy_path(root)
+    entry = read(root).get(MCP_DESTINATION)
+    if entry is None:
+        return None
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        raise PolicyError(
+            f'{path} names {MCP_DESTINATION!r} without a max_tier of 1, 2 or 3; make it {{"max_tier": 1}}'
+        )
+    return _entry(path, MCP_DESTINATION, entry, today())
 
 
 def vault_ceiling(root: Path) -> int:

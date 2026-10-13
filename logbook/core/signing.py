@@ -45,7 +45,7 @@ from zoneinfo import ZoneInfo
 from .chain import Line, canonical_json
 from .export import parse_day
 from .index import Index
-from .store import RETRACTION, Logbook, now_utc, retractions, utc
+from .store import RETRACTION, HeadMoved, Logbook, now_utc, retractions, utc
 
 KIND = "signed-day"
 SCHEMA = "signed-day/v1"
@@ -169,7 +169,12 @@ def sign(
     refused. `note` is one line. `at` is when the owner signed, an RFC 3339 moment with an offset
     or Z, stored in UTC (amendment 2: not beyond five minutes ahead of this clock, not before the
     day starts in the record's zone); now by default. When the day has a standing signature the new
-    line supersedes it. `SignError` says why a signature is refused."""
+    line supersedes it. `SignError` says why a signature is refused.
+
+    The page is read and the line appended under one hold of the writer lock (`Logbook.writer`), and
+    the head is read again before the append: when another writer moved it in between, the page
+    signed would not be the page read, and `HeadMoved` is raised with nothing written. `day sign` and
+    the MCP tool `sign_day` (ADR 0022) both sign through here and nowhere else."""
     day = parse_day(day).isoformat()
     if note is not None:
         note = note.strip()
@@ -177,6 +182,19 @@ def sign(
             raise SignError("a note is one line; put the rest in a note/v1 line on the day")
         if not note:
             note = None
+    with lb.writer():
+        return _sign(lb, day, confirm, note, at, recorded_at, dispositions)
+
+
+def _sign(
+    lb: Logbook,
+    day: str,
+    confirm: Sequence[str] | None,
+    note: str | None,
+    at: str | None,
+    recorded_at: str | None,
+    dispositions: Mapping[str, Sequence[str]] | None,
+) -> Line:
     meta = lb.meta
     owner, tz = str(meta["owner_id"]), str(meta["timezone"])
     signed_at = moment(at, day, tz) if at is not None else now_utc()
@@ -198,6 +216,12 @@ def sign(
         payload["note"] = note
     if earlier is not None:
         payload["supersedes"] = str(earlier["id"])
+    now = lb.meta
+    if now["head"] != meta["head"]:
+        raise HeadMoved(
+            f"the record's head moved from seq {meta['seq']} to seq {now['seq']} while the page of {day}"
+            " was read, so the page signed would not be the page read; nothing was signed"
+        )
     return lb.append(
         at=signed_at,
         source=SOURCE,
@@ -206,6 +230,42 @@ def sign(
         payload=payload,
         recorded_at=recorded_at,
     )
+
+
+def confirmation(entries: Sequence[str] | None, disposed: bool) -> list[str] | None:
+    """The confirmation as typed (`--confirm ID,ID|none`, or `sign_day`'s `confirm`) as `sign` takes
+    it: None when not given, the entries typed, or the empty list for `none` (amendment 2), which
+    goes alone: an id beside it, or any disposition (`disposed`), is refused in one sentence."""
+    if entries is None:
+        return None
+    if not any(entry.strip().lower() == NOTHING for entry in entries):
+        return list(entries)
+    if len(entries) > 1 or disposed:
+        flags = ", ".join(f"--{value}" for value in DISPOSITIONS[:-1])
+        raise SignError(
+            f"--confirm {NOTHING} goes alone: no id beside it and no {flags} or"
+            f" --{DISPOSITIONS[-1]}, since a line given a disposition is confirmed"
+        )
+    return []
+
+
+def summary(line: Line) -> list[str]:
+    """What `day sign` prints about the signature it wrote, the header first (`2026-06-09: signed
+    2026-06-10T06:15:00Z as #42 signed-day/v1`); `sign_day` returns the same header."""
+    p = line["payload"]
+    n, on_page = len(p["confirmed"]), p["page"]["lines"]
+    out = [f"{p['day']}: signed {line['at']} as #{line['seq']} {SCHEMA}"]
+    lines = f"{n} line{'s' if n != 1 else ''} confirmed of {on_page} on the page"
+    out.append(f"  {lines} · page sha256 {p['page']['sha256'][:12]}…")
+    counts = counts_text(dispositions_of(p))
+    if counts:
+        out.append(f"  dispositions: {counts}")
+    if p.get("note"):
+        out.append(f"  note: {p['note']}")
+    if p.get("supersedes"):
+        out.append(f"  signed again: supersedes {p['supersedes']}")
+    out.append("  only signed days cross by default (`export crossing`); re-sign after the day changes")
+    return out
 
 
 def moment(at: str, day: str, tz: str, now: datetime | None = None) -> str:

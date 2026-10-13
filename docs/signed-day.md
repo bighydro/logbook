@@ -40,8 +40,19 @@ It rewrites nothing. A day that was wrong is corrected the way the record correc
 new lines, and then signed again; the later signature stands and the earlier stays in the chain.
 Retracting a signature (`repair retract SEQ`) leaves the earlier one standing, or the day unsigned.
 
-Only you sign. The MCP server has no tool for it and never will; an agent that wants a day signed
-asks you.
+Only you sign: here, or through the door when you allow it (below).
+
+## Signing through the door
+
+An orchestrator that builds your Day page somewhere else, on a phone or a VPS, used to print a `day sign`
+command for you to run by hand. When you name it in `policy/crossing.json`, `{"mcp": {"max_tier": 1,
+"write": ["sign_day", "note_day"]}}`, it carries your verdict back itself through the MCP tool `sign_day`
+(ADR 0022, RFC 0034 amendment 3): the same arguments as the flags, `confirm`, `kept`, `missed`, `dropped`,
+`carried`, `note` and `at`, the same checks, the same supersession, through the same code, and the same line
+`day sign` would have written, byte for byte. It never waits for another writer and never signs a day more
+than 60 days back (`write_window_days`); without the entry it is refused in one sentence. Its companion
+`note_day` keeps the proposals and your notes on the day as `note/v1` lines, so the page can be rebuilt from
+the record alone ([the MCP server](mcp.md#write-tools)).
 
 ## What the readers say
 

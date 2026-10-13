@@ -82,6 +82,7 @@ LOCK_POLL_S = 0.5  # how often a waiting writer looks again
 COMMAND = "logbook"  # the words this process was run with, for the lock file; `cli.main` sets it
 WAIT = True  # a second writer waits; `--no-wait` makes it refuse
 WRITING = "another logbook command is writing to this record ({command}, since {since})"
+NOT_WAITING = "; --no-wait, so not waiting"  # what a writer that was told not to wait adds
 STALE = "a stale lock from {command} (pid {pid}, since {since}) whose process is gone; taking it over"
 HEAD_MOVED = (
     "the record's head moved from seq {was} to seq {now} while this command ran, so the batch it computed"
@@ -1179,9 +1180,7 @@ def _take_lock(path: Path, command: str, wait: bool, notice: Callable[[str], Non
                 path.unlink(missing_ok=True)
                 continue
             if not wait:
-                raise Locked(
-                    WRITING.format(command=who, since=since) + "; --no-wait, so not waiting"
-                ) from None
+                raise Locked(WRITING.format(command=who, since=since) + NOT_WAITING) from None
             if not said:
                 notice(WRITING.format(command=who, since=since) + "; waiting")
                 said = True
