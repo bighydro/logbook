@@ -33,7 +33,8 @@ scheduled run below with one step more, in this order:
 
 1. **the sync**: `sync --all`, as at every run;
 2. **the dream's catch-up**: `dream --catch-up`, the drafts of the last days that have none or whose
-   lines changed, when this version of logbook has the dream command and `policy/crossing.json` has a
+   lines changed, then the synthesis of each of their calls that has none
+   ([the synthesis of a call](transcript-synthesis.md)), when this version of logbook has the dream command and `policy/crossing.json` has a
    `dream` entry (sending a day to a model is a crossing like any other). When it has not, one line
    says why (`dream: this version has no dream command; nothing to catch up`, or `dream:
    policy/crossing.json has no dream entry; nothing to catch up`) and the run goes on: absence is not an

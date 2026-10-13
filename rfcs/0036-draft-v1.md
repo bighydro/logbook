@@ -16,7 +16,7 @@ A model's text about one unit of the record, a day, a journey, an event, a week,
 |---|---|---|---|
 | `schema` | `"draft/v1"` | MUST | |
 | `unit` | string | MUST | one of `day`, `journey`, `event`, `week`, `month`, `year`, `chapter` |
-| `subject` | string or array of string | MUST | which one: for `day` the local day `YYYY-MM-DD`, for `week` the ISO week `YYYY-Www`, for `month` `YYYY-MM`, for `year` `YYYY`; for `journey`, `event` and `chapter` the ids of the lines the unit is (the `journey/v1` line, the `event/v1` line or lines of the entry, the `chapter/v1` line), as an array |
+| `subject` | string or array of string | MUST | which one: for `day` the local day `YYYY-MM-DD`, for `week` the ISO week `YYYY-Www`, for `month` `YYYY-MM`, for `year` `YYYY`; for `journey`, `event` and `chapter` the ids of the lines the unit is (the `journey/v1` line, the `event/v1` line or lines of the entry or the `transcript/v1` line of a call, the `chapter/v1` line), as an array |
 | `read_head` | hex sha256 | MUST | the record's head (`logbook.json`) when the model read |
 | `read_count` | integer | MUST | how many lines of the unit the model read, under the ceiling it read under |
 | `language` | string | MUST | the language of the text, a BCP 47 tag (`en`, `nb`) |
@@ -73,11 +73,12 @@ draft · model:qwen2.5-7b-instruct · read at bb97e90d · 5 lines
   ~ Ola came by in the evening.                                           unsupported
 ```
 
-The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. A draft of another unit is for that unit's page (the trip page, the year) and is not on the Day. The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, supersedes }`.
+The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. A draft of another unit is for that unit's page (the trip page, the year) and is not on the Day, but for one: a draft of unit `event` whose subject is one `transcript/v1` line of the day, a call's synthesis, is shown under that transcript's row, collapsed, since the call's row is the event's place on the Day (JSON `syntheses`; `docs/transcript-synthesis.md`). The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, supersedes }`.
 
 ## Notes
 
 - **Why segments and not a text with footnotes.** A reader must be able to withhold a sentence. A text with markers in it needs a parser to find the sentence a marker belongs to; a list of segments needs none, and a second implementation prints the same thing.
 - **Why `unsupported` is a key and not an empty list.** An empty `evidence` is what a writer produces by mistake; a key the writer must set is a statement. The rule is that there is no third shape, so a reader has two cases and no guess.
+- **Evidence for a call.** A transcript's utterances are not lines (RFC 0004 keeps the text in one attachment), so a draft of a call cites the `transcript/v1` line, the one line of the unit, and keeps which utterances each segment rests on under `extra.segments` (`{part, utterances: [{n, offset}]}`, `n` from 1 in the order the text reads). Were a source to write utterances as lines, a segment would cite them as evidence and need no extra.
 - **Why `source` names the model.** `source` is who observed (SPEC §2). A model's text is the model's observation of the lines; the owner's command ran it, but the owner did not say it, and `manual` would say they did.
 - **Why the owner's act is the only confirmation.** Two models agreeing is two proposals. The record's facts are observed lines and the owner's words, and a draft is neither (ARCHITECTURE, layer 5: agents are operators, never authors).
