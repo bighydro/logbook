@@ -55,7 +55,11 @@ name or a calendar location counts 3 a line, a photo's or Dawarich's name 2, a c
 semantic type 1 — passing over a name already in `places.json` and one rejected for this spot. Each
 carries its evidence (which source said which name, how often) and the radius accepting it would
 write. `--near PLACE` lists the proposals within 5 km of a named place or of `lat,lon`, and `--top N`
-the first N, keeping the queue's numbers.
+the first N, keeping the queue's numbers. The evidence is shown folded (`groups`): the addresses one
+source wrote along one street are one line ("Plattformveien", 38 addresses, 217 stays), since a
+reverse geocoder names every house number a track passes, and three lines are shown, the rest counted
+("… and N more"); `--verbose` prints every name on its own. `logbook serve`'s Places page shows the
+same folding, from the same code.
 
 **The owner's say.** Nothing is accepted on its own. `--accept N[,N]` writes each place into
 `places.json` — the cluster's centre, its fitted radius, kind `other` — and puts the naming in the
@@ -131,6 +135,8 @@ ONLINE = re.compile(
 )
 LIBRARY_LABELS = {"immich": "immich", "apple-photos": "photos"}  # a library asked, as the evidence says it
 BLANK = "____"
+SHOWN = 3  # evidence lines shown before "… and N more"
+HOUSE_NUMBER = re.compile(r"^\d+[a-zA-Z]?(?:[-/]\d+[a-zA-Z]?)?$")  # 12, 12B, 12-14, 12/3
 EN_DASH = "\u2013"
 NOT_EQUAL = "\u2260"
 
@@ -1015,12 +1021,101 @@ def _rejected(root: Path) -> list[Rejection]:
     return found
 
 
+# -- the evidence, folded ----------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Group:
+    """One line of evidence: a name one source gave the spot, or the addresses one source wrote
+    along one street, folded (`addresses` is how many; `count` their lines, as for a name). Two
+    renderings share it: the CLI's text (`group_text`) and the Places page of `logbook serve`."""
+
+    origin: str
+    source: str
+    name: str  # the name, or the street
+    grade: str
+    count: int
+    unit: str
+    addresses: int = 0  # 0 for a name; for a street, the addresses folded into it (two or more)
+    names: tuple[Name, ...] = ()
+
+    @property
+    def score(self) -> int:
+        return sum(n.weight * n.count for n in self.names)
+
+
+def street_of(address: str) -> str | None:
+    """The street of an address with a house number — `Plattformveien 12`, `12B Bøyeveien,
+    Nordsjøen`, `Plattformveien 12-14` — the part before the first comma with the number
+    taken out; None when there is no number (nothing to fold) or nothing else."""
+    first = address.split(",")[0].strip()
+    words = first.split()
+    kept = [w for w in words if not HOUSE_NUMBER.match(w)]
+    if len(kept) == len(words) or not kept:
+        return None
+    return " ".join(kept)
+
+
+def groups(names: Sequence[Name]) -> list[Group]:
+    """The evidence folded: every address-grade name with a house number joins the group of its
+    street (per source), and a street with two addresses or more is one line; every other name
+    is a line of its own. Ordered as the names are: by weight, then origin, then name."""
+    streets: dict[tuple[str, str, str], list[Name]] = {}
+    out: list[Group] = []
+    for n in names:
+        street = street_of(n.name) if n.grade == "address" else None
+        if street is None:
+            out.append(Group(n.origin, n.source, n.name, n.grade, n.count, n.unit, 0, (n,)))
+            continue
+        streets.setdefault((n.origin, n.source, street.casefold()), []).append(n)
+    for (origin, source, _key), members in streets.items():
+        if len(members) == 1:
+            n = members[0]
+            out.append(Group(n.origin, n.source, n.name, n.grade, n.count, n.unit, 0, (n,)))
+            continue
+        street = street_of(members[0].name) or members[0].name
+        count = sum(n.count for n in members)
+        out.append(
+            Group(origin, source, street, "address", count, members[0].unit, len(members), tuple(members))
+        )
+    out.sort(key=lambda g: (-g.score, ORIGINS.index(g.origin), g.name.casefold(), g.source))  # as `ranked`
+    return out
+
+
+def group_text(g: Group) -> str:
+    """`google-takeout timeline: "Hytta" (3 visits)`, `immich: "Nordsjøen" (1 photo, city)`, for a
+    street `dawarich: "Plattformveien" (38 addresses, 217 stays)`, and for a library asked
+    (`places_photos`) `immich ×12: Havbyen`, `photos ×3: Plattformen`. The one rendering: the CLI
+    prints these lines and the Places page of `logbook serve` lists them."""
+    if g.origin == "library":  # asked now (`places_photos`), not read from a line
+        label = LIBRARY_LABELS.get(g.source, g.source)
+        folded = f" ({_plural(g.addresses, 'address', 'addresses')})" if g.addresses else ""
+        return f"{label} ×{g.count}: {g.name}{folded}"
+    who = f"{g.source} timeline" if g.origin == "timeline" else g.source
+    if g.addresses:
+        return (
+            f'{who}: "{g.name}" ({_plural(g.addresses, "address", "addresses")}, {_plural(g.count, g.unit)})'
+        )
+    grade = "" if g.grade == "name" else f", {g.grade}"
+    return f'{who}: "{g.name}" ({_plural(g.count, g.unit)}{grade})'
+
+
+def evidence_lines(names: Sequence[Name], verbose: bool = False) -> list[str]:
+    """One line per group, folded and ordered (`groups`); with `verbose`, one per name."""
+    if verbose:
+        return [
+            group_text(Group(n.origin, n.source, n.name, n.grade, n.count, n.unit, 0, (n,))) for n in names
+        ]
+    return [group_text(g) for g in groups(names)]
+
+
 # -- text --------------------------------------------------------------------------------------------------
 
 
-def rows(report: Report, shown: Sequence[Proposal]) -> Iterator[str]:
+def rows(report: Report, shown: Sequence[Proposal], verbose: bool = False) -> Iterator[str]:
     """The queue: a head, then per proposal one line with the spot, its counts and the name proposed
-    (a blank where no source knows one), and one with the evidence; then what to do."""
+    (a blank where no source knows one), and one with the evidence, folded unless `verbose`; then
+    what to do."""
     yield head(report)
     if not report.observed:
         return
@@ -1030,7 +1125,7 @@ def rows(report: Report, shown: Sequence[Proposal]) -> Iterator[str]:
     width = len(str(max(p.number for p in shown)))
     for p in shown:
         yield f"  {p.number:>{width}}  {summary(p, report.tz)} → {p.name or BLANK}"
-        yield f"  {' ' * width}      {evidence_text(p.observed.names)}"
+        yield f"  {' ' * width}      {evidence_text(p.observed.names, verbose)}"
     yield 'nothing written: `setup places review --accept N[,N]`, `--name N "…"`, or `--reject N[,N]`'
 
 
@@ -1062,18 +1157,15 @@ def summary(p: Proposal, tz: ZoneInfo) -> str:
     return " · ".join(parts)
 
 
-def evidence_text(names: Sequence[Name]) -> str:
+def evidence_text(names: Sequence[Name], verbose: bool = False) -> str:
+    """The evidence on one line: the first `SHOWN` folded lines and how many more; with `verbose`
+    every name, as before the folding."""
     if not names:
         return "no source names it"
-    said = []
-    for n in names:
-        if n.origin == "library":  # asked now, not read from a line: `immich ×12: Havbyen`
-            said.append(f"{LIBRARY_LABELS.get(n.source, n.source)} ×{n.count}: {n.name}")
-            continue
-        who = f"{n.source} timeline" if n.origin == "timeline" else n.source
-        grade = "" if n.grade == "name" else f", {n.grade}"
-        said.append(f'{who}: "{n.name}" ({_plural(n.count, n.unit)}{grade})')
-    return " · ".join(said)
+    lines = evidence_lines(names, verbose)
+    if verbose or len(lines) <= SHOWN:
+        return " · ".join(lines)
+    return " · ".join([*lines[:SHOWN], f"… and {len(lines) - SHOWN} more"])
 
 
 def written_rows(written: Iterable[Written]) -> Iterator[str]:
@@ -1097,5 +1189,5 @@ def _number(value: float) -> float | int:
     return int(value) if float(value).is_integer() else value
 
 
-def _plural(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+def _plural(n: int, noun: str, plural: str | None = None) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {plural or noun + 's'}"
