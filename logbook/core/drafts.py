@@ -287,7 +287,7 @@ def withheld_text(row: Mapping[str, Any]) -> str:
 
 def withheld(lines: Iterable[Line], retracted: Collection[str], allowed: Allowed) -> list[Line]:
     """The standing draft of every day whose standing draft `allowed` withholds, in day order: what
-    `doctor` lists, and what `dream --catch-up` dreams again inside its window."""
+    `doctor` lists."""
     out = []
     for _day, found in sorted(by_day(lines, retracted).items()):
         top = standing(found)

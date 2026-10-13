@@ -513,14 +513,12 @@ def drafts_check(lb: Logbook, state: str) -> Check | None:
         else f"the {policy.DREAM_DESTINATION!r} entry allows max_tier {allowed.max_tier} now;"
         " `logbook dream --catch-up` dreams them again under it"
     )
-    counted = f"{len(above)} day(s) whose draft is" + (f" {named}" if named else "")
+    found = f"{len(above)} day(s) with a draft above what the dream entry allows, which no reader shows"
+    if named:
+        found += f": {named}"
     if sealed:
-        counted += f"; {sealed} sealed draft(s) above it this machine has no identity to open"
-    return Check(
-        "drafts",
-        "warn",
-        f"{counted}: above what the dream entry allows, so no reader shows them; {why}",
-    )
+        found += f"; {sealed} sealed draft(s) above it that this machine has no identity to open"
+    return Check("drafts", "warn", f"{found}; {why}")
 
 
 def _ceiling_text(c: policy.Ceiling) -> str:

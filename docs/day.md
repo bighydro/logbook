@@ -146,7 +146,10 @@ are as they always were.
    reader found an id that is not on the day), never run into the prose around it and never as a
    fact. The draft is a proposal; your signature and your notes are the facts. `--no-dream` leaves it
    out. An earlier draft of the day stays in the record, listed by id under `--json`, and `show` lists
-   every draft line on the day it was written.
+   every draft line on the day it was written. A draft follows the `dream` entry of
+   `policy/crossing.json`, not the head: one above the entry's `max_tier` today (lowered, expired or
+   removed since) is not shown, and when the day's standing draft is one, the row says `superseded by
+   policy` and why, and nothing of the draft ([the dream](dream.md), *When the entry changes*).
 
 ## What makes a stop a stay
 
@@ -298,7 +301,9 @@ from), `sources`, and `received`, one object per page the circle shared for the 
 `attachments`); and, only on a day a model has dreamed, `draft`, the standing draft (`line`,
 `seq`, `source`, `model`, `tier`, `at`, `read_head`, `read_count`, `language`, `segments` each with
 `text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `supersedes`, `earlier`
-newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`. On a day with a
+newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`; and, only on a day whose
+standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `seq`, `tier`, `max_tier`,
+`why`), left out under `--no-dream` too. On a day with a
 reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the object carries
 `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and `text`; the key
 is absent on every other day.
