@@ -98,10 +98,11 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import countries as country_table
 from . import (
+    chapter,
     drafts,
     events,
+    goals,
     health,
     keepers,
     ledger,
@@ -117,6 +118,7 @@ from . import (
     trips,
     weather,
 )
+from . import countries as country_table
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line
@@ -166,6 +168,8 @@ def read(
         page = signing.page(idx, day, on_day) if tiers is None else None
         retracted = retractions(idx.retractions())
         draft, withheld = drafts.for_day(idx, day, tiers, drafts.allowed(lb.root))
+        chapters = reading.crossing(idx.by_kind(chapter.KIND), tiers)  # RFC 0036: a handful, read whole
+        goal_lines = reading.crossing(idx.by_kind(goals.KIND), tiers) if _owner_lines(on_day) else []
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     night = night_row(found, rd, day)
     if night is not None:  # only on a day a night ends on: the Day's object is otherwise unchanged
@@ -178,6 +182,7 @@ def read(
         data["draft"] = draft  # only on a day a model dreamed: the Day's object is otherwise unchanged
     if withheld is not None:
         data["draft_withheld"] = withheld  # only on a day whose draft the policy no longer allows
+    data.update(owner_lines(day, on_day, chapters, goal_lines, retracted, tz))
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
@@ -248,6 +253,45 @@ def of_reading(
         ),
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
+
+
+def owner_lines(
+    day: str,
+    on_day: Sequence[Line],
+    chapters: Sequence[Line],
+    goal_lines: Sequence[Line],
+    retracted: Mapping[str, Line],
+    tz: str,
+) -> dict[str, Any]:
+    """What RFC 0036's owner lines add to the Day, each key only on a day that has it, so the Day's
+    object (SPEC §3.2.7, the conformance fixtures) is otherwise unchanged: `chapter`, the chapter the
+    day is in (`chapter.for_day`); `reviews`, a row per review standing on the day the verdict is
+    about (`goals.reviews_on`); `goals` and `chapters`, the goal and chapter lines whose `at` is on
+    the day, each with the line that superseded it. `chapters` are every chapter line and
+    `goal_lines` every goal line the reader may see, `on_day` the day's lines."""
+    out: dict[str, Any] = {}
+    held = chapter.for_day(chapters, retracted, day)
+    if held is not None:
+        out["chapter"] = held
+    reviews = goals.reviews_on(day, on_day, goal_lines, retracted, tz)
+    if reviews:
+        out["reviews"] = reviews
+    standing = [line for line in on_day if str(line["id"]) not in retracted]
+    standing.sort(key=lambda line: (_instant(str(line["at"])), int(line["seq"])))
+    every_goal = goals.Goals(goal_lines, retracted)
+    written = [goals.goal_row(line, every_goal) for line in standing if goals.is_goal(line)]
+    if written:
+        out["goals"] = written
+    found = chapter.chapter_lines(chapters, retracted)
+    named = [chapter.line_row(line, found) for line in standing if chapter.is_chapter(line)]
+    if named:
+        out["chapters"] = named
+    return out
+
+
+def _owner_lines(lines: Iterable[Line]) -> bool:
+    """Whether the day has a goal or a review line: only then are the goals read whole."""
+    return any(goals.is_goal(line) or goals.is_review(line) for line in lines)
 
 
 # -- the header ---------------------------------------------------------------------------------------------
@@ -812,6 +856,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     head = f"{data['day']}  {data['weekday']}"
     if "signed" in data:
         head += f"{DOT}{signing.state_text(data['signed'])}"
+    if data.get("chapter"):  # RFC 0036: after the weekday and the signed state
+        head += f"{DOT}{chapter.header_text(data['chapter'])}"
     if data.get("day_start", MIDNIGHT) != MIDNIGHT:  # the page's span, said when it is not the calendar day
         head += f"{DOT}{span_words(data['day_start'])}"
     yield head
@@ -836,6 +882,10 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             yield from drafts.rows(data["draft"])
         if data.get("draft_withheld"):  # the row, never the text: the policy no longer allows it
             yield _row("draft", drafts.withheld_text(data["draft_withheld"]))
+    owned = list(owner_rows(data))
+    if owned:
+        yield ""
+        yield from owned
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")
@@ -871,6 +921,18 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield _row(f"from {page['from']}", received_text(page))
         for item in page["named"]:
             yield f"      {item['kind']:<10} {item['title']}"
+
+
+def owner_rows(data: Mapping[str, Any]) -> Iterator[str]:
+    """The reviews made on the day (`let go · month · <goal> · <note> · written 2026-10-11 20:30`),
+    then the goal and chapter lines written on it, each `· superseded` when a later line replaced
+    it (RFC 0036)."""
+    for i, row in enumerate(data.get("reviews") or ()):
+        yield _row("reviews" if i == 0 else "", goals.review_row_text(row, str(data["day"]), str(data["tz"])))
+    for row in data.get("goals") or ():
+        yield _row("goal", goals.goal_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
+    for row in data.get("chapters") or ():
+        yield _row("chapter", chapter.row_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
 
 
 def reflection_json(line: Line, tz: str) -> dict[str, Any]:

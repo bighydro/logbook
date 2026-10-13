@@ -616,21 +616,24 @@ def goal_row(line: Line, goals: Goals) -> dict[str, Any]:
 def reviews_on(
     day: str, on_day: Iterable[Line], every_goal: Iterable[Line], retracted: Collection[str], tz: str
 ) -> list[dict[str, Any]]:
-    """The Day's `reviews`: a row per review standing on `day` (of the reviews in `on_day`, the
-    latest by `at`, then `seq`, of each goal, retracted ones left out), in the day's order, with the
-    goal's current text (the standing goal of its chain), the disposition, the period, the note, and
-    `recorded_at`, which the text shows when it is a later day than `at` in `tz`."""
+    """The Day's `reviews`: a row per review standing on `day`, in the day's order. Of the reviews in
+    `on_day`, retracted ones left out, the latest by `at`, then `seq`, for each goal (the chain of
+    `supersedes` is one goal) and period stands: the writer's dedupe key, `(goal, period, at)`, read
+    on the day, so a second verdict for the same period that two writers left is shown once and a
+    verdict for another period is a row of its own. Each row has the goal's current text (the
+    standing goal of its chain), the disposition, the period, the note, and `recorded_at`, which the
+    text shows when it is a later day than `at` in `tz`."""
     goals = Goals(every_goal, retracted)
-    latest: dict[str, Line] = {}
+    latest: dict[tuple[str, str], Line] = {}
     for line in review_lines(on_day, retracted):
         goal_id = str(line["payload"]["goal"])
         current = goals.current(goal_id)
-        key = str(current["id"]) if current is not None else goal_id
+        key = (str(current["id"]) if current is not None else goal_id, str(line["payload"].get("period")))
         latest[key] = line  # review_lines is in the day's order: the last one stands
     rows = []
-    for key, line in sorted(latest.items(), key=lambda item: _order(item[1])):
+    for (goal_id, _period), line in sorted(latest.items(), key=lambda item: _order(item[1])):
         payload = line["payload"]
-        current = goals.by_id.get(key)
+        current = goals.by_id.get(goal_id)
         rows.append(
             {
                 "line": str(line["id"]),

@@ -89,7 +89,20 @@ from typing import Any, NamedTuple
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
-from ..core import assets, day_start, drafts, places, reading, share, signing, stays, trips, weather
+from ..core import (
+    assets,
+    chapter,
+    day_start,
+    drafts,
+    goals,
+    places,
+    reading,
+    share,
+    signing,
+    stays,
+    trips,
+    weather,
+)
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core.chain import Line
@@ -817,9 +830,10 @@ class Site:
             if expanded
             else self.link("expand all", f"/day/{day}?open=1")
         )
+        held = f"{DOT}{chapter.header_text(data['chapter'])}" if data.get("chapter") else ""  # RFC 0036
         close = "" if self.static else f'<a href="/day/{day}#{CLOSE}">reflect and sign</a>{DOT}'
         parts = [
-            f"<h1>{day} <small>{escape(data['weekday'])}</small></h1>\n",
+            f"<h1>{day} <small>{escape(data['weekday'] + held)}</small></h1>\n",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
             f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
@@ -843,6 +857,7 @@ class Site:
             parts.append(_reflection_html(data["reflection"], tz))
         if data.get("draft"):
             parts.append(_draft_html(data["draft"]))
+        parts.append(_owner_html(data))
         if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
             parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
@@ -1452,6 +1467,33 @@ def _reflection_html(item: Mapping[str, Any], tz: ZoneInfo) -> str:
         f'<h2>Reflection</h2>\n<div class="reflection" title="line {escape(str(item["line"]))}">\n'
         f'<p class="mute">{escape(when)}</p>\n{paragraphs}</div>\n'
     )
+
+
+def _owner_html(data: Mapping[str, Any]) -> str:
+    """RFC 0036 on the Day: the reviews made on the day, the goal's current text beside each, and
+    `written` when it was written later; then the goal and chapter lines written on the day, marked
+    when superseded. Nothing on a day with none."""
+    parts: list[str] = []
+    if data.get("reviews"):
+        parts.append('<h2>Reviews</h2>\n<ul class="unplaced">\n')
+        for row in data["reviews"]:
+            text = goals.review_row_text(row, str(data["day"]), str(data["tz"]))
+            parts.append(f'<li title="line {escape(str(row["line"]))}">{escape(text)}</li>\n')
+        parts.append("</ul>\n")
+    rows = [
+        *(("goal", row, goals.goal_text(row)) for row in data.get("goals") or ()),
+        *(("chapter", row, chapter.row_text(row)) for row in data.get("chapters") or ()),
+    ]
+    if rows:
+        parts.append('<h2>Goals and chapters</h2>\n<ul class="unplaced">\n')
+        for kind, row, text in rows:
+            mark = f"{DOT}superseded" if row.get("superseded") else ""
+            parts.append(
+                f'<li title="line {escape(str(row["line"]))}"><span class="kind">{kind}</span> '
+                f"{escape(text + mark)}</li>\n"
+            )
+        parts.append("</ul>\n")
+    return "".join(parts)
 
 
 def _draft_html(draft: Mapping[str, Any]) -> str:

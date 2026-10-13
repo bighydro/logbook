@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import apps, drafts, events, flights, keepers, signing, story
+from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, story
 from ..core.chain import Line, is_sealed, number_text
 from ..core.resolve import Ref
 from . import trip_bundle
@@ -23,6 +23,7 @@ EN_DASH = "\u2013"  # between the two clocks of a time span
 EM_DASH = "\u2014"  # between a mail's subject and its sender
 ARROW = "\u2192"  # →
 DESCRIPTION_SOURCE = "description"  # the `source` of every line `derive descriptions` writes
+TEXT_KEPT = (goals.KIND, chapter.KIND)  # superseded, still printed: the earlier words stay readable
 
 
 def _clock(at: str, tz: ZoneInfo) -> str:
@@ -40,6 +41,7 @@ def _day_rows(
     names: Mapping[Ref, str] | None,
     superseded: Mapping[str, int] | None = None,
     descriptions: Mapping[str, Line] | None = None,
+    goal_texts: Mapping[str, str] | None = None,
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
     by any other row, collapses into one summary, one calendar entry that several sources
@@ -47,7 +49,8 @@ def _day_rows(
     photo line id → the derived note, `by_photo`) prints under the first keeper row for
     that photo instead of as a row of its own; with no keeper row standing it is a row. `names` is
     the label map; None is the `--raw` path: refs exactly as the sources gave them, no label, no
-    fallback."""
+    fallback. `goal_texts` are the current texts of the goals the day's reviews name, by the id each
+    names (`goals.texts`)."""
     run: list[Line] = []
     rows, folded = events.fold(rows, flights.Airlines.load(), retracted)
     described = descriptions or {}
@@ -73,7 +76,7 @@ def _day_rows(
         else:
             stands_for = folded.get(str(line["id"]))
             sources = f"×{len(stands_for.sources)} sources" if stands_for else None
-            yield _line_row(line, retraction, tz, names, superseded, sources)
+            yield _line_row(line, retraction, tz, names, superseded, sources, goal_texts)
             pid = keepers.photo_id_of(line) if line["kind"] == keepers.KIND else None
             if (
                 pid is not None
@@ -95,23 +98,30 @@ def _line_row(
     names: Mapping[Ref, str] | None,
     superseded: Mapping[str, int] | None = None,
     sources: str | None = None,
+    goal_texts: Mapping[str, str] | None = None,
 ) -> str:
     """`sources` stands in for the line's own source on a calendar entry several sources carry
-    (`events.fold`): `×2 sources`."""
+    (`events.fold`): `×2 sources`. A superseded goal or chapter keeps its words, marked; any other
+    superseded line says only what superseded it."""
     clock = _clock(line["at"], tz)
     if retraction is not None:
         return f"  {clock}  retracted #{line['seq']}: {retraction['payload'].get('reason', '')}"
     by = (superseded or {}).get(str(line["id"]))
-    if by is not None:
+    if by is not None and line["kind"] not in TEXT_KEPT:
         return f"  {clock}  {line['kind']:<10} {line['source']:<14} superseded by #{by}"
-    text = _line_text(line, tz, names)
+    text = _line_text(line, tz, names, goal_texts)
+    if by is not None:
+        text = f"{text} · superseded by #{by}"
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
 
 
-def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str:
+def _line_text(
+    line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None, goal_texts: Mapping[str, str] | None = None
+) -> str:
     """The text part of a line's row: the profile's own summary where the kind has one, else the
     payload's text, title, name or url, else every field as `key=value`. A line still sealed at
-    this point (no identity on this machine; RFC 0029) says so and nothing else."""
+    this point (no identity on this machine; RFC 0029) says so and nothing else. A review prints the
+    current text of its goal from `goal_texts` when the caller read it, else the goal's id."""
     p = line["payload"]
     if is_sealed(line):
         return f"[sealed {p.get('of')}; no identity to open it]"
@@ -150,6 +160,12 @@ def _line_text(line: Line, tz: ZoneInfo, names: Mapping[Ref, str] | None) -> str
         text = signing.row_text(p)
     elif line["kind"] == drafts.KIND and p.get("schema") == drafts.SCHEMA:
         text = drafts.row_text(p)
+    elif goals.is_goal(line):
+        text = goals.goal_text(p)
+    elif goals.is_review(line):
+        text = goals.review_text(p, (goal_texts or {}).get(str(p.get("goal"))))
+    elif chapter.is_chapter(line):
+        text = chapter.row_text(p)
     elif line["kind"] == trip_bundle.RECEIVED:
         text = trip_bundle.text(line, lambda inner: _line_text(inner, tz, names))
     elif line["kind"] == apps.KIND and p.get("schema") == apps.SCHEMA:
