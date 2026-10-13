@@ -383,6 +383,10 @@ def test_status_says_absent_installed_and_answering(
 ) -> None:
     assert _exit(["serve", "--status"]) == 3
     assert "no serve service installed" in capsys.readouterr().out
+    monkeypatch.setattr(service, "answering", lambda port: port == 8090)
+    assert _exit(["serve", "--status", "--port", "8090"]) == 3, "one run by hand is not a service"
+    assert "answers at http://127.0.0.1:8090/ (run by hand)" in capsys.readouterr().out
+    monkeypatch.setattr(service, "answering", lambda port: False)
     cli.main(["serve", "--install-service", "--port", "8080"])
     capsys.readouterr()
     assert _exit(["serve", "--status"]) == 1, "installed, nothing answering"

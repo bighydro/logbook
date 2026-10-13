@@ -113,7 +113,7 @@ def _service(a: argparse.Namespace) -> None:
     config_home = Path(xdg).expanduser() if xdg else None
     platform, home = service.system(), Path.home()
     if a.status:
-        _service_status(platform, home, config_home)
+        _service_status(platform, home, config_home, a.port)
         return
     if a.system and service.running_as_root():
         print(
@@ -194,14 +194,15 @@ def _service_uninstall(svc: service.Service, home: Path, config_home: Path | Non
         sys.exit(1)
 
 
-def _service_status(platform: str, home: Path, config_home: Path | None) -> None:
+def _service_status(platform: str, home: Path, config_home: Path | None, port: int) -> None:
     """One line per serve service installed, and whether a logbook server answers on its port.
-    Exit 0 when every one installed answers, 1 when one does not, 3 when none is installed."""
+    Exit 0 when every one installed answers, 1 when one does not, 3 when none is installed (and
+    then whether one run by hand answers on `port`)."""
     found = service.find(platform, home, config_home)
     if not found:
         print("no serve service installed; `logbook serve --install-service` (docs/serve.md)")
-        if service.answering(serve.PORT):
-            print(f"a logbook server answers at http://{serve.HOST}:{serve.PORT}/ (run by hand)")
+        if service.answering(port):
+            print(f"a logbook server answers at http://{serve.HOST}:{port}/ (run by hand)")
         sys.exit(3)
     silent = False
     for item in found:
