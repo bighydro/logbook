@@ -1032,7 +1032,8 @@ zone is filed under in the bundled `zone.tab`. That is wrong near borders and fa
 is printed with the numbers; name the place and give it a country when it matters.
 
 **Trips are derived, never written** (ADR 0019). A trip is a run of consecutive days whose overnight stay is
-outside every home region, recomputed every time; a trip's name, when you give one, is a note. Its route is
+outside every home region, recomputed every time; a trip's name, when you give one, is a note (`logbook add
+--trip ID "NAME"`, or the field on its page in `serve`). Its route is
 the night places in order: the named place, else an airport's code and city (`ZRH, Zurich`) when the stay is at
 one — within 3.5 km of the reference point of an airport with scheduled traffic (OurAirports type large or
 medium; a terminal often lies well off the runway midpoint the row marks), within 2 km of any other row — else

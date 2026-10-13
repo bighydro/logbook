@@ -97,7 +97,7 @@ from email.utils import collapse_rfc2231_value
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PureWindowsPath
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from zoneinfo import ZoneInfo
 
@@ -122,18 +122,10 @@ from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook
-from . import (
-    asset_status,
-    dream,
-    gaps,
-    journeys,
-    people_review,
-    person_page,
-    places_review,
-    reflect,
-    trip_page,
-    world,
-)
+from . import asset_status, dream, gaps, journeys, person_page, places_review, reflect, trip_page, world
+
+if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
+    from . import people_review
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
@@ -142,12 +134,9 @@ HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
-RECORD_PAGES = frozenset(
-    {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people"}
-)  # and every Day, journey and person: the record's, not the clock's
-JOURNEY_PATH = re.compile(
-    r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$"
-)  # a journey's first and last day
+# the record's pages, not the clock's (and every Day, journey and person)
+RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places", "/world", "/journeys", "/people"})
+JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
@@ -453,7 +442,7 @@ class Site:
         self.footer = footer
         self.voice = voice
         self._lock = threading.Lock()
-        # the queues are read (their tables built once) and acted on under it
+        # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
         # one write at a time: the store's writer lock re-enters within a process, so it keeps out
         # another process's writer, never this server's other thread
@@ -510,7 +499,6 @@ class Site:
             places.PlaceError,
             assets.AssetError,
             places_review.ReviewError,
-            people_review.ReviewError,
             day_start.DayStartError,
         ) as e:
             return self._error(500, str(e))
@@ -788,6 +776,8 @@ class Site:
         identifier seen), `reject` writes through `people_review.reject` (`--reject N`: the two are
         not the same person). A proposal no longer in the queue is a 409; one the engine refuses a
         400. Done, a 303 to the queue on the page the form came from (`year`)."""
+        from . import people_review
+
         act, proposal_id = form.get("act", ""), form.get("id", "")
         year = form.get("year", "")
         if act not in ("merge", "reject") or not proposal_id:
@@ -1665,6 +1655,8 @@ class Site:
                 parts.append(self._person_row(r))
             parts.append("</ol>\n")
         if not self.static:
+            from . import people_review
+
             with self._review_lock:  # the observed table is built once, as the Places page's queue is
                 report = people_review.read(self.lb)
             parts.append(self._review_html(report, year))
