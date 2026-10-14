@@ -165,7 +165,8 @@ def _append_with(
     entity id}` (RFC 0006), so a contacts import never mints a second id for a person it knows; one
     that takes `asset` must be given a registered one; one whose `run` takes `existing` gets the
     record's standing lines by (source, raw_id), batched through the index, so a later export can
-    correct a sample (`health_export.corrected`).
+    correct a sample (`health_export.corrected`); one whose `run` takes `held` (`mail`) gets the
+    record's answer by Message-ID from any mail road (`logbook.contrib.mail_lookup`).
     One whose `run` takes `progress` gets a reporter that prints every report it makes with the
     bytes read and the rate; one whose `run` takes `cursor` gets the inbox manifest's cursor
     (`logbook.contrib.inbox`), so an import that stopped resumes where the record holds the source up to,
@@ -204,6 +205,10 @@ def _append_with(
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "existing"):
         options["existing"] = _existing(lb)
+    if _takes(adapter, "held"):  # mail: what any mail road wrote, by Message-ID
+        from ..contrib import mail_lookup
+
+        options["held"] = mail_lookup.Lookup(lb)
     if _takes(adapter, "store"):
         options["store"] = (lambda data: Path(attachments.DIR)) if dry_run else lb.attach
     if _takes(adapter, "store_file"):

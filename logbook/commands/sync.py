@@ -699,6 +699,10 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["lookup"] = _lookup(lb)
     if _takes(adapter, "existing", live=True):
         options["existing"] = _existing(lb)
+    if _takes(adapter, "held", live=True):  # mail: what any mail road wrote, by Message-ID
+        from ..contrib import mail_lookup
+
+        options["held"] = mail_lookup.Lookup(lb)
     if _takes(adapter, "previous", live=True):
         options["previous"] = _previous(lb, adapter)
     if _takes(adapter, "recorded", live=True):

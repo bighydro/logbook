@@ -54,7 +54,8 @@ import quopri
 import re
 import string
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.header import decode_header, make_header
 from email.utils import getaddresses, parsedate_to_datetime
@@ -76,11 +77,14 @@ LABELS_HEADER = "x-gmail-labels"
 THREAD_HEADER = "x-gm-thrid"
 NO_DATE = "skipped_no_date"
 BY_LABEL = "skipped_label"
+HELD = "already_in_record_from:"  # a count per holder, `<HELD>mail (<mailbox>)`, said on a line of its own
 
 CHUNK = 8 * 1024 * 1024  # bytes read at a time
 BODY_CAP = 64 * 1024  # bytes of a body part read; the rest is cut
 PROGRESS_EVERY = 10_000  # messages between progress reports
 MAX_DEPTH = 32  # nested multiparts walked
+LOOKUP_BATCH = 200  # drafts asked about at once (`held`)
+LOOKUP_BYTES = 32 * 1024 * 1024  # ... and at most this many bytes of messages waiting for the answer
 
 SEPARATOR = re.compile(rb"From \S+ [^\r\n]*\r?\n")  # `From <id> <date>`, at the start of a line
 ESCAPED_FROM = re.compile(rb"^>(>*From )", re.MULTILINE)  # mboxrd: one `>` off, the rest stays
@@ -101,6 +105,34 @@ TAG = re.compile(r"<[^>]*>")
 BLANK_LINES = re.compile(r"\n{3,}")
 
 Progress = Callable[[int, int, float], None]
+
+
+@dataclass(frozen=True)
+class Asked:
+    """One message a mail source asks the record about before it writes it (`held`): the key its line
+    would carry (`raw_id`), its Message-ID normalised (`normalise_id`) and as the header spells it, the
+    mailbox the source reads (None: an mbox imported without `--account`) and, once the message is read,
+    its `at`."""
+
+    raw_id: str
+    message_id: str
+    spelled: str
+    account: str | None
+    at: str | None = None
+
+
+@dataclass(frozen=True)
+class Holder:
+    """The line that holds a message already: under the very key the asker's line would carry (`own`,
+    which the store refuses on its own), or under another, of the mailbox `account` (None: a line written
+    without one, by an mbox imported without `--account`)."""
+
+    own: bool
+    account: str | None
+
+
+# the record's answer for a batch, one entry per message, in order: its holder, or None
+Held = Callable[[Sequence[Asked]], list[Holder | None]]
 
 
 class Cursor(Protocol):
@@ -156,10 +188,14 @@ def run(
     progress: Progress | None = None,
     cursor: Cursor | None = None,
     chunk_size: int = CHUNK,
+    held: Held | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One mail/v1 line draft per message of the mbox at `path` (or of every `.mbox` in the folder,
     in name order), streamed. `since` is RFC3339 UTC; messages with `at` before it are not
-    yielded. `timezone` is the record's zone (the line's `tz`). `tier` applies to the whole run."""
+    yielded. `timezone` is the record's zone (the line's `tz`). `tier` applies to the whole run.
+    With `held`, the drafts wait in windows of LOOKUP_BATCH (LOOKUP_BYTES at most) and the record is
+    asked once per window: a message it holds under another key, from any road, is counted (`HELD`) and
+    not yielded; one it holds under this very key goes on, for the store to refuse as before."""
     counts = counts if counts is not None else {}
     path = Path(path)
     files = [path] if path.is_file() else sorted(f for f in path.iterdir() if _is_mbox(f))
@@ -170,6 +206,27 @@ def run(
     skip = {label.strip().lower() for label in (skip_labels or []) if label.strip()}
     read = ordinal = done = 0  # messages read, drafts yielded, bytes of the files already finished
     started = time.monotonic()
+    waiting: list[tuple[dict[str, Any], list[bytes], int]] = []  # drafts, their blobs and ends, for `held`
+    waiting_bytes = 0
+
+    def release(file: Path) -> Iterator[dict[str, Any]]:
+        """The drafts that waited, in order, less the ones the record holds under another key."""
+        nonlocal ordinal, waiting_bytes
+        holders = ask_record([line for line, _blobs, _end in waiting], held)
+        for (line, blobs, end), holder in zip(waiting, holders, strict=True):
+            if holder is not None and not holder.own:
+                count_held(counts, holder)
+                continue
+            if store is not None:
+                for blob in blobs:
+                    store(blob)
+            ordinal += 1
+            if cursor is not None:
+                cursor.reached(file, ordinal, end)
+            yield line
+        waiting.clear()
+        waiting_bytes = 0
+
     for file in files:
         start = cursor.start(file) if cursor is not None else 0
         with file.open("rb") as fh:
@@ -197,13 +254,11 @@ def run(
                     continue
                 if since and line["at"] < since:
                     continue
-                if store is not None:
-                    for blob in blobs:
-                        store(blob)
-                ordinal += 1
-                if cursor is not None:
-                    cursor.reached(file, ordinal, end)
-                yield line
+                waiting.append((line, blobs, end))
+                waiting_bytes += len(raw)
+                if held is None or len(waiting) >= LOOKUP_BATCH or waiting_bytes >= LOOKUP_BYTES:
+                    yield from release(file)
+            yield from release(file)  # before the file's end is told to the cursor
             size = fh.seek(0, 2)
         done += size - start
         if cursor is not None:
@@ -603,6 +658,59 @@ def first_id(value: str | None) -> str | None:
     or None: the rule `raw_id` is keyed by, which a live source applies to the headers alone."""
     ids = _ids(value)
     return ids[0] if ids else None
+
+
+def ask(message_id: str | None, account: str | None, at: str | None = None) -> Asked | None:
+    """What a mail source asks the record about a message whose Message-ID header gives `message_id`
+    (`first_id`'s spelling), read from the mailbox `account`; None for a message without one, whose
+    line is keyed by its own bytes, so the store's (source, raw_id) is its only dedupe, as before."""
+    normal = normalise_id(message_id)
+    if message_id is None or normal is None:
+        return None
+    mailbox = account.strip().lower() if account else None
+    return Asked(f"{mailbox}:{message_id}" if mailbox else message_id, normal, message_id, mailbox, at)
+
+
+def ask_record(lines: Sequence[dict[str, Any]], held: Held | None) -> list[Holder | None]:
+    """The record's holder of each parsed draft (None: not held, or no `held` to ask), one `held` call
+    for them all; a draft without a Message-ID is never asked."""
+    found: list[Holder | None] = [None] * len(lines)
+    if held is None:
+        return found
+    asked = {n: q for n, line in enumerate(lines) if (q := _asked(line)) is not None}
+    if asked:
+        for n, holder in zip(asked, held(list(asked.values())), strict=True):
+            found[n] = holder
+    return found
+
+
+def unheld(
+    lines: Sequence[dict[str, Any]], held: Held | None, counts: dict[str, int]
+) -> list[dict[str, Any]]:
+    """The parsed drafts the record does not hold under another key; the others counted (`HELD`)."""
+    kept: list[dict[str, Any]] = []
+    for line, holder in zip(lines, ask_record(lines, held), strict=True):
+        if holder is not None and not holder.own:
+            count_held(counts, holder)
+        else:
+            kept.append(line)
+    return kept
+
+
+def count_held(counts: dict[str, int], holder: Holder) -> None:
+    """One more message the record holds from another road or key, counted by its holder's mailbox."""
+    _count(counts, f"{HELD}{NAME} ({holder.account or 'an import without --account'})")
+
+
+def _asked(line: dict[str, Any]) -> Asked | None:
+    """`ask` for a parsed draft: the key it carries, its Message-ID, its mailbox and its `at`."""
+    payload = line["payload"]
+    normal, raw_id, account = payload.get("message_id"), str(payload.get("raw_id")), payload.get("account")
+    if not normal:
+        return None
+    prefix = f"{account}:" if account else ""
+    spelled = raw_id.removeprefix(prefix)
+    return Asked(raw_id, str(normal), spelled, str(account) if account else None, str(line["at"]))
 
 
 def normalise_id(message_id: str | None) -> str | None:

@@ -7,17 +7,30 @@ Synthetic mail only: Ines, Ola and Kari Nordmann of Oslo, who do not exist, at e
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import imaplib
 import sys
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from logbook.contrib.adapters import mail
+from google_fake import USER, Fake, private_key, write_key
+from imap_server import FakeImap, Folder, Message, internaldate
+
+from logbook import cli
+from logbook.contrib import mail_lookup
+from logbook.contrib.adapters import mail, mail_imap, service_account
+from logbook.core import sealing
+from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
-INES = "ines.nordmann@example.org"
+INES = "ines.nordmann@example.org"  # a mailbox of her own, at another address
 OLA = "ola@example.org"
 
 
@@ -117,3 +130,513 @@ def test_a_blank_message_id_is_keyed_by_the_messages_bytes_as_one_without(header
     assert first["raw_id"] == f"sha256:{hashlib.sha256(_raw(header, subject='One')).hexdigest()}"
     assert first["raw_id"] != second["raw_id"]
     assert counts["no_message_id"] == 2
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("<>", None),
+        ("< >", None),
+        ("<<>>", None),
+        (">", None),
+        ("<> <a@b>", "a@b"),
+        ("<> a@B", "a@B"),
+        ("<a@b> <>", "a@b"),
+        ("<a@b>", "a@b"),
+        ("a@b", "a@b"),
+        ("<a@b", "<a@b"),
+        ("<a@b> (c)", "a@b"),
+        ("<one@a> <two@b>", "one@a"),
+    ],
+)
+def test_first_id_drops_a_token_of_brackets_alone_and_nothing_else(value: str, expected: str | None) -> None:
+    assert mail.first_id(value) == expected
+
+
+def test_a_blank_in_reply_to_or_references_threads_the_message_on_itself() -> None:
+    payload = _line(_raw("<own@mail.example.org>", extra="In-Reply-To: <>\r\nReferences: <>\r\n"))["payload"]
+    assert payload["thread"] == "own@mail.example.org"
+    assert "in_reply_to" not in payload.get("extra", {}) and "references" not in payload.get("extra", {})
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "<Fold.1@\r\n Mail.Example.ORG>",
+        "<Fold.2@Mail.Example.ORG>\r\n (added by the relay)",
+        "<Fold.3@Mail.Example.ORG\r\n >",
+        "\r\n <Fold.4@Mail.Example.ORG>",
+        "<Fold.5@Mail.Example.ORG> <Other.5@mail.example.org>",
+    ],
+)
+def test_the_header_pass_and_the_parser_read_one_stored_message_id_alike(header: str) -> None:
+    """`sync mail`'s header pass reads HEADER.FIELDS (MESSAGE-ID) through `Headers` and `first_id`, as
+    `sync gmail`'s reads the metadata: the same bytes give the key the line carries, and normalising it
+    again changes nothing."""
+    raw = _raw(header)
+    written = _line(raw)["payload"]["message_id"]
+    fields = raw.split(b"\r\nDate:")[0] + b"\r\n\r\n"
+    asked = mail.ask(mail.first_id(mail.Headers(fields).get("message-id")), INES)
+    assert asked is not None and asked.message_id == written == mail.normalise_id(written)
+
+
+# -- the three roads ----------------------------------------------------------------------------------------
+#
+# Ines's mailbox, `ines@example.org` (google_fake.USER, the account the service-account key reads as): three
+# messages of one week, each as the mailbox stores it, read by the Takeout export (an mbox), by IMAP and by
+# the Gmail API. The same bytes on every road, as Gmail serves them; Takeout adds its two headers.
+
+T0 = datetime(2026, 3, 2, 10, 15, tzinfo=UTC)
+WEEK = [
+    ("<m1@mail.example.org>", T0, False, "Mooring", ""),
+    ("<m2@mail.example.org>", T0 + timedelta(hours=12), True, "Re: Mooring", ""),
+    ("<m3@mail.example.org>", T0 + timedelta(hours=24), False, "Berth", ""),
+]
+
+
+def _stored(
+    message_id: str | None, when: datetime, sent: bool = False, subject: str = "Mooring", extra: str = ""
+) -> bytes:
+    """A message as the mailbox stores it, CRLF and all; Ines sends when `sent`, else Ola does."""
+    sender, to = (f"Ines Nordmann <{USER}>", f"Ola Nordmann <{OLA}>")
+    if not sent:
+        sender, to = to, sender
+    head = "" if message_id is None else f"Message-ID: {message_id}\r\n"
+    return (
+        f"{head}Date: {when.strftime('%a, %d %b %Y %H:%M:%S %z')}\r\nFrom: {sender}\r\nTo: {to}\r\n"
+        f'Subject: {subject}\r\n{extra}Content-Type: text/plain; charset="utf-8"\r\n\r\nHei.\r\n'
+    ).encode()
+
+
+def _week(spell: Callable[[str], str] = lambda message_id: message_id) -> list[tuple[bytes, datetime]]:
+    return [
+        (_stored(spell(mid), when, sent, subject, extra), when) for mid, when, sent, subject, extra in WEEK
+    ]
+
+
+def _mbox(path: Path, messages: list[tuple[bytes, datetime]]) -> Path:
+    """The Takeout export of those messages: a separator line each, and Takeout's own two headers."""
+    with path.open("wb") as fh:
+        for n, (raw, when) in enumerate(messages, start=1):
+            fh.write(
+                f"From 17951234567890{n:05d}@xxx {when.strftime('%a %b %d %H:%M:%S +0000 %Y')}\n".encode()
+            )
+            fh.write(
+                f"X-GM-THRID: 17951234567890{n:05d}\r\nX-Gmail-Labels: Inbox\r\n".encode() + raw + b"\r\n"
+            )
+    return path
+
+
+def _imap(messages: list[tuple[bytes, datetime]]) -> FakeImap:
+    return FakeImap(
+        [
+            Folder(
+                "[Gmail]/All Mail",
+                1234,
+                {
+                    uid: Message(uid, raw, internaldate(when), labels=("\\Inbox",))
+                    for uid, (raw, when) in enumerate(messages, start=1)
+                },
+                attributes=("\\All",),
+            )
+        ],
+        user=USER,
+    )
+
+
+@pytest.fixture(scope="module")
+def key() -> Any:
+    return private_key()
+
+
+@pytest.fixture
+def gmail_api(tmp_path: Path, key: Any, monkeypatch: pytest.MonkeyPatch) -> Fake:
+    """The Gmail API's fake, holding nothing yet: a test delivers what the mailbox holds."""
+    fake = Fake(key)
+    fake.labels = [{"id": "INBOX", "name": "INBOX", "type": "system"}]
+    monkeypatch.setattr(service_account, "send", fake)
+    monkeypatch.setattr(service_account, "sleep", lambda _s: None)
+    monkeypatch.setenv(service_account.KEY_ENV, str(write_key(tmp_path / "google-sa.json", key)))
+    monkeypatch.setenv(service_account.USER_ENV, USER)
+    return fake
+
+
+def _deliver(fake: Fake, messages: list[tuple[bytes, datetime]]) -> None:
+    for raw, when in messages:
+        fake.deliver(raw, when, ("INBOX",))
+
+
+@contextlib.contextmanager
+def _serving(fake: FakeImap, monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeImap]:
+    port = fake.start()
+    monkeypatch.setenv("LOGBOOK_IMAP_HOST", "imap.example.org")
+    monkeypatch.setenv("LOGBOOK_IMAP_USER", fake.user)
+    monkeypatch.setenv("LOGBOOK_IMAP_PASSWORD", fake.password)
+    monkeypatch.setattr(
+        mail_imap, "open_connection", lambda config: imaplib.IMAP4("127.0.0.1", port, timeout=10)
+    )
+    try:
+        yield fake
+    finally:
+        fake.stop()
+
+
+@pytest.fixture
+def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    lb = Logbook.init(tmp_path / "lb", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb.set_owner_emails([USER])
+    return lb
+
+
+def _run(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str, str]:
+    try:
+        cli.main(list(args))
+    except SystemExit as e:
+        status = e.code if isinstance(e.code, int) else 1
+    else:
+        status = 0
+    out = capsys.readouterr()
+    return status, out.out, out.err
+
+
+def _record(lb: Logbook) -> bytes:
+    """Every month file's bytes, in order: what a run that writes nothing must leave as it was."""
+    return b"".join(path.read_bytes() for path in sorted((lb.root / "logbook").glob("*/*.jsonl")))
+
+
+def _raw_asked(fake: Fake) -> list[dict[str, Any]]:
+    return [params for _m, _p, params in fake.requests if params.get("format") == "raw"]
+
+
+def test_a_takeout_imported_without_its_account_then_gmail_writes_each_message_once(
+    lb: Logbook,
+    gmail_api: Fake,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    no_network: list[str],
+) -> None:
+    """The case that wrote every message twice: the export keyed `<Message-ID>` (no `--account`), the API
+    `<account>:<Message-ID>`. The dry run says what it would skip and from where; the run writes nothing,
+    fetches no body and leaves every line already written as it was."""
+    status, out, err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "all.mbox", _week())))
+    assert status == 0, err
+    assert lb.meta["seq"] == 3 and {line["payload"]["raw_id"] for line in lb.lines()} == {
+        "m1@mail.example.org",
+        "m2@mail.example.org",
+        "m3@mail.example.org",
+    }
+    before = _record(lb)
+    _deliver(gmail_api, _week())
+    status, out, err = _run(capsys, "sync", "gmail", "--dry-run")
+    assert status == 0, err
+    assert "gmail: 0 lines from the beginning (dry run, nothing written)" in out
+    assert "  3 already in the record from mail (an import without --account)" in out.splitlines()
+    assert _raw_asked(gmail_api) == [], "a dry run fetches no body the record holds either"
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0, err
+    assert "gmail: 0 new lines of 0 seen from the beginning" in out
+    assert "  3 already in the record from mail (an import without --account)" in out.splitlines()
+    assert "3 listed, 0 new, 3 already in the record" in err
+    assert _raw_asked(gmail_api) == [] and lb.meta["seq"] == 3
+    assert _record(lb) == before, "no line written before is touched"
+    assert no_network == [], "the fake is the only way out"
+
+
+def test_gmail_then_imap_writes_each_message_once(
+    lb: Logbook, gmail_api: Fake, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _deliver(gmail_api, _week())
+    status, _out, err = _run(capsys, "sync", "gmail")
+    assert status == 0 and lb.meta["seq"] == 3, err
+    before = _record(lb)
+    with _serving(_imap(_week()), monkeypatch) as imap:
+        status, out, err = _run(capsys, "sync", "mail")
+        assert status == 0, err
+        assert "mail: 0 new lines of 0 seen" in out
+        assert not [line for line in imap.sent("FETCH") if "BODY.PEEK[]" in line], "no body was fetched"
+    assert lb.meta["seq"] == 3 and _record(lb) == before
+
+
+def test_the_same_message_id_spelled_with_other_case_and_brackets_is_one_message(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The export spells `<Berth.9@Mail.Example.ORG>`, the server ` Berth.9@MAIL.EXAMPLE.ORG` (no brackets,
+    other case): neither spelling is a key of the other, so the server's message is read and, once read,
+    known by its normalised id among the lines of its days. The local part's case is never folded."""
+    messages = [(_stored("<Berth.9@Mail.Example.ORG>", T0, subject="Berth"), T0)]
+    status, _out, err = _run(
+        capsys, "add", "mail", str(_mbox(tmp_path / "all.mbox", messages)), "--account", USER
+    )
+    assert status == 0 and lb.meta["seq"] == 1, err
+    respelled = [(_stored(" Berth.9@MAIL.EXAMPLE.ORG", T0, subject="Berth"), T0)]
+    with _serving(_imap(respelled), monkeypatch):
+        status, out, err = _run(capsys, "sync", "mail")
+    assert status == 0, err
+    assert "mail: 0 new lines of 0 seen" in out
+    assert f"  1 already in the record from mail ({USER})" in out.splitlines()
+    assert lb.meta["seq"] == 1
+    (line,) = list(lb.lines())
+    assert line["payload"]["message_id"] == "Berth.9@mail.example.org"
+    assert line["payload"]["raw_id"] == f"{USER}:Berth.9@Mail.Example.ORG"
+
+
+def test_ids_that_differ_before_the_at_are_two_messages(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Same time, same people, same domain, the local part in another case: two messages, two lines."""
+    _run(
+        capsys,
+        "add",
+        "mail",
+        str(_mbox(tmp_path / "all.mbox", [(_stored("<AbC.1@mail.example.org>", T0), T0)])),
+    )
+    _deliver(gmail_api, [(_stored("<abc.1@mail.example.org>", T0), T0)])
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0, err
+    assert "gmail: 1 new lines of 1 seen" in out and "already in the record from" not in out
+    assert sorted(line["payload"]["message_id"] for line in lb.lines()) == [
+        "AbC.1@mail.example.org",
+        "abc.1@mail.example.org",
+    ]
+
+
+def test_a_reply_with_its_own_message_id_is_a_new_line(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run(capsys, "add", "mail", str(_mbox(tmp_path / "all.mbox", _week())))
+    when = T0 + timedelta(hours=30)
+    reply = _stored(
+        "<r1@mail.example.org>",
+        when,
+        sent=True,
+        subject="Re: Berth",
+        extra="In-Reply-To: <m3@mail.example.org>\r\nReferences: <m3@mail.example.org>\r\n",
+    )
+    _deliver(gmail_api, [*_week(), (reply, when)])
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0, err
+    assert "gmail: 1 new lines of 1 seen" in out
+    assert "  3 already in the record from mail (an import without --account)" in out.splitlines()
+    new = list(lb.lines())[-1]["payload"]
+    assert new["message_id"] == "r1@mail.example.org" and new["thread"] == "m3@mail.example.org"
+    assert [len(_raw_asked(gmail_api))] == [1], "only the reply's body was fetched"
+
+
+def test_a_message_without_a_message_id_falls_back_to_each_roads_own_key(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No Message-ID, no shared key: the export keys the message by its own bytes (Takeout's headers
+    among them), the API by the bytes it serves, so each road dedupes itself, as before, and never asks the
+    record by an id it does not have."""
+    messages = [(_stored(None, T0, subject="No id"), T0)]
+    path = _mbox(tmp_path / "all.mbox", messages)
+    for _ in range(2):
+        status, out, err = _run(capsys, "add", "mail", str(path), "--restart")
+        assert status == 0, err
+    assert lb.meta["seq"] == 1
+    _deliver(gmail_api, messages)
+    for _ in range(2):
+        status, out, err = _run(capsys, "sync", "gmail", "--restart")
+        assert status == 0, err
+        assert "already in the record from" not in out
+    lines = list(lb.lines())
+    assert len(lines) == 2 and all("message_id" not in line["payload"] for line in lines)
+    assert lines[0]["payload"]["raw_id"].startswith("sha256:")
+    assert lines[1]["payload"]["raw_id"].startswith(f"{USER}:sha256:")
+
+
+def test_a_message_in_a_second_mailbox_is_a_line_of_its_own(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RFC 0015 rule 1: a message the owner received in two mailboxes is two messages. A Takeout imported
+    with `--account` names its mailbox; the API reads another, so its copy is written."""
+    other = "kari.nordmann@example.org"
+    _run(capsys, "add", "mail", str(_mbox(tmp_path / "kari.mbox", _week())), "--account", other)
+    _deliver(gmail_api, _week())
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0, err
+    assert "gmail: 3 new lines of 3 seen" in out and "already in the record from" not in out
+    assert {line["payload"].get("account") for line in lb.lines()} == {other, USER}
+
+
+def test_add_mail_after_gmail_skips_what_the_api_wrote_and_says_so_in_the_dry_run(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other way round: the API first, then the export without `--account`, which asks the record
+    under the owner's addresses too."""
+    _deliver(gmail_api, _week())
+    assert _run(capsys, "sync", "gmail")[0] == 0 and lb.meta["seq"] == 3
+    before = _record(lb)
+    path = _mbox(tmp_path / "all.mbox", _week())
+    status, out, err = _run(capsys, "add", "mail", str(path), "--dry-run")
+    assert status == 0, err
+    assert "mail: 0 lines would be added, 0 already in the record (dry run, nothing written)" in out
+    assert f"  3 already in the record from mail ({USER})" in out.splitlines()
+    status, out, err = _run(capsys, "add", "mail", str(path))
+    assert status == 0, err
+    assert "added 0 lines from mail" in out
+    assert f"  3 already in the record from mail ({USER})" in out.splitlines()
+    assert _record(lb) == before
+
+
+def test_the_skip_works_in_a_record_that_seals_its_mail(
+    lb: Logbook,
+    gmail_api: Fake,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Mail is tier 2: in a record that seals (RFC 0029) its payload is sealed and the index holds its
+    raw_id blinded. With the identity here, both the exact keys and the lines of the day still answer."""
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    meta = lb.meta
+    meta["recipients"] = [recipient for _, recipient in pairs]
+    lb._save_meta(meta)
+    identity = tmp_path / "keys" / "owner.txt"
+    sealing.write_identity_file(identity, pairs[0][0], "test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    _deliver(gmail_api, _week())
+    assert _run(capsys, "sync", "gmail")[0] == 0
+    sealed = Logbook(lb.root)
+    assert sealed.meta["seq"] == 3 and all(
+        line["payload"]["schema"] == "sealed/v1" for line in sealed.lines()
+    )
+    respelled = _week(
+        lambda mid: mid.upper().replace("<", " ").replace(">", "")
+    )  # local parts upper-cased too
+    status, out, err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "all.mbox", _week())))
+    assert status == 0, err
+    assert (
+        "added 0 lines from mail" in out
+        and f"  3 already in the record from mail ({USER})" in out.splitlines()
+    )
+    status, out, err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "upper.mbox", respelled)))
+    assert status == 0, err
+    assert "added 3 lines from mail" in out, (
+        "an id whose local part differs is another message, sealed or not"
+    )
+    assert Logbook(lb.root).meta["seq"] == 6
+
+
+# -- the pieces: what `run` asks, and whose line holds a message --------------------------------------------
+
+
+class Asking:
+    """A `held` that records what it was asked and answers from a table of normalised ids."""
+
+    def __init__(self, answers: dict[str, mail.Holder]) -> None:
+        self.answers = answers
+        self.asked: list[mail.Asked] = []
+
+    def __call__(self, asked: Sequence[mail.Asked]) -> list[mail.Holder | None]:
+        self.asked.extend(asked)
+        return [self.answers.get(q.message_id) for q in asked]
+
+
+class Reached:
+    def __init__(self) -> None:
+        self.told: list[tuple[int, int]] = []
+
+    def start(self, file: Path) -> int:
+        return 0
+
+    def reached(self, file: Path, ordinal: int, offset: int) -> None:
+        self.told.append((ordinal, offset))
+
+
+def test_run_asks_once_per_window_never_about_a_message_without_an_id_and_keeps_the_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(mail, "LOOKUP_BATCH", 2)
+    messages = [
+        (_stored("<m1@mail.example.org>", T0), T0),
+        (_stored(None, T0 + timedelta(hours=1), subject="No id"), T0 + timedelta(hours=1)),
+        (_stored("<m2@Mail.Example.ORG>", T0 + timedelta(hours=2)), T0 + timedelta(hours=2)),
+        (_stored("<m3@mail.example.org>", T0 + timedelta(hours=3)), T0 + timedelta(hours=3)),
+    ]
+    path = _mbox(tmp_path / "all.mbox", messages)
+    asking = Asking({"m2@mail.example.org": mail.Holder(own=False, account=USER)})
+    cursor, counts = Reached(), {}
+    lines = list(mail.run(path, timezone=TZ, counts=counts, held=asking, cursor=cursor))
+    assert [line["payload"].get("message_id") for line in lines] == [
+        "m1@mail.example.org",
+        None,
+        "m3@mail.example.org",
+    ]
+    assert [q.message_id for q in asking.asked] == [
+        "m1@mail.example.org",
+        "m2@mail.example.org",
+        "m3@mail.example.org",
+    ], "the message without an id is never asked about"
+    assert [q.spelled for q in asking.asked][1] == "m2@Mail.Example.ORG" and asking.asked[1].at is not None
+    assert counts[f"{mail.HELD}mail ({USER})"] == 1 and counts["no_message_id"] == 1
+    ordinals = [ordinal for ordinal, _offset in cursor.told]
+    offsets = [offset for _ordinal, offset in cursor.told]
+    assert ordinals == [1, 2, 3, 3] and offsets == sorted(offsets), (
+        "the cursor is told in order, the end last"
+    )
+    unasked = list(mail.run(path, timezone=TZ, counts={}))
+    assert len(unasked) == 4 and [unasked[0], unasked[1], unasked[3]] == lines, (
+        "the same drafts, less the held"
+    )
+
+
+def _draft(message_id: str | None, account: str | None, when: datetime = T0) -> dict[str, Any]:
+    line, _blobs = mail.parse_message(_stored(message_id, when), None, {}, TZ, None, {USER}, account)
+    assert line is not None
+    return line
+
+
+@pytest.mark.parametrize(
+    ("written", "asking", "expected"),
+    [
+        # (spelling, account) written; (spelling, account) asking; the holder, or None
+        (
+            ("<m1@mail.example.org>", USER),
+            ("<m1@mail.example.org>", USER),
+            mail.Holder(own=True, account=USER),
+        ),
+        (
+            ("<m1@mail.example.org>", None),
+            ("<m1@mail.example.org>", USER),
+            mail.Holder(own=False, account=None),
+        ),
+        (
+            ("<m1@mail.example.org>", USER),
+            ("<m1@mail.example.org>", None),
+            mail.Holder(own=False, account=USER),
+        ),
+        (
+            ("<m1@mail.example.org>", USER),
+            ("<m1@Mail.Example.ORG>", USER),
+            mail.Holder(own=False, account=USER),
+        ),
+        (("<m1@Mail.Example.ORG>", USER), ("<m1@mail.example.org>", USER), None),  # the day's lines find it
+        (("<m1@mail.example.org>", INES), ("<m1@mail.example.org>", USER), None),  # another mailbox
+        (("<M1@mail.example.org>", USER), ("<m1@mail.example.org>", USER), None),  # another message
+    ],
+)
+def test_whose_line_holds_a_message_by_the_keys_alone(
+    lb: Logbook, written: tuple[str, str | None], asking: tuple[str, str | None], expected: mail.Holder | None
+) -> None:
+    lb.append_many([_draft(*written)])
+    spelled, account = asking
+    q = mail.ask(mail.first_id(spelled), account)
+    assert q is not None
+    assert mail_lookup.Lookup(lb)([q]) == [expected]
+
+
+def test_the_lines_of_the_day_find_a_spelling_and_a_mailbox_the_keys_cannot_guess(lb: Logbook) -> None:
+    """Written as `<m1@Mail.Example.ORG>` from Ines's other mailbox; an import without `--account` finds it
+    only once it knows the message's `at`, and a road reading a third mailbox never does."""
+    lb.append_many([_draft("<m1@Mail.Example.ORG>", INES)])
+    lookup = mail_lookup.Lookup(lb)
+    unknown = mail.ask("m1@MAIL.example.org", None)
+    assert unknown is not None
+    assert lookup([unknown]) == [None], "no key names that spelling under that mailbox"
+    assert lookup([replace(unknown, at="2026-03-02T10:15:00Z")]) == [mail.Holder(own=False, account=INES)]
+    third = mail.ask("m1@MAIL.example.org", "kari.nordmann@example.org", at="2026-03-02T10:15:00Z")
+    assert lookup([third]) == [None], "another mailbox's copy is its own line (RFC 0015 rule 1)"
+    far = replace(unknown, at="2026-03-09T10:15:00Z")
+    assert lookup([far]) == [None], "only the days around the message are read"

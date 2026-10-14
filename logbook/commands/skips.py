@@ -4,6 +4,7 @@ with something worth knowing), as `add`, `sync` and `import-backup` print them a
 from __future__ import annotations
 
 LOCATION_SKIPS = ("skipped_no_timestamp", "skipped_bad_coordinates")
+HELD = "already_in_record_from:"  # `mail.HELD`: a mail road's count per holder, `<HELD>mail (<mailbox>)`
 
 
 SKIP_PHRASES = {
@@ -174,7 +175,11 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
 
 
 def _report_skipped(counts: dict[str, int]) -> None:
-    """One line naming what an adapter left out and why, or nothing when it skipped nothing."""
+    """One line naming what an adapter left out and why, or nothing when it skipped nothing; and a line
+    of its own per holder of what a mail road found in the record already (`HELD`)."""
+    for key, n in counts.items():
+        if key.startswith(HELD) and n:
+            print(f"  {n:,} already in the record from {key.removeprefix(HELD)}")
     no_time = counts.get("skipped_no_timestamp", 0)
     bad_coords = counts.get("skipped_bad_coordinates", 0)
     if no_time or bad_coords:
@@ -189,7 +194,7 @@ def _report_skipped(counts: dict[str, int]) -> None:
     noted = [
         f"{n:,} {NOTE_PHRASES.get(key, key.replace('_', ' '))}"
         for key, n in counts.items()
-        if not key.startswith("skipped_") and n
+        if not key.startswith(("skipped_", HELD)) and n
     ]
     if noted:
         print("  also " + ", ".join(noted))

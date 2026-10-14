@@ -144,13 +144,17 @@ def pull(
     existing: Callable[[Iterable[tuple[str, str]]], set[tuple[str, str]]] | None = None,
     walk: Walk | None = None,
     notice: Callable[[str], None] | None = None,
+    held: mail.Held | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One mail/v1 line draft per message the record does not hold, page by page, newest first within
     the list. `since` (RFC3339) lists the messages received from then on for this run. `walk` is
     `sync`'s checkpoint keeper: its `start()` holds the mark, `reached(ordinal, mark)` is told once the
-    last page is read. `existing` is the record's answer to a page's (source, raw_id) keys; `notice`
-    prints one line per page; `progress` is not used, since that line is the progress and names no
-    total. Raises service_account.GoogleError (an OSError) with one plain sentence."""
+    last page is read. `held` is the record's answer by Message-ID, from any mail road
+    (`logbook.contrib.mail_lookup`): asked for a page's heads before any body is fetched, and again for
+    the bodies read, now with their `at`; without it, `existing` answers for this source's own (source,
+    raw_id) keys alone. `notice` prints one line per page; `progress` is not used, since that line is
+    the progress and names no total. Raises service_account.GoogleError (an OSError) with one plain
+    sentence."""
     counts = counts if counts is not None else {}
     say = notice if notice is not None else (lambda _text: None)
     account = config.user.strip().lower()
@@ -170,16 +174,26 @@ def pull(
             if head.internal is not None and (newest is None or head.internal > newest):
                 newest = head.internal
         wanted = _wanted(heads, counts)
-        keys = {(SOURCE, f"{account}:{h.message_id}") for h in wanted if h.message_id is not None}
-        held = existing(keys) if existing is not None and keys else set()
-        for head in wanted:
-            if head.message_id is not None and (SOURCE, f"{account}:{head.message_id}") in held:
-                already += 1
-                _count(counts, ALREADY)
-                continue
-            line = _line(session, head, counts, timezone, owners, account, names)
-            if line is None:
-                continue
+        if held is not None:
+            fetch = _not_held(wanted, account, held, counts)
+        else:
+            keys = {(SOURCE, f"{account}:{h.message_id}") for h in wanted if h.message_id is not None}
+            refused = existing(keys) if existing is not None and keys else set()
+            fetch = [
+                h
+                for h in wanted
+                if h.message_id is None or (SOURCE, f"{account}:{h.message_id}") not in refused
+            ]
+            _count(counts, ALREADY, len(wanted) - len(fetch))
+        already += len(wanted) - len(fetch)
+        read = [
+            line
+            for head in fetch
+            if (line := _line(session, head, counts, timezone, owners, account, names)) is not None
+        ]
+        kept = mail.unheld(read, held, counts)  # read now, so known by their days too
+        already += len(read) - len(kept)
+        for line in kept:
             ordinal += 1
             new += 1
             yield line
@@ -298,6 +312,25 @@ def _head(session: service_account.Session, message_id: str, counts: dict[str, i
         labels=tuple(str(label) for label in data.get("labelIds") or []),
         internal=_internal(data.get("internalDate")),
     )
+
+
+def _not_held(heads: list[Head], account: str, held: mail.Held, counts: dict[str, int]) -> list[Head]:
+    """The heads whose bodies are to be fetched: every one the record does not hold by its Message-ID,
+    from any mail road; one it holds is counted, `ALREADY` under this source's own key, by its holder's
+    mailbox under another (`mail.count_held`). A head without a Message-ID is fetched: the store's own
+    key is its dedupe."""
+    asked = {n: q for n, head in enumerate(heads) if (q := mail.ask(head.message_id, account)) is not None}
+    holders = dict(zip(asked, held(list(asked.values())), strict=True)) if asked else {}
+    fetch: list[Head] = []
+    for n, head in enumerate(heads):
+        holder = holders.get(n)
+        if holder is None:
+            fetch.append(head)
+        elif holder.own:
+            _count(counts, ALREADY)
+        else:
+            mail.count_held(counts, holder)
+    return fetch
 
 
 def _wanted(heads: list[Head], counts: dict[str, int]) -> list[Head]:
