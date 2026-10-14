@@ -13,12 +13,14 @@ What the model sees (`material`) is the Day as the day reader shows it under tha
 (`day.read(..., tiers)`): the nights, the stays and moves with what attached to each and who was
 there, the flights, what is unplaced, the health line when tier 3 is allowed; then the day's
 messages by counterpart with their count and, since a message line is in the reading only when its
-tier is under the ceiling, their text; the notes in full; the commitments on the day; and the
-owner's note on signing it. Never a raw line above the ceiling. Every item carries a reference
-(`L1`, `L2`, ...) that stands for one line id of the day, so the model cites references and the
-record keeps ids. The prompt is `dream-prompt.md` beside this module (docs/dream-prompt.md explains
-it); it asks for one JSON object of segments `{text, evidence}` and says which language to write in:
-the language most of the day's own text is in (`language_of`).
+tier is under the ceiling, their text, an agent's marked (`agent` on its counterpart, `machine` on
+the text it wrote; `logbook.core.machine`), so the model never takes a bot for a person; the notes
+in full; the commitments on the day; and the owner's note on signing it. Never a raw line above the
+ceiling. Every item carries a reference (`L1`, `L2`, ...) that stands for one line id of the day, so
+the model cites references and the record keeps ids. The prompt is `dream-prompt.md` beside this
+module (docs/dream-prompt.md explains it); it asks for one JSON object of segments `{text,
+evidence}` and says which language to write in: the language most of the day's own text is in
+(`language_of`).
 
 The answer is checked before anything is written (`segments_of`): a segment whose every reference
 is one the material gave is supported and carries the ids; one with a reference the day does not
@@ -71,7 +73,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..core import day as day_reader
-from ..core import day_start, drafts, policy, present, reading, resolve, stays
+from ..core import day_start, drafts, machine, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
@@ -82,7 +84,8 @@ from .model_client import Endpoint, Transport
 from .promises import chat_ref
 
 PROMPT_FILE = Path(__file__).with_name("dream-prompt.md")
-PROMPT_NAME = "dream-day/2"  # kept under `extra.prompt`, so a draft says which prompt wrote it
+# kept under `extra.prompt`, so a draft says which prompt wrote it; 2 added the events, 3 rule 5 (agents)
+PROMPT_NAME = "dream-day/3"
 UNSUPPORTED_SHARE = 0.30  # more than this share of segments unsupported: refused, nothing written
 TEXT_CHARS = 400  # a message's text in the material, at most
 NOTE_CHARS = 1500  # a note's text in the material, at most
@@ -298,10 +301,13 @@ def canonical(lb: Logbook, identities: Mapping[Ref, resolve.Identity]) -> dict[s
 
 
 def _texts(lines: Iterable[Line]) -> list[str]:
-    """The day's own words: notes, message texts, event titles, mail subjects, transcript titles."""
+    """The day's own words: notes, message texts, event titles, mail subjects, transcript titles;
+    never an agent's (`logbook.core.machine`), which say nothing of the language the owner lives in."""
     out = []
     for line in lines:
         payload = line.get("payload") or {}
+        if machine.is_machine(payload):
+            continue
         for key in ("text", "title", "subject"):
             value = payload.get(key)
             if isinstance(value, str) and value.strip():
@@ -516,6 +522,8 @@ def _messages(on_day: Sequence[Line], names: Mapping[Ref, str], made: Material) 
             },
         )
         entry["count"] += 1
+        if machine.with_agent(payload):
+            entry["agent"] = True  # the counterpart is an agent the owner runs, never a person
         if entry["counterpart"] is None:
             entry["counterpart"] = _counterpart(payload, names)
         if direct and "person" not in entry:
@@ -531,9 +539,10 @@ def _messages(on_day: Sequence[Line], names: Mapping[Ref, str], made: Material) 
                 if isinstance(text, str) and text.strip()
                 else f"[{payload.get('media_kind') or 'media'}]"
             )
-            entry["texts"].append(
-                {"ref": ref, "from_me": bool(payload.get("from_me")), "text": _clip(body, TEXT_CHARS)}
-            )
+            said = {"ref": ref, "from_me": bool(payload.get("from_me")), "text": _clip(body, TEXT_CHARS)}
+            if machine.is_machine(payload):
+                said["machine"] = True  # an agent's words: machine text, never a person's
+            entry["texts"].append(said)
     out = []
     for entry in by.values():
         chat = entry.pop("chat")

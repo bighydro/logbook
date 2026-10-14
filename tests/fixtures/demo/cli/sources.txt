@@ -8,6 +8,7 @@ apple-podcasts       file+live  enabled
 apple-reminders      file       enabled
 apple-wallet         file       enabled
 beeper               file+live  enabled
+claude-code          file       enabled
 copilot              file       enabled
 dawarich             file+live  enabled
 drive                live       enabled
@@ -53,6 +54,7 @@ screentime           file       enabled
 shazam               file       enabled
 splitwise            file       enabled
 spotify              file       enabled
+telegram             file+live  enabled
 transcript           file       enabled
 twitter              file       enabled
 voice-memos          file       enabled
@@ -61,4 +63,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-63 adapters, 2 disabled; the list is <root>/policy/import.json
+65 adapters, 2 disabled; the list is <root>/policy/import.json

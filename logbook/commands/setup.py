@@ -88,6 +88,9 @@ KEY_SOURCES = {
     " and can send as you, so it is a password; the app must be running, Remote Access off",
     "notion": "Notion → Settings → Connections → Develop or manage integrations → New integration (internal,"
     " Read content only), then share each top-level page with it (••• → Connections)",
+    "telegram": "@BotFather → /mybots → each bot of yours → API Token, comma-separated (each reads and"
+    " sends as its bot, so it is a password); your numeric user id is personal_information.user_id in"
+    " Telegram Desktop's export",
     "ais": "a free key from aisstream.io, for the vessels registered in assets.json",
     "adsb": "an account at opensky-network.org (optional: anonymous access works, with a lower rate)",
 }

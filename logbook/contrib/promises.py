@@ -11,6 +11,10 @@ wrote the line decides which it is: the owner's addresses and names come from `l
 `policy/owner.json` and the resolution lines (`present.owner_of`), a message's `from_me`, a
 transcript's speakers (RFC 0006). A request cue in text the owner wrote is the owner asking and is
 not proposed; a commitment cue in text someone else wrote is theirs, kept apart from both sections.
+An agent's words are nobody's (`logbook.core.machine`): a message a bot wrote, a turn of a
+transcript's participant marked machine (the assistant of a Claude Code session) and a forwarded
+message are never read for a promise or a request, and counted under `skipped`; in a conversation
+with an agent only the owner's own turns are read.
 No model runs and no socket opens. Each proposal carries the day, the line it was read in (so `day
 sign --confirm` can take it), the counterpart, the sentence as written and a due hint when a date
 phrase is in it ("by Friday", "bis Montag", "next week"), resolved against the day it was said.
@@ -36,7 +40,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import day_start, policy, present, signing
+from ..core import day_start, machine, policy, present, signing
 from ..core.chain import Line
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
@@ -63,6 +67,8 @@ PROMISE, ASKED, THEIRS = (
 )  # a proposal's role: the owner's, to the owner, another's
 DEADLINE_WORDS = 8  # a sentence this short that is only a date phrase ("by Friday.") is a terse promise
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
+AGENT_MESSAGES = "messages_by_an_agent"  # skipped: a message an agent wrote (`logbook.core.machine`)
+FORWARDED = "forwarded_messages"  # skipped: words the owner forwarded, someone else's
 DIARIZER = re.compile(
     r"^(?:speaker|sprecher|spk)\s*[A-Z0-9]{1,2}$", re.IGNORECASE
 )  # `Speaker A`, `Speaker 2`
@@ -715,17 +721,27 @@ def extract(
         kind = str(line.get("kind"))
         participants = payload.get("participants")
         participants = participants if isinstance(participants, list) else []
+        humans = [p for p in participants if not machine.is_machine_participant(p)]  # an agent is nobody
         known = _known(participants, identities, owner)
         counterpart: str | None = None
         with_names: tuple[str, ...] = ()
+        if kind == MESSAGE and machine.is_machine(payload):
+            skipped[AGENT_MESSAGES] = skipped.get(AGENT_MESSAGES, 0) + 1  # an agent's words, never a promise
+            continue
+        if kind == MESSAGE and _forwarded(payload):
+            skipped[FORWARDED] = skipped.get(FORWARDED, 0) + 1  # someone else's words the owner passed on
+            continue
         if kind == TRANSCRIPT:
             turns = turns_of(lb, line)
             if turns is None:
                 skipped["transcripts_without_text"] = skipped.get("transcripts_without_text", 0) + 1
                 continue
-            turns = relabel(turns, known)
+            # an agent's turn is nobody's words, nor is a line of the owner's that its text gives the agent
+            turns = machine.human_turns(
+                relabel(machine.human_turns(turns, participants), known), participants
+            )
             spoken_by = {
-                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
+                turn.speaker: speaker_of(turn.speaker, humans, identities, owner, owner_label)
                 for turn in turns
             }
         elif kind in (MAIL, MESSAGE):
@@ -744,7 +760,7 @@ def extract(
             text = payload.get("text")
             turns = relabel([Turn(None, text)] if isinstance(text, str) else [], known)
             spoken_by = {
-                turn.speaker: speaker_of(turn.speaker, participants, identities, owner, owner_label)
+                turn.speaker: speaker_of(turn.speaker, humans, identities, owner, owner_label)
                 for turn in turns
                 if turn.speaker is not None
             }
@@ -753,7 +769,7 @@ def extract(
             )
         title = payload.get("title") if kind in (TRANSCRIPT, NOTE) else payload.get("subject")
         day = days.day_of(str(line["at"]))
-        names = _names(participants, spoken_by, identities, owner, owner_label)
+        names = _names(humans, spoken_by, identities, owner, owner_label)
         names = tuple(sorted({*names, *with_names}))
         said = [
             Said(spoken_by[turn.speaker].display(), sentence)
@@ -907,6 +923,12 @@ def _mail_parties(
 
 _WHATSAPP_DIRECT = re.compile(r"^(\d{6,15})@s\.whatsapp\.net$")
 _PHONE = re.compile(r"^\+\d{6,15}$")
+
+
+def _forwarded(payload: Mapping[str, Any]) -> bool:
+    """Whether a message is a forward (`extra.forwarded`, as the `telegram` adapters mark one)."""
+    extra = payload.get("extra")
+    return isinstance(extra, Mapping) and extra.get("forwarded") is True
 
 
 def chat_ref(chat_id: str) -> Ref | None:
@@ -1260,6 +1282,13 @@ def rows(
         if missing:
             where = "whose text is not in the attachment store" if kind == TRANSCRIPT else "without text"
             out.append(f"  {_plural(missing, noun)} {where} skipped")
+    by_agent, forwarded = report.skipped.get(AGENT_MESSAGES, 0), report.skipped.get(FORWARDED, 0)
+    if by_agent:
+        out.append(
+            f"  {_plural(by_agent, 'message')} an agent wrote skipped: an agent's words are nobody's promise"
+        )
+    if forwarded:
+        out.append(f"  {_plural(forwarded, 'forwarded message')} skipped: someone else's words")
     if judge is not None and judge.get("unparsed"):
         out.append(
             f"  {_plural(int(judge['unparsed']), 'candidate')} could not be judged (no verdict in the"

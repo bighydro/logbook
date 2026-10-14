@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from ..core import day_start, people, policy, present, reading, resolve, stays
+from ..core import day_start, machine, people, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
@@ -83,7 +83,7 @@ KINDS = ("mail", "message", "transcript", "event")  # the lines a counterpart is
 REF_KINDS = ("email", "phone", "handle", "provider_id")  # an identifier a resolution line can carry
 TABLE = "observed_people"
 TABLE_META = "observed_meta"
-TABLE_VERSION = "1"
+TABLE_VERSION = "2"  # 2: an agent is never observed (`logbook.core.machine`)
 COLUMNS = (
     "key_kind",
     "key_value",
@@ -114,7 +114,7 @@ E164 = people_merge.PHONE
 PLAIN_PHONE = re.compile(r"^\+?\d{6,15}$")
 EN_DASH = people_merge.EN_DASH
 NOT_EQUAL = "\u2260"
-ME = frozenset({"me", "you", "ich", "jeg", "du"})  # a transcript's word for the owner, never a name
+ME = frozenset({"me", "you", "ich", "jeg", "du", "owner"})  # a transcript's word for the owner, never a name
 
 
 class ReviewError(ValueError):
@@ -136,7 +136,9 @@ class Seen:
 def counterparts(kind: str, payload: Mapping[str, Any]) -> list[Seen]:
     """The people one line names, source-native: a mail's addresses, a message's sender (or, for
     the owner's own line in a direct chat, the person the chat's id names), a transcript's
-    participants, a calendar entry's attendees who did not decline and its organizer."""
+    participants, a calendar entry's attendees who did not decline and its organizer. An agent
+    names nobody (`logbook.core.machine`): no line of a conversation with one, and no transcript
+    participant marked machine."""
     if kind == "mail":
         found = []
         for header in ("from", "to", "cc", "bcc"):
@@ -149,6 +151,8 @@ def counterparts(kind: str, payload: Mapping[str, Any]) -> list[Seen]:
                     found.append(Seen((("email", email.strip().casefold()),), _text(address.get("name"))))
         return found
     if kind == "message":
+        if machine.is_machine(payload) or machine.with_agent(payload):
+            return []  # a conversation with an agent: the agent is never a person, the owner never observed
         chat = payload.get("chat")
         if payload.get("from_me") is True:
             if not isinstance(chat, dict) or chat.get("type") != "direct" or not chat.get("id"):
@@ -164,7 +168,7 @@ def counterparts(kind: str, payload: Mapping[str, Any]) -> list[Seen]:
         found = []
         participants = payload.get("participants")
         for participant in participants if isinstance(participants, list) else []:
-            if not isinstance(participant, dict):
+            if not isinstance(participant, dict) or machine.is_machine_participant(participant):
                 continue
             refs = tuple(
                 (ref_kind, str(participant[key]).strip())
@@ -1171,6 +1175,8 @@ def messages_by_direction(
             if str(line.get("id")) in retracted or str(line.get("id")) in superseded:
                 continue
             payload = line.get("payload") or {}
+            if machine.is_machine(payload) or machine.with_agent(payload):
+                continue  # a conversation with an agent is with nobody
             chat = payload.get("chat")
             chat_id = str(chat.get("id")) if isinstance(chat, dict) and chat.get("id") else None
             direct = isinstance(chat, dict) and chat.get("type") == "direct"

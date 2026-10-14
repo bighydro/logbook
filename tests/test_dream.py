@@ -277,7 +277,7 @@ def test_a_valid_answer_writes_one_draft_with_what_it_read(
     ]
     assert p["read_count"] == len(on_day)
     assert p["language"] == "en" and "supersedes" not in p
-    assert p["extra"]["prompt"] == dream.PROMPT_NAME and p["extra"]["parts"] == [
+    assert p["extra"]["prompt"] == "dream-day/3" and p["extra"]["parts"] == [
         "day",
         "day",
         "questions",
@@ -292,6 +292,18 @@ def test_a_valid_answer_writes_one_draft_with_what_it_read(
     assert "~ question  Was the evening what you wanted?  unsupported" in out
     assert seen["headers"].get("Authorization") is None  # no key, no header
     assert seen["url"] == "http://127.0.0.1:8080/v1/chat/completions"
+
+
+def test_dream_day_3_is_the_prompt_with_the_proposed_events_and_rule_5() -> None:
+    """dream-day/2 added the proposed events (#278) and rule 5, agents are not people, came after it:
+    each changes what a draft holds, so the prompt with both is dream-day/3, and the pages that explain
+    it name the same one."""
+    prompt = dream.PROMPT_FILE.read_text(encoding="utf-8")
+    assert dream.PROMPT_NAME == "dream-day/3"
+    assert "- `events`:" in prompt and "\n5. Agents are not people." in prompt
+    for page in ("dream-prompt.md", "dream.md"):
+        text = (Path(__file__).resolve().parents[1] / "docs" / page).read_text(encoding="utf-8")
+        assert "`dream-day/3`" in text, page
 
 
 def test_the_prompt_says_the_language_of_the_day(lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network):

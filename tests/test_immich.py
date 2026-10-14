@@ -87,6 +87,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "gmail",
         "apple-podcasts",
         "beeper",
+        "telegram",
         "notion",
         "weather",
     ]
@@ -140,6 +141,8 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "copilot",
         "splitwise",
         "beeper",
+        "telegram",
+        "claude-code",
         "line",
         "twitter",
         "apple-books",

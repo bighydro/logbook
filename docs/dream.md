@@ -140,10 +140,10 @@ unsupported. Before anything is written:
   nothing is written. A model that mostly makes things up writes nothing into the record.
 
 The draft line holds the segments and the ids, never the prompt, the material or the day's text the
-model was shown. Its `extra` says which prompt wrote it (`dream-day/2`; `dream-day/1` drafts asked for
-no events), which part of the dream each
-segment belongs to (`day`, `threads`, `questions`, `people`, `promises`) and the digest of the ids it
-read, which `--catch-up` compares.
+model was shown. Its `extra` says which prompt wrote it (`dream-day/3`; `dream-day/1` drafts asked for
+no events, and drafts before `dream-day/3` were not told that agents are not people), which part of the
+dream each segment belongs to (`day`, `threads`, `questions`, `people`, `promises`) and the digest of
+the ids it read, which `--catch-up` compares.
 
 On the Day, each segment prints with its evidence after it, the ids shortened; an unsupported one is
 set apart with a leading `~` and the word `unsupported`, never run into the prose around it and never
