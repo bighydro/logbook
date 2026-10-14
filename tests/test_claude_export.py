@@ -161,7 +161,7 @@ def test_a_name_is_never_a_way_in_for_a_document(tmp_path: Path):
     assert all(len(tool) <= 255 for tool in extra["tools"]) and len(line["payload"]["title"]) <= 255
 
 
-def test_tool_calls_are_a_count_by_name_and_their_output_is_never_kept(folder: Path):
+def test_tool_calls_are_a_count_by_name(folder: Path):
     line, _data = _passage(folder)
     extra = line["payload"]["extra"]
     assert extra["tool_calls"] == 2 and extra["tools"] == {"artifacts": 1, "web_search": 1}
@@ -480,6 +480,7 @@ def test_an_export_older_than_one_already_imported_writes_nothing(
         f"claude:{cc.PASSAGE}:v2",
     ]
     seq = int(lb.meta["seq"])
+    blobs = sorted(p.name for p in (lb.root / "attachments").iterdir())
     code, out = _cli(capsys, "add", "claude-export", str(older), str(newer))
     assert code == 0 and "grown" not in out and int(Logbook.find().meta["seq"]) == seq
     shorter = cc.conversations()
@@ -487,3 +488,61 @@ def test_an_export_older_than_one_already_imported_writes_nothing(
     code, out = _cli(capsys, "add", "claude-export", str(cc.export(tmp_path / "oldest", shorter)))
     assert code == 0 and "1 older than the line in the record" in out
     assert int(Logbook.find().meta["seq"]) == seq
+    assert sorted(p.name for p in (lb.root / "attachments").iterdir()) == blobs  # its text never stored
+
+
+def _branches(leaf: str, updated: float) -> list[Any]:
+    """The present conversation with two answers to the owner's question: `leaf` names the one it
+    stands on, the later answer going on with a second question."""
+    root = "00000000-0000-4000-8000-000000000000"
+    first, answer = cc.present_messages()
+    again = cc.message(3, 86460, "assistant", [cc.text("A waterproof logbook.")], conversation=cc.PRESENT)
+    more = cc.message(4, 86500, "human", [cc.text("Where can I buy one?")], conversation=cc.PRESENT)
+    first["parent_message_uuid"] = root
+    answer["parent_message_uuid"] = again["parent_message_uuid"] = first["uuid"]
+    more["parent_message_uuid"] = again["uuid"]
+    ids = {"answer": answer["uuid"], "more": more["uuid"]}
+    chat = cc.conversation(cc.PRESENT, "", [first, answer, again, more], 86400, updated)
+    return [{**chat, "current_leaf_message_uuid": ids[leaf]}]
+
+
+def test_a_conversation_switched_back_to_an_earlier_branch_is_a_new_version(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    assert (
+        _cli(capsys, "add", "claude-export", str(cc.export(tmp_path / "a", _branches("more", 86500))))[0] == 0
+    )
+    code, out = _cli(
+        capsys, "add", "claude-export", str(cc.export(tmp_path / "b", _branches("answer", 90000)))
+    )
+    assert code == 0 and "1 grown since the last import" in out  # it ends earlier, yet it is later
+    old, new = _transcripts(lb, cc.PRESENT)
+    assert new["payload"]["supersedes"] == old["id"] and new["end"] < old["end"]
+    assert [t.text for t in turns_of(lb, new) or []] == [cc.PRESENT_OWNER, cc.PRESENT_MACHINE]
+
+
+def test_a_broken_branch_reads_every_message_in_the_exports_order(tmp_path: Path):
+    chats = _branches("more", 86500)
+    chats[0]["chat_messages"][2]["parent_message_uuid"] = "0193c1a0-0000-7000-8000-00000000dead"  # not there
+    counts: dict[str, int] = {}
+    ((_line, data),) = _run(cc.export(tmp_path / "x", chats), counts)
+    assert len(json.loads(data)["turns"]) == 3 and "skipped_branch" not in counts
+
+
+def test_a_project_named_by_an_object_or_an_unreadable_projects_file(tmp_path: Path):
+    chats = cc.conversations()
+    del chats[0]["project_uuid"]
+    chats[0]["project"] = {"uuid": cc.PROJECT, "name": "not read from here"}
+    folder = cc.export(tmp_path / "p", chats)
+    assert _by_conversation(folder)[cc.PASSAGE][0]["payload"]["extra"]["project"] == cc.PROJECT_NAME
+    (folder / "projects.json").write_text("[{", encoding="utf-8")
+    assert "project" not in _by_conversation(folder)[cc.PASSAGE][0]["payload"]["extra"]
+
+
+def test_tier_sets_another_for_the_run_and_an_unchanged_conversation_is_not_written_again(
+    lb: Logbook, folder: Path, capsys: pytest.CaptureFixture[str]
+):
+    assert _cli(capsys, "add", "claude-export", str(folder), "--tier", "3")[0] == 0
+    assert {t["tier"] for t in _transcripts(lb)} == {3}
+    code, out = _cli(capsys, "add", "claude-export", str(folder))
+    assert code == 0 and "added 0 lines from claude" in out

@@ -48,12 +48,12 @@ ref: {provider_id, claude}, name: Claude}`), and the transcript counts every tra
 **A conversation that grew.** Run with the record's `existing` lines (`claude_code.versioned`), a
 conversation whose text differs from the line standing for it is a new line, `raw_id` suffixed
 `:v2` (`:v3` …), that supersedes the line before (`grown`); an unchanged one is the same line and
-nothing is written (`conversations_unchanged`), nor for one older than the record's (a text a
-version already holds, or a conversation that ends before the latest version: an earlier export
-added after a later one, `conversations_older`). `conversations` counts every conversation of the
-export and `conversations_new` those the record has no line for, so a dry run says them all; one
-that ended before `since` is counted (`skipped_before_since`). Pure: reads the export, writes
-nothing but through `store`, no network.
+nothing is written (`conversations_unchanged`, a text any of its versions holds included), nor for
+one earlier than the record's latest version (by `updated_at`, else by where it ends: an earlier
+export added after a later one, `conversations_older`), whose text is not stored either.
+`conversations` counts every conversation of the export and `conversations_new` those the record
+has no line for, so a dry run says them all; one that ended before `since` is counted
+(`skipped_before_since`). Pure: reads the export, writes nothing but through `store`, no network.
 """
 
 from __future__ import annotations
@@ -97,6 +97,7 @@ COUNTERPART = {"kind": "agent", "ref": {"kind": "provider_id", "value": NAME}, "
 CONVERSATIONS = "conversations.json"
 PROJECTS = "projects.json"
 SENDERS = {"human": OWNER, "assistant": ASSISTANT}
+ROOT = "00000000-0000-4000-8000-000000000000"  # the parent of a conversation's first message
 SNIFF_BYTES = 65536
 SNIFF_KEY = b'"chat_messages"'
 # what `text` holds in place of a block the export cannot render: never anyone's words
@@ -203,7 +204,7 @@ def run(
         line, how = versioned(line, existing)
         if existing is not None:
             _count(counts, NOTED[how])
-        if store is not None:
+        if store is not None and how != OLDER:  # an older copy is never written: nor is its text
             store(text)
         yield line
 
@@ -344,7 +345,8 @@ def _branch(
     """The messages of the branch the conversation stands on, oldest first: walked from its
     `current_leaf_message_uuid` up the `parent_message_uuid` links when the export gives the leaf
     and every message its parent, a message left on another branch (a prompt edited, an answer
-    asked for again) counted (`skipped_branch`); else every message, in the export's order."""
+    asked for again) counted (`skipped_branch`); else, and when the walk meets a parent the export
+    does not hold before the root, every message, in the export's order."""
     leaf = _text(conversation.get("current_leaf_message_uuid"))
     by_uuid = {uuid: m for m in messages if (uuid := _text(m.get("uuid"))) is not None}
     if leaf not in by_uuid or not all(isinstance(m.get("parent_message_uuid"), str) for m in messages):
@@ -352,10 +354,12 @@ def _branch(
     chain: list[Mapping[str, Any]] = []
     seen: set[str] = set()
     at: str | None = leaf
-    while at is not None and at in by_uuid and at not in seen:  # the root's parent is no message; a loop ends
+    while at is not None and at in by_uuid and at not in seen:
         seen.add(at)
         chain.append(by_uuid[at])
         at = _text(by_uuid[at].get("parent_message_uuid"))
+    if at is not None and at != ROOT:  # a parent the export does not hold, or a loop: no branch to trust
+        return messages
     if len(messages) > len(chain):
         counts["skipped_branch"] = counts.get("skipped_branch", 0) + len(messages) - len(chain)
     return chain[::-1]

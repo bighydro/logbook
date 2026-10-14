@@ -176,8 +176,10 @@ def run(
         line, data = found
         if since and str(line["end"] or line["at"]) < since:
             continue
-        line = _versioned(line, existing, counts)
-        if store is not None:
+        line, how = versioned(line, existing)
+        if how == GROWN:
+            _count(counts, "grown")
+        if store is not None and how != OLDER:  # an older copy is never written: nor is its text
             store(data)
         yield line
 
@@ -380,13 +382,6 @@ def first_words(turns: list[Turn]) -> str | None:
     return line if len(line) <= TITLE_CHARS else line[: TITLE_CHARS - 1].rstrip() + "…"
 
 
-def _versioned(line: dict[str, Any], existing: Existing | None, counts: dict[str, int]) -> dict[str, Any]:
-    line, how = versioned(line, existing)
-    if how == GROWN:
-        _count(counts, "grown")
-    return line
-
-
 # what `versioned` found the record to hold
 NEW, GROWN, UNCHANGED, OLDER = "new", "grown", "unchanged", "older"
 
@@ -395,7 +390,7 @@ def versioned(line: dict[str, Any], existing: Existing | None) -> tuple[dict[str
     """The line as it goes to the record, and what the record held for it: as it is when the record
     has no line for its conversation (NEW, or when there is no `existing` to ask); as it is too, and
     so deduped by its raw_id and never written, when a version holds the same text (UNCHANGED) or
-    the latest version ends after it (OLDER: an earlier copy, an export older than one already
+    the latest version is later (OLDER, `_before`: an earlier copy, an export older than one already
     imported); else a correction `:v<n>` that supersedes the latest version (GROWN). Keyed by the
     line's own source and `raw_id`; one batched lookup per version."""
     if existing is None:
@@ -420,13 +415,25 @@ def versioned(line: dict[str, Any], existing: Existing | None) -> tuple[dict[str
         return line, UNCHANGED  # sealed and no identity here to open it: nothing to compare or re-write
     if line["payload"]["content"]["sha256"] in digests:
         return line, UNCHANGED  # the same text as a version the record holds: deduped by its raw_id
-    held_end = latest.get("end") or latest.get("at")
-    if isinstance(held_end, str) and str(line["end"] or line["at"]) < held_end:
-        return line, OLDER  # the record's line goes on after this copy: never written back over it
+    if _before(line, latest):
+        return line, OLDER  # the record's line is later than this copy: never written back over it
     payload = dict(line["payload"])
     payload["raw_id"] = f"{raw_id}:v{version}"
     payload["supersedes"] = str(latest["id"])
     return {**line, "payload": payload}, GROWN
+
+
+def _before(line: Mapping[str, Any], latest: Mapping[str, Any]) -> bool:
+    """Whether `line` is an earlier copy than the record's `latest`: by `extra.updated_at` when both
+    carry different ones (a conversation in the apps moves back to an earlier branch and is later
+    all the same), else by where each ends."""
+    mine = (line.get("payload") or {}).get("extra") or {}
+    held = (latest.get("payload") or {}).get("extra") or {}
+    mine_at, held_at = mine.get("updated_at"), held.get("updated_at")
+    if isinstance(mine_at, str) and isinstance(held_at, str) and mine_at != held_at:
+        return mine_at < held_at
+    held_end = latest.get("end") or latest.get("at")
+    return isinstance(held_end, str) and str(line.get("end") or line.get("at")) < held_end
 
 
 def stamp(value: object) -> str | None:

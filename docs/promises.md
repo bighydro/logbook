@@ -103,7 +103,7 @@ read, and are counted under `skipped` (`messages_by_an_agent`, `forwarded_messag
 have it ready by Friday" is not a promise, and its "can you send me the tide table?" is not a
 request of you; your own reply to it is yours, as any message you sent. A line of an agent's turn
 inside your own turn (`assistant: …`, or under the agent's own name, `Claude: …`, pasted back) is
-the agent's and is dropped too.
+the agent's and is dropped too, with the lines after it in that turn up to the next speaker's label.
 
 A mail body is read up to the first reply header (`On … wrote:`, `Am … schrieb …:`, `-----Original
 Message-----`, `From:`) or signature delimiter (`-- `), and lines that begin with `>` are left out,

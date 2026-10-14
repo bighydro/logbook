@@ -287,3 +287,23 @@ def test_a_text_an_earlier_version_holds_or_an_older_end_is_never_written_again(
     newer, how = claude_code.versioned({**other, "end": cs.at(600)}, existing)
     assert how == claude_code.GROWN and newer["payload"]["raw_id"] == f"claude-code:{cs.SESSION}:v3"
     assert newer["payload"]["supersedes"] == "line-2"
+
+
+def test_an_older_copy_of_a_session_writes_nothing_and_stores_nothing(
+    lb: Logbook, folder: Path, capsys: pytest.CaptureFixture[str]
+):
+    session = folder / cs.PROJECT / f"{cs.SESSION}.jsonl"
+    older = session.read_bytes()
+    cs.write(
+        session, [*cs.entries(), cs.user(200, 30, "One more thing: I'll print the plan for the cockpit.")]
+    )
+    assert _cli(capsys, "add", "claude-sessions", str(folder))[0] == 0
+    seq = int(lb.meta["seq"])
+    blobs = sorted(p.name for p in (lb.root / "attachments").iterdir())
+    session.write_bytes(older.replace(cs.OWNER_SECOND.encode("utf-8"), b"Thanks. I will send it later."))
+    code, out = _cli(
+        capsys, "add", "claude-sessions", str(folder)
+    )  # a backup's copy, older than the record's
+    assert code == 0 and "added 0 lines from claude-code" in out and "grown" not in out
+    assert int(Logbook.find().meta["seq"]) == seq
+    assert sorted(p.name for p in (lb.root / "attachments").iterdir()) == blobs

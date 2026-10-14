@@ -201,7 +201,8 @@ description, its instructions or its documents), and `users.json` is never opene
 When the export links each message to the one before it (`parent_message_uuid`) and names where the
 conversation stands (`current_leaf_message_uuid`), only that branch is read: a prompt you edited or
 an answer you asked for again leaves the other branch behind, counted (`messages on a branch the
-conversation left`). Without the links, every message, in the export's order.
+conversation left`). Without the links, or when they lead to a message the export does not hold,
+every message, in the export's order.
 
 | Field | From |
 |---|---|
@@ -221,12 +222,14 @@ memory while it is read.
 
 **A conversation that grew** (or changed: a prompt edited, an answer asked for again) is a new line,
 `raw_id` suffixed `:v2` (`:v3` …), that `supersedes` the line before, exactly as a session that
-grew; a conversation unchanged since the last import writes nothing. Neither does an export older
-than one already imported, so a folder of exports can be added again and again: a text one of the
-conversation's lines already holds, or a conversation that ends before the line standing for it,
-is counted (`older than the line in the record`) and never written back over the newer one. Every
-run, and `--dry-run` before it, says how many conversations the export holds and how many are new
-to the record, grown, unchanged and older. A conversation you deleted in the apps is not in the next
+grew; a conversation unchanged since the last import writes nothing, and nor does one whose text
+any of its lines already holds. Neither does an export older than one already imported, so a folder
+of exports can be added again and again: a conversation earlier than the line standing for it (by
+its `updated_at`, else by where it ends) is counted (`older than the line in the record`) and never
+written back over the newer one, its text never stored. A conversation you moved back to an earlier
+branch ends earlier but is later, and is a new version. Every run, and `--dry-run` before it, says
+how many conversations the export holds and how many are new to the record, grown, unchanged and
+older. A conversation you deleted in the apps is not in the next
 export, and its line stays in the record: retract it if you want it gone. A conversation you only
 renamed is unchanged (the text is what counts), so its line keeps the old title.
 
@@ -242,7 +245,7 @@ renamed is unchanged (the text is what counts), so its line keeps the old title.
   forwarded are counted under `skipped` (`messages_by_an_agent`, `forwarded_messages`); an agent's
   turn is dropped before your turns are read, and a line inside your own turn that its text gives
   the agent, by its label or by its own name (`assistant: …`, `Claude: …`, `Claude Code: …`, pasted
-  back), is dropped too.
+  back), is dropped too, with the lines after it in that turn up to the next speaker's label.
 - **The dream** gives the model your messages with an agent marked (`agent` on the counterpart,
   `machine` on what it wrote) and tells it that agents are not people (`dream-day/3`, rule 5); an
   agent's words do not decide the language of your day.
