@@ -566,7 +566,10 @@ def drafts_check(lb: Logbook, state: str) -> Check | None:
     sealed = sum(
         1
         for line in lines
-        if line.get("kind") == drafts.KIND and is_sealed(line) and not allowed.allows(line)
+        if line.get("kind") == drafts.KIND
+        and line.get("source") != videos.DRAFT_SOURCE  # a scene's draft: no crossing entry governs it
+        and is_sealed(line)
+        and not allowed.allows(line)
     )
     if not above and not sealed:
         return None

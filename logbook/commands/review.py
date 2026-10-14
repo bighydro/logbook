@@ -454,7 +454,7 @@ def _review_videos(a: argparse.Namespace) -> None:
             _say_written(written, a.json)
             return
     if not a.json and sys.stdin.isatty() and sys.stdout.isatty() and queue.rows:
-        _sitting(lb, a.top, known, owned, today)
+        _sitting(lb, _mode(a), a.top, known, owned, today)
         return
     rows = queue.rows[: a.top] if a.top is not None else queue.rows
     if a.json:
@@ -479,6 +479,7 @@ def _review_videos(a: argparse.Namespace) -> None:
 
 def _sitting(
     lb: Logbook,
+    mode: str,
     top: int | None,
     known: list[places.Place],
     owned: list[assets.Asset],
@@ -493,7 +494,7 @@ def _sitting(
     shown = 0
     skipped: set[str] = set()
     while True:
-        current = video_review.read(lb)
+        current = video_review.read(lb, mode)
         pending = [(n, row) for n, row in enumerate(current.rows, 1) if row.id not in skipped]
         if not pending or (top is not None and shown >= top):
             print("done")

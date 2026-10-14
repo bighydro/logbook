@@ -47,7 +47,7 @@ from typing import Any
 
 from ..core import assets as asset_registry
 from ..core import places, sealing
-from ..core.chain import Line
+from ..core.chain import Line, canonical_json, is_sealed
 from ..core.store import HEAD_MOVED, HeadMoved, Logbook, now_utc, retractions
 from . import videos
 
@@ -83,6 +83,8 @@ class Row:
     proposal: Mapping[str, Any] | None
     transcript: str | None
     standing: Line | None = None  # with `--answered`: the attribution an answer would supersede
+    overlaps: tuple[Line, ...] = ()  # standing attributions of another scene of the file it overlaps
+    refused: bool = False  # with `--asked`: its proposal was refused, so none is offered
 
     @property
     def id(self) -> str:
@@ -119,17 +121,31 @@ class Queue:
     tier: int
     answered: dict[str, Line] = field(default_factory=dict)  # scene ref -> its standing attribution
     asks: dict[str, Line] = field(default_factory=dict)  # scene ref -> its open ask
+    refused: dict[str, list[Any]] = field(default_factory=dict)  # scene ref -> the proposals refused
 
 
 def _opened(lb: Logbook, lines: Iterable[Line]) -> list[Line]:
-    """The lines as a reader shows them: a sealed one opened when this machine has the identity, left
-    out when it cannot be."""
+    """The lines as a reader shows them, a sealed one opened with this machine's identity. A sealed
+    line this machine cannot open is never silently left out of the review: IdentityRequired names
+    the identity it needs, and the command says so in one sentence."""
     found = []
+    shut = 0
     for line in lines:
         try:
-            found.append(lb.opened(line))
+            opened = lb.opened(line)
         except (sealing.SealError, sealing.MissingExtra, OSError, ValueError):
+            shut += 1
             continue
+        if is_sealed(opened):
+            shut += 1
+            continue
+        found.append(opened)
+    if shut:
+        raise sealing.IdentityRequired(
+            f"{shut} line{'s' if shut != 1 else ''} of the videos {'are' if shut != 1 else 'is'} sealed and"
+            f" {'do' if shut != 1 else 'does'} not open on this machine (RFC 0029); none at"
+            f" {lb.identity_file}: pass --identity-file or set LOGBOOK_IDENTITY_FILE"
+        )
     return found
 
 
@@ -152,7 +168,9 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
     with lb.index() as idx:
         head = str(lb.meta["head"])
         gone = set(retractions(idx.retractions()))
-        listed = videos.standing_videos(idx.by_kind(videos.KIND), gone, idx.superseded(videos.KIND))
+        listed = videos.standing_videos(
+            _opened(lb, idx.by_kind(videos.KIND)), gone, idx.superseded(videos.KIND)
+        )
         scene_drafts = [d for d in _opened(lb, idx.by_kind(videos.DRAFT_KIND)) if videos.is_scene_draft(d)]
         attributions = _opened(lb, idx.by_kind(videos.ATTRIBUTION_KIND))
         noes = _opened(lb, idx.by_kind(videos.NO_KIND))
@@ -200,6 +218,9 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
                 continue
         elif ref not in (asks if mode == "asked" else answered) or line is not newest.get(ref):
             continue
+        no = mode == "asked" and proposal is not None and proposal in refused.get(ref, [])
+        if no:
+            proposal = None  # refused while asked: the family's answer is awaited, the proposal is not
         tier = max(tier, int(line.get("tier") or 1))
         info = _dict(extra.get("scene"))
         evidence = [
@@ -218,11 +239,30 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
                 proposal,
                 transcript,
                 answered.get(ref) if mode == "answered" else None,
+                _overlapping(answered, ref, scene),
+                no,
             )
         )
     rows.sort(key=Row.rank)
     rejected = sum(1 for ref, found in refused.items() if found)
-    return Queue(rows, head, len(answered), rejected, len(asks), tier, answered, asks)
+    return Queue(rows, head, len(answered), rejected, len(asks), tier, answered, asks, refused)
+
+
+def _overlapping(answered: Mapping[str, Line], ref: str, scene: tuple[str, float, float]) -> tuple[Line, ...]:
+    """The standing attributions of other scenes of the same file that overlap this one: a file
+    inferred again under other settings cuts its scenes elsewhere, and the owner's answer stands."""
+    found = []
+    for other, line in answered.items():
+        bound = videos.parse_scene(other)
+        if (
+            other != ref
+            and bound is not None
+            and bound[0] == scene[0]
+            and bound[1] < scene[2]
+            and scene[1] < bound[2]
+        ):
+            found.append(line)
+    return tuple(found)
 
 
 def _ref(line: Line) -> str | None:
@@ -367,6 +407,11 @@ def plan(
     answers = []
     for n, verb in sorted(told.items()):
         row = queue.rows[n - 1]
+        if verb == "reject" and row.standing is not None:
+            raise ReviewError(
+                f"scene {n} is confirmed (#{row.standing['seq']}); a no does not undo it: --place {n} NAME or"
+                f" --date {n} WHEN corrects it, `logbook repair retract {row.standing['seq']}` withdraws it"
+            )
         answer = Answer(row, verb)
         if verb == "accept":
             given = (row.standing.get("payload") or {}) if row.standing is not None else (row.proposal or {})
@@ -409,7 +454,7 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
     if answer.verb == "accept":
         payload: dict[str, Any] = {"schema": videos.ATTRIBUTION_SCHEMA}
         bound = {"place": answer.place, "when": answer.when}
-        digest = hashlib.sha256(json.dumps(bound, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+        digest = hashlib.sha256(canonical_json(bound).encode("utf-8")).hexdigest()[:12]
         payload["raw_id"] = f"{row.ref}@{digest}"
         payload["ref"] = {"kind": videos.SCENE, "value": row.ref}
         payload["scene"] = {"video": row.video.id, "start_s": row.start, "end_s": row.end}
@@ -439,8 +484,12 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
             yield _close_ask(lb, row, ask, now, tz)
     elif answer.verb == "reject":
         proposal = row.proposal
+        if row.refused or (proposal is not None and proposal in queue.refused.get(row.ref, [])):
+            yield Written(row, "reject", None, "already refused; nothing written")
+            return
         payload = {"schema": videos.NO_SCHEMA, "type": videos.SCENE, "verdict": "different"}
         payload["ref"] = {"kind": videos.SCENE, "value": row.ref}
+        payload["refs"] = [dict(payload["ref"])]
         place = proposal.get("place") if proposal else None
         if isinstance(place, dict):
             payload["entity"] = {"type": place.get("type"), "id": place.get("id"), "registry": "logbook"}
@@ -448,8 +497,16 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
         payload.update({"method": "owner", "evidence": evidence, "logbook_head": head})
         payload["extra"] = {"draft": str(row.draft["id"]), "proposal": proposal}
         line = lb.append(now, "manual", videos.NO_KIND, tier, payload, tz=tz)
-        yield Written(row, "reject", line, "not so: never proposed for this scene again")
+        said = (
+            "nothing to name: the scene leaves the queue"
+            if proposal is None
+            else "not so: never proposed for this scene again"
+        )
+        yield Written(row, "reject", line, said)
     else:
+        if row.ref in queue.asks:
+            yield Written(row, "ask", None, "already kept to ask the family; nothing written")
+            return
         where = f"{row.video.name}, {videos.span(row.start, row.end)}"
         title = f"Ask the family where and when this was filmed: {where}"
         payload = {
@@ -600,6 +657,12 @@ def row_lines(lb: Logbook | None, n: int, row: Row) -> Iterator[str]:
             stamp = f"; stamp: {frame['stamp']}" if frame.get("stamp") else ""
             at = videos.clock(float(frame.get("offset_s") or 0))
             yield f"        frame {at}: {frame.get('description')}{signs}{stamp}"
+    for line in row.overlaps:
+        payload = line.get("payload") or {}
+        bound = videos.parse_scene((payload.get("ref") or {}).get("value"))
+        if bound is not None:
+            target = _bound_text(payload.get("place"), payload.get("when"))
+            yield f"        overlaps a scene you confirmed, {videos.span(bound[1], bound[2])} \u2192 {target}"
     day = trusted_day(row)
     if day is not None and lb is not None:
         evidence = day_evidence(lb, day)

@@ -348,3 +348,142 @@ def test_on_a_terminal_it_asks_one_scene_at_a_time_and_holds_no_lock_while_it_wa
     assert line["kind"] == "attribution" and line["payload"]["ref"]["value"] == _ref(lb, *GARDEN)
     out = capsys.readouterr().out
     assert out.count("scene 2 of 4") == 1 and out.count("scene 3 of 4") == 1  # one scene at a time
+
+
+# -- the independent check of tiers and the attribution line --------------------------------------------
+
+
+def test_the_same_no_twice_and_a_second_ask_write_nothing(lb: Logbook) -> None:
+    assert _review("--ask", "2") == 0
+    assert _review("--asked", "--reject", "1") == 0
+    seq = _seq(lb)
+    assert _review("--asked", "--reject", "1") == 0
+    assert _new(lb, seq) == [], "the same no twice wrote a second line"
+    assert _review("--asked", "--ask", "1") == 0
+    assert _new(lb, seq) == [], "a scene already asked got a second open task"
+
+
+def test_a_no_on_a_confirmed_scene_is_refused(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    assert _review("--accept", "1") == 0
+    seq = _seq(lb)
+    capsys.readouterr()
+    assert _review("--answered", "--reject", "1") == 2
+    assert "does not undo" in capsys.readouterr().err and _seq(lb) == seq
+    assert video_review.read(lb).confirmed == 1
+
+
+def test_the_sitting_shows_the_asked_scenes_with_asked(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    import builtins
+    import sys
+
+    assert _review("--ask", "2") == 0
+    shown: list[str] = []
+    real = video_review.row_lines
+    monkeypatch.setattr(
+        video_review, "row_lines", lambda book, n, row: (shown.append(row.ref), real(book, n, row))[1]
+    )
+    monkeypatch.setattr(builtins, "input", lambda _p: "q")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    assert _review("--asked") == 0
+    assert shown == [_ref(lb, *GARDEN)]
+
+
+def test_retracting_the_no_brings_the_proposal_back(lb: Logbook) -> None:
+    assert _review("--reject", "1") == 0
+    no = _new(lb, 0)[-1]
+    Logbook(lb.root).retract(int(no["seq"]), "wrong")
+    assert _ref(lb, *PIER) in [r.ref for r in video_review.read(lb).rows]
+
+
+def test_a_scene_cut_again_elsewhere_says_it_overlaps_a_confirmed_one(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from test_videos_infer import Recording, look
+
+    assert _review("--accept", "1") == 0  # the pier, 0:40 to 1:30
+    shifted = (
+        Recording(45, -30, 0.0, TAPE[0].look, TAPE[0].said, TAPE[0].inside),
+        TAPE[1],
+        TAPE[2],
+        Recording(35, -40, 0.5, look("A snowy road between trees.", "outdoors, a road", "winter")),
+    )
+    vision = FakeVision()
+    vision.model = "another-vision-model"
+    monkeypatch.setattr(scenes, "detect", lambda *_a: (FakeMedia({HOME_01: shifted}), FakeSpeech(), vision))
+    _cache(lb, HOME_01)
+    assert _infer() == 0
+    queue = video_review.read(lb)
+    assert queue.confirmed == 1 and _ref(lb, "45.00", "95.00") in [r.ref for r in queue.rows]
+    capsys.readouterr()
+    assert _review() == 0
+    assert f"overlaps a scene you confirmed, 0:40{EN_DASH}1:30 → Vollen Brygge" in capsys.readouterr().out
+    assert [r.ref for r in video_review.read(lb, "answered").rows] == [_ref(lb, *PIER)]
+
+
+@pytest.fixture
+def sealed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]) -> Logbook:
+    """The same tape, in a record that names recipients: every tier-2 line and file is sealed."""
+    from logbook.core import sealing
+
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    lb = Logbook.init(tmp_path / "sealed", "Europe/Oslo")
+    meta = lb.meta
+    meta["recipients"] = [recipient for _secret, recipient in pairs]
+    lb._save_meta(meta)
+    path = tmp_path / "keys" / "owner.txt"
+    sealing.write_identity_file(path, str(sealing.parse_identity(pairs[0][0])), "test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(path))
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    lb = Logbook(lb.root)
+    (lb.root / "places.json").write_text(json.dumps({"Vollen Brygge": VOLLEN}), encoding="utf-8")
+    engines = (FakeMedia({HOME_01: TAPE}), FakeSpeech(), FakeVision())
+    monkeypatch.setattr(scenes, "detect", lambda *_a: engines)
+    _video(lb, HOME_01, "Home 01")
+    _cache(lb, HOME_01)
+    assert _infer() == 0
+    yield lb
+    assert no_network == []
+
+
+def test_every_line_and_the_vtt_are_sealed_and_the_review_reads_them_with_the_identity(
+    sealed: Logbook,
+) -> None:
+    from logbook.core import sealing
+    from logbook.core.chain import is_sealed
+
+    assert _review("--accept", "1", "--reject", "2", "--ask", "3") == 0
+    stored = [
+        json.loads(raw)
+        for f in Logbook(sealed.root).files()
+        for raw in f.read_text(encoding="utf-8").splitlines()
+        if raw.strip()
+    ]
+    mine = [line for line in stored if line["kind"] != "migration"]
+    assert {line["kind"] for line in mine} == {
+        "video",
+        "transcript",
+        "draft",
+        "attribution",
+        "entity-review",
+        "task",
+    }
+    assert all(is_sealed(line) for line in mine)
+    for f in (sealed.root / "attachments").iterdir():
+        if f.is_file() and not f.name.startswith("."):
+            assert sealing.is_sealed_file(f), f.name
+    queue = video_review.read(sealed)
+    assert (queue.confirmed, queue.rejected, queue.asked) == (1, 1, 1)
+    cli.main(["verify"])
+
+
+def test_without_the_identity_the_review_names_it_and_writes_nothing(
+    sealed: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(tmp_path / "keys" / "nowhere.txt"))
+    seq = _seq(sealed)
+    capsys.readouterr()
+    assert _review() == 2
+    assert "identity" in capsys.readouterr().err
+    assert _review("--accept", "1") == 2
+    assert "identity" in capsys.readouterr().err and _seq(sealed) == seq
