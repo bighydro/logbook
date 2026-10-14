@@ -21,4 +21,6 @@
 ### Changed
 - `serve`'s navigation wraps on a narrow screen and names *journeys* and *people* (`/trips` stays, from
   the front page). A draft of a journey (RFC 0036, `unit` `journey`) is read by its id: a `subject` that
-  is the trip's id, or an array naming it.
+  is the trip's id, or an array naming it. It follows the `dream` entry as a day's draft does: one above
+  the entry's `max_tier` today is not shown, and the journey's row and page say `superseded by policy`
+  and why, nothing of its text.

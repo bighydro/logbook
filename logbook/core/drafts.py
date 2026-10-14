@@ -64,7 +64,8 @@ owner confirmed from it before stays, an owner's line like any other. A call's s
 same way, by the same rule (`through`), and its row goes under the call's own row on the Day
 (`syntheses_withheld`), never in the day's draft's place. `doctor` lists the days whose standing draft
 is withheld (`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any
-tier."""
+tier. A reader of another unit (a journey's: `by_unit`, `for_unit`) holds its drafts to the same rule
+(`through`), the row included."""
 
 from __future__ import annotations
 
@@ -381,6 +382,23 @@ def for_day(
         names = person_names(resolve.identities_from([*idx.retractions(), *idx.resolutions()]))
     confirmed = confirmations(lines, retracted, str(latest["id"]))
     return day_json(latest, shown, on_day, names, confirmed), withheld
+
+
+def for_unit(
+    found: Sequence[Line],
+    on_unit: Collection[str],
+    tiers: Sequence[int] | None = None,
+    allowed: Allowed | None = None,
+    not_on: str = NOT_ON_DAY,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """The `draft` block and the `draft_withheld` row of a unit other than the day (a journey), by
+    `for_day`'s rule (`through`): `found` the unit's draft lines (`by_unit`), `on_unit` the ids of the
+    lines its evidence may name, `not_on` the words for an id outside them (`NOT_ON_JOURNEY`)."""
+    shown, withheld = through(found, tiers, allowed)
+    latest = standing(shown)
+    if latest is None:
+        return None, withheld
+    return day_json(latest, shown, on_unit, not_on=not_on), withheld
 
 
 def through(

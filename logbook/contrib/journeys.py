@@ -9,7 +9,11 @@ who are canonical (a person the resolution lines name; the ones the with module 
 names are counted, `unplaced`, and listed only in the People page's review queue), the **photos**
 dated on its days (first day to return day, `photo/v1` lines standing), its **name** when the
 captain gave it one, and the standing **draft** of it (RFC 0036, `unit` `journey`) when a model
-wrote one. Every number keeps the lines it rests on, so a page can say where it came from.
+wrote one. A journey's draft follows the `dream` entry of the crossing policy as a day's does
+(`drafts.allowed`, `drafts.for_unit`): one above the entry's `max_tier` today is not shown, and when
+the standing draft is one, a reader that holds the whole record carries the row that says so
+(`draft_withheld`) and nothing of its text, while a gated reader hides it without a word. Every
+number keeps the lines it rests on, so a page can say where it came from.
 
 **The year.** A year's journeys are those whose first day is in it, most recent first, read from
 one reading of the year and `MARGIN_DAYS` either side, so a journey that runs over New Year is read
@@ -74,7 +78,8 @@ class Journey:
     trip: trips.Trip
     name: Name | None
     photos: list[str]  # the photo lines dated on its days, in chain order
-    draft: dict[str, Any] | None  # `drafts.day_json` of the standing journey draft
+    draft: dict[str, Any] | None  # `drafts.day_json` of the standing journey draft the policy allows
+    draft_withheld: dict[str, Any] | None  # `drafts.withheld_json` when the policy withholds it
     people: list[dict[str, Any]]  # the canonical people confirmed on it: id, name, lines
     unplaced: int  # the people the with module saw on it that no resolution line names
     nights_of: list[dict[str, Any]] = field(default_factory=list)  # each night away: day, where, lines
@@ -99,6 +104,7 @@ class Journey:
             "photos": {"count": len(self.photos), "lines": list(self.photos)},
             "name": None if self.name is None else self.name.to_json(),
             "draft": self.draft,
+            "draft_withheld": self.draft_withheld,
             "nights_of": self.nights_of,
             "lines": list(t.lines),
         }
@@ -163,8 +169,9 @@ def shelf(
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
         named = names_in(idx.by_kind(notes.KIND, since, max(until, last)), retracted)
-        drafted = [line for line in idx.by_kind(drafts.KIND) if _in_gate(line, tiers)]
-    out = [_journey(t, r, named, drafted, retracted) for t, r in pairs]
+        drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
+    allowed = drafts.allowed(lb.root)
+    out = [_journey(t, r, named, drafted, allowed, tiers) for t, r in pairs]
     out.sort(key=lambda j: j.trip.start, reverse=True)
     return Shelf(year, years, out)
 
@@ -173,15 +180,18 @@ def _journey(
     trip: trips.Trip,
     rd: Reading,
     named: Sequence[Line],
-    drafted: Sequence[Line],
-    retracted: frozenset[str],
+    drafted: Mapping[str, Sequence[Line]],
+    allowed: drafts.Allowed,
+    tiers: Sequence[int] | None,
 ) -> Journey:
     canonical = [c for c in trip.people if c.person is not None]
+    draft, withheld = draft_of(trip, rd, drafted, allowed, tiers)
     return Journey(
         trip,
         name_of(trip, named, rd.day_start),
         photos(rd, trip),
-        draft_of(trip, rd, drafted, retracted),
+        draft,
+        withheld,
         [{"id": c.person, "name": c.name, "lines": list(c.lines)} for c in canonical],
         len(trip.people) - len(canonical),
         nights_of(trip, rd),
@@ -209,10 +219,6 @@ def nights_of(trip: trips.Trip, rd: Reading) -> list[dict[str, Any]]:
         lines = [id_ for id_ in (stay.first_line, stay.last_line) if id_]
         out.append({"day": night.day, "where": where, "stay": stay.id, "lines": list(dict.fromkeys(lines))})
     return out
-
-
-def _in_gate(line: Line, tiers: Sequence[int] | None) -> bool:
-    return tiers is None or int(line.get("tier", 0)) in {int(t) for t in tiers}
 
 
 # -- the name --------------------------------------------------------------------------------------------
@@ -280,17 +286,22 @@ def _words(line: Line) -> str:
 
 
 def draft_of(
-    trip: trips.Trip, rd: Reading, drafted: Sequence[Line], retracted: frozenset[str]
-) -> dict[str, Any] | None:
-    """The standing draft of the journey (`unit` `journey`, a `subject` that names its id), its
-    evidence checked against the lines of the journey's days, first day to return day; None when
-    a model wrote none."""
-    found = drafts.by_unit(drafted, retracted, drafts.UNIT_JOURNEY).get(trip.id, [])
-    latest = drafts.standing(found)
-    if latest is None:
-        return None
+    trip: trips.Trip,
+    rd: Reading,
+    drafted: Mapping[str, Sequence[Line]],
+    allowed: drafts.Allowed | None = None,
+    tiers: Sequence[int] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """The standing draft of the journey and its withheld row, by the Day's rule
+    (`drafts.for_unit`): of its drafts (`drafted`, `drafts.by_unit` of unit `journey`, by the
+    subject that names its id), those the gate `tiers` and the `dream` entry today (`allowed`) let
+    through, the evidence checked against the lines of the journey's days, first day to return day;
+    None for either when there is none."""
+    found = drafted.get(trip.id, [])
+    if not found:
+        return None, None
     on_journey = {str(line["id"]) for line in rd.lines if trip.start <= rd.day_of(line) <= trip.until}
-    return drafts.day_json(latest, found, on_journey, not_on=drafts.NOT_ON_JOURNEY)
+    return drafts.for_unit(found, on_journey, tiers, allowed, not_on=drafts.NOT_ON_JOURNEY)
 
 
 # -- one journey ------------------------------------------------------------------------------------------
@@ -312,8 +323,8 @@ def read(
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
         named = names_in(idx.by_kind(notes.KIND, trip.start, trip.until), retracted)
-        drafted = [line for line in idx.by_kind(drafts.KIND) if _in_gate(line, tiers)]
-    row = _journey(trip, rd, named, drafted, retracted)
+        drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
+    row = _journey(trip, rd, named, drafted, drafts.allowed(lb.root), tiers)
     data["journey"] = row.to_json()
     by_stay: dict[str, list[str]] = {}
     for night in rd.nights:

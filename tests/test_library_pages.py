@@ -24,7 +24,7 @@ from urllib.parse import urlencode
 
 import pytest
 from four_years import ASTRID, BJORN, FRODE, INGRID, KRISTIN, OBSERVED
-from library_record import ASTRID_ELSEWHERE, BERGEN_WINTER, PROMISE, library_record
+from library_record import ASTRID_ELSEWHERE, BERGEN_WINTER, PROMISE, dream, library_record
 
 from logbook import cli
 from logbook.contrib import people_review, serve
@@ -186,6 +186,25 @@ def test_one_journey_its_days_its_stays_on_a_canvas_and_the_promises_made_on_it(
     assert days_section.count('<details class="evidence">') == 89, "each day says where it came from"
     missing = _site(lb).respond("/journeys/2025-06-01/2025-06-02", "")
     assert missing.status == 404 and "the night was at home" in missing.body.decode("utf-8")
+
+
+def test_a_journey_draft_the_dream_entry_no_longer_allows_is_one_row_never_its_text(lb: Logbook) -> None:
+    """The Day's rule on both journey pages: a draft above the `dream` entry's max_tier today (#273)
+    is one muted row, `superseded by policy` and why, with its line on hover; none of its words."""
+    (line,) = [line for line in Logbook(lb.root).lines() if line["kind"] == "draft"]
+    dream(lb.root, {"max_tier": 1})
+    site = _site(lb)
+    for page, text in (
+        ("the list", _row(_get(site, "/journeys?year=2022"), "trip-2022-01-03-2022-03-31")),
+        ("the journey", _get(site, BERGEN_PAGE)),
+    ):
+        assert "Two photos of the harbour" not in text and "It rained every day" not in text, page
+        assert '<details class="draft"' not in text and "model:qwen2.5-7b-instruct" not in text, page
+        row = f'<p class="mute" title="line {line["id"]}">superseded by policy: tier 2, above max_tier 1'
+        assert row in text, page
+    dream(lb.root, {"max_tier": 2})
+    text = _get(_site(lb), BERGEN_PAGE)
+    assert "Two photos of the harbour" in text and "superseded by policy" not in text
 
 
 def test_the_people_of_the_year_canonical_only_then_the_review_queue(lb: Logbook) -> None:
