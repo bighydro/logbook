@@ -15,8 +15,9 @@ both through the index's public readers — `core/index.py` is not changed and n
 2. **The lines of the message's days**, for a message already read (its `at` known) that no key found:
    the mail lines whose local day is within two days of its instant (`Index.of_source`, opened when
    sealed and the identity is here), compared by normalised Message-ID. A spelling the first step did
-   not guess, or an account no address names, is still found. Each day is read once per run, the last
-   DAYS_KEPT kept.
+   not guess, or an account no address names, is still found. Each day is read once per run whatever
+   order the messages come in: what is kept of it is its ids and their mailboxes alone, up to IDS_KEPT
+   ids, the days asked about longest ago let go first.
 
 **Whose line holds it** is the mailbox's question (RFC 0015 rule 1: a message in two mailboxes is two
 lines). A line of the source's own account, or one written without an account, holds the message; a
@@ -30,6 +31,7 @@ the store's (source, raw_id) stays the guard, as it was."""
 
 from __future__ import annotations
 
+import sys
 from collections import OrderedDict
 from collections.abc import Sequence
 from datetime import datetime, timedelta
@@ -45,10 +47,10 @@ if TYPE_CHECKING:
 SOURCE = mail.NAME  # the `source` every mail road writes (gmail's SOURCE is the same)
 KIND = mail.KIND
 DAYS_AROUND = 2  # local days either side of a message's UTC date whose lines step 2 reads
-DAYS_KEPT = 64  # days step 2 keeps read, newest asked last
+IDS_KEPT = 1_000_000  # ids step 2 keeps of the days it read, a few hundred bytes each
 
-# per normalised Message-ID, the (raw_id, account) of every mail line of a day that carries it
-Day = dict[str, list[tuple[str, str | None]]]
+# per normalised Message-ID, the mailbox of every mail line of a day that carries it (None: no account)
+Day = dict[str, tuple[str | None, ...]]
 
 
 class Lookup:
@@ -60,6 +62,7 @@ class Lookup:
             dict.fromkeys(str(e).strip().lower() for e in lb.meta.get("owner_emails") or [] if str(e).strip())
         )
         self.days: OrderedDict[str, Day] = OrderedDict()
+        self.kept = 0  # ids in `days`
 
     def __call__(self, asked: Sequence[Asked]) -> list[Holder | None]:
         """The holder of each message asked about, in order; None where the record holds none."""
@@ -93,15 +96,13 @@ class Lookup:
         """Step 2: the holder among the mail lines of the message's days, by normalised Message-ID."""
         assert q.at is not None
         date = datetime.fromisoformat(q.at.replace("Z", "+00:00")).date()
-        lines = [
-            entry
+        accounts = [
+            account
             for offset in range(-DAYS_AROUND, DAYS_AROUND + 1)
-            for entry in self._day(idx, (date + timedelta(days=offset)).isoformat()).get(q.message_id, [])
+            for account in self._day(idx, (date + timedelta(days=offset)).isoformat()).get(q.message_id, ())
         ]
         best: Holder | None = None
-        for raw_id, account in lines:
-            if raw_id == q.raw_id:
-                return Holder(own=True, account=q.account)
+        for account in accounts:
             if q.account is not None and account is not None and account != q.account:
                 continue  # another mailbox's copy: a line of its own (RFC 0015 rule 1)
             holder = Holder(own=False, account=account)
@@ -118,14 +119,15 @@ class Lookup:
         for line in idx.of_source(KIND, SOURCE, day, day):
             payload = line.get("payload") or {}
             normal = mail.normalise_id(_text(payload.get("message_id")))
-            raw_id = _text(payload.get("raw_id"))
-            if normal is None or raw_id is None:
+            if normal is None:
                 continue  # no Message-ID, or a sealed line this run cannot open
             account = _text(payload.get("account"))
-            found.setdefault(normal, []).append((raw_id, account.lower() if account else None))
+            found[normal] = (*found.get(normal, ()), sys.intern(account.lower()) if account else None)
         self.days[day] = found
-        while len(self.days) > DAYS_KEPT:
-            self.days.popitem(last=False)
+        self.kept += len(found)
+        while self.kept > IDS_KEPT and len(self.days) > 1:
+            _day, let_go = self.days.popitem(last=False)
+            self.kept -= len(let_go)
         return found
 
 

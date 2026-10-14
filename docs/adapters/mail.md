@@ -41,7 +41,8 @@ are the candidates `people merge` proposes from. The adapter writes no resolutio
 ## Built for a 20 GB export
 
 The file is read in 8 MB chunks and scanned for separator lines; one message is in memory at a
-time, whatever its size. Headers are parsed by hand, the MIME tree is walked by byte offsets, and an
+time, whatever its size (with the record to ask, what was read of up to 200 messages, 32 MB at most,
+waits for its answer). Headers are parsed by hand, the MIME tree is walked by byte offsets, and an
 attachment is never decoded or copied: its length is counted from the base64 text (exact for base64
 and unencoded parts). Only with `--attachments` is a part decoded, hashed and put in the store.
 On a laptop this reads well over 40 MB/s, so an export of twenty gigabytes is read in under ten
@@ -208,11 +209,14 @@ when it does. Nothing written is touched; a message the record does not hold is 
   export added without `--account` names no mailbox, so a line of any of yours holds its message.
 - **Spelled the same, or not.** The record is asked by the keys a line of the message can carry (the id as
   the header spells it and normalised, under the road's account and bare; for an export without
-  `--account`, under each of your `owner_emails` too): one query per batch, before `sync mail` and
-  `sync gmail` fetch a body, so a message the record holds costs a header and nothing more. A message read
-  and still not found is then looked for among the mail lines of its days, by normalised `Message-ID`: a
-  spelling no key guessed (`<Berth.9@Mail.Example.ORG>` in the export, `Berth.9@MAIL.EXAMPLE.ORG` on the
-  server) is the same message. Two ids that differ before the `@`, even only in case, are two messages.
+  `--account`, under each of your `owner_emails` too): one query per batch of headers, before `sync mail`
+  and `sync gmail` fetch a body, so a message the record holds under one of those keys costs a header and
+  nothing more. A message read and still not found (the export asks once per 200 messages, the live roads
+  again for the bodies they read) is then looked for among the mail lines of its days, by normalised
+  `Message-ID`: a spelling no key guessed (`<Berth.9@Mail.Example.ORG>` in the export,
+  `Berth.9@MAIL.EXAMPLE.ORG` on the server) is the same message, found at the cost of its body. Each day
+  is read once per run, in whatever order the messages come. Two ids that differ before the `@`, even
+  only in case, are two messages.
 - **No `Message-ID`, no shared key.** A message without one is keyed by the digest of its own bytes, and
   each road dedupes itself, as before: the Takeout export adds two headers of its own, so its bytes are not
   the server's and the two roads write a line each. An id without an `@` (`unknown`, `(none)`) is no

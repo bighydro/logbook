@@ -11,6 +11,7 @@ import base64
 import contextlib
 import hashlib
 import imaplib
+import random
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import replace
@@ -355,6 +356,7 @@ def test_gmail_then_imap_writes_each_message_once(
         status, out, err = _run(capsys, "sync", "mail")
         assert status == 0, err
         assert "mail: 0 new lines of 0 seen" in out
+        assert "3 fetched, 0 new, 3 already in the record" in err
         assert not [line for line in imap.sent("FETCH") if "BODY.PEEK[]" in line], "no body was fetched"
     assert lb.meta["seq"] == 3 and _record(lb) == before
 
@@ -847,3 +849,48 @@ def test_a_held_messages_attachments_are_never_stored(tmp_path: Path) -> None:
     lines = list(mail.run(path, timezone=TZ, attachments=True, store=stored.append, held=asking))
     assert [line["payload"]["message_id"] for line in lines] == ["kept@mail.example.org"]
     assert len(stored) == 1, "only the written line's attachment reaches the store"
+
+
+@pytest.mark.parametrize("hollow", ["<@>", "<a@>", "<@mail.example.org>"])
+def test_an_id_with_nothing_on_one_side_of_the_at_is_never_a_key_across_roads(hollow: str) -> None:
+    assert mail.ask(mail.first_id(hollow), USER) is None
+    assert mail.ask(mail.first_id("<a@b>"), USER) is not None
+
+
+def test_the_count_key_is_the_one_the_report_reads() -> None:
+    from logbook.commands import skips
+
+    assert skips.HELD == mail.HELD
+
+
+def test_each_day_is_read_once_per_run_whatever_the_order_and_what_is_kept_is_bounded(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An export out of day order (a second mailbox's, every key missing) reads each day's lines once;
+    what the run keeps of them is ids and mailboxes, up to IDS_KEPT, the days asked longest ago let go."""
+    from logbook.core.index import Index
+
+    days = [T0 + timedelta(days=n) for n in range(0, 300, 3)]  # more days than any small cache holds
+    lb.append_many([_draft(f"<d{n}@mail.example.org>", INES, when) for n, when in enumerate(days)])
+    read: list[str] = []
+    of_source = Index.of_source
+
+    def counted(self: Index, kind: str, source: str, first: str, last: str, *rest: Any) -> Any:
+        read.append(first)
+        return of_source(self, kind, source, first, last, *rest)
+
+    monkeypatch.setattr(Index, "of_source", counted)
+    lookup = mail_lookup.Lookup(lb)
+    order = list(enumerate(days))
+    random.Random(7).shuffle(order)
+    for _round in range(3):
+        for n, when in order:
+            q = mail.ask(f"d{n}@MAIL.example.org", USER, at=when.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            assert q is not None and lookup([q]) == [None], "Ines's other mailbox's copy is its own"
+    assert len(read) == len(set(read)), "no day read twice"
+    monkeypatch.setattr(mail_lookup, "IDS_KEPT", 2)
+    small = mail_lookup.Lookup(lb)
+    for n, when in order:
+        q = mail.ask(f"d{n}@mail.example.org", None, at=when.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        assert q is not None and small([q]) == [mail.Holder(own=False, account=INES)]
+        assert small.kept <= 2 or len(small.days) == 1

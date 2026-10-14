@@ -668,8 +668,9 @@ def ask(message_id: str | None, account: str | None, at: str | None = None) -> A
     """What a mail source asks the record about a message whose Message-ID header gives `message_id`
     (`first_id`'s spelling), read from the mailbox `account`; None for a message without one, whose
     line is keyed by its own bytes, so the store's (source, raw_id) is its only dedupe, as before; and
-    None for an id without an `@` (`unknown`, `(none)`): RFC 5322 has no such Message-ID, and a mailer
-    that writes one writes it on every message, so it is never a key across roads."""
+    None for an id without an `@` (`unknown`, `(none)`) or with nothing on one side of it: RFC 5322 has
+    no such Message-ID, and a mailer that writes one writes it on every message, so it is never a key
+    across roads."""
     normal = normalise_id(message_id)
     if message_id is None or not _shared(normal):
         return None
@@ -720,8 +721,12 @@ def _asked(line: dict[str, Any]) -> Asked | None:
 
 
 def _shared(normal: str | None) -> TypeGuard[str]:
-    """Whether a normalised Message-ID may key a message across roads: an id with an `@` in it."""
-    return normal is not None and "@" in normal
+    """Whether a normalised Message-ID may key a message across roads: something on both sides of its
+    last `@`, as RFC 5322 has it (`<@>` or `<a@>` stamped on every message names none of them)."""
+    if normal is None:
+        return False
+    local, at, domain = normal.rpartition("@")
+    return bool(at and local and domain)
 
 
 def normalise_id(message_id: str | None) -> str | None:
