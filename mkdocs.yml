@@ -93,6 +93,7 @@ nav:
       - "0036 Goals, reviews, drafts, chapters (draft)": rfcs/0036-goals-reviews-drafts-chapters.md
       - "0037 Entities: orgs, ideas, places and assets (draft)": rfcs/0037-entities.md
       - "0038 Speakers: who spoke, and who they are (draft)": rfcs/0038-speakers.md
+      - "0039 Videos: a recording file, its scenes, the owner's attribution (draft)": rfcs/0039-videos.md
   - Letters:
       - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
@@ -151,6 +152,7 @@ nav:
       - "Health: Apple Health, Withings, MyFitnessPal": adapters/health.md
       - "Apple Wallet: boarding passes and tickets": adapters/wallet.md
       - "Your own agents: Telegram bots, Claude Code and the Claude apps": adapters/agents.md
+      - "The family's videos: scenes, proposals, your answer": adapters/videos.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md
