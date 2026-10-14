@@ -101,6 +101,7 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> FakeOpenMeteo:
     monkeypatch.setattr(weather_adapter, "urlopen", served)
     monkeypatch.setattr(weather_adapter, "sleep", lambda _s: None)
     monkeypatch.setattr(sync_commands, "_today", lambda: TODAY)
+    monkeypatch.setenv("LOGBOOK_WEATHER", "1")  # the one setting: without it nothing is fetched
     return served
 
 
@@ -251,20 +252,83 @@ def test_sync_weather_writes_one_line_per_cluster_day_caches_it_and_never_refetc
     assert lb.meta["head"] == head
 
 
-def test_sync_weather_defaults_to_the_days_since_the_watermark_and_yesterday(
+def test_sync_weather_fetches_the_previous_day_and_then_each_day_since(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake: FakeOpenMeteo
+) -> None:
+    """The first run asks about yesterday alone, never the record's history (`--since` backfills); a
+    later run covers the days since, with a week's lookback for points that arrive late, never
+    reaching back before the first day a run covered."""
+    lb = persona_record(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync_commands, "_today", lambda: "2026-06-17")  # in Zürich, the 16th behind
+    status, out, _err = _run(capsys, "sync", "weather")
+    assert status == 0
+    assert f"for 1 day 2026-06-16 {EN_DASH} 2026-06-16" in out, "yesterday, and only yesterday"
+    assert {(q["start_date"], q["end_date"]) for q in fake.queries()} == {("2026-06-16", "2026-06-16")}
+    written = [line["payload"] for line in lb.lines() if line["kind"] == "weather"]
+    assert {p["day"] for p in written} == {"2026-06-16"} and {(p["lat"], p["lon"]) for p in written} == {
+        (47.4, 8.5)
+    }
+    state = json.loads((lb.root / "state" / "weather.json").read_text(encoding="utf-8"))
+    assert (state["since"], state["from"]) == ("2026-06-16", "2026-06-16")
+    monkeypatch.setattr(sync_commands, "_today", lambda: "2026-06-19")
+    status, out, _err = _run(capsys, "sync", "weather")
+    assert status == 0
+    assert f"2026-06-16 {EN_DASH} 2026-06-18" in out, "the lookback stops at the first day covered"
+    assert all(q["start_date"] >= "2026-06-16" for q in fake.queries())
+    assert all(q["end_date"] <= "2026-06-18" for q in fake.queries()), "today is never asked for"
+    fetched = len(fake.requests)
+    monkeypatch.setattr(sync_commands, "_today", lambda: TODAY)
+    status, out, _err = _run(capsys, "sync", "weather", "--since", "2026-06-08", "--until", "2026-06-09")
+    assert status == 0 and len(fake.requests) > fetched, "a backfill is asked for by name"
+    state = json.loads((lb.root / "state" / "weather.json").read_text(encoding="utf-8"))
+    assert (state["since"], state["from"]) == ("2026-06-18", "2026-06-08")
+
+
+def test_sync_weather_fetches_nothing_unless_the_owner_turns_it_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake: FakeOpenMeteo
 ) -> None:
     lb = persona_record(tmp_path, monkeypatch)
-    status, out, _err = _run(capsys, "sync", "weather")
-    assert status == 0
-    assert f"2026-06-08 {EN_DASH} 2026-09-30" in out, "the record's first located day to yesterday"
-    assert all(q["end_date"] <= "2026-09-30" for q in fake.queries()), "today is never asked for"
-    state = json.loads((lb.root / "state" / "weather.json").read_text(encoding="utf-8"))
-    assert state["since"] == "2026-09-30"
-    fetched = len(fake.requests)
-    status, out, _err = _run(capsys, "sync", "weather")
-    assert status == 0 and len(fake.requests) == fetched
-    assert f"2026-09-23 {EN_DASH} 2026-09-30" in out, "a lookback of a week before the watermark"
+    head = lb.meta["head"]
+    for value in (None, "", "0", "off"):
+        if value is None:
+            monkeypatch.delenv("LOGBOOK_WEATHER", raising=False)
+        else:
+            monkeypatch.setenv("LOGBOOK_WEATHER", value)
+        for extra in ((), ("--dry-run",)):
+            status, out, err = _run(
+                capsys, "sync", "weather", "--since", "2026-06-08", "--until", "2026-06-21", *extra
+            )
+            assert status == 2 and "LOGBOOK_WEATHER=1" in err and out == ""
+    assert fake.requests == [], "nothing is asked"
+    assert lb.meta["head"] == head, "nothing is written"
+    assert not (lb.root / "inbox" / "weather").exists() and not (lb.root / "state").exists()
+    monkeypatch.setenv("LOGBOOK_WEATHER", "maybe")
+    status, _out, err = _run(capsys, "sync", "weather")
+    assert status == 2 and "LOGBOOK_WEATHER must be 1 or 0" in err and fake.requests == []
+
+
+def test_a_day_and_place_asked_twice_is_one_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake: FakeOpenMeteo
+) -> None:
+    """With the cache gone the provider is asked again, and the record still keeps one line per day and
+    place: the dedupe is the record's, on `<day>@<lat>,<lon>`."""
+    lb = persona_record(tmp_path, monkeypatch)
+    status, _out, err = _run(capsys, "sync", "weather", "--since", "2026-06-15", "--until", "2026-06-17")
+    assert status == 0, err
+    first = [line["payload"]["raw_id"] for line in lb.lines() if line["kind"] == "weather"]
+    assert first and len(first) == len(set(first))
+    fetched, head = len(fake.requests), lb.meta["head"]
+    for p in sorted((lb.root / "inbox" / "weather").rglob("*.json")):
+        p.unlink()
+    status, out, _err = _run(capsys, "sync", "weather", "--since", "2026-06-15", "--until", "2026-06-17")
+    assert status == 0 and len(fake.requests) > fetched, "asked again"
+    assert f"weather: 0 new lines of {len(first)} seen" in out
+    assert lb.meta["head"] == head
+    keys = [
+        (p["day"], p["lat"], p["lon"])
+        for p in (line["payload"] for line in lb.lines() if line["kind"] == "weather")
+    ]
+    assert len(keys) == len(set(keys)) == len(first)
 
 
 def test_sync_weather_dry_run_fetches_nothing_and_writes_nothing(
@@ -294,6 +358,7 @@ def test_sync_all_leaves_weather_out_unless_the_owner_lists_it(
     assert "weather: LOGBOOK_WEATHER not set; skipped" in out
     assert [line for line in lb.lines() if line["kind"] == "weather"] == []
     monkeypatch.setenv("LOGBOOK_WEATHER", "1")
+    monkeypatch.setattr(sync_commands, "_today", lambda: "2026-06-17")  # a located yesterday
     status, out, _err = _run(capsys, "sync", "--all")
     assert status == 0 and fake.requests
     assert "weather  ok" in out or "weather ok" in out.replace("  ", " ")
@@ -501,6 +566,44 @@ def test_day_year_and_trips_show_the_weather_without_the_network(
 
     status, out, _err = _run(capsys, "show", "year", "2026", "--html", str(tmp_path / "year.html"))
     assert status == 0 and "Weather" in (tmp_path / "year.html").read_text(encoding="utf-8")
+
+
+def test_the_day_header_says_the_weather_beside_the_place_of_the_night(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], fake: FakeOpenMeteo
+) -> None:
+    lb = persona_record(tmp_path, monkeypatch)
+    status, _out, err = _run(capsys, "sync", "weather", "--since", "2026-06-08", "--until", "2026-06-21")
+    assert status == 0, err
+    status, out, _err = _run(capsys, "day", "2026-06-16", "--json")
+    row = json.loads(out)["weather"]
+    word = {3: "overcast", 63: "rain"}[row["weather_code"]]
+    status, out, _err = _run(capsys, "day", "2026-06-16")
+    [after] = [text for text in out.splitlines() if text.startswith("  night after")]
+    assert after.endswith(f" · away · {round(row['t_max_c'])}° · {word}"), after
+    [before] = [text for text in out.splitlines() if text.startswith("  night before")]
+    assert "°" not in before, "the weather of the day is beside the night after, where the day ended"
+
+    lb.set_meta(day_start="06:00")  # the 16th's weather line starts at midnight, on the 15th's page
+    data = json.loads(_run(capsys, "day", "2026-06-16", "--json")[1])
+    assert data["weather"]["day"] == "2026-06-16" and data["weather"]["line"] == row["line"]
+    assert json.loads(_run(capsys, "day", "2026-06-15", "--json")[1])["weather"]["day"] == "2026-06-15"
+
+
+def test_the_short_form_is_the_days_high_and_a_word() -> None:
+    def short(**values: Any) -> str:
+        return weather.short_text({"t_min_c": None, "t_max_c": None, "weather_code": None, **values})
+
+    assert short(t_min_c=-1.0, t_max_c=4.2, weather_code=63) == "4° · rain"
+    assert short(t_max_c=-0.4, weather_code=71) == "0° · snow", "never -0°"
+    assert short(t_max_c=21.0, weather_code=0) == "21° · clear"
+    assert short(t_max_c=12.0, weather_code=81) == "12° · rain", "showers are rain"
+    assert short(t_max_c=9.0, weather_code=3) == "9° · overcast"
+    assert short(t_max_c=9.0, weather_code=2) == "9° · cloudy"
+    assert short(t_max_c=9.0, weather_code=53) == "9° · drizzle"
+    assert short(t_max_c=19.0, weather_code=96) == "19° · thunder"
+    assert short(t_min_c=-8.0, weather_code=45) == "-8° · fog", "the low when the high is unknown"
+    assert short(t_max_c=5.0) == "5°" and short(weather_code=63) == "rain"
+    assert short(weather_code=1234) == "" and short() == ""
 
 
 def test_a_record_without_weather_lines_shows_none(

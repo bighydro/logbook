@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..contrib import asset_status, gaps, home, last_run, schedule
-from ..core import assets, places, policy, reading, stays
+from ..core import assets, places, policy, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
 from ..core.store import Logbook, now_utc
@@ -839,10 +839,11 @@ def _sync_weather(a: argparse.Namespace) -> None:
     degree (`weather.clusters`), the daily values fetched from Open-Meteo once per cluster and run of
     days and cached under `inbox/weather/` (`adapters.weather.pull`), one `weather/v1` line per
     cluster-day appended; a re-run refetches nothing and appends nothing already there. The window
-    defaults to the day after the last day covered (`state/weather.json`, less a week's lookback for
-    points that arrive late) — or the record's first located day — up to yesterday. A dry run plans
-    and counts and neither fetches nor writes. The variable `LOGBOOK_WEATHER` is `sync --all`'s to
-    read: by name the command needs none."""
+    defaults to yesterday on the first run; after that, to the days since the last day covered
+    (`state/weather.json`, less a week's lookback for points that arrive late, never before the first
+    day a run covered, its `from`), up to yesterday. `--since` backfills. A dry run plans and counts
+    and neither fetches nor writes. Nothing runs unless `LOGBOOK_WEATHER` is on, by name as in `sync
+    --all`: it is the source's one setting, and without it nothing is asked of anyone."""
     from ..contrib.adapters import weather as weather_adapter
 
     if a.listen is not None:
@@ -854,10 +855,29 @@ def _sync_weather(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if _say_disabled(lb, weather_adapter.NAME):
         return
-    state_path = lb.root / "state" / f"{weather_adapter.NAME}.json"
-    stored = _read_state(state_path).get("since")
     try:
-        window = _weather_window(lb, a.since, a.until, stored if isinstance(stored, str) else None)
+        on = weather_adapter.configure(os.environ) is not None
+    except ValueError as e:
+        print(f"sync: weather: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not on:
+        print(
+            f"sync: weather: off; set {weather_adapter.ENV[0]}=1 to fetch the weather of your days"
+            " (nothing is asked without it)",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    state_path = lb.root / "state" / f"{weather_adapter.NAME}.json"
+    state = _read_state(state_path)
+    stored, covered_from = state.get("since"), state.get("from")
+    try:
+        window = _weather_window(
+            lb,
+            a.since,
+            a.until,
+            stored if isinstance(stored, str) else None,
+            covered_from if isinstance(covered_from, str) else None,
+        )
     except ValueError as e:
         print(f"sync: weather: {e}", file=sys.stderr)
         sys.exit(2)
@@ -929,17 +949,23 @@ def _sync_weather(a: argparse.Namespace) -> None:
     _report_skipped(counts)
     if failed:
         sys.exit(1)
-    if stored is None or last > str(stored):
-        _write_state(state_path, {"source": weather_adapter.NAME, "since": last, "updated_at": now_utc()})
+    since = last if stored is None or last > str(stored) else str(stored)
+    begun = first if not isinstance(covered_from, str) else min(first, covered_from)
+    if (since, begun) != (stored, covered_from):
+        _write_state(
+            state_path,
+            {"source": weather_adapter.NAME, "since": since, "from": begun, "updated_at": now_utc()},
+        )
 
 
 def _weather_window(
-    lb: Logbook, since: str | None, until: str | None, stored: str | None
+    lb: Logbook, since: str | None, until: str | None, stored: str | None, covered_from: str | None = None
 ) -> tuple[str, str] | None:
     """The local days `sync weather` covers: `--since` to `--until`, each a day; without `--until`,
-    yesterday; without `--since`, a week before the last day covered, or the record's first located
-    day. None when nothing is left to cover. ValueError for a day that is not one or a window that
-    runs backwards."""
+    yesterday; without `--since`, a week before the last day covered but never before the first day a
+    run covered (`covered_from`), or yesterday alone on the first run — the record's past is asked
+    about only by name, with `--since`. None when nothing is left to cover. ValueError for a day that
+    is not one or a window that runs backwards."""
     for text in (since, until):
         if text is not None:
             try:
@@ -952,11 +978,10 @@ def _weather_window(
         first = since
     elif stored is not None:
         first = (date.fromisoformat(stored) - timedelta(days=WEATHER_LOOKBACK_DAYS)).isoformat()
+        if covered_from is not None:
+            first = max(first, covered_from)
     else:
-        whole = reading.record_days(lb, "location")
-        if whole is None:
-            return None
-        first = whole[0]
+        first = last
     if last < first:
         if since is not None and until is not None:
             raise ValueError(f"range runs backwards: {since} > {until}")

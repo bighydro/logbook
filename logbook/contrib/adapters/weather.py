@@ -1,11 +1,12 @@
 """Open-Meteo → weather/v1 (RFC 0026), live: the daily weather of the places the owner's days were spent at.
 
 `logbook sync weather [--since DAY] [--until DAY] [--dry-run]` and nothing else calls this: no
-reader does, and `sync --all` leaves it out unless the owner sets `LOGBOOK_WEATHER=1` (the
-`sync.env` the schedule reads). The command derives the clusters — one local day and one place to a
-tenth of a degree (`logbook.core.weather.clusters`) — and `pull` fetches the daily values for each from
-Open-Meteo's free historical archive (`archive-api.open-meteo.com`, no key), or from the forecast
-API for the last `RECENT_DAYS` (the archive runs a few days behind). One request covers one cluster
+reader does, and neither the command nor `sync --all` runs unless the owner sets `LOGBOOK_WEATHER=1`
+(the `sync.env` the schedule reads), the source's one setting. The command derives the clusters —
+one local day and one place to a tenth of a degree (`logbook.core.weather.clusters`) — and `pull`
+fetches the daily values for each from Open-Meteo's free historical archive
+(`archive-api.open-meteo.com`, no key), or from the forecast API for the last `RECENT_DAYS` (the
+archive runs a few days behind). One request covers one cluster
 and a run of days: the days a cluster needs are sorted and split where a gap exceeds `GAP_DAYS` or
 a run would exceed `MAX_RANGE_DAYS`, so a fortnight at one place is one request, not fourteen.
 Between requests `pull` waits `PAUSE_S` (polite to a free service that asks for under 600 calls a
@@ -60,7 +61,7 @@ __all__ = [
 NAME = SOURCE
 ENV = (
     "LOGBOOK_WEATHER",
-)  # `1`, `on`, `yes` or `true` lists the source in `sync --all`; nothing else reads it
+)  # `1`, `on`, `yes` or `true` turns the source on, by name and in `sync --all`; off, nothing is asked
 UNIT = "requests"  # what `sync` counts in its progress lines
 ON = frozenset({"1", "on", "yes", "true"})
 OFF = frozenset({"0", "off", "no", "false"})
@@ -113,8 +114,8 @@ class Config:
 
 
 def configure(env: Mapping[str, str]) -> Config | None:
-    """Config when LOGBOOK_WEATHER is on; None when it is absent, empty or off. `sync weather` by name
-    never asks: the variable only lists the source in `sync --all`. Raises ValueError for a value
+    """Config when LOGBOOK_WEATHER is on; None when it is absent, empty or off, and then `sync weather`
+    refuses by name and `sync --all` leaves it out: nothing is asked. Raises ValueError for a value
     that is neither on nor off."""
     raw = env.get(ENV[0], "").strip().lower()
     if not raw or raw in OFF:

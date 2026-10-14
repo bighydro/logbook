@@ -14,21 +14,33 @@ by 1,000 to read in ms, one in `ms` is taken as it is. A line another health lin
 `supersedes` (a correction, `logbook repair health-units`) is out and the correction stands —
 the latest one, when a line was corrected more than once; a retracted line is out. A field the
 day has no line for is None. Under `lines` are the ids of the lines each number came from, and
-under `by` the same ids per field. Nothing here opens a file."""
+under `by` the same ids per field.
+
+`nights(lines, tz, start)` is the Day's night: per device, the asleep stages in time order, one night
+while no gap between a stage and the next exceeds `NIGHT_GAP_S` (two hours); a night is on the local
+day its last stage ends in, under `start` (a night across a 06:00 boundary is the day it ends on,
+never split between two), and of the nights that end on a day the longest asleep is its night — the
+longest device's, never a sum across devices (rule 5). `training(lines, tz, start)` is the day's
+`workout` lines (on the local day of their start): the union of their spans, so a run the watch and a
+phone app both recorded counts once. Nothing here opens a file."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .chain import Line
+from .day_start import lenient, local_day
 from .index import local_date
 from .store import RETRACTION, retractions
 
 KIND = "health"
 ASLEEP = frozenset({"asleep", "core", "deep", "rem"})  # RFC 0014 rule 4: never in_bed, never awake
 FIELDS = ("sleep_h", "steps", "resting_hr", "hrv")
+NIGHT_GAP_S = 2 * 3600  # asleep stages of one device this close are one night; farther apart, two sleeps
+WORKOUT = "workout"
 
 
 def standing(lines: Iterable[Line]) -> list[Line]:
@@ -87,8 +99,8 @@ def summary(lines: Iterable[Line], tz: str, start: object = None) -> list[dict[s
             elif kind == "sleep" and payload.get("stage") in ASLEEP:
                 day = local_date(str(line.get("end") or line["at"]), tz, start)
                 device = str(payload.get("device") or "-")
-                start, end = _sleep_span(line, float(value))
-                sleep.setdefault(day, {}).setdefault(device, []).append((start, end, id_))
+                begun, ended = _sleep_span(line, float(value))
+                sleep.setdefault(day, {}).setdefault(device, []).append((begun, ended, id_))
             elif kind == "resting_hr":
                 reading = (bpm(float(value), payload.get("unit")), id_)
                 resting.setdefault(local_date(str(line["at"]), tz, start), []).append(reading)
@@ -126,8 +138,89 @@ def summary(lines: Iterable[Line], tz: str, start: object = None) -> list[dict[s
     return rows
 
 
+def nights(lines: Iterable[Line], tz: str, start: object = None) -> dict[str, dict[str, Any]]:
+    """By local day, the night that ends on it (the module docstring): `start` and `end` (RFC3339 UTC,
+    the first asleep stage's start and the last one's end), `asleep_s` (the union of its asleep stages,
+    whole seconds), `device` (None when the lines name none) and `lines` (the stages, in time order). A
+    day no night ends on has no entry."""
+    zone, clock = ZoneInfo(tz), lenient(start)
+    by_device: dict[str, list[tuple[datetime, datetime, str]]] = {}
+    for line in standing(lines):
+        payload = line.get("payload") or {}
+        value = payload.get("value")
+        if payload.get("type") != "sleep" or payload.get("stage") not in ASLEEP:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            continue
+        try:
+            begun, ended = _sleep_span(line, float(value))
+        except (KeyError, ValueError, TypeError):  # a stamp that does not parse is on no night
+            continue
+        device = str(payload.get("device") or "-")
+        by_device.setdefault(device, []).append((begun, ended, str(line.get("id", ""))))
+    out: dict[str, dict[str, Any]] = {}
+    for device in sorted(by_device):
+        for spans in _runs(sorted(by_device[device])):
+            begun, ended = spans[0][0], max(b for _a, b, _id in spans)
+            night = {
+                "start": _stamp(begun),
+                "end": _stamp(ended),
+                "asleep_s": round(_union_s([(a, b) for a, b, _id in spans])),
+                "device": None if device == "-" else device,
+                "lines": [id_ for _a, _b, id_ in spans if id_],
+            }
+            day = local_day(ended, zone, clock).isoformat()
+            kept = out.get(day)
+            if kept is None or night["asleep_s"] > kept["asleep_s"]:
+                out[day] = night
+    return out
+
+
+def training(lines: Iterable[Line], tz: str, start: object = None) -> dict[str, dict[str, Any]]:
+    """By local day of their start, the day's workouts: `minutes`, the union of their spans in whole
+    minutes, and `lines`, their ids in time order. A day with no workout has no entry."""
+    found: dict[str, list[tuple[datetime, datetime, str]]] = {}
+    for line in standing(lines):
+        payload = line.get("payload") or {}
+        value = payload.get("value")
+        if payload.get("type") != WORKOUT or isinstance(value, bool) or not isinstance(value, int | float):
+            continue
+        try:
+            begun, ended = _sleep_span(line, float(value))
+            day = local_date(str(line["at"]), tz, start)
+        except (KeyError, ValueError, TypeError):
+            continue
+        found.setdefault(day, []).append((begun, ended, str(line.get("id", ""))))
+    return {
+        day: {
+            "minutes": round(_union_s([(a, b) for a, b, _id in spans]) / 60),
+            "lines": [id_ for _a, _b, id_ in sorted(spans) if id_],
+        }
+        for day, spans in sorted(found.items())
+    }
+
+
+def _runs(spans: list[tuple[datetime, datetime, str]]) -> list[list[tuple[datetime, datetime, str]]]:
+    """Spans in time order split where the next starts more than `NIGHT_GAP_S` after every earlier one
+    has ended: each run one sleep."""
+    runs: list[list[tuple[datetime, datetime, str]]] = []
+    reach: datetime | None = None
+    for span in spans:
+        if reach is None or (span[0] - reach).total_seconds() > NIGHT_GAP_S:
+            runs.append([])
+            reach = span[1]
+        runs[-1].append(span)
+        reach = max(reach, span[1])
+    return runs
+
+
+def _stamp(instant: datetime) -> str:
+    return instant.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _sleep_span(line: Line, seconds: float) -> tuple[datetime, datetime]:
-    """A sleep stage's span: `at` to `end`, or `at` plus its `value` when `end` is missing."""
+    """A span's extent (a sleep stage, a workout): `at` to `end`, or `at` plus its `value` when `end`
+    is missing."""
     start = datetime.fromisoformat(str(line["at"]).replace("Z", "+00:00"))
     end = line.get("end")
     if isinstance(end, str):

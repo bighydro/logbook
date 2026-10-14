@@ -1,5 +1,6 @@
 2026-06-08  Monday · unsigned
   night before  Home · home
+  night         slept 01:23–08:02 · 6 h 36 min
   night after   47.3769,8.5417 (Zurich) · away
   country       CH (nearest airport ZRH)
 
@@ -14,6 +15,6 @@
   10:30–24:00  stay   47.3769,8.5417 (Zurich) · 13 h 30 min · 1 note, 2 messages
       note         Zürich. The hotel by the river; kickoff tomorrow at nine.
 
-  health        sleep 6.6 h · 8,115 steps · resting 53 bpm
+  health        8,115 steps · resting 53 bpm
   sources       dawarich 253 lines, last 23:55 · apple-health 84 lines, last 22:26 · ais 24 lines, last 23:00 · whatsapp 4 lines, last 16:45 · safari 2 lines, last 21:32 · apple-podcasts 1 line, last 07:40 · flighty 1 line, last 07:12 · google-takeout 1 line, last 20:44 · ios-calendar 1 line, last 07:05 · manual 1 line, last 22:00 · taxi 1 line, last 10:00
   readiness     mail none · message present · meeting none · location present · photo none · calendar present

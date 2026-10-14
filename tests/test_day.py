@@ -326,7 +326,8 @@ def test_a_tracker_gap_is_a_row_the_lunch_is_unplaced_and_health_takes_the_corre
     assert f"09:00{EN_DASH}17:00  gap    8 h · no points" in text
     assert "unplaced" in text and "Lunch" in text
     assert "all day       Kari in town" in text
-    assert "health        sleep 7.0 h · 3,250 steps · resting 56 bpm" in text
+    assert f"night         slept 23:00{EN_DASH}06:00 · 7 h" in text, "the night's sleep, said once"
+    assert "health        3,250 steps · resting 56 bpm" in text
 
 
 # -- a stop ------------------------------------------------------------------------------------------------

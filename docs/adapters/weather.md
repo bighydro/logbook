@@ -6,10 +6,12 @@ sunrise and sunset. The places come from your own track, the values from Open-Me
 archive, and nothing finer than a tenth of a degree ever leaves the machine.
 
 ```bash
+export LOGBOOK_WEATHER=1                             # the one setting: without it nothing is asked
 logbook sync weather --dry-run                       # how many cluster-days, how many requests; nothing fetched
-logbook sync weather                                 # since the last run (or the record's first day), to yesterday
-logbook sync weather --since 2026-06-01 --until 2026-06-30
-logbook day 2026-06-16                               # … weather  14°–27° · 0.3 mm · wind 19 km/h · partly cloudy · sun 05:30–21:25
+logbook sync weather                                 # yesterday on the first run; then the days since the last
+logbook sync weather --since 2026-06-01 --until 2026-06-30   # a backfill, by name
+logbook day 2026-06-16                               # … night after  Hotel · away · 27° · cloudy
+                                                     # … weather      14°–27° · 0.3 mm · wind 19 km/h · partly cloudy · sun 05:30–21:25
 ```
 
 Tier 1, `evidence` `external`: the line says what a provider says about a 10 km square on a day, and
@@ -25,11 +27,14 @@ are deduped after rounding: home and an office across town are one place, so one
 track does not place (no stay reached three hours, the night was in transit) gets no line.
 
 The window: `--since` and `--until` are local days. Without `--until` the window ends yesterday
-(today is not over). Without `--since` it starts a week before the last day the previous run covered
-(`state/weather.json`), so points that reach the record late still get their days; the first run
-starts at the record's first day with a location line. Days already in the record are counted as
-already there and not written again; the cache (below) means they are not fetched again either, so a
-backfill with `--since` costs only the days that are new.
+(today is not over). Without `--since` the first run asks about **yesterday alone** — the record's
+past is asked about only when you name it, with `--since` — and every later run starts a week before
+the last day the previous run covered (`state/weather.json`, `since`), so points that reach the
+record late still get their days, but never before the first day any run covered (`from`): turning
+the source on never sends your history. Days already in the record are counted as already there and
+not written again — one line per day and place, the dedupe key `<day>@<lat>,<lon>` — and the cache
+(below) means they are not fetched again either, so a backfill with `--since` costs only the days
+that are new.
 
 ## Open-Meteo
 
@@ -55,20 +60,27 @@ the record (SPEC §1): the cache can be deleted and the lines stand. A day the p
 for (a place in the sea before the model covered it) is not cached and is counted
 (`skipped … days the provider had no values for`), so it is asked again another time.
 
-## `sync --all` and the schedule
+## The switch: `LOGBOOK_WEATHER=1`
 
-`logbook sync --all` and the twice-daily schedule leave weather out unless you say so: set
+The source's one setting, and nothing else configures it: no key, no account, no place. Set
 `LOGBOOK_WEATHER=1` in the environment — for the schedule, a line in `~/.config/logbook/sync.env` —
-and the source joins the run, each run covering the days since the last. Unset or `0`, the summary says
-`weather  skipped (LOGBOOK_WEATHER not set)` and nothing is asked. By name, `logbook sync weather` needs
-no variable. A `{"source": "weather"}` entry in `policy/import.json` disables it either way.
+and `logbook sync weather` runs, and `sync --all` and the schedule take it too, each run covering
+the days since the last. Unset, empty or `0`, nothing is asked of anyone: `logbook sync weather`
+says `sync: weather: off; set LOGBOOK_WEATHER=1 …` and exits 2 without a request, a dry run
+included, and `sync --all` says `weather: LOGBOOK_WEATHER not set; skipped`. A
+`{"source": "weather"}` entry in `policy/import.json` disables it either way.
 
 ## What the readers show
 
-- `day` adds one `weather` row after the health line when the day has lines: the place of the night
-  when the day has one, else the first, and `· 2 places` when the day was spent in more than one. The
-  JSON carries the row with every place of the day under `places`, each with its line id. A day with
-  no weather lines has no row and `"weather": null`.
+- `day` says the weather in short beside the place of the night after, `night after  Home · home ·
+  4° · rain` — the day's high (the low when the high is unknown) and the WMO code in one word (clear,
+  cloudy, overcast, fog, drizzle, rain, snow, thunder) — when the day's weather row is of that place.
+  Then one `weather` row after the health line when the day has lines: the place of the night when
+  the day has one, else the first, and `· 2 places` when the day was spent in more than one. The
+  JSON carries the row with every place of the day under `places`, each with its line id; the short
+  form is the text's own, so the JSON is unchanged. A day with no weather lines has no row and
+  `"weather": null`. Under a `day_start` the row is the line's own day's: the line starts at
+  midnight, on the page of the day before, and the Day of its `day` still shows it.
 - `year` adds one `weather` row — the coldest and warmest day, the precipitation summed over the days
   (the wettest place of a day, so two places never count one rain twice), the wet days (1 mm or more),
   the strongest wind, and how many of the year's days have a line — and the HTML page a section.
@@ -82,8 +94,8 @@ dates, the list of daily variables, and the record's time zone; no key, no accou
 referrer; the user agent names this software and its version. The provider learns that someone asked
 about a 10 km square on some days — a valley, not a street; a town, not a house — and over many
 requests, the squares a person's life touches. If that is more than you want a third party to know,
-leave `LOGBOOK_WEATHER` unset, run the command for the days you choose, or disable the source in
-`policy/import.json`. The line, the cache and the request all carry the same rounded coordinates:
+leave `LOGBOOK_WEATHER` unset (nothing is asked), turn it on for the days you choose and off again,
+or disable the source in `policy/import.json`. The line, the cache and the request all carry the same rounded coordinates:
 the stays themselves stay in the location lines, and nothing here lets a reader of the weather lines
 rebuild them. The request never carries the record's owner id or any identifier of yours.
 

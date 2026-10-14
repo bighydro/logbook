@@ -16,7 +16,13 @@ What a Day shows, in order:
    home place a night within 400 m of it lies by, or the coordinates with `near <place>, x km`,
    home or away, or in transit when no stay reaches the minimum); the country of the day
    (`countries.country_of` on the night's position, else the longest stay of the day, with the
-   method); the day's all-day calendar entries.
+   method); the day's all-day calendar entries. Under the night before, the **night** row when a
+   night ends on the day (`health.nights`: one device's asleep stages with no gap over two hours, on
+   the local day under `day_start` its last stage ends in, the longest such night): `slept
+   23:10-06:40`, how long asleep, and the day's training (`health.training`, the union of its
+   workout spans) when it has some; read time only, and the JSON carries it as `night` only on such
+   a day. Beside the night after's place, the day's weather in short (`weather.short_text`, `4° ·
+   rain`) when the weather row is of that place.
 2. The timeline: the owner's segments from `stays.derive` that touch the day — stays, stops and
    moves, each clipped to the day for display and keeping its real span — and the flights of the
    day from the `flight/v1` lines standing (`flights.standing`, the merged set: one line per
@@ -43,13 +49,16 @@ What a Day shows, in order:
 3. Unplaced: the day's events, transcripts, notes, mail and calls that fall inside no row — what
    the calendar planned where the track has nothing, or what happened while the tracker was
    silent.
-4. The health line (`health.summary`): the night's sleep in hours, the day's steps, the resting
-   heart rate, from the `health-sample/v1` lines standing, a correction superseding what it
+4. The health line (`health.summary`): the night's sleep in hours (in the JSON; the text says the
+   sleep once, on the night row, and leaves out a health row that had nothing else), the day's
+   steps, the resting heart rate, from the `health-sample/v1` lines standing, a correction superseding what it
    corrects. Then, when the day has a `transaction/v1` line, the spend line (`ledger.spend`): the
    totals per currency in the lines' own currencies, how many transactions, the merchants.
    And when the day has `weather/v1` lines (RFC 0026, `logbook sync weather`), one
    weather line (`weather.day_row`): the cluster of the night after when the day has one, else
-   the first, every cluster of the day under `places`; a day without them has no row.
+   the first, every cluster of the day under `places`; a day without them has no row. The lines are
+   taken by their own `day` from the reading, since under a `day_start` a line that starts at
+   midnight is on the page of the day before.
 5. The sources: every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent at 14:02 is seen to have. Then readiness (`readiness`, RFC 0034): per
    class of source — mail, message, meeting, location, photo, calendar — whether the day has lines
@@ -158,6 +167,9 @@ def read(
         retracted = retractions(idx.retractions())
         draft, withheld = drafts.for_day(idx, day, tiers, drafts.allowed(lb.root))
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
+    night = night_row(found, rd, day)
+    if night is not None:  # only on a day a night ends on: the Day's object is otherwise unchanged
+        data["night"] = night
     data["signed"] = signing.signed_json(signature, tz, page, day)
     reflected = notes.standing(on_day, notes.REFLECTION, retracted)
     if reflected:  # under --json only on a day that has one: the Day's object is otherwise unchanged
@@ -230,8 +242,9 @@ def of_reading(
         "stories": [story.summary(line, rd.names) for line in story.about(stories or (), day)],
         "health": health_row,
         "spend": ledger.spend(lines, day),
-        "weather": weather.day_row(
-            weather.by_day(lines).get(day, []), None if night_after is None else night_after.position
+        "weather": weather.day_row(  # by the line's own day: under a `day_start` it starts on the day before
+            weather.by_day(rd.by_kind.get(weather.KIND, ())).get(day, []),
+            None if night_after is None else night_after.position,
         ),
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
@@ -708,6 +721,29 @@ def health_rows(found: Iterable[Line], rd: Reading) -> dict[str, dict[str, Any]]
     return {str(row["day"]): {k: v for k, v in row.items() if k not in ("day", "by")} for row in rows}
 
 
+def night_row(found: Iterable[Line], rd: Reading, day: str) -> dict[str, Any] | None:
+    """The Day's night (`health.nights` over `found`, the health lines of the day and the day before,
+    with the reading's retractions): the night that ends on `day` under the record's `day_start`, its
+    span with `start_local` and `end_local`, and under `training` the day's workouts
+    (`health.training`), None when it has none. None for a day no night ends on. Read time only."""
+    lines = [*found, *rd.retracted.values()]
+    tz, start = str(rd.tz), rd.day_start.text
+    night = health.nights(lines, tz, start).get(day)
+    if night is None:
+        return None
+    zone = ZoneInfo(tz)
+    return {
+        "start": night["start"],
+        "end": night["end"],
+        "start_local": _instant(night["start"]).astimezone(zone).isoformat(timespec="seconds"),
+        "end_local": _instant(night["end"]).astimezone(zone).isoformat(timespec="seconds"),
+        "asleep_s": night["asleep_s"],
+        "device": night["device"],
+        "lines": night["lines"],
+        "training": health.training(lines, tz, start).get(day),
+    }
+
+
 def _sources(lines: Sequence[Line]) -> list[dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for line in lines:
@@ -781,7 +817,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     yield head
     marks = _marks(data)
     yield _row("night before", night_text(data["nights"]["before"]))
-    yield _row("night after", night_text(data["nights"]["after"]))
+    if data.get("night"):  # the night that ended on the day, slept through the night before's place
+        yield _row("night", slept_text(data["night"], data["tz"]))
+    yield _row("night after", night_text(data["nights"]["after"]) + _weather_beside(data))
     yield _row("country", country_text(data["country"]))
     if data["all_day"]:
         yield _row(
@@ -815,7 +853,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         for i, item in enumerate(data["anniversaries"]):
             yield _row("anniversaries" if i == 0 else "", anniversary_text(item))
     yield ""
-    yield _row("health", health_text(data["health"]))
+    health_line = health_text(data["health"], sleep=False)  # the sleep is the night row's, said once
+    if health_line:
+        yield _row("health", health_line)
     if data.get("spend"):
         yield _row("spend", ledger.spend_text(data["spend"]))
     if data.get("weather"):
@@ -899,6 +939,17 @@ def night_text(night: dict[str, Any]) -> str:
         parts.append(f"{night['position']['lat']:.4f},{night['position']['lon']:.4f}")
     parts.append("home" if night["home"] else "away")
     return DOT.join(parts)
+
+
+def _weather_beside(data: Mapping[str, Any]) -> str:
+    """` · 4° · rain` when the day's weather row is of the place the night after was spent at (its
+    position rounded as the weather line's is); nothing otherwise — the weather row below still says it."""
+    row, position = data.get("weather"), (data["nights"]["after"] or {}).get("position")
+    if not row or not position:
+        return ""
+    here = (weather.round_coordinate(position["lat"]), weather.round_coordinate(position["lon"]))
+    short = weather.short_text(row)
+    return f"{DOT}{short}" if short and here == (row["lat"], row["lon"]) else ""
 
 
 def country_text(country: dict[str, Any]) -> str:
@@ -1029,17 +1080,32 @@ def call_text(c: dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
-def health_text(row: dict[str, Any] | None) -> str:
+def health_text(row: dict[str, Any] | None, sleep: bool = True) -> str:
+    """`sleep 7.0 h · 3,250 steps · resting 56 bpm`, `no lines` for a day with none; without `sleep`
+    (the Day, whose night row says when and how long) the sleep is left out, and a row of sleep alone
+    is empty."""
     if row is None:
         return "no lines"
     parts = []
-    if row["sleep_h"] is not None:
+    if sleep and row["sleep_h"] is not None:
         parts.append(f"sleep {row['sleep_h']:.1f} h")
     if row["steps"] is not None:
         parts.append(f"{row['steps']:,} steps")
     if row["resting_hr"] is not None:
         parts.append(f"resting {row['resting_hr']} bpm")
-    return DOT.join(parts) if parts else "no lines"
+    return DOT.join(parts) if parts else ("no lines" if sleep else "")
+
+
+def slept_text(night: Mapping[str, Any], tz: str) -> str:
+    """`slept 23:10-06:40 · 7 h 20 min · training 45 min`: the night's first and last asleep minute on
+    the record's clock, how long asleep, and the day's training when it has some."""
+    zone = ZoneInfo(tz)
+    begun, ended = _instant(night["start"]).astimezone(zone), _instant(night["end"]).astimezone(zone)
+    parts = [f"slept {begun:%H:%M}{EN_DASH}{ended:%H:%M}", duration_text(int(night["asleep_s"]))]
+    training = night.get("training")
+    if training:
+        parts.append(f"training {duration_text(int(training['minutes']) * 60)}")
+    return DOT.join(parts)
 
 
 def _source_text(s: dict[str, Any], tz: ZoneInfo) -> str:
