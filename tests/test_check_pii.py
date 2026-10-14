@@ -8,6 +8,7 @@ UK fictional range `07700 900xxx` (CLAUDE.md)."""
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -265,3 +266,45 @@ def test_half_a_range_is_refused(repo: Path, patterns: Path) -> None:
     r = _run(repo, patterns, env={"PRE_COMMIT_FROM_REF": "HEAD"})
     assert r.returncode == 2
     assert "Traceback" not in r.stderr
+
+
+def test_pre_commit_over_a_range_checks_the_range_and_shows_the_count(
+    repo: Path, patterns: Path, tmp_path: Path
+) -> None:
+    """The bug, end to end: `pre-commit run --from-ref --to-ref` stages nothing, and the hook said Passed."""
+    pytest.importorskip("pre_commit")
+    yaml = pytest.importorskip("yaml")
+    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hook = next(
+        h for r in config["repos"] if r["repo"] == "local" for h in r["hooks"] if h["id"] == "check-pii"
+    )
+    # the repository's own hook, verbose and serial as it is there, run by this interpreter, not a fresh venv
+    entry = " ".join(shlex.quote(Path(p).as_posix()) for p in (sys.executable, SCRIPT))
+    hook = {**hook, "language": "system", "entry": entry}
+    local = {"repos": [{"repo": "local", "hooks": [hook]}]}
+    (repo / ".pre-commit-config.yaml").write_text(yaml.safe_dump(local), encoding="utf-8")
+    _git(repo, "add", ".pre-commit-config.yaml")
+    start = _commit(repo, "notes.md", "# notes\n")
+    clean = _commit(repo, "notes.md", "# notes\nnothing here\n")
+    dirty = _commit(repo, "notes.md", "# notes\nnothing here\ncall 07700 900123\n")
+    environ = {k: v for k, v in os.environ.items() if k not in RANGE}
+    environ["LOGBOOK_PII_PATTERNS"] = str(patterns)
+    environ["PRE_COMMIT_HOME"] = str(tmp_path / "pre-commit-home")
+
+    def pre_commit(start: str, end: str) -> subprocess.CompletedProcess[str]:
+        args = ["run", "check-pii", "--color", "never", "--from-ref", start, "--to-ref", end]
+        return subprocess.run(
+            [sys.executable, "-m", "pre_commit", *args],
+            cwd=repo,
+            env=environ,
+            capture_output=True,
+            encoding="utf-8",
+        )
+
+    passed = pre_commit(start, clean)
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+    assert "2 patterns, 1 line, 0 matches" in passed.stdout  # shown on a pass: the hook is verbose
+    failed = pre_commit(clean, dirty)
+    assert failed.returncode == 1, failed.stdout + failed.stderr
+    assert "notes.md:3" in failed.stdout
+    assert "900123" not in failed.stdout + failed.stderr
