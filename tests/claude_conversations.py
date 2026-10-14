@@ -156,7 +156,7 @@ def passage_messages() -> list[dict[str, Any]]:
             600,
             "human",
             [text(OWNER_SECOND, 600)],
-            files=[{"file_name": "chart.png", "file_kind": "image"}],
+            files=[{"file_name": "chart.png"}],
         ),
         message(
             4,

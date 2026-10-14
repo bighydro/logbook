@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -129,8 +130,35 @@ def test_attachments_and_uploaded_files_are_counted_by_name_and_type(folder: Pat
     line, _data = _passage(folder)
     assert line["payload"]["extra"]["attachments"] == [
         {"name": "harbours.csv", "type": "text/csv", "bytes": 2048},
-        {"name": "chart.png", "type": "image"},
+        {"name": "chart.png", "type": "png"},
     ]
+
+
+def test_files_v2_are_counted_in_place_of_files_and_never_twice(tmp_path: Path):
+    messages = cc.present_messages()
+    messages[0]["files"] = [{"file_name": "gloves.jpg"}]
+    messages[0]["files_v2"] = [
+        {"file_kind": "image", "file_uuid": "u", "file_name": "gloves.jpg", "preview_url": "/api/x/preview"}
+    ]
+    messages[1]["files_v2"] = [{"file_kind": "document", "file_name": "sizes.pdf"}]
+    ((line, _data),) = _run(cc.export(tmp_path / "v2", [cc.conversation(cc.PRESENT, "", messages, 0, 1)]))
+    assert line["payload"]["extra"]["attachments"] == [
+        {"name": "gloves.jpg", "type": "image"},
+        {"name": "sizes.pdf", "type": "document"},
+    ]
+    assert "/api/x/preview" not in json.dumps(line)
+
+
+def test_a_name_is_never_a_way_in_for_a_document(tmp_path: Path):
+    long = "x" * 5000
+    messages = cc.present_messages()
+    messages[0]["attachments"] = [{"file_name": long, "file_type": long, "extracted_content": "y"}]
+    messages[1]["content"].append({"type": "tool_use", "name": long, "input": {}})
+    ((line, _data),) = _run(cc.export(tmp_path / "n", [cc.conversation(cc.PRESENT, long, messages, 0, 1)]))
+    extra = line["payload"]["extra"]
+    (named,) = extra["attachments"]
+    assert len(named["name"]) <= 255 and len(named["type"]) <= 255
+    assert all(len(tool) <= 255 for tool in extra["tools"]) and len(line["payload"]["title"]) <= 255
 
 
 def test_tool_calls_are_a_count_by_name_and_their_output_is_never_kept(folder: Path):
@@ -180,6 +208,62 @@ def test_an_older_export_without_content_blocks_reads_the_text_without_placehold
     assert [t["speaker"] for t in turns] == ["owner", "assistant", "owner", "assistant"]
     assert turns[1]["text"] == cc.MACHINE_FIRST and turns[3]["text"] == cc.MACHINE_SECOND
     assert "not supported" not in data.decode("utf-8")
+
+
+INLINE_ARTIFACT = "CANARY-inline-artifact-never-in-the-record"
+INLINE_THINKING = "CANARY-inline-thinking-never-in-the-record"
+INLINE = (
+    f"<antThinking>{INLINE_THINKING}</antThinking>\n\nHere is the plan.\n\n"
+    f'<antArtifact identifier="plan" type="text/markdown" title="Plan">\n{INLINE_ARTIFACT}\n'
+    "</antArtifact>\n\n"
+    "Tell me what to change."
+)
+
+
+@pytest.mark.parametrize("shape", ["blocks", "text"])
+def test_an_artifact_and_thinking_written_inline_are_never_kept(tmp_path: Path, shape: str):
+    """An export from before artifacts were tool calls carries them, and the thinking, in the text."""
+    human = cc.message(1, 0, "human", [cc.text(cc.PRESENT_OWNER)], conversation=cc.PRESENT)
+    assistant = cc.message(2, 30, "assistant", [cc.text(INLINE, 30)], conversation=cc.PRESENT)
+    unclosed = cc.message(
+        3,
+        60,
+        "assistant",
+        [cc.text(f"Also:\n<antArtifact identifier='x'>{INLINE_ARTIFACT}")],
+        conversation=cc.PRESENT,
+    )
+    if shape == "text":
+        for m in (human, assistant, unclosed):
+            del m["content"]
+        assistant["text"], unclosed["text"] = INLINE, f"Also:\n<antArtifact identifier='x'>{INLINE_ARTIFACT}"
+    chat = cc.conversation(cc.PRESENT, "", [human, assistant, unclosed], 0, 100)
+    ((line, data),) = _run(cc.export(tmp_path / shape, [chat]))
+    text = data.decode("utf-8") + json.dumps(line, ensure_ascii=False)
+    assert INLINE_ARTIFACT not in text and INLINE_THINKING not in text and "<ant" not in text
+    assert json.loads(data)["turns"][1]["text"] == "Here is the plan.\n\nTell me what to change.\n\nAlso:"
+    assert line["payload"]["extra"]["tools"] == {"artifacts": 2}
+
+
+def test_a_message_whose_blocks_are_empty_is_read_from_its_text(tmp_path: Path):
+    first, answer = cc.present_messages()
+    first["content"] = []
+    ((_line, data),) = _run(
+        cc.export(tmp_path / "e", [cc.conversation(cc.PRESENT, "", [first, answer], 0, 1)])
+    )
+    assert json.loads(data)["turns"][0] == {"speaker": "owner", "text": cc.PRESENT_OWNER}
+
+
+def test_a_zip_whose_member_is_corrupt_is_not_sniffed_and_is_one_sentence(tmp_path: Path):
+    archive = cc.zipped(tmp_path / "corrupt.zip")
+    data = bytearray(archive.read_bytes())
+    start = data.find(b"conversations.json") + len("conversations.json")
+    for i in range(start + 5, start + 60):
+        data[i] ^= 0xFF
+    archive.write_bytes(bytes(data))
+    assert zipfile.is_zipfile(archive) and claude_export.sniff(archive) is False
+    assert adapters.find(archive) is not claude_export
+    with pytest.raises(adapters.Unreadable, match=r"corrupt\.zip"):
+        list(claude_export.run(archive))
 
 
 def test_a_malformed_conversation_is_skipped_and_counted(tmp_path: Path):
@@ -253,7 +337,9 @@ def test_a_message_from_neither_side_is_never_the_owners(tmp_path: Path):
 
 
 def test_since_leaves_out_a_conversation_that_ended_before(folder: Path):
-    assert list(_by_conversation(folder, since=cc.at(3600))) == [cc.PRESENT]
+    counts: dict[str, int] = {}
+    assert list(_by_conversation(folder, since=cc.at(3600), counts=counts)) == [cc.PRESENT]
+    assert counts["skipped_before_since"] == 1
 
 
 def test_an_export_that_does_not_parse_is_one_sentence(tmp_path: Path):
@@ -369,7 +455,7 @@ def test_dry_run_counts_conversations_new_grown_and_unchanged_and_writes_nothing
     attachments = sorted(p.name for p in (lb.root / "attachments").iterdir())
     code, out = _cli(capsys, "add", "claude-export", str(later), "--dry-run")
     assert code == 0 and "claude: 2 lines would be added, 0 already in the record (dry run" in out
-    assert "3 conversations in the export" in out and "1 new since the last import" in out
+    assert "3 conversations in the export" in out and "1 new to the record" in out
     assert "1 grown since the last import" in out and "1 with nothing in them" in out
     assert int(Logbook.find().meta["seq"]) == seq
     assert sorted(p.name for p in (lb.root / "attachments").iterdir()) == attachments
@@ -379,3 +465,25 @@ def test_dry_run_counts_conversations_new_grown_and_unchanged_and_writes_nothing
         )
         == 1
     )
+
+
+def test_an_export_older_than_one_already_imported_writes_nothing(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    older = cc.zipped(tmp_path / "drop" / "data-2026-03-03.zip")
+    grown = cc.conversations()
+    grown[0]["chat_messages"].append(cc.message(5, 4000, "human", [cc.text("One more thing.")]))
+    newer = cc.zipped(tmp_path / "drop" / "data-2026-04-03.zip", grown)
+    assert _cli(capsys, "add", "claude-export", str(older), str(newer))[0] == 0
+    assert [t["payload"]["raw_id"] for t in _transcripts(lb, cc.PASSAGE)] == [
+        f"claude:{cc.PASSAGE}",
+        f"claude:{cc.PASSAGE}:v2",
+    ]
+    seq = int(lb.meta["seq"])
+    code, out = _cli(capsys, "add", "claude-export", str(older), str(newer))
+    assert code == 0 and "grown" not in out and int(Logbook.find().meta["seq"]) == seq
+    shorter = cc.conversations()
+    shorter[0]["chat_messages"].pop()  # an export older still, never imported: nothing either
+    code, out = _cli(capsys, "add", "claude-export", str(cc.export(tmp_path / "oldest", shorter)))
+    assert code == 0 and "1 older than the line in the record" in out
+    assert int(Logbook.find().meta["seq"]) == seq
