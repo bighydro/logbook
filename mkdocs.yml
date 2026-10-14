@@ -44,7 +44,7 @@ nav:
   - Your life in a folder: launch-post.md
   - Vision: VISION.md
   - Lore: LORE.md
-  - Specification v0.2: SPEC.md
+  - Specification v0.4: SPEC.md
   - Architecture: ARCHITECTURE.md
   - Migrating to 0.6: migration-0.6.md
   - How a line becomes a Day: line-to-day.md
@@ -76,6 +76,7 @@ nav:
       - "0020 Tiers 2–3 are sealed with age": adr/0020-tiers-2-3-sealed-with-age.md
       - "0021 journey/v1 is the written form": adr/0021-journey-is-the-written-form.md
       - "0022 The record's home": adr/0022-the-records-home.md
+      - "0023 Digital events do not make a stay": adr/0023-digital-events-do-not-make-a-stay.md
   - RFCs:
       # The RFCs live in the repository under rfcs/, not under docs/; the site links there.
       - About RFCs: https://github.com/bighydro/logbook/blob/main/rfcs/README.md
