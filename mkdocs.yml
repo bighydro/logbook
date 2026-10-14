@@ -148,7 +148,7 @@ nav:
       - "Weather": adapters/weather.md
       - "Health: Apple Health, Withings, MyFitnessPal": adapters/health.md
       - "Apple Wallet: boarding passes and tickets": adapters/wallet.md
-      - "Your own agents: Telegram bots and Claude Code": adapters/agents.md
+      - "Your own agents: Telegram bots, Claude Code and the Claude apps": adapters/agents.md
   - Conformance: conformance/README.md
   - Contributing: CONTRIBUTING.md
   - Governance: GOVERNANCE.md

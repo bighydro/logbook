@@ -1,7 +1,7 @@
-# Your own agents: Telegram bots and Claude Code
+# Your own agents: Telegram bots, Claude Code and the Claude apps
 
-You talk to agents of your own: bots you run on Telegram, a coding assistant in Claude Code. Those
-conversations are part of the record. Your words in them are yours, at their tier, and read like
+You talk to agents of your own: bots you run on Telegram, a coding assistant in Claude Code, Claude
+in its apps. Those conversations are part of the record. Your words in them are yours, at their tier, and read like
 anything else you wrote. The agent's words sit beside them, marked as machine text, and no reader
 takes them for a person's: an agent is never in `people`, never someone's company, never proposed in
 `people review`, and its "I'll have it ready by Friday" is never a promise.
@@ -11,6 +11,8 @@ logbook add telegram-export ~/Downloads/"Telegram Desktop"/DataExport_2026-03-02
 logbook sync telegram                                                            # what you sent your bots since
 logbook add claude-sessions ~/.claude/projects                                   # every Claude Code session on this machine
 logbook add claude-sessions ~/.claude/projects --dry-run                         # what would be added; nothing written
+logbook add claude-export ~/Downloads/data-2026-03-03.zip                         # your conversations in the Claude apps
+logbook add claude-export ~/Downloads/data-2026-03-03.zip --dry-run               # how many new, grown and unchanged
 ```
 
 ## The machine mark
@@ -26,14 +28,16 @@ in the slots the two frozen profiles already leave for a source's own fields
 | `transcript/v1` (RFC 0004, whose consumers ignore a participant's fields they do not know) | a participant `{"name": "assistant", "machine": true}` | that participant is an agent, and every turn under its name is machine text |
 
 The counterpart is an **observed entity of kind `agent`**: what a source saw, keyed by its `ref`
-(`provider_id` `telegram:<bot id>` for a bot, `provider_id` `claude-code` for the assistant), never
+(`provider_id` `telegram:<bot id>` for a bot, `provider_id` `claude-code` for the assistant in Claude
+Code, `provider_id` `claude` for Claude in its apps), never
 resolved and never a person. RFC 0037 (draft) names the observed entities a review will one day
 place: `person`, `org`, `place`, `asset`, `idea`. `agent` is not among them yet; it is defined here,
 by these lines, so that an Agents page, when one exists, reads the same field. Only the literal
 `true` marks anything, and a line without the mark is read as it always was.
 
 A tier is where a line may travel, never who wrote it: an agent's message is tier 2 because
-`message/v1` is, exactly as your own; a session is tier 2 because `transcript/v1` is.
+`message/v1` is, exactly as your own; a session or a conversation is tier 2 because `transcript/v1`
+is.
 
 ## Telegram: the export
 
@@ -170,6 +174,53 @@ again in the new one under new ids, so a promise you closed against the old line
 again; close it once more. A session Claude Code copied into a new file when you resumed it is a
 second session here, as it is there.
 
+## Claude: the export of the apps
+
+Your conversations with Claude in its apps (the web, the desktop, the phone) live with your account,
+not on a machine. Ask for them: claude.ai → Settings → Privacy → **Export data**. A link to a zip
+arrives by email; the zip holds `conversations.json` (every conversation, its messages in it),
+`projects.json` (your projects, when you have any) and `users.json` (your account).
+`logbook add claude-export <zip>` reads the zip as it came, nothing unpacked to disk; the folder it
+unpacks to and its `conversations.json` are read too, and all three are sniffed, so a bare
+`logbook add` finds them. Another app's `conversations.json` (one without `chat_messages`) is not
+taken for it.
+
+**Your turns** are the `text` blocks of the messages you sent (`sender` `human`), **the assistant's**
+the `text` blocks of its own; an export older than the blocks gives only `text`, read without the
+placeholder the export writes for a block it cannot show ("This block is not supported on your
+current device yet."). **Never kept**, as anyone's words: its thinking; a tool call's input (an
+artifact's content, a search query), counted by the tool's name; a tool's result; the text the apps
+extracted from a file you gave them; the conversation's own summary; a message from neither side,
+counted. A **file** you gave or uploaded is named and counted, never copied. Of `projects.json` only
+a project's name is read (never its description, its instructions or its documents), and
+`users.json` is never opened.
+
+When the export links each message to the one before it (`parent_message_uuid`) and names where the
+conversation stands (`current_leaf_message_uuid`), only that branch is read: a prompt you edited or
+an answer you asked for again leaves the other branch behind, counted (`messages on a branch the
+conversation left`). Without the links, every message, in the export's order.
+
+| Field | From |
+|---|---|
+| `kind`, `source`, `tier` | `transcript`, `claude`, 2, exactly as a Claude Code session (`--tier` sets another for a run) |
+| `at`, `end` | the conversation's first and last message (its own `created_at` and `updated_at` when the messages have no time) |
+| `participants` | `[{"name": "owner"}, {"name": "assistant", "machine": true}]`, as a session's |
+| `content` | the turns as JSON, `{"turns": [{"speaker", "text"}, …]}`, stored once in the attachment store (SPEC §1.1); its `sha256` is the conversation's digest |
+| `title` | the conversation's name, else the first line of your first turn |
+| `raw_id` | `claude:<conversation uuid>` |
+| `extra` | `conversation` (its uuid), `project` (the name, when the conversation names a project `projects.json` lists), `created_at` and `updated_at` (the conversation's), `tool_calls` and `tools` (the calls by tool name: a count, never what they did or returned), `attachments` (each file's `name`, `type` and size in `bytes`, as the export gives them), `words` (`{owner, machine}`), `counterpart` (`{kind: agent, ref: {provider_id, claude}, name: Claude}`), and the counts every transcript has |
+
+A conversation that is not an object with a `uuid` and a list of messages, or that has no time at
+all, is skipped and counted (`conversations in a shape this version cannot read`); one with no words
+in it is counted too. An export that does not parse is one sentence, and nothing is written.
+
+**A conversation that grew** is a new line, `raw_id` suffixed `:v2` (`:v3` …), that `supersedes`
+the line before, exactly as a session that grew; a conversation unchanged since the last import
+writes nothing. Every run, and `--dry-run` before it, says how many conversations the export holds,
+how many are new, grown and unchanged. A conversation you deleted in the apps is not in the next
+export, and its line stays in the record: retract it if you want it gone. A conversation you only
+renamed is unchanged (the text is what counts), so its line keeps the old title.
+
 ## What the readers do with them
 
 - **`people`, `person`, `rollup people`, drift and the company of a stay** count no line of a
@@ -179,8 +230,8 @@ second session here, as it is there.
   record that held agent lines before this version rebuilds its observed table once.
 - **`promises`** reads only your own words in a conversation with an agent: your messages to a bot
   and your turns in a session. A message a bot wrote and a message you forwarded are counted under
-  `skipped` (`messages_by_an_agent`, `forwarded_messages`); an agent's turn is dropped before your
-  turns are read, and a line inside your own turn that its text gives the agent (`assistant: …`,
+  `skipped` (`messages_by_an_agent`, `forwarded_messages`); an agent's turn (the assistant's, in a
+  session or in a conversation in the apps) is dropped before your turns are read, and a line inside your own turn that its text gives the agent (`assistant: …`,
   pasted back) is dropped too.
 - **The dream** gives the model your messages with an agent marked (`agent` on the counterpart,
   `machine` on what it wrote) and tells it that agents are not people (`dream-day/3`, rule 5); an
