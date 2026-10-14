@@ -63,4 +63,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-63 adapters, 2 disabled; the list is <root>/policy/import.json
+65 adapters, 2 disabled; the list is <root>/policy/import.json
