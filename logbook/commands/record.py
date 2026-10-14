@@ -19,7 +19,17 @@ from .. import FORMAT
 from ..contrib import demo
 from ..core import attachments, day_start, health, repair, sealing
 from ..core.index import Index
-from ..core.store import CodeCheckoutError, FormatError, Logbook, NotIntact
+from ..core.store import (
+    INDEX_EXTENDED,
+    INDEX_NONE,
+    INDEX_REBUILT,
+    TAIL_LISTED,
+    CodeCheckoutError,
+    FormatError,
+    Logbook,
+    NotIntact,
+    TailReport,
+)
 from .common import Subparsers, _plural, _progress, _under_home
 
 _LOCALTIME = "/etc/localtime"
@@ -118,20 +128,22 @@ def cmd_retract(a: argparse.Namespace) -> None:
 
 
 def repair_arguments(sub: Subparsers) -> None:
-    """`logbook repair retract|migrate|index|fork|health-units`: what puts the record right, never by
-    rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
+    """`logbook repair retract|migrate|index|tail|fork|health-units`: what puts the record right, never
+    by rewriting a line. `retract`, `migrate` and `index` were commands of their own until 0.6."""
     s = sub.add_parser(
         "repair",
-        help="put the record right, rewriting nothing: retract, migrate, index…",
+        help="put the record right, rewriting nothing: retract, index, tail, fork…",
         description="put the record right, never by rewriting a line: retract one (`retract SEQ REASON`),"
         " bring a"
-        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), move a forked chain out of"
+        " logbook/0.1 record forward (`migrate`), rebuild the index (`index`), bring logbook.json forward"
+        " to the files' tail after a crash (`tail`), move a forked chain out of"
         " the record (`fork`), or append the lines that correct a known mistake (`health-units`)",
     )
     verbs = s.add_subparsers(dest="verb", required=True, metavar="<what>")
     retract_arguments(verbs)
     migrate_arguments(verbs)
     index_arguments(verbs)
+    tail_arguments(verbs)
     fork_arguments(verbs)
     v = verbs.add_parser(
         "health-units",
@@ -142,6 +154,81 @@ def repair_arguments(sub: Subparsers) -> None:
         "--dry-run", action="store_true", help="print how many lines would be appended; write nothing"
     )
     v.set_defaults(fn=cmd_repair)
+
+
+def tail_arguments(verbs: Subparsers) -> None:
+    """`logbook repair tail [--dry-run]`: the files ahead of `logbook.json` after a crash (SPEC §3, write
+    order), every line past the head verified and `logbook.json` brought forward to the last of them."""
+    v = verbs.add_parser(
+        "tail",
+        help="the files end past logbook.json (a crash after a line, before logbook.json): verify the"
+        " lines past the head and bring logbook.json forward to the last of them",
+        description="a crash between the fsync of a line and the replacement of logbook.json leaves the"
+        " files ahead of it (SPEC §3), and every writer refuses until this has run. Every line past the"
+        " head logbook.json names is checked as verify checks it (envelope, seq, prev, hash, timestamps,"
+        " a sealed line opened when the identity is here); only when every one passes is logbook.json"
+        " set to the last line's seq and head, and the index extended by those lines (rebuilt when it"
+        " was stale; left to the next reader when there is none). A line that fails is named and"
+        " nothing is changed. Nothing is ever rewritten; the files are not touched.",
+    )
+    v.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list the lines past the head and what would be done; write nothing",
+    )
+    v.set_defaults(fn=cmd_repair_tail)
+
+
+def cmd_repair_tail(a: argparse.Namespace) -> None:
+    """Refuses (exit 2) with the first failing line and `nothing was changed`; says `nothing to repair`
+    (exit 0) when the files end where logbook.json says; after a repair runs `verify` on the chain and
+    prints its verdict, exit 1 when it is not clean."""
+    lb = Logbook.find()
+    try:
+        report = lb.repair_tail(dry_run=a.dry_run)
+    except NotIntact as e:
+        print(f"repair tail: {e}", file=sys.stderr)
+        sys.exit(2)
+    for text in _describe_tail(report):
+        print(text)
+    if not report.tail or report.dry_run:
+        return
+    seq, head, errors = lb.verify(keyed=False)
+    if errors:
+        print(f"INVALID — {len(errors)} problem(s) after the repair; {seq} lines read, head {head}:")
+        for problem in errors:
+            print("  " + problem)
+        print("not tried again: run `logbook verify` and look at the report")
+        sys.exit(1)
+    print(f"valid — {seq} lines, head {head}")
+
+
+def _describe_tail(report: TailReport) -> Iterator[str]:
+    """What `repair tail` prints: seq, file, line number and hash of each tail line, never its contents."""
+    was_seq, was_head = report.was
+    if not report.tail:
+        yield f"nothing to repair: the files end where logbook.json says, seq={was_seq} head={was_head[:12]}…"
+        return
+    n = len(report.tail)
+    yield (
+        f"logbook.json says seq={was_seq} head={was_head[:12]}…; the files hold {_plural(n, 'line')} past it,"
+        " each verified (envelope, seq, prev, hash):"
+    )
+    for line in report.tail[:TAIL_LISTED]:
+        yield f"  seq {line.seq}  {line.file} line {line.line_no}  hash {line.hash[:12]}…"
+    if n > TAIL_LISTED:
+        yield f"  … and {_plural(n - TAIL_LISTED, 'more line')}"
+    seq, head = report.now
+    index = {
+        INDEX_EXTENDED: ("extend the index by", "index extended by", _plural(report.indexed, "line")),
+        INDEX_REBUILT: ("rebuild the index,", "index rebuilt,", _plural(report.indexed, "line")),
+        INDEX_NONE: ("build no index", "no index", "(there is none; the next reader builds it)"),
+    }[report.index]
+    if report.dry_run:
+        yield f"would set logbook.json to seq={seq} head={head[:12]}…, and {index[0]} {index[2]}"
+        yield "nothing written — run without --dry-run to repair"
+        return
+    yield f"logbook.json: seq {seq}, head {head[:12]}…; {index[1]} {index[2]}"
 
 
 def fork_arguments(verbs: Subparsers) -> None:

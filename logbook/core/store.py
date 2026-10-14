@@ -17,9 +17,10 @@ import zoneinfo
 from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePath
-from typing import IO, Any, BinaryIO, TextIO
+from typing import IO, Any, BinaryIO, NamedTuple, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
 from . import attachments, policy, sealing
@@ -27,9 +28,12 @@ from .chain import (
     CONTENT_FIELDS,
     ENVELOPE_FIELDS,
     GENESIS,
+    NOT_AN_INSTANT,
+    TIMESTAMP_FIELDS,
     Line,
     Opener,
     compute_hash,
+    is_instant,
     is_sealed,
     line_hash,
     parse_line,
@@ -118,6 +122,30 @@ HEAD_MOVED = (
 )
 _held: dict[Path, int] = {}  # lock file -> how many `writer` blocks of this process hold it
 
+# -- the files end where logbook.json says: append's precondition, and `repair tail` ---------------------
+REPAIR_TAIL = "nothing was written: run `logbook repair tail`"  # what every refusal of a writer ends in
+TAIL_AHEAD = (
+    "the files are ahead of logbook.json: they end at seq {seq} head {head}…, logbook.json says seq"
+    " {meta_seq} head {meta_head}… (a crash between a line and logbook.json, SPEC §3); " + REPAIR_TAIL
+)
+TAIL_OTHER_HEAD = (
+    "the files do not end where logbook.json says: they end at seq {seq} head {head}…, logbook.json says"
+    " seq {meta_seq} head {meta_head}…; " + REPAIR_TAIL
+)
+FILES_BEHIND = (
+    "logbook.json says seq={meta_seq} head={meta_head}…, the files end at seq={seq} head={head}…: the files"
+    " are behind logbook.json, which no crash leaves (SPEC §3); restore the month files from a backup"
+)
+NOT_A_LAG = (
+    "logbook.json says seq={meta_seq} head={meta_head}…, the files end at seq={seq} head={head}…: no line is"
+    " past the head and the head is not the files'; run `logbook verify`"
+)
+INDEX_EXTENDED = "extended"  # `repair tail`: the index was current and took the tail lines
+INDEX_REBUILT = "rebuilt"  # it was there and stale, and was built again from the files
+INDEX_NONE = "none"  # there was none; the next reader builds it
+TAIL_CHUNK = 1 << 16  # bytes read from the end of a month file at a time, for its last line
+TAIL_LISTED = 20  # `repair tail` lists this many tail lines; the rest are counted
+
 
 class Locked(Exception):
     """Another process is writing to this record and `--no-wait` said not to wait."""
@@ -127,6 +155,14 @@ class HeadMoved(Exception):
     """`logbook.json` changed under a writer between the head it read and the batch it would
     write: the batch would not chain, and nothing of it was written. Cannot happen while every
     writer holds the lock; this is the guard, the lock is the courtesy."""
+
+
+class TailAhead(HeadMoved):
+    """The month files end past the head `logbook.json` names, or at its seq under another head: a
+    process died between the fsync of a line and the replacement of `logbook.json` (SPEC §3, write
+    order). A writer refuses before it writes anything, in one sentence naming `logbook repair tail`,
+    which brings `logbook.json` forward once every line past it verifies. A HeadMoved to the CLI: one
+    sentence, exit 2."""
 
 
 class CodeCheckoutError(Exception):
@@ -146,6 +182,39 @@ class UnsortedFile(Exception):
     """A month file whose lines are not in seq order. This code never writes one; SPEC §3 still
     orders by seq wherever a line lives, so a caller that meets one reads again through
     `Logbook._lines_by_seq`, which sorts."""
+
+
+class FileTail(NamedTuple):
+    """The last line of the month files: the highest seq among their last lines (`Logbook._files_tail`)."""
+
+    seq: int
+    hash: str
+    path: Path
+
+
+class TailLine(NamedTuple):
+    """One line past the head `logbook.json` names, verified, as `repair tail` lists it."""
+
+    seq: int
+    hash: str
+    file: str  # the month file, relative to the root
+    line_no: int  # its line in that file
+
+
+@dataclass(frozen=True)
+class TailReport:
+    """What `repair tail` found, and did or would do (`Logbook.repair_tail`)."""
+
+    was: tuple[int, str]  # logbook.json's (seq, head) before
+    tail: tuple[TailLine, ...]  # every line past it, in seq order, each verified; empty: nothing to repair
+    dry_run: bool
+    index: str  # INDEX_EXTENDED, INDEX_REBUILT or INDEX_NONE: what was done to the index, or would be
+    indexed: int  # lines the index was extended by, or holds after a rebuild
+
+    @property
+    def now(self) -> tuple[int, str]:
+        """logbook.json's (seq, head) after: the tail's last line, or `was` when there is no tail."""
+        return (self.tail[-1].seq, self.tail[-1].hash) if self.tail else self.was
 
 
 # progress(file, lines_in_file, lines_so_far, elapsed_seconds): once per month file, as it is finished
@@ -657,6 +726,7 @@ class Logbook:
     ) -> Line:
         meta = self.meta  # read under the lock: the head is current until the lock is released
         self._check_format(meta)
+        self._check_tail(meta)
         self._require_identity((tier,))
         line = self._line(
             meta, meta["seq"] + 1, meta["head"], at, source, kind, tier, payload, end, tz, recorded_at
@@ -671,12 +741,188 @@ class Logbook:
             fh.flush()
             os.fsync(fh.fileno())  # SPEC §3 write order: the line is on disk before logbook.json names it
         meta["seq"], meta["head"] = line["seq"], line["hash"]
-        self._save_meta(meta)
+        self._save_meta(meta)  # then logbook.json, then the index: a crash leaves at most the files ahead
         if idx is not None:
             with idx:
                 line_row, words = idx.rows_of(line, meta, self._relative(path), offset)
                 idx.add([line_row], meta, [] if words is None else [words])
         return line
+
+    def _files_tail(self) -> FileTail | None:
+        """The last line of the files: the highest seq among the last line of every month file, with its
+        hash and file. The writer appends each file in seq order (SPEC §3), so a file's last line is its
+        highest seq and the files are read from their ends, not through. None when the files hold no
+        line. A last line that is not one (a month file cut inside it, SPEC §3) raises ValueError naming
+        the file and line as `verify` does."""
+        best: FileTail | None = None
+        for path in self.files():
+            found = last_line(path)
+            if found is None:
+                continue
+            offset, raw = found
+            try:
+                line = parse_line(raw)
+            except ValueError:
+                line = self._parse(path, _line_number(path, offset), raw)  # raises, naming the line
+            seq = _seq_of(line)
+            if best is None or seq > best.seq:
+                best = FileTail(seq, str(line.get("hash")), path)
+        return best
+
+    def _check_tail(self, meta: dict[str, Any]) -> None:
+        """A writer's precondition, under the lock: the files end where `logbook.json` says. When they
+        end past it (a crash after the fsync of a line and before `logbook.json` was replaced, SPEC §3)
+        or at its seq under another head, TailAhead names `repair tail` and nothing has been written:
+        appending would chain from a head the files are past, and write a second line of the same seq.
+        A month file cut inside its last line refuses the same way. Reads the end of each month file
+        only, so the check costs the same on a record of a day and of a lifetime."""
+        try:
+            tail = self._files_tail()
+        except ValueError as e:
+            raise TailAhead(f"{e}; {REPAIR_TAIL}") from None
+        meta_seq, meta_head = int(meta["seq"]), str(meta["head"])
+        if tail is None:
+            return
+        if tail.seq > meta_seq:
+            raise TailAhead(_tail_sentence(TAIL_AHEAD, (meta_seq, meta_head), (tail.seq, tail.hash)))
+        if tail.seq == meta_seq and tail.hash != meta_head:
+            raise TailAhead(_tail_sentence(TAIL_OTHER_HEAD, (meta_seq, meta_head), (tail.seq, tail.hash)))
+
+    def repair_tail(self, dry_run: bool = False) -> TailReport:
+        """`logbook repair tail`: bring `logbook.json` forward to the files' tail, once the tail verifies.
+
+        Under the writer lock. Every line past the seq `logbook.json` names is found (the month files
+        whose last line is past it, read through) and read back in seq order, one line in memory at a
+        time, and checked as `verify` would check it from that head: the envelope (SPEC §2), its seq
+        and its `prev` against the line before (the head itself for the first), its hash, its
+        timestamps, the sealed envelope rule, and a sealed line opened against its digest when the
+        identity is here. Only when every line passes is `logbook.json` set to the last line's seq and
+        head, and then the index brought along: extended by those lines when it is current with the
+        old `logbook.json`, built again from the files when it is there and stale, left to the next
+        reader when there is none. The order is SPEC §3's: the files were first, `logbook.json` second,
+        the index last. The first failing line is `NotIntact`, as `_rewrite`'s gate says it, and
+        nothing has been changed; so are the files behind `logbook.json`, which no crash leaves, and
+        the files ending at its seq under another head, which is not a lag. With `dry_run` nothing is
+        written and the report says what would be. An empty `tail` in the report means the files end
+        where `logbook.json` says and there is nothing to repair."""
+        with self.writer():
+            meta = self.meta
+            self._check_format(meta)
+            was = (int(meta["seq"]), str(meta["head"]))
+            files = self.files()
+            seqs, places, line_nos, end = self._tail_places(files, was)
+            if not seqs:
+                if end[0] < was[0]:
+                    raise NotIntact(_tail_sentence(FILES_BEHIND, was, end) + f"; {NOTHING_CHANGED}")
+                if end[1] != was[1]:
+                    raise NotIntact(_tail_sentence(NOT_A_LAG, was, end) + f"; {NOTHING_CHANGED}")
+                return TailReport(was, (), dry_run, INDEX_NONE, 0)
+            idx, state = self._index_open(meta, seqs)
+            try:
+                tail, rows, texts = self._tail_verified(files, seqs, places, line_nos, was, meta, idx)
+                if dry_run:
+                    return TailReport(was, tail, True, state, _indexed(state, was[0], len(tail)))
+                meta["seq"], meta["head"] = tail[-1].seq, tail[-1].hash
+                self._save_meta(meta)  # the files were first; then logbook.json; the index last (SPEC §3)
+                if idx is not None:
+                    idx.add(rows, meta, texts)
+                    return TailReport(was, tail, False, INDEX_EXTENDED, len(rows))
+            finally:
+                if idx is not None:
+                    idx.close()
+            if state == INDEX_REBUILT:
+                with Index.open(self) as fresh:
+                    return TailReport(was, tail, False, INDEX_REBUILT, fresh.rebuild())
+            return TailReport(was, tail, False, INDEX_NONE, 0)
+
+    def _tail_places(
+        self, files: list[Path], was: tuple[int, str]
+    ) -> tuple[array[int], array[int], array[int], tuple[int, str]]:
+        """Where every line past seq `was[0]` lives: (seqs, places as `_lines_by_seq` packs them, line
+        numbers), and the files' end (the highest seq among the last lines, with its hash). Only a month
+        file whose last line is past the head is read through. A line that is not one is NotIntact
+        naming the file and line, as `verify` does."""
+        seqs: array[int] = array("q")
+        places: array[int] = array("q")
+        line_nos: array[int] = array("q")
+        end = (0, GENESIS)
+        try:
+            for file_no, path in enumerate(files):
+                found = last_line(path)
+                if found is None:
+                    continue
+                offset, raw = found
+                try:
+                    last = parse_line(raw)
+                except ValueError:
+                    last = self._parse(path, _line_number(path, offset), raw)  # raises, naming the line
+                seq = _seq_of(last)
+                if seq > end[0]:
+                    end = (seq, str(last.get("hash")))
+                if seq <= was[0]:
+                    continue
+                with path.open("rb") as fh:
+                    offset = 0
+                    for n, raw in enumerate(fh, 1):
+                        if raw.strip():
+                            seq = _seq_of(self._parse(path, n, raw))
+                            if seq > was[0]:
+                                seqs.append(seq)
+                                places.append((file_no << 40) | offset)
+                                line_nos.append(n)
+                        offset += len(raw)
+        except ValueError as e:
+            raise NotIntact(f"{e}; {NOTHING_CHANGED}") from e
+        return seqs, places, line_nos, end
+
+    def _tail_verified(
+        self,
+        files: list[Path],
+        seqs: array[int],
+        places: array[int],
+        line_nos: array[int],
+        was: tuple[int, str],
+        meta: dict[str, Any],
+        idx: Index | None,
+    ) -> tuple[tuple[TailLine, ...], list[Row], list[TextRow]]:
+        """The tail lines read back in seq order and each checked from the head before it, with their
+        index rows when `idx` will take them. The first failing line is NotIntact; nothing is written."""
+        opener = self._opener()
+        n, prev = was
+        tail: list[TailLine] = []
+        rows: list[Row] = []
+        texts: list[TextRow] = []
+        handles: OpenFiles[int, BinaryIO] = OpenFiles(lambda file_no: files[file_no].open("rb"))
+        with handles:
+            for i in sorted(range(len(seqs)), key=seqs.__getitem__):
+                file_no, offset = places[i] >> 40, places[i] & ((1 << 40) - 1)
+                line = read_line_at(handles.get(file_no), offset)
+                problem = _line_problem(line, n + 1, prev, compute_hash, opener)
+                if problem is not None:
+                    raise NotIntact(f"line {n + 1}: {problem}; id {line.get('id')}; {NOTHING_CHANGED}")
+                n, prev = n + 1, str(line["hash"])
+                rel = self._relative(files[file_no])
+                tail.append(TailLine(n, prev, rel, line_nos[i]))
+                if idx is not None:
+                    row, words = idx.rows_of(line, meta, rel, offset)
+                    rows.append(row)
+                    if words is not None:
+                        texts.append(words)
+        return tuple(tail), rows, texts
+
+    def _index_open(self, meta: dict[str, Any], seqs: array[int]) -> tuple[Index | None, str]:
+        """For `repair tail`: the index, open, when it is there, current with `meta` and holds none of the
+        tail's `seqs`, so it can be extended once `logbook.json` moves; else None and whether it is to be
+        built again (INDEX_REBUILT: stale, or built from the files while they were ahead, as `repair
+        index` on a lagging record builds it, so it holds the tail already under the old head) or is not
+        there (INDEX_NONE). Nothing is discarded here: a refusal must change nothing."""
+        if not self.index_path.exists():
+            return None, INDEX_NONE
+        idx = Index.open(self)
+        if idx.matches(meta) and not idx.ids(seqs):
+            return idx, INDEX_EXTENDED
+        idx.close()
+        return None, INDEX_REBUILT
 
     def retract(self, seq: int, reason: str, at: str | None = None) -> Line:
         """Retract line `seq`: a new manual line, kind `retraction`, whose payload supersedes it
@@ -766,6 +1012,7 @@ class Logbook:
     ) -> int:
         meta = self.meta
         self._check_format(meta)
+        self._check_tail(meta)  # before the index is opened: built from files that are ahead, it would lie
         idx = self.index()
         seq, head = meta["seq"], meta["head"]
         n, taken, started = 0, 0, time.monotonic()
@@ -797,7 +1044,7 @@ class Logbook:
                     os.fsync(fh.fileno())  # SPEC §3 write order: every line is on disk before logbook.json
             if (meta["seq"], meta["head"]) != (seq, head):
                 meta["seq"], meta["head"] = seq, head
-                self._save_meta(meta)
+                self._save_meta(meta)  # then logbook.json, then the index: a crash leaves the files ahead
                 idx.add(rows, meta, texts)
 
         try:
@@ -1267,6 +1514,10 @@ def _line_problem(
         return "prev does not match previous hash"
     if hash_of(line) != line["hash"]:
         return "hash does not recompute"
+    for key in TIMESTAMP_FIELDS:  # an instant each (SPEC §2), as verify requires; the index needs it too
+        stamp = line[key]
+        if not (key == "end" and stamp is None) and not is_instant(stamp):
+            return f"{key} {_shown(stamp)} {NOT_AN_INSTANT}"
     sealed_error = sealed_envelope_error(line)
     if sealed_error is not None:
         return sealed_error
@@ -1278,6 +1529,60 @@ def _line_problem(
     if opener is not None and is_sealed(line):
         return opener(line)
     return None
+
+
+def _shown(value: object) -> str:
+    """A field's value as the gate quotes it, cut short, as `verify` quotes it."""
+    text = repr(value)
+    return text if len(text) <= 40 else text[:39] + "…"
+
+
+def _tail_sentence(template: str, was: tuple[int, str], end: tuple[int, str]) -> str:
+    return template.format(meta_seq=was[0], meta_head=was[1][:12], seq=end[0], head=end[1][:12])
+
+
+def _indexed(state: str, was_seq: int, tail_lines: int) -> int:
+    """The lines a `repair tail` dry run says the index would be extended by, or hold after a rebuild."""
+    if state == INDEX_EXTENDED:
+        return tail_lines
+    return was_seq + tail_lines if state == INDEX_REBUILT else 0
+
+
+def last_line(path: Path) -> tuple[int, bytes] | None:
+    """The last line of a month file that is not blank, as (byte offset, the line's bytes with its
+    newline when it has one), read from the end TAIL_CHUNK bytes at a time, so a file of any size costs
+    a read or two; None when the file holds no line. A line a crash cut short comes back without a
+    newline, and `Logbook._parse` says so."""
+    with path.open("rb") as fh:
+        pos = fh.seek(0, os.SEEK_END)
+        buffer = b""
+        while True:
+            kept = len(buffer.rstrip())  # trailing blank lines and whitespace are not the line
+            if (kept and buffer.rfind(b"\n", 0, kept) != -1) or pos == 0:
+                break
+            step = min(TAIL_CHUNK, pos)
+            pos -= step
+            fh.seek(pos)
+            buffer = fh.read(step) + buffer
+    kept = len(buffer.rstrip())
+    if not kept:
+        return None
+    start = buffer.rfind(b"\n", 0, kept) + 1
+    ended = buffer.find(b"\n", kept) != -1
+    return pos + start, buffer[start:kept] + (b"\n" if ended else b"")
+
+
+def _line_number(path: Path, offset: int) -> int:
+    """The line number of the line that starts at byte `offset`, for a message: the newlines before it."""
+    newlines, left = 0, offset
+    with path.open("rb") as fh:
+        while left > 0:
+            chunk = fh.read(min(TAIL_CHUNK, left))
+            if not chunk:
+                break
+            newlines += chunk.count(b"\n")
+            left -= len(chunk)
+    return newlines + 1
 
 
 def _take_lock(path: Path, command: str, wait: bool, notice: Callable[[str], None]) -> None:

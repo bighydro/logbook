@@ -9,7 +9,7 @@ a record in this table is put right before it is migrated or sealed and never by
 
 | `verify` says | What happened | What to run |
 |---|---|---|
-| `logbook.json says seq=N …, files say seq=N+k …` and nothing else | a crash between the files and `logbook.json` (SPEC §3, write order): the files are ahead, every line past `seq` is a chained tail | `logbook repair index` rebuilds the locator; the next append brings `logbook.json` forward. A `logbook.json` behind by one `sync` batch is the normal shape of this |
+| `logbook.json says seq=N …, files say seq=N+k …` and nothing else | a crash between the files and `logbook.json` (SPEC §3, write order): the files are ahead, every line past `seq` is a chained tail. Every writer refuses until it is mended, naming this command | `logbook repair tail --dry-run`, then `logbook repair tail` ([below](#the-files-ahead-of-logbookjson)). Never `repair index` and append: that wrote a second line of the same seq |
 | `… line n: the file ends inside this line (cut short)` | a crash tore the last line of a month file; the lines before it are whole and verify reports their head | restore that month file from the last backup, or cut the torn line and bring `logbook.json` to the head `verify` printed; `repair fork` does not mend a torn file |
 | `seq N expected N+1` and `prev does not match previous hash` on every second line from one seq | two chains fork at one head (#234): a long writer wrote its batch chained from a head another writer had already moved past | `logbook repair fork`, then `logbook repair fork --apply` |
 | `created as logbook/0.1 …` | the record was hashed by the rule before the RFC 8785 fix | `logbook repair migrate` |
@@ -21,6 +21,63 @@ a record in this table is put right before it is migrated or sealed and never by
 
 A file the lines name that the store does not hold is not in this table: `verify` lists it and stays valid
 ([below](#the-files-the-lines-name)).
+
+## The files ahead of logbook.json
+
+The shape: a writer appends a line to its month file, flushes and fsyncs it, and the process is gone
+before `logbook.json` is replaced (a kill, a power cut, a crash: the write order of SPEC §3 puts the line on
+disk first, so this is the shape a crash leaves once the line is whole; the row below it is the shape when
+it is not). The files end at seq N+1, `logbook.json` says N, and
+`verify` says exactly that and nothing else. A `logbook.json` behind by one `sync` batch is the same shape:
+`append_many` writes a whole batch, fsyncs each month file, then `logbook.json`.
+
+Until `logbook.json` is brought forward, every writer refuses, in one sentence that names this command, and
+writes nothing:
+
+```
+add: the files are ahead of logbook.json: they end at seq 2 head 4dc18fde900d…, logbook.json says seq 1 head 9c1b3e2a7f04… (a crash between a line and logbook.json, SPEC §3); nothing was written: run `logbook repair tail`
+```
+
+A writer that went ahead would chain its line from the head `logbook.json` names, which the files are
+already past, and the record would hold two lines of one seq: a fork, `repair fork`'s case, made from a
+crash that had left a clean tail. That is what the procedure this page gave before (`repair index`, then
+append) did: the rebuilt index held the tail under a `logbook.json` that did not, the next append wrote a
+second seq N+1 and the index refused it, after the file had taken it.
+
+```bash
+logbook repair tail --dry-run    # the tail, listed; writes nothing
+logbook repair tail              # the repair
+```
+
+The dry run reads every line past the seq `logbook.json` names, in seq order, and checks each as `verify`
+checks it from that head: the envelope, its seq, its `prev` against the line before (the head itself for
+the first), its hash, its timestamps, the sealed envelope rule, and a sealed line opened against its
+digest when the identity is here. It lists each line by seq, file, line number and hash, never its
+contents, and says what the repair would set `logbook.json` to:
+
+```
+logbook.json says seq=1 head=9c1b3e2a7f04…; the files hold 1 line past it, each verified (envelope, seq, prev, hash):
+  seq 2  logbook/2026/09.jsonl line 2  hash 4dc18fde900d…
+would set logbook.json to seq=2 head=4dc18fde900d…, and extend the index by 1 line
+nothing written — run without --dry-run to repair
+```
+
+The repair does the same, and only when every line passes sets `logbook.json` to the last line's seq and
+head, then brings the index along: extended by those lines when it is current with the old `logbook.json`,
+built again from the files when it is there and stale (or was built while the files were ahead, as `repair
+index` on this record builds it, so it holds the tail already), left to the next reader when there is none. The
+order is SPEC §3's own, the files first, `logbook.json` second, the index last, so a crash inside the repair
+leaves the same shape it was mending, never `logbook.json` or the index ahead of the files. It ends with
+`verify` on the chain and prints its verdict. No month file is touched; nothing is rewritten.
+
+It refuses, and changes nothing, when a line past the head does not verify (the first failing line, as
+`verify` names it, then `nothing was changed`: a hash that does not recompute, a `prev` that is not the
+line before, a second line of one seq, a month file cut inside its last line); when the files end *before*
+`logbook.json` (no crash leaves that; month files restored from an older backup under a newer
+`logbook.json` do, and the answer is the backup, not a rewind); and when the files end at the seq
+`logbook.json` names under another head, which is not a lag (`verify` says what it is). A tail that does
+not verify is a torn or changed line and the rows for those are above. The writer lock is held throughout,
+so a `sync` that is running is waited for, or refused under `--no-wait`.
 
 ## Two chains forked at one head
 
@@ -126,5 +183,5 @@ a line whose stamp is not one as an error naming the line (the table above); a s
 is written with an offset, `+01:00`, is a warning this release and an error in the next. A leap second
 (`23:59:60Z`) and the year 0000 are refused too: no reader here can place them on a day.
 
-[Backup](backup.md) says how to keep a snapshot so that the first row of the table is the only one you
-ever meet.
+[Backup](backup.md) says how to keep a snapshot so that the first row of the table, which `repair tail`
+mends from the files alone, is the only one you ever meet.
