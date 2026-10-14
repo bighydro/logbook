@@ -208,6 +208,8 @@ logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Tra
 logbook sync granola                              # every Granola recording, and its summary as a derived note
 logbook sync mail                                 # the same mailbox live over IMAP, read-only; dedupes against the Takeout import
 logbook sync notion                               # what happened in Notion each day: pages created, edited, moved, archived; never their text
+logbook sync github                               # commits, issues and pull requests created, closed, merged, reviews and comments (docs/adapters/github.md)
+logbook add github-export ~/code/oldboat          # an old project's clone or GitHub's account export: its commits and each version of its docs
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook add story ~/Stories/lake.md --teller ola@example.org --listener kari.nordmann@example.org --refers-to 1961   # a told story (RFC 0028): on the day it was told, about the time it names
@@ -401,6 +403,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `beeper` | `LOGBOOK_BEEPER_TOKEN` (`LOGBOOK_BEEPER_URL`, default `http://localhost:23373`; `LOGBOOK_BEEPER_ALLOW_REMOTE=1` to read a Beeper on another machine, which the design says not to) | one `message/v1` line per message of every chat Beeper Desktop bridges, `source` `beeper-<network>`; attachments referenced by asset id, never fetched; `--networks` chooses, default every one but imessage |
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
 | `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values; never the text ([Notion](#notion)) |
+| `github` | `LOGBOOK_GITHUB_TOKEN` (a fine-grained token, read-only) and `LOGBOOK_GITHUB_REPOS` (`owner/name`, comma-separated, or `--all`; `LOGBOOK_GITHUB_URL` for a GitHub Enterprise Server); your logins under `handles` in `policy/owner.json` | one `event/v1` line per commit, issue or pull request created, closed or merged, review and comment, tier 1: the message, body or comment in full, who acted (`owner` or `other`), `agent: true` when an agent's session marker is in the text; a watermark per repo ([GitHub](#github)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 | `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
 | `gtasks` | the same two; [Google Tasks](#google-tasks) | one `task/v1` line per task each time it changes, the line a Takeout export gives (`source` `google-takeout`), so `logbook tasks` reads it and a later export writes nothing twice; a done one says how long it was open; never the notes; tier 2 |
@@ -592,6 +595,28 @@ counted as `without a recording`.
 The watermark is the recording's end; each sync looks back 24 hours (`LOGBOOK_GRANOLA_LOOKBACK_H`) and skips what
 the record already has. A network failure is retried once, then the sync exits 1 with a clear message and nothing is
 written: a batch is all or nothing.
+
+### GitHub
+
+`logbook sync github` keeps what happened in your repositories — every commit on the default branch,
+every issue and pull request created, closed or merged, every review and comment — as one `event/v1`
+line each, tier 1, with the message, the body or the comment in full, as RFC 0009's `notes` allows,
+and who acted, marked `owner` by the handles you list in `policy/owner.json`. A pull request an agent
+wrote, by the session marker in its body, is `agent: true`, so a page can list what your agents did.
+`logbook add github-export DIR` reads an old project's clone or GitHub's account export once: its
+commits, and each version of its README and docs as a digest and a word count, so an old project's
+ideas have a first-said date; the same commit or issue read both ways is one line.
+
+```bash
+export LOGBOOK_GITHUB_TOKEN=github_pat_...                  # fine-grained, read-only: Contents, Issues, Pull requests, Metadata
+export LOGBOOK_GITHUB_REPOS='ines-example/sailplan'         # owner/name, comma-separated, or --all
+logbook sync github --dry-run                               # count, write nothing
+logbook sync github                                         # then four times a day with the schedule
+logbook add github-export ~/code/oldboat                    # once per old project
+```
+
+[docs/adapters/github.md](adapters/github.md) has the whole of it: the token, who acted, the text and
+the tier, every field of a line, the watermark per repo and the export.
 
 ### Google, on one key
 
@@ -1023,8 +1048,8 @@ resolves to a person (`Speaker A`, `me` and `Unknown` are nobody), a note writte
 record's resolution lines (RFC 0006); a bare address nobody has named and a calendar system address
 (`calendar.google.com`, `noreply`, `reservations@`, `invite@`) are dropped. You are never your own company:
 the with module knows you by `owner_id` and `owner_emails` in `logbook.json`, by every resolution line that
-names those, and by `policy/owner.json`, `{"names": [...], "emails": [...], "phones": [...]}`, where your
-other spellings go; `init` writes it empty. `trips` lists at most twelve names, most evidence first.
+names those, and by `policy/owner.json`, `{"names": [...], "emails": [...], "phones": [...], "handles":
+[...]}`, where your other spellings and your logins go; `init` writes it empty. `trips` lists at most twelve names, most evidence first.
 
 **Countries, coarsely.** `rollup countries` has no map. The country of a night is the one a place in
 `places.json` carries (`country`, your word), else the nearest large airport within 300 km and the country its

@@ -61,7 +61,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import machine
+from . import machine, policy
 from .chain import Line
 from .places import Place, distance_m
 from .resolve import Identity, Ref
@@ -159,13 +159,15 @@ def owner_of(
     identities: Mapping[Ref, Identity],
 ) -> Owner:
     """`Owner` from `logbook.json` (`owner_id`, `owner_emails`), `policy/owner.json` (`aliases`:
-    `names`, `emails`, `phones`) and the resolution lines: a ref that resolves to an owner entity
-    is the owner's, an owner ref's entity is the owner, to a fixpoint; the names are the aliases'
-    and every label an owner ref resolves to."""
+    `names`, `emails`, `phones`, `handles`, each handle as a ref carries it, `policy.handle`) and
+    the resolution lines: a ref that resolves to an owner entity is the owner's, an owner ref's
+    entity is the owner, to a fixpoint; the names are the aliases' and every label an owner ref
+    resolves to."""
     entities = {owner_id}
     refs: set[Ref] = {("email", _normal(e)) for e in owner_emails if e.strip()}
     refs |= {("email", _normal(e)) for e in aliases.get("emails", ()) if e.strip()}
     refs |= {("phone", p.strip()) for p in aliases.get("phones", ()) if p.strip()}
+    refs |= {("handle", h) for h in map(policy.handle, aliases.get("handles", ())) if h is not None}
     names = {_normal(n) for n in aliases.get("names", ()) if n.strip()}
     while True:
         before = (len(entities), len(refs))

@@ -24,6 +24,7 @@ from .common import (
     _airports,
     _csv,
     _is_rfc3339,
+    _owner_aliases,
     _plural,
     _progress,
     _registry,
@@ -170,6 +171,8 @@ def _append_with(
     and `--restart` reads from the first byte again. With `dry_run` the adapter runs, the drafts
     are counted against the record and nothing is written: not a line, not an attachment, not the
     manifest."""
+    from ..contrib import adapters
+
     if _say_disabled(lb, adapter.NAME):
         return 0
     counts: dict[str, int] = {}
@@ -214,6 +217,8 @@ def _append_with(
         except places.PlaceError as e:
             print(f"add: {e}", file=sys.stderr)
             sys.exit(2)
+    if _takes(adapter, "owner_aliases"):
+        options["owner_aliases"] = _owner_aliases(lb, "add")
     if _takes(adapter, "owner_emails"):
         owner_emails = lb.meta.get("owner_emails") or []
         options["owner_emails"] = owner_emails
@@ -260,6 +265,9 @@ def _append_with(
             skipped=skipped,
         )
     except stream.MissingExtra as e:  # the export streams through ijson, which is not installed
+        print(f"add: {adapter.NAME}: {e}", file=sys.stderr)
+        sys.exit(2)
+    except adapters.Unreadable as e:  # not the input the adapter reads: one sentence (`github`)
         print(f"add: {adapter.NAME}: {e}", file=sys.stderr)
         sys.exit(2)
     print(f"added {n} lines from {adapter.NAME}")
@@ -581,7 +589,7 @@ def _add(a: argparse.Namespace) -> None:
         paths = [Path(w).expanduser() for w in a.what[1:]]
         if all(p.exists() for p in paths):  # else the whole thing may be a sentence
             _add_named(lb, by_name, paths, given, dry_run=a.dry_run)
-            if not a.dry_run:
+            if not a.dry_run and not getattr(by_name, "KEEPS_INPUT", False):  # a clone is never consumed
                 _say_cleanable(lb, paths)
             return
     paths = [Path(w).expanduser() for w in a.what]

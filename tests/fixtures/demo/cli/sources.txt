@@ -16,6 +16,7 @@ easypark             file       enabled
 flighty              file       enabled
 gaudit               live       enabled
 gcal                 live       enabled
+github               file+live  enabled
 gmail                live       enabled
 google-takeout-access-log file       disabled (every sign-in to every Google service; opt in)
 google-takeout-activity file       disabled (every search and app opened; opt in)
@@ -63,4 +64,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-65 adapters, 2 disabled; the list is <root>/policy/import.json
+66 adapters, 2 disabled; the list is <root>/policy/import.json

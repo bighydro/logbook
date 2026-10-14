@@ -23,6 +23,7 @@ from .common import (
     Subparsers,
     _disabled,
     _is_rfc3339,
+    _owner_aliases,
     _plural,
     _registry,
     _say_disabled,
@@ -94,15 +95,19 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, ais, adsb, weather); safe to re-run;"
-        " --all for every configured source, --install-schedule for four times a day (00:00, 06:00, 12:00,"
-        " 18:00; the 06:00 run closes the day)."
+        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, github, ais, adsb, weather); safe to"
+        " re-run; --all for every configured source, --install-schedule for four times a day (00:00, 06:00,"
+        " 12:00, 18:00; the 06:00 run closes the day)."
         " gmail, gcal, drive, gtasks, meet and gaudit: one Google Workspace service account with domain-wide"
         " delegation, read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER,"
         " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
         " (LOGBOOK_GCAL_URLS) only without the two."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
         " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
+        " github: commits, issues and pull requests created, closed and merged, reviews and comments, one"
+        " event line each, read-only (LOGBOOK_GITHUB_TOKEN, a fine-grained read-only token;"
+        " LOGBOOK_GITHUB_REPOS, owner/name list or --all), a watermark per repo; the owner by the handles"
+        " in policy/owner.json."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
         " from the last batch written; --restart reads every folder from its first message again."
         " immich: the first run walks the whole library and says how many assets the server holds before it"
@@ -121,8 +126,9 @@ def sync_arguments(sub: Subparsers) -> None:
         " log, never the address they came from), granola, mail (a mailbox over IMAP, any provider), gmail"
         " (a Gmail mailbox over the Gmail API, the line IMAP writes), notion (pages created, edited, moved,"
         " archived; never their text), telegram (what you sent your own bots, from what the Bot API still"
-        " holds, read-only), ais (your vessels via aisstream.io), adsb (your aircraft via OpenSky), weather"
-        " (the places of your days, one decimal of latitude, from Open-Meteo)",
+        " holds, read-only), github (commits, issues, pull requests, reviews and comments in the repos"
+        " LOGBOOK_GITHUB_REPOS names), ais (your vessels via aisstream.io), adsb (your aircraft via"
+        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo)",
     )
     s.add_argument(
         "--all",
@@ -698,6 +704,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["timezone"] = lb.meta["timezone"]
     if _takes(adapter, "owner_emails", live=True):
         options["owner_emails"] = list(lb.meta.get("owner_emails") or [])
+    if _takes(adapter, "owner_aliases", live=True):
+        options["owner_aliases"] = _owner_aliases(lb, "sync")
     cache: dict[str, Any] | None = None  # what the source looked up and need not ask again; not the record
     cache_path = state_path.with_name(f"{a.name}-cache.json")
     if _takes(adapter, "cache", live=True):

@@ -163,6 +163,7 @@ def test_owner_aliases_go_to_policy_owner_json(run: Callable[..., str], home: Pa
         "names": ["Ines Nordmann", "Ines"],
         "emails": ["ines.nordmann@example.org"],
         "phones": ["07700 900123", "07700 900124"],
+        "handles": [],
     }
     assert "never your own company" in out
     assert _state(home / "Logbook")["owner"] == "done"
@@ -180,6 +181,7 @@ def test_owner_step_keeps_what_the_file_already_lists(run: Callable[..., str], h
         "names": ["Ines Nordmann", "Ines"],
         "emails": ["ines.nordmann@example.org"],
         "phones": [],
+        "handles": [],
     }
 
 

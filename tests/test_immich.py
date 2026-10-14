@@ -89,6 +89,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "beeper",
         "telegram",
         "notion",
+        "github",
         "weather",
     ]
     assert adapters.live("immich") is immich
@@ -143,6 +144,7 @@ def test_registry_all_adapters_knows_both_kinds_and_find_only_asks_file_adapters
         "beeper",
         "telegram",
         "claude-code",
+        "github",
         "line",
         "twitter",
         "apple-books",
