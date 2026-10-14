@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from ..contrib import site, trip_bundle, vault
+from ..contrib import site, trip_bundle, vault, world
 from ..core import crossing, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
@@ -20,18 +20,19 @@ def export_arguments(sub: Subparsers) -> None:
     """`logbook export`."""
     s = sub.add_parser(
         "export",
-        help=".jsonl, day packages, crossing, vault, site, trip-bundle, share day",
+        help=".jsonl, days, crossing, vault, site, world, trip-bundle, share day",
         description="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a"
         " crossing-package/v1,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
-        " readers as static HTML, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
+        " readers as static HTML, `world`: one page with the globe, the places, the assets and a time"
+        " scrubber, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
         " YYYY-MM-DD --to NAME`: one day as a signed page",
     )
     s.add_argument(
         "path",
         nargs="?",
         help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md),"
-        " `site` (docs/site.md), `trip-bundle` (RFC 0030) or `share day` (RFC 0025)",
+        " `site` (docs/site.md), `world` (docs/world.md), `trip-bundle` (RFC 0030) or `share day` (RFC 0025)",
     )
     s.add_argument(
         "target",
@@ -48,13 +49,21 @@ def export_arguments(sub: Subparsers) -> None:
         "--out",
         metavar="DIR",
         help="where to write (default <root>/export/<date>/); share: the zip (default"
-        " <root>/export/share/<to>/<date>.zip)",
+        " <root>/export/share/<to>/<date>.zip); world: the folder for world.html (default"
+        " <root>/export/world/)",
     )
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.add_argument(
         "--to",
         metavar="DESTINATION",
-        help="crossing: the circle member, e.g. hermes; share: the member as policy/crossing.json names them",
+        help="crossing: the circle member, e.g. hermes; share: the member as policy/crossing.json names them;"
+        " world: the last day, YYYY-MM-DD (default: the record's)",
+    )
+    s.add_argument(
+        "--from",
+        dest="from_day",
+        metavar="YYYY-MM-DD",
+        help="world: the first day (default: the record's)",
     )
     s.add_argument(
         "--since",
@@ -71,7 +80,8 @@ def export_arguments(sub: Subparsers) -> None:
         "--tier",
         metavar="1|1,2|1,2,3",
         help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3; share: the highest tier"
-        " to share (default 1; never above the ceiling)",
+        " to share (default 1; never above the ceiling); world: 1, 1,2 or 1,2,3 (default 1,2, under the"
+        " ceiling)",
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
@@ -87,7 +97,7 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--airports",
         metavar="FILE",
-        help=f"trip-bundle, site: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+        help=f"trip-bundle, site, world: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
     s.add_argument(
         "--open",
@@ -138,6 +148,9 @@ def cmd_export(a: argparse.Namespace) -> None:
         return
     if a.path == site.DESTINATION:
         _export_site(lb, a)
+        return
+    if a.path == world.DESTINATION:
+        _export_world(lb, a)
         return
     if a.path == trip_bundle.COMMAND:
         _export_trip_bundle(lb, a)
@@ -366,6 +379,41 @@ def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
         print(f"  {warning}")
     seq, sha = result.line["seq"], result.sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, site sha256 {sha}…")
+
+
+def _export_world(lb: Logbook, a: argparse.Namespace) -> None:
+    """world [--out DIR] [--from DAY] [--to DAY] [--tier 1|1,2|1,2,3]: one self-contained HTML page,
+    the globe with the places, the assets on their tracks, the stays, the journeys and a time scrubber
+    (`logbook/contrib/world.py`), tier-gated under the `world` ceiling in policy/crossing.json (ADR
+    0016; tier 2 when the file does not name it), recorded as a crossing/v1 line (RFC 0011). The page
+    is rewritten only when its content changed."""
+    generated_at = now_utc()
+    try:
+        if a.target:
+            raise world.WorldError(f"export world takes no folder but --out DIR, not {a.target!r}")
+        tiers = None if a.tier is None else world.parse_tiers(a.tier)
+        req = world.request(lb, a.from_day, a.to, tiers)
+    except world.WorldError as e:
+        print(f"export world: {e}", file=sys.stderr)
+        sys.exit(2)
+    if req is None:
+        print("world: the record has no day; nothing written, nothing appended")
+        return
+    folder = Path(a.out).expanduser() if a.out else world.default_out(lb)
+    try:
+        built = world.build(lb, req, _airports(a.airports))
+        result = world.export(lb, built, folder, generated_at)
+    except (world.WorldError, stays.SettingsError, OSError) as e:
+        print(f"export world: {e}", file=sys.stderr)
+        sys.exit(2)
+    for text in world.console(built, result):
+        print(text)
+    if 3 in req.tiers:
+        text = (
+            f"WARNING: {crossing.TIER3_WARNING}: {_plural(built.by_tier['3'], 'tier-3 line')} of the window"
+        )
+        print(text)
+        print(text, file=sys.stderr)
 
 
 def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:
