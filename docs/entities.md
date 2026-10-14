@@ -73,8 +73,8 @@ One profile for every no (RFC 0035's shape, every kind). `kind` `entity-review`,
 Its tier is the highest tier of the evidence it cites and never under 2, a decision (SPEC §4); it
 may cite a `transaction/v1` line, and is then tier 3. People review writes it for a person from now
 on; a `people-review/v1` line is read as an `entity-review/v1` of type person, forever. A place's no
-stays in `state/places-review.json` until `places review --migrate-rejects` writes it as a line of
-type place, once; the file is then a cache of those lines as well.
+is a line too: `places review --reject` writes one, and `state/places-review.json` is a cache rebuilt
+from the lines; `--migrate-rejects` writes the pairs the file held from before 0.7 as lines, once.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|

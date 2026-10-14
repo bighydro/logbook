@@ -245,10 +245,7 @@ def review_arguments(sub: Subparsers) -> None:
     s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
     s.add_argument(
-        "--reject",
-        action="append",
-        metavar="N[,N]",
-        help="reject these: one entity-review/v1 line each; a place's no goes into state/places-review.json",
+        "--reject", action="append", metavar="N[,N]", help="reject these: one entity-review/v1 line each"
     )
     s.add_argument(
         "--name",
@@ -273,7 +270,7 @@ def review_arguments(sub: Subparsers) -> None:
     g.add_argument(
         "--migrate-rejects",
         action="store_true",
-        help="write the noes state/places-review.json holds as entity-review/v1 lines, once",
+        help="write the noes state/places-review.json holds from before 0.7 as lines, once",
     )
     s.set_defaults(fn=cmd_review)
 

@@ -319,7 +319,7 @@ def test_a_blank_name_takes_the_proposal_and_refuses_a_cluster_without_one(lb: L
     assert len(_notes(lb.root)) == 1, "nothing else written"
 
 
-def test_rejecting_through_the_page_lands_in_the_state_list_as_the_cli_writes_it(
+def test_rejecting_through_the_page_writes_the_line_the_cli_writes(
     lb: Logbook, pristine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     other = tmp_path / "other"
@@ -334,11 +334,13 @@ def test_rejecting_through_the_page_lands_in_the_state_list_as_the_cli_writes_it
     cli.main(["setup", "places", "review", "--reject", "4"])
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     [mine], [theirs] = _state(lb.root)["rejected"], _state(other)["rejected"]
-    assert {k: v for k, v in mine.items() if k != "rejected_at"} == {
-        k: v for k, v in theirs.items() if k != "rejected_at"
+    assert {k: v for k, v in mine.items() if k not in ("rejected_at", "line")} == {
+        k: v for k, v in theirs.items() if k not in ("rejected_at", "line")
     }
     assert mine["name"] == BOATHOUSE
-    assert Logbook(lb.root).meta["seq"] == seq, "never a line"
+    assert Logbook(lb.root).meta["seq"] == seq + 1, "one entity-review/v1 line (RFC 0037, decision 3)"
+    line = Logbook(lb.root).line_by_seq(seq + 1)
+    assert line is not None and line["kind"] == "entity-review" and mine["line"] == line["id"]
     after = _page(site)
     cluster = _cluster(after, fourth.id)
     assert f'value="{BOATHOUSE}"' not in cluster and 'value=""' in cluster, "its only name rejected: a blank"

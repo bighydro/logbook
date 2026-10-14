@@ -154,7 +154,7 @@ def places_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--migrate-rejects",
         action="store_true",
-        help="write the noes state/places-review.json holds as entity-review/v1 lines, once",
+        help="write the noes state/places-review.json holds from before 0.7 as entity-review/v1 lines, once",
     )
     v.add_argument("--json", action="store_true", help="the queue, or what was written, as one JSON object")
     v.set_defaults(fn=cmd_places)
@@ -359,13 +359,13 @@ def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     [--migrate-rejects] [--json]`: the observed places at no named place, ranked and numbered, each
     with the name the record's sources gave it and the evidence, folded by street and cut at three
     lines unless `--verbose` (`logbook.contrib.places_review`). Nothing is written unless told:
-    `--accept` and `--name` write places.json and one naming note each, `--reject` the pair into
-    `state/places-review.json`, never a line; every number is checked before anything is written. On
-    a terminal, with nothing told, it asks for each proposal shown. `--ask-photos` adds what the
-    photo libraries say about the blanks shown, or the proposals told (`logbook.contrib.places_photos`),
-    before any of that; the queue and its numbers are the same without it. `--migrate-rejects`
-    writes the noes `state/places-review.json` holds as `entity-review/v1` lines of type place
-    (RFC 0037), once. The sitting is `review place`'s (`logbook.commands.review.sitting`)."""
+    `--accept` and `--name` write places.json and one naming note each, `--reject` one
+    `entity-review/v1` line of type place (RFC 0037, decision 3); every number is checked before
+    anything is written. On a terminal, with nothing told, it asks for each proposal shown.
+    `--ask-photos` adds what the photo libraries say about the blanks shown, or the proposals told
+    (`logbook.contrib.places_photos`), before any of that; the queue and its numbers are the same
+    without it. `--migrate-rejects` writes the noes `state/places-review.json` holds from before 0.7
+    as lines, once. The sitting is `review place`'s (`logbook.commands.review.sitting`)."""
     from .review import sitting
 
     sitting(PlaceQueue(), lb, a)
@@ -459,7 +459,7 @@ class PlaceQueue(Queue):
 
 
 def _migrate_rejects(lb: Logbook, a: argparse.Namespace) -> None:
-    """`--migrate-rejects`: the noes of `state/places-review.json` that no line holds written once as
+    """`--migrate-rejects`: the noes of `state/places-review.json` from before 0.7 written once as
     lines; said on stderr, so the queue that follows on stdout, and its JSON, stay as they are."""
     from ..contrib import places_review
 

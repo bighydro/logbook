@@ -65,15 +65,17 @@ same folding, from the same code.
 **The owner's say.** Nothing is accepted on its own. `--accept N[,N]` writes each place into
 `places.json` — the cluster's centre, its fitted radius, kind `other` — and puts the naming in the
 record as `places name` does, one `note/v1` line through `Logbook.append` (`places.name`).
-`--name N "…"` accepts with the owner's own name. `--reject N[,N]` records the pair — the spot and
-the name proposed, or the blank — in `state/places-review.json`, bookkeeping beside the record and
-never a line: that name is not proposed for that spot again, and a rejected blank keeps the spot out
-of the queue until a source names it. `--migrate-rejects` writes each pair the file holds and no line
-does as one `entity-review/v1` line of type place (RFC 0037: its `ref` the spot's `centre`, its
-`label` the name), once (`migrate_rejects`); from then on the file is a cache of those lines as well,
-rebuilt from them whenever the record has moved, and retracting a line brings its pair back. Every
-number is checked before anything is written. On a terminal, `review` asks for each proposal: y, n,
-or a name (`logbook.commands.places`).
+`--name N "…"` accepts with the owner's own name. `--reject N[,N]` puts the pair — the spot and the
+name proposed, or the blank — in the record as one `entity-review/v1` line of type place (RFC 0037,
+decision 3 of 13 October 2026: its `ref` the spot's `centre`, its `label` the name, its `evidence` the
+stays' lines, its tier the highest of theirs and never under 2), under the writer lock; the Places
+page of `logbook serve` rejects through the same `reject`. That name is not proposed for that spot
+again, and a rejected blank keeps the spot out of the queue until a source names it; retract the line
+and the pair returns. `state/places-review.json` is a cache of those lines, rebuilt from them whenever
+the record has moved, never the truth: deleting it changes nothing a reader shows. A no it holds from
+before 0.7, when the pairs were kept there and never as lines, counts until `--migrate-rejects` writes
+it as a line, once (`migrate_rejects`). Every number is checked before anything is written. On a
+terminal, `review` asks for each proposal: y, n, or a name (`logbook.commands.places`).
 
 **The fitted radius.** The spread and 75 m for the scatter of one stay's own fixes, rounded up to
 5 m, between 75 and 300 m; drawn back, to the whole metre, so that the circle stays out of every
@@ -128,7 +130,7 @@ COLUMNS = (
     "names",
     "lines",
 )
-STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: the pairs, and a cache of the lines
+STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: a cache of the lines
 MIGRATED_FROM = str(STATE_FILE)  # `extra.migrated_from` of a line `--migrate-rejects` wrote
 TIMELINE_SEGMENTS = {"visit:": "visit", "placeVisit:": "placeVisit"}  # raw_id prefix → `extra.segment`
 # a line's weight for a specific name; `library` is a photo whose library was asked (`places_photos`)
@@ -967,19 +969,26 @@ def centre(lat: float, lon: float) -> str:
 
 
 def reject(lb: Logbook, proposals: Sequence[Proposal]) -> list[Written]:
-    """Each proposal rejected: the pair — its spot and the name proposed, or the blank — appended to
-    `state/places-review.json`, so the pair is never proposed again. Never a line of the record:
-    `--migrate-rejects` (`migrate_rejects`) is what writes the file's pairs as `entity-review/v1`
-    lines, once, when the owner asks."""
-    path = state_path(lb.root)
-    state = _state(path)
+    """Each proposal rejected: one `entity-review/v1` line of type place through `Logbook.append` —
+    the spot's centre and the name proposed, or the blank, citing the stays' lines, at the highest
+    of their tiers and never under 2 — under one hold of the writer lock, so the pair is never
+    proposed again; then the cache in `state/places-review.json` is rebuilt from the lines."""
     at = now_utc()
-    for p in proposals:
-        state["rejected"].append(
-            {"lat": round(p.lat, 6), "lon": round(p.lon, 6), "name": p.name, "id": p.id, "rejected_at": at}
-        )
-    _write_state(path, state)
-    return [Written(p, "rejected", p.name) for p in proposals]
+    written = []
+    with lb.writer():
+        head = str(lb.meta["head"])
+        with lb.index() as idx:
+            tiers = {
+                line_id: int(line.get("tier", 0))
+                for line_id, line in idx.by_ids(i for p in proposals for i in p.observed.lines).items()
+            }
+        for p in proposals:
+            evidence = list(p.observed.lines)
+            cited = [tiers[i] for i in evidence if i in tiers]
+            line = _no(lb, at, head, p.lat, p.lon, p.name, evidence, {"review": p.id}, cited)
+            written.append(Written(p, "rejected", p.name, line=line))
+    rejections(lb)
+    return written
 
 
 def _write_state(path: Path, state: Mapping[str, Any]) -> None:
@@ -998,7 +1007,10 @@ def _no(
     name: str | None,
     evidence: list[str],
     extra: dict[str, Any],
+    cited: Iterable[int] = (),
 ) -> Line:
+    """One `entity-review/v1` line of type place: `cited` the tiers of the `evidence` lines the record
+    has, so the line's tier is the highest of them and never under 2 (`entities.review_tier`)."""
     payload = entities.review_payload(
         entities.PLACE,
         ("centre", centre(lat, lon)),
@@ -1015,7 +1027,7 @@ def _no(
         at=at,
         source=entities.SOURCE,
         kind=entities.ENTITY_REVIEW,
-        tier=entities.review_tier([]),
+        tier=entities.review_tier(cited),
         payload=payload,
     )
 
@@ -1068,16 +1080,16 @@ def _lines_rows(lb: Logbook) -> list[dict[str, Any]]:
 
 
 def legacy(root: Path) -> list[dict[str, Any]]:
-    """The rows of `state/places-review.json` that are no line yet: what `reject` wrote there."""
+    """The rows of `state/places-review.json` that are no line yet: written there before 0.7."""
     return [
         row for row in _state(state_path(root))["rejected"] if isinstance(row, dict) and "line" not in row
     ]
 
 
 def rejections(lb: Logbook) -> list[Rejection]:
-    """The pairs the owner rejected: the file when it was last rebuilt at this head, else rebuilt now
-    from the standing `entity-review/v1` lines of type place and the rows `reject` wrote that no line
-    holds yet. The file is written only when it exists or has something to hold."""
+    """The pairs the owner rejected: the cache when it was rebuilt at this head, else rebuilt now
+    from the standing `entity-review/v1` lines of type place and the rows from before 0.7 that no
+    line holds yet. The file is written only when it exists or has something to hold."""
     path = state_path(lb.root)
     state = _state(path)
     head = str(lb.meta["head"])
@@ -1119,8 +1131,8 @@ class Migrated:
 
 
 def migrate_rejects(lb: Logbook) -> Migrated:
-    """`places review --migrate-rejects`: every no `state/places-review.json` holds that no line
-    does written once as an `entity-review/v1` line of type place, at the moment it was said
+    """`places review --migrate-rejects`: every no `state/places-review.json` holds from before
+    0.7 written once as an `entity-review/v1` line of type place, at the moment it was said
     (`rejected_at`), under one hold of the writer lock; a pair a standing line holds already is
     passed over, so a second run writes nothing. Then the file is rebuilt from the lines."""
     written: list[Line] = []

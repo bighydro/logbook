@@ -202,8 +202,9 @@ script, inline; without it the buttons and links do the same.
 **One path.** Name and Not a place post to `/places/review`, and the server answers through the
 review engine's own `accept` and `reject`, the code `setup places review --name`, `--accept` and
 `--reject` run: `places.json` gets the place at the cluster's centre with its fitted radius, the
-record gets the naming as one `note/v1` line through `Logbook.append`, and a rejection goes into
-`state/places-review.json`, byte for byte what the CLI writes. There is no second implementation.
+record gets the naming as one `note/v1` line through `Logbook.append`, and a rejection is one
+`entity-review/v1` line, its cache in `state/places-review.json`, byte for byte what the CLI writes.
+There is no second implementation.
 After a write the head has moved, and the page you come back to is read again: the named place in
 the table, the queue one shorter, the next cluster scrolled to. A form from a page older than the
 record, naming a cluster that is gone, is refused (409) and nothing is written; so is a name the
