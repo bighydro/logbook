@@ -1,6 +1,6 @@
 # RFC 0036 — payload profile `draft/v1`: what a model wrote about a unit of the record
 
-Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md) · amendment 1 (the person unit, the policy a draft was read under) 2026-10-13
+Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md) · amendment 1 (the person unit; rule 7 for every unit and through every crossing) 2026-10-13
 
 A model's text about one unit of the record, a day, a journey, an event, a week, a month, a year, a chapter or a person, kept so that the page an orchestrator built can be rebuilt from the record alone, and kept under one rule: every sentence points at the line ids it rests on, or is marked unsupported, and a reader never shows an unsupported sentence as fact. A draft is a proposal. Nothing in it is a fact of the record until the owner confirms it through an act of their own: a signed day (RFC 0034), a note (RFC 0010), a review (`review/v1`) or a star (`keeper/v1`, RFC 0024). The draft is never that confirmation.
 
@@ -20,12 +20,11 @@ A model's text about one unit of the record, a day, a journey, an event, a week,
 | `window` | object | MUST for `person` | `{ from, to }`, two local days `YYYY-MM-DD`, both inclusive: the stretch of a person the model read. Absent on every other unit, whose `subject` bounds it |
 | `read_head` | hex sha256 | MUST | the record's head (`logbook.json`) when the model read |
 | `read_count` | integer | MUST | how many lines of the unit the model read, under the ceiling it read under |
-| `read_policy` | object | SHOULD | `{ entry, max_tier, sha256 }`: the `policy/crossing.json` entry the writer read through, its ceiling as it counted then, and the sha256 of the policy file's content as read, canonical JSON (RFC 8785), lowercase hex (amendment 1). Absent on every draft written before the amendment |
 | `language` | string | MUST | the language of the text, a BCP 47 tag (`en`, `nb`) |
 | `segments` | array of object | MUST | the text, in order, each `{ text, evidence }` or `{ text, unsupported: true }` (below); at least one |
 | `supersedes` | string | MAY | the id of the earlier `draft` line of the same unit this one replaces |
 
-Anything else MAY be kept under `extra`: the prompt's name, the model's parameters, how long it took.
+Anything else MAY be kept under `extra`: the prompt's name, the model's parameters, how long it took, and `policy_version`, the version of the crossing entry the writer read under (rule 7).
 
 **A segment** is one object with `text`, a non-empty string, one sentence or a few, and exactly one of:
 
@@ -86,21 +85,21 @@ A draft of one person over a stretch of days answers "what matters to Ola lately
 - **The authorized input set** is exactly the lines, not retracted and at or under the ceiling, whose `at` falls on a day of the window and on which the person is a *counterpart* (a `message/v1` they sent, or the owner sent in a direct chat with them; a `call/v1` whose `counterparty` resolves to them; a `mail/v1` from them or addressed to them), an *attendee* (an `event/v1` they attend and did not decline) or a *speaker* (a `transcript/v1` they are a participant of). These are the person page's channels `messages`, `calls`, `mail`, `calendar` and `transcripts` (`docs/people.md`). A line that merely mentions them is never in it: a note naming them, a mail about them, someone else's message in a group they are in, a tagged face, a promise, a stay, a resolution line, a draft.
 - **The model reads** the set and the person's label, nothing else of the record; `read_count` is the size of the set. The label's line counts toward the tier and is never evidence.
 - **Evidence outside the set is invalid** (rule 6): a writer never writes it, and a reader shows such a segment as unsupported, saying the id is not one of the person's lines in the window.
-- **It shows on the person page**, after the numbers and before the shared days, headed `draft · <source> · read at <8 hex> · <read_count> lines · <from> – <to>`; never on the Day.
+- **It shows on the person page**, after the numbers and before the shared days, headed `draft · <source> · read at <8 hex> · <read_count> lines · <from> – <to>`; never on the Day, whose draft is of unit `day` alone. It follows rule 7 as the Day's draft does: above the entry it was read under, as that entry counts today, the person page says `superseded by policy` and why (`draft_withheld`) and nothing of its text, a reader through a crossing hides it, and the door holds back its line, as it holds back every `draft` line above the entry, and counts it.
 
-A local model drafts what has passed between Ines Nordmann and Ola Nordmann since the middle of July, under the `dream` entry at a ceiling of 2: eleven lines in the set, mail, messages and one call, so the draft is tier 2. The third segment rests on nothing and says so:
+A local model drafts what has passed between Ines Nordmann and Ola Nordmann since the middle of July, under the `dream` entry `{"max_tier": 2, "until": "2026-12-31", "model": "qwen2.5-7b-instruct"}`, whose version it records (rule 7): eleven lines in the set, mail, messages and one call, so the draft is tier 2. The third segment rests on nothing and says so:
 
 ```json
 {"at":"2026-10-12T06:20:00Z","end":null,"tz":"Europe/Oslo","source":"model:qwen2.5-7b-instruct","kind":"draft","tier":2,
  "payload":{"schema":"draft/v1","unit":"person","subject":"019cadd3-6bc0-7dcd-9133-000000000501",
  "window":{"from":"2026-07-14","to":"2026-10-11"},
  "read_head":"34cb1808a3e7cf1e88351f1dedff1cfbc4ab0a3b1846d04150b8b707cc1d0f2c","read_count":11,
- "read_policy":{"entry":"dream","max_tier":2,"sha256":"e416f16fa4e6cc7e8b02cb3f6fe761fdcae93e45ee6c6745af647a47e3797f86"},
  "language":"en",
  "segments":[
   {"text":"Most of what passed between you since July is the boat: the engine in Bodø, then the tow home.","evidence":["019cadd3-6bc0-7dcd-9133-0000000005a1","019cadd3-6bc0-7dcd-9133-0000000005a2"]},
   {"text":"Ola asked twice in September whether you will keep the berth in Vollen for next summer.","evidence":["019cadd3-6bc0-7dcd-9133-0000000005a3","019cadd3-6bc0-7dcd-9133-0000000005a4"]},
-  {"text":"The cost of the rebuild seems to weigh on you both.","unsupported":true}]}}
+  {"text":"The cost of the rebuild seems to weigh on you both.","unsupported":true}],
+ "extra":{"policy_version":"7ec8517a06f1a2c18195832423682f4389056f84cacb94d2922549e4c1009aaf"}}}
 ```
 
 ## Notes
