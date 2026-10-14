@@ -94,6 +94,9 @@ What a Day shows, in order:
    (`drafts.through`): one above the entry's `max_tier` today is not shown, and when a call's standing
    synthesis is one, the row under the call says `superseded by policy` and why, the JSON under
    `syntheses_withheld` (the transcript's id first, a key there only then), and nothing of its text.
+   A synthesis is the call's draft, never the day's (RFC 0036 amendment 1: one standing draft per
+   unit): it is read by its own reader, beside the day's, and `draft` and `draft_withheld` are what
+   `drafts.for_day` gives with or without it.
 
 Thresholds are the record's (`policy/stays.json`), places and assets its own; nothing here is a
 setting of the Day. ADR 0013: derived is disposable."""

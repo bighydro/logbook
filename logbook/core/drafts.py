@@ -39,7 +39,9 @@ it is in the recording (`20:05`) when the source says. Like every draft it recor
 the `dream` entry it was made under (`extra.policy_version`), and it follows the policy as every
 draft does (below). `by_transcript` finds the syntheses as `by_day` finds the days' drafts, and
 `for_transcripts` gives the Day the standing synthesis of each of its transcripts through the same
-rule as `for_day` (`through`), every evidence id checked against the transcript.
+rule as `for_day` (`through`), every evidence id checked against the transcript. A synthesis is the
+call's draft, never the day's (amendment 1: one standing draft per unit): `by_day`, `for_day` and
+`withheld` read unit `day` alone, so a synthesis neither replaces nor shadows the day's draft.
 
 **The standing draft** of a day is its latest `draft` line, by `at` then `seq`, that is not retracted
 and not named in a later draft's `supersedes`; the earlier ones stay in the record and the Day lists

@@ -819,3 +819,70 @@ def test_the_door_never_serves_a_synthesis_above_the_dream_ceiling(
     assert "Send the survey report" not in json.dumps(out)
     with pytest.raises(mcp_server.ToolError, match="dream"):
         ask("line", {"id": line["id"]})
+
+
+# -- one draft per unit: the call's synthesis is the call's, never the day's (RFC 0036 amendment 1) ---------
+
+
+def _day_draft(lb: Logbook) -> tuple[Any, ...]:
+    """What `drafts.for_day` returns for DAY under the `dream` entry today: the Day's `draft` and
+    `draft_withheld`, the day's alone."""
+    with lb.index() as idx:
+        return drafts.for_day(idx, DAY, None, drafts.allowed(lb.root))
+
+
+def _on_the_note(material: dict[str, Any]) -> dict[str, Any]:
+    """The answer to a call, or to a day whose one line under the ceiling is the owner's note."""
+    if "utterances" in material:
+        return _answer(material)
+    return {"day": [{"text": "A note about the yard.", "evidence": [material["notes"][0]["ref"]]}]}
+
+
+def test_a_calls_synthesis_leaves_the_days_draft_as_it_was(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The day and the call are two units with a standing draft each: a synthesis written after the
+    day's draft is not the day's latest draft, does not count as a dream of the day, and `for_day`
+    returns what it returned before; the synthesis is beside it, under the call."""
+    call = _transcript(lb)
+    _fake(monkeypatch, _either)
+    assert _cli("dream", "day", DAY)[0] == 0
+    before, data_before = _day_draft(lb), json.loads(_day_text("--json"))
+    assert before[0] is not None and before[1] is None and before[0]["dreamed"] == 1
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (synthesized,) = [d for d in _drafts(lb) if d["payload"]["unit"] == drafts.UNIT_EVENT]
+    assert _day_draft(lb) == before
+    data = json.loads(_day_text("--json"))
+    assert data["draft"] == data_before["draft"] and "draft_withheld" not in data
+    assert data["draft"]["line"] != synthesized["id"] and synthesized["id"] not in data["draft"]["earlier"]
+    (block,) = data["syntheses"]
+    assert block["transcript"] == call["id"] and block["line"] == synthesized["id"]
+    out = _day_text()
+    assert out.index("dreamed 1×") < out.index("Yard plans") and _under_the_call(out) == SUMMARY
+
+
+def test_a_withheld_synthesis_leaves_the_days_draft_shown(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The day's draft read a tier-2 note under max_tier 2; the call (tier 3) was synthesized while the
+    entry allowed 3. With the entry back at 2 the synthesis is withheld under the call, and the day's
+    draft is shown as it was: no `draft_withheld`, nothing of the call's row in the day's."""
+    call = _transcript(lb)  # tier 3: outside the day's reading at max_tier 2
+    lb.append(utc(DAY, "09:00"), "manual", "note", 2, {"schema": "note/v1", "text": "The yard called."})
+    _fake(monkeypatch, _on_the_note)
+    _policy(lb, {"max_tier": 2, "until": "2026-12-31"})
+    assert _cli("dream", "day", DAY)[0] == 0
+    before = _day_draft(lb)
+    assert before[0] is not None and before[0]["tier"] == 2 and before[1] is None
+    _policy(lb, {"max_tier": 3, "until": "2026-12-31"})
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    _policy(lb, {"max_tier": 2, "until": "2026-12-31"})
+    assert _day_draft(lb) == before
+    data = json.loads(_day_text("--json"))
+    assert data["draft"]["line"] == before[0]["line"] and "draft_withheld" not in data
+    (row,) = data["syntheses_withheld"]
+    assert row["transcript"] == call["id"] and row["tier"] == 3 and "syntheses" not in data
+    out = _day_text()
+    assert "A note about the yard." in out
+    assert _under_the_call(out).startswith(f"{drafts.SUPERSEDED_BY_POLICY}: tier 3, above max_tier 2")
+    assert out.count(drafts.SUPERSEDED_BY_POLICY) == 1  # under the call; the day's draft is shown

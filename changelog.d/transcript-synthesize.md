@@ -12,8 +12,9 @@
   and nothing is sent; another model or `--again` supersedes (docs/transcript-synthesis.md).
 - `dream --catch-up`, and so the 06:00 close, synthesizes each call of the days it covers that has no
   synthesis yet, and counts the calls the ceiling held back.
-- The Day shows a call's synthesis as one collapsed row under the call's own row; `serve` opens it behind a
-  toggle, actions on top; `day --json` carries the items under `syntheses`; `--no-dream` leaves them out.
+- The Day shows a call's synthesis as one collapsed row under the call's own row, beside the day's draft and
+  never in its place (one draft per unit, RFC 0036 amendment 1); `serve` opens it behind a toggle, actions on
+  top; `day --json` carries the items under `syntheses`; `--no-dream` leaves them out.
 - A call's synthesis follows the policy like any draft: it records the `dream` entry it was made under
   (`extra.policy_version`); one above the entry's `max_tier` today is withheld, the Day saying `superseded by
   policy` under the call (`syntheses_withheld` in JSON) and nothing of it; one made under another version of
