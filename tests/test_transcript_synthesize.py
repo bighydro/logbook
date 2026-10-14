@@ -12,7 +12,7 @@ import contextlib
 import io
 import json
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ import pytest
 from persona import HOME, dwell, utc
 
 from logbook import cli
-from logbook.contrib import dream, mcp_server, model_client, serve, synthesis
+from logbook.contrib import doctor, dream, mcp_server, model_client, serve, synthesis
 from logbook.contrib.adapters import granola
 from logbook.core import day as day_reader
 from logbook.core import drafts, policy
@@ -886,3 +886,190 @@ def test_a_withheld_synthesis_leaves_the_days_draft_shown(
     assert "A note about the yard." in out
     assert _under_the_call(out).startswith(f"{drafts.SUPERSEDED_BY_POLICY}: tier 3, above max_tier 2")
     assert out.count(drafts.SUPERSEDED_BY_POLICY) == 1  # under the call; the day's draft is shown
+
+
+# -- the catch-up's window: a week of calls, never the whole backlog ---------------------------------------
+
+TODAY = date(2026, 6, 20)  # the fixture's policy day too
+WEEK_AGO = "2026-06-13"  # the first day of the catch-up's window: 7 days before TODAY
+OLD_DAY = "2026-05-11"  # 40 days before TODAY
+BEFORE_THE_WEEK = (
+    f"1 call before {WEEK_AGO} not synthesized; run `logbook transcript synthesize --day {OLD_DAY}`"
+    f" or `dream --catch-up --since {OLD_DAY}`"
+)
+
+
+def _call_days_ago(lb: Logbook, days: int, title: str, tier: int | None = None) -> dict[str, Any]:
+    """The call of SEGMENTS held `days` days before TODAY, under its own note id and title."""
+    day = (TODAY - timedelta(days=days)).isoformat()
+    segments = json.loads(json.dumps(SEGMENTS).replace(DAY, day))
+    return _transcript(lb, segments, note_id=f"not_0synthetic{days:04d}", title=title, tier=tier)
+
+
+def _three_calls(lb: Logbook) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Calls 40, 6 and 2 days old, none synthesized."""
+    return (
+        _call_days_ago(lb, 40, "Spring fitting-out"),
+        _call_days_ago(lb, 6, "Hull survey"),
+        _call_days_ago(lb, 2, "Mooring lines"),
+    )
+
+
+def _calls_sent(seen: dict[str, Any]) -> list[str]:
+    """The day of each call the model was sent, in order; the days' own requests left out."""
+    found = [json.loads(body["messages"][1]["content"]) for body in seen["calls"]]
+    return [material["transcript"]["day"] for material in found if "utterances" in material]
+
+
+def _synthesized(lb: Logbook) -> list[str]:
+    return [d["payload"]["subject"][0] for d in _drafts(lb) if d["payload"]["unit"] == drafts.UNIT_EVENT]
+
+
+def test_the_catch_up_synthesizes_the_last_week_of_calls_and_names_the_older_ones(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The close runs `dream --catch-up` with nothing else: a call is sent only when its day is one of
+    the last 7; an older one without a synthesis is counted and named in one line, never sent, so the
+    first close after an upgrade does not send a record's whole backlog of calls."""
+    old, six, two = _three_calls(lb)
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, TODAY)
+    code, out, err = _cli("dream", "--catch-up")
+    assert code == 0, out + err
+    assert _calls_sent(seen) == ["2026-06-14", "2026-06-18"] and _synthesized(lb) == [six["id"], two["id"]]
+    assert old["id"] not in _synthesized(lb) and no_network == []
+    rows = out.splitlines()
+    assert rows[-2] == "2 dreamed · 12 empty · 2 synthesized"
+    assert rows[-1] == BEFORE_THE_WEEK
+
+
+def test_a_call_the_catch_up_synthesized_is_never_sent_again(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    _three_calls(lb)
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, TODAY)
+    assert _cli("dream", "--catch-up")[0] == 0
+    sent = len(seen["calls"])
+    code, out, _err = _cli("dream", "--catch-up")
+    assert code == 0 and len(seen["calls"]) == sent
+    assert out.splitlines()[-2:] == ["2 unchanged · 12 empty", BEFORE_THE_WEEK]
+
+
+def test_since_reaches_back_to_an_older_call_and_resends_none(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """`dream --catch-up --since DAY` is the explicit ask that reaches past the week: the old call is
+    sent, the two synthesized already are not, and the days dreamed are still the last `--days`."""
+    old, six, two = _three_calls(lb)
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, TODAY)
+    assert _cli("dream", "--catch-up")[0] == 0
+    code, out, err = _cli("dream", "--catch-up", "--since", "2026-05-12")  # a day after the old call
+    assert code == 0, out + err
+    assert _calls_sent(seen) == ["2026-06-14", "2026-06-18"]
+    assert out.splitlines()[-1] == (
+        "1 call before 2026-05-12 not synthesized; run `logbook transcript synthesize --day 2026-05-11`"
+        " or `dream --catch-up --since 2026-05-11`"
+    )
+    code, out, err = _cli("dream", "--catch-up", "--since", OLD_DAY)
+    assert code == 0, out + err
+    assert _calls_sent(seen) == ["2026-06-14", "2026-06-18", OLD_DAY]
+    assert _synthesized(lb) == [six["id"], two["id"], old["id"]]
+    rows = out.splitlines()
+    assert rows[-1] == "2 unchanged · 12 empty · 1 synthesized"
+    assert rows[-2].startswith(f"{OLD_DAY}  synthesized #") and "“Spring fitting-out”" in rows[-2]
+    code, out, _err = _cli("dream", "--catch-up", "--since", OLD_DAY)
+    assert code == 0 and len(_calls_sent(seen)) == 3 and out.splitlines()[-1] == "2 unchanged · 12 empty"
+
+
+def test_a_call_synthesized_by_hand_is_not_sent_by_the_catch_up_nor_named(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """`transcript synthesize --day DAY` is unchanged and is the other way to an old call; once it
+    has a synthesis under this model, prompt and entry, no catch-up sends it, however far it reaches."""
+    old, _six, _two = _three_calls(lb)
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, TODAY)
+    code, out, err = _cli("transcript", "synthesize", "--day", OLD_DAY)
+    assert code == 0, out + err
+    assert _calls_sent(seen) == [OLD_DAY] and _synthesized(lb) == [old["id"]]
+    code, out, _err = _cli("dream", "--catch-up", "--since", "2026-05-01")
+    assert code == 0 and _calls_sent(seen) == [OLD_DAY, "2026-06-14", "2026-06-18"]
+    assert "not synthesized" not in out
+    code, out, _err = _cli("dream", "--catch-up")
+    assert code == 0 and len(_calls_sent(seen)) == 3 and "not synthesized" not in out
+
+
+def test_the_window_is_the_calls_own_day_under_the_records_day_start(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """A call at 05:30 on the first day of the window belongs, under a day that begins at 06:00, to
+    the day before: outside the week, so it is named and not sent."""
+    meta = json.loads(lb.meta_path.read_text(encoding="utf-8"))
+    meta["day_start"] = "06:00"
+    lb.meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    early = [
+        {**s, "start_time": f"{WEEK_AGO}T03:30:00Z", "end_time": f"{WEEK_AGO}T03:40:00Z"}
+        for s in SEGMENTS[:2]
+    ]  # 05:30 to 05:40 in Oslo
+    _transcript(lb, early, note_id="not_0synthetic0007", title="Early call")
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, TODAY)
+    code, out, err = _cli("dream", "--catch-up")
+    assert code == 0, out + err
+    assert _calls_sent(seen) == [] and out.splitlines()[-1] == (
+        "1 call before 2026-06-13 not synthesized; run `logbook transcript synthesize --day 2026-06-12`"
+        " or `dream --catch-up --since 2026-06-12`"
+    )
+
+
+def test_since_goes_with_catch_up_and_is_a_day(lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network):
+    seen = _fake(monkeypatch, _either)
+    code, _out, err = _cli("dream", "day", DAY, "--since", "2026-05-01")
+    assert code == 2 and "--since goes with --catch-up" in err
+    code, _out, err = _cli("dream", "--catch-up", "--since", "2026-5-1")
+    assert code == 2 and "--since" in err and "2026-5-1" in err
+    assert seen["calls"] == [] and _drafts(lb) == []
+
+
+def _synthesis_check(lb: Logbook) -> doctor.Check | None:
+    now = datetime(2026, 6, 20, 10, 0, tzinfo=UTC)  # TODAY, noon in Oslo
+    return {c.name: c for c in doctor.run(lb, {}, now=now)}.get("synthesis")
+
+
+def test_doctor_counts_the_calls_without_a_synthesis_inside_and_outside_the_window(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """One `synthesis` line: the calls with no synthesis in the close's window (today's among them,
+    for the next close), those before it, which the close leaves, and those above the ceiling."""
+    _old, six, _two = _three_calls(lb)
+    _call_days_ago(lb, 0, "Today's call")
+    _call_days_ago(lb, 50, "Keel bolts", tier=2)
+    _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", six["id"])[0] == 0
+    found = _synthesis_check(lb)
+    assert found is not None and found.status == "pass"
+    assert found.detail == (
+        "4 calls without a synthesis: 2 since 2026-06-13, which the 06:00 close synthesizes (`dream"
+        " --catch-up`); 2 before 2026-06-13, which the close leaves: `logbook dream --catch-up --since"
+        " 2026-05-01`"
+    )
+    _policy(lb, {"max_tier": 2, "until": "2026-12-31"})  # every call but Keel bolts is tier 3
+    found = _synthesis_check(lb)
+    assert found is not None and found.detail == (
+        "4 calls without a synthesis: 1 before 2026-06-13, which the close leaves: `logbook dream"
+        " --catch-up --since 2026-05-01`; 3 above the dream entry's max_tier 2, which stay on this machine"
+    )
+    _policy(lb, None)
+    assert _synthesis_check(lb) is None, "no dream entry: nothing is ever synthesized, nothing to count"
+
+
+def test_doctor_has_no_synthesis_line_when_every_call_has_one(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb)
+    _fake(monkeypatch)
+    assert _synthesis_check(lb) is not None
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    assert _synthesis_check(lb) is None

@@ -32,13 +32,17 @@ The day ends at your `day_start` (midnight unless you set one, [the record's set
 scheduled run below with one step more, in this order:
 
 1. **the sync**: `sync --all`, as at every run;
-2. **the dream's catch-up**: `dream --catch-up`, the drafts of the last days that have none or whose
-   lines changed, then the synthesis of each of their calls that has none
-   ([the synthesis of a call](transcript-synthesis.md)), when this version of logbook has the dream command and `policy/crossing.json` has a
-   `dream` entry (sending a day to a model is a crossing like any other). When it has not, one line
-   says why (`dream: this version has no dream command; nothing to catch up`, or `dream:
-   policy/crossing.json has no dream entry; nothing to catch up`) and the run goes on: absence is not an
-   error. A draft is a proposal, so what the dream does never changes the run's exit status;
+2. **the dream's catch-up**: `dream --catch-up`, when this version of logbook has the dream command and
+   `policy/crossing.json` has a `dream` entry (sending a day to a model is a crossing like any other):
+   the drafts of the last 14 days that have none or whose lines changed, then the synthesis of each call
+   of the last 7 days that has none ([the synthesis of a
+   call](transcript-synthesis.md#the-week-the-close-covers)). When it has not, one line says why
+   (`dream: this version has no dream command; nothing to catch up`, or `dream: policy/crossing.json has
+   no dream entry; nothing to catch up`) and the run goes on: absence is not an error. The close passes
+   nothing after `--catch-up`, never a `--since`, so an older call is never sent by the schedule however
+   many the record holds: the catch-up counts them in one line (`3 calls before 2026-10-07 not
+   synthesized; run …`), `doctor` on its `synthesis` line, and they wait for you to send them by hand. A
+   draft is a proposal, so what the dream does never changes the run's exit status;
 3. **the rest of the run**: the restore test on the first Sunday of the month, `doctor`, the outcome
    in `state/last-run.json`, the message when something is wrong;
 4. **one summary line**: `scheduled run, the close (dream caught up): clean; state/last-run.json`, or

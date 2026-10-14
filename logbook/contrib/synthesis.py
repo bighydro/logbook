@@ -36,16 +36,21 @@ synthesized under the same prompt and the same entry is unchanged: nothing is se
 synthesis is shown (`--again` asks once more); another model, another entry, or `--again`, writes a
 new line whose `supersedes` names the standing one. A synthesis is a draft and follows the policy as
 every draft does: the readers withhold one above the entry today (`drafts.for_transcripts`).
-`catch_up` synthesizes the transcripts of the days `dream --catch-up` covers that have no synthesis
-yet, or whose synthesis was made under another version of the entry, what the 06:00 close runs."""
+`catch_up` synthesizes the transcripts that have no synthesis yet, or whose synthesis was made under
+another version of the entry, what the 06:00 close runs: only those of the last `WINDOW_DAYS` local days
+before today (the call's own `at` on the record's `day_start`), unless `dream --catch-up --since DAY`
+reaches further back, so a record with years of calls never sends its backlog unasked, as a source's
+first run never backfills more than its window without `--since`. The calls before the window with
+no synthesis are counted (`waiting`) and named in one line (`before_text`), and `doctor` counts them
+the same way."""
 
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -55,7 +60,7 @@ from ..core.chain import Line
 from ..core.day import WEEKDAYS
 from ..core.export import parse_day
 from ..core.index import Index
-from ..core.store import HeadMoved, Logbook, now_utc, retractions
+from ..core.store import RETRACTION, HeadMoved, Logbook, now_utc, retractions
 from ..core.transcripts import Turn, turns_of
 from . import dream, model_client
 from .dream import AnswerError, DreamError, Outcome
@@ -70,6 +75,7 @@ UTTERANCE = re.compile(r"U([1-9][0-9]*)\Z")
 UTTERANCE_CHARS = 2000  # one utterance's text in the material, at most; every utterance is given
 SUFFIX_MIN = 8  # the Day and `show` shorten an id to its last 8 characters
 ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
+WINDOW_DAYS = 7  # the catch-up synthesizes the calls of the last week, unless `--since` reaches further
 SYNTHESIZED, DRY_RUN, UNCHANGED = "synthesized", "dry run", "unchanged"
 HELD_BACK, NO_TEXT, REFUSED = "held back", "no text", "refused"
 STATES = (SYNTHESIZED, DRY_RUN, UNCHANGED, HELD_BACK, NO_TEXT, REFUSED)  # the order a summary counts them
@@ -157,12 +163,18 @@ def find(lb: Logbook, name: str) -> Line:
 def of_day(lb: Logbook, day: str) -> list[Line]:
     """The transcripts standing on a local day (not retracted, not superseded), in `at` order."""
     day = parse_day(day).isoformat()
+    return between(lb, day, day)
+
+
+def between(lb: Logbook, first: str, last: str) -> list[Line]:
+    """The transcripts standing on the local days from `first` to `last`, in `at` order: by the
+    index's local day, the call's own `at` on the record's `day_start`."""
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
         superseded = idx.superseded(KIND)
         found = [
             line
-            for line in idx.by_kind(KIND, day, day)
+            for line in idx.by_kind(KIND, first, last)
             if str(line["id"]) not in retracted and str(line["id"]) not in superseded
         ]
     return sorted(found, key=lambda line: (str(line["at"]), int(line["seq"])))
@@ -570,56 +582,161 @@ def _try(
 # -- catch-up -----------------------------------------------------------------------------------------------
 
 
+def window(today: date, days: int = WINDOW_DAYS, since: str | None = None) -> tuple[str, str]:
+    """The first and the last local day of the calls a catch-up synthesizes: the last `days` days
+    before today, `WINDOW_DAYS` at most, or from `since` when it is given; today is still being
+    written. `ValueError` for a `since` that is not `YYYY-MM-DD`."""
+    first = parse_day(since) if since is not None else today - timedelta(days=min(days, WINDOW_DAYS))
+    return first.isoformat(), (today - timedelta(days=1)).isoformat()
+
+
+@dataclass(frozen=True)
+class Waiting:
+    """The calls with no synthesis, standing (not retracted, not superseded), by where they are:
+    under the ceiling and on a day from `first` on (`inside`, today's among them) or before it
+    (`before`, the oldest on `oldest`), or above the ceiling (`held_back`), which never crosses."""
+
+    first: str
+    max_tier: int
+    inside: int = 0
+    before: int = 0
+    oldest: str | None = None
+    held_back: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.inside + self.before + self.held_back
+
+
+def waiting(lines: Iterable[Line], day_of: Callable[[str], str], first: str, max_tier: int) -> Waiting:
+    """Count the calls with no synthesis among `lines`, the record's transcript, draft and retraction
+    lines (any others are ignored): a transcript retracted, or superseded by another, is not counted;
+    a synthesis that is retracted is none (`drafts.by_transcript`). `day_of` is the local day of an
+    `at`; `first` the window's first day; `max_tier` the `dream` entry's ceiling today."""
+    found = list(lines)
+    retracted = retractions(line for line in found if line.get("kind") == RETRACTION)
+    superseded = {
+        str((line.get("payload") or {}).get("supersedes"))
+        for line in found
+        if line.get("kind") == KIND and isinstance((line.get("payload") or {}).get("supersedes"), str)
+    }
+    synthesized = drafts.by_transcript((line for line in found if line.get("kind") == drafts.KIND), retracted)
+    inside = before = held = 0
+    oldest: str | None = None
+    for line in found:
+        key = str(line.get("id"))
+        if line.get("kind") != KIND or key in retracted or key in superseded or key in synthesized:
+            continue
+        if int(line.get("tier") or 0) > max_tier:
+            held += 1
+            continue
+        day = day_of(str(line["at"]))
+        if day >= first:
+            inside += 1
+        else:
+            before += 1
+            oldest = day if oldest is None or day < oldest else oldest
+    return Waiting(first, max_tier, inside, before, oldest, held)
+
+
+def _calls(n: int) -> str:
+    return f"{n} call{'s' if n != 1 else ''}"
+
+
+def before_text(found: Waiting) -> str | None:
+    """The catch-up's one line for the calls before its window that have no synthesis: how many,
+    and the two ways to them from the oldest one's day; None when there are none."""
+    if not found.before:
+        return None
+    return (
+        f"{_calls(found.before)} before {found.first} not synthesized; run `logbook transcript synthesize"
+        f" --day {found.oldest}` or `dream --catch-up --since {found.oldest}`"
+    )
+
+
+def waiting_text(found: Waiting) -> str:
+    """`doctor`'s `synthesis` line: the calls without a synthesis, inside the close's window, before
+    it, and above the ceiling, each part only when it counts any."""
+    parts = []
+    if found.inside:
+        parts.append(
+            f"{found.inside} since {found.first}, which the 06:00 close synthesizes (`dream --catch-up`)"
+        )
+    if found.before:
+        parts.append(
+            f"{found.before} before {found.first}, which the close leaves: `logbook dream --catch-up --since"
+            f" {found.oldest}`"
+        )
+    if found.held_back:
+        stay = "stays" if found.held_back == 1 else "stay"
+        parts.append(
+            f"{found.held_back} above the {policy.DREAM_DESTINATION} entry's max_tier {found.max_tier},"
+            f" which {stay} on this machine"
+        )
+    return f"{_calls(found.total)} without a synthesis: " + "; ".join(parts)
+
+
 @dataclass(frozen=True)
 class CaughtUp:
-    """What the catch-up did to the transcripts: one `Outcome` per transcript sent, and how many were
-    held back by the ceiling or had no text."""
+    """What the catch-up did to the transcripts: one `Outcome` per transcript sent, how many in its
+    window were held back by the ceiling or had no text, and the calls with no synthesis it counted
+    afterwards (`waiting`), those before the window among them."""
 
     outcomes: list[Outcome]
     max_tier: int
     held_back: int = 0
     no_text: int = 0
+    left: Waiting | None = None
 
 
 def catch_up(
     lb: Logbook,
-    days: Sequence[str],
+    first: str,
+    last: str,
     env: Mapping[str, str] | None = None,
     transport: Transport | None = None,
 ) -> CaughtUp:
-    """Synthesize each transcript of `days` that has no synthesis yet, by any model, or whose standing
-    synthesis the entry no longer stands behind (`outdated`: made under another version of it), as
-    `dream --catch-up` dreams such a day again; one `Outcome` per transcript sent, oldest first (the
-    06:00 close). A transcript above the ceiling, or without its text, is counted and never sent; one
-    synthesized already under the entry is left alone. The policy and the endpoint are checked once:
-    a refusal there is `DreamError`."""
+    """Synthesize each transcript on the local days from `first` to `last` (`window`) that has no
+    synthesis yet, by any model, or whose standing synthesis the entry no longer stands behind
+    (`outdated`: made under another version of it), as `dream --catch-up` dreams such a day again;
+    one `Outcome` per transcript sent, oldest first (the 06:00 close). A transcript above the ceiling,
+    or without its text, is counted and never sent; one synthesized already under the entry is left
+    alone; one before `first` is never read, and counted afterwards when it has no synthesis. The
+    policy and the endpoint are checked once: a refusal there is `DreamError`."""
     found = dream.ceiling(lb)
     dream.endpoint(found, env)
+    try:
+        bounds = day_start.of(lb.meta)
+    except day_start.DayStartError as e:
+        raise DreamError(str(e)) from e
     outcomes: list[Outcome] = []
     held = missing = 0
     with lb.writer():
-        for day in days:
-            for line in of_day(lb, day):
-                if int(line.get("tier") or 0) > found.max_tier:
-                    held += 1
+        for line in between(lb, first, last):
+            day = bounds.day_of(str(line["at"]))
+            if int(line.get("tier") or 0) > found.max_tier:
+                held += 1
+                continue
+            with lb.index() as idx:
+                try:
+                    latest = standing_of(idx, line)
+                except DreamError:
                     continue
-                with lb.index() as idx:
-                    try:
-                        latest = standing_of(idx, line)
-                    except DreamError:
-                        continue
-                why = None if latest is None else outdated(latest, found)
-                if latest is not None and why is None:
-                    continue
-                tried = _try(lb, line, found, env, False, False, transport, None)
-                if tried.state == NO_TEXT:
-                    missing += 1
-                elif tried.state == SYNTHESIZED and tried.synthesis is not None:
-                    detail = detail_of(tried.synthesis) + (drafts.DOT + why if why else "")
-                    outcomes.append(Outcome(day, SYNTHESIZED, detail))
-                else:
-                    outcomes.append(Outcome(day, REFUSED, f"“{title_of(line)}”: {tried.detail}"))
-    return CaughtUp(outcomes, found.max_tier, held, missing)
+            why = None if latest is None else outdated(latest, found)
+            if latest is not None and why is None:
+                continue
+            tried = _try(lb, line, found, env, False, False, transport, None)
+            if tried.state == NO_TEXT:
+                missing += 1
+            elif tried.state == SYNTHESIZED and tried.synthesis is not None:
+                detail = detail_of(tried.synthesis) + (drafts.DOT + why if why else "")
+                outcomes.append(Outcome(day, SYNTHESIZED, detail))
+            else:
+                outcomes.append(Outcome(day, REFUSED, f"“{title_of(line)}”: {tried.detail}"))
+        with lb.index() as idx:
+            lines = [*idx.by_kind(KIND), *idx.by_kind(drafts.KIND), *idx.retractions()]
+    left = waiting(lines, bounds.day_of, first, found.max_tier)
+    return CaughtUp(outcomes, found.max_tier, held, missing, left)
 
 
 def detail_of(made: Synthesis) -> str:
