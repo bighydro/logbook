@@ -32,18 +32,23 @@ SAME = ("value", "unit", "stage", "device", "extra")  # the payload fields that 
 
 def rows(path: Path) -> tuple[list[str], list[dict[str, str]]] | None:
     """The header (lower-cased, stripped) and every row as `{column: text}`; None when the file is
-    not readable as CSV at all."""
+    not readable as CSV at all. A name the header repeats keeps the last cell with text under it. A
+    row with no text under a column the header names is skipped as a blank row is (its text past the
+    header, or under a blank name), so a degenerate file — empty, blank, header only, a header naming
+    no column — reads as no rows, as an empty export does."""
     try:
         with Path(path).open(encoding="utf-8-sig", newline="") as fh:
             reader = csv.reader(fh)
             header = [cell.strip().lower() for cell in next(reader, [])]
             out = []
             for cells in reader:
-                if not any(cell.strip() for cell in cells):
-                    continue
-                out.append(
-                    {name: cells[i].strip() if i < len(cells) else "" for i, name in enumerate(header)}
-                )
+                row: dict[str, str] = {}
+                for i, name in enumerate(header):
+                    text = cells[i].strip() if i < len(cells) else ""
+                    if text or name not in row:
+                        row[name] = text
+                if any(text for name, text in row.items() if name):
+                    out.append(row)
     except (OSError, UnicodeDecodeError, csv.Error):
         return None
     return header, out

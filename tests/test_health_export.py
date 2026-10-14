@@ -1,5 +1,7 @@
 """What the Withings and MyFitnessPal readers share (`logbook.adapters.health_export`), as properties:
-for ANY bytes `rows` returns None or rows keyed by the header; for ANY text `number`, `when`, `stamp`
+for ANY bytes `rows` returns None or rows keyed by the header, each with text under a column the header
+names (a degenerate file — empty, blank, header only, a header naming no column, a row whose text sits
+only past the header — reads as no rows, as an empty export does); for ANY text `number`, `when`, `stamp`
 and `slug` return a value of the promised shape or None and never raise; and for ANY drafts against
 ANY standing lines `corrected` yields exactly one draft per draft, in order, each a valid
 health-sample/v1 line that appends into a record — the ones the record holds with another sample
@@ -16,11 +18,12 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from hypothesis import given, settings
+import pytest
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
-from logbook.contrib.adapters import health_export
+from logbook.contrib.adapters import health_export, myfitnesspal_export, withings_export
 from logbook.core.store import Logbook, uuid7
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +36,15 @@ OSLO = ZoneInfo("Europe/Oslo")
 
 @settings(max_examples=60, deadline=None)
 @given(st.binary(max_size=200))
+# Inputs that once read as a row with no text under any named column, pinned so every run checks them.
+@example(b",\n\x00")  # the shortest (3 bytes): a header naming no column, text under its blank name
+@example(b",\nx")  # the same, readable
+@example(b'"\n"\n,x')  # a quoted header that is only a line break: a blank name again
+@example(b"\x00\n,\x00")  # the row's only text sits past the header's one column
+@example(b"a\n,x")  # the same, readable
+@example(b"a\r,,x")  # the same past two cells, a bare CR ending the header
+@example(b"\x00,\x00\r\x00")  # a name the header repeats, the row truncated: the missing cell won
+@example(b"a,a\nx,")  # the same with the row's blank cell written out
 def test_any_bytes_read_as_none_or_rows_keyed_by_the_header(tmp_path_factory, data):
     p = tmp_path_factory.mktemp("csv") / "export.csv"
     p.write_bytes(data)
@@ -45,6 +57,67 @@ def test_any_bytes_read_as_none_or_rows_keyed_by_the_header(tmp_path_factory, da
         assert set(row) == set(header)
         assert all(isinstance(v, str) and v == v.strip() for v in row.values())
         assert any(row.values()) or not header
+        assert any(row[name] for name in header if name)  # text under a column the header names
+
+
+DEGENERATE = {
+    "empty": b"",
+    "blank": b"  \r\n\t\n \n",
+    "a byte-order mark only": b"\xef\xbb\xbf",
+    "header only": b"Date,Weight (kg)\n",
+    "header only, no line break": b"Date,Weight (kg)",
+    "a truncated header": b"Dat",
+    "a header in an open quote": b'"Date,Weight (kg)\n2026-06-08,81.5\n',
+    "a header naming no column": b",,\n2026-06-08,81.5\n",
+    "text only past the header": b"Date,Weight (kg)\n,,81.5\n",
+}
+
+
+@pytest.mark.parametrize("data", DEGENERATE.values(), ids=DEGENERATE.keys())
+def test_a_degenerate_file_reads_as_no_rows(tmp_path, data):
+    p = tmp_path / "export.csv"
+    p.write_bytes(data)
+    out = health_export.rows(p)
+    assert out is not None
+    assert out[1] == []
+
+
+def test_a_name_the_header_repeats_keeps_the_text_under_it(tmp_path):
+    p = tmp_path / "weight.csv"
+    p.write_bytes(
+        b"Date,Weight (kg),Weight (kg),Date\n"
+        b"2026-06-08,81.5,\n"
+        b"2026-06-09,,80.9,\n"
+        b"2026-06-10,81.0,80.7,2026-06-10\n"
+    )
+    header, rows = health_export.rows(p)
+    assert header == ["date", "weight (kg)", "weight (kg)", "date"]
+    assert rows == [
+        {"date": "2026-06-08", "weight (kg)": "81.5"},  # a blank or missing cell never covers text
+        {"date": "2026-06-09", "weight (kg)": "80.9"},
+        {"date": "2026-06-10", "weight (kg)": "80.7"},  # text under both: the last, as ever
+    ]
+
+
+@pytest.mark.parametrize(
+    ("reader", "name", "header"),
+    [
+        (withings_export, "weight.csv", b"Date,Weight (kg),Fat mass (kg)\n"),
+        (myfitnesspal_export, "diary.csv", b"Date,Meal,Calories\n"),
+    ],
+    ids=["withings", "myfitnesspal"],
+)
+def test_a_degenerate_export_reads_like_a_header_only_one(tmp_path, reader, name, header):
+    """Zero lines and nothing counted, as the export with a header and no rows: a row whose only text
+    sits past the header is no row at all, not a row with a bad date."""
+    p = tmp_path / name
+    p.write_bytes(header)
+    empty: dict[str, int] = {}
+    assert reader.lines(p, empty, "Europe/Oslo", 2) == []
+    p.write_bytes(header + b",,,,512\n, ,\t\n")
+    counts: dict[str, int] = {}
+    assert reader.lines(p, counts, "Europe/Oslo", 2) == []
+    assert counts == empty == {}
 
 
 def test_a_csv_reads_by_header_name_and_skips_blank_rows(tmp_path):
