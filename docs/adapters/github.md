@@ -79,16 +79,17 @@ follows **where the words were written**:
   SHOULD default "for a reason it states", and `event/v1`'s tier is a SHOULD, not a MUST.
 
 **Which repositories are public.** `sync github` takes GitHub's word at each run: the repository as the
-API answers it (`GET /repos/{repo}`, or the `--all` list) says `private` and `visibility`, and a
-repository is public only when both say so. An internal repository (GitHub Enterprise) is private, and
-so is one whose answer carries no mark (`tier_reason` `repository visibility not known`; the run says
-so). A repository you make public or private is read at its new tier from the next run on; the lines
+API answers it (`GET /repos/{repo}`, or the `--all` list) carries `private` and `visibility`, and a
+repository is public only when what it carries says so (`private` false, `visibility` `public`) and
+nothing in it says otherwise. An internal repository (GitHub Enterprise) is private, and so is one whose
+answer carries no mark (`tier_reason` `repository visibility not known`; the run says so). A repository you make public or private is read at its new tier from the next run on; the lines
 already written stay as they are, since a line is never rewritten. `add github-export` reads no
 network: GitHub's account export marks each repository it lists, and that mark decides. A clone says
 nothing of its visibility, and neither does an export's repository without a mark or an issue of a
 repository the export does not list, so their lines are tier 2 (`repository visibility not known`),
 and the run says so, unless you pass `--public` for that run. `--public` never makes a repository the
-export marks private tier 1.
+export marks private tier 1, and it decides only the lines not yet in the record: pass it the first
+time (`--dry-run` says what the run would do), since adding the same clone again writes nothing.
 
 **The same act read twice.** A line is never rewritten and never written twice: the record knows an act
 by its `raw_id` whatever its tier, so the first road to write a commit or an issue decides its tier.
@@ -96,6 +97,12 @@ Lines written before private repositories were tier 2 stay at tier 1, and a sync
 them again writes nothing; a clone added before the sync (tier 2) keeps its commits at tier 2 when the
 API later says the repository is public, and the other way round. A commit in two repositories, a
 public one and a private one, is one line (`commit/<sha>`), at the tier of the repository read first.
+
+**In a record that seals** (RFC 0029, `recipients` in `logbook.json`), a tier 2 line is sealed at rest
+and its `raw_id` blinded, so only the identity can see that the record holds an act sealed. Since the
+same act may come at tier 1 or 2, `sync github` and `add github-export` need the identity to write
+anything there, a tier 1 line too: without it they refuse on one sentence, before asking GitHub
+anything, rather than write a sealed act a second time, plain. `--dry-run` writes nothing and needs none.
 
 ## What a line holds
 
