@@ -24,9 +24,10 @@
 ### Changed
 - `people review --reject` writes an `entity-review/v1` line of type person; a `people-review/v1`
   line is read as the same no, forever.
-- `setup places review --migrate-rejects` writes the pairs `state/places-review.json` holds as
-  `entity-review/v1` lines of type place, once; the file is then a cache of those lines as well.
-  `--reject` keeps the pair in the file, never a line; `review` says how many are not lines yet.
+- `setup places review --reject`, and the Places page of `serve`, write the pair as an
+  `entity-review/v1` line of type place, and `state/places-review.json` is a cache rebuilt from the
+  lines. `--migrate-rejects` writes the pairs the file held before as lines, once; until then
+  `review` says how many are not lines yet.
 - What the sources saw is one table in the index, `observed_entities`; `observed_people` and
   `observed_places` are views over it for one release. The index is rebuilt once, on the first
   command after the upgrade.

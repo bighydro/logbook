@@ -189,16 +189,18 @@ logbook setup places review --json                  # the queue, with the eviden
   kind `other` — change it with an editor or `setup places add` if it is a home or a berth — and puts the
   naming in the record as `setup places name` does, one `note/v1` line.
 - **Name** is accept with your own words.
-- **Reject** records the pair — the spot and the name proposed, or the blank — in
-  `state/places-review.json` beside the record, never as a line. That name is not proposed for that
-  spot again; reject a blank and the spot stays out of the queue until a source names it. The file is
-  bookkeeping, as the rest of `state/` is: a backup leaves it out.
-- **Migrate** (`--migrate-rejects`) writes each pair the file holds and no line does once as an
+- **Reject** puts the pair — the spot and the name proposed, or the blank — in the record as one
   `entity-review/v1` line of type place (RFC 0037; [the profiles](entities.md#entity-reviewv1)): its
-  `ref` the spot's centre, its `label` the name, its `at` the moment you said it; it says how many on
-  stderr, and a second run writes nothing. From then on the file is a cache of those lines too, rebuilt
-  from them when the record has moved, so a pair that is a line survives the file's deletion, and
-  retracting the line brings the pair back. Until you run it, `review` says how many are not lines yet.
+  `ref` the spot's centre, its `label` the name, its evidence the stays' lines, its tier the highest of
+  theirs and never under 2. That name is not proposed for that spot again; reject a blank and the spot
+  stays out of the queue until a source names it; retract the line and the pair returns. The Places
+  page of `logbook serve` rejects through the same code. `state/places-review.json` is a cache of those
+  lines, rebuilt from them when the record has moved, never the truth: delete it and nothing you see
+  changes.
+- **Migrate** (`--migrate-rejects`): until 0.7 a reject was kept in `state/places-review.json` only,
+  never as a line, and a backup left it out. Those pairs still count; `--migrate-rejects` writes each
+  of them once as an `entity-review/v1` line, at the moment you said it, and says how many on stderr;
+  a second run writes nothing. Until you run it, `review` says how many are not lines yet.
 
 The numbers are the queue's as `review` prints it, also with `--near` and `--top`; every number in one
 command is checked before anything is written, and after a write the queue is numbered again. On a
