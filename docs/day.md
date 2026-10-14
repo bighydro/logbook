@@ -116,7 +116,9 @@ are as they always were.
    maintains, one line per flight — with their evidence: `tracked`, `inferred` or `declared`; the
    move a flight covers names it under `--json`.
    Under each row: its attachments, named for events (with their time; an entry several calendars
-   carry is one event, see below), transcripts, notes (the first line), mail threads (with the message
+   carry is one event, see below), transcripts (with their voices when the line has them, `Middag ·
+   you 31 min · S2 14 min`, [speakers](speakers.md); a transcript another of the day supersedes is
+   not listed beside it), notes (the first line), mail threads (with the message
    count), calls and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
    (`with <name>`, only a name the record's resolution lines make a person: `with US` names
    nobody), speaking in a transcript, attending a timed calendar entry that overlaps the
@@ -334,7 +336,8 @@ starts on, `where`, `home`, `aboard`, `in_transit`, `position` — the night's `
 asset's for a night aboard — the stay's id and its first and last location line); `country`
 (`code`, `method`, `by`, `from`); `all_day`; `timeline`, one entry per row — a stay, stop or move
 as `derive stays --json` gives it plus `within_day` (the part on the day), `gap`, `attached`
-(`events`, `transcripts`, `notes`, `mail`, `calls`, `keepers` with their line ids; `messages` and
+(`events`, `transcripts`, `notes`, `mail`, `calls`, `keepers` with their line ids, a transcript with
+voices adding `speakers`, `{label, person, name, seconds, basis, consent, owner}` each; `messages` and
 `photos` as counts with their line ids) and `with` (`confirmed`, `proposed`, each person with their
 sources, reasons and lines); an `aboard` entry adds `asset` and `inside`; a `flight` entry carries
 the flight line's fields and `line`; a move lists the `flights` that cover it — then `flights`,

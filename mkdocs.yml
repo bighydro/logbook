@@ -101,6 +101,7 @@ nav:
   - Goals, reviews and chapters: goals.md
   - The dream's prompt: dream-prompt.md
   - The synthesis of a call: transcript-synthesis.md
+  - "Speakers: who spoke": speakers.md
   - The synthesis prompt: synthesis-prompt.md
   - In a browser: serve.md
   - The rollups: rollups.md

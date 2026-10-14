@@ -359,7 +359,7 @@ def derive_arguments(sub: Subparsers) -> None:
     `descriptions` was `describe`, until 0.6; each keeps its options. `speakers` is RFC 0038's."""
     s = sub.add_parser(
         "derive",
-        help="stays; flights and keepers inferred; transcripts and their speakers; descriptions",
+        help="stays; flights, keepers; transcripts, speakers; descriptions",
         description="what the record reads out of itself: stays (nothing appended); flights and keepers"
         " (inferred, RFC 0013, RFC 0024); transcripts of voice memos, the voices in them, and descriptions"
         " of keepers, by a"
