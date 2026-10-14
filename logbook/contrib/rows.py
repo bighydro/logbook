@@ -477,12 +477,12 @@ def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     extra: dict[str, Any] = p["extra"] if isinstance(p.get("extra"), dict) else {}
     parts: list[str] = []
     turns = extra.get("turns")
-    if isinstance(turns, int):
+    voices = speakers.row_text(p)
+    if isinstance(turns, int) and not voices:  # beside voices, a writer's `extra.turns` 0 says nothing
         parts.append(_plural(turns, "turn"))
     duration = extra.get("duration_s")
     if isinstance(duration, int | float) and duration >= 0:
         parts.append(f"{duration / 60:.0f} min" if duration >= 60 else f"{duration:.0f} s")
-    voices = speakers.row_text(p)
     return head + ("; " + ", ".join(parts) if parts else "") + (f" · {voices}" if voices else "")
 
 

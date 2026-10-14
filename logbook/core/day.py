@@ -798,7 +798,8 @@ def _standing_transcripts(lines: Sequence[Line]) -> list[Line]:
     """The day's lines without the transcripts another transcript of the day supersedes (SPEC §3:
     a superseded line does not stand). `derive speakers` writes its line at the instant of the one it
     hears again, so the two are on the same day; `lines` are standing already, so a retracted
-    superseder supersedes nothing."""
+    superseder supersedes nothing (a chain whose middle line was retracted then shows its first and
+    last lines; `derive speakers` never writes one, superseding the standing line directly)."""
     replaced = {
         str((line.get("payload") or {}).get("supersedes"))
         for line in lines

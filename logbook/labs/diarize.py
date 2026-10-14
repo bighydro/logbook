@@ -52,11 +52,12 @@ PAGE = "https://huggingface.co/{repo}"
 SAMPLE_RATE = 16_000
 FETCH = "logbook setup speakers --fetch-model"
 NOT_SEPARATED = f"speakers: not separated ({FETCH})"
+METRICS = "PYANNOTE_METRICS_ENABLED"
 HUB_CONSTANTS = "huggingface_hub.constants"  # where the hub keeps the offline switch it read at import
 QUIET = {
     "HF_HUB_OFFLINE": "1",
     "TRANSFORMERS_OFFLINE": "1",
-    "PYANNOTE_METRICS_ENABLED": "0",  # pyannote.audio 4 reports usage to otel.pyannote.ai unless told not to
+    METRICS: "0",  # pyannote.audio 4 reports usage to otel.pyannote.ai unless told not to
 }
 
 Importer = Callable[[str], Any]
@@ -128,6 +129,8 @@ def quiet() -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+        if MODULE in sys.modules:  # pyannote is in the process: its usage reporting stays off for good
+            os.environ[METRICS] = "0"
         now = sys.modules.get(HUB_CONSTANTS)
         if now is not None and hasattr(now, "HF_HUB_OFFLINE"):
             if now is constants and isinstance(was, bool):
@@ -158,7 +161,15 @@ def status(importer: Importer = importlib.import_module) -> Status:
 
 def detect(importer: Importer = importlib.import_module) -> Diarizer | None:
     """The diarizer when the engine and every model are on this machine, else None (the run then
-    says `NOT_SEPARATED`). Never downloads anything."""
+    says `NOT_SEPARATED`). Never downloads anything. The cache is asked first, so a machine without
+    the models never pays for importing the engine (torch) on a run that will not use it."""
+    with quiet():
+        try:
+            hub = importer(HUB)
+        except ImportError:
+            return None
+        if not all(_cached(hub, repo) for repo in MODELS):
+            return None
     return Pyannote(importer) if status(importer).ready else None
 
 

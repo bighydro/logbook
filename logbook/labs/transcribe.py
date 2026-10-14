@@ -87,6 +87,7 @@ NO_SPEECH = "skipped_no_speech"
 NO_RECORDING = "skipped_no_recording"
 RECORDING_RETRACTED = "skipped_recording_retracted"
 RECORDING_SUPERSEDED = "skipped_recording_superseded"
+SAME_RECORDING = "skipped_same_recording"
 PHRASES = {
     NO_AUDIO: "without their audio in the store (import with --attachments)",
     RETRACTED: "retracted",
@@ -95,6 +96,7 @@ PHRASES = {
     NO_RECORDING: "with no recording of their own in the record (a provider's, a file's)",
     RECORDING_RETRACTED: "whose recording was retracted",
     RECORDING_SUPERSEDED: "whose recording a later line supersedes",
+    SAME_RECORDING: "whose recording another standing line of this run is heard for",
 }
 
 
@@ -561,7 +563,7 @@ class Again:
     already: int  # standing transcripts whose voices are separated already
     counts: dict[str, int]  # what cannot be heard again, and why
     signed: list[str]  # the signed local days whose page a new line would change
-    promises: int  # promises closed on the transcripts found, which a new line proposes again
+    promises: list[tuple[int, str]]  # (seq, sentence) of each task closing a promise on a line found
     dry_run: bool = False
     written: int = 0
     same: int = 0  # heard again into the same spans: the key is in the record, nothing written
@@ -608,8 +610,11 @@ def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) ->
             continue
         provenance = _provenance(line)
         source = str(provenance.get("source"))
-        if payload.get("speakers") or source in separated or source in {item.memo.id for item in found}:
+        if payload.get("speakers") or source in separated:
             already += 1  # one recording, one line with its voices: never two standing for it
+            continue
+        if source in {item.memo.id for item in found}:
+            _count(counts, SAME_RECORDING)
             continue
         memo = memos.get(source)
         if memo is None or memo.get("kind") != MEMO_KIND or not (memo.get("payload") or {}).get("raw_id"):
@@ -629,12 +634,13 @@ def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) ->
     }
     ids = {item.id for item in found}
     by_id = {str(task["id"]): task for task in tasks}
-    closed = [
-        task_id
-        for task_id in closes(tasks, retracted).values()
-        if str((((by_id.get(task_id) or {}).get("payload") or {}).get("extra") or {}).get("origin")) in ids
-    ]
-    return Again(found, already, counts, sorted(days & set(signatures)), len(closed), dry_run)
+    closing = [by_id[task_id] for task_id in closes(tasks, retracted).values() if task_id in by_id]
+    closed = sorted(
+        (int(task["seq"]), str((task.get("payload") or {}).get("title") or ""))
+        for task in closing
+        if str(((task.get("payload") or {}).get("extra") or {}).get("origin")) in ids
+    )
+    return Again(found, already, counts, sorted(days & set(signatures)), closed, dry_run)
 
 
 def cost(report: Again) -> list[str]:
@@ -647,9 +653,10 @@ def cost(report: Again) -> list[str]:
         )
     if report.promises:
         said.append(
-            f"{_plural(report.promises, 'promise')} closed on these transcripts will be proposed again"
-            " from the new lines, a promise's id being its line's; `promises done ID` closes one again"
+            f"{_plural(len(report.promises), 'promise')} closed on these transcripts will be proposed again"
+            " from the new lines, a promise's id being its line's; `promises done ID` closes one again:"
         )
+        said += [f"  #{seq} {sentence}" for seq, sentence in report.promises]
     return said
 
 

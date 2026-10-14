@@ -471,3 +471,26 @@ def test_the_diarizer_is_in_the_transcribe_extra_and_nowhere_else():
         "pyannote.audio" not in names([s for s in specs if isinstance(s, str)])
         for specs in project["dependency-groups"].values()
     )
+
+
+def test_detect_asks_the_cache_before_it_imports_the_engine():
+    asked: list[str] = []
+    hub = FakeHub(cached={diarize.MODEL})
+
+    def import_module(name: str) -> Any:
+        asked.append(name)
+        if name == "huggingface_hub":
+            return hub.module()
+        raise AssertionError(f"{name} imported for a run that cannot use it")
+
+    assert diarize.detect(import_module) is None and asked == ["huggingface_hub"]
+
+
+def test_once_pyannote_is_in_the_process_its_usage_reporting_stays_off(monkeypatch):
+    monkeypatch.delenv("PYANNOTE_METRICS_ENABLED", raising=False)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", types.ModuleType("pyannote.audio"))
+    with diarize.quiet():
+        pass
+    import os
+
+    assert os.environ["PYANNOTE_METRICS_ENABLED"] == "0"

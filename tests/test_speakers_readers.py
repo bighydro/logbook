@@ -165,3 +165,33 @@ def test_a_reader_shows_nothing_for_voices_it_cannot_read(lb, capsys):
     assert "Samtale" in _day(capsys) and "speakers" not in json.loads(_day(capsys, "--json"))["unplaced"][0]
     cli.main(["show", DAY])
     assert capsys.readouterr().out.rstrip().endswith("Samtale")
+
+
+def test_show_marks_the_transcript_heard_again_as_superseded_and_drops_the_writer_s_zero_turns(lb, capsys):
+    lb.append_many(
+        [_transcript(utc(DAY, "19:40"), "Middag", None, "dinner", extra={"turns": 0, "duration_s": 2})]
+    )
+    with lb.index() as idx:
+        [old] = list(idx.of_kind("transcript"))
+    lb.append_many(
+        [
+            _transcript(
+                utc(DAY, "19:40"),
+                "Middag",
+                ROOM,
+                "dinner#speakers@a9e2",
+                supersedes=old["id"],
+                extra={"turns": 0, "duration_s": 2},
+            )
+        ]
+    )
+    with lb.index() as idx:
+        new = next(line for line in idx.of_kind("transcript") if line["id"] != old["id"])
+    cli.main(["show", DAY])
+    rows = [row for row in capsys.readouterr().out.splitlines() if "transcript" in row]
+    assert rows[0].endswith(f"superseded by #{new['seq']}")
+    assert rows[1].endswith("Middag; 2 s · S1 31 min · S2 42 s")  # no "0 turns" beside the voices
+    lb.retract(new["seq"], "heard wrong")
+    cli.main(["show", DAY])
+    out = capsys.readouterr().out
+    assert "Middag; 0 turns, 2 s" in out and "superseded by" not in out  # a retracted line supersedes nothing

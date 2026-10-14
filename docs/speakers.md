@@ -29,8 +29,8 @@ A transcript without them is valid, byte for byte what it was, and every reader 
 
 - **`speakers`**: the voices, in order of first speech, each `{ label, seconds?, turns, channel?,
   from_me?, name? }`. `seconds` is how long the voice speaks (each voice's own speech: two voices
-  that talk over each other for a minute both count the minute); `turns` is how many lines of the
-  text are the voice's; `channel` is `mic` or `system`; `from_me` is `true` on the microphone's voice
+  that talk over each other for a minute both count the minute); `turns` is how many segments of the
+  text are the voice's (the lines of a plain-text transcript, the elements of Granola's JSON); `channel` is `mic` or `system`; `from_me` is `true` on the microphone's voice
   when the source says the microphone is yours and the voice is alone on it; `name` is a name the
   source displayed, never a resolution.
 - **`diarization`**: how the labels were made: `engine` (`pyannote`, or the provider whose labels an
@@ -130,7 +130,8 @@ It is not free, and the command says so before it writes:
 - a new line on a signed day changes the day's page, so the signature reads `page_matches` false
   until you sign the day again (`logbook day sign DAY`);
 - a promise closed on an old line is proposed again from the new line, a promise's id being its
-  line's (SPEC §3.2.10 rule 2); `promises done ID` closes it again;
+  line's (SPEC §3.2.10 rule 2): each is listed, by the seq of the task that closed it and its
+  sentence, and `promises done ID` closes it again;
 - a call's synthesis belongs to the line it was written about: the new line has none until
   `transcript synthesize` writes one.
 
@@ -168,7 +169,8 @@ test loads a model: the diarizer is a fake, as the transcription engine is.
 
 ## Reading them back
 
-`show`, the Day and `serve`'s Day name a transcript's voices after its title:
+`show`, the Day and `serve`'s Day name a transcript's voices after its title (and `show` drops a
+writer's `0 turns` beside them, and marks a transcript heard again `superseded by #N`):
 
 ```
   09:15  transcript transcription  Samtale · you 3 min · Ola Nordmann 3 min

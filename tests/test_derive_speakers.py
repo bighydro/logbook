@@ -206,10 +206,14 @@ def test_the_cost_is_said_before_anything_is_written(lb):
         ]
     )
     report = transcribe.unseparated(lb)
-    assert report.signed == ["2026-10-03"] and report.promises == 1
+    with lb.index() as idx:
+        [task] = list(idx.of_kind("task"))
+    assert report.signed == ["2026-10-03"]
+    assert report.promises == [(task["seq"], "Jeg sender deg bildene i morgen.")]
     said = transcribe.cost(report)
     assert any("2026-10-03" in s and "logbook day sign" in s for s in said)
     assert any("1 promise" in s and "promises done" in s for s in said)
+    assert f"  #{task['seq']} Jeg sender deg bildene i morgen." in said  # what to close again, by id
 
 
 def test_no_socket_is_opened_while_voices_are_separated_again(lb, monkeypatch):
@@ -428,3 +432,20 @@ def test_the_command_refuses_a_since_that_is_not_a_day(lb, capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["derive", "speakers", "--since", "last week"])
     assert e.value.code == 2 and "derive speakers" in capsys.readouterr().err
+
+
+def test_two_standing_lines_of_one_recording_are_heard_once(lb):
+    old = _heard_before(lb)
+    lb.append_many(  # the same recording transcribed under another source, by hand
+        [
+            {
+                **{k: old[k] for k in ("at", "end", "tz", "kind", "tier")},
+                "source": "manual",
+                "payload": {**old["payload"], "raw_id": "by-hand"},
+            }
+        ]
+    )
+    report = transcribe.unseparated(lb)
+    assert [item.line["id"] for item in report.found] == [old["id"]]
+    assert report.counts == {"skipped_same_recording": 1} and report.already == 0
+    assert "another standing line of this run" in transcribe.describe_again(report)
