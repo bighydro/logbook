@@ -10,7 +10,8 @@
 | `sync.py`      | `sync`; `doctor sources`; `setup assets`                                         |
 | `goals.py`     | `goal`: `add`, `review`, `list`, `import` (RFC 0036)                             |
 | `chapters.py`  | `chapter`: `open`, `close`, `list` (RFC 0036)                                    |
-| `derive.py`    | `derive`: `stays`, `flights`, `keepers`, `transcripts`, `descriptions`           |
+| `derive.py`    | `derive`: `stays`, `flights`, `keepers`, `transcripts`, `speakers`,              |
+|                | `descriptions`; `setup speakers`                                                 |
 | `day.py`       | `show` (a day, a page, `year`, `days`), `day`, `digest`, `search`;               |
 |                | `setup questions`                                                                |
 | `trips.py`     | `show trips`, `show trip`                                                        |

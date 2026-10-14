@@ -34,6 +34,16 @@ text (`logbook.core.speakers`). A memo whose source keeps a call's sides apart s
 channel at a time, and the microphone's voice is `from_me` when it is alone in its channel. Any other
 recording, a stereo memo included, is one room. Without the diarizer the line is today's, and the run
 says once, at the end, `speakers: not separated (logbook setup speakers --fetch-model)`.
+
+**Heard again** (`derive speakers`, RFC 0038 §2.8). A standing transcript with no `speakers`, whose
+recording (`provenance.source`, a voice memo not retracted) has its audio in the store, is heard again
+by the Whisper model that heard it and separated: the text has to be heard again, because a plain-text
+transcript keeps no times and the labels need them. The result is a new line that `supersedes` the
+old one, with the old line's `source`, `at`, `end`, `tz` and title and `raw_id` `<old raw_id>#speakers@
+<the first 12 hex of the spans file's digest>`: the same voices heard in the same text are the same
+spans, the same key, and the `(source, raw_id)` dedupe writes nothing twice. A line that is retracted
+supersedes nothing. What it costs is said before anything is written (`cost`): the signed days whose
+page changes, and the promises closed on the old lines, which are proposed again from the new ones.
 """
 
 from __future__ import annotations
@@ -42,7 +52,7 @@ import importlib
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -67,16 +77,23 @@ EXTRA = "openlogbook[transcribe]"
 OFFLINE = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
 
 CHANNELS_KEY = "channels"  # `extra.channels` of a memo whose source keeps a call's sides apart
+TRANSCRIPT_KIND = "transcript"
+SPEAKERS_KEY = "#speakers@"  # `<old raw_id>#speakers@<12 hex>`, the key of a transcript heard again
+SPANS_KEY_HEX = 12
 
 NO_AUDIO = "skipped_no_audio"
 RETRACTED = "skipped_retracted"
 SUPERSEDED = "skipped_superseded"
 NO_SPEECH = "skipped_no_speech"
+NO_RECORDING = "skipped_no_recording"
+RECORDING_RETRACTED = "skipped_recording_retracted"
 PHRASES = {
     NO_AUDIO: "without their audio in the store (import with --attachments)",
     RETRACTED: "retracted",
     SUPERSEDED: "superseded by a later line",
     NO_SPEECH: "with no words in them",
+    NO_RECORDING: "with no recording of their own in the record (a provider's, a file's)",
+    RECORDING_RETRACTED: "whose recording was retracted",
 }
 
 
@@ -486,6 +503,227 @@ def _draft(
     draft["payload"]["provider"] = engine.name  # RFC 0004: the tool that produced the text
     draft["payload"]["provenance"] = {"source": memo.id, "engine": engine.name, "model": engine.model}
     return draft
+
+
+# -- heard again: derive speakers --------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Unseparated:
+    """A standing transcript whose voices were never separated, its recording, and the Whisper model
+    that heard it."""
+
+    line: Line
+    memo: Memo
+    model: str
+
+    @property
+    def id(self) -> str:
+        return str(self.line["id"])
+
+
+@dataclass
+class Again:
+    """What `derive speakers` found and did."""
+
+    found: list[Unseparated]  # in time order
+    already: int  # standing transcripts whose voices are separated already
+    counts: dict[str, int]  # what cannot be heard again, and why
+    signed: list[str]  # the signed local days whose page a new line would change
+    promises: int  # promises closed on the transcripts found, which a new line proposes again
+    dry_run: bool = False
+    written: int = 0
+    same: int = 0  # heard again into the same spans: the key is in the record, nothing written
+    voiceless: int = 0  # heard again with no voice found: nothing written
+
+
+def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) -> Again:
+    """The standing transcripts from local day `since` on with no `speakers` whose recording's audio
+    is in the store, in time order; the ones that cannot be heard again counted; what writing their
+    new lines would cost. Reads the index; writes nothing."""
+    from ..contrib.promises import closes
+    from ..core import day_start, signing, stays
+    from ..core.store import retractions
+
+    counts: dict[str, int] = {}
+    with lb.index() as idx:
+        retracted = retractions(idx.retractions())
+        every = idx.by_kind(TRANSCRIPT_KIND)
+        window = idx.by_kind(TRANSCRIPT_KIND, first_day=since) if since else every
+        sources = {_provenance(line).get("source") for line in window}
+        memos = idx.by_ids(str(s) for s in sources if isinstance(s, str))
+        signatures = signing.standing(idx, str(lb.meta.get("owner_id") or "") or None)
+        tasks = idx.by_kind("task")
+    replaced = {  # a line a standing transcript supersedes; a retracted one supersedes nothing
+        str(line["payload"]["supersedes"])
+        for line in every
+        if str(line["id"]) not in retracted and isinstance((line.get("payload") or {}).get("supersedes"), str)
+    }
+    found: list[Unseparated] = []
+    already = 0
+    for line in sorted(window, key=lambda line: (str(line["at"]), int(line["seq"]))):
+        payload = line.get("payload") or {}
+        if str(line["id"]) in retracted or str(line["id"]) in replaced:
+            continue
+        if payload.get("speakers"):
+            already += 1
+            continue
+        provenance = _provenance(line)
+        memo = memos.get(str(provenance.get("source")))
+        if memo is None or memo.get("kind") != MEMO_KIND:
+            _count(counts, NO_RECORDING)
+        elif str(memo["id"]) in retracted:
+            _count(counts, RECORDING_RETRACTED)
+        elif (audio := _audio(lb, memo.get("payload") or {})) is None:
+            _count(counts, NO_AUDIO)
+        else:
+            model = provenance.get("model")
+            found.append(Unseparated(line, Memo(memo, audio), str(model) if model else DEFAULT_MODEL))
+    bounds = day_start.of(lb.meta)
+    days = {
+        bounds.day(at).isoformat() for item in found if (at := stays.instant(item.line["at"])) is not None
+    }
+    ids = {item.id for item in found}
+    by_id = {str(task["id"]): task for task in tasks}
+    closed = [
+        task_id
+        for task_id in closes(tasks, retracted).values()
+        if str((((by_id.get(task_id) or {}).get("payload") or {}).get("extra") or {}).get("origin")) in ids
+    ]
+    return Again(found, already, counts, sorted(days & set(signatures)), len(closed), dry_run)
+
+
+def cost(report: Again) -> list[str]:
+    """What writing the new lines changes, said before anything is written (RFC 0038 §2.8)."""
+    said: list[str] = []
+    if report.signed:
+        said.append(
+            f"signed days whose page changes: {', '.join(report.signed)}; each signature reads"
+            " page_matches false until the day is signed again (logbook day sign DAY)"
+        )
+    if report.promises:
+        said.append(
+            f"{_plural(report.promises, 'promise')} closed on these transcripts will be proposed again"
+            " from the new lines, a promise's id being its line's; `promises done ID` closes one again"
+        )
+    return said
+
+
+def rehear(
+    lb: Logbook,
+    report: Again,
+    engine_for: Callable[[str], Engine],
+    diarizer: diarize.Diarizer,
+    hint: int | None = None,
+    chunk_s: float = CHUNK_S,
+    progress: Callable[[str], None] | None = None,
+) -> Again:
+    """Hear each transcript `unseparated` found again and separate its voices, a new line each that
+    supersedes the old one; `engine_for(model)` gives the engine for a Whisper model, and every
+    model must be on this machine before anything is heard (ModelMissing). `hint` is the number of
+    voices the owner says a room held. A line is appended as soon as it is heard."""
+    engines: dict[str, Engine] = {}
+    for item in report.found:
+        if item.model not in engines:
+            engines[item.model] = engine_for(item.model)
+            _ready(engines[item.model], fetch_model=False)
+    if not report.found:
+        return report
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+
+    def same(_draft: dict[str, Any]) -> None:
+        report.same += 1
+
+    with diarize.quiet():
+        report.written = lb.append_many(
+            _again(lb, report, engines, diarizer, hint, chunk_s, zone, progress), skipped=same
+        )
+    return report
+
+
+def _again(
+    lb: Logbook,
+    report: Again,
+    engines: Mapping[str, Engine],
+    diarizer: diarize.Diarizer,
+    hint: int | None,
+    chunk_s: float,
+    zone: ZoneInfo,
+    progress: Callable[[str], None] | None,
+) -> Iterator[dict[str, Any]]:
+    for item in report.found:
+        engine, memo, old = engines[item.model], item.memo, item.line
+        started = time.monotonic()
+        voices: Voices | None = None
+        with lb.attachment(memo.audio.name) as audio:
+            heard = _hear(engine, audio, chunk_s)
+            if heard.segments:
+                voices = separate_voices(diarizer, heard, audio, channels_of(memo.line), hint)
+        seconds = time.monotonic() - started
+        title = str((old.get("payload") or {}).get("title") or memo.title)
+        if voices is None or not voices.turns:
+            if voices is None:
+                _count(report.counts, NO_SPEECH)
+            else:
+                report.voiceless += 1
+            if progress is not None:
+                said = "no words heard" if voices is None else "no voice found"
+                progress(f"  {_clock(str(old['at']), zone)}  {title}: {said} ({seconds:.1f}s)")
+            continue
+        data = heard.text.encode("utf-8")
+        draft = _draft(memo, engine, data, heard.language, len(heard.windows), len(heard.segments))
+        spans = label(draft, voices, heard.segments, data, diarizer, memo)
+        payload = draft["payload"]
+        payload["title"] = title
+        old_raw_id = (old.get("payload") or {}).get("raw_id") or memo.raw_id
+        key = payload["diarization"]["spans"]["sha256"][:SPANS_KEY_HEX]
+        payload["raw_id"] = f"{old_raw_id}{SPEAKERS_KEY}{key}"
+        payload["supersedes"] = str(old["id"])
+        draft.update(at=old["at"], end=old.get("end"), tz=old.get("tz"), source=old["source"])
+        draft["tier"] = max(int(draft["tier"]), int(old["tier"]))
+        lb.attach(data)
+        lb.attach(spans)
+        if progress is not None:
+            voices_said = _plural(len(payload["speakers"]), "voice")
+            progress(f"  {_clock(str(old['at']), zone)}  {title}: {voices_said}, {seconds:.1f}s")
+        yield draft
+
+
+def found_rows(report: Again, zone: ZoneInfo) -> list[str]:
+    """A row per transcript `unseparated` found, its local time and title, for a dry run."""
+    rows = []
+    for item in report.found:
+        title = (item.line.get("payload") or {}).get("title") or item.memo.title
+        rows.append(f"  {_clock(str(item.line['at']), zone)}  {title}")
+    return rows
+
+
+def describe_again(report: Again) -> str:
+    """The closing lines of `derive speakers`."""
+    already = f" ({report.already:,} separated already)" if report.already else ""
+    if not report.found:
+        text = f"nothing to separate{already}"
+    elif report.dry_run:
+        text = (
+            f"dry run: the voices of {_plural(len(report.found), 'transcript')} would be separated, each a"
+            f" new line superseding the one heard before{already}; nothing written"
+        )
+    else:
+        text = (
+            f"separated the voices of {_plural(report.written, 'transcript')}, each a new line superseding"
+            f" the one heard before{already}"
+        )
+        if report.same:
+            text += f"\n  heard the same as before, nothing written: {report.same:,}"
+        if report.voiceless:
+            text += f"\n  no voice found, nothing written: {report.voiceless:,}"
+    skipped = [f"{n:,} {PHRASES.get(key, key)}" for key, n in report.counts.items() if n]
+    return text + (f"\n  not heard again: {', '.join(skipped)}" if skipped else "")
+
+
+def _provenance(line: Line) -> dict[str, Any]:
+    found = (line.get("payload") or {}).get("provenance")
+    return found if isinstance(found, dict) else {}
 
 
 # -- engines ---------------------------------------------------------------------------------------

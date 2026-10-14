@@ -119,6 +119,65 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
     print(transcribe.describe(report))
 
 
+def cmd_speakers(a: argparse.Namespace) -> None:
+    """`derive speakers [--since DAY] [--speakers N] [--dry-run]` (RFC 0038 §2.8): each standing
+    transcript heard before voices were separated, whose recording's audio is in the store, heard
+    again and separated, a new transcript/v1 line superseding the old one; what that costs (signed
+    days, closed promises) said before anything is written. Nothing to do needs no engine; a dry run
+    needs none either. Without the diarizer: one sentence naming `setup speakers --fetch-model`, exit 2."""
+    from ..labs import diarize, transcribe
+
+    if a.since is not None:
+        try:
+            parse_day(a.since)
+        except ValueError as e:
+            print(f"derive speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    report = transcribe.unseparated(lb, since=a.since, dry_run=a.dry_run)
+    if report.dry_run:
+        for row in transcribe.found_rows(report, ZoneInfo(str(lb.meta["timezone"]))):
+            print(row)
+    if report.found:
+        for said in transcribe.cost(report):
+            print(said)
+    if report.dry_run or not report.found:
+        print(transcribe.describe_again(report))
+        return
+    diarizer = diarize.detect()
+    if diarizer is None:
+        print(
+            f"derive speakers: the diarizer and its models are not on this machine; {diarize.FETCH} fetches"
+            " them, the one time anything uses the network",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        transcribe.rehear(
+            lb,
+            report,
+            lambda model: transcribe.detect(model, words=True),
+            diarizer,
+            hint=a.speakers,
+            progress=print,
+        )
+    except (transcribe.EngineMissing, transcribe.ModelMissing) as e:
+        print(f"derive speakers: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(transcribe.describe_again(report))
+
+
+def _voices(text: str) -> int:
+    """`--speakers N`: a whole number of voices, one or more."""
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"a number of voices, not {text!r}") from None
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"a number of voices, one or more, not {n}")
+    return n
+
+
 def cmd_describe(a: argparse.Namespace) -> None:
     """`describe keepers [--since DAY] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
     [--dry-run] [--json]`: a derived note/v1 line per standing keeper (RFC 0024) whose photo file is
@@ -200,14 +259,15 @@ def _infer_keepers(a: argparse.Namespace) -> None:
 
 
 def derive_arguments(sub: Subparsers) -> None:
-    """`logbook derive stays|flights|keepers|transcripts|descriptions`: what the record reads out of
-    itself. `flights` and `keepers` were `infer`, `transcripts` was `transcribe`, `descriptions`
-    was `describe`, until 0.6; each keeps its options."""
+    """`logbook derive stays|flights|keepers|transcripts|speakers|descriptions`: what the record reads
+    out of itself. `flights` and `keepers` were `infer`, `transcripts` was `transcribe`,
+    `descriptions` was `describe`, until 0.6; each keeps its options. `speakers` is RFC 0038's."""
     s = sub.add_parser(
         "derive",
-        help="stays; flights and keepers inferred; transcripts; descriptions",
+        help="stays; flights and keepers inferred; transcripts and their speakers; descriptions",
         description="what the record reads out of itself: stays (nothing appended); flights and keepers"
-        " (inferred, RFC 0013, RFC 0024); transcripts of voice memos and descriptions of keepers, by a"
+        " (inferred, RFC 0013, RFC 0024); transcripts of voice memos, the voices in them, and descriptions"
+        " of keepers, by a"
         " local model, nothing leaving the machine",
     )
     verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")
@@ -270,6 +330,25 @@ def derive_arguments(sub: Subparsers) -> None:
         help="do not separate the voices, even when the diarizer is on this machine (RFC 0038)",
     )
     v.set_defaults(fn=cmd_transcribe)
+
+    v = verbs.add_parser(
+        "speakers",
+        help="the voices of transcripts heard before they were separated: each heard again from its"
+        " recording, a new line superseding the old (RFC 0038); nothing leaves the machine",
+    )
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only transcripts from this local day on")
+    v.add_argument(
+        "--speakers",
+        type=_voices,
+        metavar="N",
+        help="a hint to the diarizer that the room held N voices",
+    )
+    v.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list what would be heard again and what it would change (signed days, promises); write nothing",
+    )
+    v.set_defaults(fn=cmd_speakers)
 
     v = verbs.add_parser(
         "descriptions",
