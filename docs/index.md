@@ -46,6 +46,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [The digest](digest.md): the day in 25 lines at most, ending in one question you may ignore.
 - [The ledger](ledger.md): the record's money read back in context, by month or by trip.
 - [People](people.md): everyone the record knows, what it knows of each, merging the duplicates, reviewing who the sources saw, and a priority you can argue with.
+- [Review](review.md): one sitting for what the sources saw — people, orgs, ideas, assets and places — and [the three profiles](entities.md) it writes, `status` among them.
 - [Promises](promises.md): the sentences in your own words that read as commitments, and whether they were kept.
 - [Tasks](tasks.md): every task line, open or done, and the evidence that one was finished.
 - [Search](search.md): full text across notes, transcripts, messages, mail and events, within a tier.
