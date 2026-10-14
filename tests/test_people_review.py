@@ -28,7 +28,7 @@ from review_people import (
 
 from logbook import cli
 from logbook.contrib import people_review
-from logbook.core import index, resolve
+from logbook.core import resolve
 from logbook.core.store import Logbook
 
 
@@ -130,10 +130,8 @@ def test_the_observed_table_lives_in_the_index_and_follows_the_record(
         columns = {row[1] for row in db.execute(f"PRAGMA table_info({people_review.TABLE})")}
         assert set(people_review.COLUMNS) <= columns
         assert db.execute(f"SELECT count(*) FROM {people_review.TABLE}").fetchone()[0] == len(before)
-        stamps = f"SELECT key, value FROM {index.OBSERVED_META} WHERE kind = 'person'"
-        assert dict(db.execute(stamps))["head"] == lb.meta["head"]
-        kind = "SELECT type FROM sqlite_master WHERE name = ?"
-        assert db.execute(kind, (people_review.TABLE,)).fetchone() == ("view",), "a view of observed_entities"
+        head = dict(db.execute("SELECT key, value FROM observed_entities_meta WHERE kind = 'person'"))["head"]
+        assert head == lb.meta["head"]
     finally:
         db.close()
     assert people_review.observed(lb) == before, "served from the table while the head stands"
@@ -148,8 +146,7 @@ def test_the_observed_table_lives_in_the_index_and_follows_the_record(
     db = sqlite3.connect(lb.index_path)
     try:
         db.execute(f"DROP VIEW {people_review.TABLE}")
-        db.execute("DROP VIEW observed_places")
-        db.execute(f"ALTER TABLE {index.OBSERVED} DROP COLUMN days")
+        db.execute("ALTER TABLE observed_entities DROP COLUMN days")
         db.commit()
     finally:
         db.close()

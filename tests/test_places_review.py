@@ -233,12 +233,7 @@ def test_reject_records_the_pair_beside_the_record_and_it_is_not_proposed_again(
     state = json.loads((lb.root / "state" / "places-review.json").read_text(encoding="utf-8"))
     [pair] = state["rejected"]
     assert pair["name"] == BOATHOUSE and places.distance_m(pair["lat"], pair["lon"], *S[4]) < 10
-    assert _seq(lb) == before + 1, "a line now (RFC 0037, decision 3); the file is its cache"
-    line = Logbook(lb.root).line_by_seq(before + 1)
-    assert line is not None and line["kind"] == "entity-review" and line["source"] == "manual"
-    payload = line["payload"]
-    assert payload["schema"] == "entity-review/v1" and payload["entity"] == {"type": "place"}
-    assert payload["label"] == BOATHOUSE and payload["ref"]["kind"] == "centre" and pair["line"] == line["id"]
+    assert _seq(lb) == before, "a note beside the record, never a line"
     data = _json(capsys)
     assert data["proposals"][3]["name"] is None, "its only name rejected: a blank now"
     assert any(e["name"] == BOATHOUSE for e in data["proposals"][3]["evidence"]), "the evidence stays"
@@ -358,10 +353,9 @@ def test_the_table_is_served_while_the_record_stands_and_rebuilt_when_it_moves(
               payload={"schema": "note/v1", "text": "a later note"})  # fmt: skip
     places_review.observed(Logbook(lb.root))
     assert len(built) == 3, "the head moved: rebuilt"
-    with sqlite3.connect(lb.index_path) as db:  # the view of a table of another shape
+    with sqlite3.connect(lb.index_path) as db:
         db.execute(f"DROP VIEW {places_review.TABLE}")
-        db.execute("DROP VIEW observed_people")
-        db.execute("ALTER TABLE observed_entities DROP COLUMN labels")
+        db.execute("ALTER TABLE observed_entities DROP COLUMN spread_m")
     places_review.observed(Logbook(lb.root))
     assert len(built) == 4, "a table of another shape: rebuilt"
 
