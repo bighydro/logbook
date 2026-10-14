@@ -325,10 +325,11 @@ def share_of(
     }
 
 
-def export(lb: Logbook, prepared: Prepared, out: Path, generated_at: str) -> Export:
-    """Write the bundle — `trip.json`, then RFC 0005's files with the manifest last — and append the
-    crossing line, in that order, so a crash leaves at worst a bundle no line names. The watermark
-    of `export crossing` is not moved: a trip is not a delta window."""
+def export(lb: Logbook, prepared: Prepared, out: Path, generated_at: str, force: bool = False) -> Export:
+    """Write the bundle — `trip.json` and RFC 0005's files, the manifest last, built fresh and put in
+    place of `out` (`crossing.write_bundle`; `force` replaces a folder that is not a bundle) — and
+    append the crossing line, in that order, so a crash leaves at worst a bundle no line names. The
+    watermark of `export crossing` is not moved: a trip is not a delta window."""
     policy.write_default(lb.root)
     req, sel = prepared.request, prepared.selection
     head = str(lb.meta["head"])
@@ -340,12 +341,9 @@ def export(lb: Logbook, prepared: Prepared, out: Path, generated_at: str) -> Exp
     manifest["sender"] = dict(prepared.sender)
     manifest["attachments_included"] = prepared.attachments
     manifest["trip_file"] = TRIP_FILE
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(prepared.share, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    (out / TRIP_FILE).write_bytes(raw)
     manifest["trip_sha256"] = hashlib.sha256(raw).hexdigest()
-    package_sha256 = crossing.write_bundle(lb, sel, manifest, out)
+    package_sha256 = crossing.write_bundle(lb, sel, manifest, out, extra={TRIP_FILE: raw}, force=force)
     line = crossing.record(
         lb,
         req,
