@@ -13,8 +13,8 @@ every attachment named, sized and digested (`sha256`, the bytes are in hand) and
 the parser's own (the text part, else the HTML stripped, at most 64 KB of it). So the line is the one the
 IMAP source writes for that message — `source` `mail`, `raw_id` `<account>:<Message-ID>` — and a mailbox
 synced over IMAP yesterday and over the API today writes nothing twice, whichever came first; a Takeout
-imported with `--account` dedupes against both. `SOURCE` says so to `sync`, which counts what the
-record holds by it.
+dedupes against both, imported with `--account` or without (`held`, by normalised Message-ID).
+`SOURCE` says so to `sync`, which counts what the record holds by it.
 
 **Labels**, as the IMAP source spells Gmail's X-GM-LABELS (`mail.gmail_fields`, the one function both
 use): the system labels `INBOX`, `SENT`, `IMPORTANT` and `STARRED` as `Inbox`, `Sent`, `Important` and
@@ -31,8 +31,9 @@ the one its sent message will carry) is skipped and counted (`skipped_draft`); a
 being listed and being read (`skipped_gone`).
 
 **Headers first.** Each page of message ids is read as metadata (`format=metadata`, the Message-ID
-header alone), the record is asked which of those `(mail, <account>:<Message-ID>)` keys it holds
-(`existing`, one SELECT), and only the rest are fetched whole: a mailbox the IMAP source or a Takeout
+header alone), the record is asked which of those messages it holds by normalised Message-ID, from any
+mail road (`held`, `logbook.contrib.mail_lookup`; without it `existing`, the keys `(mail,
+<account>:<Message-ID>)` alone), and only the rest are fetched whole: a mailbox the IMAP source or a Takeout
 already wrote costs one small request per message and no body. The progress line per page says what is
 true: listed, new, already in the record.
 

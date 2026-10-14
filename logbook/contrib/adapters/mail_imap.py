@@ -29,11 +29,12 @@ read from its first message again (the record refuses what it holds); `--restart
 refuse) and still advances the marks; `--dry-run` fetches and counts and writes nothing.
 
 Headers first: each batch of `BATCH` UIDs is fetched as `Message-ID` and size alone, the record is
-asked which of those ids it holds (`existing`, one SELECT), and only the bodies of the rest are
-fetched, in batches bounded by `BODY_BATCH_BYTES` — so the first run over a 400,000-message All Mail
-after a Takeout import asks for no body the record would refuse. The progress line per batch says
-what is true: fetched, new, already in the record; never a guessed total. One connection, closed on
-the way out, on success and on error alike.
+asked which of those messages it holds by normalised Message-ID, from any mail road (`held`,
+`logbook.contrib.mail_lookup`: one query; without it `existing`, this source's own keys), and only
+the bodies of the rest are fetched, in batches bounded by `BODY_BATCH_BYTES` — so the first run over a
+400,000-message All Mail after a Takeout import asks for no body the record would refuse. The progress
+line per batch says what is true: fetched, new, already in the record; never a guessed total. One
+connection, closed on the way out, on success and on error alike.
 
 Gmail's labels and thread id (the `X-GM-EXT-1` extension: `X-GM-LABELS`, `X-GM-THRID`) are fetched
 with the body and written as the mbox adapter writes Takeout's `X-Gmail-Labels` and `X-GM-THRID`:

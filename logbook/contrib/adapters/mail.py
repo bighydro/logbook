@@ -15,6 +15,10 @@ is missing or unreadable (counted `date_from_separator`), `tz` the record's zone
 `Message-ID` without its brackets, prefixed by `<account>:` when `--account` names the mailbox, so a
 re-import and a later live puller of the same mailbox append nothing (ADR 0017); a message with no
 `Message-ID` is keyed `sha256:<digest of its bytes>` and counted (`no_message_id`), never skipped.
+`message_id` is the id normalised (`normalise_id`: brackets and surrounding whitespace off, the domain
+part lower-cased), the key every mail road asks the record by before it writes (`held`,
+`logbook.contrib.mail_lookup`): a message the record holds from any road under another key is counted
+per mailbox (`HELD`) and not yielded (RFC 0015, amendment of 2026-10-14).
 `thread` is the root of `References`, else `In-Reply-To`, else the message's own id. `from`, `to`,
 `cc` and `bcc` are `{email, name?}` as the headers spell them, the address lower-cased, never
 resolved: a `resolution/v1` line for `{kind: "email", value}` names them (RFC 0006), and the names

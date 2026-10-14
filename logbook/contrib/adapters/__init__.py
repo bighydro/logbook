@@ -68,7 +68,9 @@ record's dedupe by (source, raw_id) stays the safety net. `pull` may also take `
 record's own addresses, as a file adapter's `run` may), `owner_aliases` (as `run` may),
 `existing(keys) -> set` (which of a batch of
 (source, raw_id) keys the record already holds, one SELECT, so a source that can name its items before
-fetching them never fetches what would be refused) and `notice(text)` (one line of its own on stderr,
+fetching them never fetches what would be refused), `held(asked) -> [Holder | None]` (the mail roads,
+`run` and `pull` alike: which of a batch of messages the record holds by normalised Message-ID from any
+mail road, `logbook.contrib.mail_lookup`) and `notice(text)` (one line of its own on stderr,
 for a progress line that says what is true: fetched, new, already in the record, never a guessed total),
 and `previous(prefixes) -> {prefix: [payload]}` (the payloads of the record's lines of its source and KIND
 under each raw_id prefix, in chain order, so a source that keeps no history of its own — `notion` — can
