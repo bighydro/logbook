@@ -306,3 +306,9 @@ def test_a_malformed_entry_is_skipped_and_the_rest_are_read():
         ]
     }
     assert speakers.row_text(payload) == "S1 · S3"
+
+
+def test_a_source_s_own_labels_stand_and_only_the_overlap_is_reckoned():
+    turns = _turns((0.0, 4.0, "mic"), (1.0, 9.0, "system"))
+    found = speakers.assign([Span(0.0, 4.0), Span(1.0, 9.0), Span(9.5, 10.0)], turns, ["mic", "system", None])
+    assert found == [Assigned("mic", ("system",)), Assigned("system", ("mic",)), Assigned(None)]

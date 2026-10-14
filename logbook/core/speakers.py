@@ -184,8 +184,12 @@ def _inside(intervals: Sequence[Interval], ends: Sequence[float], start: float, 
 # -- the segments ---------------------------------------------------------------------------------
 
 
-def assign(spans: Sequence[Span], turns: Sequence[VoiceTurn]) -> list[Assigned]:
-    """Each segment's voice and overlap (the module's rules)."""
+def assign(
+    spans: Sequence[Span], turns: Sequence[VoiceTurn], given: Sequence[str | None] | None = None
+) -> list[Assigned]:
+    """Each segment's voice and overlap (the module's rules). `given` is each segment's voice as a
+    source already says it (a provider that labels its own segments): it stands, and only the
+    overlap is reckoned."""
     voices = order(turns)
     merged = _merged(turns)
     ends = {voice: [b for _a, b in merged[voice]] for voice in voices}
@@ -195,11 +199,15 @@ def assign(spans: Sequence[Span], turns: Sequence[VoiceTurn]) -> list[Assigned]:
         return {v: sum(_inside(merged[v], ends[v], a, b) for a, b in windows) for v in voices}
 
     out: list[Assigned] = []
-    for span in spans:
+    for i, span in enumerate(spans):
         around = heard([(span.start, span.end)])
         by_words = heard(span.words) if span.words else around
-        speaker = _most(voices, by_words) or _most(voices, around)
-        overlap = tuple(v for v in voices if v != speaker and around[v] >= OVERLAP_MIN_S) if speaker else ()
+        speaker = given[i] if given is not None else _most(voices, by_words) or _most(voices, around)
+        overlap = (
+            tuple(v for v in voices if v != speaker and around.get(v, 0.0) >= OVERLAP_MIN_S)
+            if speaker
+            else ()
+        )
         out.append(Assigned(speaker, overlap))
     return out
 
