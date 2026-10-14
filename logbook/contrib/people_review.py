@@ -42,9 +42,10 @@ person with no identifier a resolution line can carry (a spoken name alone) is l
 observed person as the lines wrote it, the line `people merge` writes: one `resolution/v1`,
 `source` `manual`, `method` `owner`, `alias_of` the canonical person's own ref (a phone before an
 address), the head the proposal was read against and under `extra` the proposal id, the entity,
-the score and what matched. `--reject N[,N]` writes one `people-review/v1` line (RFC 0035) saying
-the observed person and the canonical person are not the same, with the identifiers, so the pair
-never comes back; retract it and the proposal returns. `--all-above SCORE` accepts every proposal at
+the score and what matched. `--reject N[,N]` writes one `entity-review/v1` line of type person
+(RFC 0037; RFC 0035's `people-review/v1` until then, and read as one forever) saying the observed
+person and the canonical person are not the same, with the identifiers, so the pair never comes
+back; retract it and the proposal returns. `--all-above SCORE` accepts every proposal at
 or above the score. Only `Logbook.append` writes.
 
 **Priority.** `people --priority` ranks the canonical people heard in the last year by a plain
@@ -70,14 +71,15 @@ from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
 from ..core.store import Logbook, now_utc, retractions, uuid7
-from . import google_contacts, people_merge
+from . import entities, google_contacts, people_merge
 from .adapters import phone as phones
 from .adapters import service_account
 from .adapters.ios_contacts import DIAL_PREFIX_ENV
 from .google_contacts import Contact
 
-KIND = "people-review"  # the line a rejection writes
-SCHEMA = "people-review/v1"
+KIND = entities.ENTITY_REVIEW  # the line a rejection writes (RFC 0037, decision 2)
+SCHEMA = entities.ENTITY_REVIEW_SCHEMA
+LEGACY_KIND, LEGACY_SCHEMA = entities.PEOPLE_REVIEW, entities.PEOPLE_REVIEW_SCHEMA  # RFC 0035: read forever
 DIFFERENT = "different"
 SOURCE = people_merge.SOURCE
 METHOD = people_merge.METHOD
@@ -572,7 +574,7 @@ def read(lb: Logbook, book: google_contacts.Book | None = None) -> Report:
     rows = observed(lb)
     with lb.index() as idx:
         marks, resolutions = idx.retractions(), idx.resolutions()
-        reviews = idx.by_kind(KIND)
+        reviews = [*idx.by_kind(LEGACY_KIND), *idx.by_kind(KIND)]
     lines = [*marks, *resolutions]
     standing = resolve.standing(lines)
     identities = resolve.identities_from(lines)
@@ -635,16 +637,19 @@ class Rejected:
 
 
 def rejections(reviews: Iterable[Line], retracted: frozenset[str]) -> Rejected:
-    """The standing `people-review/v1` lines with verdict `different`, read into `Rejected`."""
+    """The standing `entity-review/v1` lines of type person and `people-review/v1` lines with
+    verdict `different`, read into `Rejected`."""
     found: dict[str, set[Ref]] = {}
     pairs = 0
     for line in reviews:
         if str(line.get("id")) in retracted:
             continue
         payload = line.get("payload") or {}
-        if payload.get("schema") != SCHEMA or payload.get("verdict") != DIFFERENT:
+        if payload.get("schema") not in (SCHEMA, LEGACY_SCHEMA) or payload.get("verdict") != DIFFERENT:
             continue
         entity = payload.get("entity")
+        if payload.get("schema") == SCHEMA and entities.kind_of(entity) != entities.PERSON:
+            continue  # another kind's no
         entity_id = entity.get("id") if isinstance(entity, dict) else None
         if not isinstance(entity_id, str) or not entity_id:
             continue
@@ -1000,10 +1005,11 @@ def _named(lb: Logbook, report: Report, p: Proposal, minted: dict[str, str], at:
 
 
 def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[Written]:
-    """The proposals rejected: one `people-review/v1` line each, saying the observed person and
-    the canonical person are not the same, appended through `Logbook.append`. A contact proposal's no
-    writes no line, the contact not being in the record: its id is kept in
-    `state/google-contacts-review.json` (`google_contacts.reject`) and it is not proposed again."""
+    """The proposals rejected: one `entity-review/v1` line of type person each, saying the observed
+    person and the canonical person are not the same, appended through `Logbook.append`; its tier
+    the evidence's, never under 2 (a decision). A contact proposal's no writes no line, the contact
+    not being in the record: its id is kept in `state/google-contacts-review.json`
+    (`google_contacts.reject`) and it is not proposed again."""
     at = now_utc()
     passed = [p.id for p in proposals if p.canonical is None]
     if passed:
@@ -1028,7 +1034,9 @@ def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
             "raw_id": f"review:{DIFFERENT}:{p.id}",
             "extra": {"review": p.id, "score": p.score, "matched": list(p.evidence)},
         }
-        line = lb.append(at=at, source=SOURCE, kind=KIND, tier=p.tier, payload=payload)
+        line = lb.append(
+            at=at, source=SOURCE, kind=KIND, tier=entities.review_tier([p.tier]), payload=payload
+        )
         written.append(Written(p, "rejected", [line]))
     return written
 

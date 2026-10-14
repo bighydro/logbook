@@ -28,6 +28,7 @@ from . import (
     people,
     promises,
     record,
+    review,
     rollup,
     serve,
     sync,
@@ -37,7 +38,7 @@ from .common import Subparsers
 #: the groups of `logbook --help`, in order: a header, then the commands under it
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("start", ("init", "setup", "doctor")),
-    ("write", ("add", "import", "sync", "goal", "chapter")),
+    ("write", ("add", "import", "sync", "goal", "chapter", "review")),
     ("read", ("show", "day", "digest", "search", "people", "rollup", "serve")),
     ("derive", ("derive", "promises", "dream")),
     ("keep", ("verify", "backup", "key", "repair")),
@@ -54,6 +55,7 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
     sync.sync_arguments,
     goals.goal_arguments,
     chapters.chapter_arguments,
+    review.review_arguments,
     day.show_arguments,
     day.day_arguments,
     day.digest_arguments,
