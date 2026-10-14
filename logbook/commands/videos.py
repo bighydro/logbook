@@ -119,7 +119,8 @@ def cmd_videos(a: argparse.Namespace) -> None:
 def _infer(a: argparse.Namespace) -> None:
     """`videos infer [--since DAY] [--limit N] [--keep] [--dry-run]`: the cached files read on this
     machine (`labs.scenes.run`), a line per file on stderr as it goes, then what was written. Nothing in
-    the cache says so and asks for nothing; exit 2 when ffmpeg, an extra or a model is missing."""
+    the cache says so and asks for nothing; exit 2 when ffmpeg, an extra or a model is missing, 1 when
+    a model fails on a scene."""
     from ..core.export import parse_day
     from ..labs import scenes as infer
 
@@ -157,6 +158,13 @@ def _infer(a: argparse.Namespace) -> None:
         except (infer.ModelMissing, infer.EngineMissing) as e:
             print(f"videos infer: {e}", file=sys.stderr)
             sys.exit(2)
+        except infer.SceneFailed as e:
+            print(
+                f"videos infer: a model failed on {e}; nothing of that file was written and it stays in"
+                " the cache (the files before it are written)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
     print(infer.summary(report))
 
 

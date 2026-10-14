@@ -7,9 +7,10 @@ scene) nobody has answered yet, the drafts of each file's latest inference only:
 proposal first, the surest first (`high`, `medium`, `low`), then the folder's order and the scene's;
 then the scenes with nothing to go on, for the owner to name or let go. Each row shows the scene (the
 file, its number, its offsets), the proposal and the sentences it rests on with the frames and time
-ranges they cite, what the frames showed, and, when the proposal is a single day, what the record holds
-for that day (`day_evidence`): where the owner's phone had the owner (the Day's stays) and where the
-owner's assets were reported, or the nearest day within `NEAR_DAYS` that has any.
+ranges they cite, what the frames showed, and, when the proposal is a single day the rules trust (its
+date not `low`), what the record holds for that day (`day_evidence`): where the owner's phone had the
+owner (the Day's stays) and where the owner's assets were reported, or the nearest day within
+`NEAR_DAYS` that has any.
 
 **The answers**, every number checked before the first line is written:
 
@@ -541,9 +542,13 @@ def _close_ask(lb: Logbook, row: Row, ask: Line, now: str, tz: str) -> Written:
 
 
 def trusted_day(row: Row) -> date | None:
-    """The day the proposal names, when it names one day: the only case the record's own evidence of
-    where everyone was can be set beside it."""
-    when = (row.proposal or {}).get("when")
+    """The day the proposal names, when it names one day and the rules trust it (the date's own
+    confidence not `low`: not 1 January without a time, not a stamp the frames' season contradicts):
+    the only case the record's own evidence of where everyone was can be set beside it."""
+    proposal = row.proposal or {}
+    when = proposal.get("when")
+    if proposal.get("when_confidence", proposal.get("confidence")) == "low":
+        return None
     if isinstance(when, dict) and when.get("precision") == "day":
         try:
             return date.fromisoformat(str(when.get("from")))

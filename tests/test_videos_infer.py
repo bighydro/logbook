@@ -347,6 +347,7 @@ def test_the_stamp_dates_its_scene_to_the_day_and_nothing_else_is_dated(inferred
         "place": None,
         "when": {"from": "1994-07-14", "to": "1994-07-14", "precision": "day"},
         "confidence": "high",
+        "when_confidence": "high",
     }
     assert [p["when"] for p in proposals if p is not None and p["when"] is not None] == [proposals[2]["when"]]
     for p in proposals:
@@ -476,6 +477,49 @@ def test_finding_the_files_earlier_transcript_opens_no_other_transcript(
     assert _run() == 0
     assert "video-transcription" in seen or "drive-videos" in seen
     assert "granola" not in seen
+
+
+def test_a_model_that_fails_on_a_scene_is_one_sentence_and_the_file_stays_in_the_cache(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Failing(FakeVision):
+        def describe(self, image: Path, prompt: str) -> str:
+            if "frame-3-" in image.name:
+                raise RuntimeError("out of memory")
+            return super().describe(image, prompt)
+
+    monkeypatch.setattr(infer, "detect", lambda *_a: (FakeMedia({HOME_01: TAPE}), FakeSpeech(), Failing()))
+    _video(lb, HOME_01, "Home 01")
+    path = _cache(lb, HOME_01)
+    seq = int(lb.meta["seq"])
+    capsys.readouterr()
+    assert _run() == 1
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert "a model failed on Familiens videoer / Home 01, scene 3 of 4 (1:30\u20132:10)" in err
+    assert "RuntimeError: out of memory" in err
+    assert _new(lb, seq) == []
+    assert path.exists()
+    assert not list(path.parent.glob(".infer-*"))
+
+
+def test_promises_never_read_a_home_videos_soundtrack(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Said on a tape years ago, a request is nobody's to the owner now, and the transcript sits at
+    the import, not when it was said."""
+    from logbook.contrib import promises
+    from logbook.core import transcripts
+
+    asked = ((5, 9, "Can you send me the photos by Friday? I'll call you tomorrow."),)
+    kitchen = Recording(40, -30, 0.0, look("A kitchen table.", "indoors, a kitchen", "unknown"), asked)
+    found = (FakeMedia({HOME_01: (kitchen, TAPE[1])}), FakeSpeech(), FakeVision())
+    monkeypatch.setattr(infer, "detect", lambda *_a: found)
+    _video(lb, HOME_01, "Home 01")
+    _cache(lb, HOME_01)
+    assert _run() == 0
+    assert infer.TRANSCRIPT_SOURCE in transcripts.NOT_CALLS
+    report = promises.extract(Logbook(lb.root))
+    assert report.proposals == []
+    assert report.skipped.get("video_soundtracks") == 1
 
 
 def test_keep_leaves_the_file_in_the_cache(lb: Logbook, engines: Any) -> None:

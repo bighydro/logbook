@@ -140,6 +140,11 @@ class ModelMissing(Exception):
     """A model is not on this machine; `videos fetch --models` fetches it."""
 
 
+class SceneFailed(Exception):
+    """A model failed on one scene of a file: nothing of that file is written, and it stays in the
+    cache; the files before it are written."""
+
+
 # -- the scenes -------------------------------------------------------------------------------------
 
 
@@ -210,8 +215,10 @@ def find_scenes(
         elif score >= settings.soft_cut and sound.breaks(t):
             breaks.append(_Break(t, score + 0.5, "cut and sound"))
     breaks.extend(sound.gaps())
-    kept = _merge(sorted(breaks, key=lambda b: b.at), settings.merge_s)
-    kept = [b for b in kept if settings.merge_s <= b.at <= duration - settings.merge_s]
+    # the file's first and last seconds first: a break there, dropped after the merge, would take a
+    # break inside with it
+    inside = [b for b in breaks if settings.merge_s <= b.at <= duration - settings.merge_s]
+    kept = _merge(sorted(inside, key=lambda b: b.at), settings.merge_s)
     edges = [0.0, *(round(b.at, 2) for b in kept), round(duration, 2)]
     kinds = ["start", *(b.kind for b in kept)]
     return [
@@ -558,17 +565,21 @@ class Segment:
 class Proposal:
     where: Where | None
     when: When | None
-    confidence: str | None
+    confidence: str | None  # the weaker of the place's and the date's
     segments: list[Segment] = field(default_factory=list)
+    when_confidence: str | None = None  # the date's own: `review videos` sets the record beside a trusted day
 
     def to_json(self) -> dict[str, Any] | None:
         if self.where is None and self.when is None:
             return None
-        return {
+        found: dict[str, Any] = {
             "place": self.where.to_json() if self.where is not None else None,
             "when": self.when.to_json() if self.when is not None else None,
             "confidence": self.confidence,
         }
+        if self.when is not None:
+            found["when_confidence"] = self.when_confidence
+        return found
 
 
 def fold(text: str) -> str:
@@ -632,7 +643,7 @@ def propose(
         told.append(f"when, {when.text()} ({when_confidence})")
     cites = tuple(dict.fromkeys(c for s in segments if s.part in ("where", "when") for c in s.cites))
     segments.append(Segment(f"Proposed: {'; '.join(told)}.", "proposed", cites or ("video",)))
-    return Proposal(where, when, confidence, segments)
+    return Proposal(where, when, confidence, segments, when_confidence)
 
 
 def _where(
@@ -1037,12 +1048,18 @@ def _infer(
     languages: Counter[str] = Counter()
     try:
         for scene in scenes:
-            frames = _frames(job.file, scene, media, vision, scratch, settings, report)
-            said: list[Speech] = []
-            if probe.audio:
-                said, language = _speech(job.file, scene, media, speech, scratch)
-                if language:
-                    languages[language] += 1
+            try:
+                frames = _frames(job.file, scene, media, vision, scratch, settings, report)
+                said: list[Speech] = []
+                if probe.audio:
+                    said, language = _speech(job.file, scene, media, speech, scratch)
+                    if language:
+                        languages[language] += 1
+            except Exception as e:  # a model's own error: one sentence naming where, never a traceback
+                raise SceneFailed(
+                    f"{job.video.name}, scene {scene.n} of {len(scenes)}"
+                    f" ({videos.span(scene.start, scene.end)}): {type(e).__name__}: {e}"
+                ) from e
             read.append((scene, frames, said))
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

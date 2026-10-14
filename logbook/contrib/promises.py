@@ -46,7 +46,7 @@ from ..core import attribution, day_start, machine, policy, present, signing
 from ..core.chain import Line
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
-from ..core.transcripts import SPEAKER, Turn, turns_of
+from ..core.transcripts import NOT_CALLS, SPEAKER, Turn, turns_of
 
 TRANSCRIPT = "transcript"
 NOTE = "note"
@@ -71,6 +71,7 @@ DEADLINE_WORDS = 8  # a sentence this short that is only a date phrase ("by Frid
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
 AGENT_MESSAGES = "messages_by_an_agent"  # skipped: a message an agent wrote (`logbook.core.machine`)
 FORWARDED = "forwarded_messages"  # skipped: words the owner forwarded, someone else's
+SOUNDTRACKS = "video_soundtracks"  # skipped: a home video's speech (RFC 0039), nobody's word to anyone now
 DIARIZER = re.compile(
     r"^(?:speaker|sprecher|spk)\s*[A-Z0-9]{1,2}$", re.IGNORECASE
 )  # `Speaker A`, `Speaker 2`
@@ -749,6 +750,9 @@ def extract(
             continue
         if kind == MESSAGE and _forwarded(payload):
             skipped[FORWARDED] = skipped.get(FORWARDED, 0) + 1  # someone else's words the owner passed on
+            continue
+        if kind == TRANSCRIPT and line.get("source") in NOT_CALLS:
+            skipped[SOUNDTRACKS] = skipped.get(SOUNDTRACKS, 0) + 1
             continue
         voiced = (  # an agent's turns are dropped by its label: such a transcript is read as before
             attribution.voiced_turns(lb, line)

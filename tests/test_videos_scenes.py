@@ -86,6 +86,15 @@ def test_no_boundary_near_the_start_or_the_end_and_every_scene_is_long_enough() 
     assert all(s.length >= infer.SETTINGS.merge_s for s in scenes)
 
 
+def test_a_break_at_the_start_takes_no_break_just_inside_with_it() -> None:
+    cuts = [(2.0, 0.9), (4.5, 0.35)]  # a glitch as the tape starts, then the first recording's cut
+    scenes = infer.find_scenes(60.0, cuts, _levels((0, 60, -30)))
+    assert _edges(scenes) == [4.5]
+    cuts = [(55.5, 0.35), (58.0, 0.9)]  # and at the end
+    scenes = infer.find_scenes(60.0, cuts, _levels((0, 60, -30)))
+    assert _edges(scenes) == [55.5]
+
+
 def test_a_file_with_no_soundtrack_is_cut_by_its_picture_alone() -> None:
     scenes = infer.find_scenes(60.0, [(20.0, 0.6), (40.0, 0.2)], [])
     assert _edges(scenes) == [20.0]  # the weak cut has no sound to confirm it
@@ -320,6 +329,22 @@ def test_a_camcorder_clock_never_set_is_not_a_sure_day(stamp: str) -> None:
         assert found.when is None
     else:
         assert found.confidence == "low" and any("never set" in s.text for s in found.segments)
+        assert (found.to_json() or {})["when_confidence"] == "low"
+
+
+def test_the_proposal_keeps_the_dates_own_confidence_beside_the_weaker_of_the_two() -> None:
+    frames = [infer.Frame(1.0, "A garden.", None, None, (), "JUL 14 1994", ())]
+    said = [infer.Speech(2.0, 4.0, "Her i Vollen er det fint")]  # one word said: a `low` place
+    known = [infer.places.Place("Vollen", 59.8, 10.48, 300.0)]
+    found = infer.propose(frames, said, known, [], TODAY).to_json()
+    assert found is not None
+    assert (found["confidence"], found["when_confidence"]) == ("low", "high")
+    assert infer.propose(frames, [], [], [], TODAY).to_json() == {
+        "place": None,
+        "when": {"from": "1994-07-14", "to": "1994-07-14", "precision": "day"},
+        "confidence": "high",
+        "when_confidence": "high",
+    }
 
 
 def test_a_year_a_shop_has_stood_since_dates_no_scene() -> None:

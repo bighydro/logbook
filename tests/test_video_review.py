@@ -267,6 +267,28 @@ def test_a_proposed_day_with_nothing_in_the_record_says_so(
     assert "nothing in the record within 3 days of 1994-07-14" in capsys.readouterr().out
 
 
+def _dated(first: str, last: str, precision: str, confidence: str) -> dict[str, Any]:
+    return {"when": {"from": first, "to": last, "precision": precision}, "when_confidence": confidence}
+
+
+@pytest.mark.parametrize(
+    ("proposal", "day"),
+    [
+        (_dated("1994-07-14", "1994-07-14", "day", "high"), True),
+        (_dated("2000-01-01", "2000-01-01", "day", "low"), False),  # 1 January without a time
+        (_dated("1994-07-01", "1994-07-31", "month", "high"), False),
+        (None, False),
+    ],
+)
+def test_the_record_is_set_beside_a_day_only_when_the_rules_trust_it(proposal: Any, day: bool) -> None:
+    class Row:
+        pass
+
+    row = Row()
+    row.proposal = proposal  # type: ignore[attr-defined]
+    assert (video_review.trusted_day(row) is not None) is day  # type: ignore[arg-type]
+
+
 def test_json_carries_a_stable_id_per_row(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     capsys.readouterr()
     assert _review("--json") == 0

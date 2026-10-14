@@ -61,7 +61,7 @@ from ..core.day import WEEKDAYS
 from ..core.export import parse_day
 from ..core.index import Index
 from ..core.store import RETRACTION, HeadMoved, Logbook, now_utc, retractions
-from ..core.transcripts import Turn, turns_of
+from ..core.transcripts import NOT_CALLS, Turn, turns_of
 from . import dream, model_client
 from .dream import AnswerError, DreamError, Outcome
 from .model_client import Transport
@@ -76,9 +76,6 @@ UTTERANCE_CHARS = 2000  # one utterance's text in the material, at most; every u
 SUFFIX_MIN = 8  # the Day and `show` shorten an id to its last 8 characters
 ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 WINDOW_DAYS = 7  # the catch-up synthesizes the calls of the last week, unless `--since` reaches further
-# transcripts that are no call: a home video's soundtrack (RFC 0039), whose time is not known; by the
-# envelope's `source`, which reads without a key, so a sealed one is left out as surely
-NOT_CALLS = frozenset({"video-transcription"})
 SYNTHESIZED, DRY_RUN, UNCHANGED = "synthesized", "dry run", "unchanged"
 HELD_BACK, NO_TEXT, REFUSED = "held back", "no text", "refused"
 STATES = (SYNTHESIZED, DRY_RUN, UNCHANGED, HELD_BACK, NO_TEXT, REFUSED)  # the order a summary counts them

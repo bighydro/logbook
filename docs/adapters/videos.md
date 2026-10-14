@@ -176,7 +176,7 @@ and the next carries on. `--dry-run` says which cached files would be inferred a
 The queue is every scene of each file's latest inference that you have not answered, the surest
 proposals first, then the scenes with nothing to go on. Each row shows the file, the scene and its
 offsets, the proposal, the sentences with the frames and speech they cite, what the frames showed, and,
-when the proposal is one day, where the record had you and your assets that day (the Day's stays, the
+when the proposal is one day the rules trust (its date not `low`), where the record had you and your assets that day (the Day's stays, the
 assets' positions), or the nearest day within three that has any. On a terminal it asks for each scene:
 `y` confirms, `n` refuses, `a` keeps it to ask the family, Enter skips, `q` stops. With flags, every
 number is checked before the first line is written:
