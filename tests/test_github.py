@@ -8,10 +8,11 @@ recorded, never slept.
 
 Which text a line carries, by the profile: `event/v1` (RFC 0009) has `notes`, "the description
 body", so a commit's message, an issue's or a pull request's body, a review's and a comment's text
-are kept in full, and its tier is 1 whoever wrote the words — "an entry whose notes carry someone
-else's words is still tier 1 by default". A tier is where a line may travel, never who wrote it.
-Where the words were written decides it: a private repository's lines are tier 2, with the reason
-on the line (SPEC §4: a producer MAY write a higher tier than a SHOULD default for a reason it states).
+are kept in full. A tier is where a line may travel, never who wrote it, so where the words were
+written decides it: a public repository's lines are tier 1 whoever wrote the words — "an entry whose
+notes carry someone else's words is still tier 1 by default" — and a private repository's are tier 2,
+with the reason on the line (SPEC §4: a producer MAY write a higher tier than a SHOULD default for a
+reason it states).
 """
 
 from __future__ import annotations
@@ -448,7 +449,7 @@ def test_a_public_repos_lines_are_tier_1_and_a_private_ones_tier_2_with_the_reas
     assert len(public) == FIRST_RUN - 1
     assert {line["tier"] for line in public} == {1}
     assert not any("tier_reason" in line["payload"]["extra"] for line in public), "the default says nothing"
-    assert "1 from a private repository (tier 2)" in capsys.readouterr().out
+    assert "1 read from a private repository (tier 2)" in capsys.readouterr().out
 
 
 def test_every_line_of_a_private_repo_is_tier_2_its_agents_pull_request_too(
@@ -485,8 +486,10 @@ def test_all_reads_each_repos_visibility_from_the_list(
         ({"private": False, "visibility": "internal"}, "private repository"),
         ({"private": "false", "visibility": None}, "private repository"),
         ({"private": False, "visibility": "secret"}, "private repository"),
+        ({"private": True, "visibility": "public"}, "private repository"),
+        ({"private": False, "visibility": "Public"}, "private repository"),
     ],
-    ids=["no-mark", "internal", "not-a-boolean", "unknown-word"],
+    ids=["no-mark", "internal", "not-a-boolean", "unknown-word", "the-two-disagree", "not-githubs-spelling"],
 )
 def test_a_repo_not_marked_public_is_tier_2(
     lb: Logbook, fake: FakeGitHub, capsys: pytest.CaptureFixture[str], marks: dict[str, Any], reason: str
@@ -499,8 +502,10 @@ def test_a_repo_not_marked_public_is_tier_2(
     assert _sync() == 0
     line = _keyed(lb)[_commit("h1")]
     assert line["tier"] == 2 and line["payload"]["extra"]["tier_reason"] == reason
-    said = "GitHub does not say whether it is public" in capsys.readouterr().err
-    assert said == (reason == "repository visibility not known")
+    out, err = capsys.readouterr()
+    unknown = reason == "repository visibility not known"
+    assert ("GitHub does not say whether it is public" in err) == unknown
+    assert ("1 read from a repository not known to be public (tier 2)" in out) == unknown
 
 
 def test_a_change_of_visibility_applies_from_then_on_and_never_rewrites_a_line(
@@ -567,14 +572,10 @@ def test_a_crossing_at_tier_1_carries_nothing_from_a_private_repo(
     assert HARBOUR not in text and sha("h1") not in text and "Harbour notes" not in text
 
 
-def test_in_a_sealed_record_a_private_repos_lines_are_sealed_at_rest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """A record that names recipients seals every tier 2 line (RFC 0029): a private repo's text is not
-    plain on disk, and without the identity the run writes nothing, says so in one sentence and keeps
-    the watermark, as any tier 2 source does."""
+def _sealed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Logbook, Path]:
+    """A record that names two recipients (RFC 0029), and where the first identity's file would be;
+    the identity is not there until a test writes it (`_with_identity`)."""
     from logbook.core import sealing
-    from logbook.core.chain import is_sealed
 
     pairs = [sealing.generate_identity() for _ in range(2)]
     lb = Logbook.init(tmp_path / "sealed", "Europe/Oslo")
@@ -583,13 +584,34 @@ def test_in_a_sealed_record_a_private_repos_lines_are_sealed_at_rest(
     lb._save_meta(meta)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     _owner(lb, handles=["ines-example"])
-    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(tmp_path / "keys" / "absent.txt"))
+    identity = tmp_path / "keys" / "owner.txt"
+    (tmp_path / "keys" / "secret.txt").parent.mkdir(parents=True)
+    (tmp_path / "keys" / "secret.txt").write_text(pairs[0][0], encoding="utf-8")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    return lb, identity
+
+
+def _with_identity(identity: Path) -> None:
+    from logbook.core import sealing
+
+    if not identity.exists():
+        secret = (identity.parent / "secret.txt").read_text(encoding="utf-8")
+        sealing.write_identity_file(identity, secret, "test")
+
+
+def test_in_a_sealed_record_a_private_repos_lines_are_sealed_at_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record that names recipients seals every tier 2 line (RFC 0029): a private repo's text is not
+    plain on disk, and without the identity the run writes nothing, says so in one sentence and keeps
+    the watermark."""
+    from logbook.core.chain import is_sealed
+
+    lb, identity = _sealed(tmp_path, monkeypatch)
     assert _sync() == 2
     assert "identity" in capsys.readouterr().err
     assert _lines(lb) == [] and not (lb.root / "state" / "github.json").exists()
-    identity = tmp_path / "keys" / "owner.txt"
-    sealing.write_identity_file(identity, pairs[0][0], "test")
-    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    _with_identity(identity)
     assert _sync() == 0
     stored = [
         json.loads(raw)
@@ -604,6 +626,35 @@ def test_in_a_sealed_record_a_private_repos_lines_are_sealed_at_rest(
     assert opened["raw_id"] == _commit("h1") and opened["extra"]["tier_reason"] == "private repository"
     assert _sync() == 0
     assert len(_lines(lb)) == FIRST_RUN, "the blinded index knows the sealed line: nothing twice"
+
+
+def test_in_a_sealed_record_a_repo_made_public_is_never_written_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """h1 is sealed at tier 2 while harbour-notes is private; then the repo is made public. A tier 1
+    line may be written without the identity (RFC 0029 §6.3), but only the identity can see that the
+    record holds h1 sealed (its `raw_id` is blinded), so without it the sync refuses before it asks
+    GitHub anything, rather than write h1 a second time, plain. A dry run writes nothing and needs none."""
+    lb, identity = _sealed(tmp_path, monkeypatch)
+    _with_identity(identity)
+    assert _sync() == 0
+    _private(fake, HARBOUR, private=False)
+    identity.unlink()
+    capsys.readouterr()
+    fake.requests.clear()
+    assert _sync() == 2
+    err = capsys.readouterr().err
+    assert "needs the identity" in err and len(err.strip().splitlines()) == 1
+    assert fake.requests == [], "refused before a request"
+    assert _sync("--dry-run") == 0
+    _with_identity(identity)
+    assert _sync() == 0
+    lb = Logbook(lb.root)  # one that reads the identity now there
+    opened = [lb.opened(line) for line in _lines(lb)]
+    keys = [line["payload"]["raw_id"] for line in opened]
+    assert len(keys) == FIRST_RUN and keys.count(_commit("h1")) == 1
+    h1 = next(line for line in opened if line["payload"]["raw_id"] == _commit("h1"))
+    assert h1["tier"] == 2, "it keeps the tier it was written at"
 
 
 # -- watermarks, --since, the repos ------------------------------------------------------------------

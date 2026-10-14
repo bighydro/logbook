@@ -284,6 +284,27 @@ def test_a_clone_does_not_say_its_visibility_so_every_line_of_it_is_tier_2(
         assert line["tier"] == 2, line["payload"]["raw_id"]
         assert line["payload"]["extra"]["tier_reason"] == UNKNOWN
     assert "--public" in out, "the run says how to say it is public"
+    assert "a line keeps the tier it was written at" in out, "and that it holds for lines not yet written"
+    assert _add(str(repo), "--public") == 0
+    assert {line["tier"] for line in _lines(lb)} == {2}, "added again with --public: nothing rewritten"
+
+
+def test_in_a_sealed_record_without_the_identity_a_clone_is_not_added(
+    lb: Logbook, oldboat: tuple[Path, list[str]], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The export's lines may be tier 1 or 2 for the same act, so a record that seals needs the
+    identity to see the sealed ones it holds, even with --public; a dry run needs none."""
+    from logbook.core import sealing
+
+    meta = lb.meta
+    meta["recipients"] = [sealing.generate_identity()[1] for _ in range(2)]
+    lb._save_meta(meta)
+    repo, _shas = oldboat
+    assert _add(str(repo), "--public", "--dry-run") == 0
+    capsys.readouterr()
+    assert _add(str(repo), "--public") == 2
+    assert "needs the identity" in capsys.readouterr().err
+    assert _lines(lb) == []
 
 
 def test_public_says_the_clone_is_public_and_its_lines_are_tier_1(
@@ -594,6 +615,7 @@ def test_an_account_export_marks_each_repository_and_its_mark_sets_the_tier(
     lb: Logbook,
     sailplan: tuple[Path, list[str]],
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     mark: dict[str, Any],
     public: bool,
     tier: int,
@@ -602,6 +624,14 @@ def test_an_account_export_marks_each_repository_and_its_mark_sets_the_tier(
     work, shas = sailplan
     archive = _archive(tmp_path, work, mark)
     assert _add(str(archive), *(["--public"] if public else [])) == 0
+    said = [row for row in capsys.readouterr().out.splitlines() if row.strip().startswith(SAILPLAN)]
+    if reason is None:
+        assert said == []
+    elif reason == UNKNOWN:
+        assert len(said) == 1 and "does not mark it public or private" in said[0] and "--public" in said[0]
+    else:
+        assert len(said) == 1 and "the export marks it private" in said[0], "once, however many lines"
+        assert ("whatever --public says" in said[0]) == public
     lines = _lines(lb)
     keys = {line["payload"]["raw_id"] for line in lines}
     assert keys >= ARCHIVE_KEYS | {f"commit/{sha}" for sha in shas}
@@ -613,8 +643,13 @@ def test_an_account_export_marks_each_repository_and_its_mark_sets_the_tier(
     assert merged["agent"] is True, "the agent's pull request, at the repository's tier"
 
 
-def test_an_act_whose_repository_the_export_does_not_list_is_tier_2(
-    lb: Logbook, sailplan: tuple[Path, list[str]], tmp_path: Path
+@pytest.mark.parametrize("public", [False, True])
+def test_an_act_whose_repository_the_export_does_not_list_is_not_known_to_be_public(
+    lb: Logbook,
+    sailplan: tuple[Path, list[str]],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    public: bool,
 ) -> None:
     work, _shas = sailplan
     archive = _archive(tmp_path, work)
@@ -632,11 +667,30 @@ def test_an_act_whose_repository_the_export_does_not_list_is_tier_2(
         }
     )
     (archive / "issues_000001.json").write_text(json.dumps(issues), encoding="utf-8")
-    assert _add(str(archive)) == 0
+    assert _add(str(archive), *(["--public"] if public else [])) == 0
+    out = capsys.readouterr().out
     keyed = _keyed(lb)
     unlisted = keyed["ines-example/harbour-notes/issues/7/created"]
-    assert unlisted["tier"] == 2 and unlisted["payload"]["extra"]["tier_reason"] == UNKNOWN
+    if public:
+        assert unlisted["tier"] == 1 and "tier_reason" not in unlisted["payload"]["extra"]
+        assert "does not list it" not in out
+    else:
+        assert unlisted["tier"] == 2 and unlisted["payload"]["extra"]["tier_reason"] == UNKNOWN
+        assert "ines-example/harbour-notes: the export does not list it public or private" in out
     assert keyed["ines-example/sailplan/issues/1/created"]["tier"] == 1
+
+
+def test_a_repository_the_export_lists_twice_is_private_if_either_row_says_so(
+    lb: Logbook, sailplan: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    work, _shas = sailplan
+    archive = _archive(tmp_path, work)
+    rows = json.loads((archive / "repositories_000001.json").read_text(encoding="utf-8"))
+    (archive / "repositories_000002.json").write_text(
+        json.dumps([{**rows[0], "private": True, "git_url": None}]), encoding="utf-8"
+    )
+    assert _add(str(archive)) == 0
+    assert {line["tier"] for line in _lines(lb)} == {2}
 
 
 # -- the live source and the export, either first ------------------------------------------------------

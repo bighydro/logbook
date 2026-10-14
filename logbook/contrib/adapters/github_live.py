@@ -74,6 +74,7 @@ from .github import CLOSED, COMMENTED, CREATED, MERGED, REVIEWED, Owner, Who
 __all__ = [
     "ENV",
     "KIND",
+    "MIXED_TIERS",
     "NAME",
     "TIER",
     "Config",
@@ -86,6 +87,7 @@ __all__ = [
 NAME = github.NAME
 KIND = github.KIND
 TIER = github.TIER
+MIXED_TIERS = github.MIXED_TIERS  # `sync` needs the identity in a record that seals (`github.MIXED_TIERS`)
 TOKEN_ENV = "LOGBOOK_GITHUB_TOKEN"
 REPOS_ENV = "LOGBOOK_GITHUB_REPOS"
 URL_ENV = "LOGBOOK_GITHUB_URL"

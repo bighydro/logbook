@@ -17,11 +17,14 @@ someone else's words is still tier 1 by default"): a comment Ola left is tier 1 
 A private repository's lines are tier 2 (`PRIVATE_TIER`), so an issue's text, a review and other
 people's comments there never go where tier 1 crosses by default, with the reason on the line
 (`extra.tier_reason`), as SPEC §4 lets a producer write a higher tier than a SHOULD default "for a
-reason it states". A repository is public only when GitHub marks it so (`visibility`): `private`
+reason it states". A repository is public only when GitHub marks it so (`visibility_of`): `private`
 false, or a `visibility` of `public`, and nothing that says otherwise; an `internal` one, a mark that
 is no boolean or no word GitHub uses, is private; one with no mark at all is not known, and a line of
 it is tier 2 too (`repository visibility not known`). Every line is built with its repository's
-visibility (`line` takes it and has no default), so none can fall to tier 1 by omission.
+visibility (`line` takes it and has no default), so none can fall to tier 1 by omission. The same act
+may so come at tier 1 one day and tier 2 another (a repository made public, a clone read before the
+API); the record keeps the first and never a second, which in a record that seals needs the identity
+for the tier 1 lines too, since a sealed line's `raw_id` is blinded (`MIXED_TIERS`).
 
 **A line.** `kind` `event`; `at` when the act happened (a commit's author date, an issue's
 creation, its close, a pull request's merge, a review's submission, a comment's creation), `end`
@@ -114,6 +117,7 @@ __all__ = [
     "AGENT_MARKERS",
     "KEEPS_INPUT",
     "KIND",
+    "MIXED_TIERS",
     "NAME",
     "TIER",
     "Owner",
@@ -131,7 +135,7 @@ NAME = "github"
 KIND = "event"
 TIER = 1  # a public repository's lines — SPEC §4, RFC 0009: event/v1, whoever wrote the words
 PRIVATE_TIER = 2  # a private repository's, or one not known to be public: SPEC §4, "for a reason it states"
-PUBLIC, PRIVATE, UNKNOWN = "public", "private", "unknown"  # a repository's visibility (`visibility`)
+PUBLIC, PRIVATE, UNKNOWN = "public", "private", "unknown"  # a repository's visibility (`visibility_of`)
 TIER_REASONS = {PRIVATE: "private repository", UNKNOWN: "repository visibility not known"}
 SCHEMA = "event/v1"
 CALENDAR = {"id": "github", "name": "GitHub"}
@@ -142,6 +146,7 @@ PREFIX = "github:"  # a handle ref's value: `github:<login>`, lower case
 NOREPLY = "users.noreply.github.com"  # the domain of the address GitHub commits under when asked to
 USER, BOT = "User", "Bot"
 KEEPS_INPUT = True  # `add` never calls the input deletable: a clone is the owner's working copy
+MIXED_TIERS = True  # one act may come at tier 1 or 2: a record that seals needs the identity to write any
 OWNER_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 REPO_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 MARKDOWN = frozenset({".md", ".markdown", ".mdx"})
@@ -190,7 +195,7 @@ def visibility_of(repo: Mapping[str, Any]) -> str:
     private, seen = repo.get("private"), repo.get("visibility")
     if private is None and seen is None:
         return UNKNOWN
-    said_public = isinstance(seen, str) and seen.strip().casefold() == PUBLIC
+    said_public = seen == PUBLIC  # GitHub's own word, as it spells it
     if (private is None or private is False) and (seen is None or said_public):
         return PUBLIC
     return PRIVATE
@@ -546,7 +551,8 @@ def run(
         if not public:
             report.append(
                 f"{name}: a clone does not say whether its repository is public, so its lines are tier 2;"
-                " add it again with --public if it is"
+                " a public one's are tier 1 with --public, for the lines not yet in the record (a line"
+                " keeps the tier it was written at)"
             )
         yield from _history(git, name, None, floor, owner, counts, PUBLIC if public else UNKNOWN)
         return
@@ -883,8 +889,9 @@ class _Marks:
             else:
                 where = "the export does not mark it" if found is not None else "the export does not list it"
                 self.report.append(
-                    f"{repo}: {where} public or private, so its lines are tier 2; add the export again with"
-                    " --public if it is public"
+                    f"{repo}: {where} public or private, so its lines are tier 2; a public one's are tier 1"
+                    " with --public, for the lines not yet in the record (a line keeps the tier it was"
+                    " written at)"
                 )
         return visibility
 

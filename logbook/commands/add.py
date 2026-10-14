@@ -28,6 +28,7 @@ from .common import (
     _plural,
     _progress,
     _registry,
+    _require_identity_for_mixed_tiers,
     _say_disabled,
     _takes,
     _under_home,
@@ -175,6 +176,8 @@ def _append_with(
 
     if _say_disabled(lb, adapter.NAME):
         return 0
+    if not dry_run:
+        _require_identity_for_mixed_tiers(lb, adapter, "add")
     counts: dict[str, int] = {}
     report: list[str] = []
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run

@@ -26,6 +26,7 @@ from .common import (
     _owner_aliases,
     _plural,
     _registry,
+    _require_identity_for_mixed_tiers,
     _say_disabled,
     _takes,
     _today,
@@ -639,6 +640,8 @@ def _sync_one(a: argparse.Namespace) -> None:
             f"sync: --since must be RFC3339 UTC, e.g. 2026-03-01T00:00:00Z, not {a.since!r}", file=sys.stderr
         )
         sys.exit(2)
+    if not a.dry_run:  # before a request: a dry run writes nothing, so it needs no identity
+        _require_identity_for_mixed_tiers(lb, adapter, "sync")
     state_path = lb.root / "state" / f"{a.name}.json"
     stored = _read_state(state_path).get("since")
     since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
