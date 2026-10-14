@@ -629,7 +629,7 @@ def _signatures_moved(lb: Logbook) -> tuple[int, int]:
 
 def doctor_arguments(sub: Subparsers) -> None:
     """`logbook doctor [sources]`: the check-up, and where each source went quiet (`sources`, a command
-    of its own until 0.6, declared beside `sync`)."""
+    of its own until 0.6, declared beside `sync`); `--packet [--out FILE]`, the diagnostic to send."""
     from .sync import sources_arguments
 
     s = sub.add_parser(
@@ -639,13 +639,23 @@ def doctor_arguments(sub: Subparsers) -> None:
         " `sources`:"
         " every adapter, and with --gaps where each went quiet",
     )
-    s.add_argument(
+    which = s.add_mutually_exclusive_group()
+    which.add_argument(
         "--implausible",
         action="store_true",
         help="list the ids of the lines dated outside their source's plausible range (calendars 1970 to"
         " now plus 5 years, mail 1990 to now plus 1 day, the rest 1970 to now plus 1 day;"
         " policy/plausible.json overrides per source); nothing is changed",
     )
+    which.add_argument(
+        "--packet",
+        action="store_true",
+        help="a diagnostic to send a collaborator: this machine, the versions, the record's line count and"
+        " head, each source's last run and watermark date, the schedule and the service, one probe of the"
+        " dream endpoint when it is set, the names of the variables set and the last 40 lines of the logs;"
+        " no line's content, no name, no path under the home directory, no value (docs/doctor.md)",
+    )
+    s.add_argument("--out", metavar="FILE", help="--packet: write it to FILE instead of printing it")
     s.set_defaults(fn=cmd_doctor)
     checks = s.add_subparsers(dest="check", required=False, metavar="<check>")
     sources_arguments(checks)
@@ -656,10 +666,17 @@ def cmd_doctor(a: argparse.Namespace) -> None:
     Reads only: a missing settings file is reported, never written."""
     from ..contrib import doctor as doctor_checks
 
+    out = getattr(a, "out", None)
+    if out and not getattr(a, "packet", False):
+        print("doctor: --out goes with --packet", file=sys.stderr)
+        sys.exit(2)
     try:
         lb: Logbook | None = Logbook.find()
     except FileNotFoundError:
         lb = None
+    if getattr(a, "packet", False):
+        _doctor_packet(lb, out)
+        return
     if getattr(a, "implausible", False):
         if lb is None:
             sys.exit("no logbook found; run `logbook init`, or set LOGBOOK_HOME")
@@ -670,6 +687,24 @@ def cmd_doctor(a: argparse.Namespace) -> None:
     status = doctor_checks.report(doctor_checks.run(lb, os.environ), sys.stdout)
     if status:
         sys.exit(status)
+
+
+def _doctor_packet(lb: Logbook | None, out: str | None) -> None:
+    """`doctor --packet [--out FILE]`: the diagnostic (`logbook/contrib/packet.py`), printed or written
+    to FILE as UTF-8 bytes; a file that cannot be written exits 2."""
+    from ..contrib import packet
+
+    text = packet.build(lb, os.environ)
+    if not out:
+        sys.stdout.write(text)
+        return
+    try:
+        Path(out).expanduser().write_bytes(text.encode("utf-8"))
+    except OSError as e:
+        print(f"doctor: could not write {out}: {e.strerror or e}", file=sys.stderr)
+        sys.exit(2)
+    lines = text.count("\n")
+    print(f"wrote {out}: {lines:,} lines, nothing from the record's lines; read it before you send it")
 
 
 def backup_arguments(sub: Subparsers) -> None:
