@@ -243,7 +243,7 @@ def hear(engine: Engine, audio: Path, fetch_model: bool = False, chunk_s: float 
     segments with words in them and the language detected, for a caller that writes its own line
     (`logbook day reflect`). The model must be on this machine unless `fetch_model` (ModelMissing)."""
     _ready(engine, fetch_model)
-    with offline():
+    with diarize.quiet():  # the hub offline, its own switch included, whoever imported it first
         heard = _hear(engine, audio, chunk_s)
     return Result(heard.segments, heard.language)
 

@@ -12,6 +12,11 @@ hub's cache on this machine before a run can separate voices.
 (`HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, as `transcribe` has it) so no model is fetched, and
 pyannote.audio's own usage reporting, which its 4.x releases switch on by default and send to
 pyannote's server, is switched off (`PYANNOTE_METRICS_ENABLED=0`) before the package is imported.
+`huggingface_hub` reads `HF_HUB_OFFLINE` once, when it is first imported, and asks the constant it
+made on every request; so `quiet()` sets that constant too, for the block, and on the way out puts
+back what it was, or, for a hub first imported inside the block, what the environment now says. The
+hub is offline inside, whichever code imported it first, and a download outside (the Whisper model
+`derive transcripts --fetch-model` fetches) is not refused for having followed one.
 Whether the models are here is asked of the hub's cache with `local_files_only`, which opens nothing.
 `detect` answers None when the package or a model is missing, and the run then transcribes as it
 always did and says once `speakers: not separated (logbook setup speakers --fetch-model)`.
@@ -27,6 +32,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -46,6 +52,7 @@ PAGE = "https://huggingface.co/{repo}"
 SAMPLE_RATE = 16_000
 FETCH = "logbook setup speakers --fetch-model"
 NOT_SEPARATED = f"speakers: not separated ({FETCH})"
+HUB_CONSTANTS = "huggingface_hub.constants"  # where the hub keeps the offline switch it read at import
 QUIET = {
     "HF_HUB_OFFLINE": "1",
     "TRANSFORMERS_OFFLINE": "1",
@@ -94,11 +101,15 @@ class Status:
 
 @contextmanager
 def quiet() -> Iterator[None]:
-    """The hub offline and pyannote's usage reporting off, for the length of the block; the
-    variables as they were afterwards. Entered before pyannote.audio is first imported, since it
-    reads its switch then."""
+    """The hub offline and pyannote's usage reporting off, for the length of the block, the hub's
+    own switch included (the module's docstring); the variables and the switch as they were
+    afterwards. Entered before pyannote.audio is first imported, since it reads its switch then."""
     before = {name: os.environ.get(name) for name in QUIET}
+    constants = sys.modules.get(HUB_CONSTANTS)
+    was = getattr(constants, "HF_HUB_OFFLINE", None)
     os.environ.update(QUIET)
+    if constants is not None:
+        setattr(constants, "HF_HUB_OFFLINE", True)  # noqa: B010
     try:
         yield
     finally:
@@ -107,6 +118,18 @@ def quiet() -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+        now = sys.modules.get(HUB_CONSTANTS)
+        if now is not None and hasattr(now, "HF_HUB_OFFLINE"):
+            if now is constants and isinstance(was, bool):
+                setattr(now, "HF_HUB_OFFLINE", was)  # noqa: B010 - a module's attribute, not ours
+            else:  # imported inside the block: what it would have read outside it
+                outside = os.environ.get("HF_HUB_OFFLINE") or os.environ.get("TRANSFORMERS_OFFLINE")
+                setattr(now, "HF_HUB_OFFLINE", _truthy(outside))  # noqa: B010
+
+
+def _truthy(value: str | None) -> bool:
+    """As the hub reads its variables."""
+    return value is not None and value.strip().upper() in ("1", "ON", "YES", "TRUE")
 
 
 def status(importer: Importer = importlib.import_module) -> Status:

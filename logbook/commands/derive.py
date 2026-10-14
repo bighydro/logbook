@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Iterator, Mapping
 from datetime import date, datetime
@@ -71,6 +72,7 @@ def cmd_infer(a: argparse.Namespace) -> None:
 # imported only when the command runs, so `--help` loads no model code; a test holds these copies to them.
 TRANSCRIBE_DEFAULT_MODEL = "small"
 DESCRIBE_DEFAULT_MODEL = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
+SPEAKERS_MODEL = "pyannote/speaker-diarization-3.1"  # `diarize.MODEL`
 
 
 def cmd_transcribe(a: argparse.Namespace) -> None:
@@ -165,6 +167,99 @@ def cmd_speakers(a: argparse.Namespace) -> None:
         print(f"derive speakers: {e}", file=sys.stderr)
         sys.exit(2)
     print(transcribe.describe_again(report))
+
+
+def speakers_arguments(sub: Subparsers) -> None:
+    """`logbook setup speakers [--fetch-model]` (RFC 0038 §2.9): what separates voices on this
+    machine, and the one command that downloads its models. Declared beside `derive speakers`."""
+    s = sub.add_parser(
+        "speakers",
+        help="the diarizer that separates voices: what is on this machine; --fetch-model, the one download",
+        description="what separates the voices of a recording on this machine (RFC 0038): the engine,"
+        f" pyannote.audio, and the models {SPEAKERS_MODEL} reads, each here or not, and what the record"
+        " holds; opens no connection. --fetch-model downloads those models into the Hugging Face cache,"
+        " the one time anything here uses the network, with your access token read from HF_TOKEN for"
+        " those requests only, never written and never printed",
+    )
+    s.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the diarization models (gated on Hugging Face: accept their conditions first);"
+        " HF_TOKEN is read for these requests only",
+    )
+    s.set_defaults(fn=cmd_setup_speakers)
+
+
+def cmd_setup_speakers(a: argparse.Namespace) -> None:
+    """`setup speakers`: the engine and each model, here or not, and what the record holds (no
+    socket). `setup speakers --fetch-model`: the models fetched first (`diarize.fetch`), a refusal
+    naming the page to accept their conditions on (exit 2), then the same."""
+    from ..labs import diarize
+
+    if a.fetch_model:
+        if diarize._truthy(os.environ.get("HF_HUB_OFFLINE")):
+            print(
+                "setup speakers: HF_HUB_OFFLINE is set in this shell, so the hub would refuse; unset it for"
+                " this one command",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        print(
+            "fetching the speaker models into the Hugging Face cache, the one time anything here uses the"
+            f" network ({diarize.TOKEN} is read for these requests and never kept):"
+        )
+        try:
+            diarize.fetch(os.environ, progress=lambda repo: print(f"  {repo}"))
+        except ImportError:
+            print(
+                f"setup speakers: the hub client is not installed; install {diarize.EXTRA}", file=sys.stderr
+            )
+            sys.exit(2)
+        except (diarize.Refused, OSError) as e:
+            print(f"setup speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+    for row in _speakers_rows(diarize.status()):
+        print(row)
+
+
+def _speakers_rows(found: Any) -> Iterator[str]:
+    """The engine, each model, what the record holds, and what to do next."""
+    from ..core import speakers
+    from ..labs import diarize, transcribe
+
+    if found.version is None:
+        yield f"engine     pyannote.audio not installed; install {diarize.EXTRA}"
+    else:
+        yield f"engine     pyannote.audio {found.version}"
+    for repo, here in found.models.items():
+        yield f"model      {repo}  {'here' if here else 'not here'}"
+    try:
+        lb = Logbook.find()
+    except FileNotFoundError:
+        lb = None
+    if lb is not None:
+        again = transcribe.unseparated(lb)
+        with lb.index() as idx:
+            standing = [
+                line for line in idx.by_kind(transcribe.TRANSCRIPT_KIND) if line["payload"].get("speakers")
+            ]
+        mine = [
+            voice.seconds
+            for line in standing
+            for voice in speakers.voices(line["payload"])
+            if voice.from_me and voice.seconds is not None
+        ]
+        said = f"voices separated in {_plural(again.already, 'transcript')}"
+        if again.found:
+            said += f"; {len(again.found):,} more can be (logbook derive speakers)"
+        yield f"record     {said}"
+        if mine:
+            minutes, count = speakers.duration_text(sum(mine)), _plural(len(mine), "transcript")
+            yield f"record     your own microphone: {minutes} in {count}"
+    if found.ready:
+        yield "ready      derive transcripts separates the voices of what it hears"
+    else:
+        yield f"not ready  {diarize.FETCH} fetches the models (accept their conditions on Hugging Face first)"
 
 
 def _voices(text: str) -> int:

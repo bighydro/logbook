@@ -15,7 +15,7 @@ import pytest
 from logbook import cli
 from logbook.commands import add, day, derive, parser, promises, record, setup
 from logbook.contrib.adapters import screentime
-from logbook.labs import describe, judge, transcribe
+from logbook.labs import describe, diarize, judge, transcribe
 
 ADAPTER_PREFIX = "logbook.contrib.adapters."
 LABS_PREFIX = "logbook.labs."
@@ -67,6 +67,7 @@ def test_the_help_text_copies_match_their_originals() -> None:
     assert add.SCREENTIME_MAC_DEFAULT == screentime.MAC_DEFAULT
     assert derive.TRANSCRIBE_DEFAULT_MODEL == transcribe.DEFAULT_MODEL
     assert derive.DESCRIBE_DEFAULT_MODEL == describe.DEFAULT_MODEL
+    assert derive.SPEAKERS_MODEL == diarize.MODEL
     assert promises.JUDGE_DEFAULT_MODEL == judge.DEFAULT_MODEL
     assert promises.JUDGE_EXTRA == judge.EXTRA
     assert record.SETUP_STEPS == setup.STEPS

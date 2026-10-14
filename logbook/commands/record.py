@@ -627,11 +627,13 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup [places|assets|questions]`: the guided first run, and the settings of the record
-    that it asks about or that live beside its policy — the named places (`places.json`), the
-    assets it tracks (`assets.json`) and the digest's questions (`policy/questions.json`). Each
-    was a command of its own until 0.6 and is declared beside the code that reads its file."""
+    """`logbook setup [places|assets|questions|day_start|speakers]`: the guided first run, and the
+    settings of the record that it asks about or that live beside its policy — the named places
+    (`places.json`), the assets it tracks (`assets.json`), the digest's questions
+    (`policy/questions.json`), where the day starts — and the diarizer's models (RFC 0038). Each is
+    declared beside the code that reads it."""
     from .day import questions_arguments
+    from .derive import speakers_arguments
     from .places import places_arguments
     from .sync import assets_arguments
 
@@ -652,6 +654,7 @@ def setup_arguments(sub: Subparsers) -> None:
     assets_arguments(settings)
     questions_arguments(settings)
     day_start_arguments(settings)
+    speakers_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
