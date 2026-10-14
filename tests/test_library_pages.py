@@ -2,15 +2,14 @@
 journey, the people of a year and one person, every derived row with its evidence folded; the acts
 "name this journey", Merge and Not the same person write through the CLI's own functions, byte for
 byte what `add --trip`, `people review --accept` and `--reject` write, from this machine only. Phone
-first: no page is wider than a 400 px column, measured in a browser when one is installed. On the
-four synthetic years (`library_record.py`); nobody here exists."""
+first: no page is wider than a 400 px column, read from the page and its stylesheet
+(`phone_width.py`). On the four synthetic years (`library_record.py`); nobody here exists."""
 
 from __future__ import annotations
 
 import html
 import http.client
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -22,6 +21,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import phone_width
 import pytest
 from four_years import ASTRID, BJORN, FRODE, INGRID, KRISTIN, OBSERVED
 from library_record import ASTRID_ELSEWHERE, BERGEN_WINTER, PROMISE, dream, library_record
@@ -386,83 +386,18 @@ def test_the_name_form_round_trips_over_the_socket(lb: Logbook) -> None:
 
 # -- phone first ---------------------------------------------------------------------------------------------
 
-PHONE_PX = 400
 WIDE_PAGES = ("/journeys?year=2022", BERGEN_PAGE, "/people", f"/people/{BJORN['id']}")
 
 
-def _chromium() -> str | None:
-    """A Chromium or Chrome this machine has: on PATH, or Playwright's (`PLAYWRIGHT_BROWSERS_PATH`,
-    `/opt/pw-browsers`); None when there is none, and the width test is skipped."""
-    for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"):
-        found = shutil.which(name)
-        if found:
-            return found
-    for root in (os.environ.get("PLAYWRIGHT_BROWSERS_PATH"), "/opt/pw-browsers"):
-        if root:
-            for found_path in sorted(Path(root).glob("chromium-*/chrome-linux/chrome")):
-                return str(found_path)
-    return None
-
-
-def _frames(pages: dict[str, str]) -> str:
-    """Each page in a 400 px frame of its own (a phone's column, which a desktop browser's window
-    cannot be made: headless Chromium's narrowest is 500), every disclosure opened, then measured:
-    the document's scroll width against its width, and any element whose right edge is past it."""
-    frames = "".join(
-        f'<iframe data-page="{html.escape(name)}" style="width:{PHONE_PX}px;height:800px;border:0"'
-        f' srcdoc="{html.escape(text, quote=True)}"></iframe>'
-        for name, text in pages.items()
-    )
-    script = """
-window.addEventListener('load', function () {
-  var found = {};
-  document.querySelectorAll('iframe').forEach(function (frame) {
-    var d = frame.contentDocument;
-    d.querySelectorAll('details').forEach(function (x) { x.open = true; });
-    var root = d.documentElement, width = root.clientWidth, past = [];
-    d.querySelectorAll('body *').forEach(function (e) {
-      var r = e.getBoundingClientRect();
-      if (r.width && r.right > width + 0.5) past.push(e.tagName + ' ' + (e.textContent || '').slice(0, 40));
-    });
-    found[frame.getAttribute('data-page')] = {width: width, scroll: root.scrollWidth, past: past.slice(0, 5)};
-  });
-  document.body.setAttribute('data-measured', JSON.stringify(found));
-});
-"""
-    return f'<!doctype html><html><body style="margin:0">{frames}<script>{script}</script></body></html>'
-
-
-def test_no_shelf_is_wider_than_a_phone(lb: Logbook, tmp_path: Path) -> None:
-    """Rendered in a browser at 400 px with every disclosure open, no page scrolls sideways and no
-    element reaches past the column. Skipped where no Chromium is installed; CI's Linux runners have
-    one, and so does the development container."""
-    chromium = _chromium()
-    if chromium is None:
-        pytest.skip("no Chromium or Chrome on this machine to render the pages in")
+def test_no_shelf_is_wider_than_a_phone(lb: Logbook) -> None:
+    """Read as a phone 400 px wide reads them, every disclosure open, from the HTML and the page's
+    own stylesheet (`phone_width`, no browser): no element on the Journeys, a journey, the People page
+    or a person fixes a width, a min-width or a row of columns that passes the column with the frames
+    around it; every image and pre has a max-width that keeps it inside, the journey's canvas of stays
+    among them; and the stylesheet has its phone breakpoint."""
     site = _site(lb)
-    pages = {page: _get(site, page) for page in WIDE_PAGES}
-    framed = tmp_path / "frames.html"
-    framed.write_bytes(_frames(pages).encode("utf-8"))
-    run = subprocess.run(
-        [
-            chromium,
-            "--headless",
-            "--no-sandbox",
-            "--disable-gpu",
-            f"--user-data-dir={tmp_path / 'profile'}",
-            "--window-size=500,900",
-            "--dump-dom",
-            framed.as_uri(),
-        ],
-        capture_output=True,
-        encoding="utf-8",
-        timeout=120,
-    )
-    found = re.search(r'data-measured="([^"]*)"', run.stdout)
-    if found is None:
-        pytest.skip(f"the browser rendered nothing to measure: {run.stderr.strip()[-200:]}")
-    measured = json.loads(html.unescape(found.group(1)))
-    assert set(measured) == set(WIDE_PAGES)
-    for page, m in measured.items():
-        assert m["width"] <= PHONE_PX and m["scroll"] <= m["width"], (page, m)
-        assert m["past"] == [], (page, m["past"])
+    for page in WIDE_PAGES:
+        text = _get(site, page)
+        assert phone_width.problems(text) == [], page
+        assert phone_width.phone_breakpoints(phone_width.parse(text)[1]), page
+    assert phone_width.images(_get(site, BERGEN_PAGE)) == ["html > body > main > svg.stays"]

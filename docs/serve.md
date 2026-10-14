@@ -400,10 +400,13 @@ Both acts post to `/people/review`, from this machine only; a proposal no longer
 
 Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
 facts with the evidence folded under it, a day never breaks inside its hyphens, the canvas scales to
-the column. `tests/test_library_pages.py` renders the Journeys, a journey, the People page and a
-person in headless Chromium inside a 400 px frame (a desktop browser's window cannot be made that
-narrow) with every disclosure open, and fails when the page scrolls sideways or any element reaches
-past the column; where no Chromium is installed the test is skipped.
+the column. `tests/test_library_pages.py` holds the Journeys, a journey, the People page and a person
+to that column without a browser: `tests/phone_width.py` parses each page with every disclosure
+open, applies the page's own stylesheet as a 400 px phone would (its phone breakpoint included), and
+fails when an element's fixed width, min-width or row of columns, with the margins, borders and
+padding around it, passes the column, when an image or a `pre` has no `max-width` to keep it inside,
+or when the stylesheet has no phone breakpoint. Its estimates err wide, and a stylesheet it cannot
+read fails the test rather than passing it.
 
 ## What it is not
 
