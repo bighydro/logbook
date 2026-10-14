@@ -1,15 +1,18 @@
 """The readers never take an agent for a person: `people`, `person`, `people review`, the company of a
 stay and the dream's material pass machine text and agent counterparts over, and `promises` reads
 only the owner's own words in a conversation with an agent. The record holds the persona's Telegram
-export (`telegram_persona`), her Claude Code sessions (`claude_sessions`), and a bot she named after
-her sister Kari, who is also a person of the record. Nobody here exists."""
+export (`telegram_persona`), her Claude Code sessions (`claude_sessions`), her conversations in the
+Claude apps (`claude_conversations`), and a bot she named after her sister Kari, who is also a person
+of the record. Nobody here exists."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import claude_conversations as cc
 import claude_sessions as cs
 import pytest
 import telegram_persona as tp
@@ -17,8 +20,8 @@ from duplicates import resolution
 
 from logbook.contrib import dream, people_review
 from logbook.contrib import promises as promise_reader
-from logbook.contrib.adapters import claude_code, telegram
-from logbook.core import machine, people, present, resolve, stays
+from logbook.contrib.adapters import claude_code, claude_export, telegram
+from logbook.core import machine, people, policy, present, resolve, stays
 from logbook.core.store import Logbook
 
 KARI = {"id": "019cadd3-6bc0-7dcd-9133-000000000201", "name": "Kari Nordmann", "phone": "+447700900124"}
@@ -79,6 +82,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     lb.append_many([resolution("ios-contacts", ("phone", KARI["phone"]), KARI["id"], KARI["name"])])
     lb.append_many(telegram.run(export, timezone="Europe/Oslo"))
     lb.append_many(claude_code.run(cs.projects(tmp_path / "projects"), store=lb.attach))
+    lb.append_many(claude_export.run(cc.zipped(tmp_path / "claude-export.zip"), store=lb.attach))
     lb.append_many([_from_kari(100, "See you at the harbour"), _named_machine(tp.at(120), tp.at(150))])
     return lb
 
@@ -106,7 +110,8 @@ def test_people_review_never_proposes_a_bot_or_the_assistant_as_a_person(lb: Log
     assert report.proposals == []
     observed = [o.name for o in report.unplaced]
     assert all(
-        name not in ("Kari Nordmann", "Nordlys", "Fjordvakt", "assistant", "owner") for name in observed
+        name not in ("Kari Nordmann", "Nordlys", "Fjordvakt", "assistant", "owner", "Claude")
+        for name in observed
     )
 
 
@@ -160,6 +165,8 @@ def test_promises_reads_only_the_owners_words_in_a_conversation_with_an_agent(lb
         "Thanks, I'll buy the present on Wednesday.",  # to the bot named Kari
         "I'll test it on Saturday.",  # in the Claude Code session
         "I will send the harbour list tomorrow.",
+        "I'll leave the harbour at nine on Saturday.",  # in a conversation in the Claude apps
+        "I will send the tide table tomorrow.",
     }
     assert owner_promises <= quotes
     machine_words = {
@@ -169,10 +176,11 @@ def test_promises_reads_only_the_owners_words_in_a_conversation_with_an_agent(lb
         "I'll start with the tide tables.",
         "Can you send me the harbour list?",
         "I'll bring the charts on Friday",  # forwarded: Ola's words, not the owner's
+        "I'll draft the plan by Friday.",  # the assistant's, in the Claude apps
     }
     assert not machine_words & quotes
     for proposal in report.proposals:
-        if proposal.source in ("telegram", "claude-code"):
+        if proposal.source in ("telegram", "claude-code", "claude"):
             assert proposal.speaker is not None and proposal.speaker.owner, proposal.match.quote
             assert proposal.role == promise_reader.PROMISE
 
@@ -211,3 +219,15 @@ def test_the_days_language_is_the_owners_not_the_agents(lb: Logbook):
     assert all(
         not machine.is_machine(line["payload"]) or line["payload"].get("text") not in texts for line in lines
     )
+
+
+def test_the_dream_sees_a_conversation_in_the_apps_as_it_sees_a_claude_code_session(lb: Logbook):
+    ceiling = policy.Ceiling("dream", 2, None, False)
+    session_day = dream.material(lb, "2026-03-01", ceiling).data
+    apps_day = dream.material(lb, "2026-03-02", ceiling).data
+    (session,) = [u for u in session_day["unplaced"] if u.get("title") == "Passage planner for Solvind"]
+    (conversation,) = [u for u in apps_day["unplaced"] if u.get("title") == "Passage to Drøbak"]
+    assert session["kind"] == conversation["kind"] == "transcript" and set(session) == set(conversation)
+    seen = json.dumps(apps_day, ensure_ascii=False)
+    for words in (cc.OWNER_FIRST, cc.MACHINE_FIRST, cc.MACHINE_SECOND, "Claude", "assistant"):
+        assert words not in seen, words
