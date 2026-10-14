@@ -79,6 +79,7 @@ UUID_TEXT = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ARTICLES = frozenset({"the", "a", "an"})
+LEGAL_FORMS = frozenset({"as", "asa", "ltd", "inc", "gmbh", "ab"})  # set aside when org names are compared
 WORD = re.compile(r"\w+")
 
 POLICY_FILE = Path("policy") / "entities.json"
@@ -140,6 +141,12 @@ def words(text: str, articles: bool = True) -> list[str]:
     """The folded words of `text`, punctuation aside; with `articles` False, `the`, `a`, `an` out."""
     found = WORD.findall(fold(text))
     return found if articles else [w for w in found if w not in ARTICLES]
+
+
+def org_name(text: str) -> tuple[str, ...]:
+    """An org's name for comparing: its folded words sorted, the legal forms out (`Nordmann Verft AS`
+    is `Nordmann Verft`)."""
+    return tuple(sorted(w for w in words(text) if w not in LEGAL_FORMS))
 
 
 def title_key(text: str) -> str:
@@ -723,7 +730,8 @@ def known(lines: Iterable[Line], root: Path) -> dict[tuple[str, str], Entity]:
 
 def lookup(found: Mapping[tuple[str, str], Entity], kind: str, text: str) -> Entity:
     """The one entity of `kind` that `text` names, tried in order (§6): a ref (`kind:value`, or a
-    value one of its refs carries), an id, a label or an alias (case aside), a word of a label.
+    value one of its refs carries), an id, a label or an alias (case aside), for an org the same
+    with the legal forms aside, a word of a label.
     `EntityError` naming the candidates when none or several."""
     pool = [e for (k, _id), e in sorted(found.items()) if k == kind]
     wanted = text.strip()
@@ -735,6 +743,11 @@ def lookup(found: Mapping[tuple[str, str], Entity], kind: str, text: str) -> Ent
         lambda e: any(fold(v) == fold(wanted) for _k, v in e.refs),
         lambda e: e.id == wanted,
         lambda e: fold(e.label) == fold(wanted) or any(fold(a) == fold(wanted) for a in e.aliases),
+        lambda e: (
+            kind == ORG
+            and bool(org_name(wanted))
+            and org_name(wanted) in {org_name(n) for n in (e.label, *e.aliases)}
+        ),
         lambda e: len(words(wanted)) == 1 and words(wanted)[0] in words(e.label),
     ]
     for test in tries:
