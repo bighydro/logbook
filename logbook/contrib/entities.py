@@ -17,8 +17,10 @@ the spot's centre. Its tier is the highest of its evidence and never under 2, a 
 3 when it cites a `transaction/v1` line.
 
 **`status/v1`** is what the owner decided about an org, an idea, a place or an asset, at a point in
-time: one of the kind's dispositions (`DISPOSITIONS`), tier 2, no money on the line. A person has no
-status, and a goal is reviewed by RFC 0036's `review/v1`. The current status is the last line
+time: one of the kind's dispositions (`DISPOSITIONS`), no money on the line. Its tier is the kind's
+(`status_tier`, RFC 0037 §8): 3 for an org, whose dispositions describe a position in money, so the
+line may cite tier-3 evidence; 2 for an idea, a place or an asset, which never cites a tier-3 line.
+A person has no status, and a goal is reviewed by RFC 0036's `review/v1`. The current status is the last line
 standing; any may follow any. A status that closes a registry entry (a place let go, an asset sold or
 let go) closes it with `until`, the line's local day (`entity_status`); the entry is never deleted.
 
@@ -50,9 +52,10 @@ ENTITY_SCHEMA, ENTITY_REVIEW_SCHEMA, STATUS_SCHEMA = "entity/v1", "entity-review
 PEOPLE_REVIEW, PEOPLE_REVIEW_SCHEMA = "people-review", "people-review/v1"  # RFC 0035: read forever
 RESOLUTION = resolve.RESOLUTION
 SOURCE, REGISTRY, METHOD = "manual", "logbook", "owner"
-TIER = 2  # entity/v1 and status/v1, every kind (decisions 8 and 10)
+TIER = 2  # entity/v1 of every kind, and status/v1 of an idea, a place or an asset (decisions 8 and 10)
 MONEY_TIER = 3  # a tier-3 line: what an entity/v1 line never cites
 PERSON, ORG, IDEA, ASSET, PLACE = "person", "org", "idea", "asset", "place"
+STATUS_TIERS = {ORG: MONEY_TIER}  # a status/v1 line's tier by kind, TIER for the rest (RFC 0037 §8)
 KINDS = (PERSON, ORG, IDEA, ASSET, PLACE)
 LEGACY = {"company": ORG}  # resolution/v1's frozen word for an org (decision 12)
 RESOLUTION_REFS = ("email", "phone", "handle", "provider_id", "device_id", "domain", "line")  # RFC 0006
@@ -346,18 +349,40 @@ VALIDATORS = {
 }
 
 
-def tier_problems(schema: str, tier: int, cited: Mapping[str, int]) -> list[str]:
-    """The tier rules (decisions 8 and 10) against the tiers of the lines a payload cites (`cited`:
-    line id → tier, the ones the record holds): an `entity/v1` and a `status/v1` line are tier 2
-    and never cite a tier-3 line; an `entity-review/v1` is the highest tier of its evidence and at
-    least 2, so 3 when it cites a transaction/v1 line."""
+def status_tier(kind: str) -> int:
+    """A `status/v1` line's tier for an entity of `kind` (RFC 0037 §8, the owner's decision of 13
+    October 2026): 3 for an org, whose `hold`, `add`, `sell` and `exited` describe a position in
+    money and whose `passed` and `let-go` would otherwise give that away by contrast; 2 for an idea,
+    a place or an asset, a decision about one's own work, place or craft."""
+    return STATUS_TIERS.get(kind, TIER)
+
+
+def tier_problems(schema: str, tier: int, cited: Mapping[str, int], kind: str | None = None) -> list[str]:
+    """The tier rules (decisions 8 and 10; RFC 0037 §8) against the tiers of the lines a payload
+    cites (`cited`: line id → tier, the ones the record holds), each problem naming the rule for the
+    kind: an `entity/v1` line is tier 2 for every kind and never cites a tier-3 line; a `status/v1`
+    line is its kind's tier (`status_tier`: 3 about an org, which may cite tier-3 evidence; 2 about
+    an idea, a place or an asset, which never cites a tier-3 line); an `entity-review/v1` is the
+    highest tier of its evidence and at least 2, so 3 when it cites a transaction/v1 line."""
     money = sorted(line_id for line_id, t in cited.items() if t >= MONEY_TIER)
-    if schema in (ENTITY_SCHEMA, STATUS_SCHEMA):
-        problems = [] if tier == TIER else [f"{_a(schema)} line is tier {TIER}, not {tier}"]
+    if schema == ENTITY_SCHEMA:
+        about = "" if kind is None else f" of kind {kind}"
+        problems = [] if tier == TIER else [f"{_a(schema)} line{about} is tier {TIER}, not {tier}"]
         if money:
             problems.append(
-                f"{_a(schema)} line never cites a tier-3 line ({money[0]} is tier 3): bind a merchant"
+                f"{_a(schema)} line{about} never cites a tier-3 line ({money[0]} is tier 3): bind a merchant"
                 " as a `merchant` ref, and the ledger is read at the page, within its ceiling"
+            )
+        return problems
+    if schema == STATUS_SCHEMA:
+        wanted = status_tier(kind) if kind is not None else TIER
+        about = f"about {_an(kind)}" if kind is not None else "about an idea, a place or an asset"
+        why = "" if kind != ORG else ": its dispositions describe a position in money"
+        problems = [] if tier == wanted else [f"{_a(schema)} line {about} is tier {wanted}, not {tier}{why}"]
+        if money and wanted < MONEY_TIER:
+            problems.append(
+                f"{_a(schema)} line {about} never cites a tier-3 line ({money[0]} is tier 3): no money on"
+                " the line, and the ledger is read at the page, within its ceiling"
             )
         return problems
     if schema == ENTITY_REVIEW_SCHEMA:
@@ -370,6 +395,10 @@ def tier_problems(schema: str, tier: int, cited: Mapping[str, int]) -> list[str]
 
 def _a(schema: str) -> str:
     return f"{'an' if schema[0] in 'aeiou' else 'a'} {schema}"
+
+
+def _an(kind: str) -> str:
+    return f"{'an' if kind[0] in 'aeiou' else 'a'} {kind}"
 
 
 def review_tier(cited: Iterable[int]) -> int:

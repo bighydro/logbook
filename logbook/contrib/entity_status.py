@@ -1,19 +1,22 @@
 """What the owner decided — `logbook status KIND ENTITY DISPOSITION [--reason "…"] [--at DATE]` and
 `logbook status list KIND` (RFC 0037 §9; decisions 5, 6, 9, 10 and 11).
 
-**The writer.** One `status/v1` line, `source` `manual`, tier 2, for an org, an idea, a place or an
-asset, with one of its kind's dispositions; a person has no status, and a goal is reviewed by RFC
-0036's `review/v1`. The entity is named as `review` and the pages name one (a ref, an id, a label
-or an alias, a word of a label: `entities.lookup`). The line supersedes the standing status of the
-entity, so the current status is the last line standing; any status may follow any. A status equal
-to the standing one is refused on the same local day, and on a later day unless it comes with a new
-reason (the owner reaffirmed, and said why). `--reason` writes one `note/v1` beside it, tier 2,
-label `status`, the reason as its text, the status line's id under `extra`, so the owner's words
-are on the day and in `search`. A place let go and an asset sold or let go close their registry
-entry: `until`, the line's local day, is written into the entry of `places.json` or `assets.json`,
-every other key kept; the entry is never deleted (ADR 0018, rule 4). Everything is read and written
-under one hold of the writer lock, and the head is read again before the first line: a head that
-moved is `HeadMoved`, and nothing is written.
+**The writer.** One `status/v1` line, `source` `manual`, for an org, an idea, a place or an asset,
+with one of its kind's dispositions, at the kind's tier (`entities.status_tier`, RFC 0037 §8): 3 for
+an org, whose dispositions describe a position in money, so the line may cite tier-3 evidence; 2 for
+an idea, a place or an asset, which never cites a tier-3 line. A person has no status, and a goal is
+reviewed by RFC 0036's `review/v1`. The entity is named as `review` and the pages name one (a ref,
+an id, a label or an alias, a word of a label: `entities.lookup`). The line supersedes the standing
+status of the entity, so the current status is the last line standing; any status may follow any. A
+status equal to the standing one is refused on the same local day, and on a later day unless it
+comes with a new reason (the owner reaffirmed, and said why). `--reason` writes one `note/v1` beside
+it at the status line's tier (3 for an org: a reason about a company can name money), label
+`status`, the reason as its text, the status line's id under `extra`, so the owner's words are on
+the day and in `search`. A place let go and an asset sold or let go close their registry entry:
+`until`, the line's local day, is written into the entry of `places.json` or `assets.json`, every
+other key kept; the entry is never deleted (ADR 0018, rule 4). Everything is read and written under
+one hold of the writer lock, and the head is read again before the first line: a head that moved is
+`HeadMoved`, and nothing is written.
 
 `--at DATE` is the local day the owner disposed: today is now, a day before is its last minute,
 a day ahead is refused. No money is ever on the line; the ledger holds it.
@@ -28,7 +31,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -91,6 +94,14 @@ def _read(
     return entities.known(lines, lb.root), found
 
 
+def _cited(lb: Logbook, evidence: Sequence[str]) -> dict[str, int]:
+    """The tier of each line `evidence` names that the record has (line id → tier)."""
+    if not evidence:
+        return {}
+    with lb.index() as idx:
+        return {line_id: int(line.get("tier", 0)) for line_id, line in idx.by_ids(evidence).items()}
+
+
 def moment(lb: Logbook, day: str | None, today: str | None = None) -> str:
     """When the owner disposed, in UTC: now, or for `--at DATE` the day's moment (`notes.moment`:
     now when it is today, its last minute when it is past); a day ahead of today is refused."""
@@ -116,12 +127,16 @@ def write(
     at: str | None = None,
     proposal: Mapping[str, Any] | None = None,
     today: str | None = None,
+    evidence: Sequence[str] = (),
 ) -> Written:
-    """One `status/v1` line for the entity of `kind` that `name` names, with its note when there is
-    a `reason`, and the registry entry closed when the disposition closes one; under one hold of the
-    writer lock, the head read again before the first line. `proposal` is what the dream proposed,
-    when the owner answers one (`proposed_by` `dream`). `StatusError` or `entities.EntityError` says
-    why a status is refused; `HeadMoved` when another writer moved the record."""
+    """One `status/v1` line for the entity of `kind` that `name` names, at the kind's tier
+    (`entities.status_tier`), with its note at the same tier when there is a `reason`, and the
+    registry entry closed when the disposition closes one; under one hold of the writer lock, the
+    head read again before the first line. `proposal` is what the dream proposed, when the owner
+    answers one (`proposed_by` `dream`), and `evidence` the ids of the lines it rested on: a status
+    about an idea, a place or an asset that cites a tier-3 line is refused (`entities.tier_problems`);
+    one about an org may. `StatusError` or `entities.EntityError` says why a status is refused;
+    `HeadMoved` when another writer moved the record."""
     check_kind(kind)
     if disposition not in DISPOSITIONS[kind]:
         raise StatusError(
@@ -138,6 +153,7 @@ def write(
         local = day_start.of(meta)
         day = local.day(_instant(stamp)).isoformat()
         known, found = _read(lb)
+        cited = _cited(lb, evidence)
         entity = entities.lookup(known, kind, name)
         history = found.get((kind, entity.id), [])
         current = history[-1] if history else None
@@ -158,25 +174,27 @@ def write(
             reason,
             proposed_by="dream" if proposal is not None else entities.METHOD,
             proposal=proposal,
+            evidence=evidence,
             supersedes=None if current is None else current.line,
             head=str(meta["head"]),
         )
+        tier = entities.status_tier(kind)
         problems = entities.validate_status(payload) + entities.tier_problems(
-            entities.STATUS_SCHEMA, entities.TIER, {}
+            entities.STATUS_SCHEMA, tier, cited, kind
         )
         if problems:
             raise StatusError(problems[0])
         now = lb.meta
         if now["head"] != meta["head"]:
             raise HeadMoved(HEAD_MOVED.format(was=meta["seq"], now=now["seq"]))
-        line = lb.append(at=stamp, source=entities.SOURCE, kind=KIND, tier=entities.TIER, payload=payload)
+        line = lb.append(at=stamp, source=entities.SOURCE, kind=KIND, tier=tier, payload=payload)
         note = None
         if reason is not None:
-            note = lb.append(
+            note = lb.append(  # the status line's tier: a reason about a company can name money
                 at=stamp,
                 source=entities.SOURCE,
                 kind=notes.KIND,
-                tier=notes.TIER,
+                tier=tier,
                 payload={
                     "schema": notes.SCHEMA,
                     "text": reason,
