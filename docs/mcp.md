@@ -136,10 +136,12 @@ service that may see record content gets its own entry in the file, and a tempor
 the next, so nothing crosses until you write a new date or remove the line; `logbook doctor` names an
 entry that has expired. The `dream` entry is one of these: `logbook dream` sends a day to a model only
 through `{"dream": {"max_tier": 2, "until": "2026-12-31", "model": "qwen2.5-7b-instruct"}}`, the one
-model named there when it names one ([the dream](dream.md)). What the dream wrote follows that entry as
-well as this one: a `draft` line above the `dream` entry's `max_tier` today (lowered, expired or removed
-since it was dreamed) is held back from every tool as a line above the ceiling is, and counted with them;
-`line` refuses it naming the entry (ADR 0016, *Derived material follows the policy, not the head*).
+model named there when it names one ([the dream](dream.md)), and `logbook transcript synthesize` sends a
+call through the same entry ([the synthesis of a call](transcript-synthesis.md)). What they wrote follows
+that entry as well as this one: a `draft` line, a day's draft or a call's synthesis, above the `dream`
+entry's `max_tier` today (lowered, expired or removed since it was written) is held back from every tool
+as a line above the ceiling is, and counted with them; `line` refuses it naming the entry (ADR 0016,
+*Derived material follows the policy, not the head*).
 
 What the ceiling means in practice:
 

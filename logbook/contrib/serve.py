@@ -234,6 +234,8 @@ ol.inside .row{border:0;padding:.15rem 0}
 details{margin:.3rem 0 0 7.5rem}
 summary{cursor:pointer;color:var(--accent)}
 ul.attached{margin:.3rem 0 0 1rem}
+details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
+details.synthesis p.segment{margin:.15rem 0}
 ul.attached li,ul.unplaced li{padding:.15rem 0}
 p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
 form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
@@ -868,11 +870,13 @@ class Site:
         if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
             parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
+        syntheses = day_reader.syntheses_of(data)  # a call's synthesis, or the policy's row, under the call
         if data["timeline"]:
             parts.append('<ol class="timeline">\n')
             name_this = None if self.static else self._name_this
             parts.extend(
-                _entry_html(entry, tz, expanded=expanded, name_this=name_this) for entry in data["timeline"]
+                _entry_html(entry, tz, expanded=expanded, name_this=name_this, syntheses=syntheses)
+                for entry in data["timeline"]
             )
             parts.append("</ol>\n")
         else:
@@ -881,10 +885,12 @@ class Site:
             parts.append('<h2>Unplaced</h2>\n<ul class="unplaced">\n')
             for item in data["unplaced"]:
                 span = day_reader.span_text(item["at"], item["end"], tz)
+                blocks = syntheses.get(item["line"], []) if item["kind"] == "transcript" else []
                 parts.append(
                     f'<li title="line {escape(item["line"])}"><span class="clock">{escape(span)}</span> '
                     f'<span class="kind">{escape(item["kind"])}</span> '
-                    f"{escape(item['title'] + day_reader.sources_text(item))}</li>\n"
+                    f"{escape(item['title'] + day_reader.sources_text(item))}"
+                    f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
                 )
             parts.append("</ul>\n")
         parts.append(f"<h2>Health</h2>\n<p>{escape(day_reader.health_text(data['health']))}</p>\n")
@@ -1403,10 +1409,13 @@ def _entry_html(
     inside: bool = False,
     expanded: bool = False,
     name_this: Callable[[Mapping[str, Any]], str] | None = None,
+    syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> str:
     """One timeline row: the clock, the kind, what it was; then an `aboard` entry's inner rows;
     then, behind a toggle, the attachments by name and the company. The grammar is `day.rows`'.
-    `name_this` gives a stay printed as coordinates its link to the Places page."""
+    `name_this` gives a stay printed as coordinates its link to the Places page; `syntheses` (by
+    transcript line, `day.syntheses_of`) put a call's synthesis under the call, behind a toggle of its
+    own, or the policy's row for one the `dream` entry withholds."""
     if entry["kind"] == day_reader.FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = day_reader.span_text(entry["start"], entry["end"], tz)
@@ -1463,7 +1472,7 @@ def _entry_html(
             n = len(confirmed) + len(proposed)
             summary = f"{summary}{DOT}with {n}" if summary else f"with {n}"
         out.append(f"\n<details{' open' if expanded else ''}><summary>{escape(summary)}</summary>\n")
-        out.append(_attached_html(entry.get("attached"), tz))
+        out.append(_attached_html(entry.get("attached"), tz, syntheses, expanded))
         if confirmed or proposed:
             text = ", ".join(day_reader.companion_text(c) for c in confirmed)
             more = ", ".join(day_reader.companion_text(c) for c in proposed)
@@ -1581,7 +1590,45 @@ def _withheld_html(row: Mapping[str, Any], heading: bool = True) -> str:
     return f'{head}<p class="mute" title="line {line}">{escape(drafts.withheld_text(row))}</p>\n'
 
 
-def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:
+def _synthesis_html(block: Mapping[str, Any], expanded: bool = False) -> str:
+    """A call's synthesis (RFC 0036, `transcript synthesize`) under the call's row, behind a toggle
+    closed unless the page is expanded: the summary says what it holds and which model wrote it;
+    inside, one paragraph per segment, actions on top, an action with its assignee and due hint, each
+    with where in the call it rests (the line on hover), an unsupported one a muted block marked with
+    the word, never run into the prose around it. A synthesis the `dream` entry no longer allows
+    (`drafts.withheld_json`) is one muted line that says so and why, and nothing of what it says."""
+    if drafts.is_withheld(block):
+        line = escape(str(block["line"]))
+        return f'\n<p class="synthesis mute" title="line {line}">{escape(drafts.withheld_text(block))}</p>'
+    parts = [
+        f'\n<details class="synthesis"{" open" if expanded else ""}>'
+        f"<summary>{escape(drafts.synthesis_summary(block))}</summary>\n"
+    ]
+    for segment in block["segments"]:
+        label = drafts.SYNTHESIS_LABELS.get(str(segment.get("part")), "")
+        head = f'<span class="kind">{escape(label)}</span> ' if label else ""
+        assigned = drafts.assignment_text(segment)
+        who = f" <em>{escape(assigned)}</em>" if assigned else ""
+        if segment["supported"]:
+            line = escape(str(block["transcript"]))
+            where = f' <small title="line {line}">[{escape(drafts.where_text(segment))}]</small>'
+            parts.append(f'<p class="segment">{head}{escape(segment["text"])}{who}{where}</p>\n')
+        else:
+            why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
+            parts.append(
+                f'<p class="segment unsupported mute">{head}~ {escape(segment["text"])}{who}'
+                f" <small>{drafts.UNSUPPORTED}{why}</small></p>\n"
+            )
+    parts.append("</details>")
+    return "".join(parts)
+
+
+def _attached_html(
+    attached: Mapping[str, Any] | None,
+    tz: ZoneInfo,
+    syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    expanded: bool = False,
+) -> str:
     if not attached:
         return ""
     items: list[tuple[str, str, Sequence[str]]] = []  # kind, text, the lines it points at
@@ -1606,9 +1653,11 @@ def _attached_html(attached: Mapping[str, Any] | None, tz: ZoneInfo) -> str:
     out = ['<ul class="attached">\n']
     for kind, text, lines in items:
         title = " ".join(lines[:3]) + (" …" if len(lines) > 3 else "")
+        blocks = (syntheses or {}).get(lines[0], []) if kind == "transcript" and lines else []
         out.append(
             f'<li title="{escape(_plural(len(lines), "line"))}: {escape(title)}">'
-            f'<span class="kind">{escape(kind)}</span> {escape(text)}</li>\n'
+            f'<span class="kind">{escape(kind)}</span> {escape(text)}'
+            f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
         )
     out.append("</ul>\n")
     return "".join(out)

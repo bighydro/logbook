@@ -28,6 +28,21 @@ proposal is numbered by its place in the list, from 1. It is never an event line
 `raw_id` is `<draft id>/<number>` and whose `extra.from` names the draft (`confirmations`); the Day
 then shows the proposal confirmed and the event among the day's events.
 
+**A transcript's synthesis** (`logbook transcript synthesize`, `logbook.contrib.synthesis`) is a
+draft of unit `event` whose `subject` is `[<the transcript line's id>]`. A transcript's utterances
+are not lines of their own (`transcript/v1` keeps the text in one attachment, RFC 0004), so every
+supported segment's `evidence` is the transcript line, and which utterances it rests on is kept
+beside the segments: `extra.segments`, one object per segment, `{part, utterances: [{n, offset?}],
+assignee?, due?: {phrase, date}}`, `part` one of `SYNTHESIS_PARTS` (actions on top), `n` the
+utterance's place in the transcript as `transcripts.turns_of` reads it, from 1, and `offset` where
+it is in the recording (`20:05`) when the source says. Like every draft it records the version of
+the `dream` entry it was made under (`extra.policy_version`), and it follows the policy as every
+draft does (below). `by_transcript` finds the syntheses as `by_day` finds the days' drafts, and
+`for_transcripts` gives the Day the standing synthesis of each of its transcripts through the same
+rule as `for_day` (`through`), every evidence id checked against the transcript. A synthesis is the
+call's draft, never the day's (amendment 1: one standing draft per unit): `by_day`, `for_day` and
+`withheld` read unit `day` alone, so a synthesis neither replaces nor shadows the day's draft.
+
 **The standing draft** of a day is its latest `draft` line, by `at` then `seq`, that is not retracted
 and not named in a later draft's `supersedes`; the earlier ones stay in the record and the Day lists
 their ids. A reader that holds the record checks every evidence id against the day's lines: an id
@@ -45,9 +60,11 @@ Day of a reader that holds the whole record says so in one row, `superseded by p
 nothing of the draft's text (`withheld_json`); a reader through a gate of its own hides it without a
 word, as it hides every line above its gate. A withheld draft's proposals are withheld with it: the Day
 shows none and `--accept` names none, and the draft shown in its place brings its own; an event the
-owner confirmed from it before stays, an owner's line like any other. `doctor` lists the days whose
-standing draft is withheld (`withheld`), and `dream --catch-up` dreams them again under the entry when
-it allows any tier."""
+owner confirmed from it before stays, an owner's line like any other. A call's synthesis is held the
+same way, by the same rule (`through`), and its row goes under the call's own row on the Day
+(`syntheses_withheld`), never in the day's draft's place. `doctor` lists the days whose standing draft
+is withheld (`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any
+tier."""
 
 from __future__ import annotations
 
@@ -67,6 +84,7 @@ from .store import retractions
 KIND = "draft"
 SCHEMA = "draft/v1"
 UNIT_DAY = "day"
+UNIT_EVENT = "event"  # a transcript's synthesis: the call is the unit, its line the subject
 UNITS = ("day", "journey", "event", "week", "month", "year", "chapter")
 SOURCE_PREFIX = "model:"  # `source` names the model as its runner names it; never `manual`
 SUPPORTED, UNSUPPORTED, MALFORMED = "supported", "unsupported", "malformed"
@@ -78,11 +96,29 @@ PART_LABELS = {
     "people": "people",
     "promises": "promise",
 }
+# the parts of a transcript's synthesis, in order: actions on top (`logbook transcript synthesize`)
+SYNTHESIS_PARTS = ("actions", "topics", "decisions", "open_threads", "personal")
+SYNTHESIS_LABELS = {
+    "actions": "action",
+    "topics": "topic",
+    "decisions": "decision",
+    "open_threads": "open",
+    "personal": "personal",
+}
+SYNTHESIS_NOUNS = {
+    "actions": ("action", "actions"),
+    "topics": ("topic", "topics"),
+    "decisions": ("decision", "decisions"),
+    "open_threads": ("open thread", "open threads"),
+    "personal": ("personal", "personal"),
+}
 HEAD_SHORT = 8  # `read at bb97e90d`: the first 8 hex of the head
 ID_SHORT = 8  # an evidence id shortened to its last 8 characters in text
 LANGUAGE = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\Z")  # a BCP 47 tag, loosely
 SHA256_HEX = 64
 NOT_ON_DAY = "evidence names a line that is not on the day"
+NOT_THE_TRANSCRIPT = "evidence names a line that is not the transcript"
+WHOLE = "the transcript"  # a segment that rests on the transcript line and on no utterance of it
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
 DOT = " · "
@@ -216,14 +252,16 @@ class Allowed:
     def allows(self, line: Line) -> bool:
         return int(line.get("tier") or 0) <= self.max_tier
 
-    def why_not(self, tier: int) -> str:
-        """Why a draft of `tier` is withheld, in words, for the Day and `doctor`."""
+    def why_not(self, tier: int, unit: str = UNIT_DAY) -> str:
+        """Why a draft of `tier` is withheld, in words, for the Day and `doctor`. A day is dreamed
+        again under the entry; a call's synthesis is of the call's tier, so the call is above the
+        entry as well and stays home (`synthesis.gate`) until the entry allows it again."""
         if self.reason is not None:
             return self.reason
-        return (
-            f"tier {tier}, above max_tier {self.max_tier} of the {policy.DREAM_DESTINATION!r} entry;"
-            " `dream --catch-up` dreams the day again under it"
-        )
+        found = f"tier {tier}, above max_tier {self.max_tier} of the {policy.DREAM_DESTINATION!r} entry"
+        if unit == UNIT_EVENT:
+            return f"{found}; the call stays home until the entry allows its tier"
+        return f"{found}; `dream --catch-up` dreams the day again under it"
 
 
 def allowed(root: Path) -> Allowed:
@@ -309,16 +347,7 @@ def for_day(
     draft is one of those, a reader that holds the whole record (no `tiers`) gets the row that says
     so (`withheld_json`), never its text or its proposals; None otherwise."""
     retracted = retractions(idx.retractions())
-    found = of_day(idx.by_kind(KIND), retracted, day)
-    if tiers is not None:
-        gate = {int(t) for t in tiers}
-        found = [line for line in found if int(line.get("tier", 0)) in gate]
-    shown = found if allowed is None else [line for line in found if allowed.allows(line)]
-    withheld = None
-    if allowed is not None and tiers is None:
-        top = standing(found)
-        if top is not None and not allowed.allows(top):
-            withheld = withheld_json(top, allowed)
+    shown, withheld = through(of_day(idx.by_kind(KIND), retracted, day), tiers, allowed)
     latest = standing(shown)
     if latest is None:
         return None, withheld
@@ -331,6 +360,26 @@ def for_day(
     return day_json(latest, shown, on_day, names, confirmed), withheld
 
 
+def through(
+    found: Sequence[Line], tiers: Sequence[int] | None = None, allowed: Allowed | None = None
+) -> tuple[list[Line], dict[str, Any] | None]:
+    """The drafts of one unit (a day's, a call's) a reader may show, and the row for a standing draft
+    it may not: the one rule `for_day` and `for_transcripts` read through. Through the gate `tiers`
+    when given, a draft above it is not seen. Through `allowed`, the `dream` entry today, when given,
+    a draft above it is not seen either, and when the standing draft is one of those, a reader that
+    holds the whole record (no `tiers`) gets the row that says so (`withheld_json`); None otherwise."""
+    if tiers is not None:
+        gate = {int(t) for t in tiers}
+        found = [line for line in found if int(line.get("tier", 0)) in gate]
+    shown = list(found) if allowed is None else [line for line in found if allowed.allows(line)]
+    withheld = None
+    if allowed is not None and tiers is None:
+        top = standing(found)
+        if top is not None and not allowed.allows(top):
+            withheld = withheld_json(top, allowed)
+    return shown, withheld
+
+
 def withheld_json(line: Line, allowed: Allowed) -> dict[str, Any]:
     """The row a Day carries for a standing draft the `dream` entry no longer allows: the line, its
     tier, the entry's `max_tier` today and why, in words. Nothing of what the draft says."""
@@ -340,7 +389,7 @@ def withheld_json(line: Line, allowed: Allowed) -> dict[str, Any]:
         "seq": int(line["seq"]),
         "tier": tier,
         "max_tier": allowed.max_tier,
-        "why": allowed.why_not(tier),
+        "why": allowed.why_not(tier, str((line.get("payload") or {}).get("unit"))),
     }
 
 
@@ -434,16 +483,19 @@ def day_json(
     }
 
 
-def segment_json(segment: Mapping[str, Any], on_day: Collection[str] | None) -> dict[str, Any]:
+def segment_json(
+    segment: Mapping[str, Any], on_day: Collection[str] | None, not_on: str = NOT_ON_DAY
+) -> dict[str, Any]:
     """One segment with its verdict: supported when every evidence id is a line of the day (when
-    the reader holds the day; any id otherwise); else unsupported with `why`."""
+    the reader holds the day; any id otherwise), or of the unit `on_day` names; else unsupported with
+    `why`, `not_on` when an id is not among them."""
     shape = segment_shape(segment)
     text = str(segment.get("text") or "").strip()
     if shape == SUPPORTED:
         evidence = [str(e) for e in segment["evidence"]]
         missing = [e for e in evidence if on_day is not None and e not in on_day]
         if missing:
-            return {"text": text, "evidence": evidence, "supported": False, "why": NOT_ON_DAY}
+            return {"text": text, "evidence": evidence, "supported": False, "why": not_on}
         return {"text": text, "evidence": evidence, "supported": True, "why": None}
     if shape == UNSUPPORTED:
         return {"text": text, "evidence": [], "supported": False, "why": None}
@@ -507,6 +559,202 @@ def cluster_coordinates(place: str) -> tuple[float, float] | None:
     except ValueError:
         return None
     return (lat, lon) if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+
+
+# -- a transcript's synthesis ------------------------------------------------------------------------------
+
+
+def subject_ids(payload: Mapping[str, Any]) -> list[str]:
+    """The ids a draft's `subject` names: the list, or the one string; empty for anything else."""
+    subject = payload.get("subject")
+    if isinstance(subject, str):
+        return [subject]
+    if isinstance(subject, list):
+        return [str(s) for s in subject if isinstance(s, str)]
+    return []
+
+
+def by_transcript(lines: Iterable[Line], retracted: Collection[str]) -> dict[str, list[Line]]:
+    """The syntheses, as `by_day` gives the days' drafts: the draft lines of unit `event` whose
+    subject is one line's id alone (a transcript's), not retracted, by that id, each one's in `at`
+    then `seq` order; a line whose payload is not a draft's is left out."""
+    found: dict[str, list[Line]] = {}
+    for line in lines:
+        payload = line.get("payload") or {}
+        if line.get("kind") != KIND or payload.get("schema") != SCHEMA or payload.get("unit") != UNIT_EVENT:
+            continue
+        subject = subject_ids(payload)
+        if len(subject) != 1 or str(line["id"]) in retracted:
+            continue
+        found.setdefault(subject[0], []).append(line)
+    for transcript in found:
+        found[transcript].sort(key=lambda line: (str(line["at"]), int(line["seq"])))
+    return found
+
+
+def for_transcripts(
+    idx: Index, transcripts: Sequence[str], tiers: Sequence[int] | None = None, allowed: Allowed | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The Day's `syntheses` and its `syntheses_withheld` rows, read through the rule `for_day` reads
+    a day's draft through (`through`). The syntheses: the standing synthesis of each of these
+    transcript lines that has one, in the order given, each with its evidence checked against its
+    transcript (`synthesis_json`). Through the gate `tiers` when given, a synthesis above it is not
+    seen; through `allowed`, the `dream` entry today, one above the entry is not seen either, and a
+    reader that holds the whole record gets the row for a standing synthesis the entry withholds, the
+    transcript's id first (`withheld_json`), never its text."""
+    if not transcripts:
+        return [], []
+    by = by_transcript(idx.by_kind(KIND), retractions(idx.retractions()))
+    out, held = [], []
+    for transcript in transcripts:
+        shown, withheld = through(by.get(transcript, []), tiers, allowed)
+        latest = standing(shown)
+        if latest is not None:
+            out.append(synthesis_json(latest, shown, transcript))
+        if withheld is not None:
+            held.append({"transcript": transcript, **withheld})
+    return out, held
+
+
+def synthesis_json(line: Line, found: Sequence[Line], transcript: str) -> dict[str, Any]:
+    """A transcript's standing synthesis as the Day carries it: the transcript it is of, the draft
+    line, its source and model, what it read, its segments (`synthesis_segments`), how many of each
+    part and how many unsupported, the earlier syntheses newest first and how many there were."""
+    payload = line.get("payload") or {}
+    tz = ZoneInfo(str(line.get("tz") or "UTC"))
+    segments = synthesis_segments(payload, {transcript})
+    found_extra = payload.get("extra")
+    extra: Mapping[str, Any] = found_extra if isinstance(found_extra, dict) else {}
+    last = max((str(other["at"]) for other in found), default=str(line["at"]))
+    return {
+        "transcript": transcript,
+        "line": str(line["id"]),
+        "seq": int(line["seq"]),
+        "source": str(line.get("source")),
+        "model": model_of(line.get("source")),
+        "tier": line.get("tier"),
+        "at": str(line["at"]),
+        "read_head": payload.get("read_head"),
+        "language": payload.get("language"),
+        "utterances": extra.get("utterances"),
+        "segments": segments,
+        "counts": {part: sum(1 for s in segments if s["part"] == part) for part in SYNTHESIS_PARTS},
+        "unsupported": sum(1 for s in segments if not s["supported"]),
+        "supersedes": payload.get("supersedes"),
+        "earlier": [str(other["id"]) for other in reversed(found) if other["id"] != line["id"]],
+        "synthesized": len(found),
+        "last": _instant(last).astimezone(tz).date().isoformat(),
+        "malformed": validate(payload),
+    }
+
+
+def synthesis_segments(
+    payload: Mapping[str, Any], transcript: Collection[str] | None
+) -> list[dict[str, Any]]:
+    """The segments of a synthesis with their verdict (`segment_json`, the transcript's id the only
+    evidence a segment may name when `transcript` is given) and what `extra.segments` keeps of each:
+    `part`, `utterances` (`[{n, offset}]`), `assignee` and `due` (`{phrase, date}`), each None or
+    empty when the line does not say."""
+    found = payload.get("segments")
+    raw = [s for s in found if isinstance(s, dict)] if isinstance(found, list) else []
+    found_extra = payload.get("extra")
+    extra: Mapping[str, Any] = found_extra if isinstance(found_extra, dict) else {}
+    details = extra.get("segments")
+    if not isinstance(details, list) or len(details) != len(raw):
+        details = [{}] * len(raw)
+    out = []
+    for segment, detail in zip(raw, details, strict=True):
+        shown = segment_json(segment, transcript, NOT_THE_TRANSCRIPT)
+        detail = detail if isinstance(detail, dict) else {}
+        part = detail.get("part")
+        shown["part"] = part if part in SYNTHESIS_PARTS else None
+        shown["utterances"] = [
+            {"n": u["n"], "offset": u.get("offset") if isinstance(u.get("offset"), str) else None}
+            for u in detail.get("utterances") or []
+            if isinstance(u, dict) and isinstance(u.get("n"), int) and not isinstance(u.get("n"), bool)
+        ]
+        assignee = detail.get("assignee")
+        shown["assignee"] = assignee if isinstance(assignee, str) and assignee else None
+        due = detail.get("due")
+        shown["due"] = (
+            {
+                "phrase": str(due.get("phrase") or ""),
+                "date": due.get("date") if isinstance(due.get("date"), str) else None,
+            }
+            if isinstance(due, dict) and due.get("phrase")
+            else None
+        )
+        out.append(shown)
+    return out
+
+
+def synthesis_summary(block: Mapping[str, Any]) -> str:
+    """`synthesis · 1 action, 2 topics, 1 decision, 1 open thread, 1 personal · model:qwen2.5-7b-instruct`,
+    the Day's one row for a synthesis, collapsed; with `· N unsupported` when any is."""
+    counts = block.get("counts") or {}
+    found = [
+        f"{n} {SYNTHESIS_NOUNS[part][0 if n == 1 else 1]}"
+        for part in SYNTHESIS_PARTS
+        if (n := int(counts.get(part) or 0))
+    ]
+    parts = ["synthesis", ", ".join(found) or "no items"]
+    if block.get("unsupported"):
+        parts.append(f"{block['unsupported']} unsupported")
+    if block.get("malformed"):
+        parts.append("malformed")
+    parts.append(str(block["source"]))
+    return DOT.join(parts)
+
+
+def is_withheld(block: Mapping[str, Any]) -> bool:
+    """Whether a block of the Day's is the row of a draft the `dream` entry withholds (`withheld_json`:
+    no segments, the reason why) rather than a draft it shows."""
+    return "segments" not in block and "why" in block
+
+
+def synthesis_row(block: Mapping[str, Any]) -> str:
+    """The one row under a call on the Day: its synthesis, collapsed (`synthesis_summary`), or, for a
+    synthesis the `dream` entry withholds, `superseded by policy` and why (`withheld_text`)."""
+    return withheld_text(block) if is_withheld(block) else synthesis_summary(block)
+
+
+def synthesis_rows(segments: Sequence[Mapping[str, Any]], indent: str = "    ") -> Iterator[str]:
+    """The segments of a synthesis, one per row: the part's word, the text, an action's assignee and
+    due hint (`assignment_text`), then where in the call it rests (`where_text`); an unsupported one
+    starts with `~` and ends with the word."""
+    for segment in segments:
+        label = SYNTHESIS_LABELS.get(str(segment.get("part")), "")
+        mark = "  " if segment["supported"] else "~ "
+        assigned = assignment_text(segment)
+        who = f"  {assigned}" if assigned else ""
+        if segment["supported"]:
+            tail = f"[{where_text(segment)}]"
+        else:
+            tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
+        yield f"{indent}{mark}{label:<9} {segment['text']}{who}  {tail}"
+
+
+def assignment_text(segment: Mapping[str, Any]) -> str:
+    """`→ Ola Nordmann · due by Friday (2026-06-12?)`: an action's assignee and due hint, the date a
+    reading of the words (SPEC §3.2.10 rule 4); empty when the segment names neither."""
+    parts = []
+    if segment.get("assignee"):
+        parts.append(f"→ {segment['assignee']}")
+    due = segment.get("due")
+    if due:
+        parts.append(f"due {due['phrase']}" + (f" ({due['date']}?)" if due.get("date") else ""))
+    return DOT.join(parts)
+
+
+def where_text(segment: Mapping[str, Any]) -> str:
+    """Where in the call a segment rests: `02:10, 20:05`, `u3, u17` when the recording gives no time,
+    `the transcript` when it rests on the line and no utterance of it."""
+    return ", ".join(utterance_text(u) for u in segment.get("utterances") or []) or WHOLE
+
+
+def utterance_text(utterance: Mapping[str, Any]) -> str:
+    """`20:05` where the recording gives the utterance's time, else `u17`."""
+    return str(utterance["offset"]) if utterance.get("offset") else f"u{utterance['n']}"
 
 
 # -- text ------------------------------------------------------------------------------------------------
