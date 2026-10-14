@@ -170,6 +170,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "telegram",
     "telegram_live",
     "claude_code",
+    "claude_export",
     "notion",
     "github",
     "github_live",
@@ -306,6 +307,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "music": "apple-music",
     "telegram-export": "telegram",  # `add telegram-export <folder>`: Telegram Desktop's JSON export
     "claude-sessions": "claude-code",  # `add claude-sessions <folder>`: Claude Code's session transcripts
+    "claude-export": "claude",  # `add claude-export <zip|folder>`: the Claude apps' data export
     "github-export": "github",  # `add github-export DIR`: a clone or an account export (the export's word)
 }
 
