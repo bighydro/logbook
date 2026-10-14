@@ -12,9 +12,11 @@ wrote the line decides which it is: the owner's addresses and names come from `l
 transcript's speakers (RFC 0006). A request cue in text the owner wrote is the owner asking and is
 not proposed; a commitment cue in text someone else wrote is theirs, kept apart from both sections.
 An agent's words are nobody's (`logbook.core.machine`): a message a bot wrote, a turn of a
-transcript's participant marked machine (the assistant of a Claude Code session) and a forwarded
-message are never read for a promise or a request, and counted under `skipped`; in a conversation
-with an agent only the owner's own turns are read.
+transcript's participant marked machine (the assistant of a Claude Code session or of a conversation
+in the Claude apps) and a forwarded message are never read for a promise or a request, and counted
+under `skipped`; in a conversation with an agent only the owner's own turns are read, and a line of
+the owner's that its text gives the agent, by the participant's label or by the agent's own name
+(`assistant: …`, `Claude: …`), is the agent's.
 No model runs and no socket opens. Each proposal carries the day, the line it was read in (so `day
 sign --confirm` can take it), the counterpart, the sentence as written and a due hint when a date
 phrase is in it ("by Friday", "bis Montag", "next week"), resolved against the day it was said.
@@ -721,6 +723,16 @@ def extract(
         kind = str(line.get("kind"))
         participants = payload.get("participants")
         participants = participants if isinstance(participants, list) else []
+        agent = machine.agent_of(payload)
+        if (
+            kind == TRANSCRIPT
+            and agent is not None
+            and isinstance(agent.get("name"), str)
+            and agent["name"].strip()
+        ):
+            # the agent by its own name speaks as the agent: a line the owner pasted back under it
+            # (`Claude: …`) is the agent's, as one under the participant's label is
+            participants = [*participants, {"name": agent["name"], machine.MACHINE: True}]
         humans = [p for p in participants if not machine.is_machine_participant(p)]  # an agent is nobody
         known = _known(participants, identities, owner)
         counterpart: str | None = None

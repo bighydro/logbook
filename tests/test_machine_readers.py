@@ -34,6 +34,33 @@ KARI_BOT = [  # a bot the owner named after her sister: it is still a bot
 ]
 
 
+PASTED = "0193c1a0-0000-7000-8000-00000000c0aa"  # a conversation in the apps where the owner pastes Claude
+PASTED_SESSION = "0193c0de-0000-7000-8000-0000000000aa"  # a Claude Code session where the owner does the same
+
+
+def _pasted(tmp_path: Path) -> tuple[Path, Path]:
+    """The owner's own promise, then a line of the agent's she pasted back under its name."""
+    owner = "I will check the sails on Sunday.\nClaude: I'll draft the plan by Friday."
+    messages = [
+        cc.message(1, 7200, "human", [cc.text(owner, 7200)], conversation=PASTED),
+        cc.message(2, 7230, "assistant", [cc.text("Noted.", 7230)], conversation=PASTED),
+    ]
+    export = cc.export(tmp_path / "pasted-export", [cc.conversation(PASTED, "Sails", messages, 7200, 7230)])
+    session = cs.write(
+        tmp_path / "pasted-projects" / cs.PROJECT / f"{PASTED_SESSION}.jsonl",
+        [
+            cs.user(
+                7200,
+                1,
+                "I will tidy the cockpit on Sunday.\nClaude Code: I'll write the tests by Monday.",
+                session=PASTED_SESSION,
+            ),
+            cs.assistant(7230, 2, [cs.text("Noted.")], "msg-pasted", session=PASTED_SESSION),
+        ],
+    )
+    return export, session
+
+
 def _from_kari(minutes: float, text: str) -> dict[str, Any]:
     """A message from the real Kari, by her number: the evidence that makes her a person here."""
     return {
@@ -83,6 +110,9 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     lb.append_many(telegram.run(export, timezone="Europe/Oslo"))
     lb.append_many(claude_code.run(cs.projects(tmp_path / "projects"), store=lb.attach))
     lb.append_many(claude_export.run(cc.zipped(tmp_path / "claude-export.zip"), store=lb.attach))
+    pasted_export, pasted_session = _pasted(tmp_path)
+    lb.append_many(claude_export.run(pasted_export, store=lb.attach))
+    lb.append_many(claude_code.run(pasted_session, store=lb.attach))
     lb.append_many([_from_kari(100, "See you at the harbour"), _named_machine(tp.at(120), tp.at(150))])
     return lb
 
@@ -183,6 +213,13 @@ def test_promises_reads_only_the_owners_words_in_a_conversation_with_an_agent(lb
         if proposal.source in ("telegram", "claude-code", "claude"):
             assert proposal.speaker is not None and proposal.speaker.owner, proposal.match.quote
             assert proposal.role == promise_reader.PROMISE
+
+
+def test_a_line_the_owner_pasted_under_the_agents_name_is_never_her_promise(lb: Logbook):
+    report = promise_reader.extract(lb)
+    quotes = {proposal.match.quote for proposal in report.proposals}
+    assert {"I will check the sails on Sunday.", "I will tidy the cockpit on Sunday."} <= quotes
+    assert not any("draft the plan by Friday" in q or "write the tests by Monday" in q for q in quotes)
 
 
 def test_promises_counts_what_it_left_out_as_an_agents(lb: Logbook):

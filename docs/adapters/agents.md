@@ -11,8 +11,8 @@ logbook add telegram-export ~/Downloads/"Telegram Desktop"/DataExport_2026-03-02
 logbook sync telegram                                                            # what you sent your bots since
 logbook add claude-sessions ~/.claude/projects                                   # every Claude Code session on this machine
 logbook add claude-sessions ~/.claude/projects --dry-run                         # what would be added; nothing written
-logbook add claude-export ~/Downloads/data-2026-03-03.zip                         # your conversations in the Claude apps
-logbook add claude-export ~/Downloads/data-2026-03-03.zip --dry-run               # how many new, grown and unchanged
+logbook add claude-export ~/Downloads/claude-data.zip                             # your conversations in the Claude apps
+logbook add claude-export ~/Downloads/claude-data.zip --dry-run                   # how many new, grown and unchanged
 ```
 
 ## The machine mark
@@ -189,11 +189,14 @@ taken for it.
 the `text` blocks of its own; an export older than the blocks gives only `text`, read without the
 placeholder the export writes for a block it cannot show ("This block is not supported on your
 current device yet."). **Never kept**, as anyone's words: its thinking; a tool call's input (an
-artifact's content, a search query), counted by the tool's name; a tool's result; the text the apps
-extracted from a file you gave them; the conversation's own summary; a message from neither side,
-counted. A **file** you gave or uploaded is named and counted, never copied. Of `projects.json` only
-a project's name is read (never its description, its instructions or its documents), and
-`users.json` is never opened.
+artifact's content, a search query), counted by the tool's name; a tool's result; the thinking and
+the artifacts an export from before artifacts were tool calls writes inline in the text
+(`<antThinking>`, `<antArtifact>`: dropped, each artifact counted as an `artifacts` call); the text
+the apps extracted from a file you gave them; the conversation's own summary; a message from
+neither side, counted. A **file** you gave or uploaded is named and counted, never copied: its name,
+its type (the export's, else the name's suffix) and its size, never its text, preview or link; a
+name is cut at 255 characters. Of `projects.json` only a project's name is read (never its
+description, its instructions or its documents), and `users.json` is never opened.
 
 When the export links each message to the one before it (`parent_message_uuid`) and names where the
 conversation stands (`current_leaf_message_uuid`), only that branch is read: a prompt you edited or
@@ -212,12 +215,18 @@ conversation left`). Without the links, every message, in the export's order.
 
 A conversation that is not an object with a `uuid` and a list of messages, or that has no time at
 all, is skipped and counted (`conversations in a shape this version cannot read`); one with no words
-in it is counted too. An export that does not parse is one sentence, and nothing is written.
+in it is counted too. An export that does not parse, or a zip that is damaged, is one sentence, and
+nothing is written. `conversations.json` is read whole, so an export takes a few times its size in
+memory while it is read.
 
-**A conversation that grew** is a new line, `raw_id` suffixed `:v2` (`:v3` …), that `supersedes`
-the line before, exactly as a session that grew; a conversation unchanged since the last import
-writes nothing. Every run, and `--dry-run` before it, says how many conversations the export holds,
-how many are new, grown and unchanged. A conversation you deleted in the apps is not in the next
+**A conversation that grew** (or changed: a prompt edited, an answer asked for again) is a new line,
+`raw_id` suffixed `:v2` (`:v3` …), that `supersedes` the line before, exactly as a session that
+grew; a conversation unchanged since the last import writes nothing. Neither does an export older
+than one already imported, so a folder of exports can be added again and again: a text one of the
+conversation's lines already holds, or a conversation that ends before the line standing for it,
+is counted (`older than the line in the record`) and never written back over the newer one. Every
+run, and `--dry-run` before it, says how many conversations the export holds and how many are new
+to the record, grown, unchanged and older. A conversation you deleted in the apps is not in the next
 export, and its line stays in the record: retract it if you want it gone. A conversation you only
 renamed is unchanged (the text is what counts), so its line keeps the old title.
 
@@ -229,10 +238,11 @@ renamed is unchanged (the text is what counts), so its line keeps the old title.
 - **`people review`** never observes an agent and so never proposes one, not even by its name; a
   record that held agent lines before this version rebuilds its observed table once.
 - **`promises`** reads only your own words in a conversation with an agent: your messages to a bot
-  and your turns in a session. A message a bot wrote and a message you forwarded are counted under
-  `skipped` (`messages_by_an_agent`, `forwarded_messages`); an agent's turn (the assistant's, in a
-  session or in a conversation in the apps) is dropped before your turns are read, and a line inside your own turn that its text gives the agent (`assistant: …`,
-  pasted back) is dropped too.
+  and your turns in a session or a conversation in the apps. A message a bot wrote and a message you
+  forwarded are counted under `skipped` (`messages_by_an_agent`, `forwarded_messages`); an agent's
+  turn is dropped before your turns are read, and a line inside your own turn that its text gives
+  the agent, by its label or by its own name (`assistant: …`, `Claude: …`, `Claude Code: …`, pasted
+  back), is dropped too.
 - **The dream** gives the model your messages with an agent marked (`agent` on the counterpart,
   `machine` on what it wrote) and tells it that agents are not people (`dream-day/3`, rule 5); an
   agent's words do not decide the language of your day.

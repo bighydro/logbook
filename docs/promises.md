@@ -98,11 +98,12 @@ counted as asked of you; a commitment from one is nobody's and shows under `--al
 
 An agent's words are nobody's ([your own agents](adapters/agents.md)). A message one of your bots
 wrote (`extra.machine`), a turn of a transcript's participant marked `machine` (the assistant of a
-Claude Code session) and a message you forwarded (`extra.forwarded`, someone else's words) are never
+Claude Code session or of a conversation in the Claude apps) and a message you forwarded (`extra.forwarded`, someone else's words) are never
 read, and are counted under `skipped` (`messages_by_an_agent`, `forwarded_messages`). A bot's "I'll
 have it ready by Friday" is not a promise, and its "can you send me the tide table?" is not a
 request of you; your own reply to it is yours, as any message you sent. A line of an agent's turn
-inside your own turn (`assistant: …` pasted back) is the agent's and is dropped too.
+inside your own turn (`assistant: …`, or under the agent's own name, `Claude: …`, pasted back) is
+the agent's and is dropped too.
 
 A mail body is read up to the first reply header (`On … wrote:`, `Am … schrieb …:`, `-----Original
 Message-----`, `From:`) or signature delimiter (`-- `), and lines that begin with `>` are left out,
