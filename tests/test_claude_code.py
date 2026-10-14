@@ -257,3 +257,33 @@ def test_a_session_that_grew_supersedes_the_line_before(
     )
     seq, _head, errors = lb.verify()
     assert not errors and seq == 4
+
+
+def _held(version: int, sha: str, end: str) -> dict[str, Any]:
+    raw_id = f"claude-code:{cs.SESSION}" + ("" if version == 1 else f":v{version}")
+    content = {"media_type": "application/json", "sha256": sha, "bytes": 1}
+    return {"id": f"line-{version}", "end": end, "payload": {"raw_id": raw_id, "content": content}}
+
+
+def test_a_text_an_earlier_version_holds_or_an_older_end_is_never_written_again(folder: Path):
+    """An older copy of a session (an export, a backup) after a newer one is in: nothing written."""
+    ((line, data),) = _run(folder / cs.PROJECT / f"{cs.SESSION}.jsonl")
+    sha = hashlib.sha256(data).hexdigest()
+    held = {1: _held(1, sha, line["end"]), 2: _held(2, "b" * 64, cs.at(500))}
+
+    def existing(keys: Any) -> dict[tuple[str, str], dict[str, Any]]:
+        by_key = {("claude-code", h["payload"]["raw_id"]): h for h in held.values()}
+        return {key: by_key[key] for key in keys if key in by_key}
+
+    same, how = claude_code.versioned(line, existing)
+    assert how == claude_code.UNCHANGED and same["payload"]["raw_id"] == f"claude-code:{cs.SESSION}"
+    other = {
+        **line,
+        "payload": {**line["payload"], "content": {**line["payload"]["content"], "sha256": "c" * 64}},
+    }
+    older, how = claude_code.versioned(other, existing)
+    assert how == claude_code.OLDER and "supersedes" not in older["payload"]
+    assert older["payload"]["raw_id"] == f"claude-code:{cs.SESSION}"
+    newer, how = claude_code.versioned({**other, "end": cs.at(600)}, existing)
+    assert how == claude_code.GROWN and newer["payload"]["raw_id"] == f"claude-code:{cs.SESSION}:v3"
+    assert newer["payload"]["supersedes"] == "line-2"

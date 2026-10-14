@@ -40,9 +40,11 @@ directory's last part), `cwd`, `git_branch`, `version` (Claude Code's), `models`
 **A session that grew.** A session goes on after an import (or is resumed): run with the record's
 `existing` lines, a session whose stored text differs from the line standing for it is written as
 a new line, `raw_id` suffixed `:v2` (`:v3` …) and `supersedes` the line before, counted
-(`grown`); an unchanged session is the same line and is not written twice. A sealed line this
-machine cannot open is taken as unchanged: a session grows on the record's home, which has the
-key. Pure: reads the files, writes nothing but through `store`, no network.
+(`grown`); an unchanged session is the same line and is not written twice, nor is an older copy
+of it (a text a version already holds, or a session that ends before the latest version: a backup,
+an earlier export), which is never written back over the newer line. A sealed line this machine
+cannot open is taken as unchanged: a session grows on the record's home, which has the key. Pure:
+reads the files, writes nothing but through `store`, no network.
 """
 
 from __future__ import annotations
@@ -62,12 +64,16 @@ __all__ = [
     "ASSISTANT",
     "GROWN",
     "KIND",
+    "MEDIA_TYPE",
     "NAME",
     "NEW",
+    "OLDER",
     "OWNER",
     "PARTICIPANTS",
+    "SEALED",
     "TIER",
     "UNCHANGED",
+    "Existing",
     "first_words",
     "run",
     "say",
@@ -381,34 +387,42 @@ def _versioned(line: dict[str, Any], existing: Existing | None, counts: dict[str
     return line
 
 
-NEW, GROWN, UNCHANGED = "new", "grown", "unchanged"  # what `versioned` found the record to hold
+# what `versioned` found the record to hold
+NEW, GROWN, UNCHANGED, OLDER = "new", "grown", "unchanged", "older"
 
 
 def versioned(line: dict[str, Any], existing: Existing | None) -> tuple[dict[str, Any], str]:
     """The line as it goes to the record, and what the record held for it: as it is when the record
-    has no line for its conversation (NEW, or when there is no `existing` to ask), or one whose text
-    is the same (UNCHANGED: the record's dedupe then writes nothing); a correction `:v<n>` that
-    supersedes the latest version when the text changed (GROWN). Keyed by the line's own source and
-    `raw_id`; one batched lookup per version."""
+    has no line for its conversation (NEW, or when there is no `existing` to ask); as it is too, and
+    so deduped by its raw_id and never written, when a version holds the same text (UNCHANGED) or
+    the latest version ends after it (OLDER: an earlier copy, an export older than one already
+    imported); else a correction `:v<n>` that supersedes the latest version (GROWN). Keyed by the
+    line's own source and `raw_id`; one batched lookup per version."""
     if existing is None:
         return line, NEW
     source = str(line["source"])
     raw_id = str(line["payload"]["raw_id"])
     latest: Mapping[str, Any] | None = None
+    digests: set[object] = set()
     version = 1
     while True:
         wanted = (source, raw_id if version == 1 else f"{raw_id}:v{version}")
         found = existing([wanted]).get(wanted)
         if found is None:
             break
+        content = (found.get("payload") or {}).get("content")
+        if isinstance(content, Mapping):
+            digests.add(content.get("sha256"))
         latest, version = found, version + 1
     if latest is None:
         return line, NEW
     if (latest.get("payload") or {}).get("schema") == SEALED:
         return line, UNCHANGED  # sealed and no identity here to open it: nothing to compare or re-write
-    content = (latest.get("payload") or {}).get("content")
-    if isinstance(content, Mapping) and content.get("sha256") == line["payload"]["content"]["sha256"]:
-        return line, UNCHANGED  # the same conversation: deduped by its raw_id
+    if line["payload"]["content"]["sha256"] in digests:
+        return line, UNCHANGED  # the same text as a version the record holds: deduped by its raw_id
+    held_end = latest.get("end") or latest.get("at")
+    if isinstance(held_end, str) and str(line["end"] or line["at"]) < held_end:
+        return line, OLDER  # the record's line goes on after this copy: never written back over it
     payload = dict(line["payload"])
     payload["raw_id"] = f"{raw_id}:v{version}"
     payload["supersedes"] = str(latest["id"])
