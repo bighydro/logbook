@@ -231,8 +231,9 @@ when it does. Nothing written is touched; a message the record does not hold is 
   or `from mail (you@example.org)` for a line of that mailbox. `--dry-run` says the same and writes
   nothing.
 - **A record that seals.** Mail is tier 2: in a record that seals (RFC 0029) its lines are sealed and the
-  index holds their keys blinded. With your identity here both questions are answered as above; without
-  it nothing can be read by `Message-ID`, and the store's own key is the only dedupe, as it was.
+  index holds their keys blinded. With your identity here both questions are answered as above. Without
+  it nothing can be read by `Message-ID`: a dry run counts every message as new, and a run is refused by
+  the record, which writes no sealed line without the identity.
 
 Adding a Takeout export with `--account <the address>` still helps: its lines then name the mailbox, so a
 second mailbox's copy of the same message stays its own.

@@ -7,6 +7,7 @@ Synthetic mail only: Ines, Ola and Kari Nordmann of Oslo, who do not exist, at e
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import imaplib
@@ -738,3 +739,111 @@ def test_imap_whose_head_and_body_disagree_on_the_message_id_never_drops_or_cras
         assert "  1 already in the record from mail (an import without --account)" in out.splitlines()
         assert len([c for c in imap.sent("FETCH") if "BODY.PEEK[]" in c]) == 1, "one fetch, both bodies"
     assert [line["payload"]["subject"] for line in Logbook(other.root).lines()] == ["Body only", "Head only"]
+
+
+def test_sealed_lines_answer_by_blinded_key_and_by_the_opened_lines_of_the_day(
+    lb: Logbook,
+    gmail_api: Fake,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """In a record that seals, an export spelled `Mail.Example.ORG` is found by neither key the server's
+    spelling gives, only among the opened lines of its days; without the identity nothing is read by id,
+    nothing is skipped, and nothing is written (the store asks for the identity)."""
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    meta = lb.meta
+    meta["recipients"] = [recipient for _, recipient in pairs]
+    lb._save_meta(meta)
+    identity = tmp_path / "keys" / "owner.txt"
+    sealing.write_identity_file(identity, pairs[0][0], "test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    odd = _week(lambda mid: mid.replace("mail.example.org", "Mail.Example.ORG"))
+    assert _run(capsys, "add", "mail", str(_mbox(tmp_path / "a.mbox", odd)), "--account", USER)[0] == 0
+    before = _record(lb)
+    with _serving(_imap(_week()), monkeypatch) as imap:
+        status, out, err = _run(capsys, "sync", "mail")
+    assert status == 0 and "mail: 0 new lines of 0 seen" in out, err
+    assert f"  3 already in the record from mail ({USER})" in out.splitlines()
+    assert [c for c in imap.sent("FETCH") if "BODY.PEEK[]" in c], "no key matched: the day's lines did"
+    _deliver(gmail_api, _week())
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0 and "gmail: 0 new lines of 0 seen" in out and _record(lb) == before, err
+    monkeypatch.delenv("LOGBOOK_IDENTITY_FILE")
+    status, out, err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "b.mbox", _week())), "--dry-run")
+    assert status == 0 and "3 lines would be added" in out and "already in the record from" not in out, err
+    status, out, err = _run(capsys, "add", "mail", str(tmp_path / "b.mbox"))
+    assert status == 2 and "needs the identity" in err and _record(lb) == before
+
+
+def test_the_cursor_resumes_past_a_held_message_without_losing_or_repeating_one(
+    lb: Logbook,
+    gmail_api: Fake,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from logbook.contrib import inbox
+
+    monkeypatch.setattr(mail, "LOOKUP_BATCH", 2)
+    week = _week()
+    _deliver(gmail_api, [week[1]])
+    assert _run(capsys, "sync", "gmail")[0] == 0
+    t4 = T0 + timedelta(hours=36)
+    path = _mbox(tmp_path / "all.mbox", [*week, (_stored("<m4@mail.example.org>", t4, subject="Fender"), t4)])
+    cursor = inbox.Cursor(lb.root, "mail", {})
+    drafts = mail.run(path, timezone=TZ, counts={}, held=mail_lookup.Lookup(lb), cursor=cursor)
+    lb.append_many([next(drafts)])
+    cursor.commit(1)
+    drafts.close()  # stopped after the first line: m2 is held, m3 and m4 not read yet
+    again, counts = inbox.Cursor(lb.root, "mail", {}), {}
+    rest = list(mail.run(path, timezone=TZ, counts=counts, held=mail_lookup.Lookup(lb), cursor=again))
+    assert again.resumed
+    assert [d["payload"]["message_id"] for d in rest] == ["m3@mail.example.org", "m4@mail.example.org"]
+    assert counts[f"{mail.HELD}mail ({USER})"] == 1
+    lb.append_many(rest)
+    again.commit(2)
+    assert sorted(line["payload"]["message_id"] for line in lb.lines()) == [
+        f"m{n}@mail.example.org" for n in (1, 2, 3, 4)
+    ]
+    last = inbox.Cursor(lb.root, "mail", {})
+    assert list(mail.run(path, timezone=TZ, counts={}, held=mail_lookup.Lookup(lb), cursor=last)) == []
+
+
+def test_a_retracted_line_and_a_repeated_id_are_counted_never_dropped_silently(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A retracted line holds its message as the store holds its key: nothing is written again. A message
+    repeated in one export is asked about twice and written once, the store counting the repeat."""
+    _deliver(gmail_api, _week()[:1])
+    assert _run(capsys, "sync", "gmail")[0] == 0
+    lb.retract(1, "wrong")
+    before = _record(lb)
+    status, out, _err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "a.mbox", _week()[:1])))
+    assert status == 0 and f"  1 already in the record from mail ({USER})" in out.splitlines()
+    assert _record(lb) == before
+    twice = [
+        (_stored("<x@mail.example.org>", T0, subject="One"), T0),
+        (_stored("<x@mail.example.org>", T0, subject="Two"), T0),
+    ]
+    status, out, _err = _run(capsys, "add", "mail", str(_mbox(tmp_path / "b.mbox", twice)))
+    assert "added 1 lines from mail" in out and "1 already in the record (same source and raw_id)" in out
+
+
+def test_a_held_messages_attachments_are_never_stored(tmp_path: Path) -> None:
+    jpeg = base64.encodebytes(b"\xff\xd8" + bytes(range(64))).decode("ascii").replace("\n", "\r\n")
+    with_file = (
+        f"Message-ID: <{{}}>\r\nDate: Mon, 02 Mar 2026 11:15:00 +0100\r\nFrom: Ola Nordmann <{OLA}>\r\n"
+        'Content-Type: multipart/mixed; boundary="b1"\r\n\r\n--b1\r\nContent-Type: text/plain\r\n\r\nHei.\r\n'
+        '--b1\r\nContent-Type: image/jpeg; name="berth.jpg"\r\nContent-Disposition: attachment; '
+        'filename="berth.jpg"\r\nContent-Transfer-Encoding: base64\r\n\r\n' + jpeg + "--b1--\r\n"
+    )
+    messages = [
+        (with_file.format(mid).encode(), T0) for mid in ("kept@mail.example.org", "held@mail.example.org")
+    ]
+    stored: list[bytes] = []
+    asking = Asking({"held@mail.example.org": mail.Holder(own=False, account=None)})
+    path = _mbox(tmp_path / "all.mbox", messages)
+    lines = list(mail.run(path, timezone=TZ, attachments=True, store=stored.append, held=asking))
+    assert [line["payload"]["message_id"] for line in lines] == ["kept@mail.example.org"]
+    assert len(stored) == 1, "only the written line's attachment reaches the store"
