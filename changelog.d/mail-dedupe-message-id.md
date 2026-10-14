@@ -8,5 +8,7 @@
   domain part lower-cased, the part before the `@` as written) and a message the record holds under another
   spelling is found among the lines of its days; a copy in another of your mailboxes is still a line of its
   own (RFC 0015 rule 1, amended). Nothing written is touched; a message without a `Message-ID` is keyed by
-  its bytes and dedupes on its own road, as before, and `Message-ID: <>` now counts as none instead of
-  folding every such message into one line ([Mail](docs/adapters/mail.md#one-email-one-line)).
+  its bytes and dedupes on its own road, as before, and so is one whose id has no `@` (`unknown`), never a
+  key across roads. `Message-ID: <>` now counts as none instead of folding every such message into one
+  line: a Takeout holding such messages, imported before, writes each of them once more on a re-import, one
+  of them a second copy of the line the old key kept ([Mail](docs/adapters/mail.md#one-email-one-line)).

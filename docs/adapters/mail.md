@@ -215,7 +215,11 @@ when it does. Nothing written is touched; a message the record does not hold is 
   server) is the same message. Two ids that differ before the `@`, even only in case, are two messages.
 - **No `Message-ID`, no shared key.** A message without one is keyed by the digest of its own bytes, and
   each road dedupes itself, as before: the Takeout export adds two headers of its own, so its bytes are not
-  the server's and the two roads write a line each.
+  the server's and the two roads write a line each. An id without an `@` (`unknown`, `(none)`) is no
+  Message-ID either: a mailer that writes one writes it on every message, so it is never a key across
+  roads, though each road's own key still dedupes it. `Message-ID: <>` names no message and is keyed by its
+  bytes; before this, every such message of an export shared the key `<>` and was one line, so re-adding an
+  export added before writes each of them, the first a second copy of what that line holds.
 - **Said, dry run included.** Each holder has a line of its own after the counts:
 
   ```

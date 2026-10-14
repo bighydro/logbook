@@ -64,7 +64,7 @@ from datetime import UTC, datetime
 from email.header import decode_header, make_header
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
-from typing import IO, Any, Protocol
+from typing import IO, Any, Protocol, TypeGuard
 from urllib.parse import unquote_to_bytes
 
 from ...core.attachments import DIR as ATTACHMENTS_DIR
@@ -667,9 +667,11 @@ def first_id(value: str | None) -> str | None:
 def ask(message_id: str | None, account: str | None, at: str | None = None) -> Asked | None:
     """What a mail source asks the record about a message whose Message-ID header gives `message_id`
     (`first_id`'s spelling), read from the mailbox `account`; None for a message without one, whose
-    line is keyed by its own bytes, so the store's (source, raw_id) is its only dedupe, as before."""
+    line is keyed by its own bytes, so the store's (source, raw_id) is its only dedupe, as before; and
+    None for an id without an `@` (`unknown`, `(none)`): RFC 5322 has no such Message-ID, and a mailer
+    that writes one writes it on every message, so it is never a key across roads."""
     normal = normalise_id(message_id)
-    if message_id is None or normal is None:
+    if message_id is None or not _shared(normal):
         return None
     mailbox = account.strip().lower() if account else None
     return Asked(f"{mailbox}:{message_id}" if mailbox else message_id, normal, message_id, mailbox, at)
@@ -710,11 +712,16 @@ def _asked(line: dict[str, Any]) -> Asked | None:
     """`ask` for a parsed draft: the key it carries, its Message-ID, its mailbox and its `at`."""
     payload = line["payload"]
     normal, raw_id, account = payload.get("message_id"), str(payload.get("raw_id")), payload.get("account")
-    if not normal:
+    if not isinstance(normal, str) or not _shared(normal):
         return None
     prefix = f"{account}:" if account else ""
     spelled = raw_id.removeprefix(prefix)
-    return Asked(raw_id, str(normal), spelled, str(account) if account else None, str(line["at"]))
+    return Asked(raw_id, normal, spelled, str(account) if account else None, str(line["at"]))
+
+
+def _shared(normal: str | None) -> TypeGuard[str]:
+    """Whether a normalised Message-ID may key a message across roads: an id with an `@` in it."""
+    return normal is not None and "@" in normal
 
 
 def normalise_id(message_id: str | None) -> str | None:

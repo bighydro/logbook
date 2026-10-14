@@ -640,3 +640,101 @@ def test_the_lines_of_the_day_find_a_spelling_and_a_mailbox_the_keys_cannot_gues
     assert lookup([third]) == [None], "another mailbox's copy is its own line (RFC 0015 rule 1)"
     far = replace(unknown, at="2026-03-09T10:15:00Z")
     assert lookup([far]) == [None], "only the days around the message are read"
+
+
+@pytest.mark.parametrize("junk", ["unknown", "<1234>", "(none)"])
+def test_an_id_without_an_at_is_never_a_key_across_roads(
+    lb: Logbook, gmail_api: Fake, tmp_path: Path, capsys: pytest.CaptureFixture[str], junk: str
+) -> None:
+    """RFC 5322 has no Message-ID without an `@`: a mailer that writes `unknown` writes it on every
+    message. Each road's own key still dedupes it, as before; across roads it is never the key, so one
+    message is never taken for another."""
+    _run(capsys, "add", "mail", str(_mbox(tmp_path / "all.mbox", [(_stored(junk, T0, subject="One"), T0)])))
+    _deliver(
+        gmail_api, [(_stored(junk, T0 + timedelta(hours=1), subject="Another"), T0 + timedelta(hours=1))]
+    )
+    status, out, err = _run(capsys, "sync", "gmail")
+    assert status == 0, err
+    assert "gmail: 1 new lines of 1 seen" in out and "already in the record from" not in out
+    assert [line["payload"]["subject"] for line in lb.lines()] == ["One", "Another"]
+
+
+def test_a_message_without_a_message_id_on_imap_dedupes_on_the_stores_key_alone(
+    lb: Logbook, gmail_api: Fake, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    messages = [(_stored(None, T0, subject="No id"), T0)]
+    _deliver(gmail_api, messages)
+    assert _run(capsys, "sync", "gmail")[0] == 0 and lb.meta["seq"] == 1
+    before = _record(lb)
+    with _serving(_imap(messages), monkeypatch) as imap:
+        for _ in range(2):
+            status, out, err = _run(capsys, "sync", "mail", "--restart")
+            assert status == 0, err
+            assert "mail: 0 new lines of 1 seen from the beginning (1 already in the record)" in out
+            assert "already in the record from" not in out
+        assert len([c for c in imap.sent("FETCH") if "BODY.PEEK[]" in c]) == 2, "the body is read each time"
+    assert lb.meta["seq"] == 1 and _record(lb) == before
+    (line,) = list(lb.lines())
+    assert line["payload"]["raw_id"].startswith(f"{USER}:sha256:") and "message_id" not in line["payload"]
+
+
+def test_a_takeout_with_blank_ids_reimported_over_the_one_line_the_old_key_wrote(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Before this change every `Message-ID: <>` shared the key `<>`: one line for all of them. Now each
+    is keyed by its bytes, so a re-import writes one line per message, the first a second copy of the
+    message the old line holds (nothing written is touched to avoid it). The old line never trips the
+    lookup."""
+    messages = [
+        (_stored("<>", T0 + timedelta(hours=n), subject=f"Blank {n}"), T0 + timedelta(hours=n))
+        for n in range(3)
+    ]
+    old, _ = mail.parse_message(messages[0][0], None, {}, TZ, None, {USER}, None)
+    assert old is not None
+    old["payload"].update(raw_id="<>", message_id="<>", thread="<>")  # as the key `<>` wrote it
+    assert lb.append_many([old]) == 1
+    path = _mbox(tmp_path / "old.mbox", messages)
+    status, out, err = _run(capsys, "add", "mail", str(path), "--dry-run")
+    assert status == 0 and "mail: 3 lines would be added, 0 already in the record" in out, err
+    status, out, err = _run(capsys, "add", "mail", str(path))
+    assert status == 0 and "added 3 lines from mail" in out, err
+    assert [line["payload"]["subject"] for line in lb.lines()] == ["Blank 0", "Blank 0", "Blank 1", "Blank 2"]
+
+
+def test_imap_whose_head_and_body_disagree_on_the_message_id_never_drops_or_crashes(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The header pass and the body read may disagree (a server that adds or strips the header): a head
+    naming an id the body lacks is fetched and keyed by its bytes; a body whose id the head did not give is
+    found once read, among the lines of its days."""
+    real, heads = mail_imap._fetch_heads, {1: "ghost@mail.example.org", 2: None}
+    monkeypatch.setattr(
+        mail_imap,
+        "_fetch_heads",
+        lambda imap, shown, uids: {u: (heads.get(u, m), s) for u, (m, s) in real(imap, shown, uids).items()},
+    )
+    t1 = T0 + timedelta(hours=1)
+    messages = [
+        (_stored(None, T0, subject="Head only"), T0),
+        (_stored("<real@mail.example.org>", t1, subject="Body only"), t1),
+    ]
+    with _serving(_imap(messages), monkeypatch):
+        status, out, err = _run(capsys, "sync", "mail")
+        assert status == 0 and "mail: 2 new lines of 2 seen" in out, err
+        status, out, err = _run(capsys, "sync", "mail", "--restart")
+        assert status == 0 and "(2 already in the record)" in out, err
+    first, second = (line["payload"] for line in lb.lines())
+    assert first["raw_id"].startswith(f"{USER}:sha256:") and "message_id" not in first
+    assert second["raw_id"] == f"{USER}:real@mail.example.org"
+    other = Logbook.init(tmp_path / "other", TZ)
+    monkeypatch.setenv("LOGBOOK_HOME", str(other.root))
+    other.set_owner_emails([USER])
+    assert _run(capsys, "add", "mail", str(_mbox(tmp_path / "t.mbox", messages[1:])))[0] == 0
+    assert other.meta["seq"] == 1
+    with _serving(_imap(messages), monkeypatch) as imap:
+        status, out, err = _run(capsys, "sync", "mail")
+        assert status == 0, err
+        assert "mail: 1 new lines of 1 seen" in out
+        assert "  1 already in the record from mail (an import without --account)" in out.splitlines()
+        assert len([c for c in imap.sent("FETCH") if "BODY.PEEK[]" in c]) == 1, "one fetch, both bodies"
+    assert [line["payload"]["subject"] for line in Logbook(other.root).lines()] == ["Body only", "Head only"]
