@@ -17,6 +17,8 @@
 | `keepers.py`   | `show keepers`                                                                   |
 | `rollup.py`    | `rollup`, with `rollup ledger`                                                   |
 | `people.py`    | `people`, `people --priority`, `people NAME`, `people merge`, `people review`    |
+| `review.py`    | `review KIND` (the one sitting `people review` and `setup places review` run),   |
+|                | `status KIND ENTITY DISPOSITION`, `status list KIND`                             |
 | `places.py`    | `setup places`                                                                   |
 | `promises.py`  | `promises`, with `promises tasks`                                                |
 | `export.py`    | `export` (with `export share day`), `import` (with `import trip-bundle`,         |
@@ -25,7 +27,7 @@
 | `lab.py`       | `lab`                                                                            |
 | `aliases.py`   | the old top-level names and the words each became; `cli.main` rewrites them      |
 
-The 25 top-level commands, their groups and their order are `parser.GROUPS` and `parser.ARGUMENTS`;
+The 27 top-level commands, their groups and their order are `parser.GROUPS` and `parser.ARGUMENTS`;
 `docs/commands.md` lists them with the old names (the October 2026 audit, Decision 1).
 
 A command is two functions in its family's module: `<command>_arguments(sub)` declares its arguments
