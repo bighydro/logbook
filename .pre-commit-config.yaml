@@ -23,9 +23,14 @@ repos:
     hooks: [{ id: gitleaks }]
   - repo: local
     hooks:
+      # Reads the staged diff, or the range `pre-commit run --from-ref A --to-ref B` names, and ends
+      # with one line of counts: `verbose` shows that line on a pass too, so "checked nothing" (no
+      # patterns file, no lines) is never a silent Passed; `require_serial` keeps it to one run, one line.
       - id: check-pii
-        name: check staged diff for personal identifiers
+        name: check added lines for personal identifiers
         entry: python scripts/check_pii.py
         language: python
         pass_filenames: true
+        require_serial: true
+        verbose: true
         stages: [pre-commit]
