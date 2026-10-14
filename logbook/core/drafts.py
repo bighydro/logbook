@@ -33,7 +33,9 @@ the ones the entry allows is shown in its place, if there is one. The line stays
 Day of a reader that holds the whole record says so in one row, `superseded by policy` and why, and
 nothing of the draft's text (`withheld_json`); a reader through a gate of its own hides it without a
 word, as it hides every line above its gate. `doctor` lists the days whose standing draft is withheld
-(`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any tier."""
+(`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any tier. A
+reader of another unit (a journey's: `by_unit`, `for_unit`) holds its drafts to the same rule
+(`sift`), the row included."""
 
 from __future__ import annotations
 
@@ -273,21 +275,50 @@ def for_day(
     draft is one of those, a reader that holds the whole record (no `tiers`) gets the row that says
     so (`withheld_json`), never its text; None otherwise."""
     retracted = retractions(idx.retractions())
-    found = of_day(idx.by_kind(KIND), retracted, day)
-    if tiers is not None:
-        gate = {int(t) for t in tiers}
-        found = [line for line in found if int(line.get("tier", 0)) in gate]
-    shown = found if allowed is None else [line for line in found if allowed.allows(line)]
-    withheld = None
-    if allowed is not None and tiers is None:
-        top = standing(found)
-        if top is not None and not allowed.allows(top):
-            withheld = withheld_json(top, allowed)
+    shown, withheld = sift(of_day(idx.by_kind(KIND), retracted, day), tiers, allowed)
     latest = standing(shown)
     if latest is None:
         return None, withheld
     on_day = {str(line["id"]) for line in idx.day(day) if str(line["id"]) not in retracted}
     return day_json(latest, shown, on_day), withheld
+
+
+def for_unit(
+    found: Sequence[Line],
+    on_unit: Collection[str],
+    tiers: Sequence[int] | None = None,
+    allowed: Allowed | None = None,
+    missing: str = NOT_ON_DAY,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """The `draft` block and the `draft_withheld` row of a unit other than the day (a journey), by
+    `for_day`'s rule (`sift`): `found` the unit's draft lines (`by_unit`), `on_unit` the ids of the
+    lines its evidence may name, `missing` the words for an id outside them (`NOT_ON_JOURNEY`)."""
+    shown, withheld = sift(found, tiers, allowed)
+    latest = standing(shown)
+    if latest is None:
+        return None, withheld
+    return day_json(latest, shown, on_unit, missing), withheld
+
+
+def sift(
+    found: Sequence[Line], tiers: Sequence[int] | None = None, allowed: Allowed | None = None
+) -> tuple[list[Line], dict[str, Any] | None]:
+    """The rule every reader of a unit's drafts holds them to (`for_day`, `for_unit`): the drafts
+    it may show, in order, and the withheld row or None. Through the gate `tiers` when given, a
+    draft above it is not seen, as a reader under a ceiling never sees it. Through `allowed`, the
+    `dream` entry today, when given, a draft above it is not seen either, and when the standing
+    draft is one of those, a reader that holds the whole record (no `tiers`) gets the row that says
+    so (`withheld_json`), never its text."""
+    if tiers is not None:
+        gate = {int(t) for t in tiers}
+        found = [line for line in found if int(line.get("tier", 0)) in gate]
+    shown = list(found) if allowed is None else [line for line in found if allowed.allows(line)]
+    withheld = None
+    if allowed is not None and tiers is None:
+        top = standing(found)
+        if top is not None and not allowed.allows(top):
+            withheld = withheld_json(top, allowed)
+    return shown, withheld
 
 
 def withheld_json(line: Line, allowed: Allowed) -> dict[str, Any]:

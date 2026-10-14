@@ -1471,6 +1471,8 @@ class Site:
             out.append(f'<p class="facts">with {with_}</p>\n')
         if j.draft is not None:
             out.append(_draft_folded(j.draft))
+        if j.draft_withheld is not None:  # the policy no longer allows it: the row, never the text
+            out.append(_withheld_html(j.draft_withheld, heading=False))
         out.append(self._evidence(self._journey_evidence(j)))
         out.append("</li>\n")
         return "".join(out)
@@ -1542,6 +1544,8 @@ class Site:
             parts.append(self._evidence([("named", [named["line"]], None)], "the name"))
         if row["draft"] is not None:
             parts.append(_draft_folded(row["draft"]))
+        if row["draft_withheld"] is not None:  # the policy no longer allows it: the row, never the text
+            parts.append(_withheld_html(row["draft_withheld"], heading=False))
         parts.append("<h2>Stays</h2>\n")
         parts.append(_stays_svg(data["route"]))
         parts.append('<ol class="shelf">\n')
@@ -2120,7 +2124,8 @@ def _draft_body(draft: Mapping[str, Any]) -> str:
 def _withheld_html(row: Mapping[str, Any], heading: bool = True) -> str:
     """A standing draft the `dream` entry no longer allows (`drafts.withheld_json`): one muted line
     that says so and why, and nothing of what the draft says; under the Draft heading of an earlier
-    draft the entry does allow, when the Day shows one."""
+    draft the entry does allow, when the Day shows one. A journey's row and page carry it without a
+    heading, after the folded draft the entry does allow, when there is one."""
     line = escape(str(row["line"]))
     head = "<h2>Draft</h2>\n" if heading else ""
     return f'{head}<p class="mute" title="line {line}">{escape(drafts.withheld_text(row))}</p>\n'

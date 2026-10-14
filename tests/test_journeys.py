@@ -5,6 +5,7 @@ promises made on it. On the four synthetic years (`library_record.py`); nobody h
 
 from __future__ import annotations
 
+import json
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,11 +13,22 @@ from typing import Any
 
 import pytest
 from four_years import OBSERVED
-from library_record import BERGEN_WINTER, PHOTO_A, PHOTO_B, PHOTO_HOME, PROMISE, library_record
+from library_record import (
+    BERGEN_WINTER,
+    DRAFT_SOURCE,
+    PHOTO_A,
+    PHOTO_B,
+    PHOTO_HOME,
+    PROMISE,
+    dream,
+    journey_draft,
+    library_record,
+)
+from persona import utc
 
 from logbook import cli
 from logbook.contrib import journeys
-from logbook.core import drafts
+from logbook.core import drafts, policy
 from logbook.core.store import Logbook
 
 
@@ -75,6 +87,66 @@ def test_the_journey_s_draft_is_its_standing_draft_checked_against_its_days(lb: 
     assert not unsupported["supported"] and unsupported["why"] is None
     assert not elsewhere["supported"] and elsewhere["why"] == drafts.NOT_ON_JOURNEY, "a June line at home"
     assert journeys.shelf(lb, "2022").journeys[0].draft is None, "a journey nobody drafted has none"
+
+
+def _draft_line(lb: Logbook) -> dict[str, Any]:
+    (line,) = [line for line in Logbook(lb.root).lines() if line["kind"] == drafts.KIND]
+    return line
+
+
+def test_a_journey_s_draft_follows_the_dream_entry_as_a_day_s_does(lb: Logbook) -> None:
+    """#273's rule on the Journeys: a draft above the `dream` entry's max_tier today is never shown,
+    whatever the head. A reader that holds the whole record carries the row that says so
+    (`draft_withheld`) and nothing of the draft's text; a gated reader hides it without a word."""
+    line = _draft_line(lb)
+    assert line["payload"]["extra"]["policy_version"] == policy.version(policy.dream_entry(lb.root))
+    bergen = journeys.shelf(lb, "2022").journeys[1]
+    assert bergen.draft is not None and bergen.draft_withheld is None, "tier 2 under max_tier 2: shown"
+    assert bergen.to_json()["draft_withheld"] is None
+
+    dream(lb.root, {"max_tier": 1})  # lowered since: no line appended, the head did not move
+    bergen = journeys.shelf(lb, "2022").journeys[1]
+    assert bergen.draft is None
+    row = bergen.to_json()["draft_withheld"]
+    assert row["line"] == line["id"] and row["seq"] == line["seq"]
+    assert row["tier"] == 2 and row["max_tier"] == 1 and "above max_tier 1" in row["why"]
+    assert "harbour" not in json.dumps(row) and DRAFT_SOURCE not in json.dumps(row), "nothing it says"
+    one = journeys.read(lb, BERGEN_WINTER)["journey"]
+    assert one["draft"] is None and one["draft_withheld"] == row
+    assert journeys.shelf(lb, "2022").journeys[0].draft_withheld is None, "a journey nobody drafted"
+    gated = journeys.shelf(lb, "2022", tiers=(1, 2, 3)).journeys[1]
+    assert gated.draft is None and gated.draft_withheld is None, "a gated reader hides it without a word"
+    one = journeys.read(lb, BERGEN_WINTER, tiers=(1, 2, 3))["journey"]
+    assert one["draft"] is None and one["draft_withheld"] is None
+
+    dream(lb.root, None)
+    row = journeys.shelf(lb, "2022").journeys[1].to_json()["draft_withheld"]
+    assert row["max_tier"] == 0 and "names no 'dream' entry" in row["why"]
+    dream(lb.root, {"max_tier": 2, "until": "2022-04-30"})
+    row = journeys.shelf(lb, "2022").journeys[1].to_json()["draft_withheld"]
+    assert row["max_tier"] == 0 and "expired on 2022-04-30" in row["why"]
+    dream(lb.root, {"max_tier": 3})
+    bergen = journeys.shelf(lb, "2022").journeys[1]
+    assert bergen.draft is not None and bergen.draft["line"] == line["id"] and bergen.draft_withheld is None
+
+
+def test_an_earlier_journey_draft_the_entry_allows_is_shown_in_place_of_a_withheld_one(lb: Logbook) -> None:
+    standing = _draft_line(lb)
+    earlier = journey_draft([PHOTO_A], standing["payload"]["extra"]["policy_version"])["payload"]
+    earlier["segments"] = [{"text": "A winter in Bergen.", "evidence": [PHOTO_A]}]
+    lb.append(utc("2022-04-01", "07:00"), DRAFT_SOURCE, drafts.KIND, 1, earlier)  # before it, at tier 1
+    dream(lb.root, {"max_tier": 1})
+    bergen = journeys.shelf(lb, "2022").journeys[1]
+    assert bergen.draft is not None and bergen.draft["tier"] == 1
+    assert [s["text"] for s in bergen.draft["segments"]] == ["A winter in Bergen."]
+    assert bergen.draft["dreamed"] == 1 and bergen.draft["earlier"] == [], "the withheld one is not counted"
+    assert bergen.draft_withheld is not None and bergen.draft_withheld["line"] == standing["id"]
+    dream(lb.root, {"max_tier": 2})
+    bergen = journeys.shelf(lb, "2022").journeys[1]
+    assert (
+        bergen.draft is not None and bergen.draft["line"] == standing["id"] and bergen.draft["dreamed"] == 2
+    )
+    assert bergen.draft_withheld is None
 
 
 def test_one_journey_is_the_trip_with_its_stays_lines_its_days_and_the_promises_made_on_it(

@@ -328,7 +328,10 @@ over New Year is read whole and listed once, under the year it began), the lates
   review, and never named here;
 - the **draft** of the journey (RFC 0036, `unit` `journey`, a `subject` naming its id), folded under
   its head: a proposal, each sentence with its lines, an unsupported one set apart and marked, a
-  sentence resting on a line from outside the journey's days marked so;
+  sentence resting on a line from outside the journey's days marked so. It follows the `dream` entry
+  of the crossing policy as the Day's draft does ([dream](dream.md#when-the-entry-changes)): a draft
+  above the entry's `max_tier` today is not shown, and when the journey's standing draft is one, the
+  row says `superseded by policy` and why, its line on hover, and nothing of its text;
 - the **evidence**, folded: each run of nights at one place with the lines of its stays, the
   flights, each person with the lines that put them there, the photos, the name.
 
