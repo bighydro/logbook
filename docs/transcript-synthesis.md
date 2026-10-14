@@ -17,7 +17,8 @@ logbook transcript synthesize --day yesterday --dry-run               # ask the 
 
 `--show-prompt` prints the prompt and the material as they are sent; `--again` asks once more when
 this model has already synthesized the call. The morning's `dream --catch-up` synthesizes every call of
-the days it covers that has no synthesis yet (below).
+the days it covers that has no synthesis yet, or whose synthesis was made under another version of the
+`dream` entry (below).
 
 ## What a synthesis is, and is not
 
@@ -39,6 +40,38 @@ tier 3, so under the usual `"max_tier": 2` a call is **held back**: `transcript 
 and exits 2, `--day` says it in the call's row, and the catch-up counts it. To let calls cross, write
 `"max_tier": 3` on the entry, which also lets the dream read the day's tier-3 lines (health, money), or
 import the calls at tier 2 (`logbook add --tier 2`). The draft's tier is the transcript's.
+
+## When the entry changes
+
+A synthesis is a `draft/v1` line derived through the `dream` entry, so it follows the entry, not the
+head, as the day's draft does ([the dream](dream.md#when-the-entry-changes); [ADR
+0016](adr/0016-tier-crossing-policy.md), *Derived material follows the policy, not the head*).
+
+- **Every synthesis names the entry it was made under**: `extra.policy_version`, the same SHA-256 of the
+  entry's `max_tier`, `until` and `model` that the dream records.
+- **A reader shows a synthesis only while the entry allows its tier**, through the same rule as the
+  day's draft. A synthesis above the entry's `max_tier` today (lowered, expired, removed) is not on the
+  Day, not on `serve`'s Day page and not through the MCP door. The line stays in the record. `day` puts
+  one row under the call that says so and nothing of the synthesis:
+
+  ```
+        transcript   Yard plans
+                     superseded by policy: tier 3, above max_tier 2 of the 'dream' entry; the call stays home until the entry allows its tier
+  ```
+
+  `day --json` carries the same under `syntheses_withheld`, one row per call (`transcript`, `line`,
+  `seq`, `tier`, `max_tier`, `why`), a key present only then; `serve` shows the row as one muted line
+  under the call; `--no-dream` leaves it out. A reader through a gate of its own (the MCP door) hides
+  the synthesis without the row, counts it among the lines it withheld, and its `line` tool refuses it.
+- **Synthesized again under the entry as it is now.** A synthesis made under another version of the
+  entry (an `until` moved, another model, a ceiling raised) is no longer unchanged: `transcript
+  synthesize` sends the call again, and `dream --catch-up` does so for the calls of its days, the row
+  saying `synthesized under another dream entry`. The new synthesis supersedes the old one. A call above
+  a lowered ceiling is above it as its synthesis is (they share the tier), so it stays home and is
+  counted as held back; its synthesis shows again once the entry allows its tier.
+- A synthesis written before syntheses named their entry has no version to compare: a new entry alone
+  synthesizes nothing again, and its tier still decides what a reader shows. `doctor`'s `drafts` line
+  names the days whose draft is withheld, not the calls.
 
 ## What the model sees
 
@@ -83,16 +116,18 @@ utterance numbers, never the prompt, the material or the call's words.
 ## Once, and again
 
 A call the same model has synthesized under the same prompt (`transcript-synthesis/1`, kept in
-`extra.prompt`) is **unchanged**: nothing is sent, nothing is written, and the standing synthesis is
-printed. Another model, a new prompt, or `--again` writes a new line that supersedes the standing one. A
-transcript that is retracted or superseded is not the call as the record stands and is refused.
+`extra.prompt`) and the same `dream` entry (`extra.policy_version`) is **unchanged**: nothing is sent,
+nothing is written, and the standing synthesis is printed. Another model, a new prompt, another entry,
+or `--again` writes a new line that supersedes the standing one. A transcript that is retracted or
+superseded is not the call as the record stands and is refused.
 
 The run holds the record's writer lock and reads the head again before it appends: a head that moved
 under the reading is `HeadMoved`, one sentence, nothing written.
 
 `dream --catch-up`, the 06:00 close's second step ([the schedule](schedule.md)), synthesizes, after the
-days, each call of those days that no model has synthesized yet, one row each; a call held back by the
-ceiling or without its text is counted in the closing line:
+days, each call of those days that no model has synthesized yet, or whose synthesis was made under
+another version of the entry, one row each; a call held back by the ceiling or without its text is
+counted in the closing line:
 
 ```
 $ logbook dream --catch-up --days 3
@@ -131,5 +166,6 @@ marked; `day --json` carries them under `syntheses`; `transcript synthesize ID` 
   a synthesis is a proposal: the transcript is the record
 ```
 
-`day --no-dream` leaves syntheses out with the day's draft. `show` lists the draft line on the day it
-was written, as every line.
+A synthesis the `dream` entry no longer allows is not among them: its row says `superseded by policy`
+and why (*When the entry changes*). `day --no-dream` leaves syntheses, and that row, out with the day's
+draft. `show` lists the draft line on the day it was written, as every line.
