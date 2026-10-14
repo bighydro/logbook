@@ -4,12 +4,14 @@
 [`logbook/contrib/dream-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-prompt.md)
 in the package with the day and the language filled in, and the day's material as JSON. This page
 explains the prompt; `logbook dream day DAY --show-prompt` prints both as they go. The prompt's name,
-`dream-day/1`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
-change to the prompt that changes what a draft holds bumps the number.
+`dream-day/2`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
+change to the prompt that changes what a draft holds bumps the number (`dream-day/2` added the proposed
+events; a `dream-day/1` draft has none).
 
 ## What it asks for
 
-One JSON object with five keys, each a list of segments, in the order the Day prints them:
+One JSON object with six keys, the first five each a list of segments, in the order the Day prints
+them, and the sixth the proposed events:
 
 | Key | What | How many |
 |---|---|---|
@@ -18,10 +20,13 @@ One JSON object with five keys, each a list of segments, in the order the Day pr
 | `questions` | questions for the owner's reflection, each resting on something the day holds | exactly two |
 | `people` | the people the model thinks were there, one sentence each, with the items that show it | as many as the material names |
 | `promises` | the promises it thinks were made or kept that day, in the words the material gives | as many as the material shows |
+| `events` | the events it thinks the day held that the calendar does not have: `{title, start, end, place, people, evidence}`, the place a stay's `place`, the people ids from the material's `people`, never a name | at most four |
 
 A segment is `{"text": "...", "evidence": ["L1", "L2"]}` or `{"text": "...", "unsupported": true}`.
 The references are the ones the material carries; the record turns them into line ids before the
-draft is written and keeps nothing of the prompt ([the dream](dream.md), *the evidence rule*).
+draft is written and keeps nothing of the prompt ([the dream](dream.md), *the evidence rule*). A
+proposed event that names a time, a place, a person or a reference the material does not give is
+dropped and counted ([the dream](dream.md#proposed-events)).
 
 ## The rules it gives the model
 
@@ -43,9 +48,12 @@ The second message is the material as JSON: `day`, `weekday`, `tz`, `max_tier` (
 read under), `night_before` and `night_after` (where, home or away, the references), `country`,
 `all_day`, `timeline` (one entry per stay, move, stop or flight as the Day shows it, with its events,
 transcripts, mail threads, calls, photos as a count, keepers and who was there, confirmed and proposed,
-each with references), `unplaced`, `messages` (by counterpart: the count, the references and the
-texts), `notes` (in full), `commitments`, `health` (only when tier 3 is under the ceiling) and `signed`
-(when and the note you wrote on signing). Every item carries `ref`, a reference such as `L12`; a
+each with references and, for a canonical person, the `person` id; a stay or stop also its `place`, a
+named place's name or `place:<lat>,<lon>`), `unplaced`, `messages` (by counterpart: the count, the
+references, the texts and the counterpart's `person` id when the record resolves one), `notes` (in
+full), `commitments`, `people` (every canonical person the material names, `id` and `name`; never
+the owner), `health` (only when tier 3 is under the ceiling) and `signed` (when and the note you wrote
+on signing). Every item carries `ref`, a reference such as `L12`; a
 reference stands for one line id of the day, and only lines of the day get one, so the model cannot
 cite a line from the night before even though the material describes that night.
 

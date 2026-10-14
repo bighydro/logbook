@@ -34,6 +34,18 @@ dream never writes a note, a signature or a review. Every draft records the vers
 was dreamed under (`extra.policy_version`, `policy.version`: the SHA-256 of its `max_tier`, `until`
 and `model`).
 
+**Proposed events.** Beside its segments the model proposes the events it thinks the day held, `{title,
+start, end, place, people, evidence}` (`proposals_of`): a stay at a restaurant with two photos and a
+recording is a dinner with the people in it. The material names what a proposal may point at: each
+stay's `place` (a named place by its name, else the observed place by its id, `place:<lat>,<lon>`),
+the canonical people the day names under `people` (`id`, `name`; never the owner), and the
+references. A proposal is checked as a segment is, and more strictly, since it has no unsupported
+form: a time not on the day, a place not on the day, an evidence reference the day does not have,
+and a person who is not one of the day's canonical people (a name, an id the record does not resolve,
+the owner) each drop it, and the drops are counted by why under `extra.dropped`. What survives is
+kept in the draft line under `proposals`, kind `event` (`drafts.proposal_shape`), never as an event
+line: the owner confirms one with `day sign --accept N` (`logbook.contrib.dream_events`).
+
 `--catch-up` dreams each of the last N days that has no draft, or whose lines today differ from
 what the standing draft read (its `read_count`, and the digest of the ids it read, kept under
 `extra.read_ids_sha256`), or whose standing draft the entry no longer stands behind: its tier above
@@ -52,13 +64,14 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from string import Template
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from ..core import day as day_reader
-from ..core import drafts, policy, reading, resolve
+from ..core import day_start, drafts, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
@@ -69,7 +82,7 @@ from .model_client import Endpoint, Transport
 from .promises import chat_ref
 
 PROMPT_FILE = Path(__file__).with_name("dream-prompt.md")
-PROMPT_NAME = "dream-day/1"  # kept under `extra.prompt`, so a draft says which prompt wrote it
+PROMPT_NAME = "dream-day/2"  # kept under `extra.prompt`, so a draft says which prompt wrote it
 UNSUPPORTED_SHARE = 0.30  # more than this share of segments unsupported: refused, nothing written
 TEXT_CHARS = 400  # a message's text in the material, at most
 NOTE_CHARS = 1500  # a note's text in the material, at most
@@ -81,6 +94,16 @@ HEAD_MOVED = (
     "the record's head moved from {was} to {now} while the model read the day, so the draft would not"
     " say what it read; nothing was written, dream the day again"
 )
+EVENTS = "events"  # the key of the answer that holds the proposed events
+LONGEST_EVENT = timedelta(hours=24)  # a proposed event lasts less than a day and a night
+# why a proposed event was dropped, the keys of `extra.dropped`
+DROP_SHAPE = "not an event"
+DROP_TITLE = "no title"
+DROP_TIME = "a time not on the day"
+DROP_PLACE = "a place not on the day"
+DROP_PERSON = "unresolved person"
+DROP_EVIDENCE = "evidence not on the day"
+CLOCK = re.compile(r"(\d{1,2}):(\d{2})\Z")
 LANGUAGE_NAMES = {"en": "English", "nb": "Norwegian", "de": "German", "fr": "French", "es": "Spanish"}
 # the commonest short words of each language the dream recognises, matched whole and lower-cased
 STOPWORDS: dict[str, frozenset[str]] = {
@@ -123,6 +146,12 @@ class Material:
     data: dict[str, Any]  # the JSON the prompt carries
     refs: dict[str, str] = field(default_factory=dict)  # `L1` -> line id
     ids: set[str] = field(default_factory=set)  # every line id read on the day
+    zone: ZoneInfo = field(default_factory=lambda: ZoneInfo("UTC"))  # the record's
+    span: tuple[datetime, datetime] | None = None  # where the day starts and ends on the record's clock
+    places: set[str] = field(default_factory=set)  # the place ids the material gave
+    canonical: dict[str, str] = field(default_factory=dict)  # every canonical person: id -> name
+    people: dict[str, str] = field(default_factory=dict)  # the canonical people the material names
+    identities: dict[Ref, resolve.Identity] = field(default_factory=dict)
     _by_id: dict[str, str] = field(default_factory=dict)  # line id -> `L1`
 
     def ref_of(self, line_id: str | None) -> str | None:
@@ -141,11 +170,26 @@ class Material:
     def refs_of(self, ids: Iterable[str | None]) -> list[str]:
         return [ref for ref in (self.ref_of(i) for i in ids) if ref is not None]
 
+    def person(self, entity: str | None) -> str | None:
+        """The entity id when it is a canonical person, noted as one the day names; else None."""
+        if not entity or entity not in self.canonical:
+            return None
+        self.people.setdefault(entity, self.canonical[entity])
+        return entity
+
+    def person_of(self, ref: Ref | None) -> str | None:
+        """The canonical person a ref resolves to, noted as one the day names; else None."""
+        if ref is None:
+            return None
+        entity, _label = present.resolve_ref(ref, self.identities)
+        return self.person(entity)
+
 
 @dataclass(frozen=True)
 class Dream:
     """What a dream of one day came to: the draft line written (None under `--dry-run`), the
-    payload, the prompt's messages and the model's raw answer."""
+    payload, the prompt's messages and the model's raw answer; the proposed events as the Day
+    shows them, and how many were dropped, by why."""
 
     day: str
     line: Line | None
@@ -153,6 +197,8 @@ class Dream:
     tier: int
     messages: list[dict[str, str]]
     answer: str
+    proposals: list[dict[str, Any]] = field(default_factory=list)
+    dropped: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -206,6 +252,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
     day = parse_day(day).isoformat()
     tiers = tuple(range(1, found.max_tier + 1))
     data = day_reader.read(lb, day, airports, tiers)
+    days = day_start.of(lb.meta)
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
         on_day = [
@@ -214,6 +261,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
             if str(line["id"]) not in retracted and line.get("kind") not in EXCLUDED_KINDS
         ]
         names = resolve.labels(lb, idx)
+        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
     on_day.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
     ids = {str(line["id"]) for line in on_day}
     digest = hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()
@@ -228,9 +276,25 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         language=language_of(texts),
         data={},
         ids=ids,
+        zone=days.zone,
+        span=days.span(day),
+        canonical=canonical(lb, identities),
+        identities=identities,
     )
     made.data = _data(data, on_day, names, made, found.max_tier)
     return made
+
+
+def canonical(lb: Logbook, identities: Mapping[Ref, resolve.Identity]) -> dict[str, str]:
+    """Every canonical person of the record, id -> name: the entities the resolution lines name as
+    a person after the alias walk (a person merged into another is not one), never the owner."""
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
+    return {e: name for e, name in drafts.person_names(identities).items() if e not in owner.entities}
 
 
 def _texts(lines: Iterable[Line]) -> list[str]:
@@ -285,6 +349,8 @@ def _data(
         "notes": _notes(on_day, made),
         "commitments": _commitments(on_day, names, made),
     }
+    named = sorted(made.people.items(), key=lambda p: (p[1], p[0]))
+    out["people"] = [{"id": e, "name": name} for e, name in named]  # the only ids a proposal may hold
     if data.get("health"):
         out["health"] = day_reader.health_text(data["health"])
     signed = data.get("signed")
@@ -320,6 +386,10 @@ def _entry(entry: Mapping[str, Any], made: Material) -> dict[str, Any]:
         "where": entry.get("where"),
         "ref": made.refs_of([lines.get("first"), lines.get("last")]),
     }
+    place = _place_id(entry)
+    if place is not None:
+        out["place"] = place
+        made.places.add(place)
     if entry["kind"] == "move" and entry.get("mode"):
         out["mode"] = entry["mode"]
     if entry.get("airports"):
@@ -359,12 +429,36 @@ def _entry(entry: Mapping[str, Any], made: Material) -> dict[str, Any]:
     company = entry.get("with")
     if company and (company["confirmed"] or company["proposed"]):
         out["with"] = {
-            "confirmed": [{"name": c["name"], "ref": made.refs_of(c["lines"])} for c in company["confirmed"]],
-            "proposed": [{"name": c["name"], "ref": made.refs_of(c["lines"])} for c in company["proposed"]],
+            "confirmed": [_companion(c, made) for c in company["confirmed"]],
+            "proposed": [_companion(c, made) for c in company["proposed"]],
         }
     inside = entry.get("inside")
     if inside:
         out["inside"] = [_entry({**s, "attached": None, "with": None}, made) for s in inside]
+    return out
+
+
+def _place_id(entry: Mapping[str, Any]) -> str | None:
+    """The id a proposal names a stay's place by: the named place's name, else the observed place at
+    its centre, `place:<lat>,<lon>` (as `places review` names a cluster and the Day links to it);
+    None for a move, a gap, a flight or a stay aboard an asset."""
+    if entry.get("gap") or entry.get("kind") not in (stays.STAY, stays.STOP) or entry.get("aboard"):
+        return None
+    if entry.get("place"):
+        return str(entry["place"])
+    lat, lon = entry.get("lat"), entry.get("lon")
+    if lat is None or lon is None:
+        return None
+    return f"{drafts.CLUSTER}{float(lat):.4f},{float(lon):.4f}"
+
+
+def _companion(c: Mapping[str, Any], made: Material) -> dict[str, Any]:
+    """Someone at a stay as the model sees them: the name, the references, and the person's id when
+    they are a canonical person, the id a proposal names them by."""
+    out: dict[str, Any] = {"name": c["name"], "ref": made.refs_of(c["lines"])}
+    person = made.person(c.get("person"))
+    if person is not None:
+        out["person"] = person
     return out
 
 
@@ -424,6 +518,10 @@ def _messages(on_day: Sequence[Line], names: Mapping[Ref, str], made: Material) 
         entry["count"] += 1
         if entry["counterpart"] is None:
             entry["counterpart"] = _counterpart(payload, names)
+        if direct and "person" not in entry:
+            person = made.person_of(_sender_ref(payload)) or made.person_of(chat_ref(key))
+            if person is not None:
+                entry["person"] = person
         ref = made.ref_of(str(line["id"]))
         entry["ref"].append(ref)
         text = payload.get("text")
@@ -447,6 +545,15 @@ def _messages(on_day: Sequence[Line], names: Mapping[Ref, str], made: Material) 
     return sorted(out, key=lambda e: (-e["count"], e["counterpart"]))
 
 
+def _sender_ref(payload: Mapping[str, Any]) -> Ref | None:
+    """The sender's ref of a message the owner did not write; None for the owner's own."""
+    sender = payload.get("sender")
+    if payload.get("from_me") or not isinstance(sender, dict):
+        return None
+    kind, value = sender.get("kind"), sender.get("value")
+    return (kind, value) if isinstance(kind, str) and isinstance(value, str) and value else None
+
+
 def _notes(on_day: Sequence[Line], made: Material) -> list[dict[str, Any]]:
     return [
         {
@@ -465,18 +572,20 @@ def _commitments(on_day: Sequence[Line], names: Mapping[Ref, str], made: Materia
             continue
         payload = line.get("payload") or {}
         who = payload.get("counterparty")
-        label = None
+        label, person = None, None
         if isinstance(who, dict) and isinstance(who.get("kind"), str) and isinstance(who.get("value"), str):
             label = names.get((who["kind"], who["value"])) or who["value"]
-        out.append(
-            {
-                "ref": made.ref_of(str(line["id"])),
-                "text": _clip(str(payload.get("text") or ""), TEXT_CHARS),
-                "direction": payload.get("direction"),
-                "counterparty": label,
-                "due": payload.get("due"),
-            }
-        )
+            person = made.person_of((who["kind"], who["value"]))
+        item: dict[str, Any] = {
+            "ref": made.ref_of(str(line["id"])),
+            "text": _clip(str(payload.get("text") or ""), TEXT_CHARS),
+            "direction": payload.get("direction"),
+            "counterparty": label,
+            "due": payload.get("due"),
+        }
+        if person is not None:
+            item["person"] = person
+        out.append(item)
     return out
 
 
@@ -550,6 +659,95 @@ def segments_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str
     return segments, parts
 
 
+def proposals_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """The answer's proposed events that hold, each `{kind: event, title, start, end, place, people,
+    evidence}` with the times in UTC and the references turned into line ids; and how many were
+    dropped, by why. A proposal is dropped, never marked: when it is not an object, has no title,
+    starts off the day or does not run forward (or runs longer than `LONGEST_EVENT`), names a place
+    the material did not give, a person who is not one of the day's canonical people, or rests on a
+    reference the day does not have, or on none."""
+    items = found.get(EVENTS)
+    kept: list[dict[str, Any]] = []
+    dropped: Counter[str] = Counter()
+    for item in items if isinstance(items, list) else []:
+        proposal, why = _proposal(item, made)
+        if proposal is None:
+            dropped[why] += 1
+        else:
+            kept.append(proposal)
+    return kept, dict(dropped)
+
+
+def _proposal(item: object, made: Material) -> tuple[dict[str, Any] | None, str]:
+    if not isinstance(item, dict):
+        return None, DROP_SHAPE
+    title = item.get("title")
+    if not isinstance(title, str) or not title.strip():
+        return None, DROP_TITLE
+    start, end = _moment(item.get("start"), made), _moment(item.get("end"), made)
+    if start is None or end is None or made.span is None:
+        return None, DROP_TIME
+    if not made.span[0] <= start < made.span[1] or not start < end <= start + LONGEST_EVENT:
+        return None, DROP_TIME
+    place = item.get("place")
+    if place in (None, ""):
+        place = None
+    elif not isinstance(place, str) or place.strip() not in made.places:
+        return None, DROP_PLACE
+    people = item.get("people")
+    people = [] if people is None else people
+    if not isinstance(people, list):
+        return None, DROP_PERSON
+    persons: list[str] = []
+    for entry in people:
+        key = str(entry).strip()
+        if key not in made.people:
+            return None, DROP_PERSON
+        if key not in persons:
+            persons.append(key)
+    evidence = item.get("evidence")
+    ids: list[str] = []
+    for ref in evidence if isinstance(evidence, list) else []:
+        key = str(ref).strip()
+        line_id = made.refs.get(key) or (key if key in made.ids else None)
+        if line_id is None:
+            return None, DROP_EVIDENCE
+        if line_id not in ids:
+            ids.append(line_id)
+    if not ids:
+        return None, DROP_EVIDENCE
+    return {
+        "kind": drafts.EVENT,
+        "title": " ".join(title.split()),
+        "start": _utc(start),
+        "end": _utc(end),
+        "place": None if place is None else place.strip(),
+        "people": persons,
+        "evidence": ids,
+    }, ""
+
+
+def _moment(value: object, made: Material) -> datetime | None:
+    """A time as the model gave it: an RFC 3339 moment (an offset or Z; without one, the record's
+    wall clock), or `HH:MM` on the day in the record's zone; None for anything else."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    clock = CLOCK.match(text)
+    try:
+        if clock:
+            when = datetime.combine(parse_day(made.day), time(int(clock.group(1)), int(clock.group(2))))
+        else:
+            when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo is not None else when.replace(tzinfo=made.zone)
+
+
+def _utc(when: datetime) -> str:
+    return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _segment(item: object, made: Material) -> dict[str, Any] | None:
     if isinstance(item, str):
         item = {"text": item}
@@ -621,7 +819,9 @@ def dream(
             answer = model_client.complete(ep, messages, transport=transport)
         except model_client.ModelError as e:
             raise AnswerError(str(e)) from e
-        segments, parts = segments_of(parse(answer), made)
+        found_answer = parse(answer)
+        segments, parts = segments_of(found_answer, made)
+        proposals, dropped = proposals_of(found_answer, made)
         payload: dict[str, Any] = {
             "schema": drafts.SCHEMA,
             "unit": drafts.UNIT_DAY,
@@ -637,18 +837,23 @@ def dream(
                 "policy_version": version,
             },
         }
+        if proposals:
+            payload[drafts.PROPOSALS] = proposals
+        if dropped:
+            payload["extra"]["dropped"] = dropped
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         problems = drafts.validate(payload)
         if problems:
             raise AnswerError(f"the draft would not be a {drafts.SCHEMA}: {problems[0]}; nothing was written")
+        shown = drafts.proposals_json(payload, made.ids, made.zone, made.people, {})
         if dry_run:
-            return Dream(made.day, None, payload, made.tier, messages, answer)
+            return Dream(made.day, None, payload, made.tier, messages, answer, shown, dropped)
         current = lb.meta
         if str(current.get("head")) != made.read_head:
             raise HeadMoved(HEAD_MOVED.format(was=made.read_head[:8], now=str(current.get("head"))[:8]))
         line = lb.append(at=now_utc(), source=source, kind=drafts.KIND, tier=made.tier, payload=payload)
-    return Dream(made.day, line, payload, made.tier, messages, answer)
+    return Dream(made.day, line, payload, made.tier, messages, answer, shown, dropped)
 
 
 # -- catch-up ----------------------------------------------------------------------------------------------
@@ -730,6 +935,9 @@ def _catch_up_day(
         detail = f"#{line['seq'] if line else '?'}{DOT}{why}{DOT}{n} segments" + (
             f", {unsupported} unsupported" if unsupported else ""
         )
+        if dreamed.proposals:
+            k = len(dreamed.proposals)
+            detail += f"{DOT}{k} proposed event{'s' if k != 1 else ''}"
         return Outcome(day, "dreamed", detail)
     except (DreamError, HeadMoved, ValueError) as e:
         return Outcome(day, "refused", str(e))
