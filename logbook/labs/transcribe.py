@@ -87,6 +87,7 @@ SUPERSEDED = "skipped_superseded"
 NO_SPEECH = "skipped_no_speech"
 NO_RECORDING = "skipped_no_recording"
 RECORDING_RETRACTED = "skipped_recording_retracted"
+RECORDING_SUPERSEDED = "skipped_recording_superseded"
 PHRASES = {
     NO_AUDIO: "without their audio in the store (import with --attachments)",
     RETRACTED: "retracted",
@@ -94,6 +95,7 @@ PHRASES = {
     NO_SPEECH: "with no words in them",
     NO_RECORDING: "with no recording of their own in the record (a provider's, a file's)",
     RECORDING_RETRACTED: "whose recording was retracted",
+    RECORDING_SUPERSEDED: "whose recording a later line supersedes",
 }
 
 
@@ -179,6 +181,8 @@ class Report:
     diarizer: str | None = None  # the diarizer that ran, None when none was on this machine
     separated: int = 0  # memos whose voices were separated
     voiceless: int = 0  # memos heard in which the diarizer found no voice
+    rooms: int = 0  # memos whose source named two channels the diarizer could not read apart: one room
+    unlabelled: int = 0  # memos whose text's lines could not be numbered as heard: written without voices
 
 
 @dataclass(frozen=True)
@@ -203,6 +207,7 @@ class Voices:
     channels: int = 1
     channel_of: dict[str, str] | None = None
     from_me: str | None = None
+    unread: bool = False  # the source named two channels the diarizer could not read apart
 
 
 def run(
@@ -286,7 +291,17 @@ def describe(report: Report) -> str:
     said = f"  voices separated in {_plural(report.separated, 'voice memo')}"
     if report.voiceless:
         said += f"; no voice found in {report.voiceless:,}"
-    return f"{text}\n{said}"
+    return f"{text}\n{said}{_heard_text(report.rooms, report.unlabelled)}"
+
+
+def _heard_text(rooms: int, unlabelled: int) -> str:
+    """What a run that separated voices could not do as asked, a line each; nothing when nothing."""
+    out = ""
+    if rooms:
+        out += f"\n  heard as one room, the two channels its source named not read apart: {rooms:,}"
+    if unlabelled:
+        out += f"\n  voices heard, the text's lines not numbered as heard, so not written: {unlabelled:,}"
+    return out
 
 
 # -- the memos -------------------------------------------------------------------------------------
@@ -367,11 +382,20 @@ def _drafts(
         report.done.append(Done(memo, heard.language, words, seconds))
         draft = _draft(memo, engine, data, heard.language, len(heard.windows), len(heard.segments))
         said = ""
-        if voices is not None and voices.turns and diarizer is not None:
-            labelled = label(draft, voices, heard.segments, data, diarizer, memo)
+        if voices is not None and voices.unread:
+            report.rooms += 1
+        labelled = (
+            label(draft, voices, heard.segments, data, diarizer, memo)
+            if voices is not None and voices.turns and diarizer is not None
+            else None
+        )
+        if labelled is not None:
             lb.attach(labelled)  # the spans file, sealed as the text is
             report.separated += 1
             said = f", {_plural(len(draft['payload']['speakers']), 'voice')}"
+        elif voices is not None and voices.turns:
+            report.unlabelled += 1
+            said = ", voices not written"
         elif voices is not None:
             report.voiceless += 1
             said = ", no voice found"
@@ -431,7 +455,10 @@ def separate_voices(
     channel heard on its own, labelled by the channel; the microphone's voice is `from_me` when it
     is the one voice there. A file that does not hold the channels its source named is a room."""
     if channels is not None:
-        apart, rate = diarizer.channels(audio)
+        try:
+            apart, rate = diarizer.channels(audio)
+        except Exception:  # a decoder that cannot keep this file's channels apart: it is heard as a room
+            apart, rate = [], 0
         if len(apart) == len(channels):
             turns = speakers.label_channels(
                 {name: diarizer.diarize(samples, rate) for name, samples in zip(channels, apart, strict=True)}
@@ -439,7 +466,8 @@ def separate_voices(
             voices = speakers.order(turns)
             channel_of = {voice: voice.split(".")[0] for voice in voices}
             return Voices(turns, len(channels), channel_of, speakers.MIC if speakers.MIC in voices else None)
-    return Voices(speakers.label_room(diarizer.diarize(heard.samples, heard.rate, hint)))
+    turns = speakers.label_room(diarizer.diarize(heard.samples, heard.rate, hint))
+    return Voices(turns, unread=channels is not None)
 
 
 def label(
@@ -449,16 +477,20 @@ def label(
     data: bytes,
     diarizer: diarize.Diarizer,
     memo: Memo,
-) -> bytes:
+) -> bytes | None:
     """`speakers` and `diarization` on `draft`, the transcript of `memo` whose text is `data`; the
     spans file's bytes, for the caller to store. A segment whose text holds several lines is a
-    segment per line of the content, each with the segment's times, so the spans number the lines."""
+    segment per line of the content, each with the segment's times, so the spans number the lines.
+    None, and `draft` untouched, when they would not number the segments a reader counts in the text
+    (`speakers.segment_count`: a text that happens to read as SRT): a spans file must never be wrong."""
     spans = [
         speakers.Span(s.start, s.end, s.words)
         for s in segments
         for part in s.text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if part.strip()
     ]
+    if speakers.segment_count(data, MEDIA_TYPE) != len(spans):
+        return None
     assigned = speakers.assign(spans, voices.turns)
     content = draft["payload"]["content"]["sha256"]
     spans_data = speakers.spans_bytes(speakers.spans_document(content, spans, assigned, voices.turns))
@@ -535,6 +567,8 @@ class Again:
     written: int = 0
     same: int = 0  # heard again into the same spans: the key is in the record, nothing written
     voiceless: int = 0  # heard again with no voice found: nothing written
+    rooms: int = 0  # two channels named by the source, not read apart: heard as one room
+    unlabelled: int = 0  # voices heard but the text's lines not numbered as heard: nothing written
 
 
 def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) -> Again:
@@ -554,10 +588,18 @@ def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) ->
         memos = idx.by_ids(str(s) for s in sources if isinstance(s, str))
         signatures = signing.standing(idx, str(lb.meta.get("owner_id") or "") or None)
         tasks = idx.by_kind("task")
+        memo_superseded = idx.superseded(MEMO_KIND)
     replaced = {  # a line a standing transcript supersedes; a retracted one supersedes nothing
         str(line["payload"]["supersedes"])
         for line in every
         if str(line["id"]) not in retracted and isinstance((line.get("payload") or {}).get("supersedes"), str)
+    }
+    separated = {  # the recordings a standing line has separated already, whatever the day
+        str(_provenance(line).get("source"))
+        for line in every
+        if (line.get("payload") or {}).get("speakers")
+        and str(line["id"]) not in retracted
+        and str(line["id"]) not in replaced
     }
     found: list[Unseparated] = []
     already = 0
@@ -565,15 +607,18 @@ def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) ->
         payload = line.get("payload") or {}
         if str(line["id"]) in retracted or str(line["id"]) in replaced:
             continue
-        if payload.get("speakers"):
-            already += 1
-            continue
         provenance = _provenance(line)
-        memo = memos.get(str(provenance.get("source")))
-        if memo is None or memo.get("kind") != MEMO_KIND:
+        source = str(provenance.get("source"))
+        if payload.get("speakers") or source in separated or source in {item.memo.id for item in found}:
+            already += 1  # one recording, one line with its voices: never two standing for it
+            continue
+        memo = memos.get(source)
+        if memo is None or memo.get("kind") != MEMO_KIND or not (memo.get("payload") or {}).get("raw_id"):
             _count(counts, NO_RECORDING)
         elif str(memo["id"]) in retracted:
             _count(counts, RECORDING_RETRACTED)
+        elif str(memo["id"]) in memo_superseded:
+            _count(counts, RECORDING_SUPERSEDED)
         elif (audio := _audio(lb, memo.get("payload") or {})) is None:
             _count(counts, NO_AUDIO)
         else:
@@ -661,6 +706,8 @@ def _again(
                 voices = separate_voices(diarizer, heard, audio, channels_of(memo.line), hint)
         seconds = time.monotonic() - started
         title = str((old.get("payload") or {}).get("title") or memo.title)
+        if voices is not None and voices.unread:
+            report.rooms += 1
         if voices is None or not voices.turns:
             if voices is None:
                 _count(report.counts, NO_SPEECH)
@@ -673,8 +720,14 @@ def _again(
         data = heard.text.encode("utf-8")
         draft = _draft(memo, engine, data, heard.language, len(heard.windows), len(heard.segments))
         spans = label(draft, voices, heard.segments, data, diarizer, memo)
+        if spans is None:
+            report.unlabelled += 1
+            if progress is not None:
+                progress(f"  {_clock(str(old['at']), zone)}  {title}: voices not written ({seconds:.1f}s)")
+            continue
         payload = draft["payload"]
-        payload["title"] = title
+        if (old.get("payload") or {}).get("title"):  # the old line's title; else the memo's, as at ingest
+            payload["title"] = str(old["payload"]["title"])
         old_raw_id = (old.get("payload") or {}).get("raw_id") or memo.raw_id
         key = payload["diarization"]["spans"]["sha256"][:SPANS_KEY_HEX]
         payload["raw_id"] = f"{old_raw_id}{SPEAKERS_KEY}{key}"
@@ -709,14 +762,18 @@ def describe_again(report: Again) -> str:
             f" new line superseding the one heard before{already}; nothing written"
         )
     else:
-        text = (
-            f"separated the voices of {_plural(report.written, 'transcript')}, each a new line superseding"
-            f" the one heard before{already}"
-        )
+        if report.written:
+            text = (
+                f"separated the voices of {_plural(report.written, 'transcript')}, each a new line"
+                f" superseding the one heard before{already}"
+            )
+        else:
+            text = f"heard {_plural(len(report.found), 'transcript')} again; nothing written{already}"
         if report.same:
             text += f"\n  heard the same as before, nothing written: {report.same:,}"
         if report.voiceless:
             text += f"\n  no voice found, nothing written: {report.voiceless:,}"
+        text += _heard_text(report.rooms, report.unlabelled)
     skipped = [f"{n:,} {PHRASES.get(key, key)}" for key, n in report.counts.items() if n]
     return text + (f"\n  not heard again: {', '.join(skipped)}" if skipped else "")
 

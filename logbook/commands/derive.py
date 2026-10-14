@@ -146,6 +146,12 @@ def cmd_speakers(a: argparse.Namespace) -> None:
     if report.dry_run or not report.found:
         print(transcribe.describe_again(report))
         return
+    calls = sum(1 for item in report.found if transcribe.channels_of(item.memo.line) is not None)
+    if a.speakers and calls:
+        print(
+            f"--speakers {a.speakers} is for a room: {_plural(calls, 'recording')} of these keep a call's"
+            " two sides apart and are heard a channel at a time, without it"
+        )
     diarizer = diarize.detect()
     if diarizer is None:
         print(

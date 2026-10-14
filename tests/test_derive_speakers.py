@@ -290,3 +290,141 @@ def test_without_the_diarizer_the_command_names_the_one_that_fetches_it_and_writ
 def test_with_nothing_to_separate_the_command_needs_no_diarizer(lb, monkeypatch, capsys):
     cli.main(["derive", "speakers"])
     assert "nothing to separate" in capsys.readouterr().out
+
+
+def test_a_transcript_whose_memo_a_later_memo_supersedes_is_not_heard_again(lb):
+    old = _heard_before(lb)
+    memo_id = old["payload"]["provenance"]["source"]
+    _memo(
+        lb,
+        "7A1B2C3D-0000-4000-8000-000000000038:v2",
+        AT,
+        title="Middag (trimmed)",
+        audio=_wav(1.5),
+        supersedes=memo_id,
+    )
+    report = transcribe.unseparated(lb)
+    assert all(item.line["id"] != old["id"] for item in report.found)
+    assert report.counts.get("skipped_recording_superseded") == 1
+
+
+def test_a_recording_with_a_standing_line_of_its_voices_is_not_heard_again_by_another(lb):
+    """A chain whose middle was retracted leaves the first line standing beside the last: the
+    recording already has its voices, and a second line of them is never written."""
+    old = _heard_before(lb)
+    transcribe.rehear(lb, transcribe.unseparated(lb), lambda model: FakeEngine(model), FakeDiarizer())
+    middle = next(line for line in _transcripts(lb) if line["id"] != old["id"])
+    lb.append_many(
+        [
+            {
+                **{k: middle[k] for k in ("at", "end", "tz", "source", "kind", "tier")},
+                "payload": {
+                    **middle["payload"],
+                    "raw_id": f"{MEMO_ID}#speakers@0123456789ab",
+                    "supersedes": middle["id"],
+                },
+            }
+        ]
+    )
+    lb.retract(middle["seq"], "the middle of the chain")
+    report = transcribe.unseparated(lb)
+    assert report.found == [] and report.already == 2
+
+
+def test_a_memo_line_without_a_raw_id_is_no_recording_to_hear(lb):
+    old = _heard_before(lb)
+    lb.append_many(
+        [
+            {
+                **{k: old[k] for k in ("at", "end", "tz", "source", "kind", "tier")},
+                "payload": {
+                    **{k: v for k, v in old["payload"].items() if k != "raw_id"},
+                    "raw_id": "by-hand",
+                    "provenance": {"source": _bare_memo(lb), "engine": "fake-whisper", "model": "small"},
+                },
+            }
+        ]
+    )
+    report = transcribe.unseparated(lb)
+    assert report.counts == {"skipped_no_recording": 1}
+
+
+def _bare_memo(lb: Logbook) -> str:
+    lb.append_many(
+        [
+            {
+                "at": AT,
+                "end": None,
+                "tz": TZ,
+                "source": "manual",
+                "kind": "voice-memo",
+                "tier": 2,
+                "payload": {"schema": "voice-memo/v1", "title": "by hand"},
+            }
+        ]
+    )
+    with lb.index() as idx:
+        return next(str(line["id"]) for line in idx.of_kind("voice-memo") if "raw_id" not in line["payload"])
+
+
+def test_a_line_and_a_memo_without_titles_gain_none_when_heard_again(lb):
+    _memo(lb, MEMO_ID, AT, audio=_wav())
+    with lb.index() as idx:
+        [memo] = list(idx.of_kind("voice-memo"))
+    assert memo["payload"]["title"]  # the helper gives one; take it away through a new memo line
+    lb.append_many(
+        [
+            {
+                **{k: memo[k] for k in ("at", "end", "tz", "source", "kind", "tier")},
+                "payload": {k: v for k, v in memo["payload"].items() if k != "title"}
+                | {"raw_id": "untitled"},
+            }
+        ]
+    )
+    transcribe.run(lb, FakeEngine(), diarizer=None)
+    report = transcribe.unseparated(lb)
+    untitled = [item for item in report.found if item.line["payload"]["raw_id"] == "untitled"]
+    assert untitled and "title" not in untitled[0].line["payload"]
+    transcribe.rehear(lb, report, lambda model: FakeEngine(model), FakeDiarizer())
+    new = next(
+        line for line in _transcripts(lb) if line["payload"]["raw_id"].startswith("untitled#speakers@")
+    )
+    assert "title" not in new["payload"]
+
+
+def test_the_closing_line_says_nothing_was_written_when_nothing_was(lb):
+    old = _heard_before(lb)
+    transcribe.rehear(lb, transcribe.unseparated(lb), lambda model: FakeEngine(model), FakeDiarizer())
+    lb.retract(next(line for line in _transcripts(lb) if line["id"] != old["id"])["seq"], "heard wrong")
+    report = transcribe.rehear(
+        lb, transcribe.unseparated(lb), lambda model: FakeEngine(model), FakeDiarizer()
+    )
+    text = transcribe.describe_again(report)
+    assert (
+        text.startswith("heard 1 transcript again; nothing written")
+        and "separated the voices of 0" not in text
+    )
+
+
+def test_the_heard_again_line_is_a_valid_transcript(lb):
+    from jsonschema import Draft202012Validator
+    from test_transcribe import SCHEMA
+
+    _heard_before(lb)
+    transcribe.rehear(lb, transcribe.unseparated(lb), lambda model: FakeEngine(model), FakeDiarizer())
+    new = next(line for line in _transcripts(lb) if "speakers" in line["payload"])
+    assert [e.message for e in Draft202012Validator(SCHEMA).iter_errors(new["payload"])] == []
+
+
+def test_the_command_says_the_number_of_voices_is_not_for_a_call(lb, monkeypatch, capsys):
+    _heard_before(lb, channels=["mic", "system"])
+    monkeypatch.setattr(transcribe, "detect", _detect)
+    monkeypatch.setattr(diarize, "detect", lambda *_a, **_k: FakeDiarizer())
+    cli.main(["derive", "speakers", "--speakers", "3"])
+    assert "--speakers 3 is for a room: 1 recording of these keep" in capsys.readouterr().out
+
+
+def test_the_command_refuses_a_since_that_is_not_a_day(lb, capsys):
+    with pytest.raises(SystemExit) as e:
+        cli.main(["derive", "speakers", "--since", "last week"])
+    assert e.value.code == 2 and "derive speakers" in capsys.readouterr().err

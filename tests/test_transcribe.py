@@ -788,3 +788,54 @@ def test_a_segment_holding_several_lines_is_a_span_per_line_so_the_spans_number_
     spans = _spans(lb, line)
     assert speakers.segment_count(text, "text/plain") == len(spans["segments"]) == 2
     assert line["payload"]["speakers"] == [{"label": "S1", "seconds": 2.0, "turns": 2}]
+
+
+def test_a_file_whose_channels_the_diarizer_cannot_read_apart_is_heard_as_a_room_and_said(lb):
+    class Undecodable(FakeDiarizer):
+        def channels(self, path: Path) -> tuple[list[list[int]], int]:
+            raise RuntimeError("no decoder for this container")
+
+    _memo(
+        lb,
+        "7A1B2C3D-0000-4000-8000-000000000043",
+        "2026-10-06T11:00:00Z",
+        audio=_wav(channels=2),
+        channels=["mic", "system"],
+    )
+    report = transcribe.run(lb, FakeEngine(), diarizer=Undecodable(), chunk_s=1.0)
+    p = _transcripts(lb)[0]["payload"]
+    assert [s["label"] for s in p["speakers"]] == ["S1", "S2"] and p["diarization"]["channels"] == 1
+    assert not any("from_me" in s for s in p["speakers"])
+    assert report.rooms == 1 and "heard as one room" in transcribe.describe(report)
+
+
+def test_a_silent_microphone_leaves_the_far_end_alone_and_nobody_from_me(lb):
+    _memo(
+        lb,
+        "7A1B2C3D-0000-4000-8000-000000000044",
+        "2026-10-06T12:00:00Z",
+        audio=_wav(channels=2),
+        channels=["mic", "system"],
+    )
+    transcribe.run(
+        lb, FakeEngine(), diarizer=FakeDiarizer(by_channel=[[], [(0.0, 2.0, "SPEAKER_00")]]), chunk_s=1.0
+    )
+    p = _transcripts(lb)[0]["payload"]
+    assert p["speakers"] == [{"label": "system", "seconds": 2.0, "turns": 2, "channel": "system"}]
+    assert p["diarization"]["channels"] == 2
+    _valid(p)
+
+
+def test_a_text_that_reads_as_srt_is_written_without_voices_rather_than_with_wrong_spans(lb):
+    class Srt(FakeEngine):
+        def transcribe(self, samples: Any, rate: int, language: str | None) -> transcribe.Result:
+            lines = ["1", "00:00:01,000 --> 00:00:02,000", "Hei."]
+            return transcribe.Result(
+                [transcribe.Segment(i * 0.5, i * 0.5 + 0.5, s) for i, s in enumerate(lines)], "nb"
+            )
+
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    report = transcribe.run(lb, Srt(), diarizer=FakeDiarizer())
+    assert report.written == 1 and report.unlabelled == 1 and report.separated == 0
+    assert "speakers" not in _transcripts(lb)[0]["payload"]
+    assert "not written" in transcribe.describe(report)
