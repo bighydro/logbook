@@ -20,7 +20,7 @@ import pytest
 from persona import HOME, dwell, utc
 
 from logbook import cli
-from logbook.contrib import model_client, serve, synthesis
+from logbook.contrib import dream, mcp_server, model_client, serve, synthesis
 from logbook.contrib.adapters import granola
 from logbook.core import day as day_reader
 from logbook.core import drafts, policy
@@ -110,8 +110,8 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     return lb
 
 
-def _policy(lb: Logbook, entry: dict[str, Any] | None) -> None:
-    data: dict[str, Any] = {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
+def _policy(lb: Logbook, entry: dict[str, Any] | None, mcp: int = 1) -> None:
+    data: dict[str, Any] = {"hermes": {"max_tier": 2}, "mcp": {"max_tier": mcp}}
     if entry is not None:
         data[policy.DREAM_DESTINATION] = entry
     policy.policy_path(lb.root).write_text(json.dumps(data), encoding="utf-8")
@@ -636,3 +636,186 @@ def test_evidence_that_is_not_the_transcript_is_shown_unsupported_and_said_why(l
     assert (
         "synthesis · 1 action, 1 topic · 1 unsupported · model:x" in _cli("day", DAY, "--no-anniversaries")[1]
     )
+
+
+# -- the policy that authorised it: a synthesis is a draft, and follows the policy like any draft ----------
+
+
+def _today(monkeypatch: pytest.MonkeyPatch, day: date) -> None:
+    monkeypatch.setattr(dream, "date", type("D", (), {"today": staticmethod(lambda: day)}))
+
+
+def _day_text(*args: str) -> str:
+    code, out, err = _cli("day", DAY, *args, "--no-anniversaries")
+    assert code == 0, err
+    return out
+
+
+def _under_the_call(out: str) -> str:
+    """The row under the unplaced call's own row, checked to sit under its title."""
+    rows = out.splitlines()
+    at = next(i for i, row in enumerate(rows) if row.startswith("  unplaced") and "Yard plans" in row)
+    below = rows[at + 1]
+    assert len(below) - len(below.lstrip()) == rows[at].index("Yard plans"), (rows[at], below)
+    return below.strip()
+
+
+def test_a_synthesis_records_the_version_of_the_entry_it_was_made_under(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb)
+    _fake(monkeypatch)
+    _policy(lb, {"max_tier": 3, "until": "2026-12-31", "model": MODEL})
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (line,) = _drafts(lb)
+    found = policy.version(policy.dream_entry(lb.root))
+    assert line["payload"]["extra"]["policy_version"] == found and len(found) == 64
+    assert drafts.validate(line["payload"]) == []
+
+
+def test_the_same_model_under_another_entry_synthesizes_the_call_again(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """Rule 1 as the dream has it: a call is unchanged for the same model under the same prompt and the
+    same entry; an entry lent for longer is another entry, and the new synthesis supersedes."""
+    call = _transcript(lb)
+    seen = _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (first,) = _drafts(lb)
+    _policy(lb, {"max_tier": 3, "until": "2027-03-31"})  # the same ceiling, lent for longer
+    code, out, err = _cli("transcript", "synthesize", call["id"])
+    assert code == 0, err
+    assert len(seen["calls"]) == 2 and f"supersedes {first['id']}" in out
+    second = _drafts(lb)[-1]
+    assert second["payload"]["supersedes"] == first["id"]
+    assert second["payload"]["extra"]["policy_version"] == policy.version(policy.dream_entry(lb.root))
+    code, out, _err = _cli("transcript", "synthesize", call["id"])
+    assert code == 0 and len(seen["calls"]) == 2
+    assert f"unchanged: synthesized by model:{MODEL} as #{second['seq']}; nothing sent" in out
+
+
+def test_a_synthesis_made_at_3_is_withheld_when_the_ceiling_drops_to_2(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The Day of a reader that holds the whole record says so under the call's row, and nothing of the
+    synthesis; a gated reader hides it without a word; the call itself stays home from then on."""
+    call = _transcript(lb)  # tier 3, as the granola adapter writes it
+    seen = _fake(monkeypatch, _either)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (line,) = _drafts(lb)
+    assert _under_the_call(_day_text()) == SUMMARY
+
+    _policy(lb, {"max_tier": 2, "until": "2026-12-31"})  # no line appended: the head did not move
+    out = _day_text()
+    below = _under_the_call(out)
+    assert below.startswith(f"{drafts.SUPERSEDED_BY_POLICY}: tier 3, above max_tier 2")
+    assert "synthesis ·" not in out and "Send the survey report" not in out and f"model:{MODEL}" not in out
+    data = json.loads(_day_text("--json"))
+    assert "syntheses" not in data and "draft_withheld" not in data
+    (row,) = data["syntheses_withheld"]
+    assert row["transcript"] == call["id"] and row["line"] == line["id"] and row["seq"] == line["seq"]
+    assert row["tier"] == 3 and row["max_tier"] == 2 and set(row) == {
+        "transcript", "line", "seq", "tier", "max_tier", "why",
+    }  # fmt: skip
+    assert "Send the survey report" not in json.dumps(data)
+    gated = day_reader.read(lb, DAY, tiers=(1, 2, 3))
+    assert "syntheses" not in gated and "syntheses_withheld" not in gated
+    html = serve.Site(lb).page_day(DAY)
+    assert '<details class="synthesis"' not in html and "Send the survey report" not in html
+    assert html.index("Yard plans") < html.index(drafts.SUPERSEDED_BY_POLICY)
+    assert "syntheses_withheld" not in json.loads(_day_text("--json", "--no-dream"))
+    assert drafts.SUPERSEDED_BY_POLICY not in _day_text("--no-dream")
+
+    _today(monkeypatch, date(2026, 6, 12))
+    code, out, _err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0 and len(seen["calls"]) == 1 and _drafts(lb) == [line]
+    assert out.splitlines()[-1] == "3 empty · 1 transcript held back above max_tier 2"
+
+    _policy(lb, {"max_tier": 3, "until": "2026-12-31"})  # the entry it was made under, again
+    assert _under_the_call(_day_text()) == SUMMARY
+    assert "syntheses_withheld" not in json.loads(_day_text("--json"))
+
+
+def test_an_expired_entry_shows_nothing_of_a_synthesis(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb)
+    seen = _fake(monkeypatch)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    _policy(lb, {"max_tier": 3, "until": "2026-06-15"})  # today is 2026-06-20 in the fixture
+    below = _under_the_call(_day_text())
+    assert below.startswith(drafts.SUPERSEDED_BY_POLICY) and "expired on 2026-06-15" in below
+    (row,) = json.loads(_day_text("--json"))["syntheses_withheld"]
+    assert row["max_tier"] == 0 and row["transcript"] == call["id"]
+    assert "Send the survey report" not in serve.Site(lb).page_day(DAY)
+    code, _out, err = _cli("transcript", "synthesize", call["id"])
+    assert code == 2 and "expired on 2026-06-15" in err and len(seen["calls"]) == 1
+
+
+def test_catch_up_synthesizes_again_a_call_made_under_another_entry(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    _transcript(lb)
+    seen = _fake(monkeypatch, _either)
+    _today(monkeypatch, date(2026, 6, 12))
+    assert _cli("dream", "--catch-up", "--days", "3")[0] == 0
+    (first,) = [d for d in _drafts(lb) if d["payload"]["unit"] == drafts.UNIT_EVENT]
+    assert len(seen["calls"]) == 2
+    _policy(lb, {"max_tier": 3, "until": "2027-03-31"})  # the same ceiling, lent for longer
+    assert _under_the_call(_day_text()) == SUMMARY  # its tier is allowed: shown until made again
+    code, out, err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0, out + err
+    rows = out.splitlines()
+    assert rows[1].startswith(f"{DAY}  dreamed   #") and "dreamed under another dream entry" in rows[1]
+    assert rows[3].startswith(f"{DAY}  synthesized #") and "“Yard plans” · 6 segments" in rows[3]
+    assert rows[3].endswith("synthesized under another dream entry")
+    assert rows[4] == "1 dreamed · 2 empty · 1 synthesized" and len(seen["calls"]) == 4
+    second = _drafts(lb)[-1]
+    assert second["payload"]["supersedes"] == first["id"]
+    assert second["payload"]["extra"]["policy_version"] == policy.version(policy.dream_entry(lb.root))
+    code, out, _err = _cli("dream", "--catch-up", "--days", "3")
+    assert code == 0 and len(seen["calls"]) == 4 and out.splitlines()[-1] == "1 unchanged · 2 empty"
+
+
+def test_a_synthesis_that_names_no_policy_version_is_held_to_its_model_and_its_tier(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """A synthesis written before syntheses named their entry: no version to compare, so a new entry
+    alone synthesizes nothing again, and its tier still decides what a reader shows."""
+    call = _transcript(lb)
+    seen = _fake(monkeypatch)
+    made = synthesis.synthesize(lb, call, dry_run=True)
+    payload = made.payload
+    del payload["extra"]["policy_version"]
+    lb.append("2026-06-20T04:00:00Z", f"model:{MODEL}", drafts.KIND, made.tier, payload)
+    _policy(lb, {"max_tier": 3, "until": "2027-03-31"})
+    code, out, _err = _cli("transcript", "synthesize", call["id"])
+    assert code == 0 and "unchanged" in out and len(seen["calls"]) == 1
+    _today(monkeypatch, date(2026, 6, 12))
+    _fake(monkeypatch, _either)
+    assert _cli("dream", "--catch-up", "--days", "3")[1].splitlines()[-1] == "1 dreamed · 2 empty"
+    assert len([d for d in _drafts(lb) if d["payload"]["unit"] == drafts.UNIT_EVENT]) == 1
+    assert _under_the_call(_day_text()) == SUMMARY
+    _policy(lb, {"max_tier": 2, "until": "2027-03-31"})
+    assert _under_the_call(_day_text()).startswith(drafts.SUPERSEDED_BY_POLICY)
+
+
+def test_the_door_never_serves_a_synthesis_above_the_dream_ceiling(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    call = _transcript(lb)
+    _fake(monkeypatch)
+    _policy(lb, {"max_tier": 3, "until": "2026-12-31"}, mcp=3)
+    assert _cli("transcript", "synthesize", call["id"])[0] == 0
+    (line,) = _drafts(lb)
+
+    def ask(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        return mcp_server.call(lb.root, name, arguments, allow_tier_3=True)
+
+    assert ask("day", {"date": DAY})["data"]["syntheses"][0]["line"] == line["id"]
+    _policy(lb, {"max_tier": 2, "until": "2026-12-31"}, mcp=3)
+    out = ask("day", {"date": DAY})
+    assert "syntheses" not in out["data"] and "syntheses_withheld" not in out["data"]
+    assert "Send the survey report" not in json.dumps(out)
+    with pytest.raises(mcp_server.ToolError, match="dream"):
+        ask("line", {"id": line["id"]})

@@ -406,6 +406,7 @@ def cmd_day(a: argparse.Namespace) -> None:
             data.pop("draft", None)
             data.pop("draft_withheld", None)
             data.pop("syntheses", None)
+            data.pop("syntheses_withheld", None)
         if not a.no_anniversaries:
             found = people_drift.anniversaries(lb, day, airports)
             if found:
