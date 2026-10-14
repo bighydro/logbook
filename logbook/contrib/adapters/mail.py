@@ -52,6 +52,7 @@ import hashlib
 import html
 import quopri
 import re
+import string
 import time
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
@@ -86,6 +87,7 @@ ESCAPED_FROM = re.compile(rb"^>(>*From )", re.MULTILINE)  # mboxrd: one `>` off,
 BLANK_LINE = re.compile(rb"\r?\n\r?\n")  # ends a header block
 SEPARATOR_DATE = ("%a %b %d %H:%M:%S %z %Y", "%a %b %d %H:%M:%S %Y")
 MESSAGE_ID = re.compile(r"<([^<>]+)>")
+ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)  # a Message-ID's domain part
 PARAM = re.compile(r';\s*([^=;\s]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]*))')
 PARAM_KEY = re.compile(r"^(.*?)(?:\*(\d+))?(\*)?$")
 SIMPLE_ADDRESS = re.compile(
@@ -518,7 +520,7 @@ def parse_message(
         "raw_id": f"{account.strip().lower()}:{own}" if account else own,
     }
     if message_id is not None:
-        payload["message_id"] = message_id
+        payload["message_id"] = normalise_id(message_id)  # the key the roads share; raw_id keeps the spelling
     payload["thread"] = references[0] if references else in_reply_to or own
     if sender:
         payload["from"] = sender[0]
@@ -603,14 +605,31 @@ def first_id(value: str | None) -> str | None:
     return ids[0] if ids else None
 
 
+def normalise_id(message_id: str | None) -> str | None:
+    """A Message-ID as every mail source asks the record by it (`payload.message_id`): surrounding
+    whitespace and one pair of angle brackets off, and the ASCII letters after the last `@` lower-cased,
+    since the domain part is case-insensitive (RFC 5322, the DNS). The part before it is kept as written:
+    two ids that differ there, in case or in a space, are two messages. None when nothing is left."""
+    if message_id is None:
+        return None
+    text = message_id.strip()
+    if text.startswith("<") and text.endswith(">"):
+        text = text[1:-1].strip()
+    if not text:
+        return None
+    local, at, domain = text.rpartition("@")
+    return local + at + domain.translate(ASCII_LOWER) if at else text
+
+
 def _ids(value: str | None) -> list[str]:
-    """Message ids without their angle brackets; a bare token without brackets counts too."""
+    """Message ids without their angle brackets; a bare token without brackets counts too, a token of
+    brackets alone (`<>`) does not."""
     if not value:
         return []
     found = MESSAGE_ID.findall(value)
     if found:
         return [token.strip() for token in found if token.strip()]
-    return [token for token in value.split() if token]
+    return [token for token in value.split() if token.strip("<>")]
 
 
 def _addresses(headers: Headers, name: str) -> list[dict[str, Any]]:
