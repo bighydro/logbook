@@ -29,12 +29,15 @@ else, alone or beside good references, is unsupported (RFC 0036 rule 6). Topics 
 are one topic (`merge`): their texts joined, their utterances united.
 
 The draft's tier is the transcript's (the one line read; `read_count` 1), `read_head` the head when the
-model read. The whole run holds the writer lock and the head is read again before the append:
-`HeadMoved` and nothing written when it moved. A transcript the same model synthesized under the same
-prompt is unchanged: nothing is sent and the standing synthesis is shown (`--again` asks once more);
-another model, or `--again`, writes a new line whose `supersedes` names the standing one.
+model read, and like every draft it records the version of the entry it was made under
+(`extra.policy_version`, `policy.version`). The whole run holds the writer lock and the head is read
+again before the append: `HeadMoved` and nothing written when it moved. A transcript the same model
+synthesized under the same prompt and the same entry is unchanged: nothing is sent and the standing
+synthesis is shown (`--again` asks once more); another model, another entry, or `--again`, writes a
+new line whose `supersedes` names the standing one. A synthesis is a draft and follows the policy as
+every draft does: the readers withhold one above the entry today (`drafts.for_transcripts`).
 `catch_up` synthesizes the transcripts of the days `dream --catch-up` covers that have no synthesis
-yet, what the 06:00 close runs."""
+yet, or whose synthesis was made under another version of the entry, what the 06:00 close runs."""
 
 from __future__ import annotations
 
@@ -427,7 +430,8 @@ def standing_of(idx: Index, line: Line) -> Line | None:
     by = idx.superseded(KIND).get(transcript)
     if by is not None:
         raise DreamError(f"the transcript is superseded by #{by}; synthesize that one")
-    return drafts.standing(drafts.of_transcript(idx.by_kind(drafts.KIND), retracted, transcript))
+    found = drafts.by_transcript(idx.by_kind(drafts.KIND), retracted).get(transcript, [])
+    return drafts.standing(found)
 
 
 def synthesize(
@@ -453,7 +457,7 @@ def synthesize(
             current = idx.by_id(str(line["id"])) or line
             latest = standing_of(idx, current)
         gate(current, found)
-        if latest is not None and not again and _same(latest, source):
+        if latest is not None and not again and _same(latest, source, found):
             kept = latest.get("payload") or {}
             return Synthesis(current, UNCHANGED, latest, dict(kept), int(latest.get("tier") or 1))
         made = material(lb, current, found)
@@ -474,7 +478,12 @@ def synthesize(
             "read_count": 1,
             "language": made.language,
             "segments": segments,
-            "extra": {"prompt": PROMPT_NAME, "utterances": len(made.turns), "segments": details},
+            "extra": {
+                "prompt": PROMPT_NAME,
+                "utterances": len(made.turns),
+                "segments": details,
+                "policy_version": policy.version(found),
+            },
         }
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
@@ -490,10 +499,31 @@ def synthesize(
     return Synthesis(current, SYNTHESIZED, written, payload, made.tier, messages, answer)
 
 
-def _same(latest: Line, source: str) -> bool:
-    """Whether the standing synthesis is this model's under this prompt: then the call is unchanged."""
+def _same(latest: Line, source: str, found: policy.Ceiling) -> bool:
+    """Whether the standing synthesis is this model's under this prompt and the entry still stands
+    behind it (`outdated`): then the call is unchanged (RFC 0036 rule 1, as the dream has it)."""
     extra = (latest.get("payload") or {}).get("extra")
-    return latest.get("source") == source and isinstance(extra, dict) and extra.get("prompt") == PROMPT_NAME
+    return (
+        latest.get("source") == source
+        and isinstance(extra, dict)
+        and extra.get("prompt") == PROMPT_NAME
+        and outdated(latest, found) is None
+    )
+
+
+def outdated(latest: Line, found: policy.Ceiling) -> str | None:
+    """Why the `dream` entry no longer stands behind a standing synthesis, in words; None when it
+    does. Its tier above the entry's `max_tier` today, or made under another version of the entry
+    (`extra.policy_version`): derived material follows the policy, not the head. A synthesis that
+    names no version is held to its tier alone."""
+    tier = int(latest.get("tier") or 0)
+    if tier > found.max_tier:
+        return f"synthesized at tier {tier}, above max_tier {found.max_tier} now"
+    extra = (latest.get("payload") or {}).get("extra")
+    kept = extra.get("policy_version") if isinstance(extra, dict) else None
+    if isinstance(kept, str) and kept != policy.version(found):
+        return f"synthesized under another {policy.DREAM_DESTINATION} entry"
+    return None
 
 
 def synthesize_day(
@@ -557,10 +587,12 @@ def catch_up(
     env: Mapping[str, str] | None = None,
     transport: Transport | None = None,
 ) -> CaughtUp:
-    """Synthesize each transcript of `days` that has no synthesis yet, by any model; one `Outcome` per
-    transcript sent, oldest first (`dream --catch-up`, the 06:00 close). A transcript above the
-    ceiling, or without its text, is counted and never sent; one synthesized already is left alone.
-    The policy and the endpoint are checked once: a refusal there is `DreamError`."""
+    """Synthesize each transcript of `days` that has no synthesis yet, by any model, or whose standing
+    synthesis the entry no longer stands behind (`outdated`: made under another version of it), as
+    `dream --catch-up` dreams such a day again; one `Outcome` per transcript sent, oldest first (the
+    06:00 close). A transcript above the ceiling, or without its text, is counted and never sent; one
+    synthesized already under the entry is left alone. The policy and the endpoint are checked once:
+    a refusal there is `DreamError`."""
     found = dream.ceiling(lb)
     dream.endpoint(found, env)
     outcomes: list[Outcome] = []
@@ -576,13 +608,15 @@ def catch_up(
                         latest = standing_of(idx, line)
                     except DreamError:
                         continue
-                if latest is not None:
+                why = None if latest is None else outdated(latest, found)
+                if latest is not None and why is None:
                     continue
                 tried = _try(lb, line, found, env, False, False, transport, None)
                 if tried.state == NO_TEXT:
                     missing += 1
                 elif tried.state == SYNTHESIZED and tried.synthesis is not None:
-                    outcomes.append(Outcome(day, SYNTHESIZED, detail_of(tried.synthesis)))
+                    detail = detail_of(tried.synthesis) + (drafts.DOT + why if why else "")
+                    outcomes.append(Outcome(day, SYNTHESIZED, detail))
                 else:
                     outcomes.append(Outcome(day, REFUSED, f"“{title_of(line)}”: {tried.detail}"))
     return CaughtUp(outcomes, found.max_tier, held, missing)
