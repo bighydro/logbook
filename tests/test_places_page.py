@@ -334,11 +334,11 @@ def test_rejecting_through_the_page_lands_in_the_state_list_as_the_cli_writes_it
     cli.main(["setup", "places", "review", "--reject", "4"])
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     [mine], [theirs] = _state(lb.root)["rejected"], _state(other)["rejected"]
-    assert {k: v for k, v in mine.items() if k != "rejected_at"} == {
-        k: v for k, v in theirs.items() if k != "rejected_at"
+    assert {k: v for k, v in mine.items() if k not in ("rejected_at", "line")} == {
+        k: v for k, v in theirs.items() if k not in ("rejected_at", "line")
     }
     assert mine["name"] == BOATHOUSE
-    assert Logbook(lb.root).meta["seq"] == seq, "never a line"
+    assert Logbook(lb.root).meta["seq"] == seq + 1, "one entity-review/v1 line (RFC 0037, decision 3)"
     after = _page(site)
     cluster = _cluster(after, fourth.id)
     assert f'value="{BOATHOUSE}"' not in cluster and 'value=""' in cluster, "its only name rejected: a blank"

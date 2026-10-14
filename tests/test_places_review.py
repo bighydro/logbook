@@ -233,7 +233,12 @@ def test_reject_records_the_pair_beside_the_record_and_it_is_not_proposed_again(
     state = json.loads((lb.root / "state" / "places-review.json").read_text(encoding="utf-8"))
     [pair] = state["rejected"]
     assert pair["name"] == BOATHOUSE and places.distance_m(pair["lat"], pair["lon"], *S[4]) < 10
-    assert _seq(lb) == before, "a note beside the record, never a line"
+    assert _seq(lb) == before + 1, "a line now (RFC 0037, decision 3); the file is its cache"
+    line = Logbook(lb.root).line_by_seq(before + 1)
+    assert line is not None and line["kind"] == "entity-review" and line["source"] == "manual"
+    payload = line["payload"]
+    assert payload["schema"] == "entity-review/v1" and payload["entity"] == {"type": "place"}
+    assert payload["label"] == BOATHOUSE and payload["ref"]["kind"] == "centre" and pair["line"] == line["id"]
     data = _json(capsys)
     assert data["proposals"][3]["name"] is None, "its only name rejected: a blank now"
     assert any(e["name"] == BOATHOUSE for e in data["proposals"][3]["evidence"]), "the evidence stays"
