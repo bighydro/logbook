@@ -185,6 +185,12 @@ are as they always were.
    day the verdict is about, `let go · month · <the goal's current text> · <note>`, ending `written
    2026-10-11 20:30` when it was written on a later day; then the goal and chapter lines written on
    the day, each `· superseded` when a later line replaced it.
+9. **A call's synthesis** — one row under a transcript's own row, whether the call is attached to a
+   stay or unplaced, collapsed: `synthesis · 1 action, 2 topics, 1 decision, 1 open thread, 1 personal ·
+   model:…`, with how many items are unsupported when any is. It is the standing `draft/v1` line of
+   unit `event` a model wrote about that transcript ([the synthesis of a call](transcript-synthesis.md),
+   `transcript synthesize`); its items, actions on top, are behind a toggle in `serve` and under
+   `syntheses` in `--json`. `--no-dream` leaves it out with the draft.
 
 ## What makes a stop a stay
 
@@ -340,8 +346,13 @@ from), `sources`, and `received`, one object per page the circle shared for the 
 `name`), `evidence`, `supported`, `why` and `confirmed` (`line`, `seq`, or null), `supersedes`,
 `earlier` newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`; and, only on a
 day whose standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `seq`, `tier`,
-`max_tier`, `why`, and nothing of the draft's text or proposals), left out under `--no-dream` too.
-On a day with a reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the
+`max_tier`, `why`, and nothing of the draft's text or proposals), left out under `--no-dream` too;
+and, only on a day with a synthesized call, `syntheses`, one per transcript of the day that has one,
+in the day's order (`transcript`, the transcript line's id, then `line`, `seq`, `source`, `model`,
+`tier`, `at`, `read_head`, `language`, `utterances`, `segments` each with `text`, `evidence`,
+`supported`, `why`, `part`, `utterances` as `{n, offset}`, `assignee` and `due` as `{phrase, date}`,
+`counts` per part, `unsupported`, `supersedes`, `earlier`, `synthesized`, `last`, `malformed`), left
+out under `--no-dream` too. On a day with a reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the
 object carries `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and
 `text`; the key is absent on every other day. Likewise `chapter` (`name`, `line`, `from`, `to`, and `clash` when another
 standing chapter holds the day), `reviews` (`line`, `goal`, `goal_text`, `disposition`, `period`,
