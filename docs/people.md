@@ -219,8 +219,10 @@ id. An address seen under three display names is one observed person with three 
 seen as `+447700900101` in one chat and as a JID in another is one. Keyed the other way, one person
 explodes into a row per observation, and no queue survives that.
 
-**The table.** Observed people are a derived table in the index, `observed_people` in
-`index.sqlite`: one row per strongest identifier with the display names and the identifiers as the
+**The table.** Observed people are the person rows of the index's derived table,
+`observed_entities` in `index.sqlite` (RFC 0037: one table for every kind the record names, read
+here through its view `observed_people`, the table it replaces, for one release): one row per
+strongest identifier with the display names and the identifiers as the
 lines wrote them, counts per source and per kind, the days seen, first and last seen, the tier of
 the evidence, a few line ids as evidence, and the canonical person the row resolves to when one of
 its identifiers has a resolution standing *as written* — the readers look a ref up as the line
@@ -273,17 +275,20 @@ logbook people review --json                    # the queue, the unplaced and th
   against, the target's line and the observed lines as `evidence`, and under `extra` the proposal
   id, the entity, the score and what matched. The identifier, and every reader that looks it up,
   then resolves to the canonical person through the ordinary alias walk.
-- `--reject N[,N]` writes one `people-review/v1` line (RFC 0035, `kind` `people-review`) saying the
-  observed person and the canonical person are not the same: the strongest identifier as `ref`,
-  the identifiers as written under `refs`, the display names, the entity, the same head and
-  evidence. The pair never comes back; retract the line and it does.
+- `--reject N[,N]` writes one `entity-review/v1` line of type person (RFC 0037, `kind`
+  `entity-review`; [the profiles](entities.md#entity-reviewv1)) saying the observed person and the
+  canonical person are not the same: the strongest identifier as `ref`, the identifiers as written
+  under `refs`, the display names, the entity, the same head and evidence, tier 2 at least. The
+  pair never comes back; retract the line and it does. A `people-review/v1` line (RFC 0035), which
+  `people review` wrote until 0.7, is read as the same no, forever.
 - `--all-above SCORE` accepts every proposal at or above the score, a whole number.
 
 Every number is checked before the first line is written; a number the queue does not have, a
 number both accepted and rejected, or a score that is not a whole number exits 2 and writes nothing.
 A second `people review` after accepting is shorter by what was accepted, numbered afresh, and the
 `people` rows of the people already placed do not change: a review adds refs to a person, never a
-person to the list.
+person to the list. `logbook review person` is this sitting under the name every kind shares
+([review](review.md)); the two print the same, byte for byte.
 
 ## Names from Google contacts
 
