@@ -113,8 +113,11 @@ A place's no: that spot is not "Boathouse":
 
 ## `status/v1`
 
-What the owner decided, at a point in time. `kind` `status`, `source` `manual`, tier **2** for every
-kind, and no money on the line: the ledger holds it. A person has no status; a goal is reviewed by
+What the owner decided, at a point in time. `kind` `status`, `source` `manual`, and no money on the
+line: the ledger holds it. Its tier is the kind's (RFC 0037 §8): **3** for an org, whose dispositions
+describe a position in money (a `passed` at 2 among `hold`s at 3 would say which is which), so the
+line may cite tier-3 evidence; **2** for an idea, a place or an asset, a decision about your own work,
+place or craft, which never cites a tier-3 line. A person has no status; a goal is reviewed by
 RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 
 | Kind | Dispositions |
@@ -141,8 +144,8 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 **Rules.** The current status is the last standing line's; any status may follow any. A status
 equal to the standing one on the same local day is refused; on a later day it is written only with a
 new reason (the owner reaffirmed, and said why). `status --reason "…"` also writes one `note/v1`
-line, tier 2, label `status`, beside the status line, so the owner's words are on the day and in
-`search`. A place let go and an asset sold or let go close their registry entry with `until`, the
+line at the status line's tier (3 for an org: a reason about a company can name money), label
+`status`, beside the status line, so the owner's words are on the day and in `search`. A place let go and an asset sold or let go close their registry entry with `until`, the
 line's local day: the entry in `places.json` or `assets.json` is never deleted (ADR 0018, rule 4).
 
 **Readers' rules**, never lines (`policy/entities.json`):
@@ -157,7 +160,7 @@ line's local day: the entry in `places.json` or `assets.json` is never deleted (
 A passed company, the dream's proposal kept beside the owner's word:
 
 ```json
-{"at":"2026-06-14T19:40:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"status","tier":2,
+{"at":"2026-06-14T19:40:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"status","tier":3,
  "payload":{"schema":"status/v1","entity":{"type":"org","id":"019cadd3-6bc0-7dcd-9133-000000000202","registry":"logbook"},
  "label":"Fjordkiosk AS","status":"passed","reason":"good team, but a kiosk is a place and I do not want to own places",
  "proposed_by":"dream","proposal":{"status":"passed","score":40,"because":["3 meetings and 9 mails 2026-03-30 – 2026-05-02","no touch for 180 days","no status line"]},

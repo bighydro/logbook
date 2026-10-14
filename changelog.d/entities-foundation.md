@@ -10,8 +10,9 @@
   `--all-above`; nothing written unless told, nothing looked up. `review` alone lists every queue.
 - `logbook status KIND ENTITY DISPOSITION [--reason "…"] [--at DATE]`: what you decided about an
   org (`hold`, `add`, `sell`, `let-go`, `exited`, `passed`), an idea (`spark`, `exploring`, `build`,
-  `built`, `killed`), a place (`let-go`) or an asset (`sold`, `let-go`), one `status/v1` line, tier
-  2, no money on it; `--reason` also writes your words as a `note/v1`. A place let go and an asset
+  `built`, `killed`), a place (`let-go`) or an asset (`sold`, `let-go`), one `status/v1` line, no
+  money on it, tier 3 for an org (its dispositions describe a position in money) and 2 for the rest;
+  `--reason` also writes your words as a `note/v1` at the same tier. A place let go and an asset
   sold close their registry entry with `until` and keep it. `status list KIND` says the current
   status of each, the stale ones and the proposals muted for a year by a status you gave a reason.
 - Three profiles in draft with RFC 0037 ([the profiles](docs/entities.md)): `entity/v1` (an org,

@@ -1,6 +1,7 @@
 """`logbook status KIND ENTITY DISPOSITION` and `status list KIND` (RFC 0037 §9; decisions 5, 6, 9, 10,
-11): one `status/v1` line for an org, an idea, a place or an asset, tier 2, under the writer lock with
-the head read again; the reason as a `note/v1` beside it; a place let go or an asset sold closes its
+11): one `status/v1` line for an org, an idea, a place or an asset, at the kind's tier (3 for an org,
+RFC 0037 §8; 2 for the rest, never citing a tier-3 line), under the writer lock with the head read
+again; the reason as a `note/v1` beside it at the same tier; a place let go or an asset sold closes its
 registry entry with `until`, never deleted; a person and a goal take no status; the 365-day mute and
 the stale rule are a reader's. On the synthetic record of `entities_record`."""
 
@@ -54,14 +55,16 @@ def _after(lb: Logbook, seq: int) -> list[dict[str, Any]]:
     return [line for line in Logbook(lb.root).lines() if int(line["seq"]) > seq]
 
 
-def test_an_org_status_is_one_tier_two_line_and_its_reason_a_note_beside_it(
+def test_an_org_status_is_one_tier_three_line_and_its_reason_a_note_beside_it(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     seq, head = int(lb.meta["seq"]), str(lb.meta["head"])
     out = _status(capsys, "org", "Nordmann Verft", "hold", "--reason", "the yard is still compounding")
     assert out.splitlines()[0] == f"Nordmann Verft AS: hold (#{seq + 1})"
     status, note = _after(lb, seq)
-    assert (status["kind"], status["source"], status["tier"]) == ("status", "manual", 2)
+    assert (status["kind"], status["source"], status["tier"]) == ("status", "manual", 3), (
+        "an org's status is tier 3 (RFC 0037 §8): its dispositions describe a position in money"
+    )
     payload = status["payload"]
     assert entities.validate_status(payload) == []
     assert payload["entity"] == {"type": "org", "id": YARD["id"], "registry": "logbook"}, (
@@ -74,7 +77,9 @@ def test_an_org_status_is_one_tier_two_line_and_its_reason_a_note_beside_it(
     )
     assert payload["reason"] == "the yard is still compounding" and payload["logbook_head"] == head
     assert not {"amount", "currency"} & set(payload), "no money on the line"
-    assert (note["kind"], note["tier"], note["at"]) == ("note", 2, status["at"])
+    assert (note["kind"], note["tier"], note["at"]) == ("note", 3, status["at"]), (
+        "the note at the status line's tier: a reason about a company can name money"
+    )
     assert (
         note["payload"]["labels"] == ["status"] and note["payload"]["text"] == "the yard is still compounding"
     )
@@ -135,6 +140,59 @@ def test_an_idea_status_names_the_idea_by_a_word_of_its_label(
     status, _note = _after(lb, seq)
     assert status["payload"]["entity"]["type"] == "idea" and status["payload"]["label"] == "the fjord kiosk"
     assert status["tier"] == 2
+
+
+def test_a_place_status_is_tier_two_and_never_cites_a_tier_three_line(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seq = int(lb.meta["seq"])
+    _status(capsys, "place", "Hytta", "let-go", "--reason", "sold the cabin")
+    status, note = _after(lb, seq)
+    assert (status["kind"], status["tier"], status["payload"]["entity"]["type"]) == ("status", 2, "place")
+    assert note["tier"] == 2, "the note at the status line's tier"
+    payment = next(line for line in Logbook(lb.root).lines() if line["kind"] == "transaction")
+    assert payment["tier"] == 3
+    with pytest.raises(entity_status.StatusError, match="never cites a tier-3 line") as e:
+        entity_status.write(lb, "asset", "Solvind", "sold", evidence=[str(payment["id"])], today=TODAY)
+    assert "about an asset" in str(e.value) and payment["id"] in str(e.value)
+    with pytest.raises(entity_status.StatusError, match="about an idea"):
+        entity_status.write(lb, "idea", "kiosk", "spark", evidence=[str(payment["id"])], today=TODAY)
+    assert int(Logbook(lb.root).meta["seq"]) == seq + 2, "nothing written"
+    written = entity_status.write(
+        lb, "org", YARD["label"], "hold", evidence=[str(payment["id"])], today=TODAY
+    )
+    assert written.status["tier"] == 3 and written.status["payload"]["evidence"] == [payment["id"]], (
+        "an org's status may cite tier-3 evidence"
+    )
+
+
+def test_an_export_under_a_ceiling_of_two_carries_no_org_status_and_no_org_status_note(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    policy = lb.root / "policy" / "crossing.json"
+    policy.write_text(json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8")
+    seq = int(lb.meta["seq"])
+    _status(capsys, "org", YARD["label"], "hold", "--reason", "orders through 2027", "--at", "2026-10-01")
+    _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written", "--at", "2026-10-02")
+    org_status, org_note, idea_status, idea_note = _after(lb, seq)
+    assert [line["tier"] for line in (org_status, org_note, idea_status, idea_note)] == [3, 3, 2, 2]
+    out = tmp_path / "out"
+    cli.main(["export", "crossing", "--to", "hermes", "--since", "2026-09-01T00:00:00Z", "--until",
+              "2026-10-05T00:00:00Z", "--tier", "1,2", "--unsigned", "--out", str(out)])  # fmt: skip
+    crossed = [json.loads(s) for s in (out / "entries.jsonl").read_text(encoding="utf-8").splitlines() if s]
+    ids = {line["id"] for line in crossed}
+    assert idea_status["id"] in ids and idea_note["id"] in ids, "an idea's status and its note cross at 2"
+    assert org_status["id"] not in ids and org_note["id"] not in ids, "an org's never under a ceiling of 2"
+    assert not any(
+        line["kind"] == "status" and line["payload"]["entity"]["type"] == "org" for line in crossed
+    )
+    assert not any(
+        line["kind"] == "note"
+        and "status" in line["payload"].get("labels", [])
+        and line["payload"].get("extra", {}).get("entity", {}).get("type") == "org"
+        for line in crossed
+    )
+    assert all(line["tier"] <= 2 for line in crossed)
 
 
 def test_a_place_let_go_and_an_asset_sold_close_their_entries_with_until(

@@ -33,8 +33,9 @@ FIXTURES = ROOT / "tests" / "fixtures" / "entities"
 def _example(name: str) -> str:
     """One example line as written, from `tests/fixtures/entities/`: RFC 0037 §11's with the decisions
     applied (the org binds its domain through entity/v1, decision 1, so no resolution line; the passed
-    company's status is tier 2, decision 10; the heads whole), the entity-review/v1 examples of the
-    profiles page, RFC 0035's people-review/v1 example and RFC 0037's company resolution, as given."""
+    company's status is tier 3, RFC 0037 §8 and the owner's decision of 13 October 2026; the heads
+    whole), the entity-review/v1 examples of the profiles page, RFC 0035's people-review/v1 example and
+    RFC 0037's company resolution, as given."""
     return (FIXTURES / f"{name}.json").read_text(encoding="utf-8").strip()
 
 
@@ -138,7 +139,7 @@ def test_each_example_line_is_built_byte_for_byte_and_valid(name: str, tmp_path:
     example = json.loads(text)
     assert canonical_json(payload) == canonical_json(example["payload"]), name
     assert entities.VALIDATORS[payload["schema"]](payload) == []
-    assert entities.tier_problems(payload["schema"], example["tier"], {}) == []
+    assert entities.tier_problems(payload["schema"], example["tier"], {}, payload["entity"]["type"]) == []
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
     line = lb.append(
         at=example["at"], source="manual", kind=example["kind"], tier=example["tier"], payload=payload
@@ -218,6 +219,44 @@ def test_status_v1_takes_the_four_kinds_and_their_dispositions_and_no_money() ->
     assert any("entity.type" in p for p in entities.validate_status(person)), "a person has no status"
     goal = {**good, "entity": {"type": "goal", "id": ORG_ID, "registry": "logbook"}}
     assert any("entity.type" in p for p in entities.validate_status(goal)), "a goal is reviewed by review/v1"
+
+
+def test_the_tier_rules_name_the_rule_per_kind_an_org_status_is_tier_three() -> None:
+    money = {"019cadd3-6bc0-7dcd-9133-0000000001d1": 3}
+    assert entities.status_tier("org") == 3 and [
+        entities.status_tier(k) for k in ("idea", "place", "asset")
+    ] == [
+        2,
+        2,
+        2,
+    ]
+    assert entities.tier_problems("status/v1", 3, money, "org") == [], "an org's status may cite the ledger"
+    assert entities.tier_problems("status/v1", 2, {}, "org") == [
+        "a status/v1 line about an org is tier 3, not 2: its dispositions describe a position in money"
+    ]
+    for kind in ("idea", "place", "asset"):
+        assert entities.tier_problems("status/v1", 2, {}, kind) == [], kind
+        [wrong] = entities.tier_problems("status/v1", 3, {}, kind)
+        assert (
+            wrong == f"a status/v1 line about {'an' if kind[0] in 'aeiou' else 'a'} {kind} is tier 2, not 3"
+        )
+        [cites] = entities.tier_problems("status/v1", 2, money, kind)
+        assert cites.startswith(
+            f"a status/v1 line about {'an' if kind[0] in 'aeiou' else 'a'} {kind} never cites"
+        )
+        assert "019cadd3-6bc0-7dcd-9133-0000000001d1 is tier 3" in cites
+    assert entities.tier_problems("entity/v1", 2, money, "org") == [
+        "an entity/v1 line of kind org never cites a tier-3 line (019cadd3-6bc0-7dcd-9133-0000000001d1"
+        " is tier 3): bind a merchant as a `merchant` ref, and the ledger is read at the page, within its"
+        " ceiling"
+    ], "an entity/v1 line stays tier 2 for every kind, an org's too"
+    assert entities.tier_problems("entity/v1", 3, {}, "org") == [
+        "an entity/v1 line of kind org is tier 2, not 3"
+    ]
+    assert entities.tier_problems("entity-review/v1", 3, money, "org") == [], (
+        "a no is the highest of its evidence"
+    )
+    assert entities.tier_problems("entity-review/v1", 2, money, "place")
 
 
 def test_the_tier_rules_an_entity_line_never_cites_a_tier_three_line() -> None:
