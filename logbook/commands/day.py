@@ -359,6 +359,7 @@ def cmd_day(a: argparse.Namespace) -> None:
         data = day_reader.read(lb, day, airports)
         if a.no_dream:
             data.pop("draft", None)
+            data.pop("draft_withheld", None)
         if not a.no_anniversaries:
             found = people_drift.anniversaries(lb, day, airports)
             if found:

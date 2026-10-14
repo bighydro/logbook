@@ -72,7 +72,10 @@ What a Day shows, in order:
    day was dreamed and when last; one row per segment with its evidence ids, an unsupported
    segment set apart with `~` and the word, never as a fact. The JSON carries it under `draft`, the
    key there only on a day that has one (SPEC §3.2.7's object is otherwise unchanged); `day
-   --no-dream` leaves it out.
+   --no-dream` leaves it out. A draft follows the `dream` entry of the crossing policy, not the
+   head (`drafts.allowed`): one above the entry's `max_tier` today is not shown, and when the
+   day's standing draft is one, the Day says `superseded by policy` and why in one row, the JSON
+   under `draft_withheld` (a key there only then), and nothing of its text.
 
 Thresholds are the record's (`policy/stays.json`), places and assets its own; nothing here is a
 setting of the Day. ADR 0013: derived is disposable."""
@@ -153,7 +156,7 @@ def read(
         )
         page = signing.page(idx, day, on_day) if tiers is None else None
         retracted = retractions(idx.retractions())
-        draft = drafts.for_day(idx, day, tiers)
+        draft, withheld = drafts.for_day(idx, day, tiers, drafts.allowed(lb.root))
     data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
     data["signed"] = signing.signed_json(signature, tz, page, day)
     reflected = notes.standing(on_day, notes.REFLECTION, retracted)
@@ -161,6 +164,8 @@ def read(
         data["reflection"] = reflection_json(reflected[-1], tz)
     if draft is not None:
         data["draft"] = draft  # only on a day a model dreamed: the Day's object is otherwise unchanged
+    if withheld is not None:
+        data["draft_withheld"] = withheld  # only on a day whose draft the policy no longer allows
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
@@ -786,10 +791,13 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     if data.get("reflection"):
         yield ""
         yield from reflection_rows(data["reflection"], tz)
-    if data.get("draft"):
+    if data.get("draft") or data.get("draft_withheld"):
         yield ""
-        yield _row("draft", drafts.head_text(data["draft"], word=False))
-        yield from drafts.rows(data["draft"])
+        if data.get("draft"):
+            yield _row("draft", drafts.head_text(data["draft"], word=False))
+            yield from drafts.rows(data["draft"])
+        if data.get("draft_withheld"):  # the row, never the text: the policy no longer allows it
+            yield _row("draft", drafts.withheld_text(data["draft_withheld"]))
     yield ""
     if not data["timeline"]:
         yield _row("timeline", "nothing logged")

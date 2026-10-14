@@ -24,9 +24,13 @@ the line were not there), and the response says how many lines were withheld, so
 answer is a partial one. Tier 3 crosses only when the policy allows it and the server was started with
 `--allow-tier-3`: a policy edit alone never lets it through, as it never does for an export. A read
 appends no `crossing/v1` line: nothing leaves the machine, and the record is not the place to log
-an agent's every question. What the server does log, one line per call on the `logbook.mcp`
-logger (stderr when serving; stdout is the transport), is the tool's name, the day or id it was asked
-about and counts — never a line's content, never a search's words, never a name."""
+an agent's every question. A `draft` line (RFC 0036) is a model's text about a day, derived through
+the `dream` entry, and follows that entry as well as the door's: one above the entry's `max_tier`
+today (lowered, expired, removed) is held back like a line above the ceiling, from every tool, and
+counted the same way (`drafts.allowed`; derived material follows the policy, not the head). What
+the server does log, one line per call on the `logbook.mcp` logger (stderr when serving; stdout is
+the transport), is the tool's name, the day or id it was asked about and counts — never a line's
+content, never a search's words, never a name."""
 
 from __future__ import annotations
 
@@ -47,6 +51,7 @@ from .. import __version__
 from ..core import day as day_reader
 from ..core import (
     day_start,
+    drafts,
     flights,
     notes,
     pages,
@@ -122,17 +127,32 @@ class ToolError(ValueError):
 # -- the gate: the record as the ceiling lets a client see it ------------------------------------
 
 
+# The gate as SQL over the index's columns: at or below the ceiling, and a draft at or below the dream's.
+CUT = f"tier <= ? AND (kind != '{drafts.KIND}' OR tier <= ?)"
+
+
 @dataclass
 class Gate:
-    """The ceiling in force for one call and the seqs of the lines it held back."""
+    """The ceiling in force for one call and the seqs of the lines it held back. `drafts` is the
+    `dream` entry's `max_tier` today, which a `draft` line must be at or under as well."""
 
     max_tier: int
     withheld: set[int]
+    drafts: int = policy.TIERS[-1]
+
+    def allows(self, tier: int, kind: str) -> bool:
+        """At or below the ceiling; a draft also at or below the dream entry it was written under."""
+        return tier <= self.max_tier and (kind != drafts.KIND or tier <= self.drafts)
+
+    @property
+    def cut(self) -> tuple[int, int]:
+        """The arguments of `CUT`."""
+        return self.max_tier, self.drafts
 
     def keep(self, line: Line) -> bool:
-        """A line at or below the ceiling. A retraction passes whatever its tier: it is a mark on
-        another line, needed so that line stays hidden, and no tool ever returns one."""
-        if int(line["tier"]) <= self.max_tier or line.get("kind") == RETRACTION:
+        """A line the gate allows. A retraction passes whatever its tier: it is a mark on another
+        line, needed so that line stays hidden, and no tool ever returns one."""
+        if self.allows(int(line["tier"]), str(line.get("kind"))) or line.get("kind") == RETRACTION:
             return True
         self.withheld.add(int(line["seq"]))
         return False
@@ -172,9 +192,9 @@ class GatedIndex(Index):
         return [line for line in lines if self.gate.keep(line)]
 
     def _count_above(self, where: str, args: Sequence[object]) -> None:
-        """Hold back (count) every line `where` matches that is above the ceiling."""
+        """Hold back (count) every line `where` matches that the gate does not allow."""
         for (seq,) in self.db.execute(
-            f"SELECT seq FROM lines WHERE {where} AND tier > ?", (*args, self.gate.max_tier)
+            f"SELECT seq FROM lines WHERE {where} AND NOT ({CUT})", (*args, *self.gate.cut)
         ):
             self.gate.withheld.add(int(seq))
 
@@ -187,7 +207,7 @@ class GatedIndex(Index):
     def window(self, since: str, until: str) -> list[Place]:
         kept = []
         for place in super().window(since, until):
-            if place.tier <= self.gate.max_tier or place.kind == RETRACTION:
+            if self.gate.allows(place.tier, place.kind) or place.kind == RETRACTION:
                 kept.append(place)
             else:
                 self.gate.withheld.add(place.seq)
@@ -217,7 +237,7 @@ class GatedIndex(Index):
             args.extend(kinds)
         self._count_above(where, args)
         (n,) = self.db.execute(
-            f"SELECT count(*) FROM lines WHERE {where} AND tier > ?", (*args, self.gate.max_tier)
+            f"SELECT count(*) FROM lines WHERE {where} AND NOT ({CUT})", (*args, *self.gate.cut)
         ).fetchone()
         return int(n)
 
@@ -256,8 +276,8 @@ class GatedIndex(Index):
         args: tuple[object, ...] = (first_day, last_day, *(() if subject is None else (subject,)))
         self._count_above(where, args)
         rows: list[LocationRow] = self.db.execute(
-            f"SELECT seq, at, lat, lon FROM lines WHERE {where} AND tier <= ? ORDER BY at, seq",
-            (*args, self.gate.max_tier),
+            f"SELECT seq, at, lat, lon FROM lines WHERE {where} AND {CUT} ORDER BY at, seq",
+            (*args, *self.gate.cut),
         ).fetchall()
         return rows
 
@@ -269,15 +289,15 @@ class GatedIndex(Index):
         args: tuple[object, ...] = (*kinds, first_day, last_day)
         self._count_above(where, args)
         rows: list[EvidenceRow] = self.db.execute(
-            f"SELECT kind, at, end FROM lines WHERE {where} AND tier <= ? ORDER BY at, seq",
-            (*args, self.gate.max_tier),
+            f"SELECT kind, at, end FROM lines WHERE {where} AND {CUT} ORDER BY at, seq",
+            (*args, *self.gate.cut),
         ).fetchall()
         return rows
 
     def span(self, kind: str | None = None) -> tuple[str, str] | None:
         found = self.db.execute(
-            "SELECT min(day_local), max(day_local) FROM lines WHERE kind = coalesce(?, kind) AND tier <= ?",
-            (kind, self.gate.max_tier),
+            f"SELECT min(day_local), max(day_local) FROM lines WHERE kind = coalesce(?, kind) AND {CUT}",
+            (kind, *self.gate.cut),
         ).fetchone()
         if found is None or found[0] is None:
             return None
@@ -288,8 +308,8 @@ class GatedIndex(Index):
     ) -> tuple[int, dict[str, int]]:
         where = "day_local BETWEEN ? AND ? AND kind != 'retraction'"
         self._count_above(where, (first, last))
-        where += " AND tier <= ?"
-        args: tuple[object, ...] = (first, last, self.gate.max_tier)
+        where += f" AND {CUT}"
+        args: tuple[object, ...] = (first, last, *self.gate.cut)
         if tiers is not None:  # a reader's own gate on top of the ceiling (`reading.read(..., tiers)`)
             where += f" AND tier IN ({','.join('?' * len(tiers))})"
             args += tuple(int(t) for t in tiers)
@@ -306,8 +326,8 @@ class GatedIndex(Index):
         tier cut in each, so a source whose every line is above it is not listed at all."""
         where = "day_local BETWEEN ? AND ?"
         self._count_above(where, (first_day, last_day))
-        where += " AND tier <= ?"
-        cut = (first_day, last_day, self.gate.max_tier)
+        where += f" AND {CUT}"
+        cut = (first_day, last_day, *self.gate.cut)
         totals = self.db.execute(
             f"SELECT source, count(*), min(at), max(at) FROM lines WHERE {where}"
             " GROUP BY source ORDER BY count(*) DESC, source",
@@ -351,9 +371,8 @@ class GatedIndex(Index):
             args.extend(kinds)
         self._count_above(where, args)
         found = self.db.execute(
-            f"SELECT seq, id, at, kind, tier, file, offset FROM lines WHERE {where} AND tier <= ?"
-            " ORDER BY seq",
-            (*args, self.gate.max_tier),
+            f"SELECT seq, id, at, kind, tier, file, offset FROM lines WHERE {where} AND {CUT} ORDER BY seq",
+            (*args, *self.gate.cut),
         ).fetchall()
         return [
             Place(int(seq), str(id_), str(at), str(kind), int(tier), str(file), int(offset))
@@ -749,6 +768,12 @@ def tool_line(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
                 f"line {id_!r} is tier {tier}, above the mcp ceiling of {lb.gate.max_tier};"
                 " nothing of it crosses"
             )
+        if not lb.gate.allows(tier, kind):  # a draft the dream entry no longer allows
+            lb.gate.withheld.add(seq)
+            raise ToolError(
+                f"line {id_!r} is a draft of tier {tier}, above max_tier {lb.gate.drafts} of the"
+                f" {policy.DREAM_DESTINATION!r} entry it was written under; nothing of it crosses"
+            )
         line = idx.by_id(id_)
         assert line is not None  # the tier is at or below the ceiling: the gate lets it through
         marks = retractions(idx.retractions())
@@ -968,7 +993,7 @@ def _written(lb: GatedLogbook, line: Line) -> dict[str, Any]:
         "at": line["at"],
         "kind": line["kind"],
         "tier": tier,
-        "readable": tier <= lb.gate.max_tier,
+        "readable": lb.gate.allows(tier, str(line["kind"])),
     }
 
 
@@ -1218,7 +1243,7 @@ def call(root: Path, name: str, arguments: Arguments, allow_tier_3: bool = False
         if key not in tool.properties:
             raise ToolError(f"{name} takes no argument {key!r}")
     try:
-        gate = Gate(ceiling(root, allow_tier_3), set())
+        gate = Gate(ceiling(root, allow_tier_3), set(), drafts.allowed(root).max_tier)
         lb = GatedLogbook(root, gate)
         held: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         if tool.named:  # allowed by name, under the writer lock, never waiting for another writer

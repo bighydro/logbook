@@ -14,6 +14,15 @@ both (the next reader rebuilds it, or `logbook repair index` does now); a **fail
 a clock `HH:MM`, which every reader that groups by day refuses. A record whose day begins at midnight,
 with an index that agrees, has no such line.
 
+## Drafts the policy no longer allows
+
+A draft follows the `dream` entry of `policy/crossing.json`, not the head ([the dream](dream.md), *When
+the entry changes*). When a day's standing draft is above what the entry allows today (the ceiling
+lowered, the `until` passed, the entry removed), no reader shows it, and a `drafts` line after
+`crossing` names the days: ``warn  drafts  1 day(s) with a draft above what the dream entry allows, which
+no reader shows: 2026-06-10 (#5440, tier 3); the 'dream' entry allows max_tier 2 now; `logbook dream
+--catch-up` dreams them again under it``. A record with no such day has no line.
+
 ## The Google key
 
 When either variable of the Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,

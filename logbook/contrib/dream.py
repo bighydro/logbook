@@ -29,12 +29,19 @@ The draft's tier is the highest tier among the lines it read, not the lines it c
 reading, the model's turn and the write, runs inside the record's writer lock (`Logbook.writer`,
 #237), and the head is read again before the append: a head that moved is `HeadMoved` and nothing
 is written. Dreaming a day again writes a new line whose `supersedes` names the standing draft; the
-same model at the same head writes nothing and says so (RFC 0036 rule 1). The dream never writes a
-note, a signature or a review.
+same model at the same head under the same entry writes nothing and says so (RFC 0036 rule 1). The
+dream never writes a note, a signature or a review. Every draft records the version of the entry it
+was dreamed under (`extra.policy_version`, `policy.version`: the SHA-256 of its `max_tier`, `until`
+and `model`).
 
 `--catch-up` dreams each of the last N days that has no draft, or whose lines today differ from
 what the standing draft read (its `read_count`, and the digest of the ids it read, kept under
-`extra.read_ids_sha256`), one line per day; what the morning schedule calls."""
+`extra.read_ids_sha256`), or whose standing draft the entry no longer stands behind: its tier above
+the entry's `max_tier` today, or dreamed under another version of the entry. Derived material follows
+the policy, not the head, so a lowered ceiling or a moved `until` is a change of the day as much as a
+new line is, and the day is dreamed again under the entry as it is now, superseding the old draft.
+An expired entry dreams nothing (the refusal before any day); the readers withhold what it allowed
+(`drafts.allowed`). One line per day; what the morning schedule calls."""
 
 from __future__ import annotations
 
@@ -593,9 +600,15 @@ def dream(
             earlier = drafts.of_day(idx.by_kind(drafts.KIND), retractions(idx.retractions()), made.day)
         latest = drafts.standing(earlier)
         source = drafts.SOURCE_PREFIX + ep.model
+        version = policy.version(found)
         if latest is not None and not dry_run:
             payload_before = latest.get("payload") or {}
-            if latest.get("source") == source and payload_before.get("read_head") == made.read_head:
+            kept = _policy_version(payload_before)
+            if (
+                latest.get("source") == source
+                and payload_before.get("read_head") == made.read_head
+                and (kept is None or kept == version)  # a draft that names no entry: the head decides
+            ):
                 raise DreamError(
                     f"{made.day} was dreamed by {source} at this head already (#{latest['seq']}); the record"
                     " has not moved, so there is nothing new to dream"
@@ -617,7 +630,12 @@ def dream(
             "read_count": made.read_count,
             "language": made.language,
             "segments": segments,
-            "extra": {"prompt": PROMPT_NAME, "parts": parts, "read_ids_sha256": made.read_ids_sha256},
+            "extra": {
+                "prompt": PROMPT_NAME,
+                "parts": parts,
+                "read_ids_sha256": made.read_ids_sha256,
+                "policy_version": version,
+            },
         }
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
@@ -641,9 +659,18 @@ def days_to_catch_up(today: date, days: int) -> list[str]:
     return [(today - timedelta(days=n)).isoformat() for n in range(days, 0, -1)]
 
 
+def _policy_version(payload: Mapping[str, Any]) -> str | None:
+    """The version of the entry a draft was dreamed under, None for a draft that names none."""
+    extra = payload.get("extra")
+    kept = extra.get("policy_version") if isinstance(extra, dict) else None
+    return kept if isinstance(kept, str) else None
+
+
 def changed_since(lb: Logbook, day: str, found: policy.Ceiling) -> tuple[bool, str, Material | None]:
-    """Whether `day` needs dreaming: no draft, or the lines under the ceiling today are not what
-    the standing draft read (its count, and the digest of ids when it kept one). The material is
+    """Whether `day` needs dreaming: no draft; a standing draft the entry no longer stands behind
+    (its tier above the entry's `max_tier` today, or dreamed under another version of the entry: a
+    draft follows the policy, not the head); or the lines under the ceiling today are not what the
+    standing draft read (its count, and the digest of ids when it kept one). The material is
     returned so a caller that dreams does not read twice; None for an empty day."""
     made = material(lb, day, found)
     if made.read_count == 0:
@@ -654,6 +681,12 @@ def changed_since(lb: Logbook, day: str, found: policy.Ceiling) -> tuple[bool, s
     if latest is None:
         return True, "no draft yet", made
     payload = latest.get("payload") or {}
+    tier = int(latest.get("tier") or 0)
+    if tier > found.max_tier:
+        return True, f"dreamed at tier {tier}, above max_tier {found.max_tier} now", made
+    version = _policy_version(payload)
+    if version is not None and version != policy.version(found):
+        return True, f"dreamed under another {policy.DREAM_DESTINATION} entry", made
     extra = payload.get("extra")
     kept = extra.get("read_ids_sha256") if isinstance(extra, dict) else None
     if payload.get("read_count") != made.read_count:

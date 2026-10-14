@@ -54,6 +54,41 @@ evidence of a draft is everything it read). A day of locations and photos dreame
 is a tier-1 draft; the same ceiling over a day with a note is tier 2, and is sealed as tier 2 is in a
 record that seals.
 
+## When the entry changes
+
+A draft is derived through the `dream` entry, so it follows the entry, not the head ([ADR
+0016](adr/0016-tier-crossing-policy.md), *Derived material follows the policy, not the head*). Lowering
+the ceiling, letting `until` pass or removing the entry appends no line, so nothing in the record moves;
+what changes is what the readers show.
+
+- **Every draft names the entry it was dreamed under**: `extra.policy_version`, the SHA-256 (lowercase
+  hex) of the RFC 8785 JSON of the entry's three deciding values, `{"max_tier": 2, "model": null,
+  "until": "2026-12-31"}` (`model` and `until` `null` when the entry does not set them). The same values
+  give the same version however the file spells them and whatever else the entry says.
+- **A reader shows a draft only while the entry allows its tier.** A draft above the entry's `max_tier`
+  today is not on the Day, not on `serve`'s Day page and not through the MCP door, whichever head the
+  record is at; an expired entry counts as `max_tier` 0, and so does a file with no `dream` entry, so
+  nothing a model wrote is shown until the entry is back. The line stays in the record, as every line
+  does. `day` says why in one row and nothing of the draft's text:
+
+  ```
+    draft         superseded by policy: tier 3, above max_tier 2 of the 'dream' entry; `dream --catch-up` dreams the day again under it
+  ```
+
+  `day --json` carries the same under `draft_withheld` (`line`, `seq`, `tier`, `max_tier`, `why`), a key
+  present only then; `--no-dream` leaves it out. A reader through a gate of its own (`export site`, the
+  MCP door) hides the draft without the row, as it hides every line above its gate; the door counts it
+  among the lines it withheld, and its `line` tool refuses it naming the entry.
+- **`doctor` warns** with a `drafts` line naming each day whose standing draft is above what the entry
+  allows, its seq and tier, and what to do.
+- **`dream --catch-up` dreams such a day again** under the entry as it is now: a standing draft above
+  the entry's `max_tier`, or one dreamed under another version of the entry (a ceiling raised or
+  lowered, an `until` moved, another model), is a change of the day as much as a new line is. The new
+  draft supersedes the old one. A day the lowered ceiling leaves empty is `empty` and its draft stays
+  withheld. An expired entry dreams nothing: the run refuses before any day, as it always has, and says
+  that no reader shows a draft above it. A draft written before drafts named their entry has no version
+  to compare, so only its tier is held against the entry.
+
 ## The endpoint
 
 Any OpenAI-compatible chat completions endpoint, through three variables; a cloud model today and a
@@ -117,7 +152,7 @@ says why; a segment of neither documented shape is unsupported and the line is s
 ```
 
 `day --no-dream` leaves the draft out; `day --json` carries it under `draft`, the key there only on a
-day that has one, so the Day's object is otherwise what it was: the line, the model, when it was written, what it read, the segments each with `supported`, its
+day that has one (and the entry allows, *When the entry changes*), so the Day's object is otherwise what it was: the line, the model, when it was written, what it read, the segments each with `supported`, its
 `evidence`, its `part` and `why` when a reader found it wanting, `supersedes`, the `earlier` drafts'
 ids newest first, how many times the day was `dreamed` and the day it was `last`. `serve` shows the
 same above the timeline, an unsupported segment a muted block marked with the word.
@@ -128,12 +163,14 @@ A draft names the head it read (`read_head`) and how many lines of the day it re
 
 - `dream day DAY` on a day that has a draft writes a new one whose `supersedes` names the standing
   draft; the Day then says `dreamed 2×` and lists the earlier id. The same model at the same head
-  writes nothing and says so (RFC 0036 rule 1); since writing a draft moves the head, that happens
-  only when the record has not moved since the draft was read, as when a write failed half-way.
+  under the same entry writes nothing and says so (RFC 0036 rule 1); since writing a draft moves the
+  head, that happens only when the record has not moved since the draft was read, as when a write
+  failed half-way.
 - `dream --catch-up [--days N]` looks at each of the last N days before today (14 by default) and
-  dreams it when it has no draft, or when its lines under the ceiling today are not what the standing
-  draft read: a different count, or a different set of ids. A day unchanged is skipped and nothing is
-  sent for it. One line per day says what happened: `dreamed` with the line's seq and why, `unchanged`,
+  dreams it when it has no draft, when its standing draft is above the entry's `max_tier` today or was
+  dreamed under another version of the entry (*When the entry changes*), or when its lines under the
+  ceiling today are not what the standing draft read: a different count, or a different set of ids.
+  A day unchanged is skipped and nothing is sent for it. One line per day says what happened: `dreamed` with the line's seq and why, `unchanged`,
   `empty` (nothing logged under the ceiling), or `refused` and why. The exit status is 1 when any day
   was refused, so the schedule's run can say so; a policy or endpoint refusal is said once, before any
   day, exit 2.
