@@ -8,6 +8,8 @@
 |                | `index`, `fork`, `health-units`), `demo`, and `show stats`                       |
 | `add.py`       | `add`; `import backup`, `import inbox`, `import attachments`                     |
 | `sync.py`      | `sync`; `doctor sources`; `setup assets`                                         |
+| `goals.py`     | `goal`: `add`, `review`, `list`, `import` (RFC 0036)                             |
+| `chapters.py`  | `chapter`: `open`, `close`, `list` (RFC 0036)                                    |
 | `derive.py`    | `derive`: `stays`, `flights`, `keepers`, `transcripts`, `descriptions`           |
 | `day.py`       | `show` (a day, a page, `year`, `days`), `day`, `digest`, `search`;               |
 |                | `setup questions`                                                                |
@@ -23,7 +25,7 @@
 | `lab.py`       | `lab`                                                                            |
 | `aliases.py`   | the old top-level names and the words each became; `cli.main` rewrites them      |
 
-The 22 top-level commands, their groups and their order are `parser.GROUPS` and `parser.ARGUMENTS`;
+The 25 top-level commands, their groups and their order are `parser.GROUPS` and `parser.ARGUMENTS`;
 `docs/commands.md` lists them with the old names (the October 2026 audit, Decision 1).
 
 A command is two functions in its family's module: `<command>_arguments(sub)` declares its arguments

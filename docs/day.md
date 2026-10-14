@@ -174,6 +174,12 @@ are as they always were.
    `policy/crossing.json`, not the head: one above the entry's `max_tier` today (lowered, expired or
    removed since) is not shown, and when the day's standing draft is one, the row says `superseded by
    policy` and why, and nothing of the draft ([the dream](dream.md), *When the entry changes*).
+8. **Goals, reviews and chapters** (RFC 0036, [goals](goals.md)) — the chapter the day is in, in the
+   header after the signed state (`· chapter The Lofoten summer`, with `, clashes with <name>` should
+   two standing chapters hold the day); after the draft, a `reviews` row per review standing on the
+   day the verdict is about, `let go · month · <the goal's current text> · <note>`, ending `written
+   2026-10-11 20:30` when it was written on a later day; then the goal and chapter lines written on
+   the day, each `· superseded` when a later line replaced it.
 
 ## What makes a stop a stay
 
@@ -330,7 +336,10 @@ standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `se
 `why`), left out under `--no-dream` too. On a day with a
 reflection (`day reflect`, or a note labelled `reflection` through the MCP door) the object carries
 `reflection`, the latest standing one: `line`, `seq`, `at`, `at_local`, `source` and `text`; the key
-is absent on every other day.
+is absent on every other day. Likewise `chapter` (`name`, `line`, `from`, `to`, and `clash` when another
+standing chapter holds the day), `reviews` (`line`, `goal`, `goal_text`, `disposition`, `period`,
+`note`, `recorded_at`), `goals` and `chapters` (the lines written on the day, each with `superseded`)
+are there only on a day that has them ([goals](goals.md#on-the-day)).
 
 ## A window of days
 

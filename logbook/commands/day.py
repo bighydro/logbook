@@ -7,10 +7,10 @@ import argparse
 import json
 import sys
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
@@ -24,8 +24,21 @@ from ..contrib import (
     week_paper,
     year_poster,
 )
+from ..core import (
+    chapter,
+    day_start,
+    flights,
+    goals,
+    keepers,
+    notes,
+    pages,
+    policy,
+    reading,
+    search,
+    signing,
+    stays,
+)
 from ..core import day as day_reader
-from ..core import day_start, flights, keepers, notes, pages, policy, reading, search, signing, stays
 from ..core import days as days_reader
 from ..core import year as year_reader
 from ..core.chain import Line
@@ -190,23 +203,44 @@ def cmd_show(a: argparse.Namespace) -> None:
         superseded = idx.superseded(flights.KIND)  # a flight another flight line replaced (RFC 0013 rule 4)
         names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
         signature = signing.signature_of(idx, day, str(lb.meta["owner_id"]))  # RFC 0034: the header
+        held = chapter.for_day(idx.by_kind(chapter.KIND), retracted, day)  # RFC 0036: the header too
+        goal_texts, replaced = _owner_lines(idx, rows, retracted)
     if not rows:
         print(f"{day}: nothing logged")
         return
+    superseded = {**superseded, **replaced}
     rows.sort(
         key=lambda line: (instant_of(line["at"]), line["seq"])
     )  # by the instant, then seq (SPEC §3.2, #123)
     head = f"{day}  {signing.state_text(signing.signed_json(signature, str(tz), None))}"
+    if held is not None:
+        head += f"{day_reader.DOT}{chapter.header_text(held)}"
     print(head if days.midnight else f"{head}{day_reader.DOT}{days.describe()}")
     hero = keepers.hero_row([*rows, *retracted.values()])  # RFC 0024 rule 4: the day's hero photos
     if hero:
         print(f"  {hero}")
     descriptions = by_photo(line for line in rows if line["id"] not in retracted)
-    for text in _day_rows(rows, retracted, tz, names, superseded, descriptions):
+    for text in _day_rows(rows, retracted, tz, names, superseded, descriptions, goal_texts):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
+
+
+def _owner_lines(
+    idx: Any, rows: Sequence[Line], retracted: Mapping[str, Line]
+) -> tuple[dict[str, str], dict[str, int]]:
+    """For `show`, when the day has a goal, review or chapter line (RFC 0036): the current text of
+    each goal a review names, and the seq of the line that superseded each goal and chapter line."""
+    kinds = {line.get("kind") for line in rows}
+    if not kinds & {goals.KIND, goals.REVIEW, chapter.KIND}:
+        return {}, {}
+    every_goal = goals.Goals(idx.by_kind(goals.KIND), retracted)
+    replaced = {id_: int(every_goal.by_id[later]["seq"]) for id_, later in every_goal.successor.items()}
+    found = chapter.chapter_lines(idx.by_kind(chapter.KIND), retracted)
+    by_id = {str(line["id"]): line for line in found}
+    replaced.update({id_: int(by_id[later]["seq"]) for id_, later in chapter.successors(found).items()})
+    return goals.texts(every_goal, rows), replaced
 
 
 def day_arguments(sub: Subparsers) -> None:
