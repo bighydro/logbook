@@ -206,6 +206,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("verify", "--keyless"),
     ("videos", "infer"),  # RFC 0039: reads the cache on this machine, never the network
     ("videos", "infer", "--dry-run"),
+    ("review", "videos"),  # the queue reads the record and the registries alone
+    ("review", "videos", "--json"),
 )
 
 

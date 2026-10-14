@@ -16,9 +16,11 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable, Sequence
+from datetime import datetime
 from typing import Any, NoReturn
+from zoneinfo import ZoneInfo
 
-from ..core.store import Logbook
+from ..core.store import HeadMoved, Logbook
 from .common import Subparsers
 
 KINDS = ("person", "org", "idea", "asset", "place", "speakers")  # speakers: RFC 0038 §4, `commands.speakers`
@@ -35,6 +37,7 @@ PLACE_FLAGS = (
 )
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
+VIDEO_KINDS = ("videos",)  # RFC 0039: the scenes `videos infer` proposed (`_review_videos`)
 
 
 class Queue:
@@ -243,7 +246,13 @@ def review_arguments(sub: Subparsers) -> None:
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
         " With no KIND, every queue, one block each.",
     )
-    s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
+    s.add_argument(
+        "kind",
+        nargs="?",
+        choices=(*KINDS, *VIDEO_KINDS),
+        metavar="KIND",
+        help=f"one of {', '.join((*KINDS, *VIDEO_KINDS))}",
+    )
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
     s.add_argument(
         "--reject", action="append", metavar="N[,N]", help="reject these: one entity-review/v1 line each"
@@ -276,6 +285,35 @@ def review_arguments(sub: Subparsers) -> None:
     from .speakers import speakers_arguments
 
     speakers_arguments(s)
+    v = s.add_argument_group("videos", "with `review videos` (RFC 0039); --top counts scenes")
+    v.add_argument(
+        "--place",
+        nargs=2,
+        action="append",
+        metavar=("N", "NAME"),
+        help="confirm scene N at your own place: a name of places.json or an asset of assets.json; none for"
+        " no place",
+    )
+    v.add_argument(
+        "--date",
+        nargs=2,
+        action="append",
+        metavar=("N", "WHEN"),
+        help="confirm scene N on your own date: 1994, 1994-07, 1994-07-14, 'summer 1994', 1994-06..1994-08;"
+        " none for no date",
+    )
+    v.add_argument(
+        "--ask", action="append", metavar="N[,N]", help="ask the family: an open task, list videos"
+    )
+    shown = v.add_mutually_exclusive_group()
+    shown.add_argument(
+        "--asked", action="store_true", help="the scenes kept to ask the family, to answer them now"
+    )
+    shown.add_argument(
+        "--answered",
+        action="store_true",
+        help="the scenes already confirmed, to correct one: a new answer supersedes the standing line",
+    )
     s.set_defaults(fn=cmd_review)
 
 
@@ -283,6 +321,9 @@ def cmd_review(a: argparse.Namespace) -> None:
     """`review [KIND] [--accept N[,N]] [--reject N[,N]] [--name N NAME] [--all-above SCORE] [--json]`
     (and, for a place, `setup places review`'s options): one sitting (`sitting`). With no KIND,
     every queue in turn, nothing written."""
+    if a.kind in VIDEO_KINDS:
+        _review_videos(a)
+        return
     lb = Logbook.find()
     if a.kind is None:
         _every_queue(lb, a)
@@ -365,6 +406,173 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 def _refuse(prog: str, reason: str) -> NoReturn:
     print(f"{prog}: {reason}", file=sys.stderr)
     sys.exit(2)
+
+
+# -- videos (RFC 0039) ---------------------------------------------------------------------------------
+
+
+def _review_videos(a: argparse.Namespace) -> None:
+    """`review videos [--accept N[,N]] [--place N NAME] [--date N WHEN] [--reject N[,N]] [--ask N[,N]]
+    [--top N] [--json]`: the queue (`video_review.read`), or the answers written (`video_review.plan`,
+    `write`); on a terminal with no answer given, one scene at a time. Exit 2, nothing written, for an
+    answer the queue cannot take or a head another writer moved."""
+    from ..contrib import video_review
+    from ..core import assets, places
+
+    lb = Logbook.find()
+    try:
+        accept = _numbers(a.accept)
+        reject = _numbers(a.reject)
+        ask = _numbers(a.ask)
+        place = {_number(n): name for n, name in a.place or []}
+        when = {_number(n): text for n, text in a.date or []}
+    except ValueError as e:
+        print(f"review: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.top is not None and a.top < 1:
+        print("review: --top is a number of scenes, 1 or more", file=sys.stderr)
+        sys.exit(2)
+    today = datetime.now(ZoneInfo(str(lb.meta["timezone"]))).date()
+    try:
+        known, owned = places.read(lb.root), assets.read(lb.root)
+    except (places.PlaceError, assets.AssetError) as e:
+        print(f"review: {e}", file=sys.stderr)
+        sys.exit(2)
+    told = bool(accept or reject or ask or place or when)
+    with lb.writer() if told else _nothing():
+        queue = video_review.read(lb, _mode(a))
+        if told:
+            try:
+                answers = video_review.plan(queue, accept, reject, ask, place, when, known, owned, today)
+                written = video_review.write(lb, queue, answers)
+            except (video_review.ReviewError, HeadMoved) as e:
+                print(f"review: {e}", file=sys.stderr)
+                sys.exit(2)
+            _say_written(written, a.json)
+            return
+    if not a.json and sys.stdin.isatty() and sys.stdout.isatty() and queue.rows:
+        _sitting(lb, queue, a.top, known, owned, today)
+        return
+    rows = queue.rows[: a.top] if a.top is not None else queue.rows
+    if a.json:
+        data = video_review.to_json(queue)
+        data["rows"] = data["rows"][: len(rows)]
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    print(video_review.head_text(queue))
+    for n, row in enumerate(rows, 1):
+        for text in video_review.row_lines(lb, n, row):
+            print(text)
+    if len(rows) < len(queue.rows):
+        print(f"  and {len(queue.rows) - len(rows)} more; --top shows more")
+    if queue.rows:
+        print(
+            "nothing written: `review videos --accept N[,N]`, `--place N NAME`, `--date N WHEN`,"
+            " `--reject N[,N]` or `--ask N[,N]`"
+        )
+    else:
+        print("nothing to review: `videos infer` proposes the scenes of the files in the cache")
+
+
+def _sitting(
+    lb: Logbook, queue: object, top: int | None, known: object, owned: object, today: object
+) -> None:
+    """One scene at a time on a terminal: y confirms, n refuses, a keeps it to ask the family, Enter
+    skips, q stops; each answer is written at once, the queue read again after it."""
+    from ..contrib import video_review
+
+    shown = 0
+    skipped: set[str] = set()
+    while True:
+        with lb.writer():
+            current = video_review.read(lb)
+            pending = [(n, row) for n, row in enumerate(current.rows, 1) if row.id not in skipped]
+            if not pending or (top is not None and shown >= top):
+                print("done")
+                return
+            n, row = pending[0]
+            for text in video_review.row_lines(lb, n, row):
+                print(text)
+            shown += 1
+            try:
+                said = (
+                    input("  y confirm / n not so / a ask the family / Enter skip / q stop: ")
+                    .strip()
+                    .casefold()
+                )
+            except EOFError:
+                said = "q"
+            if said == "q":
+                return
+            verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said)
+            if verb is None:
+                skipped.add(row.id)
+                continue
+            try:
+                answers = video_review.plan(
+                    current,
+                    [n] if verb == "accept" else [],
+                    [n] if verb == "reject" else [],
+                    [n] if verb == "ask" else [],
+                    {},
+                    {},
+                    known,  # type: ignore[arg-type]
+                    owned,  # type: ignore[arg-type]
+                    today,  # type: ignore[arg-type]
+                )
+                _say_written(video_review.write(lb, current, answers), False)
+            except (video_review.ReviewError, HeadMoved) as e:
+                print(f"  {e}")
+                skipped.add(row.id)
+
+
+def _say_written(written: list, as_json: bool) -> None:  # type: ignore[type-arg]
+    if as_json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "scene": w.row.ref,
+                        "answer": w.verb,
+                        "line": None if w.line is None else w.line["id"],
+                        "text": w.text,
+                    }
+                    for w in written
+                ],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return
+    for w in written:
+        seq = f" (#{w.line['seq']})" if w.line is not None else ""
+        print(f"{w.row.video.name} · {w.row.ref.split('#', 1)[1]}: {w.text}{seq}")
+
+
+def _mode(a: argparse.Namespace) -> str:
+    return "asked" if getattr(a, "asked", False) else "answered" if getattr(a, "answered", False) else "open"
+
+
+class _nothing:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+def _numbers(given: list[str] | None) -> list[int]:
+    found: list[int] = []
+    for text in given or []:
+        found += [_number(part) for part in text.split(",") if part.strip()]
+    return found
+
+
+def _number(text: str) -> int:
+    try:
+        return int(str(text).strip())
+    except ValueError:
+        raise ValueError(f"{text!r} is not a scene's number") from None
 
 
 # -- status ----------------------------------------------------------------------------------------------
