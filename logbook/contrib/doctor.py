@@ -5,8 +5,9 @@ file a reader would create, so running it changes nothing.
 The checks, in the order they print:
 
 - `record`: a record is found (`LOGBOOK_HOME`, the working folder, `~/Logbook`) and `verify` is
-  green: every hash recomputes and `logbook.json` names the last line. Not found, not intact or
-  hashed by another rule is a fail.
+  green: every hash recomputes, every timestamp is an instant and `logbook.json` names the last line.
+  Not found, not intact or hashed by another rule is a fail. The attachments the lines name are looked
+  for and the missing ones counted in the pass (SPEC §1.1 allows them); their bytes are `verify`'s.
 - `index`: `index.sqlite` was built at the record's head (a stale or missing index is a warn: the
   next reader rebuilds it, `logbook index` shows progress).
 - `day-start`: where the owner's day begins, when `logbook.json` sets `day_start` to anything but
@@ -85,7 +86,7 @@ from pathlib import Path
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
-from ..core import assets, day_start, drafts, index, places, plausible, policy, sealing
+from ..core import assets, attachments, day_start, drafts, index, places, plausible, policy, sealing
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
 from . import adapters, home, last_run, schedule, serve
@@ -136,10 +137,14 @@ class Check:
 
 
 def record_check(lb: Logbook) -> Check:
-    """`verify` on the files (never the index): the chain recomputes and `logbook.json` is fresh."""
+    """`verify` on the files (never the index): the chain recomputes and `logbook.json` is fresh. The
+    files the lines name are looked for, and the missing ones counted in the pass, as `verify` lists
+    them without failing (SPEC §1.1); their bytes are `verify`'s to hash, not a check that runs four
+    times a day."""
     warnings: list[str] = []
+    walk = attachments.Walk(hash_plain=False, open_sealed=False)
     try:
-        seq, head, errors = lb.verify(warnings)
+        seq, head, errors = lb.verify(warnings, walk=walk)
     except FormatError as e:
         return Check("record", "fail", f"{lb.root}: {e}")
     except (OSError, ValueError) as e:  # logbook.json unreadable, or not the object SPEC §1 describes
@@ -152,7 +157,13 @@ def record_check(lb: Logbook) -> Check:
             f"{lb.root}: {errors[0]}{more}; run `logbook verify`, and `logbook repair fork` when it"
             " reports two chains",
         )
-    detail = f"{seq:,} lines, head {head[:12]}…, verified; {lb.root}"
+    missing = len(walk.missing)
+    if missing:
+        noted = f"; {missing:,} attachment{'s' if missing != 1 else ''} missing (SPEC §1.1 allows it;"
+        noted += " `logbook attach status`)"
+    else:
+        noted = ""
+    detail = f"{seq:,} lines, head {head[:12]}…, verified{noted}; {lb.root}"
     if warnings:
         n = len(warnings)
         return Check(

@@ -5,7 +5,8 @@ message, a transcript (SPEC §1.1, ADR 0015). One file per distinct content, nam
 hex SHA-256 of its exact bytes, no extension, no subdirectories. The store is write-once and never
 pruned; a line that points at a file is the reason the file stays. The chain covers lines, not
 bytes: the digest is in the line, so a changed file is detectable, and `verify` of the chain never
-fails because a file is missing.
+fails because a file is missing. It lists the missing ones and hashes the present ones against their
+names, a sealed one with the identity ([When verify fails](recovery.md#the-files-the-lines-name)).
 
 Three commands tend it. None of them appends a line.
 
@@ -105,7 +106,9 @@ attachments/: 3 files, 56 bytes (56 B)
 Every file under `attachments/` whose name is a digest is streamed through SHA-256 and compared with
 its name. A file whose bytes hash to something else is listed and the command exits 1 (SPEC §1.1: a
 present file whose bytes do not match its name is an error); an entry under another name — a
-temporary file a run left behind — is counted and ignored. A progress line every 500 files.
+temporary file a run left behind — is counted and ignored. A progress line every 500 files. It walks
+the store, every file whether a line names it or not; `logbook verify` walks the lines, every file one
+names, and lists the ones the store does not hold.
 
 ```
 attachments/: 3 files checked, 56 bytes, every file matches its name

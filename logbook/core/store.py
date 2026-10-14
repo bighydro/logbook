@@ -45,10 +45,17 @@ def now_utc() -> str:
 
 
 def utc(stamp: str) -> str:
-    """`stamp` as SPEC §2 wants it written: RFC 3339 in UTC with a literal Z. A stamp that already
-    ends in Z is kept verbatim (it is hashed as written); a numeric offset is converted, keeping
-    the fractional seconds as given; a stamp with no zone at all is refused."""
+    """`stamp` as SPEC §2 wants it written: an RFC 3339 instant in UTC with a literal Z. A stamp that
+    already ends in Z is kept verbatim when it is an instant (`chain.is_instant`: it is hashed as
+    written) and refused when it is not, as `not-a-dateZ` or `2026-02-30T07:30:00Z` are; a numeric
+    offset is converted, keeping the fractional seconds as given; a stamp with no zone at all is
+    refused. What this returns is always an instant, so no line is written that `verify` reports."""
+    from .chain import is_instant
+
+    not_one = f"timestamp {stamp!r} is not an RFC 3339 instant in UTC, e.g. 2026-03-01T07:30:00Z"
     if stamp.endswith("Z"):
+        if not is_instant(stamp):
+            raise ValueError(not_one)
         return stamp
     try:
         parsed = datetime.fromisoformat(stamp)
@@ -57,8 +64,14 @@ def utc(stamp: str) -> str:
     if parsed.tzinfo is None:
         raise ValueError(f"timestamp {stamp!r} has no zone; SPEC §2 wants UTC, e.g. 2026-03-01T07:30:00Z")
     fraction = FRACTION.search(stamp)
-    seconds = parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
-    return seconds + (fraction.group(0) if fraction else "") + "Z"
+    try:
+        seconds = parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+    except OverflowError:  # an offset that carries the year 1 or 9999 out of range
+        raise ValueError(not_one) from None
+    written = seconds + (fraction.group(0) if fraction else "") + "Z"
+    if not is_instant(written):  # a year before 1000, which strftime does not pad on every platform
+        raise ValueError(not_one)
+    return written
 
 
 FRACTION = re.compile(r"\.\d+(?=[+-]\d\d:?\d\d$)")  # the fractional seconds before a numeric offset
@@ -297,17 +310,21 @@ class Logbook:
         opened.pop(sealing.FIELD, None)
         return opened
 
-    def _opener(self) -> Opener | None:
-        """What `verify` opens sealed lines with: None (keyless) when there is no identity."""
+    def _opener(self, seen: Callable[[dict[str, Any]], None] | None = None) -> Opener | None:
+        """What `verify` opens sealed lines with: None (keyless) when there is no identity. `seen` is
+        handed the payload of every line that opens, so `verify` walks the attachments a sealed line
+        names without opening it twice."""
         identities = self.identities
         if not identities:
             return None
 
         def check(line: Line) -> str | None:
             try:
-                sealing.open_line(line, identities)
+                payload = sealing.open_line(line, identities)
             except (sealing.SealError, sealing.MissingExtra) as e:
                 return str(e).removeprefix(f"line {line.get('seq')}: ")  # verify_lines names the line once
+            if seen is not None:
+                seen(payload)
             return None
 
         return check
@@ -517,35 +534,50 @@ class Logbook:
         progress: FileProgress | None = None,
         counts: dict[str, int] | None = None,
         keyed: bool | None = None,
+        walk: attachments.Walk | None = None,
     ) -> tuple[int, str, list[str]]:
         """(seq, head, errors) of the files, never the index, streamed through `lines()`: memory is
         one line per month file however long the record. A month file cut inside a line (a crash,
         SPEC §3) or a line that is not one JSON object is an error naming the file and line, and
         `seq` and `head` are still those of the lines read, so a torn record reports the last line
-        written whole and its hash, never 0 and GENESIS while a line survives. What this release
-        only warns about (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when
-        a list is given.
+        written whole and its hash, never 0 and GENESIS while a line survives. A timestamp that is
+        not an RFC 3339 instant is an error naming the line; what this release only warns about
+        (SPEC §2 timestamps with a numeric offset) is appended to `warnings` when a list is given.
         `progress` is told of each month file as it is finished. Sealed lines are opened and
         checked against their digest when the identity is here (`keyed` None), always when
         `keyed` is True (no identity is then an error), never when False; `counts` is told how
-        many were sealed, opened and plain at tier 2 or 3 (RFC 0029 §4.3)."""
+        many were sealed, opened and plain at tier 2 or 3 (RFC 0029 §4.3). With a `walk`, the
+        attachment references are walked too (SPEC §1.1, `attachments.Walk`): every file a line
+        names, a sealed line's when it opens, is looked for in the store after the lines; a missing
+        one is listed in the walk and is not an error, a present one that does not hash to its name
+        is (a sealed one is opened when the line could be, the identity here and `keyed` not False).
+        `verify` and `doctor` pass one; a caller that only needs the chain does not, and reads no
+        attachment."""
         meta = self.meta
         self._check_format(meta)
         kept = 0 if warnings is None else len(warnings)
-        opener = None if keyed is False else self._opener()
+        opener = None if keyed is False else self._opener(None if walk is None else walk.note)
         if keyed is True and opener is None:
             return 0, GENESIS, [f"no identity at {self.identity_file} to open the sealed lines with"]
         tally = {} if counts is None else counts
         unreadable: list[str] = []  # lines that are not one (SPEC §3, truncation), by file and line
+
+        def walked(lines: Iterator[Line]) -> Iterable[Line]:
+            return lines if walk is None else walk.through(lines)
+
         try:
-            seq, head, errors = verify_lines(self.lines(progress, unreadable), warnings, opener, tally)
+            seq, head, errors = verify_lines(
+                walked(self.lines(progress, unreadable)), warnings, opener, tally
+            )
         except UnsortedFile:  # not written by this code; SPEC §3 orders by seq regardless
             if warnings is not None:
                 del warnings[kept:]
             tally.clear()
             unreadable.clear()
+            if walk is not None:
+                walk.again()
             seq, head, errors = verify_lines(
-                self._lines_by_seq(progress, unreadable), warnings, opener, tally
+                walked(self._lines_by_seq(progress, unreadable)), warnings, opener, tally
             )
         errors.extend(unreadable)
         if meta["seq"] != seq or meta["head"] != head:
@@ -553,6 +585,8 @@ class Logbook:
                 f"logbook.json says seq={meta['seq']} head={meta['head'][:12]}…, "
                 f"files say seq={seq} head={head[:12]}…"
             )
+        if walk is not None:
+            errors.extend(walk.check(self.root, [] if opener is None else self.identities))
         return seq, head, errors
 
     # -- writing -------------------------------------------------------------

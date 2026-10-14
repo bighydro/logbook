@@ -14,6 +14,13 @@ a record in this table is put right before it is migrated or sealed and never by
 | `seq N expected N+1` and `prev does not match previous hash` on every second line from one seq | two chains fork at one head (#234): a long writer wrote its batch chained from a head another writer had already moved past | `logbook repair fork`, then `logbook repair fork --apply` |
 | `created as logbook/0.1 …` | the record was hashed by the rule before the RFC 8785 fix | `logbook repair migrate` |
 | `hash does not recompute` on one line | a byte of a line changed on disk, or was changed | restore from backup; the chain says which line |
+| `line n: at '…' is not an RFC 3339 instant (SPEC §2)`, or `end`, `recorded_at` | the line carries a timestamp that names no instant (`not-a-dateZ`, `2026-02-30T07:30:00Z`): a line made by hand or by another tool, or one an earlier release appended, which took any stamp ending in `Z`. The index cannot place it either | the stamp is inside the line's hash and no command edits a line: restore the record from the last backup taken before that line, then sync again (`sync` skips what the record already has) and add back by hand what came after |
+| `line n: attachments/<sha256> holds bytes that hash to …, not its name (SPEC §1.1)` | the file the line names changed on disk: the line is right, the store is not | restore that one file from a backup; `logbook backup --verify` hashes a snapshot's files the same way |
+| `line n: attachments/<sha256> opens to bytes that do not hash to its name (SPEC §1.1)` | a sealed file was replaced by one that opens with your identity and holds other bytes, which anyone with your recipients can make; only the identity tells the two apart | restore that file from a backup, and find what wrote it |
+| `line n: attachments/<sha256> does not open with this identity: …` | a sealed file sealed to other recipients, or damaged | restore that file from a backup; `logbook key show` names the recipients the record seals to |
+
+A file the lines name that the store does not hold is not in this table: `verify` lists it and stays valid
+([below](#the-files-the-lines-name)).
 
 ## Two chains forked at one head
 
@@ -77,6 +84,47 @@ Google Drive). The dry run always works.
 The orphan lines are observations too; a source that is synced again will bring them back, chained
 correctly, and `append_many` skips the ones the record already has by `raw_id`. To put them back by hand,
 `logbook add repair/<stamp>-removed.jsonl` appends them as new lines at the head.
+
+## The files the lines name
+
+The chain covers lines, not bytes, but a line names its files by digest ([SPEC §1.1](SPEC.md#11-attachments)),
+so after the lines `verify` looks for every file of the attachment store a line names: a reference whose
+`path` is `attachments/<sha256>`, or an adapter's pre-attach hash (`extra.media` with a `local_path`, the
+file `logbook attach import-backup` fills in), in a sealed line when the identity opens it. A digest alone
+names no file of the store and is not looked for: a mail attachment counted and not kept, a body hashed and
+never kept, a signed day's page. Each file is looked at once, the first line that names it standing for
+the rest, and every line counts, a retracted one too:
+
+- **missing**: listed under `attachments:` with that line, and not an error: `verify` stays valid and exits
+  0, as SPEC §1.1 requires. `logbook attach status` counts them by source; a phone source's media is
+  missing until `attach import-backup` has run.
+- **present and plain**: hashed against its name; bytes that hash to anything else are an error naming the
+  line (the table above). `--no-attachment-digests` leaves present plain files unhashed, for a
+  store too large to read on every run, and counts them `not hashed`; a missing file is still listed.
+- **present and sealed**: with the identity, opened and its plaintext hashed against its name; a mismatch,
+  or a file that does not open, is an error (the last two rows). A verifier with the key must make this
+  check (SPEC §1.1 and §3), so `--no-attachment-digests` does not skip it. Without the identity, or with
+  `--keyless`, a sealed file is counted `sealed and not opened`.
+
+```
+valid — 1204 lines, head 4dc18fde900da55538fbd134e48652282d044bc2ec8c28ac0573fee15506b599
+  attachments: 3 files named by the lines; 2 present, checked against their name; 1 missing, reported and not an error (SPEC §1.1):
+    attachments/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 (line 29)
+```
+
+Twenty missing files are listed by name, the rest counted. `doctor` looks for the same files and counts the
+missing ones in its `record` line, which still passes; it does not hash them, since it runs four times a
+day ([The doctor](doctor.md)). `logbook attach verify` is the other walk: every file in the store, named by
+a line or not, against its name ([The attachment store](attachments.md)).
+
+## Timestamps
+
+`at`, `end` (when it is not null) and `recorded_at` are RFC 3339 instants ([SPEC §2](SPEC.md#2-the-line-the-envelope)).
+`append` refuses a stamp that is not one, whatever it ends in, and keeps one that is exactly as it was
+given, since the string is hashed as written: `07:30:00Z` and `07:30:00.000Z` both stand. `verify` reports
+a line whose stamp is not one as an error naming the line (the table above); a stamp that is an instant but
+is written with an offset, `+01:00`, is a warning this release and an error in the next. A leap second
+(`23:59:60Z`) and the year 0000 are refused too: no reader here can place them on a day.
 
 [Backup](backup.md) says how to keep a snapshot so that the first row of the table is the only one you
 ever meet.

@@ -17,7 +17,7 @@ and a verbatim reference still resolves. The age header in its first 22 bytes is
 file a sealed record attaches again is sealed in place: the content did not change, only its
 protection, and that is raised, never lowered. `read_bytes` and `opened` give a reader the plaintext
 when the identity is here; `check` tells a verifier whether a file hashes to its name, or that it
-could not tell.
+could not tell. `references` and `Walk` are what `verify` makes of the files the lines point at.
 """
 
 from __future__ import annotations
@@ -27,12 +27,13 @@ import hashlib
 import os
 import re
 import tempfile
-from collections.abc import Callable, Iterator, Sequence
-from pathlib import Path
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 
 from . import sealing
-from .chain import AGE_MAGIC
+from .chain import AGE_MAGIC, Line, is_sealed
 
 DIR = "attachments"
 CHUNK = 1 << 20
@@ -244,3 +245,123 @@ def check(path: Path, identities: Sequence[Any] = ()) -> bool | None:
         return None
     with opened(path.parent.parent, path.name, identities) as plain:
         return digest_path(plain)[0] == path.name
+
+
+def references(obj: object) -> Iterator[str]:
+    """The digests of the store files a payload points at: every object in it, at any depth, whose
+    `sha256` is a digest and that places the file in the store, by a `path` of `attachments/<sha256>`
+    (the SPEC §1.1 reference) or by a `local_path` the attach pass fills the store from (an adapter's
+    pre-attach hash, `extra.media`; `logbook attach import-backup`). A digest alone names no file of
+    the store: a mail attachment counted and not kept, a body hashed and never kept, a signed day's
+    page."""
+    if isinstance(obj, dict):
+        sha256 = obj.get("sha256")
+        if (
+            isinstance(sha256, str)
+            and is_digest(sha256)
+            and (_in_store(obj.get("path"), sha256) or isinstance(obj.get("local_path"), str))
+        ):
+            yield sha256
+        for child in obj.values():
+            yield from references(child)
+    elif isinstance(obj, list):
+        for child in obj:
+            yield from references(child)
+
+
+def _in_store(path: object, sha256: str) -> bool:
+    """Whether a reference's `path`, relative to the record root and `/`-separated (SPEC §1.1), is
+    `attachments/<sha256>`, by its parts."""
+    return isinstance(path, str) and PurePosixPath(path).parts == (DIR, sha256)
+
+
+SHOWN_ERRORS = 20  # attachment errors `Walk.check` lists one by one; the rest are counted
+
+
+@dataclass
+class Walk:
+    """The attachment references of a record, as `Logbook.verify` walks them (SPEC §1.1): given one,
+    it notes every file of the store a line names (`references`; a sealed line's when it opens with
+    the identity), then looks for each file once, after the lines. A missing file is listed in
+    `missing` with the first line that names it, and is not an error. A present one is checked: a
+    plain file is hashed against its name when `hash_plain` (a verifier MAY; on by default, `verify
+    --no-attachment-digests` turns it off on a large store); a sealed file is opened with the identity
+    and its plaintext hashed against its name when `open_sealed` and the identity is here (a verifier
+    with the key MUST); without the identity it is counted in `unopened`. A file that does not match,
+    or a sealed one that does not open, is an error of the record naming the line. `doctor`, which runs
+    four times a day, turns both off and looks for the files alone. Memory is one entry per distinct
+    file named."""
+
+    hash_plain: bool = True
+    open_sealed: bool = True
+    named: dict[str, int] = field(default_factory=dict)  # digest -> the first line that names it
+    present: int = 0
+    checked: int = 0  # present files whose bytes, or sealed plaintext, hash to their name
+    unhashed: int = 0  # present plain files left unhashed (`hash_plain` off)
+    unopened: int = 0  # present sealed files not opened: no identity, or `open_sealed` off
+    missing: list[tuple[str, int]] = field(default_factory=list)  # (digest, the first line naming it)
+    at: int = 0  # the line being read, counted from 1 in chain order
+
+    def through(self, lines: Iterable[Line]) -> Iterator[Line]:
+        """`lines` as they come, each counted and a plain line's references noted on the way; a sealed
+        line's are noted by `note` when the verifier opens it, before the next line is read."""
+        for line in lines:
+            self.at += 1
+            if not is_sealed(line):
+                self.note(line.get("payload"))
+            yield line
+
+    def note(self, payload: object) -> None:
+        """The references of the payload of the line being read."""
+        for sha256 in references(payload):
+            self.named.setdefault(sha256, self.at)
+
+    def again(self) -> None:
+        """Forget every line read: `verify` reads the record again, sorted."""
+        self.named.clear()
+        self.at = 0
+
+    def check(self, root: Path, identities: Sequence[Any] = ()) -> list[str]:
+        """Look for every file named, in the order the lines first name them; the errors of the
+        record, each naming the first line that names the file."""
+        errors: list[str] = []
+        store = Path(root) / DIR
+        for sha256, n in self.named.items():
+            path = store / sha256
+            if not path.is_file():
+                self.missing.append((sha256, n))
+                continue
+            self.present += 1
+            try:
+                problem = self._problem(path, identities)
+            except OSError as e:
+                problem = f"cannot be read: {e.strerror or e}"
+            if problem is not None:
+                errors.append(f"line {n}: {DIR}/{sha256} {problem}")
+        if len(errors) > SHOWN_ERRORS:
+            more = len(errors) - SHOWN_ERRORS
+            del errors[SHOWN_ERRORS:]
+            errors.append(f"…and {more:,} more attachment{'s' if more != 1 else ''} in error")
+        return errors
+
+    def _problem(self, path: Path, identities: Sequence[Any]) -> str | None:
+        """What is wrong with one present file, or None; counts it as checked, unhashed or unopened."""
+        if sealing.is_sealed_file(path):
+            if not self.open_sealed or not identities:
+                self.unopened += 1
+                return None
+            try:
+                matches = check(path, identities)
+            except (sealing.SealError, sealing.MissingExtra) as e:
+                return str(e).removeprefix(f"{path.name} ")
+            if not matches:
+                return "opens to bytes that do not hash to its name (SPEC §1.1)"
+        elif not self.hash_plain:
+            self.unhashed += 1
+            return None
+        else:
+            found = digest_path(path)[0]
+            if found != path.name:
+                return f"holds bytes that hash to {found[:12]}…, not its name (SPEC §1.1)"
+        self.checked += 1
+        return None
