@@ -100,8 +100,8 @@ places review read until 0.7, are views over it for one release. Nothing of it i
 
 ## What happened to a place's no
 
-Until 0.7 a place you rejected was kept in `state/places-review.json`, never as a line, and a backup
-left it out. It is a line now, and the file is a cache rebuilt from the lines. The pairs the file held
-from before still count; `setup places review --migrate-rejects` (or `review place --migrate-rejects`)
-writes each once as an `entity-review/v1` line, at the moment you said it, and a second run writes
-nothing.
+A place you reject is kept in `state/places-review.json`, never as a line, and a backup leaves it out.
+`setup places review --migrate-rejects` (or `review place --migrate-rejects`) writes each pair the file
+holds and no line does once as an `entity-review/v1` line of type place, at the moment you said it, and
+a second run writes nothing; the file is then a cache of those lines as well, rebuilt from them when
+the record has moved. Until you run it, `review` says how many pairs are not lines yet.
