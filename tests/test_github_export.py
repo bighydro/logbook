@@ -181,7 +181,7 @@ def test_a_clone_gives_a_line_per_commit_with_its_message_in_full(
     keyed = _keyed(lb)
     commits = [keyed[f"commit/{sha}"] for sha in shas]
     first = commits[0]
-    assert first["at"] == "2019-05-01T08:00:00Z" and (first["kind"], first["tier"]) == ("event", 1)
+    assert first["at"] == "2019-05-01T08:00:00Z" and (first["kind"], first["tier"]) == ("event", 2)
     p = first["payload"]
     assert p["title"] == "Start the old boat project" and p["notes"] == FIRST_MESSAGE
     assert p["extra"]["action"] == "committed" and p["extra"]["repo"] == OLDBOAT
@@ -264,6 +264,54 @@ def test_a_bare_repository_reads_as_its_clone(
     assert _add(str(bare)) == 0
     assert len(_lines(lb)) == 9
     assert _keyed(lb)[f"commit/{shas[0]}"]["payload"]["extra"]["repo"] == "oldboat", "no remote: its folder"
+    assert {line["tier"] for line in _lines(lb)} == {2}, "a bare clone says no more of its visibility"
+
+
+# -- the tier: a clone does not say whether its repository is public ----------------------------------
+
+UNKNOWN = "repository visibility not known"
+
+
+def test_a_clone_does_not_say_its_visibility_so_every_line_of_it_is_tier_2(
+    lb: Logbook, oldboat: tuple[Path, list[str]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, _shas = oldboat
+    assert _add(str(repo)) == 0
+    out = capsys.readouterr().out
+    lines = _lines(lb)
+    assert len(lines) == 9 and len(_versions(lb)) == 4
+    for line in lines:
+        assert line["tier"] == 2, line["payload"]["raw_id"]
+        assert line["payload"]["extra"]["tier_reason"] == UNKNOWN
+    assert "--public" in out, "the run says how to say it is public"
+
+
+def test_public_says_the_clone_is_public_and_its_lines_are_tier_1(
+    lb: Logbook, oldboat: tuple[Path, list[str]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, _shas = oldboat
+    assert _add(str(repo), "--public") == 0
+    lines = _lines(lb)
+    assert len(lines) == 9
+    assert {line["tier"] for line in lines} == {1}
+    assert not any("tier_reason" in line["payload"]["extra"] for line in lines)
+    assert "--public" not in capsys.readouterr().out
+
+
+def test_public_is_an_option_of_the_github_export_alone(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = tmp_path / "notes"
+    folder.mkdir()
+    (folder / "a.txt").write_text("a synthetic line\n", encoding="utf-8")
+    try:
+        cli.main(["add", "transcript", str(folder / "a.txt"), "--public"])
+    except SystemExit as e:
+        assert e.code == 2
+    else:
+        raise AssertionError("--public went to another adapter without a word")
+    assert "--public is not an option of the transcript adapter" in capsys.readouterr().err
+    assert _lines(lb) == []
 
 
 def test_a_noreply_address_spells_the_login(
@@ -322,10 +370,11 @@ def test_the_git_it_runs_reads_and_never_fetches(
 ARCHIVE_WEB = "https://github.example.org"
 
 
-def _archive(root: Path, work: Path) -> Path:
+def _archive(root: Path, work: Path, mark: dict[str, Any] | None = None) -> Path:
     """GitHub's account export (the migration archive) of sailplan, as its files spell things: the
-    repository, its bare git beside, issue #1 (Ola's, which Ines closed), pull request #2 (Ines's, an
-    agent's, merged), a comment, a review and an inline comment."""
+    repository (`private: false` unless `mark` says otherwise; a key given None is left out), its bare
+    git beside, issue #1 (Ola's, which Ines closed), pull request #2 (Ines's, an agent's, merged), a
+    comment, a review and an inline comment."""
     archive = root / "github-export"
     target = archive / "repositories" / "ines-example" / "sailplan.git"
     target.parent.mkdir(parents=True)
@@ -336,20 +385,21 @@ def _archive(root: Path, work: Path) -> Path:
         (archive / name).write_text(json.dumps(rows), encoding="utf-8")
 
     (archive / "schema.json").write_text(json.dumps({"version": "1.2.0"}), encoding="utf-8")
-    write(
-        "repositories_000001.json",
-        [
-            {
-                "type": "repository",
-                "url": url,
-                "owner": f"{ARCHIVE_WEB}/ines-example",
-                "name": "sailplan",
-                "private": False,
-                "default_branch": "main",
-                "git_url": "tarball://root/repositories/ines-example/sailplan.git",
-            }
-        ],
-    )
+    row: dict[str, Any] = {
+        "type": "repository",
+        "url": url,
+        "owner": f"{ARCHIVE_WEB}/ines-example",
+        "name": "sailplan",
+        "private": False,
+        "default_branch": "main",
+        "git_url": "tarball://root/repositories/ines-example/sailplan.git",
+    }
+    for key, value in (mark or {}).items():
+        if value is None:
+            row.pop(key, None)
+        else:
+            row[key] = value
+    write("repositories_000001.json", [row])
     write(
         "issues_000001.json",
         [
@@ -514,6 +564,79 @@ def test_an_account_export_gives_the_lines_sync_github_writes(
     assert inline["extra"]["path"] == "tides.md" and inline["extra"]["pull"]["number"] == 2
     comment = keyed["ines-example/sailplan/issues/comments/970300101"]["payload"]
     assert comment["title"] == "Which harbour first?" and comment["extra"]["actor"]["role"] == "owner"
+    assert {line["tier"] for line in _lines(lb)} == {1}, "the export marks sailplan public"
+
+
+@pytest.mark.parametrize(
+    ("mark", "public", "tier", "reason"),
+    [
+        ({"private": True}, False, 2, "private repository"),
+        ({"private": True}, True, 2, "private repository"),
+        ({"private": None, "visibility": "private"}, False, 2, "private repository"),
+        ({"private": None, "visibility": "internal"}, True, 2, "private repository"),
+        ({"private": None, "visibility": "public"}, False, 1, None),
+        ({"private": "no"}, True, 2, "private repository"),
+        ({"private": None}, False, 2, UNKNOWN),
+        ({"private": None}, True, 1, None),
+    ],
+    ids=[
+        "private",
+        "private-whatever-public-says",
+        "visibility-private",
+        "internal",
+        "visibility-public",
+        "a-mark-that-is-no-boolean",
+        "no-mark",
+        "no-mark-public",
+    ],
+)
+def test_an_account_export_marks_each_repository_and_its_mark_sets_the_tier(
+    lb: Logbook,
+    sailplan: tuple[Path, list[str]],
+    tmp_path: Path,
+    mark: dict[str, Any],
+    public: bool,
+    tier: int,
+    reason: str | None,
+) -> None:
+    work, shas = sailplan
+    archive = _archive(tmp_path, work, mark)
+    assert _add(str(archive), *(["--public"] if public else [])) == 0
+    lines = _lines(lb)
+    keys = {line["payload"]["raw_id"] for line in lines}
+    assert keys >= ARCHIVE_KEYS | {f"commit/{sha}" for sha in shas}
+    assert _versions(lb), "the doc versions of its bare repository"
+    for line in lines:
+        assert line["tier"] == tier, line["payload"]["raw_id"]
+        assert line["payload"]["extra"].get("tier_reason") == reason
+    merged = _keyed(lb)["ines-example/sailplan/pull/2/merged"]["payload"]["extra"]
+    assert merged["agent"] is True, "the agent's pull request, at the repository's tier"
+
+
+def test_an_act_whose_repository_the_export_does_not_list_is_tier_2(
+    lb: Logbook, sailplan: tuple[Path, list[str]], tmp_path: Path
+) -> None:
+    work, _shas = sailplan
+    archive = _archive(tmp_path, work)
+    other = f"{ARCHIVE_WEB}/ines-example/harbour-notes"
+    issues = json.loads((archive / "issues_000001.json").read_text(encoding="utf-8"))
+    issues.append(
+        {
+            "type": "issue",
+            "url": f"{other}/issues/7",
+            "repository": other,
+            "user": f"{ARCHIVE_WEB}/ola-example",
+            "title": "Moorings for the winter",
+            "body": "Ola's words in a repository the export does not list.",
+            "created_at": "2026-03-04T10:00:00.000+01:00",
+        }
+    )
+    (archive / "issues_000001.json").write_text(json.dumps(issues), encoding="utf-8")
+    assert _add(str(archive)) == 0
+    keyed = _keyed(lb)
+    unlisted = keyed["ines-example/harbour-notes/issues/7/created"]
+    assert unlisted["tier"] == 2 and unlisted["payload"]["extra"]["tier_reason"] == UNKNOWN
+    assert keyed["ines-example/sailplan/issues/1/created"]["tier"] == 1
 
 
 # -- the live source and the export, either first ------------------------------------------------------
@@ -608,3 +731,39 @@ def test_the_same_commit_and_issue_read_either_way_are_one_line(
     assert len([k for k in keys if "/file/README.md@" in k]) == 2, (
         "the doc versions come from the export alone"
     )
+    assert {line["tier"] for line in _lines(lb)} == {1}, "both roads say sailplan is public"
+
+
+@pytest.mark.parametrize("live_first", [True, False])
+def test_when_the_two_roads_disagree_on_the_tier_the_first_line_stands_and_is_never_doubled(
+    lb: Logbook,
+    sailplan: tuple[Path, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    live_first: bool,
+) -> None:
+    """The API says sailplan is public; its clone says nothing, so the clone's lines are tier 2. Each
+    commit is one line whichever road comes first, at the tier that road wrote it; nothing is
+    rewritten, and nothing is written twice at the other tier."""
+    work, shas = sailplan
+    fake = _live_from(work, shas)
+    fake.start()
+    try:
+        if live_first:
+            assert _sync(fake, monkeypatch) == 0
+            capsys.readouterr()
+            assert _add(str(work)) == 0
+        else:
+            assert _add(str(work)) == 0
+            capsys.readouterr()
+            assert _sync(fake, monkeypatch) == 0
+        assert "2 already in the record" in capsys.readouterr().out, "the two commits"
+    finally:
+        fake.stop()
+    keys = [line["payload"]["raw_id"] for line in _lines(lb)]
+    assert len(keys) == len(set(keys)), "each act once"
+    keyed = _keyed(lb)
+    for sha in shas:
+        assert keyed[f"commit/{sha}"]["tier"] == (1 if live_first else 2)
+    assert keyed["ines-example/sailplan/issues/1/created"]["tier"] == 1, "the API alone gives the issue"
+    assert {v["tier"] for v in _versions(lb)} == {2}, "the clone alone gives the doc versions"

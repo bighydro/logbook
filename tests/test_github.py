@@ -10,6 +10,8 @@ Which text a line carries, by the profile: `event/v1` (RFC 0009) has `notes`, "t
 body", so a commit's message, an issue's or a pull request's body, a review's and a comment's text
 are kept in full, and its tier is 1 whoever wrote the words — "an entry whose notes carry someone
 else's words is still tier 1 by default". A tier is where a line may travel, never who wrote it.
+Where the words were written decides it: a private repository's lines are tier 2, with the reason
+on the line (SPEC §4: a producer MAY write a higher tier than a SHOULD default for a reason it states).
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from github_api import (
     CREW,
     HARBOUR,
     INES,
+    INES_EMAIL,
     OLA,
     SAIL_PLAN_MESSAGE,
     SAILPLAN,
@@ -228,7 +231,8 @@ def test_first_run_writes_a_line_per_commit_issue_pull_review_and_comment(
         f"{SAIL}/pulls/comments/970500301",
     }
     for line in _lines(lb):
-        assert (line["kind"], line["tier"], line["end"]) == ("event", 1, None)
+        private = line["payload"]["extra"]["repo"] == HARBOUR  # harbour-notes is private: tier 2
+        assert (line["kind"], line["tier"], line["end"]) == ("event", 2 if private else 1, None)
         assert line["payload"]["schema"] == "event/v1"
         assert line["payload"]["calendar"] == {"id": "github", "name": "GitHub"}
         assert line["payload"]["all_day"] is False
@@ -420,6 +424,186 @@ def test_any_listed_handle_is_the_owner_spelt_as_the_owner_likes(lb: Logbook, fa
     keyed = _keyed(lb)
     assert keyed[_commit("c1")]["payload"]["extra"]["actor"]["role"] == "owner"
     assert keyed[_commit("c2")]["payload"]["extra"]["actor"]["role"] == "owner"
+
+
+# -- the tier: a private repository's lines are tier 2 --------------------------------------------------
+
+
+def _private(fake: FakeGitHub, name: str, private: bool = True) -> None:
+    """Make a repo private (or public) as the API marks it: `private` and `visibility` both."""
+    fake.repos[name]["private"] = private
+    fake.repos[name]["visibility"] = "private" if private else "public"
+
+
+def test_a_public_repos_lines_are_tier_1_and_a_private_ones_tier_2_with_the_reason(
+    lb: Logbook, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _sync() == 0
+    keyed = _keyed(lb)
+    private = keyed[_commit("h1")]
+    assert private["tier"] == 2 and private["payload"]["extra"]["repo"] == HARBOUR
+    assert private["payload"]["extra"]["tier_reason"] == "private repository"
+    assert private["payload"]["notes"] == "Harbour notes", "the text is kept; the tier says where it may go"
+    public = [line for line in _lines(lb) if line["payload"]["extra"]["repo"] == SAILPLAN]
+    assert len(public) == FIRST_RUN - 1
+    assert {line["tier"] for line in public} == {1}
+    assert not any("tier_reason" in line["payload"]["extra"] for line in public), "the default says nothing"
+    assert "1 from a private repository (tier 2)" in capsys.readouterr().out
+
+
+def test_every_line_of_a_private_repo_is_tier_2_its_agents_pull_request_too(
+    lb: Logbook, fake: FakeGitHub
+) -> None:
+    _private(fake, SAILPLAN)
+    assert _sync() == 0
+    lines = _lines(lb)
+    assert len(lines) == FIRST_RUN
+    for line in lines:
+        assert line["tier"] == 2, line["payload"]["raw_id"]
+        assert line["payload"]["extra"]["tier_reason"] == "private repository"
+    keyed = _keyed(lb)
+    flagged = {key for key, line in keyed.items() if line["payload"]["extra"].get("agent")}
+    assert {f"{SAIL}/pull/2/created", f"{SAIL}/pull/2/merged", _commit("c3")} <= flagged
+    assert keyed[f"{SAIL}/pull/2/reviews/970400201"]["payload"]["notes"] == "Looks right."
+    assert keyed[f"{SAIL}/pulls/comments/970500301"]["tier"] == 2, "Ola's words on a private diff"
+
+
+def test_all_reads_each_repos_visibility_from_the_list(
+    lb: Logbook, fake: FakeGitHub, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(REPOS_ENV, "--all")
+    assert _sync() == 0
+    assert not any(p == f"/repos/{HARBOUR}" for p in fake.paths()), "the list says it; no GET more"
+    tiers = {line["payload"]["extra"]["repo"]: line["tier"] for line in _lines(lb)}
+    assert tiers == {SAILPLAN: 1, HARBOUR: 2}
+
+
+@pytest.mark.parametrize(
+    ("marks", "reason"),
+    [
+        ({"private": None, "visibility": None}, "repository visibility not known"),
+        ({"private": False, "visibility": "internal"}, "private repository"),
+        ({"private": "false", "visibility": None}, "private repository"),
+        ({"private": False, "visibility": "secret"}, "private repository"),
+    ],
+    ids=["no-mark", "internal", "not-a-boolean", "unknown-word"],
+)
+def test_a_repo_not_marked_public_is_tier_2(
+    lb: Logbook, fake: FakeGitHub, capsys: pytest.CaptureFixture[str], marks: dict[str, Any], reason: str
+) -> None:
+    for key, value in marks.items():
+        if value is None:
+            fake.repos[HARBOUR].pop(key)
+        else:
+            fake.repos[HARBOUR][key] = value
+    assert _sync() == 0
+    line = _keyed(lb)[_commit("h1")]
+    assert line["tier"] == 2 and line["payload"]["extra"]["tier_reason"] == reason
+    said = "GitHub does not say whether it is public" in capsys.readouterr().err
+    assert said == (reason == "repository visibility not known")
+
+
+def test_a_change_of_visibility_applies_from_then_on_and_never_rewrites_a_line(
+    lb: Logbook, fake: FakeGitHub
+) -> None:
+    """harbour-notes is public at the first run, so h1 is written at tier 1, as every line was before
+    private repos were tier 2; then it is made private and gains h2. The second run reads h1 again (the
+    lookback) and leaves it as it is, once, at tier 1; h2 is tier 2. Then public again: h3 is tier 1."""
+    _private(fake, HARBOUR, private=False)
+    assert _sync() == 0
+    assert _keyed(lb)[_commit("h1")]["tier"] == 1
+    _private(fake, HARBOUR)
+    fake.add_commit(
+        HARBOUR, commit(HARBOUR, "h2", "Moorings", "2026-03-07T18:00Z", INES, "Ines Nordmann", INES_EMAIL, 1)
+    )
+    fake.requests.clear()
+    assert _sync() == 0
+    assert f"/repos/{HARBOUR}/commits/{sha('h1')}" not in fake.paths(), "the line is there: no detail asked"
+    keys = [line["payload"]["raw_id"] for line in _lines(lb)]
+    assert keys.count(_commit("h1")) == 1, "never doubled at tier 2"
+    keyed = _keyed(lb)
+    assert keyed[_commit("h1")]["tier"] == 1 and "tier_reason" not in keyed[_commit("h1")]["payload"]["extra"]
+    assert keyed[_commit("h2")]["tier"] == 2
+    _private(fake, HARBOUR, private=False)
+    fake.add_commit(
+        HARBOUR, commit(HARBOUR, "h3", "Fuel dock", "2026-03-08T18:00Z", INES, "Ines Nordmann", INES_EMAIL, 1)
+    )
+    assert _sync() == 0
+    keyed = _keyed(lb)
+    assert (keyed[_commit("h2")]["tier"], keyed[_commit("h3")]["tier"]) == (2, 1)
+    assert len(_lines(lb)) == FIRST_RUN + 2
+    _seq, _head, errors = lb.verify()
+    assert errors == []
+
+
+def test_a_crossing_at_tier_1_carries_nothing_from_a_private_repo(
+    lb: Logbook, fake: FakeGitHub, tmp_path: Path
+) -> None:
+    assert _sync() == 0
+    (lb.root / "policy" / "crossing.json").write_text(
+        json.dumps({"hermes": {"max_tier": 1}}), encoding="utf-8"
+    )
+    out = tmp_path / "crossing"
+    cli.main(
+        [
+            "export",
+            "crossing",
+            "--to",
+            "hermes",
+            "--since",
+            "2026-03-01T00:00:00Z",
+            "--until",
+            "2026-03-08T00:00:00Z",
+            "--unsigned",
+            "--out",
+            str(out),
+        ]
+    )
+    text = (out / "entries.jsonl").read_text(encoding="utf-8")
+    entries = [json.loads(row) for row in text.splitlines() if row.strip()]
+    crossed = [e for e in entries if e["source"] == "github"]
+    assert len(crossed) == FIRST_RUN - 1, "every line of the public repo"
+    assert {e["payload"]["extra"]["repo"] for e in crossed} == {SAILPLAN}
+    assert HARBOUR not in text and sha("h1") not in text and "Harbour notes" not in text
+
+
+def test_in_a_sealed_record_a_private_repos_lines_are_sealed_at_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake: FakeGitHub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A record that names recipients seals every tier 2 line (RFC 0029): a private repo's text is not
+    plain on disk, and without the identity the run writes nothing, says so in one sentence and keeps
+    the watermark, as any tier 2 source does."""
+    from logbook.core import sealing
+    from logbook.core.chain import is_sealed
+
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    lb = Logbook.init(tmp_path / "sealed", "Europe/Oslo")
+    meta = lb.meta
+    meta["recipients"] = [recipient for _secret, recipient in pairs]
+    lb._save_meta(meta)
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    _owner(lb, handles=["ines-example"])
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(tmp_path / "keys" / "absent.txt"))
+    assert _sync() == 2
+    assert "identity" in capsys.readouterr().err
+    assert _lines(lb) == [] and not (lb.root / "state" / "github.json").exists()
+    identity = tmp_path / "keys" / "owner.txt"
+    sealing.write_identity_file(identity, pairs[0][0], "test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    assert _sync() == 0
+    stored = [
+        json.loads(raw)
+        for path in lb.files()
+        for raw in path.read_text(encoding="utf-8").splitlines()
+        if raw.strip()
+    ]
+    sealed = [line for line in stored if line["source"] == "github" and is_sealed(line)]
+    assert len(sealed) == 1 and sealed[0]["tier"] == 2, "h1, harbour-notes's one commit"
+    assert "Harbour notes" not in json.dumps(stored) and HARBOUR not in json.dumps(stored)
+    opened = Logbook(lb.root).opened(sealed[0])["payload"]
+    assert opened["raw_id"] == _commit("h1") and opened["extra"]["tier_reason"] == "private repository"
+    assert _sync() == 0
+    assert len(_lines(lb)) == FIRST_RUN, "the blinded index knows the sealed line: nothing twice"
 
 
 # -- watermarks, --since, the repos ------------------------------------------------------------------

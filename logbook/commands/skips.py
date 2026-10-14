@@ -168,6 +168,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "github_unmarked": "with the actor marked neither owner nor other (list handles in policy/owner.json)",
     "github_issues_off": "repos with their issues switched off",
     "github_part_unreadable": "lists the token may not read",
+    "github_private": "from a private repository (tier 2)",
+    "github_visibility_unknown": "from a repository not known to be public (tier 2)",
 }
 
 

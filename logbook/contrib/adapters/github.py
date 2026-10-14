@@ -11,9 +11,17 @@ an issue's or a pull request's body, a review's and a comment's text go there in
 README's or a doc's text is never kept: its version is a digest, its length and its word count, as
 Notion's pages are (SPEC §1.1, the record holds a digest, not the text).
 
-**The tier.** 1, as SPEC §4 and RFC 0009 give `event/v1`, whoever wrote the words: "an entry whose
-notes carry someone else's words is still tier 1 by default". The tier is where a line may travel,
-never who wrote it; a comment Ola left is tier 1 as one Ines left is.
+**The tier.** Where the words were written, never who wrote them. A public repository's lines are
+tier 1, as SPEC §4 and RFC 0009 give `event/v1` ("`tier` SHOULD be 1"; "an entry whose notes carry
+someone else's words is still tier 1 by default"): a comment Ola left is tier 1 as one Ines left is.
+A private repository's lines are tier 2 (`PRIVATE_TIER`), so an issue's text, a review and other
+people's comments there never go where tier 1 crosses by default, with the reason on the line
+(`extra.tier_reason`), as SPEC §4 lets a producer write a higher tier than a SHOULD default "for a
+reason it states". A repository is public only when GitHub marks it so (`visibility`): `private`
+false, or a `visibility` of `public`, and nothing that says otherwise; an `internal` one, a mark that
+is no boolean or no word GitHub uses, is private; one with no mark at all is not known, and a line of
+it is tier 2 too (`repository visibility not known`). Every line is built with its repository's
+visibility (`line` takes it and has no default), so none can fall to tier 1 by omission.
 
 **A line.** `kind` `event`; `at` when the act happened (a commit's author date, an issue's
 creation, its close, a pull request's merge, a review's submission, a comment's creation), `end`
@@ -31,7 +39,8 @@ commit's author name; `role` `owner` or `other` once the owner is known); and wh
 a commit's `branch` and `files` (how many it changed), an issue's `labels`, a merge's `files`,
 `commits`, `base` and `head`, an inline comment's `path` and `review`, a doc's `file` `{path,
 blob}` and `content` `{sha256, bytes, media_type, words, words_delta}`. `agent` true when the
-line's own text carries the marker of an agent's session (`is_agent`).
+line's own text carries the marker of an agent's session (`is_agent`). `tier_reason` on a tier 2
+line: `private repository`, or `repository visibility not known`.
 
 **raw_id.** A commit is `commit/<sha>`, whichever repo it was read from: one commit, one line.
 Everything else is under the repo, lower case: `<repo>/issues/<n>/created`, `<repo>/pull/<n>/
@@ -65,13 +74,18 @@ the top whose name starts with `readme` or ends in a doc's suffix (`DOC_SUFFIXES
 words since the path's previous version: so an old project's ideas have a first-said date. A
 version is a path's content: the same bytes back at the same path later are no new version. The
 repo is named by the clone's `origin` when that is a hosting link (`https://<host>/<owner>/<name>`,
-`git@<host>:<owner>/<name>`), else by its folder. An account export gives, for every repository its
+`git@<host>:<owner>/<name>`), else by its folder. A clone says nothing of whether its repository is
+public, so its lines are tier 2 unless the owner says it is (`public`, `add github-export DIR
+--public`), and nothing here asks the network. An account export gives, for every repository its
 `repositories_*.json` lists, its bare repository's history as a clone's, under the name it gives; and
 from its `issues_*`, `pull_requests_*`, `issue_events_*` (who closed and who merged),
 `issue_comments_*`, `pull_request_reviews_*` and `pull_request_review_comments_*` files the lines
 `sync github` writes for the same acts, the ids read from their links (`#issuecomment-<id>`,
 `#pullrequestreview-<id>`, `#discussion_r<id>`): read leniently, a row without what a line needs
-skipped and counted. `--since` keeps the acts at or after it; a doc's earlier versions are still
+skipped and counted. Each repository row's mark (`private`, `visibility`) sets the tier of every line
+of that repository, its history's and its acts'; an act of a repository no row lists, or a row with
+no mark, is not known to be public: tier 2, or 1 with `public`, which never overrides a repository
+the export marks private. `--since` keeps the acts at or after it; a doc's earlier versions are still
 read, so a version is new only once. Git runs here, never a shell, read-only (`rev-parse`,
 `symbolic-ref`, `config`, `log`, `cat-file`) and never fetching (`GIT_NO_LAZY_FETCH`, no prompt, no
 fsmonitor); a folder that is none of these is one sentence, `Unreadable`, and `add` exits 2. The
@@ -86,7 +100,7 @@ import os
 import re
 import shutil
 import subprocess
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -109,11 +123,16 @@ __all__ = [
     "repo_name",
     "run",
     "sniff",
+    "tier_of",
+    "visibility_of",
 ]
 
 NAME = "github"
 KIND = "event"
-TIER = 1  # SPEC §4, RFC 0009: event/v1, whoever wrote the words
+TIER = 1  # a public repository's lines — SPEC §4, RFC 0009: event/v1, whoever wrote the words
+PRIVATE_TIER = 2  # a private repository's, or one not known to be public: SPEC §4, "for a reason it states"
+PUBLIC, PRIVATE, UNKNOWN = "public", "private", "unknown"  # a repository's visibility (`visibility`)
+TIER_REASONS = {PRIVATE: "private repository", UNKNOWN: "repository visibility not known"}
 SCHEMA = "event/v1"
 CALENDAR = {"id": "github", "name": "GitHub"}
 COMMITTED, CREATED, CLOSED, MERGED = "committed", "created", "closed", "merged"
@@ -161,6 +180,28 @@ AGENT_MARKERS = (
 def is_agent(text: str | None) -> bool:
     """Whether the text carries the marker of an agent's session (`AGENT_MARKERS`)."""
     return bool(text) and any(marker.search(text or "") for marker in AGENT_MARKERS)
+
+
+def visibility_of(repo: Mapping[str, Any]) -> str:
+    """A repository's visibility as GitHub marks it, in the API's answer or an account export's row:
+    `public` only when every mark it carries says so (`private` false, `visibility` `public`);
+    `unknown` when it carries none; `private` for anything else — `private` true, an `internal` or
+    `private` visibility, a mark that is no boolean or no word GitHub uses."""
+    private, seen = repo.get("private"), repo.get("visibility")
+    if private is None and seen is None:
+        return UNKNOWN
+    said_public = isinstance(seen, str) and seen.strip().casefold() == PUBLIC
+    if (private is None or private is False) and (seen is None or said_public):
+        return PUBLIC
+    return PRIVATE
+
+
+def tier_of(visibility: str) -> tuple[int, str | None]:
+    """The tier of a line of a repository of that visibility, and the reason a tier 2 one says; every
+    visibility but `public` is tier 2."""
+    if visibility == PUBLIC:
+        return TIER, None
+    return PRIVATE_TIER, TIER_REASONS.get(visibility, TIER_REASONS[PRIVATE])
 
 
 def login_of_address(address: str | None) -> str | None:
@@ -311,8 +352,12 @@ def line(
     refs: Mapping[str, Any] | None = None,
     extra: Mapping[str, Any] | None = None,
     agent: bool = False,
+    *,
+    visibility: str,
 ) -> dict[str, Any]:
-    """One draft: the act, its text, who did it, the thing it was done to."""
+    """One draft: the act, its text, who did it, the thing it was done to, at the tier of a repository
+    whose visibility is `visibility` (`tier_of`); there is no default, so no line is tier 1 by omission."""
+    tier, reason = tier_of(visibility)
     payload: dict[str, Any] = {"schema": SCHEMA, "raw_id": raw_id}
     if title:
         payload["title"] = title
@@ -330,6 +375,9 @@ def line(
         body["actor"] = acted
     if agent:
         body["agent"] = True
+    if reason is not None:
+        body["tier_reason"] = reason
+        _count(counts, "github_private" if visibility == PRIVATE else "github_visibility_unknown")
     payload["extra"] = body
     return {
         "at": stamp(at),
@@ -337,7 +385,7 @@ def line(
         "tz": None,  # the record's own
         "source": NAME,
         "kind": KIND,
-        "tier": TIER,
+        "tier": tier,
         "payload": payload,
     }
 
@@ -354,6 +402,8 @@ def commit_line(
     who: Who | None,
     owner: Owner,
     counts: dict[str, int],
+    *,
+    visibility: str,
 ) -> dict[str, Any]:
     reference: dict[str, Any] = {"sha": sha}
     if url:
@@ -377,6 +427,7 @@ def commit_line(
         notes=message,
         extra=extra,
         agent=is_agent(message),
+        visibility=visibility,
     )
 
 
@@ -471,9 +522,12 @@ def run(
     counts: dict[str, int] | None = None,
     report: list[str] | None = None,
     owner_aliases: Mapping[str, Iterable[str]] | None = None,
+    public: bool = False,
 ) -> Iterator[dict[str, Any]]:
     """The lines of a clone or an account export (the module docstring), the acts at or after `since`
-    (every one when None). Raises `Unreadable`, one sentence, for a folder that is neither, or one git
+    (every one when None). `public`: the owner says a repository not known to be public is (a clone,
+    a repository the export does not mark), so its lines are tier 1; a repository the export marks
+    private stays tier 2. Raises `Unreadable`, one sentence, for a folder that is neither, or one git
     cannot read."""
     counts = counts if counts is not None else {}
     report = report if report is not None else []
@@ -483,13 +537,18 @@ def run(
     if not owner.handles:
         report.append("no handles in policy/owner.json: the owner is known by addresses and names alone")
     if _is_archive(path):
-        yield from _archive(path, floor, owner, counts, report)
+        yield from _archive(path, floor, owner, counts, report, public)
         return
     if _is_repository(path):
         git = _Git.of(path)
         origin = git.text("config", "--get", "remote.origin.url")
         name = (repo_name(origin) if origin else None) or path.name.removesuffix(".git")
-        yield from _history(git, name, None, floor, owner, counts)
+        if not public:
+            report.append(
+                f"{name}: a clone does not say whether its repository is public, so its lines are tier 2;"
+                " add it again with --public if it is"
+            )
+        yield from _history(git, name, None, floor, owner, counts, PUBLIC if public else UNKNOWN)
         return
     raise Unreadable(f"{path}: not a git clone, a bare repository or a GitHub account export; nothing read")
 
@@ -602,19 +661,36 @@ def _commits(git: _Git, counts: dict[str, int]) -> Iterator[_Commit]:
 
 
 def _history(
-    git: _Git, repo: str, web: str | None, floor: datetime | None, owner: Owner, counts: dict[str, int]
+    git: _Git,
+    repo: str,
+    web: str | None,
+    floor: datetime | None,
+    owner: Owner,
+    counts: dict[str, int],
+    visibility: str,
 ) -> Iterator[dict[str, Any]]:
     """A repository's commits and doc versions on the branch `HEAD` names, oldest first, those at or
-    after `floor`."""
+    after `floor`, at the tier its `visibility` gives."""
     branch = git.text("symbolic-ref", "-q", "--short", "HEAD")
     for c in _commits(git, counts):
         if floor is not None and c.authored < floor:
             continue
         url = f"{web}/commit/{c.sha}" if web else None
         yield commit_line(
-            repo, branch, c.sha, c.message, url, len(c.paths), c.authored, c.committed, c.who, owner, counts
+            repo,
+            branch,
+            c.sha,
+            c.message,
+            url,
+            len(c.paths),
+            c.authored,
+            c.committed,
+            c.who,
+            owner,
+            counts,
+            visibility=visibility,
         )
-    yield from _versions(git, repo, floor, owner, counts)
+    yield from _versions(git, repo, floor, owner, counts, visibility)
 
 
 @dataclass(frozen=True)
@@ -677,7 +753,7 @@ def _version_list(git: _Git, counts: dict[str, int]) -> list[_Version]:
 
 
 def _versions(
-    git: _Git, repo: str, floor: datetime | None, owner: Owner, counts: dict[str, int]
+    git: _Git, repo: str, floor: datetime | None, owner: Owner, counts: dict[str, int], visibility: str
 ) -> Iterator[dict[str, Any]]:
     """One line per version of each doc: a path's content seen for the first time, the whole history
     read so that `floor` never makes an old version new."""
@@ -719,6 +795,7 @@ def _versions(
             counts,
             refs={"commit": {"sha": v.sha}, "file": {"path": v.path, "blob": v.blob}},
             extra={"content": content},
+            visibility=visibility,
         )
 
 
@@ -774,12 +851,57 @@ def _rows(archive: Path, prefix: str, report: list[str]) -> Iterator[dict[str, A
                 yield row
 
 
+class _Marks:
+    """The visibility of each repository an account export lists, by its mark (`visibility_of`), and what
+    a repository not known to be public is taken for: public when the owner says so (`public`), else
+    not known. Each repository that is not public is said once in `report`."""
+
+    def __init__(self, rows: Iterable[Mapping[str, Any]], public: bool, report: list[str]) -> None:
+        self.marks: dict[str, str] = {}
+        for row in rows:
+            link = _Link.of(row.get("url"))
+            if link.repo is None:
+                continue
+            key, found = link.repo.lower(), visibility_of(row)
+            before = self.marks.get(key, found)  # a repository listed twice: private if either says so
+            self.marks[key] = (
+                PRIVATE if PRIVATE in (before, found) else PUBLIC if PUBLIC in (before, found) else found
+            )
+        self.public = public
+        self.report = report
+        self.said: set[str] = set()
+
+    def __call__(self, repo: str) -> str:
+        key = repo.lower()
+        found = self.marks.get(key)
+        visibility = PUBLIC if found in (None, UNKNOWN) and self.public else found or UNKNOWN
+        if visibility != PUBLIC and key not in self.said:
+            self.said.add(key)
+            if visibility == PRIVATE:
+                why = "the export marks it private" + (", whatever --public says" if self.public else "")
+                self.report.append(f"{repo}: {why}; its lines are tier 2")
+            else:
+                where = "the export does not mark it" if found is not None else "the export does not list it"
+                self.report.append(
+                    f"{repo}: {where} public or private, so its lines are tier 2; add the export again with"
+                    " --public if it is public"
+                )
+        return visibility
+
+
 def _archive(
-    archive: Path, floor: datetime | None, owner: Owner, counts: dict[str, int], report: list[str]
+    archive: Path,
+    floor: datetime | None,
+    owner: Owner,
+    counts: dict[str, int],
+    report: list[str],
+    public: bool,
 ) -> Iterator[dict[str, Any]]:
     """An account export: each repository's history, then its issues, pull requests, reviews and
-    comments, oldest first."""
-    for row in _rows(archive, "repositories", report):
+    comments, oldest first, each at the tier its repository's mark gives (`_Marks`)."""
+    rows = list(_rows(archive, "repositories", report))
+    marks = _Marks(rows, public, report)
+    for row in rows:
         link = _Link.of(row.get("url"))
         if link.repo is None:
             _count(counts, "skipped_no_url")
@@ -794,17 +916,23 @@ def _archive(
             report.append(f"{link.repo}: its repository is not in the export; its commits are not read")
             continue
         web = str(row["url"]).rstrip("/")
-        yield from _history(_Git.of(bare), link.repo, web, floor, owner, counts)
+        yield from _history(_Git.of(bare), link.repo, web, floor, owner, counts, marks(link.repo))
     acts = sorted(
-        _acts(archive, floor, owner, counts, report), key=lambda d: (d["at"], d["payload"]["raw_id"])
+        _acts(archive, floor, owner, counts, report, marks), key=lambda d: (d["at"], d["payload"]["raw_id"])
     )
     yield from acts
 
 
 def _acts(
-    archive: Path, floor: datetime | None, owner: Owner, counts: dict[str, int], report: list[str]
+    archive: Path,
+    floor: datetime | None,
+    owner: Owner,
+    counts: dict[str, int],
+    report: list[str],
+    marks: Callable[[str], str],
 ) -> Iterator[dict[str, Any]]:
-    """The export's issues, pull requests, reviews and comments as the lines `sync github` writes."""
+    """The export's issues, pull requests, reviews and comments as the lines `sync github` writes, each
+    at the tier of its repository's visibility (`marks`)."""
     closers: dict[tuple[str, bool, int, str], Who | None] = {}
     for row in _rows(archive, "issue_events", report):
         event = _text(row.get("event"))
@@ -824,7 +952,7 @@ def _acts(
         if link.repo is not None and link.number is not None and title is not None:
             titles[(link.repo.lower(), link.number)] = title
     for row in items:
-        yield from _item(row, floor, owner, counts, closers)
+        yield from _item(row, floor, owner, counts, closers, marks)
 
     for row in _rows(archive, "issue_comments", report):
         link = _Link.of(row.get("url"))
@@ -848,6 +976,7 @@ def _acts(
                 notes=body,
                 refs={**item_ref(bool(parent.pull), parent.number, None), "comment": _ref(comment_id, row)},
                 agent=is_agent(body),
+                visibility=marks(parent.repo),
             )
     for row in _rows(archive, "pull_request_reviews", report):
         link = _Link.of(row.get("url"))
@@ -880,6 +1009,7 @@ def _acts(
                 notes=body,
                 refs={**item_ref(True, parent.number, None), "review": reference},
                 agent=is_agent(body),
+                visibility=marks(parent.repo),
             )
     for row in _rows(archive, "pull_request_review_comments", report):
         link = _Link.of(row.get("url"))
@@ -911,6 +1041,7 @@ def _acts(
                 refs={**item_ref(True, parent.number, None), "comment": _ref(comment_id, row)},
                 extra=extra,
                 agent=is_agent(body),
+                visibility=marks(parent.repo),
             )
 
 
@@ -920,14 +1051,16 @@ def _item(
     owner: Owner,
     counts: dict[str, int],
     closers: Mapping[tuple[str, bool, int, str], Who | None],
+    marks: Callable[[str], str],
 ) -> Iterator[dict[str, Any]]:
-    """An issue's or a pull request's lines: created, then closed or merged."""
+    """An issue's or a pull request's lines: created, then closed or merged, at its repository's tier."""
     link = _Link.of(row.get("url"))
     created = instant(row.get("created_at"))
     if link.repo is None or link.number is None or link.pull is None or created is None:
         _count(counts, "skipped_bad_row")
         return
     repo, pull, number = link.repo, link.pull, link.number
+    visibility = marks(repo)
     title, body, url = _text(row.get("title")), _body(row), _text(row.get("url"))
     agent = pull and is_agent(body)
     closed, merged = instant(row.get("closed_at")), instant(row.get("merged_at")) if pull else None
@@ -948,6 +1081,7 @@ def _item(
             refs=item_ref(pull, number, url),
             extra={"labels": labels} if labels else None,
             agent=agent,
+            visibility=visibility,
         )
     if merged is not None and _since(merged, floor):
         extra = {
@@ -966,6 +1100,7 @@ def _item(
             refs=item_ref(True, number, url),
             extra=extra,
             agent=agent,
+            visibility=visibility,
         )
     elif merged is None and closed is not None and _since(closed, floor):
         yield line(
@@ -980,6 +1115,7 @@ def _item(
             counts,
             refs=item_ref(pull, number, url),
             agent=agent,
+            visibility=visibility,
         )
 
 
