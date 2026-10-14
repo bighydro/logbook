@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import heapq
 import json
 import os
@@ -22,7 +23,19 @@ from typing import IO, Any, BinaryIO, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
 from . import attachments, policy, sealing
-from .chain import GENESIS, Line, Opener, compute_hash, is_sealed, parse_line, verify_lines
+from .chain import (
+    CONTENT_FIELDS,
+    ENVELOPE_FIELDS,
+    GENESIS,
+    Line,
+    Opener,
+    compute_hash,
+    is_sealed,
+    line_hash,
+    parse_line,
+    sealed_envelope_error,
+    verify_lines,
+)
 from .index import FILE_NAME as INDEX_FILE
 from .index import Index, Located, Row, TextRow
 
@@ -73,6 +86,8 @@ MIGRATE_PROGRESS_EVERY = 100_000  # migrate: lines between progress reports
 MIGRATION = "migration"  # kind of the one line a migration appends (SPEC §3.1)
 REKEY = "rekey"  # kind of the one line a reseal to other recipients appends (RFC 0029 §6.4)
 NOT_INTACT = "the 0.1 record is not intact; nothing was changed"
+NOTHING_CHANGED = "nothing was changed"  # a rewrite refused at its gate: the record is as it was
+NOT_REPLACED = "the record was not replaced"  # a rewrite whose new files do not verify: the old ones stay
 CUT_SHORT = "the file ends inside this line (cut short)"  # a month file a crash tore (SPEC §3)
 
 
@@ -103,6 +118,11 @@ class HeadMoved(Exception):
 
 class CodeCheckoutError(Exception):
     """The folder looks like a clone of this repository, not a personal record."""
+
+
+class NotIntact(ValueError):
+    """The record does not verify, so a rewrite that would give its lines new hashes refused and
+    changed nothing: the message names the first failing line, what `verify` says of it and its id."""
 
 
 class FormatError(Exception):
@@ -784,13 +804,15 @@ class Logbook:
         """logbook/0.1 → logbook/0.2 (SPEC §3.1, ADR 0014): the same lines, hashed with the right rule.
 
         Every line keeps `id`, `seq`, the content fields and `recorded_at`; `prev` and `hash` are
-        recomputed in seq order. New month files are written under <root>/logbook.migrating/, then
-        swapped in: the 0.1 files move to <root>/logbook-0.1/ (kept, never deleted here) and the
-        new ones take their place. logbook.json gets the new format and head and a `lineage`
-        entry; index.sqlite is dropped (it is rebuilt from the files); then one manual line,
-        `migration/v1`, records the old head inside the chain. Refuses anything but a 0.1 record,
-        and a 0.1 record whose links (`seq`, `prev`, the head) are broken — nothing is touched then.
-        `progress(count, elapsed_seconds)` is called every MIGRATE_PROGRESS_EVERY lines."""
+        recomputed in seq order. First the whole record is verified under the 0.1 rule, every hash
+        and every link (`_rewrite`'s gate): a 0.1 record that does not verify is refused by its first
+        failing line and nothing is touched. New month files are written under
+        <root>/logbook.migrating/, verified, then swapped in: the 0.1 files move to
+        <root>/logbook-0.1/ (kept, never deleted here) and the new ones take their place.
+        logbook.json gets the new format and head and a `lineage` entry; index.sqlite is dropped (it
+        is rebuilt from the files); then one manual line, `migration/v1`, records the old head inside
+        the chain. Refuses anything but a 0.1 record. `progress(count, elapsed_seconds)` is called
+        every MIGRATE_PROGRESS_EVERY lines."""
         meta = self.meta
         if meta.get("format") != OLD_FORMAT:
             raise FormatError(f"nothing to migrate: this logbook is {meta.get('format')}")
@@ -798,48 +820,15 @@ class Logbook:
         kept = self.root / "logbook-0.1"
         if kept.exists():
             raise FileExistsError(f"{kept} already exists; move it away before migrating")
-        tmp = self.root / "logbook.migrating"
-        if tmp.exists():
-            shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
-        tmp.mkdir()
-
-        def reopen(path: Path) -> TextIO:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path.open("a", encoding="utf-8")
-
-        def synced(_path: Path, fh: TextIO) -> None:
-            fh.flush()
-            os.fsync(fh.fileno())
-
-        handles: OpenFiles[Path, TextIO] = OpenFiles(reopen, closing=synced)
-        n, prev, old_prev, started = 0, GENESIS, GENESIS, time.monotonic()
-        try:
-            for line in self._lines_by_seq():
-                n += 1
-                if line.get("seq") != n:
-                    raise ValueError(f"line {n}: seq {line.get('seq')}, expected {n}; {NOT_INTACT}")
-                if line.get("prev") != old_prev:
-                    raise ValueError(f"line {n}: prev does not match the previous hash; {NOT_INTACT}")
-                old_prev = line["hash"]
-                line["prev"] = prev
-                line["hash"] = prev = compute_hash(line)
-                handles.get(tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl").write(_dumps(line))
-                if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
-                    progress(n, time.monotonic() - started)
-            if (n, old_prev) != (meta["seq"], old_head):
-                raise ValueError(
-                    f"logbook.json says seq={meta['seq']} head={old_head[:12]}…, files say seq={n} "
-                    f"head={old_prev[:12]}…; {NOT_INTACT}"
-                )
-            handles.close()  # each file flushed and fsynced as it closes
-        except BaseException:
-            with contextlib.suppress(OSError):  # the files are about to go; their fsync may not matter
-                handles.close()
-            shutil.rmtree(tmp, ignore_errors=True)
-            raise
-        if self.log_dir.exists():
-            os.rename(self.log_dir, kept)
-        os.rename(tmp, self.log_dir)
+        n, prev, _changed = self._rewrite(
+            "logbook.migrating",
+            lambda line: line,
+            recompute=True,
+            progress=progress,
+            hash_of=hash_0_1,
+            keep=kept,
+            not_intact=NOT_INTACT,
+        )
         migrated_at = now_utc()
         meta["format"], meta["head"] = FORMAT, prev
         lineage = meta.setdefault("lineage", [])
@@ -868,7 +857,8 @@ class Logbook:
         beside the record, and the caller says so once (a backup taken before holds them still).
         `logbook.json` gets `format` 0.3 and a `lineage` entry; the index is dropped; one manual
         `migration/v1` line records the head it replaced and the counts. Refuses a record with no
-        recipients, and a record whose chain is not intact; nothing is touched then."""
+        recipients, and a record that does not verify, every hash and every link (`_rewrite`'s
+        gate, so a changed line is never given a fresh hash); nothing is touched then."""
         meta = self.meta
         self._check_format(meta)
         recipients = self.recipients
@@ -993,77 +983,136 @@ class Logbook:
         transform: Callable[[Line], Line],
         recompute: bool,
         progress: Callable[[int, float], None] | None,
+        *,
+        hash_of: Callable[[Line], str] = compute_hash,
+        keep: Path | None = None,
+        not_intact: str = NOTHING_CHANGED,
     ) -> tuple[int, str, int]:
         """Every line through `transform`, in seq order, into new month files under <root>/<tmp_name>/,
-        then swapped in; the old files are removed. With `recompute`, `prev` and `hash` are
-        recomputed as a migration does. The chain is checked on the way (`seq`, `prev`) and an
-        intact record is required; an exception leaves the record as it was. Returns (lines, head,
-        lines the transform changed)."""
-        meta = self.meta
-        tmp = self.root / tmp_name
-        if tmp.exists():
-            shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
-        tmp.mkdir()
+        then swapped in. With `recompute`, `prev` and `hash` are recomputed as a migration does;
+        without it a line's hash must still recompute after the transform. The old files are removed,
+        or moved to `keep` when a path is given (`migrate` keeps the 0.1 files there).
 
-        def reopen(path: Path) -> TextIO:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            return path.open("a", encoding="utf-8", newline="\n")
+        The gate. A rewrite that recomputes hashes would give a changed line a fresh hash and a clean
+        chain, so before a byte is written the whole record is verified in seq order: every envelope
+        field (SPEC §2), every link (`seq`, `prev`, the head `logbook.json` names) and every hash
+        under `hash_of`, the rule the record's hashes were computed with (the current rule; the 0.1
+        rule for `migrate`), and a sealed line opened against its digest when the identity is here.
+        The first failure is the error, `NotIntact`: the line number, the sentence `verify` prints
+        for it, the line's id, then `not_intact`; nothing has been written or removed. Every caller
+        passes here, so no command can skip it. Only then are the new files written, and they are
+        verified under the current rule before the swap, so the old files stay until the new set is
+        known good; an exception at any point leaves the record as it was. The writer lock is held
+        throughout. Returns (lines, head, lines the transform changed)."""
+        with self.writer():
+            meta = self.meta
+            expected = (int(meta["seq"]), str(meta["head"]))
+            self._verified(self.files(), hash_of, self._opener(), expected, not_intact)
+            tmp = self.root / tmp_name
+            if tmp.exists():
+                shutil.rmtree(tmp)  # an earlier run that did not finish; nothing in it is the record
+            tmp.mkdir()
 
-        def synced(_path: Path, fh: TextIO) -> None:
-            fh.flush()
-            os.fsync(fh.fileno())
+            def reopen(path: Path) -> TextIO:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                return path.open("a", encoding="utf-8", newline="\n")
 
-        handles: OpenFiles[Path, TextIO] = OpenFiles(reopen, closing=synced)
-        n, changed, prev, old_prev, started = 0, 0, GENESIS, GENESIS, time.monotonic()
+            def synced(_path: Path, fh: TextIO) -> None:
+                fh.flush()
+                os.fsync(fh.fileno())
+
+            handles: OpenFiles[Path, TextIO] = OpenFiles(reopen, closing=synced)
+            n, changed, prev, old_prev, started = 0, 0, GENESIS, GENESIS, time.monotonic()
+            try:
+                for line in self._lines_by_seq():
+                    n += 1
+                    if line.get("seq") != n or line.get("prev") != old_prev:  # the gate passed: cannot happen
+                        raise NotIntact(f"line {n}: the chain is not intact; {not_intact}")
+                    old_prev = line["hash"]
+                    before = _dumps(line)
+                    line = transform(line)
+                    if _dumps(line) != before:
+                        changed += 1
+                    if recompute:
+                        line["prev"] = prev
+                        line["hash"] = compute_hash(line)
+                    elif line["hash"] != compute_hash(line):
+                        raise NotIntact(
+                            f"line {n}: hash does not recompute; id {line.get('id')}; {not_intact}"
+                        )
+                    prev = line["hash"]
+                    handles.get(tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl").write(_dumps(line))
+                    if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
+                        progress(n, time.monotonic() - started)
+                if (n, old_prev) != expected:
+                    raise NotIntact(
+                        f"logbook.json says seq={expected[0]} head={expected[1][:12]}…, files say seq={n} "
+                        f"head={old_prev[:12]}…; {not_intact}"
+                    )
+                handles.close()  # each file flushed and fsynced as it closes
+                try:
+                    self._verified(sorted(tmp.glob("*/*.jsonl")), compute_hash, None, (n, prev), NOT_REPLACED)
+                except NotIntact as e:
+                    raise NotIntact(f"the new files do not verify: {e}") from None
+            except BaseException:
+                with contextlib.suppress(OSError):  # the files are about to go; their fsync may not matter
+                    handles.close()
+                shutil.rmtree(tmp, ignore_errors=True)
+                raise
+            old = keep if keep is not None else self.root / f"{tmp_name}.old"
+            if keep is None and old.exists():
+                shutil.rmtree(old)
+            if self.log_dir.exists():
+                os.rename(self.log_dir, old)
+            os.rename(tmp, self.log_dir)
+            if keep is None:
+                shutil.rmtree(old, ignore_errors=True)  # not kept beside the record (RFC 0029 §10.2)
+            return n, prev, changed
+
+    def _verified(
+        self,
+        files: list[Path],
+        hash_of: Callable[[Line], str],
+        opener: Opener | None,
+        expected: tuple[int, str],
+        not_intact: str,
+    ) -> None:
+        """The gate of `_rewrite`: `files`, read in seq order, are one intact record ending at
+        `expected` (seq, head), or NotIntact names the first line that is not, as `line n: <what
+        verify says>; id <its id>; <not_intact>`. Every line's envelope (SPEC §2), `seq`, `prev`,
+        its hash under `hash_of` and, with an `opener`, its sealed content against its digest. One
+        line in memory at a time; nothing is written."""
+        n, prev = 0, GENESIS
         try:
-            for line in self._lines_by_seq():
-                n += 1
-                if line.get("seq") != n or line.get("prev") != old_prev:
-                    raise ValueError(f"line {n}: the chain is not intact; nothing was changed")
-                old_prev = line["hash"]
-                before = _dumps(line)
-                line = transform(line)
-                if _dumps(line) != before:
-                    changed += 1
-                if recompute:
-                    line["prev"] = prev
-                    line["hash"] = compute_hash(line)
-                elif line["hash"] != compute_hash(line):
-                    raise ValueError(f"line {n}: hash does not recompute; nothing was changed")
-                prev = line["hash"]
-                handles.get(tmp / line["at"][:4] / f"{line['at'][5:7]}.jsonl").write(_dumps(line))
-                if progress is not None and n % MIGRATE_PROGRESS_EVERY == 0:
-                    progress(n, time.monotonic() - started)
-            if (n, old_prev) != (meta["seq"], meta["head"]):
-                raise ValueError(
-                    f"logbook.json says seq={meta['seq']} head={str(meta['head'])[:12]}…, files say seq={n} "
-                    f"head={old_prev[:12]}…; nothing was changed"
-                )
-            handles.close()  # each file flushed and fsynced as it closes
-        except BaseException:
-            with contextlib.suppress(OSError):  # the files are about to go; their fsync may not matter
-                handles.close()
-            shutil.rmtree(tmp, ignore_errors=True)
+            for n, line in enumerate(self._lines_by_seq(files=files), 1):
+                problem = _line_problem(line, n, prev, hash_of, opener)
+                if problem is not None:
+                    raise NotIntact(f"line {n}: {problem}; id {line.get('id')}; {not_intact}")
+                prev = str(line["hash"])
+        except NotIntact:
             raise
-        old = self.root / f"{tmp_name}.old"
-        if old.exists():
-            shutil.rmtree(old)
-        if self.log_dir.exists():
-            os.rename(self.log_dir, old)
-        os.rename(tmp, self.log_dir)
-        shutil.rmtree(old, ignore_errors=True)  # not kept beside the record (RFC 0029 §10.2)
-        return n, prev, changed
+        except ValueError as e:  # a line that is not one: a month file cut inside it, bytes that are not JSON
+            raise NotIntact(f"{e}; {not_intact}") from e
+        if (n, prev) != expected:
+            raise NotIntact(
+                f"logbook.json says seq={expected[0]} head={expected[1][:12]}…, files say seq={n} "
+                f"head={prev[:12]}…; {not_intact}"
+            )
 
     def _lines_by_seq(
-        self, progress: FileProgress | None = None, unreadable: list[str] | None = None
+        self,
+        progress: FileProgress | None = None,
+        unreadable: list[str] | None = None,
+        files: list[Path] | None = None,
     ) -> Iterator[Line]:
         """Every line in chain order with one line in memory at a time, whatever order the files
         are in: a first pass notes where each seq lives (two integers per line), a second reads
         them back in seq order through at most OPEN_FILES open files. `lines()` is the one-pass
         merge for files the writer kept in seq order; this is for `migrate` and for `verify`'s
         fallback. `unreadable` is as `lines()` takes it: a line that is not one ends its file for
-        the reader."""
-        files = self.files()
+        the reader. `files` names the month files to read in place of the record's own: the new
+        set a rewrite checks before it swaps it in."""
+        files = self.files() if files is None else files
         seqs: array[int] = array("q")
         places: array[int] = array("q")  # file number << 40 | byte offset
         started = time.monotonic()
@@ -1155,6 +1204,46 @@ class Logbook:
 
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
+
+
+def hash_0_1(line: Line) -> str:
+    """A line's hash under logbook/0.1 (SPEC §3.1): the content canonicalised with Python's
+    `json.dumps(sort_keys=True, separators=(",", ":"))`, the rule before RFC 8785. ADR 0014 keeps the
+    code to one rule for writing and verifying a record; this one is read by `migrate`'s gate alone,
+    which must know that every 0.1 hash it replaces is the hash of the line it stands on."""
+    content = {key: line.get(key) for key in CONTENT_FIELDS}
+    text = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return line_hash(line["prev"], line["seq"], digest, line["recorded_at"])
+
+
+def _line_problem(
+    line: Line, n: int, prev: str, hash_of: Callable[[Line], str], opener: Opener | None
+) -> str | None:
+    """The first thing `verify` would say of line `n`, or None: the envelope fields (SPEC §2), `seq`,
+    `prev`, the hash under `hash_of`, the sealed envelope rule, `payload.schema`, the tier, and with
+    an `opener` the sealed content against its digest. The sentences are `verify_lines`'s, so the
+    one `verify` prints is the one the gate names."""
+    for key in ENVELOPE_FIELDS:
+        if key not in line:
+            return f"{key} is missing"
+    if line["seq"] != n:
+        return f"seq {line['seq']} expected {n}"
+    if line["prev"] != prev:
+        return "prev does not match previous hash"
+    if hash_of(line) != line["hash"]:
+        return "hash does not recompute"
+    sealed_error = sealed_envelope_error(line)
+    if sealed_error is not None:
+        return sealed_error
+    payload = line["payload"]
+    if not isinstance(payload, dict) or "schema" not in payload:
+        return "payload.schema missing"
+    if line["tier"] not in (1, 2, 3):
+        return "tier must be 1, 2 or 3"
+    if opener is not None and is_sealed(line):
+        return opener(line)
+    return None
 
 
 def _take_lock(path: Path, command: str, wait: bool, notice: Callable[[str], None]) -> None:
