@@ -58,7 +58,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 | `verify` | check the chain |
 | `backup` | a verified snapshot of the record on another disk; `backup list DEST`; `backup restore SNAPSHOT TARGET`; `backup --restore-test` restores the latest snapshot into a temporary folder and verifies it, monthly on the schedule |
 | `key` | the record's recipients and this machine's identity: `init`, `show`, `add-recipient`, `remove-recipient`; `key seal --all` seals what was written before the record had recipients; `key circle` the sharing keys |
-| `repair` | put the record right, rewriting nothing: `repair retract SEQ REASON`, `repair migrate`, `repair index`, `repair fork [--apply]` (two chains forked at one head: diagnose, and move the orphan chain out into `repair/`), `repair health-units` |
+| `repair` | put the record right, rewriting nothing: `repair retract SEQ REASON`, `repair migrate`, `repair index`, `repair tail [--dry-run]` (the files ahead of `logbook.json` after a crash: verify the tail, bring `logbook.json` forward), `repair fork [--apply]` (two chains forked at one head: diagnose, and move the orphan chain out into `repair/`), `repair health-units` |
 
 ## Share
 
