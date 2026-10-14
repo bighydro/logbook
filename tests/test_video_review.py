@@ -322,3 +322,29 @@ def test_show_prints_the_video_and_the_attribution_readably(
     out = capsys.readouterr().out
     assert f"scene 0:40{EN_DASH}1:30 \u2192 Vollen Brygge" in out
     assert "Home 01 \u00b7 3 min \u00b7 12 bytes" in out  # its name, length and size; nothing it shows
+
+
+def test_on_a_terminal_it_asks_one_scene_at_a_time_and_holds_no_lock_while_it_waits(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import builtins
+    import sys
+
+    from logbook.core import store
+
+    answers = iter(["", "y", "q"])  # skip the pier, confirm the garden's day, stop
+
+    def ask(prompt: str) -> str:
+        assert not store._held, "the writer lock was held while the owner thought"
+        assert not (lb.root / store.LOCK_FILE).exists()
+        return next(answers)
+
+    monkeypatch.setattr(builtins, "input", ask)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    seq = _seq(lb)
+    assert _review() == 0
+    (line,) = _new(lb, seq)
+    assert line["kind"] == "attribution" and line["payload"]["ref"]["value"] == _ref(lb, *GARDEN)
+    out = capsys.readouterr().out
+    assert out.count("scene 2 of 4") == 1 and out.count("scene 3 of 4") == 1  # one scene at a time

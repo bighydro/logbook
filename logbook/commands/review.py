@@ -16,12 +16,15 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable, Sequence
-from datetime import datetime
-from typing import Any, NoReturn
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any, NoReturn
 from zoneinfo import ZoneInfo
 
 from ..core.store import HeadMoved, Logbook
 from .common import Subparsers
+
+if TYPE_CHECKING:
+    from ..core import assets, places
 
 KINDS = ("person", "org", "idea", "asset", "place", "speakers")  # speakers: RFC 0038 §4, `commands.speakers`
 PLACE_FLAGS = (
@@ -451,7 +454,7 @@ def _review_videos(a: argparse.Namespace) -> None:
             _say_written(written, a.json)
             return
     if not a.json and sys.stdin.isatty() and sys.stdout.isatty() and queue.rows:
-        _sitting(lb, queue, a.top, known, owned, today)
+        _sitting(lb, a.top, known, owned, today)
         return
     rows = queue.rows[: a.top] if a.top is not None else queue.rows
     if a.json:
@@ -475,55 +478,61 @@ def _review_videos(a: argparse.Namespace) -> None:
 
 
 def _sitting(
-    lb: Logbook, queue: object, top: int | None, known: object, owned: object, today: object
+    lb: Logbook,
+    top: int | None,
+    known: list[places.Place],
+    owned: list[assets.Asset],
+    today: date,
 ) -> None:
     """One scene at a time on a terminal: y confirms, n refuses, a keeps it to ask the family, Enter
-    skips, q stops; each answer is written at once, the queue read again after it."""
+    skips, q stops. The queue is read and the owner asked without the writer lock, so a scheduled sync
+    never waits on a person; each answer is written at once under it, the head read again first (a
+    head another writer moved is said, and the queue read again)."""
     from ..contrib import video_review
 
     shown = 0
     skipped: set[str] = set()
     while True:
-        with lb.writer():
-            current = video_review.read(lb)
-            pending = [(n, row) for n, row in enumerate(current.rows, 1) if row.id not in skipped]
-            if not pending or (top is not None and shown >= top):
-                print("done")
-                return
-            n, row = pending[0]
-            for text in video_review.row_lines(lb, n, row):
-                print(text)
-            shown += 1
-            try:
-                said = (
-                    input("  y confirm / n not so / a ask the family / Enter skip / q stop: ")
-                    .strip()
-                    .casefold()
-                )
-            except EOFError:
-                said = "q"
-            if said == "q":
-                return
-            verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said)
-            if verb is None:
-                skipped.add(row.id)
-                continue
-            try:
-                answers = video_review.plan(
-                    current,
-                    [n] if verb == "accept" else [],
-                    [n] if verb == "reject" else [],
-                    [n] if verb == "ask" else [],
-                    {},
-                    {},
-                    known,  # type: ignore[arg-type]
-                    owned,  # type: ignore[arg-type]
-                    today,  # type: ignore[arg-type]
-                )
-                _say_written(video_review.write(lb, current, answers), False)
-            except (video_review.ReviewError, HeadMoved) as e:
-                print(f"  {e}")
-                skipped.add(row.id)
+        current = video_review.read(lb)
+        pending = [(n, row) for n, row in enumerate(current.rows, 1) if row.id not in skipped]
+        if not pending or (top is not None and shown >= top):
+            print("done")
+            return
+        n, row = pending[0]
+        for text in video_review.row_lines(lb, n, row):
+            print(text)
+        shown += 1
+        try:
+            said = (
+                input("  y confirm / n not so / a ask the family / Enter skip / q stop: ").strip().casefold()
+            )
+        except EOFError:
+            said = "q"
+        if said == "q":
+            return
+        verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said)
+        if verb is None:
+            skipped.add(row.id)
+            continue
+        try:
+            answers = video_review.plan(
+                current,
+                [n] if verb == "accept" else [],
+                [n] if verb == "reject" else [],
+                [n] if verb == "ask" else [],
+                {},
+                {},
+                known,
+                owned,
+                today,
+            )
+            _say_written(video_review.write(lb, current, answers), False)
+        except video_review.ReviewError as e:
+            print(f"  {e}")
+            skipped.add(row.id)
+        except HeadMoved:
+            print("  the record moved while you answered (another writer); this scene is asked again")
+            shown -= 1
 
 
 def _say_written(written: list, as_json: bool) -> None:  # type: ignore[type-arg]
