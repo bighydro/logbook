@@ -119,6 +119,8 @@ nav:
   - The digest: digest.md
   - People: people.md
   - Places: places.md
+  - Review: review.md
+  - Entities (the profiles): entities.md
   - Search: search.md
   - The MCP server: mcp.md
   - Backup: backup.md
