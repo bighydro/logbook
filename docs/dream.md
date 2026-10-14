@@ -172,9 +172,10 @@ A draft names the head it read (`read_head`) and how many lines of the day it re
   ceiling today are not what the standing draft read: a different count, or a different set of ids.
   A day unchanged is skipped and nothing is sent for it. One line per day says what happened: `dreamed` with the line's seq and why, `unchanged`,
   `empty` (nothing logged under the ceiling), or `refused` and why. Then each call of those days that
-  no model has synthesized yet is synthesized, one line each, `synthesized` or `refused`
-  ([the synthesis of a call](transcript-synthesis.md)); a call above the ceiling, or without its
-  text, is counted in the closing line and never sent. The exit status is 1 when any day or call was
+  no model has synthesized yet, or whose synthesis was made under another version of the entry, is
+  synthesized, one line each, `synthesized` or `refused` ([the synthesis of a
+  call](transcript-synthesis.md)); a call above the ceiling, or without its text, is counted in the
+  closing line and never sent. The exit status is 1 when any day or call was
   refused, so the schedule's run can say so; a policy or endpoint refusal is said once, before any
   day, exit 2.
 
