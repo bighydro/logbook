@@ -247,6 +247,33 @@ def test_a_file_already_inferred_is_not_fetched_again(lb: Logbook, fake: Fake) -
     assert set(_cached(lb)) == {B}
 
 
+def test_again_fetches_a_file_already_inferred_to_infer_it_under_other_models(
+    lb: Logbook, fake: Fake, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for line in [line for line in lb.lines() if line["kind"] == "video"]:
+        lb.append(
+            "2026-10-14T20:00:00Z",
+            "model:video-rules/1",
+            "draft",
+            2,
+            {
+                "schema": "draft/v1",
+                "unit": "event",
+                "subject": [videos.scene_ref(str(line["id"]), 0.0, 12.5)],
+                "read_head": lb.meta["head"],
+                "read_count": 1,
+                "language": "en",
+                "segments": [{"text": "Nothing places or dates this scene.", "evidence": [str(line["id"])]}],
+            },
+        )
+    capsys.readouterr()
+    assert _run("videos", "fetch", "--cache-gb", _gb(20_000)) == 0
+    assert not _cached(lb)
+    assert "--again fetches the inferred ones" in capsys.readouterr().out
+    assert _run("videos", "fetch", "--again", "--cache-gb", _gb(20_000)) == 0
+    assert set(_cached(lb)) == {A, B, C}  # the big one is still refused by the cap
+
+
 def test_a_fetch_with_nothing_to_do_says_so(
     lb: Logbook, fake: Fake, capsys: pytest.CaptureFixture[str]
 ) -> None:

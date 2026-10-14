@@ -1051,6 +1051,7 @@ def _infer(
     with lb.writer():
         transcript_id = _transcript(lb, job.video, heard, speech, languages, len(scenes)) if heard else None
         head = str(lb.meta["head"])
+        earlier = standing_drafts(lb, job.video.id)
         lines = []
         for scene, frames, said in read:
             proposal = propose(frames, said, known, owned, today)
@@ -1069,6 +1070,7 @@ def _infer(
                     speech,
                     vision,
                     settings,
+                    earlier,
                 )
             )
         report.written += lb.append_many(lines)
@@ -1081,6 +1083,22 @@ def _infer(
         0.0,
         False,
     )
+
+
+def standing_drafts(lb: Logbook, video_id: str) -> dict[str, str]:
+    """scene ref → the id of the standing draft of that scene of this video (RFC 0036 rule 2: the
+    latest not retracted and not named in a later draft's `supersedes`), so a file inferred again
+    supersedes its earlier draft of each scene it cuts the same way."""
+    found: dict[str, list[Line]] = {}
+    with lb.index() as idx:
+        gone = retractions(idx.retractions())
+        for line in idx.of_source(videos.DRAFT_KIND, SOURCE, "", "9999-12-31"):
+            scene = videos.scene_of(line) if videos.is_scene_draft(line) else None
+            if scene is None or scene[0] != video_id or str(line["id"]) in gone:
+                continue
+            found.setdefault(str(line["payload"]["subject"][0]), []).append(line)
+    kept = {ref: drafts.standing(lines) for ref, lines in found.items()}
+    return {ref: str(draft["id"]) for ref, draft in kept.items() if draft is not None}
 
 
 def _frames(
@@ -1167,9 +1185,8 @@ def _transcript(
     earlier: Line | None = None
     with lb.index() as idx:
         gone = retractions(idx.retractions())
-        for line in sorted(idx.by_kind("transcript"), key=lambda line: int(line["seq"])):
-            opened = lb.opened(line)
-            payload = opened.get("payload") or {}
+        for line in idx.of_source("transcript", TRANSCRIPT_SOURCE, "", "9999-12-31"):
+            payload = line.get("payload") or {}
             provenance = payload.get("provenance")
             if str(line["id"]) in gone or not isinstance(provenance, dict):
                 continue
@@ -1177,7 +1194,7 @@ def _transcript(
                 continue
             if payload.get("raw_id") == raw_id:
                 return str(line["id"])
-            earlier = opened
+            earlier = line
     lb.attach(data)  # tier 2: sealed when the record names recipients
     language = languages.most_common(1)[0][0] if languages else None
     draft = transcript.draft(
@@ -1229,9 +1246,11 @@ def _draft(
     speech: transcribe.Engine,
     vision: describe.Engine,
     settings: Settings,
+    earlier: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """One scene's draft/v1 line: every segment cites the video line (the frames) or the transcript
-    line (what was said), the frames and ranges under `extra.segments`."""
+    line (what was said), the frames and ranges under `extra.segments`; `supersedes` the standing
+    draft of the same scene (`earlier`, scene ref → id) when the file was inferred before."""
     ids = {"video": video.id, "transcript": transcript_id}
     segments = []
     details = []
@@ -1275,6 +1294,9 @@ def _draft(
             "settings": settings.to_json(),
         },
     }
+    ref = payload["subject"][0]
+    if earlier and ref in earlier:
+        payload["supersedes"] = earlier[ref]
     problems = drafts.validate(payload)
     if problems:  # a writer refuses what is not a draft (RFC 0036): a bug here, never written
         raise drafts.DraftError("; ".join(problems))

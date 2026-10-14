@@ -87,6 +87,8 @@ backup. Nothing downloads the folder, and no video is ever copied into the recor
   resumed from the byte it reached (`Range`), three times in a run; past that the part is kept, and the
   next `videos fetch` hashes it and carries on. A file Drive no longer has is said and skipped; a full
   disk stops the run.
+- **Once inferred, not again.** A file with scene drafts is not fetched again; `--again` fetches the
+  inferred files too, for `videos infer` under other models or settings.
 - `--limit N` fetches at most N files; `--models` instead fetches the speech and vision models `videos
   infer` uses, once (the only other network use of the videos).
 
@@ -139,7 +141,9 @@ folder first, `--limit N` at most:
   scene shows and says that places or dates it, each citing the video line (the frames) or the
   transcript line (the speech), with the frames and time ranges under `extra.segments`; the proposal
   (`extra.proposal`: a place, a date or date range, a confidence word) beside them; the frame
-  descriptions under `extra.frames`; the models, the prompt and the settings it was made under.
+  descriptions under `extra.frames`; the models, the prompt and the settings it was made under. A
+  file inferred again (`videos fetch --again`, other models or settings) writes a new draft per scene,
+  which `supersedes` the earlier draft of a scene cut the same way (RFC 0036 rule 2).
 
 The proposals are made by rules, not by a model behind an endpoint, so the draft can say nothing its
 evidence does not:

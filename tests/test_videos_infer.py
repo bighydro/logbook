@@ -404,6 +404,80 @@ def test_a_file_inferred_under_the_same_models_and_settings_is_not_inferred_agai
     assert not path.exists()
 
 
+def test_a_file_inferred_again_supersedes_its_earlier_draft_of_each_scene(
+    inferred: Any, lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RFC 0036 rule 2: under other models the same scenes are cut, and each new draft names the
+    earlier draft of its scene; the earlier ones stay in the record."""
+    _video_line, lines = inferred
+    first = {d["payload"]["subject"][0]: d for d in _drafts(lines)}
+    assert all("supersedes" not in d["payload"] for d in first.values())
+    vision = FakeVision()
+    vision.model = "another-vision-model"
+    monkeypatch.setattr(infer, "detect", lambda *_a: (FakeMedia({HOME_01: TAPE}), FakeSpeech(), vision))
+    _cache(lb, HOME_01)
+    seq = int(Logbook(lb.root).meta["seq"])
+    assert _run() == 0
+    second = _drafts(_new(lb, seq))
+    assert len(second) == len(first) == 4
+    for d in second:
+        assert d["payload"]["supersedes"] == first[d["payload"]["subject"][0]]["id"]
+    assert infer.standing_drafts(Logbook(lb.root), str(_video_line["id"])) == {
+        d["payload"]["subject"][0]: d["id"] for d in second
+    }
+    assert Logbook(lb.root).verify()[2] == []
+
+
+def test_a_scene_cut_otherwise_supersedes_nothing_and_a_retracted_draft_is_not_named(
+    inferred: Any, lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    video, lines = inferred
+    first = {d["payload"]["subject"][0]: d for d in _drafts(lines)}
+    ref = f"{video['id']}#t=%s"
+    Logbook(lb.root).retract(int(first[ref % "40.00,90.00"]["seq"]), "wrong cut")
+    shorter = (*TAPE[:3], Recording(35, -40, 0.5, TAPE[3].look))  # the last recording cut 5 s shorter
+    vision = FakeVision()
+    vision.model = "another-vision-model"
+    monkeypatch.setattr(infer, "detect", lambda *_a: (FakeMedia({HOME_01: shorter}), FakeSpeech(), vision))
+    _cache(lb, HOME_01)
+    seq = int(Logbook(lb.root).meta["seq"])
+    assert _run() == 0
+    second = {d["payload"]["subject"][0]: d["payload"].get("supersedes") for d in _drafts(_new(lb, seq))}
+    assert second == {
+        ref % "0.00,40.00": first[ref % "0.00,40.00"]["id"],
+        ref % "40.00,90.00": None,  # its earlier draft was retracted: nothing to supersede
+        ref % "90.00,130.00": first[ref % "90.00,130.00"]["id"],
+        ref % "130.00,165.00": None,  # another scene: a unit of its own
+    }
+
+
+def test_finding_the_files_earlier_transcript_opens_no_other_transcript(
+    lb: Logbook, engines: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sealed record opens a line to read it: the file's own transcripts are looked for by their
+    source, so the calls and memos of the record are never opened for it."""
+    lb.append(
+        "2026-10-13T09:00:00Z",
+        "granola",
+        "transcript",
+        2,
+        {"schema": "transcript/v1", "raw_id": "call-1", "turns": [{"speaker": "Ola", "text": "Hei."}]},
+    )
+    _video(lb, HOME_01, "Home 01")
+    _cache(lb, HOME_01)
+    seen: list[str] = []
+    real = Logbook.opened
+
+    def opened(self: Logbook, line: dict[str, Any]) -> dict[str, Any]:
+        seen.append(str(line.get("source")))
+        return real(self, line)
+
+    monkeypatch.setattr(Logbook, "opened", opened)
+    assert _run() == 0
+    assert "video-transcription" in seen or "drive-videos" in seen
+    assert "granola" not in seen
+
+
 def test_keep_leaves_the_file_in_the_cache(lb: Logbook, engines: Any) -> None:
     _video(lb, HOME_01, "Home 01")
     path = _cache(lb, HOME_01)

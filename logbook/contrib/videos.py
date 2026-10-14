@@ -349,8 +349,10 @@ def fetch(
     cap_bytes: int | None = None,
     media: Media | None = None,
     progress: Callable[[str], None] | None = None,
+    again: bool = False,
 ) -> FetchReport:
-    """Download the videos nobody has inferred yet and the cache does not hold, one at a time, until
+    """Download the videos nobody has inferred yet (with `again`, those inferred too, for `videos infer`
+    under other models or settings) and the cache does not hold, one at a time, until
     `limit` files are tried or the next one would take the cache past its cap. `cap_bytes` is kept in
     `state/videos.json` when given. A file whose md5 does not match is deleted and its sentence put in
     `failed`; a dropped connection is resumed from its byte, `RESUMES` times, then left as a part for the
@@ -363,7 +365,7 @@ def fetch(
     cache = Cache(lb.root)
     report = FetchReport(state.cap_bytes, cache.used())
     with lb.index() as idx:
-        done = inferred(idx.by_kind(DRAFT_KIND))
+        done = set() if again else inferred(idx.of_source(DRAFT_KIND, DRAFT_SOURCE, "", "9999-12-31"))
     videos = [v for v in read_videos(lb) if v.id not in done and cache.cached(v) is None]
     report.pending = len(videos)
     get = media if media is not None else drive_videos.media
@@ -548,7 +550,10 @@ def fetch_lines(report: FetchReport) -> Iterator[str]:
     left = report.pending - len(report.fetched) - len(report.refused) - len(report.unknown_size)
     if not report.fetched and report.full is None and not report.failed and left <= 0:
         held = " or refused above" if report.refused or report.unknown_size else ""
-        yield f"nothing to fetch: every video in the record is inferred or already in the cache{held}"
+        yield (
+            f"nothing to fetch: every video in the record is inferred or already in the cache{held}"
+            " (--again fetches the inferred ones, to infer them under other models or settings)"
+        )
     yield f"cache: {cache_text(report.used_after, report.cap_bytes)}; {max(0, left)} more to fetch"
 
 

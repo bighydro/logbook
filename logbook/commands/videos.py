@@ -45,6 +45,11 @@ def videos_arguments(sub: Subparsers) -> None:
     )
     v.add_argument("--limit", type=int, metavar="N", help="at most N files this run")
     v.add_argument(
+        "--again",
+        action="store_true",
+        help="fetch the files already inferred too, to infer them again under other models or settings",
+    )
+    v.add_argument(
         "--cache-gb",
         type=float,
         metavar="N",
@@ -163,10 +168,10 @@ def _anything_cached(lb: Logbook) -> bool:
 
 
 def _fetch(a: argparse.Namespace) -> None:
-    """`videos fetch [--limit N] [--cache-gb N]`: the next files into the cache (`contrib.videos.fetch`),
-    a line per file, then the cache against its cap; exit 1 when a file could not be fetched whole or
-    did not match its md5, or Google refused; 2 for a flag or a setting that is not one. `--models`:
-    the two models, and nothing else."""
+    """`videos fetch [--limit N] [--again] [--cache-gb N]`: the next files into the cache
+    (`contrib.videos.fetch`), a line per file, then the cache against its cap; exit 1 when a file
+    could not be fetched whole or did not match its md5, or Google refused; 2 for a flag or a setting
+    that is not one. `--models`: the two models, and nothing else."""
     from ..contrib import videos
     from ..contrib.adapters import drive_videos
 
@@ -194,7 +199,12 @@ def _fetch(a: argparse.Namespace) -> None:
         sys.exit(2)
     try:
         report = videos.fetch(
-            lb, config, limit=a.limit, cap_bytes=cap, progress=lambda text: print(text, file=sys.stderr)
+            lb,
+            config,
+            limit=a.limit,
+            cap_bytes=cap,
+            progress=lambda text: print(text, file=sys.stderr),
+            again=a.again,
         )
     except videos.StateError as e:
         print(f"videos fetch: {e}", file=sys.stderr)
