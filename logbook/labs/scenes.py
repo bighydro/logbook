@@ -35,7 +35,8 @@ as `policy/stays.json`'s are, and the key carries them: other settings infer the
 **What is read of a scene.** Its sound, cut out at 16 kHz and heard by the transcribe extra through its
 public function (`transcribe.hear`), every segment shifted by the scene's start, so the speech of a
 scene is a time range of the file. One `transcript/v1` line per file holds all of it as WebVTT, each cue
-with its times (tier 2; `at` the video line's, `end` null: when it was said is not known). And
+with its times (tier 2; `at` the video line's, `end` null: when it was said is not known; source
+`video-transcription`, which the synthesis of calls leaves out: a home video's soundtrack is no call). And
 `FRAMES` frames of its picture (`frame_times`: at a fifth, a half and four fifths of the scene; one, at
 its middle, for a scene under `short_s`, 6 s), each shown to the describe extra's vision model with this
 module's own prompt (`PROMPT`): what is visible, the setting, the season, the text on signs, boats and
@@ -95,7 +96,7 @@ from . import describe, transcribe
 RULES = "video-rules/1"
 SOURCE = videos.DRAFT_SOURCE  # `model:video-rules/1`
 PROMPT_NAME = "video-frames/1"
-TRANSCRIPT_SOURCE = transcribe.SOURCE  # `transcription`: heard on this machine, as a voice memo is
+TRANSCRIPT_SOURCE = "video-transcription"  # heard here, as a memo is; no call: synthesis leaves it out
 TRANSCRIPT_MEDIA = "text/vtt"
 TIER = videos.TIER
 LANGUAGE = "en"  # the language the rules write in

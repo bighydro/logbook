@@ -605,3 +605,18 @@ def test_a_generated_tape_is_inferred_scene_by_scene(
     assert proposals[0] is None and proposals[3] is None
     assert all(str(video["id"]) in d["payload"]["subject"][0] for d in _drafts(lines))
     assert no_network == []
+
+
+def test_the_videos_transcript_is_no_call_for_the_synthesis(inferred: Any, lb: Logbook) -> None:
+    """A home video's soundtrack is no call: `transcript synthesize` and the 06:00 close leave it out,
+    so its words go to no model endpoint, sealed or not (the source reads without a key)."""
+    from logbook.contrib import synthesis
+    from logbook.core import day_start
+
+    _video_line, lines = inferred
+    (transcript,) = [line for line in lines if line["kind"] == "transcript"]
+    assert transcript["source"] == "video-transcription"
+    assert synthesis.between(lb, "2026-10-01", "2026-10-31") == []
+    bounds = day_start.of(lb.meta)
+    found = synthesis.waiting(Logbook(lb.root).lines(), bounds.day_of, "2026-10-01", 3)
+    assert found.total == 0

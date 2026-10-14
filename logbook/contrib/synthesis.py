@@ -76,6 +76,9 @@ UTTERANCE_CHARS = 2000  # one utterance's text in the material, at most; every u
 SUFFIX_MIN = 8  # the Day and `show` shorten an id to its last 8 characters
 ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
 WINDOW_DAYS = 7  # the catch-up synthesizes the calls of the last week, unless `--since` reaches further
+# transcripts that are no call: a home video's soundtrack (RFC 0039), whose time is not known; by the
+# envelope's `source`, which reads without a key, so a sealed one is left out as surely
+NOT_CALLS = frozenset({"video-transcription"})
 SYNTHESIZED, DRY_RUN, UNCHANGED = "synthesized", "dry run", "unchanged"
 HELD_BACK, NO_TEXT, REFUSED = "held back", "no text", "refused"
 STATES = (SYNTHESIZED, DRY_RUN, UNCHANGED, HELD_BACK, NO_TEXT, REFUSED)  # the order a summary counts them
@@ -175,7 +178,9 @@ def between(lb: Logbook, first: str, last: str) -> list[Line]:
         found = [
             line
             for line in idx.by_kind(KIND, first, last)
-            if str(line["id"]) not in retracted and str(line["id"]) not in superseded
+            if str(line["id"]) not in retracted
+            and str(line["id"]) not in superseded
+            and line.get("source") not in NOT_CALLS
         ]
     return sorted(found, key=lambda line: (str(line["at"]), int(line["seq"])))
 
@@ -626,6 +631,8 @@ def waiting(lines: Iterable[Line], day_of: Callable[[str], str], first: str, max
     for line in found:
         key = str(line.get("id"))
         if line.get("kind") != KIND or key in retracted or key in superseded or key in synthesized:
+            continue
+        if line.get("source") in NOT_CALLS:
             continue
         if int(line.get("tier") or 0) > max_tier:
             held += 1
