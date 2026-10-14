@@ -606,8 +606,13 @@ def _today(monkeypatch: pytest.MonkeyPatch, day: date) -> None:
     monkeypatch.setattr(dream, "date", type("D", (), {"today": staticmethod(lambda: day)}))
 
 
+def _disk(_path: Path) -> tuple[int, int, int]:
+    """One fixed reading of the volume: two runs never differ by what another test wrote meanwhile."""
+    return (300 * doctor.GIB, 100 * doctor.GIB, 200 * doctor.GIB)
+
+
 def _checks(lb: Logbook) -> dict[str, doctor.Check]:
-    return {c.name: c for c in doctor.run(lb, {}, installed=lambda _m: True)}
+    return {c.name: c for c in doctor.run(lb, {}, installed=lambda _m: True, usage=_disk)}
 
 
 def _day_text(*args: str) -> str:
