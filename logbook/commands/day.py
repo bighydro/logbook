@@ -10,6 +10,7 @@ import tempfile
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from ..contrib import digest as digest_reader
@@ -34,6 +35,9 @@ from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _clock, _csv, _print_target, _under_home
 from .derive import TRANSCRIBE_DEFAULT_MODEL
 from .rows import _day_rows, _line_row, _line_text, by_photo
+
+if TYPE_CHECKING:
+    from ..contrib import serve
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 
@@ -505,10 +509,7 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
         tz = str(lb.meta["timezone"])
         days = day_start.of(lb.meta)  # the page is the day so defined (RFC 0036)
         today = notes.today_in(days)
-        if day > today:
-            raise reflect.ReflectError(
-                f"{day} is ahead of today in {tz}; a reflection is of today or a day before it"
-            )
+        reflect.on_or_before(day, today, tz)
         if a.at is not None:
             notes.moment(day, tz, a.at, today, days)  # the note's rules, checked before anything is heard
         wanted = None if a.accept is None else reflect.numbers(a.accept)
@@ -594,10 +595,11 @@ def _reflection(
         path = Path(a.audio)
         if not path.is_file():
             raise reflect.ReflectError(f"no recording at {a.audio}")
-        return _heard(path, a), False
+        return heard(path, a.model or TRANSCRIBE_DEFAULT_MODEL, a.fetch_model), False
     if a.mic is not None:
         with tempfile.TemporaryDirectory(prefix="logbook-reflect-") as folder:
-            return _heard(reflect.record(a.mic, Path(folder)), a), False
+            recorded = reflect.record(a.mic, Path(folder))
+            return heard(recorded, a.model or TRANSCRIBE_DEFAULT_MODEL, a.fetch_model), False
     said = reflect.dictations(lb, lines, retracted)
     if a.from_wispr is not None:
         if a.from_wispr:
@@ -628,14 +630,15 @@ def _reflection(
     )
 
 
-def _heard(path: Path, a: argparse.Namespace) -> reflect.Reflection:
+def heard(path: Path, model: str = TRANSCRIBE_DEFAULT_MODEL, fetch_model: bool = False) -> reflect.Reflection:
     """The recording at `path` heard by the local engine (`transcribe.hear`), its segments joined
-    with a space so that a sentence the engine cut in two is one sentence again."""
+    with a space so that a sentence the engine cut in two is one sentence again: `day reflect
+    --audio` and `--mic`, and a recording sent from the Day page of `serve` (`voice`)."""
     from ..labs import transcribe
 
     try:
-        engine = transcribe.detect(a.model or TRANSCRIBE_DEFAULT_MODEL)
-        result = transcribe.hear(engine, path, fetch_model=a.fetch_model)
+        engine = transcribe.detect(model)
+        result = transcribe.hear(engine, path, fetch_model=fetch_model)
     except (transcribe.EngineMissing, transcribe.ModelMissing) as e:
         raise reflect.ReflectError(str(e)) from e
     except (OSError, RuntimeError) as e:  # a file the engine cannot decode
@@ -645,6 +648,31 @@ def _heard(path: Path, a: argparse.Namespace) -> reflect.Reflection:
         raise reflect.ReflectError(f"no words were heard in {path.name}")
     heard_by = {"engine": engine.name, "model": engine.model, "language": result.language or None}
     return reflect.Reflection(text, reflect.HEARD, extra={"heard_by": heard_by})
+
+
+def voice(model: str = TRANSCRIBE_DEFAULT_MODEL) -> serve.Voice:
+    """Whether the Day page of `serve` can hear a recording, asked once when the server starts: the
+    engine of the `openlogbook[transcribe]` extra and its model on this machine, then `heard` for each
+    recording, never fetching; or why not, which the page says in place of the recording form."""
+    from ..contrib import serve
+    from ..labs import transcribe
+
+    try:
+        engine = transcribe.detect(model)
+        ready = engine.ready()
+    except transcribe.EngineMissing as e:
+        return serve.Voice(None, str(e))
+    except (ImportError, OSError) as e:
+        return serve.Voice(
+            None, f"the transcription engine could not be asked whether its model is here: {e}"
+        )
+    if not ready:
+        return serve.Voice(
+            None,
+            f"model {model!r} is not on this machine; `logbook day reflect YYYY-MM-DD --audio FILE"
+            " --fetch-model` fetches it once, the only time it uses the network; then restart `serve`",
+        )
+    return serve.Voice(lambda path: heard(path, model))
 
 
 def _print_reflection(day: str, r: reflect.Reflection, zone: ZoneInfo) -> None:
@@ -676,16 +704,7 @@ def _proposal_rows(proposals: Sequence[reflect.Proposal]) -> Iterator[str]:
         return
     yield "proposals, by rules alone; each is a guess until you accept it:"
     for p in proposals:
-        due = f" · due {p.due}" if p.due else (f" · {p.due_phrase}" if p.due_phrase else "")
-        if p.kind == reflect.DISPOSITION:
-            word = str(p.value)
-            what = f"#{p.seq} \u201c{p.target}\u201d · {p.cue} · overlap {p.score or 0:.2f}"
-        elif p.kind == reflect.DELEGATION:
-            word = p.kind
-            what = f"to {p.counterpart}: \u201c{p.quote}\u201d · {p.cue}{due}"
-        else:
-            word = p.kind
-            what = f"\u201c{p.quote}\u201d · {p.cue}{due} · `promises` reads it from the reflection"
+        word, what = reflect.proposal_words(p)
         yield f"  {p.number:>3}  {word:<11} line {p.sentence}  {what}"
 
 
@@ -741,22 +760,10 @@ def _ask_each(askable: Sequence[reflect.Proposal]) -> list[int] | None:
 def _write_reflection(
     lb: Logbook, day: str, r: reflect.Reflection, at: str | None, today: str, zone: ZoneInfo
 ) -> Line:
-    """The reflection as one note/v1 line on the day (`notes.write`): at `--at` when given, else when
+    """The reflection as one note/v1 line on the day (`reflect.write`): at `--at` when given, else when
     the dictation was spoken, else the note's own default."""
-    note = notes.write(
-        lb,
-        day,
-        r.text,
-        notes.REFLECTION,
-        reflect.SOURCE,
-        at=at if at is not None else r.at,
-        today=today,
-        extra=r.extra,
-    )
-    print(
-        f"wrote the reflection as #{note['seq']} {notes.SCHEMA} (source {reflect.SOURCE}, tier {notes.TIER})"
-        f" at {_clock(str(note['at']), zone)}"
-    )
+    note = reflect.write(lb, day, r, at, today)
+    print(reflect.wrote_text(note, zone))
     return note
 
 
@@ -769,36 +776,13 @@ def _reflect_sign(
     accepted: Sequence[reflect.Proposal],
     zone: ZoneInfo,
 ) -> None:
-    """Under one hold of the writer lock: the page read again (a disposition's line retracted while
-    the owner answered is refused, nothing written), the reflection written when it is new, the
-    accepted delegations written as notes, then the signature through `signing.sign`. HeadMoved and
-    another writer are the store's own errors, said by `cli.main`; nothing is retried."""
-    with lb.writer():
-        lines, retracted = reflect.day_lines(lb, day)
-        page = reflect.on_page(lines, retracted)
-        gone = [p for p in accepted if p.kind == reflect.DISPOSITION and p.line not in page]
-        if gone:
-            raise reflect.ReflectError(
-                f"#{gone[0].seq} is no longer on the page of {day}; nothing was written"
-            )
-        with lb.index() as idx:
-            earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
-        note = r.note if r.note is not None else _write_reflection(lb, day, r, a.at, today, zone)
-        joined = [str(note["id"])]
-        for p in accepted:
-            if p.kind == reflect.COMMITMENT:
-                print(f"commitment {p.number}: nothing to write; `promises` lists it from the reflection")
-            elif p.kind == reflect.DELEGATION:
-                line = reflect.delegate(lb, day, p, note, today)
-                joined.append(str(line["id"]))
-                print(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
-        args = reflect.signature(earlier, page | set(joined), joined, accepted)
-        if args.kept is not None:
-            print(f"  {args.kept}")
-        line = signing.sign(
-            lb, day, confirm=args.confirm, note=args.note, at=a.at, dispositions=args.dispositions
-        )
-    for text in signing.summary(line):
+    """The day closed through `reflect.close`, the code the Day page's Sign runs too: under one hold
+    of the writer lock, the page read again (a disposition's line retracted while the owner answered
+    is refused, nothing written), the reflection written when it is new, the accepted delegations
+    written as notes, then the signature through `signing.sign`; each step printed as it is done.
+    HeadMoved and another writer are the store's own errors, said by `cli.main`; nothing is retried."""
+    closed = reflect.close(lb, day, today, r, accepted, a.at, say=print)
+    for text in signing.summary(closed.signature):
         print(text)
 
 

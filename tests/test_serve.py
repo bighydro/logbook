@@ -88,14 +88,17 @@ def test_refuses_to_bind_anything_but_loopback(
 def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Every link, form and image on every page points inside the server: a path from `/`, never
     a scheme, a host or a protocol-relative `//`. No script fetched (the Places page carries one
-    inline, for its keys, named by its hash in that page's policy and by nothing else; every other
-    page has none and a policy that allows none), no stylesheet link, no frame, no `url()` or
-    `@import` in the inline style, and a Content-Security-Policy that would stop a browser
-    following any of those even if one slipped in."""
-    _lb, site = _open(tmp_path, monkeypatch)
-    for page in PAGES:
+    inline, for its keys, and a Day one, for its record button, when the server can hear a
+    recording; each named by its hash in that page's policy and by nothing else; every other page
+    has none and a policy that allows none), no stylesheet link, no frame, no `url()` or `@import`
+    in the inline style, and a Content-Security-Policy that would stop a browser following any of
+    those even if one slipped in."""
+    lb, site = _open(tmp_path, monkeypatch)
+    voiced = serve.Site(lb, voice=serve.Voice(lambda path: None))  # type: ignore[arg-type, return-value]
+    days = [page for page in PAGES if page.startswith("/day/")]
+    for page, server in [*((page, site) for page in PAGES), *((page, voiced) for page in days)]:
         path, _, query = page.partition("?")
-        response = site.respond(path, query)
+        response = server.respond(path, query)
         assert response.status == 200, page
         text = response.body.decode("utf-8")
         low = text.lower()
@@ -104,12 +107,17 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
             assert target.startswith("/") and not target.startswith("//"), (page, target)
             assert ":" not in target.split("?")[0], (page, target)
         csp = response.headers["Content-Security-Policy"]
-        if path == "/places":
+        script = (
+            serve.PLACES_SCRIPT_HASH
+            if path == "/places"
+            else serve.DAY_SCRIPT_HASH
+            if server is voiced
+            else None
+        )
+        if script is not None:
             assert text.count("<script") == 1 and "<script src" not in low and "<script>" in text, page
-            assert (
-                f"script-src '{serve.PLACES_SCRIPT_HASH}'" in csp
-                and "'unsafe-inline'" not in csp.split("style-src")[0]
-            )
+            assert f"script-src '{script}'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
+            assert "connect-src" not in csp, page
         else:
             assert "<script" not in low and "script-src" not in csp, page
         for tag in (

@@ -18,6 +18,7 @@ logbook day sign 2026-06-09 --kept 4181 --carried 4183   # and what became of th
 logbook day sign 2026-06-09 --confirm none               # nothing on the page is a fact of the day
 logbook day sign 2026-06-09 --at 2026-06-09T19:30:00+02:00   # signed when you clicked, not when this ran
 logbook day reflect 2026-06-09 --audio evening.m4a --sign      # or close it by voice (below)
+logbook serve                           # or on the Day page: Reflect, tick, Sign (below)
 logbook show 2026-06-09                 # the header now says `signed 2026-06-10 08:15`
 ```
 
@@ -41,7 +42,25 @@ It rewrites nothing. A day that was wrong is corrected the way the record correc
 new lines, and then signed again; the later signature stands and the earlier stays in the chain.
 Retracting a signature (`repair retract SEQ`) leaves the earlier one standing, or the day unsigned.
 
-Only you sign: here, or through the door when you allow it (below).
+Only you sign: here, on the Day page of `logbook serve`, or through the door when you allow it
+(below).
+
+## Signing on the Day page
+
+`logbook serve` is the Library, and its Day page is your own Sign path. At its foot, *Reflect and
+sign* takes your reflection (typed, the day's Wispr Flow draft offered prefilled, or a recording
+where this machine can hear one), shows the proposals the rules read in it as boxes, none ticked,
+and Sign signs the day through the code `day reflect --sign` runs: the ticked delegations written as
+notes, then `signing.sign` with every line on the page confirmed, your reflection among them, and
+the ticked dispositions in the signature. The line is byte for byte what `logbook day reflect DAY
+--sign --accept N,N` writes for the same reflection and ticks. A day you signed before is signed
+again, the new line superseding the standing one and keeping what it said, and the page then shows
+the signature with its page digest. It answers this machine only, and nothing is written until you
+click ([serve](serve.md#reflect-and-sign)).
+
+It needs no policy. The page is not the door: it never reads `policy/crossing.json`, and the `write`
+list there may stay empty. The Purser, the orchestrator that builds your Day page elsewhere, remains
+an alternative front door, through `sign_day` below, and only when you name the tool in that list.
 
 ## Signing through the door
 
@@ -209,7 +228,8 @@ stay with `day sign`.
 
 **Where it shows.** `logbook day` prints the reflection in a section of its own, labelled `reflection`
 with the time you spoke: your words in your voice, below the header and above the record, the timeline
-and everything after it. The Day page of `logbook serve` shows it the same way, under *Reflection*.
+and everything after it. The Day page of `logbook serve` shows it the same way, under *Reflection*, and
+at its foot lets you write it and sign the day with it ([above](#signing-on-the-day-page)).
 `day --json` carries it under `reflection` (`line`, `seq`, `at`, `at_local`, `source`, `text`), a key
 that is there only on a day that has one, so every other Day's object, the conformance sample's among
 them, is unchanged. The latest reflection standing is the one shown; retract it and the one before it

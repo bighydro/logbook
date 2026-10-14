@@ -12,15 +12,25 @@ where it begins. Every page is built from the index and the readers, so a Day re
 `logbook day` takes whatever the record's length, and nothing is written by a GET: every page is
 answered from the record at its head.
 
-One page writes, on a POST: `/places` carries the review queue of `setup places review`
+Two pages write, on a POST. `/places` carries the review queue of `setup places review`
 (`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
 `/places/review` (`Site.write`), which names a cluster or rejects it through the engine's own
 `accept` and `reject`, so `places.json`, the naming note and `state/places-review.json` are what the
-CLI writes. The Library's first write act, allowed because the server binds 127.0.0.1 and runs as
-the record's own user: the POST is answered only when the connection comes from this machine (the
-client address is loopback) and the form was submitted from the server's own pages (the browser's
-`Origin`, when it sends one, names 127.0.0.1); anything else is a 403 and nothing is written. After
-a write the head has moved, and the next request reads the record again as after a sync.
+CLI writes. The Day carries the owner's two acts on it, Reflect and Sign (`Site._reflect`,
+`Site._sign`): the reflection posts to `/day/YYYY-MM-DD/reflect` and is written through `day
+reflect`'s own `reflect.write` (the day's Wispr Flow draft offered prefilled, a recording heard
+through `day reflect --audio`'s path when the command wired one in, `Voice`), and the proposals
+the rules read in it are checkboxes whose form posts to `/day/YYYY-MM-DD/sign`, which signs the
+day through `reflect.close`, the code `day reflect --sign` runs: `signing.sign` with the lines
+confirmed, the accepted dispositions and the reflection, a signed day signed again superseding its
+signature. The Library's write acts, allowed because the server binds 127.0.0.1 and runs as the
+record's own user: a POST is answered only when the connection comes from this machine (the client
+address is loopback) and the form was submitted from the server's own pages (the browser's
+`Origin`, when it sends one, names 127.0.0.1); anything else is a 403 and nothing is written. Every
+write is one at a time (`Site._write_lock`) and through the CLI's own function; the Day's never
+waits for another writer. After a write the head has moved, and the next request reads the record
+again as after a sync. The policy's `write` list (the MCP door, ADR 0022) is never read: this is
+the owner's own page.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -36,13 +46,16 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
   opened), so the record is readable from this machine and nowhere else. It never resolves a
   name, not even its own.
 - A page is one HTML document with one inline stylesheet: no font, no image, no stylesheet link,
-  no script fetched, and no reference to any URL but the server's own paths. The one script is
-  inline on the Places page (`PLACES_SCRIPT`: the keys Enter, n and Space), named in that page's
-  Content-Security-Policy by its hash and by nothing else; every other page's policy allows no
-  script. The header tells the browser what the markup already does, so nothing a payload carried
-  could make a page fetch from elsewhere even if the escaping here were wrong.
-- Read-only but for the one POST above. The pages call the readers; the readers never write (not
-  even `policy/stays.json`).
+  no script fetched, and no reference to any URL but the server's own paths. A script is inline on
+  two pages, each named in that page's Content-Security-Policy by its hash and by nothing else: the
+  Places page's keys (`PLACES_SCRIPT`: Enter, n and Space) and the Day page's record button
+  (`DAY_SCRIPT`, only where the server can hear a recording: it records with the browser's own
+  MediaRecorder and sends the recording with the form, never by a fetch); every other page's policy
+  allows no script. The header tells the browser what the markup already does, so nothing a
+  payload carried could make a page fetch from elsewhere even if the escaping here were wrong.
+- Read-only but for the POSTs above. The pages call the readers; the readers never write (not
+  even `policy/stays.json`), and a GET writes nothing: a draft is offered, a proposal is a box, and
+  nothing is taken until the owner clicks.
 
 The text grammar is the commands' own (`day.span_text`, `days.night_text`, `gaps.runs`, …), so a
 row reads here as it prints there.
@@ -50,11 +63,13 @@ row reads here as it prints there.
 `logbook export site` writes the same pages as files (`logbook/contrib/site.py`): a `Site` made with `href`
 renders every link through it (a relative path to a file, or None for plain text), through the gate
 `tiers` (`reading.read`), with its own `nav` and `footer`, and without the forms and pagers a static
-page has nothing to submit to. The rendering is this module's either way."""
+page has nothing to submit to. The rendering is this module's either way. The Day says in its footer
+that no model touched it (`NO_MODEL`): its rows are computed and a model's draft is headed as one."""
 
 from __future__ import annotations
 
 import base64
+import email
 import hashlib
 import ipaddress
 import json
@@ -62,23 +77,26 @@ import math
 import re
 import secrets
 import socketserver
+import tempfile
 import threading
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
+from email.utils import collapse_rfc2231_value
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, NamedTuple
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
-from ..core import assets, day_start, drafts, places, reading, share, stays, trips, weather
+from ..core import assets, day_start, drafts, places, reading, share, signing, stays, trips, weather
 from ..core import day as day_reader
 from ..core import days as days_reader
+from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
-from ..core.store import Logbook
-from . import asset_status, gaps, places_review
+from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook
+from . import asset_status, dream, gaps, places_review, reflect
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
@@ -88,10 +106,27 @@ CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-u
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
 RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places"})  # and every Day: the record's, not the clock's
-REVIEW_PATH = "/places/review"  # the one path that writes: POST only, from this machine only
+REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
+DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
+REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
+CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
-FORM_BYTES = 16 * 1024  # the most a POST body may carry: a name, a cluster id, a page number
+FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
+AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
 STATE_FILES = (places_review.STATE_FILE,)  # record-relative bookkeeping the pages read, in the tag
+NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
+AUDIO_SUFFIXES = {
+    "audio/webm": ".webm",
+    "video/webm": ".webm",
+    "audio/ogg": ".ogg",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "audio/aac": ".aac",
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/flac": ".flac",
+}  # a recording's suffix when its name gives none, so the engine's decoder knows it
 PLACES_SCRIPT = """
 (function(){
 var keys={Enter:"button[value=name]",n:"button[value=reject]",N:"button[value=reject]"," ":"a.skip"};
@@ -113,6 +148,32 @@ PLACES_SCRIPT_HASH = (
     "sha256-" + base64.b64encode(hashlib.sha256(PLACES_SCRIPT.encode("utf-8")).digest()).decode()
 )
 PLACES_CSP = CSP.replace("style-src", f"script-src '{PLACES_SCRIPT_HASH}'; style-src")
+DAY_SCRIPT = """
+(function(){
+var form=document.querySelector("form.audio");if(!form)return;
+var button=form.querySelector("button.record"),input=form.querySelector("input[type=file]");
+var media=navigator.mediaDevices;
+if(!button||!input||!window.MediaRecorder||!window.DataTransfer||!media||!media.getUserMedia)return;
+button.hidden=false;
+var recorder=null;
+button.addEventListener("click",function(){
+if(recorder){recorder.stop();return;}
+media.getUserMedia({audio:true}).then(function(stream){
+var parts=[];recorder=new MediaRecorder(stream);
+recorder.ondataavailable=function(e){if(e.data&&e.data.size)parts.push(e.data);};
+recorder.onstop=function(){
+stream.getTracks().forEach(function(t){t.stop();});
+var type=(recorder.mimeType||"audio/webm").split(";")[0];
+var ext=/mp4|aac/.test(type)?"m4a":(/ogg/.test(type)?"ogg":"webm");
+var t=new DataTransfer();t.items.add(new File(parts,"reflection."+ext,{type:type}));
+input.files=t.files;recorder=null;button.disabled=true;button.textContent="Hearing it";form.submit();};
+recorder.start();button.textContent="Stop, and hear it";
+},function(){button.textContent="No microphone here";button.disabled=true;});
+});
+})();
+"""
+DAY_SCRIPT_HASH = "sha256-" + base64.b64encode(hashlib.sha256(DAY_SCRIPT.encode("utf-8")).digest()).decode()
+DAY_CSP = CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
@@ -125,6 +186,7 @@ STYLE = """
 :root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
 body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
 header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
 nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
 nav a:first-child{font-weight:600}
 main{max-width:66rem;margin:0 auto;padding:1rem}
@@ -180,6 +242,23 @@ form.name input[type=text]{min-width:16rem;flex:1}
 a.skip{display:inline-block;padding:.2rem .4rem;border:1px solid var(--line);border-radius:3px;
 text-decoration:none}
 @media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
+section.close form{margin:.6rem 0 1rem}
+section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
+padding:.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+section.close button{padding:.35rem .9rem;margin:.4rem .4rem 0 0}
+section.close details{margin:.4rem 0}
+section.close label{overflow-wrap:anywhere}
+section.close input[type=file]{max-width:100%}
+ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
+ol.proposals{list-style:none}
+ol.sentences{padding-left:2rem}
+ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
+ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
+ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
+ul.signed{color:var(--mute);margin:.4rem 0}
+code.sha{overflow-wrap:anywhere}
+footer .footnote{display:inline-block;margin-top:.3rem}
+@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}}
 """
 
 NAV = (
@@ -202,6 +281,44 @@ class Redirect(Exception):
     def __init__(self, location: str):
         super().__init__(location)
         self.location = location
+
+
+class Voice(NamedTuple):
+    """How the Day page hears a recording: `hear`, the path of `day reflect --audio` that the command
+    wires in (`commands.day.voice`; contrib never imports labs), or None with `missing`, why this
+    machine cannot (the extra, or its model, not here), which the page says in place of the form."""
+
+    hear: Callable[[Path], reflect.Reflection] | None
+    missing: str | None = None
+
+
+class Upload(NamedTuple):
+    """A file sent with a form (`multipart/form-data`): the Day page's recording."""
+
+    filename: str
+    content_type: str
+    data: bytes
+
+
+class Closing(NamedTuple):
+    """What the Day page's Reflect and Sign read of a day, at the head: its lines and those retracted,
+    the reflection standing (as `day reflect` reads it with no input) and the proposals the rules
+    read in it, the Wispr Flow draft not yet taken, the standing signature and what signing again
+    would keep from it, and `digest`, the proposals as shown, which the Sign form carries back."""
+
+    lines: list[Line]
+    retracted: set[str]
+    reflection: reflect.Reflection | None
+    proposals: list[reflect.Proposal]
+    draft: reflect.Dictation | None
+    earlier: Line | None
+    kept: str | None
+    digest: str
+
+
+class Stale(Exception):
+    """A Day form older than the record: the reflection, its proposals or the draft it offered are
+    not what the page showed; a 409, nothing written."""
 
 
 class Response(NamedTuple):
@@ -240,7 +357,7 @@ class Site:
     `tiers` reads the record through that gate (`reading.read`); the server reads every tier, since
     nothing leaves the machine. `href` makes the site static (`logbook export site`): every link is
     written as `href(path)` says, a page carries `nav` and `footer` in place of the server's, and no
-    form or pager is rendered."""
+    form or pager is rendered. `voice` is how the Day page hears a recording (None: it offers none)."""
 
     def __init__(
         self,
@@ -251,6 +368,7 @@ class Site:
         href: Href | None = None,
         nav: str = NAV,
         footer: str | None = None,
+        voice: Voice | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -260,8 +378,12 @@ class Site:
         self.static = href is not None
         self.nav = nav
         self.footer = footer
+        self.voice = voice
         self._lock = threading.Lock()
         self._review_lock = threading.Lock()  # the queue is read (its table built once) and acted on under it
+        # one write at a time: the store's writer lock re-enters within a process, so it keeps out
+        # another process's writer, never this server's other thread
+        self._write_lock = threading.Lock()
         self._head: str | None = None  # the head the index was last brought to by `current`
         self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
 
@@ -290,6 +412,8 @@ class Site:
             return Response(204, b"", "image/x-icon")
         if path == REVIEW_PATH:
             return self._error(405, f"{REVIEW_PATH} takes the Places page's forms (POST), nothing else")
+        if DAY_ACT.match(path) is not None:
+            return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
         meta = self.current()
         if path == TODAY:
             return self._today(meta)
@@ -298,6 +422,8 @@ class Site:
             return Response(304, b"", etag=etag)
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
         csp = PLACES_CSP if path == "/places" else CSP
+        if DAY_PATH.match(path) is not None and self._records():
+            csp = DAY_CSP
         try:
             return Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
         except NotFound:
@@ -316,29 +442,52 @@ class Site:
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
 
-    def write(self, path: str, form: Mapping[str, str], client: str, origin: str | None) -> Response:
-        """A POST: the Places page's form, `act` `name` (the field `name`, else the name proposed)
-        or `reject` on the cluster `id`, through `places_review.accept` and `reject`, the one path
-        the CLI's `--name`, `--accept` and `--reject` take. Refused (403, nothing written) unless
+    def write(
+        self,
+        path: str,
+        form: Mapping[str, str],
+        client: str,
+        origin: str | None,
+        upload: Upload | None = None,
+    ) -> Response:
+        """A POST. The Places page's form: `act` `name` (the field `name`, else the name proposed) or
+        `reject` on the cluster `id`, through `places_review.accept` and `reject`, the one path the
+        CLI's `--name`, `--accept` and `--reject` take. A Day's: Reflect and Sign (`_reflect`,
+        `_sign`), through `day reflect`'s own functions. Refused (403, nothing written) unless
         `client`, the connection's address, is loopback and `origin`, the browser's Origin header
-        when it sent one, names 127.0.0.1: this machine, the server's own pages. A cluster no
-        longer in the queue (named or rejected since the page was read) is a 409; a name the engine
-        refuses a 400. Done, a 303 to the page the form came from, at the next cluster."""
-        if path != REVIEW_PATH:
-            return self._error(404, f"nothing to post at {path}; the Places page posts to {REVIEW_PATH}")
+        when it sent one, names 127.0.0.1: this machine, the server's own pages. A field sent more
+        than once (the Sign form's boxes) arrives as its values joined with commas, as `--accept N,N`
+        takes them; `upload` is the file a form carried, the Day's recording.
+
+        On the Places page a cluster no longer in the queue (named or rejected since the page was
+        read) is a 409; a name the engine refuses a 400. Done, a 303 to the page the form came from,
+        at the next cluster."""
+        day_act = DAY_ACT.match(path)
+        if path != REVIEW_PATH and day_act is None:
+            return self._error(
+                404,
+                f"nothing to post at {path}; the Places page posts to {REVIEW_PATH}, a Day to"
+                " /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign",
+            )
         if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
-            return self._error(
-                403,
-                f"refused {where}: a place is named from this machine only, through the server's own"
-                " pages or `logbook setup places review`; nothing was written",
+            what = (
+                "a place is named from this machine only, through the server's own pages or"
+                " `logbook setup places review`"
+                if day_act is None
+                else "a day is reflected on and signed from this machine only, through the server's own"
+                " pages or `logbook day reflect`"
             )
+            return self._error(403, f"refused {where}: {what}; nothing was written")
+        if day_act is not None:
+            day, act = day_act.group(1), day_act.group(2)
+            return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
         act, cluster = form.get("act", ""), form.get("id", "")
         page = form.get("page", "1")
         page = page if page.isdigit() and int(page) >= 1 else "1"
         if act not in ("name", "reject") or not cluster:
             return self._error(400, "the form names a cluster (id) and an act: name or reject")
-        with self._review_lock:
+        with self._write_lock, self._review_lock:
             self.current()
             try:
                 report = places_review.read(self.lb)
@@ -366,6 +515,153 @@ class Site:
         location = f"/places?page={page}" + (f"#{following[0].id}" if following else "")
         return Response(303, b"", location=location)
 
+    def _reflect(self, day: str, form: Mapping[str, str], upload: Upload | None) -> Response:
+        """Reflect: the words of the field (`act` reflect), written as the day's reflection through
+        `reflect.write`, the code `day reflect --text` runs; with `dictation`, the Wispr Flow draft
+        the page offered is taken in the words the field holds, as `day reflect`'s y (or e, edited)
+        takes it. Or a recording (`act` hear) heard through `Voice.hear`, the path of `day reflect
+        --audio`, and written the same way. The same words on the day already are never written
+        twice. Done, a 303 to the Day at Reflect and sign, where its proposals are now boxes."""
+        act = form.get("act", "")
+        if act not in (REFLECT, HEAR):
+            return self._error(
+                400, "the form names an act: reflect, with your words, or hear, with a recording"
+            )
+        try:
+            day, today = self._closing_day(day)
+        except ValueError as e:  # a day ahead, a day that is not one, a day_start that is not a clock
+            return self._error(400, str(e))
+        heard: reflect.Reflection | None = None
+        if act == HEAR:
+            if upload is None or not upload.data:
+                return self._error(400, "no recording came with the form; choose one, or record one")
+            hear = self.voice.hear if self.voice is not None else None
+            if hear is None:
+                missing = self.voice.missing if self.voice is not None else None
+                return self._error(
+                    400,
+                    missing
+                    or f"this server hears no recording; `logbook day reflect {day} --audio FILE` does",
+                )
+            try:  # heard before the lock is taken: a minute of speech is a while
+                with tempfile.TemporaryDirectory(prefix="logbook-reflect-") as folder:
+                    recording = Path(folder) / f"reflection{_suffix(upload)}"
+                    recording.write_bytes(upload.data)
+                    heard = hear(recording)
+            except reflect.ReflectError as e:
+                return self._error(400, str(e))
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    lines, retracted = reflect.day_lines(self.lb, day)
+                    r = heard if heard is not None else self._typed(day, form, lines, retracted)
+                    if not r.text.strip():
+                        raise reflect.ReflectError("the reflection is empty; say or type a few words")
+                    standing = reflect.reflections(lines, retracted)
+                    if reflect.same(r.text, standing, r.dictation) is None:  # never written twice
+                        reflect.write(self.lb, day, r, None, today)
+            except Locked as e:
+                return self._error(409, _not_waiting(e))
+            except (HeadMoved, Stale) as e:
+                return self._error(409, str(e))
+            except ValueError as e:  # ReflectError, NoteError, SignError (the note's moment)
+                return self._error(400, str(e))
+        return Response(303, b"", location=f"/day/{day}#{CLOSE}")
+
+    def _typed(
+        self, day: str, form: Mapping[str, str], lines: Sequence[Line], retracted: Collection[str]
+    ) -> reflect.Reflection:
+        """The reflection the field holds, its line ends plain newlines (a browser sends a field's as
+        CRLF): typed, or the Wispr Flow dictation the form names taken in these words; `Stale` when
+        that dictation is no longer on the day."""
+        text = form.get("text", "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        named = form.get("dictation", "").strip()
+        if not named:
+            return reflect.Reflection(text, reflect.TYPED)
+        found = [d for d in reflect.dictations(self.lb, lines, retracted) if d.id == named]
+        if not found:
+            raise Stale(
+                f"the Wispr Flow dictation this page offered is no longer on {day}; /day/{day} is the day"
+                " as it stands, and nothing was written"
+            )
+        return reflect.dictated(found[0], text)
+
+    def _sign(self, day: str, form: Mapping[str, str]) -> Response:
+        """Sign: the day signed through `reflect.close`, the code `day reflect --sign` runs, with the
+        reflection standing on the day and the proposals ticked (`accept`, N,N as `--accept` takes
+        them; none ticked accepts none): the accepted delegations written as notes, then
+        `signing.sign` with the lines confirmed, the accepted dispositions and the reflection, now.
+        A day signed already is signed again, the new signature superseding it and keeping what it
+        said. Refused (409, nothing written) when the reflection or its proposals are not those the
+        page showed (`reflection`, `proposals`), and when there is no reflection to sign with."""
+        if form.get("act") != SIGN:
+            return self._error(400, "the form names the act: sign")
+        try:
+            day, today = self._closing_day(day)
+            wanted = reflect.numbers(form.get("accept") or reflect.NONE)
+        except ValueError as e:
+            return self._error(400, str(e))
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    found = self._closing(day)
+                    r = found.reflection
+                    if r is None or r.note is None:
+                        raise Stale(
+                            f"nothing to sign {day} with: reflect first, and the day is signed with your"
+                            f" reflection among the lines it confirms (`logbook day sign {day}` signs it"
+                            " without one); nothing was written"
+                        )
+                    if form.get("reflection") != str(r.note["id"]) or form.get("proposals") != found.digest:
+                        raise Stale(
+                            f"the reflection or its proposals changed since this page was read; /day/{day}"
+                            " is the day as it stands, and nothing was written"
+                        )
+                    accepted = reflect.chosen(found.proposals, wanted)
+                    reflect.close(self.lb, day, today, r, accepted)
+            except Locked as e:
+                return self._error(409, _not_waiting(e))
+            except (HeadMoved, Stale) as e:
+                return self._error(409, str(e))
+            except ValueError as e:  # ReflectError, SignError, NoteError
+                return self._error(400, str(e))
+        return Response(303, b"", location=f"/day/{day}#{CLOSE}")
+
+    def _closing_day(self, day: str) -> tuple[str, str]:
+        """The day and today as the record defines them (its zone and `day_start`); `ReflectError` for
+        a day ahead of today, as `day reflect` refuses one."""
+        day = parse_day(day).isoformat()
+        today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+        reflect.on_or_before(day, today, str(self.lb.meta["timezone"]))
+        return day, today
+
+    def _closing(self, day: str) -> Closing:
+        """What Reflect and Sign read of `day`, as `day reflect DAY --sign` reads it with no input."""
+        lines, retracted = reflect.day_lines(self.lb, day)
+        standing = reflect.reflections(lines, retracted)
+        pending = reflect.drafts(reflect.dictations(self.lb, lines, retracted), standing)
+        r = reflect.on_the_day(standing[-1]) if standing else None
+        proposals: list[reflect.Proposal] = []
+        if r is not None and r.note is not None:
+            mine = str(r.note["id"])
+            proposals = reflect.propose(r.text, day, reflect.commitments(self.lb, day, {mine}))
+        with self.lb.index() as idx:
+            earlier = signing.signature_of(idx, day, str(self.lb.meta["owner_id"]))
+        kept = None
+        if earlier is not None and r is not None and r.note is not None:
+            page = reflect.on_page(lines, retracted)
+            kept = reflect.signature(earlier, page, [str(r.note["id"])], []).kept
+        shown = json.dumps([p.to_json() for p in proposals], sort_keys=True, ensure_ascii=False)
+        digest = hashlib.sha256(shown.encode("utf-8")).hexdigest()[:16]
+        draft = pending[-1] if pending else None
+        return Closing(lines, retracted, r, proposals, draft, earlier, kept, digest)
+
+    def _records(self) -> bool:
+        """Whether a Day page carries the recording form and its script: a server that can hear."""
+        return not self.static and self.voice is not None and self.voice.hear is not None
+
     def current(self) -> dict[str, Any]:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
         appended while the server runs), the index is brought to the new head here, once, under a
@@ -385,7 +681,8 @@ class Site:
         """The tag of a page that is the record's and nothing else: the head, then a digest of the
         request and what else the pages read — the rest of `logbook.json`, the settings beside the
         chain (`places.json`, `assets.json`, `policy/`), the review's bookkeeping in `state/`, the
-        pages received from the circle, and this server's start. One page's tag never stands for
+        pages received from the circle, this server's start, and for a Day the day the owner is in
+        (its forms are there from that day on). One page's tag never stands for
         another's, and a request that is an error is given none. None for a page the clock moves
         (`/assets`, `/gaps`) or a path with no page."""
         if path not in RECORD_PAGES and DAY_PATH.match(path) is None:
@@ -402,6 +699,11 @@ class Site:
             *senders,
         ]
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
+        if DAY_PATH.match(path) is not None:  # its forms are there from the day the owner is in
+            try:
+                parts.append(day_start.of(meta).today(self.now()).isoformat())
+            except day_start.DayStartError:
+                parts.append("-")
         for file in read:
             try:
                 st = file.stat()
@@ -443,10 +745,10 @@ class Site:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
         return Response(status, self.document(str(status), body).encode("utf-8"))
 
-    def document(self, title: str, body: str, script: str | None = None) -> str:
-        """One HTML document: the head, the navigation, `body`, the footer; `script` is the one
-        inline script a page may carry (the Places page's keys), named by hash in that page's
-        policy."""
+    def document(self, title: str, body: str, script: str | None = None, footnote: str | None = None) -> str:
+        """One HTML document: the head, the navigation, `body`, the footer and `footnote` under it;
+        `script` is the one inline script a page may carry (the Places page's keys, the Day's record
+        button), named by hash in that page's policy."""
         meta = self.lb.meta
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
@@ -455,6 +757,8 @@ class Site:
             if self.footer is None
             else self.footer
         )
+        if footnote is not None:
+            footer += f'<br><span class="footnote">{escape(footnote)}</span>'
         return (
             "<!doctype html>\n"
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
@@ -513,10 +817,11 @@ class Site:
             if expanded
             else self.link("expand all", f"/day/{day}?open=1")
         )
+        close = "" if self.static else f'<a href="/day/{day}#{CLOSE}">reflect and sign</a>{DOT}'
         parts = [
             f"<h1>{day} <small>{escape(data['weekday'])}</small></h1>\n",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
-            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}"
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             '<dl class="header">\n',
             *(
@@ -527,6 +832,7 @@ class Site:
             _dt("night before", day_reader.night_text(data["nights"]["before"])),
             _dt("night after", day_reader.night_text(data["nights"]["after"])),
             _dt("country", day_reader.country_text(data["country"])),
+            _signed_html(data.get("signed")),
         ]
         if data["all_day"]:
             parts.append(
@@ -585,7 +891,139 @@ class Site:
                     line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
                     parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
                 parts.append("</ul>\n")
-        return self.document(f"{day} {data['weekday']}", "".join(parts))
+        script = None
+        if not self.static:
+            closing, records = self._close_html(day)
+            parts.append(closing)
+            script = DAY_SCRIPT if records else None
+        return self.document(f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL)
+
+    def _close_html(self, day: str) -> tuple[str, bool]:
+        """Reflect and sign, at the foot of the Day: the reflection's field (the Wispr Flow draft
+        prefilled when one is waiting, else the reflection standing), the recording form when the
+        server can hear one, then the standing signature as `day sign` prints it, and the Sign form:
+        the proposals as boxes, none ticked. Nothing here is written until a button is clicked. With
+        it, whether the page carries the recording form (and so its script)."""
+        tz = self.tz
+        out = [f'<section class="close">\n<h2 id="{CLOSE}">Reflect and sign</h2>\n']
+        try:
+            self._closing_day(day)
+        except reflect.ReflectError:
+            out.append(
+                f'<p class="mute">{day} is ahead of today in {escape(str(tz))}; a day is reflected on and'
+                " signed on it or after it</p>\n</section>\n"
+            )
+            return "".join(out), False
+        found = self._closing(day)
+        r = found.reflection
+        if found.earlier is not None:  # the signature first: what Sign leaves the owner looking at
+            out.append('<ul class="plain signed">\n')
+            out.extend(f"<li>{escape(text.strip())}</li>\n" for text in signing.summary(found.earlier))
+            out.append("</ul>\n")
+        out.append(f'<form class="reflect" method="post" action="/day/{day}/reflect">\n')
+        if found.draft is not None:
+            d = found.draft
+            out.append(
+                f'<p class="mute">The Wispr Flow dictation #{d.seq} of {escape(_clock(d.at, tz)[11:])} begins'
+                f" with \u201c{reflect.CUE}\u201d: its words are below, without that word, a draft until"
+                " Reflect takes them (change them first if they need it).</p>\n"
+                f'<input type="hidden" name="dictation" value="{escape(d.id)}">\n'
+            )
+            text = reflect.without_cue(d.text)
+        elif r is not None and r.note is not None:
+            when = escape(_clock(str(r.note["at"]), tz)[11:])
+            out.append(
+                f'<p class="mute">Your reflection #{r.note["seq"]} of {when}'
+                " is below; Reflect writes changed words as the day's reflection, the same words never"
+                " twice.</p>\n"
+            )
+            text = r.text
+        else:
+            out.append(
+                '<p class="mute">A few sentences about the day, in your words: what went out, what did not,'
+                " what you will do, what someone else should. Rules, no model, read them for proposals.</p>\n"
+            )
+            text = ""
+        language = dream.language_of(_texts(found.lines, found.retracted))
+        out.append(
+            f'<textarea name="text" rows="6" lang="{escape(language)}" aria-label="your reflection"'
+            f' spellcheck="true">{escape(text, quote=False)}</textarea>\n'
+            '<button name="act" value="reflect">Reflect</button>\n</form>\n'
+        )
+        records = self._records()
+        if records:
+            out.append(
+                f'<form class="audio" method="post" action="/day/{day}/reflect"'
+                ' enctype="multipart/form-data">\n'
+                f'<input type="hidden" name="act" value="{HEAR}">\n'
+                "<label>or say it: a recording, heard on this machine "
+                '<input type="file" name="audio" accept="audio/*" capture></label>\n'
+                '<button>Hear it</button> <button type="button" class="record" hidden>Record</button>\n'
+                "</form>\n"
+            )
+        elif self.voice is not None and self.voice.missing:
+            out.append(f'<p class="mute">To reflect by voice here: {escape(self.voice.missing)}.</p>\n')
+        if r is None or r.note is None:
+            out.append(
+                '<p class="mute">Reflect first: Sign signs the day with your reflection among the lines it'
+                f" confirms, as <code>logbook day reflect {day} --sign</code> does; <code>logbook day sign"
+                f" {day}</code> signs it without one.</p>\n</section>\n"
+            )
+            return "".join(out), records
+        out.append(self._sign_html(day, found, r.note))
+        out.append("</section>\n")
+        return "".join(out), records
+
+    def _sign_html(self, day: str, found: Closing, note: Line) -> str:
+        """The Sign form: the proposals, a box each as `day reflect` numbers them (rules alone, none
+        ticked: a guess until the owner accepts it), the reflection a sentence a line folded beside
+        them, what signing confirms or keeps, and the button."""
+        r = found.reflection
+        assert r is not None
+        out = [
+            f'<form class="sign" method="post" action="/day/{day}/sign">\n'
+            f'<input type="hidden" name="reflection" value="{escape(str(note["id"]))}">\n'
+            f'<input type="hidden" name="proposals" value="{escape(found.digest)}">\n'
+        ]
+        if found.proposals:
+            out.append(
+                '<p class="mute">proposals, by rules alone; each is a guess until you accept it:</p>\n'
+                '<ol class="proposals">\n'
+            )
+            for p in found.proposals:
+                word, what = reflect.proposal_words(p)
+                out.append(
+                    f'<li><label><input type="checkbox" name="accept" value="{p.number}">'
+                    f' <span><b>{p.number}</b> <span class="kind">{escape(word)}</span> line {p.sentence}'
+                    f"{DOT}{escape(what, quote=False)}</span></label></li>\n"
+                )
+            out.append("</ol>\n")
+        else:
+            out.append(
+                '<p class="mute">no proposals: the rules read no commitment, delegation or disposition in'
+                " it</p>\n"
+            )
+        sentences = "".join(f"<li>{escape(text)}</li>" for text in reflect.sentences(r.text))
+        out.append(
+            f'<details><summary>the reflection, a sentence a line</summary><ol class="sentences">{sentences}'
+            "</ol></details>\n"
+        )
+        if found.earlier is None:
+            said = (
+                f"Sign confirms every line on the page, your reflection #{note['seq']} among them, writes"
+                " the delegations you tick and puts the dispositions you tick in the signature."
+            )
+            button = "Sign"
+        else:
+            kept = found.kept or "keeps nothing from the one it supersedes"
+            said = (
+                f"Sign again, and the new signature {kept}; your reflection #{note['seq']} is among the"
+                " lines it confirms."
+            )
+            button = "Sign again"
+        out.append(f'<p class="mute">{escape(said)}</p>\n')
+        out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
+        return "".join(out)
 
     def _name_this(self, entry: Mapping[str, Any]) -> str:
         """The "name this place" link of a stay printed as coordinates: the Places page at its
@@ -1176,6 +1614,80 @@ def _loopback_origin(origin: str) -> bool:
     return _loopback(parts.hostname)
 
 
+def _not_waiting(e: Locked) -> str:
+    """Another writer holds the record: the store's sentence, said for a page, which never waits."""
+    return str(e).replace(
+        NOT_WAITING, "; the page does not wait for another writer, so nothing was written: try again shortly"
+    )
+
+
+def _suffix(upload: Upload) -> str:
+    """The recording's suffix, for the engine's decoder: its file name's, else its type's."""
+    suffix = PureWindowsPath(upload.filename).suffix.lower()  # a name, perhaps with either separator
+    if re.fullmatch(r"\.[a-z0-9]{1,5}", suffix):
+        return suffix
+    return AUDIO_SUFFIXES.get(upload.content_type.partition(";")[0].strip().lower(), ".audio")
+
+
+def _multipart(body: bytes, content_type: str) -> tuple[dict[str, str], Upload | None]:
+    """A `multipart/form-data` body (RFC 7578): the form's fields, a field sent more than once its
+    values joined with commas, and its one file, the recording (None when none was chosen). Each
+    part is cut at the boundary the header names and nowhere else, so a recording's bytes are kept
+    as they were sent. ValueError for a body that is not one."""
+    header = email.message.Message()
+    header["content-type"] = content_type
+    boundary = header.get_param("boundary")
+    if not isinstance(boundary, str) or not boundary:
+        raise ValueError("a multipart form names its boundary")
+    parts = (b"\r\n" + body).split(b"\r\n--" + boundary.encode("latin-1"))
+    if len(parts) < 3 or not parts[-1].startswith(b"--"):
+        raise ValueError("the form's body is not what its boundary says")
+    fields: dict[str, list[str]] = {}
+    upload: Upload | None = None
+    for part in parts[1:-1]:
+        _padding, _, rest = part.partition(b"\r\n")
+        head, found, data = rest.partition(b"\r\n\r\n")
+        if not found:
+            raise ValueError("a part of the form has no header")
+        headers = email.message_from_bytes(head + b"\r\n\r\n")
+        name = headers.get_param("name", header="content-disposition")
+        if name is None:
+            continue
+        name = collapse_rfc2231_value(name)
+        filename = headers.get_filename()
+        if filename is None:
+            fields.setdefault(name, []).append(data.decode("utf-8", "replace"))
+        elif data:
+            upload = Upload(filename, headers.get_content_type(), data)
+    return {k: ",".join(v) for k, v in fields.items()}, upload
+
+
+def _signed_html(signed: Mapping[str, Any] | None) -> str:
+    """The Day's signature row: `unsigned`, or when (`signing.state_text`), which line, how many lines
+    it confirmed of the page's, and the page digest whole."""
+    if signed is None:
+        return _dt("signature", signing.state_text(None))
+    n, of = signed.get("confirmed"), signed.get("lines")
+    text = f"{signing.state_text(dict(signed))}{DOT}#{signed['seq']}{DOT}{n} of {of} lines confirmed"
+    digest = signed.get("page_sha256")
+    sha = f'{DOT}page sha256 <code class="sha">{escape(str(digest))}</code>' if digest else ""
+    return f"<dt>signature</dt><dd>{escape(text)}{sha}</dd>\n"
+
+
+def _texts(lines: Iterable[Line], retracted: Collection[str]) -> list[str]:
+    """The day's own words, for the language they are in: the text, title or subject of each line."""
+    found = []
+    for line in lines:
+        if str(line["id"]) in retracted:
+            continue
+        payload = line.get("payload") or {}
+        for key in ("text", "title", "subject"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                found.append(value)
+    return found
+
+
 # -- fragments --------------------------------------------------------------------------------------------
 
 
@@ -1257,18 +1769,34 @@ class Handler(BaseHTTPRequestHandler):
         self._answer(body=False)
 
     def do_POST(self) -> None:
-        """The Places page's form: read in full, then `Site.write` with the connection's address
-        and the Origin header, which decide whether it is answered at all."""
+        """A page's form: read in full (a field sent more than once, its values joined with commas;
+        a recording as `multipart/form-data`, to a Day only, up to `AUDIO_BYTES`), then `Site.write`
+        with the connection's address and the Origin header, which decide whether it is answered at
+        all."""
         assert isinstance(self.server, Server)
+        site = self.server.site
+        path = self.path.partition("?")[0]
+        kind = self.headers.get("Content-Type") or ""
+        multipart = kind.strip().lower().startswith("multipart/form-data")
+        limit = AUDIO_BYTES if multipart and DAY_ACT.match(path) is not None else FORM_BYTES
         length = self.headers.get("Content-Length") or "0"
         size = int(length) if length.isdigit() else 0
-        if size > FORM_BYTES:
-            self._send(self.server.site._error(413, f"a form is at most {FORM_BYTES:,} bytes"), body=True)
+        if size > limit:
+            self.close_connection = True  # the body is left unread
+            self._send(site._error(413, f"a form is at most {limit:,} bytes"), body=True)
             return
         raw = self.rfile.read(size) if size > 0 else b""
-        form = {k: v[-1] for k, v in parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
-        path = self.path.partition("?")[0]
-        response = self.server.site.write(path, form, str(self.client_address[0]), self.headers.get("Origin"))
+        upload: Upload | None = None
+        if multipart:
+            try:
+                form, upload = _multipart(raw, kind)
+            except ValueError as e:
+                self._send(site._error(400, str(e)), body=True)
+                return
+        else:
+            query = parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
+            form = {k: ",".join(v) for k, v in query.items()}
+        response = site.write(path, form, str(self.client_address[0]), self.headers.get("Origin"), upload)
         self._send(response, body=True)
 
     def _answer(self, body: bool) -> None:
@@ -1303,15 +1831,21 @@ class Server(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
-def make_server(lb: Logbook, host: str = HOST, port: int = PORT, airports: Airports | None = None) -> Server:
+def make_server(
+    lb: Logbook,
+    host: str = HOST,
+    port: int = PORT,
+    airports: Airports | None = None,
+    voice: Voice | None = None,
+) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
-    before a socket is opened; OSError when the port is taken."""
+    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
             "and nothing here leaves it"
         )
-    return Server(port, Site(lb, airports))
+    return Server(port, Site(lb, airports, voice=voice))
 
 
 def serve(
@@ -1320,12 +1854,16 @@ def serve(
     port: int = PORT,
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
+    voice: Voice | None = None,
 ) -> None:
     """Serve the record until Ctrl-C. `HostError` and OSError as `make_server`."""
-    server = make_server(lb, host, port, airports)
+    server = make_server(lb, host, port, airports, voice)
     try:
         bound = server.server_address[1]
-        announce(f"serving {_shown(lb.root)} at http://{HOST}:{bound}/  (Ctrl-C to stop; nothing is written)")
+        announce(
+            f"serving {_shown(lb.root)} at http://{HOST}:{bound}/  (Ctrl-C to stop; nothing is written but"
+            " what you name, reflect or sign on a page)"
+        )
         server.serve_forever()
     except KeyboardInterrupt:
         announce("stopped")
