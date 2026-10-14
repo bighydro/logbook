@@ -17,8 +17,9 @@ logbook transcript synthesize --day yesterday --dry-run               # ask the 
 
 `--show-prompt` prints the prompt and the material as they are sent; `--again` asks once more when
 this model has already synthesized the call. The morning's `dream --catch-up` synthesizes every call of
-the days it covers that has no synthesis yet, or whose synthesis was made under another version of the
-`dream` entry (below).
+the last 7 days that has no synthesis yet, or whose synthesis was made under another version of the
+`dream` entry, and never an older one unless you ask with `--since` ([*The week the close
+covers*](#the-week-the-close-covers)).
 
 ## What a synthesis is, and is not
 
@@ -65,8 +66,9 @@ head, as the day's draft does ([the dream](dream.md#when-the-entry-changes); [AD
   the synthesis without the row, counts it among the lines it withheld, and its `line` tool refuses it.
 - **Synthesized again under the entry as it is now.** A synthesis made under another version of the
   entry (an `until` moved, another model, a ceiling raised) is no longer unchanged: `transcript
-  synthesize` sends the call again, and `dream --catch-up` does so for the calls of its days, the row
-  saying `synthesized under another dream entry`. The new synthesis supersedes the old one. A call above
+  synthesize` sends the call again, and `dream --catch-up` does so for the calls of its week (or from
+  its `--since` day), the row saying `synthesized under another dream entry`; an older call keeps its
+  synthesis until you send it again by hand. The new synthesis supersedes the old one. A call above
   a lowered ceiling is above it as its synthesis is (they share the tier), so it stays home and is
   counted as held back; its synthesis shows again once the entry allows its tier.
 - A synthesis written before syntheses named their entry has no version to compare: a new entry alone
@@ -124,19 +126,49 @@ superseded is not the call as the record stands and is refused.
 The run holds the record's writer lock and reads the head again before it appends: a head that moved
 under the reading is `HeadMoved`, one sentence, nothing written.
 
+## The week the close covers
+
 `dream --catch-up`, the 06:00 close's second step ([the schedule](schedule.md)), synthesizes, after the
-days, each call of those days that no model has synthesized yet, or whose synthesis was made under
-another version of the entry, one row each; a call held back by the ceiling or without its text is
-counted in the closing line:
+days, each call of the **last 7 days** that no model has synthesized yet, or whose synthesis was made
+under another version of the entry, one row each; a call held back by the ceiling or without its text is
+counted in the closing line. A call's day is its own: the local day of its start (`at`) on the record's
+clock, [`day_start`](settings.md#where-your-day-begins-day_start) included, so a call at 05:30 under a
+day that begins at 06:00 is on the day before, and a call held three years ago and imported last night
+is three years old. Today's calls wait for the next morning, as today's draft does.
+
+An older call is never sent by the close. A record that holds years of transcripts would otherwise
+send every one of them to the model the first morning after an upgrade: unasked, and the whole
+backlog's cost in one night. It is the rule a source keeps on its first run, which never reads back
+further than its window without an explicit `--since`. The calls before the week that have no synthesis
+are counted and named in one line, with the two ways to them, from the oldest one's day:
 
 ```
-$ logbook dream --catch-up --days 3
-2026-06-09  empty     nothing logged
-2026-06-10  dreamed   #5440 · no draft yet · 4 segments
-2026-06-11  unchanged unchanged since #5431
-2026-06-10  synthesized #5441 · “Yard plans” · 6 segments
-1 dreamed · 1 unchanged · 1 empty · 1 synthesized · 1 transcript held back above max_tier 2
+$ logbook dream --catch-up
+2026-06-06  empty     nothing logged
+…
+2026-06-14  dreamed   #5440 · no draft yet · 4 segments
+2026-06-18  dreamed   #5441 · no draft yet · 3 segments
+2026-06-14  synthesized #5442 · “Hull survey” · 6 segments
+2026-06-18  synthesized #5443 · “Mooring lines” · 6 segments
+2 dreamed · 12 empty · 2 synthesized
+1 call before 2026-06-13 not synthesized; run `logbook transcript synthesize --day 2026-05-11` or `dream --catch-up --since 2026-05-11`
 ```
+
+- `logbook dream --catch-up --since DAY` synthesizes the calls from `DAY` on, not only the week's, and
+  only those: it is the explicit ask that reaches back, a day at a time or a year at once. The days it
+  dreams are still the last `--days N` (14 by default); `--since` is about the calls. A `--days` under 7
+  narrows the calls to those days too; it never widens them.
+- `logbook transcript synthesize --day DAY` (or `ID`) is unchanged: it sends the calls you name,
+  whatever their age.
+- Either way, a call already synthesized by the same model, under the same prompt and the same `dream`
+  entry, is never sent again (*Once, and again*, above). A call above the ceiling is not among the
+  ones named: it stays home whatever you ask, and only `doctor` counts it.
+
+The scheduled close runs `dream --catch-up` with nothing after it, so it never reaches further than the
+week. `logbook doctor` counts the calls without a synthesis on one `synthesis` line ([the
+doctor](doctor.md#calls-without-a-synthesis)): those of the week and today, which the close will
+synthesize; those before it, which the close leaves, with the `--since` that reaches the oldest; and those
+above the ceiling.
 
 ## On the Day
 

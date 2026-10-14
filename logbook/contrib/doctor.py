@@ -48,6 +48,11 @@ The checks, in the order they print:
   under the entry when it is in force. A record with no such day has no line. Read from the index
   when it is current, opened read-only, else from the month files; a sealed draft this machine has
   no identity to open is counted, not named.
+- `synthesis`: when the policy has a `dream` entry, how many calls (`transcript/v1` lines) have no
+  synthesis: those of the last 7 days and today, which the 06:00 close synthesizes; those before,
+  which it leaves, with the `dream --catch-up --since DAY` that reaches the oldest; and those above
+  the entry's ceiling, which stay home. A pass; a record whose every call has a synthesis has no line.
+  Read as the `drafts` line reads.
 - `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
   names this machine, or no home is set (a pass either way); another machine is a warn: writers
   belong on the home.
@@ -89,7 +94,7 @@ from zoneinfo import ZoneInfo
 from ..core import assets, attachments, day_start, drafts, index, places, plausible, policy, sealing
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
-from . import adapters, home, last_run, schedule, serve
+from . import adapters, home, last_run, schedule, serve, synthesis
 from . import service as serve_service
 from .adapters import service_account
 
@@ -478,15 +483,20 @@ def crossing_check(root: Path) -> Check:
 
 
 def draft_lines(lb: Logbook, state: str) -> list[Line]:
-    """The record's draft and retraction lines, opened where this machine has the identity: from
-    the index when it is `current` (opened read-only, the lines read at the places it names), else
-    from the month files."""
-    kinds = (drafts.KIND, RETRACTION)
+    """The record's draft and retraction lines (`kind_lines`)."""
+    return kind_lines(lb, state, (drafts.KIND, RETRACTION))
+
+
+def kind_lines(lb: Logbook, state: str, kinds: tuple[str, ...]) -> list[Line]:
+    """The record's lines of these kinds, opened where this machine has the identity: from the index
+    when it is `current` (opened read-only, the lines read at the places it names), else from the
+    month files."""
     if state == "current":
         db = sqlite3.connect(f"{lb.index_path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             places = db.execute(
-                "SELECT file, offset FROM lines WHERE kind IN (?, ?) ORDER BY seq", kinds
+                f"SELECT file, offset FROM lines WHERE kind IN ({', '.join('?' * len(kinds))}) ORDER BY seq",
+                kinds,
             ).fetchall()
         finally:
             db.close()  # before anything could unlink it: Windows refuses to delete an open file
@@ -537,6 +547,27 @@ def drafts_check(lb: Logbook, state: str) -> Check | None:
     if sealed:
         found += f"; {sealed} sealed draft(s) above it that this machine has no identity to open"
     return Check("drafts", "warn", f"{found}; {why}")
+
+
+def synthesis_check(lb: Logbook, state: str, now: datetime) -> Check | None:
+    """The calls with no synthesis (`synthesis.waiting`): in the window the 06:00 close synthesizes,
+    before it, and above the `dream` entry's ceiling. None when the policy names no `dream` entry
+    (nothing is ever synthesized), when the policy or `day_start` is not readable (`crossing` and
+    `day-start` say so), or when every call has a synthesis. A pass: the close leaves the older calls
+    by design, and the line says how to reach them."""
+    try:
+        entry = policy.dream_today(lb.root)
+        bounds = day_start.of(lb.meta)
+    except (policy.PolicyError, day_start.DayStartError):
+        return None
+    if entry is None:
+        return None
+    first, _last = synthesis.window(now.astimezone(bounds.zone).date())
+    lines = kind_lines(lb, state, (synthesis.KIND, drafts.KIND, RETRACTION))
+    found = synthesis.waiting(lines, bounds.day_of, first, entry.max_tier)
+    if not found.total:
+        return None
+    return Check("synthesis", "pass", synthesis.waiting_text(found))
 
 
 def _ceiling_text(c: policy.Ceiling) -> str:
@@ -783,6 +814,9 @@ def run(
     withheld = drafts_check(lb, state)
     if withheld is not None:
         checks.append(withheld)
+    calls = synthesis_check(lb, state, now or last_run.now())
+    if calls is not None:
+        checks.append(calls)
     checks.append(home_check(lb.root))
     checks.append(last_run_check(lb, env))
     checks.append(restore_test_check(lb))

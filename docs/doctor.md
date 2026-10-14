@@ -38,6 +38,24 @@ lowered, the `until` passed, the entry removed), no reader shows it, and a `draf
 no reader shows: 2026-06-10 (#5440, tier 3); the 'dream' entry allows max_tier 2 now; `logbook dream
 --catch-up` dreams them again under it``. A record with no such day has no line.
 
+## Calls without a synthesis
+
+When `policy/crossing.json` has a `dream` entry, a `synthesis` line after `drafts` counts the calls
+(`transcript/v1` lines) that have no synthesis ([the synthesis of a
+call](transcript-synthesis.md#the-week-the-close-covers)), in three parts, each only when it counts any:
+those of the last 7 days and today, which the 06:00 close synthesizes; those before, which the close
+leaves, with the `--since` that reaches the oldest; and those above the entry's `max_tier`, which never
+leave the machine:
+
+```
+pass  synthesis  4 calls without a synthesis: 1 since 2026-10-07, which the 06:00 close synthesizes (`dream --catch-up`); 2 before 2026-10-07, which the close leaves: `logbook dream --catch-up --since 2026-08-21`; 1 above the dream entry's max_tier 2, which stays on this machine
+```
+
+It is a pass: the close leaves older calls by design, so a record with years of transcripts does not
+send them all to the model one morning. A record without a `dream` entry, or whose every call has a
+synthesis, has no such line. A retracted or superseded call is not counted, nor a call whose synthesis
+was made under another version of the entry: it has one.
+
 ## The Google key
 
 When either variable of the Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,

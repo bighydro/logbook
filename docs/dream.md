@@ -9,7 +9,8 @@ and the Day shows it above your note, labelled as a draft.
 ```
 logbook dream day 2026-06-13            # one day, one line
 logbook dream day 2026-06-13 --dry-run  # ask the model, check the answer, write nothing
-logbook dream --catch-up --days 14      # every day of the last fortnight that needs it
+logbook dream --catch-up --days 14      # every day of the last fortnight that needs it, and the week's calls
+logbook dream --catch-up --since 2026-05-01   # the same, and every call since 1 May that has no synthesis
 ```
 
 ## What the dream is, and is not
@@ -245,11 +246,14 @@ A draft names the head it read (`read_head`) and how many lines of the day it re
   dreamed under another version of the entry (*When the entry changes*), or when its lines under the
   ceiling today are not what the standing draft read: a different count, or a different set of ids.
   A day unchanged is skipped and nothing is sent for it. One line per day says what happened: `dreamed` with the line's seq and why, `unchanged`,
-  `empty` (nothing logged under the ceiling), or `refused` and why. Then each call of those days that
-  no model has synthesized yet, or whose synthesis was made under another version of the entry, is
-  synthesized, one line each, `synthesized` or `refused` ([the synthesis of a
-  call](transcript-synthesis.md)); a call above the ceiling, or without its text, is counted in the
-  closing line and never sent. The exit status is 1 when any day or call was
+  `empty` (nothing logged under the ceiling), or `refused` and why. Then each call of the last 7 days
+  (fewer when `--days` is under 7) that no model has synthesized yet, or whose synthesis was made under
+  another version of the entry, is synthesized, one line each, `synthesized` or `refused` ([the
+  synthesis of a call](transcript-synthesis.md#the-week-the-close-covers)); a call above the ceiling,
+  or without its text, is counted in the closing line and never sent. An older call is never sent: the
+  ones without a synthesis are counted in one line after the closing one, naming `transcript synthesize
+  --day DAY` and `dream --catch-up --since DAY`, and `--since DAY` is how you ask for the calls from
+  `DAY` on (the days dreamed are still the last N). The exit status is 1 when any day or call was
   refused, so the schedule's run can say so; a policy or endpoint refusal is said once, before any
   day, exit 2.
 

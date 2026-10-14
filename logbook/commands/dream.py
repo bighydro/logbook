@@ -17,7 +17,8 @@ DEFAULT_DAYS = 14
 
 
 def dream_arguments(sub: Subparsers) -> None:
-    """`logbook dream day DAY [--dry-run] [--show-prompt]`, `logbook dream --catch-up [--days N]`."""
+    """`logbook dream day DAY [--dry-run] [--show-prompt]`, `logbook dream --catch-up [--days N]
+    [--since DAY]`."""
     s = sub.add_parser(
         "dream",
         help="a model reads one day and drafts it, every sentence with its lines",
@@ -25,9 +26,11 @@ def dream_arguments(sub: Subparsers) -> None:
         " policy/crossing.json and writes one draft/v1 line, the day in a paragraph, the threads it moved,"
         " two questions, the people and promises it proposes, every sentence pointing at the lines it came"
         " from; a proposal, never a fact, shown on the Day above your note. `dream --catch-up` dreams each"
-        " of the last N days that has no draft or whose lines changed, then synthesizes each transcript of"
-        " those days that has none (`transcript synthesize`). The model is LOGBOOK_DREAM_ENDPOINT,"
-        " LOGBOOK_DREAM_MODEL and, for a cloud model, LOGBOOK_DREAM_KEY (docs/dream.md)",
+        " of the last N days that has no draft or whose lines changed, then synthesizes each call of the"
+        f" last {synthesis.WINDOW_DAYS} days that has none (`transcript synthesize`), or of the days from"
+        " --since DAY on; an older call is counted and named, never sent. The model is"
+        " LOGBOOK_DREAM_ENDPOINT, LOGBOOK_DREAM_MODEL and, for a cloud model, LOGBOOK_DREAM_KEY"
+        " (docs/dream.md)",
     )
     s.add_argument("verb", nargs="?", metavar="day", help="`day`, then the local day to dream")
     s.add_argument("day", nargs="?", metavar="YYYY-MM-DD", help="with day: the local day; `yesterday` works")
@@ -36,8 +39,8 @@ def dream_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--catch-up",
         action="store_true",
-        help="dream each of the last N days that needs it, then synthesize their transcripts that have no"
-        " draft; one line each",
+        help="dream each of the last N days that needs it, then synthesize the calls of the last"
+        f" {synthesis.WINDOW_DAYS} of them that have no draft; one line each",
     )
     s.add_argument(
         "--days",
@@ -45,6 +48,12 @@ def dream_arguments(sub: Subparsers) -> None:
         default=DEFAULT_DAYS,
         metavar="N",
         help=f"with --catch-up: how many days back (default {DEFAULT_DAYS})",
+    )
+    s.add_argument(
+        "--since",
+        metavar="YYYY-MM-DD",
+        help="with --catch-up: synthesize the calls from this local day on, not only the last"
+        f" {synthesis.WINDOW_DAYS} days' (the days dreamed are still the last N)",
     )
     s.add_argument(
         "--airports",
@@ -61,6 +70,9 @@ def cmd_dream(a: argparse.Namespace) -> None:
     a day the model's answer failed exits 1 (`--catch-up`: when any day did). A head that moved under
     the reading is the record's HeadMoved, one sentence, exit 2."""
     lb = Logbook.find()
+    if a.since is not None and not a.catch_up:
+        print("dream: --since goes with --catch-up: dream --catch-up --since 2026-06-01", file=sys.stderr)
+        sys.exit(2)
     if a.catch_up:
         if a.verb is not None or a.day is not None:
             print("dream: --catch-up takes no day; `dream day YYYY-MM-DD` dreams one", file=sys.stderr)
@@ -119,16 +131,23 @@ def cmd_dream(a: argparse.Namespace) -> None:
 
 
 def _catch_up(lb: Logbook, a: argparse.Namespace) -> None:
-    """The days, one row each; then each transcript of those days that no model has synthesized,
-    one row each sent (`synthesis.catch_up`); then the count, with the transcripts the ceiling held
-    back and those without their text. Exit 1 when a day or a transcript was refused."""
+    """The days, one row each; then each call of the last `synthesis.WINDOW_DAYS` days (from `--since`
+    when given) that no model has synthesized, one row each sent (`synthesis.catch_up`); then the
+    count, with the transcripts the ceiling held back and those without their text; then one line
+    for the calls before the window that have no synthesis, never sent. Exit 1 when a day or a
+    transcript was refused."""
     if a.days < 1:
         print("dream: --days N is at least 1", file=sys.stderr)
         sys.exit(2)
     today = dreaming.today()
     try:
+        first, last = synthesis.window(today, a.days, a.since)
+    except ValueError as e:
+        print(f"dream: --since: {e}", file=sys.stderr)
+        sys.exit(2)
+    try:
         outcomes = dreaming.catch_up(lb, a.days, today=today)
-        caught = synthesis.catch_up(lb, dreaming.days_to_catch_up(today, a.days))
+        caught = synthesis.catch_up(lb, first, last)
     except dreaming.DreamError as e:
         print(f"dream: {e}", file=sys.stderr)
         sys.exit(2)
@@ -145,5 +164,8 @@ def _catch_up(lb: Logbook, a: argparse.Namespace) -> None:
         n = caught.no_text
         said.append(f"{n} transcript{'s' if n != 1 else ''} without their text")
     print(drafts.DOT.join(said) or "no days")
+    left = None if caught.left is None else synthesis.before_text(caught.left)
+    if left is not None:
+        print(left)
     if counted["refused"]:
         sys.exit(1)

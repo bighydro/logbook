@@ -354,6 +354,35 @@ def test_the_runs_that_are_not_the_close_never_dream(
     assert "scheduled run: " in out and "the close" not in out
 
 
+def test_the_installed_close_passes_no_since_so_it_reaches_back_a_week_of_calls(
+    lb: Logbook,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clock: list[datetime],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The close's catch-up synthesizes the calls of the last 7 days unless `--since` says further
+    back, and the schedule never says it: no installed job carries `--since`, and the close hands the
+    dream command its own arguments with none, so `since` is None and `--days` its default."""
+    from logbook.commands import dream as dream_command
+
+    for system in ("darwin", "linux"):
+        for user in (None, "ines"):
+            plan = schedule.plan(system, tmp_path / "home", "/opt/py", tmp_path / "lb", user=user)
+            closes = [text for path, text in plan.files.items() if "close" in path.name]
+            assert closes and all("sync --scheduled --close" in text for text in closes), (system, user)
+            assert not any("--since" in text for text in plan.files.values()), (system, user)
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    given: list[argparse.Namespace] = []
+    monkeypatch.setattr(dream_command, "cmd_dream", given.append)
+    _dream_entry(lb)
+    status, out, _err = _scheduled(capsys, "--close")
+    assert status == 0 and "scheduled run, the close (dream caught up): " in out
+    (a,) = given
+    assert a.catch_up and a.since is None and a.days == dream_command.DEFAULT_DAYS
+
+
 def test_close_goes_with_scheduled(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as e:
         cli.main(["sync", "--close"])
