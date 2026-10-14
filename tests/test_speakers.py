@@ -312,3 +312,29 @@ def test_a_source_s_own_labels_stand_and_only_the_overlap_is_reckoned():
     turns = _turns((0.0, 4.0, "mic"), (1.0, 9.0, "system"))
     found = speakers.assign([Span(0.0, 4.0), Span(1.0, 9.0), Span(9.5, 10.0)], turns, ["mic", "system", None])
     assert found == [Assigned("mic", ("system",)), Assigned("system", ("mic",)), Assigned(None)]
+
+
+@pytest.mark.parametrize(("start", "end"), [(0.13, 1.13), (0.14, 1.14), (0.38, 1.38)])
+def test_a_voice_speaking_one_second_of_a_segment_is_in_its_overlap_whatever_the_float_error(start, end):
+    turns = _turns((0.0, 300.0, "S1"), (start, end, "S2"))
+    assert speakers.assign([Span(0.0, 300.0)], turns) == [Assigned("S1", ("S2",))]
+
+
+def test_a_reversed_empty_or_nan_turn_is_no_speech_for_any_of_the_functions():
+    bad = _turns((5.0, 3.0, "S9"), (2.0, 2.0, "S9"), (float("nan"), 4.0, "S9"))
+    turns = _turns((0.0, 10.0, "S1"), (2.0, 8.0, "S2"), (7.0, 5.0, "S3")) + bad
+    assert speakers.order(turns) == ["S1", "S2"]
+    assert speakers.seconds(turns) == {"S1": 10.0, "S2": 6.0}
+    assert speakers.overlap_seconds(turns) == pytest.approx(6.0)
+    assert speakers.assign([Span(0.0, 10.0)], turns) == [Assigned("S1", ("S2",))]
+
+
+def test_a_time_that_is_not_a_number_never_reaches_a_spans_file():
+    with pytest.raises(ValueError, match="not a time"):
+        speakers.spans_document("0" * 64, [Span(float("nan"), 1.0)], [Assigned(None)], [])
+
+
+def test_a_label_with_a_trailing_newline_is_not_a_label():
+    """Python's `re.search` lets `$` match before a final newline, so `jsonschema` in Python takes
+    `S1\\n` for the profile's pattern; the pattern is ECMA's, and the writers check with `is_label`."""
+    assert not speakers.is_label("S1\n")

@@ -73,7 +73,8 @@ voice's own speech, overlaps counted for each voice; absent when the source give
 voice alone, a statement of the source as in `message/v1`, never a resolution); `name` (MAY; a name the
 source displayed for the voice, never a resolution).
 
-`diarization`: `engine` (MUST; `pyannote`, or the provider whose labels an adapter took, `granola`);
+`diarization`: `engine` (MUST; `pyannote`, `whisperx`, `channels` when no model ran and each channel is
+one voice as the source split it, or the provider whose labels an adapter took, `granola`);
 `model` (MAY; `pyannote/speaker-diarization-3.1`); `audio` (MAY; the SHA-256 of the audio heard, absent
 when the labels came from a provider and the record holds no audio); `channels` (MUST; 1 for a room, 2
 for a call that keeps its sides apart); `overlap_s` (MAY; the seconds in which two voices or more speak

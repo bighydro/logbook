@@ -773,3 +773,18 @@ def test_the_engines_ask_for_word_times_only_when_told_and_read_them_back():
     assert found.segments[0].words == ((0.2, 0.5),) and fw.model.asked == [True]
     transcribe.FasterWhisper("small", fw, _importer()).transcribe([0.0], RATE, None)
     assert fw.model.asked == [True, False]
+
+
+def test_a_segment_holding_several_lines_is_a_span_per_line_so_the_spans_number_the_content(lb):
+    class Lines(FakeEngine):
+        def transcribe(self, samples: Any, rate: int, language: str | None) -> transcribe.Result:
+            seconds = len(samples) / rate
+            return transcribe.Result([transcribe.Segment(0.0, seconds, "Hei.\n\nHar du sett vannet?")], "nb")
+
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    transcribe.run(lb, Lines(), diarizer=FakeDiarizer(turns=[(0.0, 2.0, "A")]))
+    [line] = _transcripts(lb)
+    text = lb.attachment_bytes(line["payload"]["content"]["sha256"])
+    spans = _spans(lb, line)
+    assert speakers.segment_count(text, "text/plain") == len(spans["segments"]) == 2
+    assert line["payload"]["speakers"] == [{"label": "S1", "seconds": 2.0, "turns": 2}]

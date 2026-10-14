@@ -22,6 +22,11 @@ diarizer's turns. Its bytes are `json.dumps` with sorted keys and no spaces, eve
 from the line's `at` to two decimals, so the same voices heard in the same text give the same file,
 the same digest and, for `derive speakers`, the same `raw_id`.
 
+The spans file's `segments` number the content's segments as `segment_count` counts them, by the
+content's media type; that is not always the turns `transcripts.turns_of` reads (it merges the lines
+of plain prose into turns, and skips JSON elements with no text), so a reader joins spans to text
+through `segment_count`'s notion of a segment, never by the index of a turn.
+
 Readers take a line's voices through `voices`, which never fails on a payload it cannot read (SPEC
 §5): an entry it cannot read is skipped. The owner is shown only from `from_me`, a statement of
 the source, as `you`; every other voice by the name the source displayed, else its label. Nothing
@@ -117,19 +122,19 @@ def label_channels(by_channel: Mapping[str, Iterable[tuple[float, float, str]]])
 
 
 def order(turns: Iterable[VoiceTurn]) -> list[str]:
-    """The voices in order of first speech (a tie by label)."""
+    """The voices in order of first speech (a tie by label); a turn that is no speech names none."""
     first: dict[str, float] = {}
     for t in turns:
+        if not _speech(t):
+            continue
         if t.voice not in first or t.start < first[t.voice]:
             first[t.voice] = t.start
     return sorted(first, key=lambda voice: (first[voice], voice))
 
 
 def _spoken(heard: Iterable[tuple[float, float, str]]) -> list[tuple[float, float, str]]:
-    return sorted(
-        ((float(start), float(end), str(raw)) for start, end, raw in heard if float(end) > float(start)),
-        key=lambda t: (t[0], t[1], t[2]),
-    )
+    found = [VoiceTurn(float(start), float(end), str(raw)) for start, end, raw in heard]
+    return sorted(((t.start, t.end, t.voice) for t in found if _speech(t)), key=lambda t: (t[0], t[1], t[2]))
 
 
 # -- seconds and overlap --------------------------------------------------------------------------
@@ -158,10 +163,15 @@ def overlap_seconds(turns: Iterable[VoiceTurn]) -> float:
     return total
 
 
+def _speech(turn: VoiceTurn) -> bool:
+    """A turn with a length and finite times; a reversed, empty or NaN one is no speech."""
+    return math.isfinite(turn.start) and math.isfinite(turn.end) and turn.end > turn.start
+
+
 def _merged(turns: Sequence[VoiceTurn]) -> dict[str, list[Interval]]:
-    """Each voice's turns as sorted, disjoint intervals."""
+    """Each voice's turns that are speech as sorted, disjoint intervals."""
     by_voice: dict[str, list[Interval]] = {}
-    for t in sorted(turns, key=lambda t: (t.start, t.end)):
+    for t in sorted((t for t in turns if _speech(t)), key=lambda t: (t.start, t.end)):
         intervals = by_voice.setdefault(t.voice, [])
         if intervals and t.start <= intervals[-1][1]:
             intervals[-1] = (intervals[-1][0], max(intervals[-1][1], t.end))
@@ -204,7 +214,8 @@ def assign(
         by_words = heard(span.words) if span.words else around
         speaker = given[i] if given is not None else _most(voices, by_words) or _most(voices, around)
         overlap = (
-            tuple(v for v in voices if v != speaker and around.get(v, 0.0) >= OVERLAP_MIN_S)
+            # at the two decimals the spans file writes: 1.00 s is a second, float error or not
+            tuple(v for v in voices if v != speaker and _two(around.get(v, 0.0)) >= OVERLAP_MIN_S)
             if speaker
             else ()
         )
@@ -235,7 +246,8 @@ def speakers_field(
 ) -> list[dict[str, Any]]:
     """`payload.speakers`: one entry per voice, in the order given (first speech): `label`,
     `seconds` (from `spoken`, absent when the source gave no times), `turns` (the segments that are
-    the voice's), `channel`, `from_me` and `name` where given."""
+    the voice's), `channel`, `from_me` and `name` where given. Empty for no voices, which the profile
+    does not allow (`minItems` 1): a writer that heard no voice writes neither field."""
     counts: dict[str, int] = {}
     for a in assigned:
         if a.speaker is not None:
@@ -334,7 +346,7 @@ def segment_count(data: bytes, media_type: str) -> int | None:
         except ValueError:
             return None
         if isinstance(found, dict):
-            found = found.get("segments", found.get("turns"))
+            found = found.get("segments") or found.get("turns")  # as `transcripts.turns_of` finds it
         return len(found) if isinstance(found, list) else None
     if media == "text/vtt":
         return len(transcripts.parse_text(text, "vtt").turns)
@@ -351,7 +363,10 @@ _SRT = re.compile(r"^\s*\d+\s*\n\d\d:\d\d:\d\d,\d{3}\s*-->")
 
 
 def _two(value: float) -> float:
-    """Seconds to two decimals, never `-0.0`."""
+    """Seconds to two decimals, never `-0.0`; ValueError for a time that is not a number, which
+    JSON cannot hold."""
+    if not math.isfinite(value):
+        raise ValueError(f"not a time in seconds: {value!r}")
     return round(value, 2) + 0.0
 
 
