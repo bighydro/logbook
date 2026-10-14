@@ -451,3 +451,121 @@ def test_the_day_shows_a_proposed_event_greyed_and_a_confirmed_one_as_an_event(
     assert 'class="proposal proposed mute"' not in html and 'class="proposal confirmed"' in html
     assert f'<span class="kind">event</span> {TITLE}' in html
     assert str(draft["id"]) == event["payload"]["extra"]["from"]
+
+
+# -- the policy ------------------------------------------------------------------------------------------
+
+EVENING = "Evening at the bistro"
+
+
+def _entry(lb: Logbook, max_tier: int) -> None:
+    """The `dream` entry of the crossing policy as the owner edits it: no line is appended, the head
+    does not move, and the readers hold every draft against the entry as it is now."""
+    policy.policy_path(lb.root).write_text(
+        json.dumps(
+            {"mcp": {"max_tier": 1}, policy.DREAM_DESTINATION: {"max_tier": max_tier, "until": "2026-12-31"}}
+        ),
+        encoding="utf-8",
+    )
+
+
+def _photos_only(material: dict[str, Any]) -> dict[str, Any]:
+    """The answer of a dream that read no recording (a tier-2 line, above an entry at 1): the evening
+    proposed from the bistro stay and its photos alone, naming no one."""
+    answer = _answer(material)
+    entry = next(e for e in material["timeline"] if e.get("place") == BISTRO)
+    answer["events"] = [
+        {
+            "title": EVENING,
+            "start": entry["start"],
+            "end": entry["end"],
+            "place": BISTRO,
+            "people": [],
+            "evidence": [*entry["ref"], *entry["photos"]["ref"]],
+        }
+    ]
+    return answer
+
+
+def test_a_draft_the_policy_withholds_withholds_its_proposed_events_with_it(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    draft = _dreamed(lb, monkeypatch)
+    assert draft["tier"] == 2 and draft["payload"]["proposals"]  # it read the recording, a tier-2 line
+    _entry(lb, 1)
+    out = _cli("day", DAY, "--no-anniversaries")[1]
+    assert TITLE not in out and "? event" not in out
+    (row,) = [r for r in out.splitlines() if r.startswith("  draft ")]
+    assert "superseded by policy" in row
+    raw = _cli("day", DAY, "--json", "--no-anniversaries")[1]
+    data = json.loads(raw)
+    assert "draft" not in data and data["draft_withheld"]["line"] == draft["id"] and TITLE not in raw
+    assert "draft" not in day_reader.read(lb, DAY, tiers=(1, 2, 3))  # a gated reader: not a word
+    html = serve.Site(lb).page_day(DAY)
+    assert TITLE not in html and 'class="proposal' not in html and "superseded by policy" in html
+
+    # not listed, so not to be accepted: refused with the reason, and nothing is written
+    before = _files(lb.root)
+    code, out, err = _cli("day", "sign", DAY, "--accept", "1")
+    assert code == 2 and "no proposed event 1" in err and "superseded by policy" in err
+    assert TITLE not in out and _files(lb.root) == before
+    code, out, _err = _cli("day", "reflect", DAY, "--text", "A quiet evening.", "--dry-run")
+    assert code == 0 and TITLE not in out and "proposed events" not in out
+    code, _out, err = _cli("day", "reflect", DAY, "--text", "A quiet evening.", "--sign", "--accept", "1")
+    assert code == 2 and "no proposal 1" in err and "superseded by policy" in err
+    assert _files(lb.root) == before and _of_kind(lb, "event") == []
+    code, out, err = _cli("day", "sign", DAY, "--at", SIGNED_AT)  # the day signs; nothing is offered
+    assert code == 0, err
+    assert TITLE not in out and "proposed event" not in out and _of_kind(lb, "event") == []
+
+
+def test_the_draft_the_policy_still_allows_stands_in_with_its_own_proposed_events(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    _entry(lb, 1)
+    _fake(monkeypatch, _photos_only)
+    assert _cli("dream", "day", DAY)[0] == 0
+    _entry(lb, 2)
+    _fake(monkeypatch)
+    assert _cli("dream", "day", DAY)[0] == 0
+    first, second = _of_kind(lb, drafts.KIND)
+    assert (first["tier"], second["tier"]) == (1, 2) and second["payload"]["supersedes"] == first["id"]
+    assert [p["title"] for p in day_reader.read(lb, DAY)["draft"]["proposals"]] == [TITLE]
+
+    _entry(lb, 1)  # the standing draft is withheld; the earlier one, which the entry allows, is shown
+    data = day_reader.read(lb, DAY)
+    assert data["draft"]["line"] == first["id"] and data["draft_withheld"]["line"] == second["id"]
+    assert [p["title"] for p in data["draft"]["proposals"]] == [EVENING]
+    out = _cli("day", DAY, "--no-anniversaries")[1]
+    assert TITLE not in out
+    assert any(r.lstrip().startswith("? event 1") and EVENING in r for r in out.splitlines())
+    html = serve.Site(lb).page_day(DAY)
+    assert TITLE not in html and 'class="proposal proposed mute"' in html and EVENING in html
+
+    seq = lb.meta["seq"]
+    code, out, err = _cli("day", "sign", DAY, "--accept", "1", "--at", SIGNED_AT)
+    assert code == 0, err
+    assert TITLE not in out and f"wrote proposed event 1 as #{seq + 1} event/v1" in out
+    event = lb.line_by_seq(seq + 1)
+    assert event is not None and event["kind"] == "event" and event["payload"]["title"] == EVENING
+    assert event["payload"]["extra"]["from"] == first["id"]  # the draft that was shown, not the withheld one
+    (confirmed,) = day_reader.read(lb, DAY)["draft"]["proposals"]
+    assert confirmed["confirmed"] == {"line": event["id"], "seq": seq + 1}
+
+
+def test_an_event_confirmed_from_a_draft_the_policy_later_withholds_stays_in_the_record(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    draft = _dreamed(lb, monkeypatch)
+    seq = lb.meta["seq"]
+    assert _cli("day", "sign", DAY, "--accept", "1", "--at", SIGNED_AT)[0] == 0
+    event = lb.line_by_seq(seq + 1)
+    assert event is not None and event["tier"] == 1 and event["source"] == "owner"
+    _entry(lb, 1)
+    data = day_reader.read(lb, DAY)
+    assert "draft" not in data and data["draft_withheld"]["line"] == draft["id"]
+    # the proposal and its `confirmed as` row go with the draft; the event is the owner's line and stays
+    assert [e["title"] for e in _bistro(data)["attached"]["events"]] == [TITLE]
+    out = _cli("day", DAY, "--no-anniversaries")[1]
+    assert f"confirmed as #{seq + 1}" not in out and "? event" not in out
+    assert any(r.strip().startswith("event") and TITLE in r for r in out.splitlines())

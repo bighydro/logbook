@@ -17,11 +17,17 @@ it) and `extra.from` names the draft. A person the record knows by no email addr
 the ref it does know, in the shape the adapter gives an address. The tier is the profile's, 1, as
 every calendar entry's: a tier says where a line may travel, never who wrote it.
 
+The proposals are the draft's the Day shows (`listed`, through `drafts.for_day` under the `dream` entry
+today, `drafts.allowed`): derived material follows the policy, not the head, so a draft the entry no
+longer allows is withheld with its proposals, which are neither listed nor accepted (`held_back` says
+why), and the standing draft among the ones the entry allows stands in, with its own. An event the
+owner confirmed before the entry changed stays in the record: it is the owner's line, not the model's.
+
 The event lines and the signature are written under one hold of the writer lock, the proposals read
 again inside it (`again`): one confirmed meanwhile, one whose evidence left the page, or a day dreamed
-again in between is refused, and nothing is written. Every number and every flag of the signature is
-checked before the first line is (`check_signature`). Sending a confirmed event to an external
-calendar would be a crossing, and nothing here sends anything."""
+again or its draft withheld in between is refused, and nothing is written. Every number and every
+flag of the signature is checked before the first line is (`check_signature`). Sending a confirmed
+event to an external calendar would be a crossing, and nothing here sends anything."""
 
 from __future__ import annotations
 
@@ -66,11 +72,13 @@ class Proposed:
 
 
 def listed(lb: Logbook, day: str, first: int = 1) -> list[Proposed]:
-    """The standing draft's proposed events of `day`, numbered from `first` in the draft's order;
-    none when the day has no draft or its draft proposes none. Every tier: the owner reads their own
-    record."""
+    """The proposed events of the draft the Day shows for `day`, numbered from `first` in the draft's
+    order: the standing draft among the ones the `dream` entry allows today (`drafts.for_day` under
+    `drafts.allowed`). None when the day has no draft, when its draft proposes none, or when the entry
+    withholds every draft of the day: a withheld draft's proposals are withheld with it. Every tier
+    the entry allows: the owner reads their own record."""
     with lb.index() as idx:
-        draft, _withheld = drafts.for_day(idx, day)
+        draft, _withheld = drafts.for_day(idx, day, allowed=drafts.allowed(lb.root))
     if draft is None:
         return []
     return [
@@ -79,13 +87,26 @@ def listed(lb: Logbook, day: str, first: int = 1) -> list[Proposed]:
     ]
 
 
-def chosen(found: Sequence[Proposed], wanted: Sequence[int], day: str) -> list[Proposed]:
-    """The proposed events these numbers name, in their order; refused when a number names none, when
-    one is confirmed already, or when one rests on a line no longer on the page."""
+def held_back(lb: Logbook, day: str) -> str | None:
+    """`superseded by policy: ...` when the `dream` entry withholds the standing draft of `day`, and
+    its proposals with it (the Day's `draft_withheld` row, in words); None otherwise."""
+    with lb.index() as idx:
+        _draft, row = drafts.for_day(idx, day, allowed=drafts.allowed(lb.root))
+    return None if row is None else drafts.withheld_text(row)
+
+
+def chosen(
+    found: Sequence[Proposed], wanted: Sequence[int], day: str, held: str | None = None
+) -> list[Proposed]:
+    """The proposed events these numbers name, in their order; refused when a number names none (and
+    why, `held`, when the policy withholds the standing draft), when one is confirmed already, or
+    when one rests on a line no longer on the page."""
     by_number = {p.number: p for p in found}
     missing = [str(n) for n in wanted if n not in by_number]
     if missing:
         have = f"proposed {len(found)} for {day}, numbered above" if found else f"proposed none for {day}"
+        if held is not None:
+            have += f" that the Day shows: its standing draft is withheld with its proposed events, {held}"
         raise EventError(f"no proposed event {', '.join(missing)}; the dream {have}")
     taken = [by_number[n] for n in sorted(set(wanted))]
     for p in taken:
@@ -103,13 +124,17 @@ def chosen(found: Sequence[Proposed], wanted: Sequence[int], day: str) -> list[P
 
 
 def again(lb: Logbook, day: str, taken: Sequence[Proposed], first: int = 1) -> list[Proposed]:
-    """`taken` read again, under the writer lock, just before writing: the same draft still
-    standing, and each proposal still pending (`chosen`)."""
+    """`taken` read again, under the writer lock, just before writing: the same draft still the one
+    the Day shows (not dreamed again, not withheld by the policy since), and each proposal still
+    pending (`chosen`)."""
     if not taken:
         return []
     fresh = listed(lb, day, first)
     if not fresh or fresh[0].draft != taken[0].draft:
-        raise EventError(f"{day} was dreamed again while its proposals were read; nothing was written")
+        raise EventError(
+            f"{day} was dreamed again, or the policy withheld its draft, while its proposals were read;"
+            " nothing was written"
+        )
     return chosen(fresh, [p.number for p in taken], day)
 
 

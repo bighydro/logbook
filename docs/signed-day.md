@@ -253,6 +253,12 @@ already, one whose lines left the page since the dream, and `--confirm none` bes
 refused before anything is written. On a terminal, `day reflect --sign` asks y or n for each open
 proposal, the events among them.
 
+The events listed are those of the draft the Day shows. A draft the `dream` entry of the crossing policy
+no longer allows is withheld with its proposed events ([the dream](dream.md), *When the entry changes*):
+none of them is listed, and `--accept` naming one is refused with the reason. When an earlier draft the
+entry still allows stands in on the Day, its own proposals are the ones listed. An event you accepted
+before the entry changed stays in the record: it is your line, not the model's.
+
 ## Readiness: is the day all in?
 
 Before signing you want to know whether everything that usually arrives has arrived. The Day's

@@ -43,8 +43,11 @@ removed, or a file that is not a policy) is withheld, whatever the head, and the
 the ones the entry allows is shown in its place, if there is one. The line stays in the record. The
 Day of a reader that holds the whole record says so in one row, `superseded by policy` and why, and
 nothing of the draft's text (`withheld_json`); a reader through a gate of its own hides it without a
-word, as it hides every line above its gate. `doctor` lists the days whose standing draft is withheld
-(`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any tier."""
+word, as it hides every line above its gate. A withheld draft's proposals are withheld with it: the Day
+shows none and `--accept` names none, and the draft shown in its place brings its own; an event the
+owner confirmed from it before stays, an owner's line like any other. `doctor` lists the days whose
+standing draft is withheld (`withheld`), and `dream --catch-up` dreams them again under the entry when
+it allows any tier."""
 
 from __future__ import annotations
 
