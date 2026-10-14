@@ -21,6 +21,7 @@ PACKAGE = ROOT / "logbook" / "contrib" / "adapters"
 #: adapter modules that are deliberately not registered, each with the reason its docstring gives
 UNREGISTERED = {
     "takeout.calendar": "reached through `ics`, which sniffs every iCalendar file, folder or not",
+    "drive_videos": "reached through `sync drive --videos`, a flag of drive's; `sync --all` never lists it",
 }
 
 

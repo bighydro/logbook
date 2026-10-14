@@ -33,6 +33,10 @@ title and description may name them. The payload:
 listed, so a file moved into it later, whatever its modified time, is found; the record's dedupe on
 `(source, raw_id)` writes nothing twice. The watermark is the newest `drive_modified` a line holds.
 
+**Not in the registry.** The module is reached through `sync drive --videos`, a flag of drive's, and is
+deliberately not an entry point of `logbook.adapters`: `sync --all` and the schedule never list the
+folder, which changes when the family adds a tape, and is listed by hand then.
+
 **A quota answer.** Drive's daily or per-user limit (a 403 or 429 saying so, or the retries of
 `service_account.Session` exhausted on one) stops the walk: the files listed before it are written, one
 line says what happened, and `sync` keeps the watermark and exits 1. Run again later."""
