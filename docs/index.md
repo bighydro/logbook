@@ -74,6 +74,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 
 - [Backup](backup.md): copy the record to another disk, verify it there, restore it; the monthly restore test.
 - [The schedule](schedule.md): `sync --all` and `doctor` four times a day, the 06:00 run closing the day, the outcome in `state/last-run.json`, one message when something is wrong.
+- [On a home server](home-server.md): the record on an always-on machine at home, as a runbook for one hour: two users, the pages and the schedule as system daemons, the env file, one writer and read-only checkouts, backups, the local model, the phone over a private network.
 - [The record's settings](settings.md): your timezone, where your day begins (`day_start`), your places and assets.
 - [When verify fails](recovery.md): what each failure means and the one command that answers it; `repair fork` for two chains forked at one head.
 - [The attachment store](attachments.md): the content-addressed bytes a line points at.
