@@ -328,3 +328,69 @@ def test_the_config_never_prints_the_folder_or_the_key(fake: Fake, lb: Logbook) 
     config = drive_videos.configure(os.environ)
     assert config is not None
     assert ROOT not in repr(config) and USER not in repr(config)
+
+
+# -- Drive's clock and the line's, with a later run (the size-and-dates check's tests) -----------------
+
+LATER = "2026-11-02T08:00:00Z"
+NEW = "1NewTapeSyntheticVideoId0015"
+
+
+def test_since_is_not_a_filter_and_never_a_lines_at(fake: Fake, lb: Logbook) -> None:
+    assert _sync("drive", "--videos", "--since", "2030-01-01T00:00:00Z") == 0
+    found = _videos(lb)
+    assert set(found) == VIDEOS
+    assert {line["at"] for line in found.values()} == {NOW}
+
+
+def test_a_dry_run_writes_nothing_and_streams_nothing(fake: Fake, lb: Logbook) -> None:
+    assert _sync("drive", "--videos", "--dry-run") == 0
+    assert _videos(lb) == {} and fake.streamed == []
+    assert not (lb.root / "state" / f"{drive_videos.NAME}.json").exists()
+
+
+def test_a_later_run_moves_the_watermark_and_no_lines_at(
+    fake: Fake, lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert _sync("drive", "--videos") == 0
+    before = {k: (v["at"], v["hash"]) for k, v in _videos(lb).items()}
+    fake.files[NEW] = {
+        **FILES[HOME_01],
+        "id": NEW,
+        "name": "15",
+        "createdTime": "2026-10-01T09:00:00.000Z",
+        "modifiedTime": "2026-10-01T09:00:00.000Z",
+        "md5Checksum": "9e107d9d372bb6826bd81d3542a419d6",
+    }
+    monkeypatch.setattr(drive_videos, "_now", lambda: drive_videos._instant(LATER))
+    assert _sync("drive", "--videos") == 0
+    after = _videos(lb)
+    assert {k: (v["at"], v["hash"]) for k, v in after.items() if k != NEW} == before
+    assert after[NEW]["at"] == LATER  # when the record learned of it, not Drive's 2026-10-01
+    assert after[NEW]["payload"]["extra"]["drive_modified"] == "2026-10-01T09:00:00Z"
+    assert _state(lb)["since"] == "2026-10-01T09:00:00Z"  # the watermark is Drive's clock; no line's at is
+
+
+def test_a_rate_limit_on_the_very_first_call_is_one_line_and_the_watermark_kept(
+    fake: Fake, lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _sync("drive", "--videos") == 0
+    mark = _state(lb)["since"]
+    capsys.readouterr()
+    for _ in range(service_account.RETRIES + 1):
+        fake.fail(429, reason="rateLimitExceeded")
+    assert _sync("drive", "--videos") == 1
+    err = capsys.readouterr().err
+    assert sum("quota" in line for line in err.splitlines()) == 1, err
+    assert "Traceback" not in err
+    assert _state(lb)["since"] == mark
+
+
+def test_no_field_of_the_line_but_extra_carries_drives_clock(fake: Fake, lb: Logbook) -> None:
+    assert _sync("drive", "--videos") == 0
+    for line in _videos(lb).values():
+        payload = dict(line["payload"])
+        extra = payload.pop("extra")
+        text = str(line["at"]) + str(line["end"]) + str(line["recorded_at"]) + repr(payload)
+        for stamp in extra.values():
+            assert stamp[:10] not in text, (stamp, line)

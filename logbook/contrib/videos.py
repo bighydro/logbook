@@ -27,6 +27,7 @@ the same way, so an interrupted run loses nothing."""
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -62,6 +63,7 @@ SCENE_REF = re.compile(r"(?P<id>[^#\s]+)#t=(?P<start>\d+(?:\.\d+)?),(?P<end>\d+(
 EN_DASH = "\u2013"
 SAFE_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
 SUFFIX = re.compile(r"\.[a-z0-9]{1,5}\Z")
+RANGE = re.compile(r"bytes (\d+)-")
 
 
 # -- the scene ------------------------------------------------------------------------------------
@@ -228,7 +230,6 @@ class State:
 
     cap_bytes: int = DEFAULT_CAP_BYTES
     fetched: dict[str, dict[str, Any]] = field(default_factory=dict)
-    capped: bool = False  # the owner set the cap (`--cache-gb`), rather than the default standing
 
 
 class StateError(ValueError):
@@ -251,7 +252,7 @@ def read_state(root: Path) -> State:
         raise StateError(
             f"{STATE_FILE.as_posix()} needs cap_bytes (a positive number) and fetched (an object)"
         )
-    return State(cap, {str(k): v for k, v in fetched.items() if isinstance(v, dict)}, True)
+    return State(cap, {str(k): v for k, v in fetched.items() if isinstance(v, dict)})
 
 
 def write_state(root: Path, state: State) -> Path:
@@ -337,6 +338,7 @@ class FetchReport:
     failed: list[str] = field(default_factory=list)  # one sentence per file that could not be fetched
     limit_reached: bool = False
     used_after: int = 0  # the cache's size when the run ended
+    disk_full: bool = False  # the disk under the record filled up: the run stopped there
 
 
 def fetch(
@@ -384,6 +386,8 @@ def fetch(
             break
         tried += 1
         done_bytes = _download(config, video, cache, get, report, progress)
+        if report.disk_full:
+            break
         if done_bytes is None:
             continue
         state.fetched[video.drive_id] = {"at": now_utc(), "bytes": done_bytes, "md5": video.md5}
@@ -401,7 +405,10 @@ def _download(
     progress: Callable[[str], None] | None,
 ) -> int | None:
     """One file into the cache, verified: its size on success; None, with the sentence in `failed`,
-    when it could not be fetched whole or did not match."""
+    when it could not be fetched whole or did not match. A drop, whether the connection fails or the
+    answer just ends short, is resumed from the byte it reached, `RESUMES` times, and then the part is
+    kept for the next run; bytes that cannot be the file (more than the line says, a 416 before its
+    end, a wrong md5) are deleted. A full disk stops the run (`report.disk_full`)."""
     cache.dir.mkdir(parents=True, exist_ok=True)
     part = cache.part(video)
     expected = video.bytes or 0
@@ -412,6 +419,8 @@ def _download(
             for chunk in iter(lambda: fh.read(CHUNK), b""):
                 digest.update(chunk)
                 written += len(chunk)
+    else:
+        part.touch()  # a file of no bytes is a file too: it is verified and kept like any other
     began = written
     resumes = 0
     reported = written // PROGRESS_EVERY
@@ -419,13 +428,21 @@ def _download(
         try:
             stream = media(config, video.drive_id, video.resource_key, written)
         except service_account.ApiError as e:
-            if e.status == 416:  # the part is the file's whole length already
+            if e.status == 416:  # past the file's end: the part is all of it, or Drive's file is shorter
                 break
+            if e.status == 404:
+                _unlink(part)
+                report.failed.append(f"{video.name}: Drive has no file with its id any more (HTTP 404)")
+                return None
             raise
         try:
-            if stream.status == 200 and written:  # the server sent the whole file again: start over
-                digest, written = hashlib.md5(), 0
+            start = _range_start(stream)
+            if written and (stream.status == 200 or (start is not None and start != written)):
+                digest, written, began, reported = hashlib.md5(), 0, 0, 0  # not from our byte: start over
                 part.write_bytes(b"")
+                if stream.status != 200:  # a part of the file from somewhere else: ask again, whole
+                    stream.close()
+                    continue
             with part.open("ab") as fh:
                 while True:
                     chunk = stream.read(CHUNK)
@@ -441,6 +458,13 @@ def _download(
                         progress(f"  {video.title}: {_size(written)} of {_size(expected)}")
         except OSError as e:
             stream.close()
+            if e.errno == errno.ENOSPC:
+                report.disk_full = True
+                report.failed.append(
+                    f"{video.name}: the disk is full at {_size(written)} of {_size(expected)}; the part is"
+                    " kept: make room, then run `videos fetch` again"
+                )
+                return None
             resumes += 1
             if resumes > RESUMES:
                 report.failed.append(
@@ -451,12 +475,16 @@ def _download(
             service_account.sleep(service_account.BACKOFF_S * 2.0 ** (resumes - 1))
             continue
         stream.close()
-        if written > expected or (written < expected and stream.status not in (200, 206)):
+        if written > expected:
             break
-        if written < expected:  # the answer ended short of the file without an error: ask for the rest
+        if written < expected:  # the answer ended short with no error: how urllib shows a drop
             resumes += 1
             if resumes > RESUMES:
-                break
+                report.failed.append(
+                    f"{video.name}: Drive's answer ended at {_size(written)} of {_size(expected)}"
+                    f" {resumes} times; the part is kept, run `videos fetch` again to resume"
+                )
+                return None
     if written != expected:
         _unlink(part)
         report.failed.append(
@@ -473,6 +501,12 @@ def _download(
     os.replace(part, cache.path(video))
     report.fetched.append(Fetched(video, written, began))
     return written
+
+
+def _range_start(stream: service_account.Stream) -> int | None:
+    """Where a 206's bytes begin, from its `Content-Range` (`bytes 1000-3039/3040`); None without one."""
+    found = RANGE.match(stream.headers.get("content-range", "")) if stream.status == 206 else None
+    return int(found[1]) if found is not None else None
 
 
 def _unlink(path: Path) -> None:
@@ -497,7 +531,8 @@ def fetch_lines(report: FetchReport) -> Iterator[str]:
     then the cache against its cap."""
     for done in report.fetched:
         resumed = f", resumed at {_size(done.resumed_from)}" if done.resumed_from else ""
-        yield f"fetched {done.video.name}: {_size(done.bytes)}, md5 verified{resumed}"
+        checked = "md5 verified" if done.video.md5 is not None else "no md5 from Drive to verify it by"
+        yield f"fetched {done.video.name}: {_size(done.bytes)}, {checked}{resumed}"
     for video in report.refused:
         yield (
             f"refused {video.name}: {_size(video.bytes or 0)} is more than the cache's cap of"

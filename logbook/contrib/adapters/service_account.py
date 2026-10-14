@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import http.client
 import json
 import os
 import stat
@@ -184,7 +185,11 @@ class Stream:
     body: Any  # a file-like object: read(n) -> bytes, close()
 
     def read(self, n: int) -> bytes:
-        return bytes(self.body.read(n))
+        """Up to `n` bytes; an OSError when the connection fails, whatever http.client calls it."""
+        try:
+            return bytes(self.body.read(n))
+        except http.client.HTTPException as e:  # IncompleteRead: a chunked body cut short
+            raise OSError(f"{type(e).__name__}: the answer was cut short") from None
 
     def close(self) -> None:
         with contextlib.suppress(OSError):
@@ -323,6 +328,8 @@ def open_stream(method: str, url: str, headers: dict[str, str], timeout: float) 
         return Stream(e.code, _lower(e.headers.items() if e.headers else ()), e)
     except URLError as e:
         raise OSError(str(e.reason)) from None
+    except http.client.HTTPException as e:  # a status line or headers that do not read
+        raise OSError(f"{type(e).__name__}: {e}") from None
     return Stream(response.status, _lower(response.headers.items()), response)
 
 
