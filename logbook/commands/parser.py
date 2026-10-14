@@ -1,5 +1,5 @@
 """The parser: every command's arguments, registered in the order `logbook --help` lists them, and
-that help itself: one screen, the 25 commands in seven groups by what a person is doing, one line
+that help itself: one screen, the 27 commands in seven groups by what a person is doing, one line
 each (the October 2026 audit, Decision 1).
 
 A command's arguments live next to the command, in its family's module (`<command>_arguments`
@@ -38,7 +38,7 @@ from .common import Subparsers
 #: the groups of `logbook --help`, in order: a header, then the commands under it
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("start", ("init", "setup", "doctor")),
-    ("write", ("add", "import", "sync", "goal", "chapter", "review")),
+    ("write", ("add", "import", "sync", "goal", "chapter", "review", "status")),
     ("read", ("show", "day", "digest", "search", "people", "rollup", "serve")),
     ("derive", ("derive", "promises", "dream")),
     ("keep", ("verify", "backup", "key", "repair")),
@@ -56,6 +56,7 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
     goals.goal_arguments,
     chapters.chapter_arguments,
     review.review_arguments,
+    review.status_arguments,
     day.show_arguments,
     day.day_arguments,
     day.digest_arguments,

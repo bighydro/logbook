@@ -235,7 +235,7 @@ def review_arguments(sub: Subparsers) -> None:
     """`logbook review [KIND]`."""
     s = sub.add_parser(
         "review",
-        help="what the sources saw, proposed against what you named; accept, name, reject",
+        help="what the sources saw, set beside what you named; accept, reject",
         description="One sitting for the five kinds of thing the record names (RFC 0037): the observed"
         " people, orgs, ideas, assets and places not yet placed, each proposed against the canonical"
         " ones with the evidence, numbered, or as a new one; nothing is written unless told, and nothing"
@@ -335,3 +335,63 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 def _refuse(prog: str, reason: str) -> NoReturn:
     print(f"{prog}: {reason}", file=sys.stderr)
     sys.exit(2)
+
+
+# -- status ----------------------------------------------------------------------------------------------
+
+
+def status_arguments(sub: Subparsers) -> None:
+    """`logbook status KIND ENTITY DISPOSITION` and `logbook status list KIND`."""
+    s = sub.add_parser(
+        "status",
+        help="what you decided about an org, idea, place or asset; list KIND",
+        description="One status/v1 line (RFC 0037): an org's hold, add, sell, let-go, exited or passed; an"
+        " idea's spark, exploring, build, built or killed; a place let go; an asset sold or let go. Tier 2,"
+        " no money on it; --reason writes your words as a note beside it; a place or an asset it closes"
+        " keeps its registry entry, closed with `until`. `status list KIND`: every one of a kind, its"
+        " current status, stale ones and muted proposals said. A person has no status; a goal is reviewed.",
+    )
+    s.add_argument(
+        "words",
+        nargs="+",
+        metavar="KIND ENTITY DISPOSITION | list KIND",
+        help="org, idea, place or asset; the entity by name, alias, id or ref; the disposition",
+    )
+    s.add_argument("--reason", metavar="TEXT", help="why, in your words; required for passed, let-go, killed")
+    s.add_argument("--at", metavar="YYYY-MM-DD", help="the day you decided (default today)")
+    s.add_argument("--json", action="store_true", help="the line written, or the list, as one JSON object")
+    s.set_defaults(fn=cmd_status)
+
+
+def cmd_status(a: argparse.Namespace) -> None:
+    """`status KIND ENTITY DISPOSITION [--reason "…"] [--at DATE] [--json]`: one status line through
+    the writer (`logbook.contrib.entity_status.write`); `status list KIND [--json]`: the list. A
+    refusal is one sentence on stderr, exit 2, nothing written."""
+    from ..contrib import entities, entity_status
+
+    lb = Logbook.find()
+    words = list(a.words)
+    try:
+        if words[0] == "list":
+            if len(words) != 2 or a.reason is not None or a.at is not None:
+                raise entity_status.StatusError("`status list KIND` takes a kind and nothing else")
+            found = entity_status.listing(lb, words[1])
+            if a.json:
+                print(json.dumps(found.to_json(), indent=2, ensure_ascii=False))
+                return
+            for text in entity_status.rows(found):
+                print(text)
+            return
+        if len(words) != 3:
+            entity_status.check_kind(words[0])
+            raise entity_status.StatusError(
+                'say KIND ENTITY DISPOSITION: `status org "Nordmann Verft AS" hold`'
+            )
+        written = entity_status.write(lb, words[0], words[1], words[2], a.reason, a.at)
+    except (entity_status.StatusError, entities.EntityError) as e:
+        _refuse("status", str(e))
+    if a.json:
+        print(json.dumps(written.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in entity_status.written_rows(written):
+        print(text)
