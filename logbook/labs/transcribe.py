@@ -49,7 +49,6 @@ page changes, and the promises closed on the old lines, which are proposed again
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -912,19 +911,16 @@ def download(importer: Callable[[str], Any], repo_id: str) -> None:
 
 
 class offline:
-    """While transcribing, the hub is offline: the engines never reach out, whatever they would do."""
+    """While transcribing, the hub is offline: the engines never reach out, whatever they would do.
+    The variables are not enough once the hub client is imported (it reads them then), so this is
+    `diarize.quiet()`, which sets the client's own switch too; `judge` and `describe` use it."""
 
     def __enter__(self) -> None:
-        self.before = {name: os.environ.get(name) for name in OFFLINE}
-        for name in OFFLINE:
-            os.environ[name] = "1"
+        self._quiet = diarize.quiet()
+        self._quiet.__enter__()
 
     def __exit__(self, *exc: object) -> None:
-        for name, value in self.before.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
+        self._quiet.__exit__(None, None, None)
 
 
 # -- small things ----------------------------------------------------------------------------------

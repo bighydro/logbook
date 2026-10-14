@@ -311,3 +311,163 @@ def test_a_run_that_separates_voices_has_the_hub_offline_even_when_it_was_import
     _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
     transcribe.run(lb, FakeEngine(), diarizer=Watching())
     assert seen == [True] and constants.HF_HUB_OFFLINE is False  # type: ignore[attr-defined]
+
+
+def test_a_refusal_the_hub_wraps_in_another_error_is_still_named_as_one():
+    class LocalEntryNotFoundError(FileNotFoundError):
+        """As hub 1.33's snapshot_download re-raises a failed call it could not serve from cache."""
+
+    def snapshot(repo: str, **_options: Any) -> str:
+        try:
+            raise GatedRepoError("restricted")
+        except GatedRepoError as e:
+            raise LocalEntryNotFoundError("Got: ...") from e
+
+    with pytest.raises(diarize.Refused, match=r"huggingface\.co/pyannote/speaker-diarization-3\.1"):
+        diarize.fetch(
+            {"HF_TOKEN": TOKEN}, _importer(huggingface_hub=types.SimpleNamespace(snapshot_download=snapshot))
+        )
+
+
+def test_the_hub_s_own_words_never_reach_the_screen_even_when_they_hold_the_token(lb, monkeypatch, capsys):
+    for failure in (GatedRepoError(f"denied for {TOKEN}"), RuntimeError(f"500 for Bearer {TOKEN}")):
+
+        def snapshot(repo: str, failure: Exception = failure, **_options: Any) -> str:
+            raise failure
+
+        module = types.ModuleType("huggingface_hub")
+        module.snapshot_download = snapshot  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "huggingface_hub", module)
+        monkeypatch.setenv("HF_TOKEN", TOKEN)
+        with pytest.raises(SystemExit):
+            cli.main(["setup", "speakers", "--fetch-model"])
+        out, err = capsys.readouterr()
+        assert TOKEN not in out and TOKEN not in err and "Bearer" not in err
+
+
+def test_transformers_offline_is_an_offline_shell_too(lb, hub, monkeypatch, capsys):
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["setup", "speakers", "--fetch-model"])
+    assert e.value.code == 2 and "TRANSFORMERS_OFFLINE" in capsys.readouterr().err and hub.calls == []
+
+
+def test_quiet_puts_everything_back_when_the_block_raises(monkeypatch):
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.setenv("PYANNOTE_METRICS_ENABLED", "true")
+    constants = types.ModuleType("huggingface_hub.constants")
+    constants.HF_HUB_OFFLINE = False  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", constants)
+    with pytest.raises(RuntimeError), diarize.quiet():
+        raise RuntimeError("the pipeline failed")
+    assert constants.HF_HUB_OFFLINE is False  # type: ignore[attr-defined]
+    assert "HF_HUB_OFFLINE" not in __import__("os").environ
+    assert __import__("os").environ["PYANNOTE_METRICS_ENABLED"] == "true"
+
+
+def test_pyannote_is_imported_with_its_usage_reporting_and_the_hub_already_off():
+    """pyannote.audio 4 writes PYANNOTE_METRICS_ENABLED=true at import when it finds none."""
+    import os
+
+    seen: dict[str, str | None] = {}
+
+    def import_module(name: str) -> Any:
+        if name == "pyannote.audio":
+            seen.update({v: os.environ.get(v) for v in ("PYANNOTE_METRICS_ENABLED", "HF_HUB_OFFLINE")})
+            return types.SimpleNamespace(__version__="4.0.7")
+        if name == "huggingface_hub":
+            return FakeHub().module()
+        raise ImportError(name)
+
+    diarize.status(import_module)
+    assert seen == {"PYANNOTE_METRICS_ENABLED": "0", "HF_HUB_OFFLINE": "1"}
+
+
+def test_a_cache_that_is_not_whole_is_one_sentence_naming_the_fetch_not_a_traceback(lb, monkeypatch, capsys):
+    class LocalEntryNotFoundError(FileNotFoundError):
+        pass
+
+    class Pipeline:
+        @staticmethod
+        def from_pretrained(name: str) -> Any:
+            raise LocalEntryNotFoundError(name)
+
+    modules: dict[str, Any] = {  # numpy and torch are asked for and never used: the load fails first
+        "pyannote.audio": types.SimpleNamespace(Pipeline=Pipeline),
+        "numpy": types.SimpleNamespace(),
+        "torch": types.SimpleNamespace(),
+    }
+    with pytest.raises(diarize.ModelsMissing, match="logbook setup speakers --fetch-model"):
+        diarize.Pyannote(_importer(**modules)).diarize([0.0], 16_000)
+
+    class Nothing:
+        @staticmethod
+        def from_pretrained(name: str) -> Any:
+            return None
+
+    modules["pyannote.audio"] = types.SimpleNamespace(Pipeline=Nothing)
+    with pytest.raises(diarize.ModelsMissing):
+        diarize.Pyannote(_importer(**modules)).diarize([0.0], 16_000)
+
+    from test_transcribe import FakeEngine, _memo, _wav
+
+    class Broken:
+        name, model = diarize.ENGINE, diarize.MODEL
+
+        def diarize(self, *_a: Any, **_k: Any) -> Any:
+            raise diarize.ModelsMissing()
+
+        def channels(self, path: Path) -> Any:
+            raise AssertionError("a room")
+
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    monkeypatch.setattr(transcribe, "detect", lambda model, **_k: FakeEngine(model))
+    monkeypatch.setattr(diarize, "detect", lambda *_a, **_k: Broken())
+    with pytest.raises(SystemExit) as e:
+        cli.main(["derive", "transcripts", "voice-memos"])
+    assert e.value.code == 2 and "logbook setup speakers --fetch-model" in capsys.readouterr().err
+
+
+def test_hearing_again_has_the_hub_s_own_switch_off_too(lb, monkeypatch):
+    from test_derive_speakers import _heard_before
+    from test_transcribe import FakeDiarizer, FakeEngine
+
+    _heard_before(lb)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    constants = types.ModuleType("huggingface_hub.constants")
+    constants.HF_HUB_OFFLINE = False  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", constants)
+    seen: list[bool] = []
+
+    class Watching(FakeDiarizer):
+        def diarize(self, samples: Any, rate: int, speakers: int | None = None) -> Any:
+            seen.append(constants.HF_HUB_OFFLINE)  # type: ignore[attr-defined]
+            return super().diarize(samples, rate, speakers)
+
+    transcribe.rehear(lb, transcribe.unseparated(lb), lambda model: FakeEngine(model), Watching())
+    assert seen == [True] and constants.HF_HUB_OFFLINE is False  # type: ignore[attr-defined]
+
+
+def test_the_diarizer_is_in_the_transcribe_extra_and_nowhere_else():
+    import tomllib
+
+    project = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    def names(specs: list[str]) -> set[str]:
+        return {
+            spec.split(";")[0].split(">")[0].split("=")[0].split("<")[0].strip().lower() for spec in specs
+        }
+
+    extras = project["project"]["optional-dependencies"]
+    assert "pyannote.audio" in names(extras["transcribe"])
+    assert all(
+        "pyannote.audio" not in names(specs) for extra, specs in extras.items() if extra != "transcribe"
+    )
+    assert "pyannote.audio" not in names(project["project"]["dependencies"])
+    assert all(
+        "pyannote.audio" not in names([s for s in specs if isinstance(s, str)])
+        for specs in project["dependency-groups"].values()
+    )

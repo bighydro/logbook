@@ -86,6 +86,16 @@ class Refused(Exception):
         self.repo = repo
 
 
+class ModelsMissing(Exception):
+    """The cache said the models were here and the pipeline could not load them from it (a fetch
+    that was interrupted, a cache written by an older hub): one sentence naming the fetch."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            f"the speaker models in the Hugging Face cache are not whole; {FETCH} fetches them again"
+        )
+
+
 @dataclass(frozen=True)
 class Status:
     """What is on this machine: the engine's version (None when it is not installed) and, for each
@@ -176,13 +186,20 @@ def fetch(
     return fetched
 
 
-def _refused(error: BaseException) -> bool:
-    """A gated repository whose conditions are not accepted, or a token that may not read it."""
-    names = {klass.__name__ for klass in type(error).__mro__}
-    if names & {"GatedRepoError", "RepositoryNotFoundError"}:
-        return True
-    response = getattr(error, "response", None)
-    return getattr(response, "status_code", None) in (401, 403)
+def _refused(error: BaseException | None) -> bool:
+    """A gated repository whose conditions are not accepted, or a token that may not read it; the
+    hub sometimes wraps the refusal (`LocalEntryNotFoundError ... from` it), so its causes count."""
+    seen: set[int] = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        names = {klass.__name__ for klass in type(error).__mro__}
+        if names & {"GatedRepoError", "RepositoryNotFoundError"}:
+            return True
+        response = getattr(error, "response", None)
+        if getattr(response, "status_code", None) in (401, 403):
+            return True
+        error = error.__cause__ or error.__context__
+    return False
 
 
 def _cached(hub: Any, repo: str) -> bool:
@@ -211,7 +228,12 @@ class Pyannote:
         numpy, torch = self._import("numpy"), self._import("torch")
         with quiet():
             if self._pipeline is None:
-                self._pipeline = self._import(MODULE).Pipeline.from_pretrained(MODEL)
+                try:
+                    self._pipeline = self._import(MODULE).Pipeline.from_pretrained(MODEL)
+                except OSError:  # the hub's LocalEntryNotFoundError is a FileNotFoundError
+                    raise ModelsMissing() from None
+                if self._pipeline is None:  # 4.x answers None for a checkpoint it cannot find
+                    raise ModelsMissing()
             waveform = torch.from_numpy(numpy.asarray(samples, dtype=numpy.float32).reshape(1, -1))
             options = {"num_speakers": speakers} if speakers else {}
             found = self._pipeline({"waveform": waveform, "sample_rate": rate}, **options)

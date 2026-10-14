@@ -85,7 +85,7 @@ A recording counts as two channels only when its source says so. A `voice-memo/v
 `["system", "mic"]` when the far end is the first channel. No adapter writes that yet; a call
 recorder's will. Anything else is one room, an iPhone's stereo memo included: two microphones in one
 room are not a call, and no voice of it is `from_me`. A file that does not hold the channels its source
-named is heard as a room too.
+named, or whose channels the diarizer cannot decode apart, is heard as a room too, and the run says so.
 
 **Granola** keeps the two sides apart itself and marks each segment as the microphone's (`me`) or the
 system audio's (`them`). `sync granola` takes those marks as the labels: `mic` and `system` (`system.1`,
@@ -120,8 +120,10 @@ new `transcript/v1` line with the new text and the labels. That line `supersedes
 keeps its `source`, `at`, `end`, `tz` and title; its `raw_id` is `<the old raw_id>#speakers@<the first
 12 hex of the spans file's digest>`, so the same voices heard in the same text write nothing twice.
 The old line stays in the record, superseded, as every correction does. `--speakers N` tells the
-diarizer the room held N voices. A transcript from a provider or a file has no recording here and is
-left alone, counted.
+diarizer the room held N voices (a call heard a channel at a time does without it, and the command
+says so). A transcript from a provider or a file has no recording here and is left alone, counted;
+so is one whose memo was retracted or superseded by a later memo line. One recording has one line of
+its voices: a recording a standing line has separated already is not heard again.
 
 It is not free, and the command says so before it writes:
 
@@ -157,9 +159,12 @@ fetches the Whisper model and only that.
 Every run that separates voices does it with the hub offline (`HF_HUB_OFFLINE`, and the switch the hub
 client read when it was first imported, set for the run and put back after) and with pyannote.audio's
 own usage reporting, which its 4.x releases switch on by default, switched off
-(`PYANNOTE_METRICS_ENABLED=0`). The audio is decoded on this machine and never leaves it. A test
-separates voices with every socket refused; no test loads a model: the diarizer is a fake, as the
-transcription engine is.
+(`PYANNOTE_METRICS_ENABLED=0`). The audio is decoded on this machine and never leaves it. The same guard
+now serves every command that runs a local model (`transcribe.offline`, which `promises --judge` and
+`describe` use, set the variables only, which the hub client ignores once imported). A cache the hub
+says holds the models but whose files are not whole (an interrupted fetch) stops the run with one
+sentence naming `setup speakers --fetch-model`. A test separates voices with every socket refused; no
+test loads a model: the diarizer is a fake, as the transcription engine is.
 
 ## Reading them back
 

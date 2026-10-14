@@ -115,7 +115,7 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
             diarizer=diarizer,
             separate=not a.no_speakers,
         )
-    except transcribe.ModelMissing as e:
+    except (transcribe.ModelMissing, diarize.ModelsMissing) as e:
         print(f"transcribe: {e}", file=sys.stderr)
         sys.exit(2)
     print(transcribe.describe(report))
@@ -169,7 +169,7 @@ def cmd_speakers(a: argparse.Namespace) -> None:
             hint=a.speakers,
             progress=print,
         )
-    except (transcribe.EngineMissing, transcribe.ModelMissing) as e:
+    except (transcribe.EngineMissing, transcribe.ModelMissing, diarize.ModelsMissing) as e:
         print(f"derive speakers: {e}", file=sys.stderr)
         sys.exit(2)
     print(transcribe.describe_again(report))
@@ -203,10 +203,12 @@ def cmd_setup_speakers(a: argparse.Namespace) -> None:
     from ..labs import diarize
 
     if a.fetch_model:
-        if diarize._truthy(os.environ.get("HF_HUB_OFFLINE")):
+        switches = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+        offline = [name for name in switches if diarize._truthy(os.environ.get(name))]
+        if offline:
             print(
-                "setup speakers: HF_HUB_OFFLINE is set in this shell, so the hub would refuse; unset it for"
-                " this one command",
+                f"setup speakers: {' and '.join(offline)} set in this shell, so the hub would refuse;"
+                " unset it for this one command",
                 file=sys.stderr,
             )
             sys.exit(2)
