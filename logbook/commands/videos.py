@@ -5,7 +5,7 @@ bounded cache under `state/videos/`, one at a time, verified against the md5 Dri
 (`logbook.contrib.videos`); with `--models`, the speech and vision models `videos infer` uses, once,
 and nothing else. `videos infer` reads only what the cache holds, on this machine, with no socket: the
 scenes of each file, what is said and shown in each, and one draft per scene proposing where and when
-(`logbook.labs.videos`)."""
+(`logbook.labs.scenes`)."""
 
 from __future__ import annotations
 
@@ -68,12 +68,97 @@ def videos_arguments(sub: Subparsers) -> None:
         help=f"with --models: the vision model (default {DESCRIBE_DEFAULT_MODEL})",
     )
     v.set_defaults(fn=cmd_videos)
+    v = verbs.add_parser(
+        "infer",
+        help="the scenes of each cached file, heard and looked at here; a draft per scene; no network",
+        description="For each file `videos fetch` left in the cache and not yet inferred under these models"
+        " and settings: find its scenes (one continuous recording each: cuts in the picture, breaks in"
+        " the soundtrack), hear each scene's speech with the transcribe extra and look at a few of its"
+        " frames with the describe extra, all on this machine with no socket opened, and write one"
+        " transcript line for the file and one draft per scene proposing where and when it was filmed,"
+        " from what it shows and says and your places and assets, every sentence with its evidence."
+        " The file is then deleted from the cache unless --keep. Needs ffmpeg on the PATH and the"
+        " transcribe and describe extras; `videos fetch --models` fetches the models once.",
+    )
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only the video lines from this local day on")
+    v.add_argument("--limit", type=int, metavar="N", help="at most N files this run")
+    v.add_argument("--keep", action="store_true", help="keep each file in the cache once it is inferred")
+    v.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="say which cached files would be inferred; no engine, nothing written",
+    )
+    v.add_argument(
+        "--speech-model",
+        default=TRANSCRIBE_DEFAULT_MODEL,
+        metavar="NAME",
+        help=f"the Whisper model (default {TRANSCRIBE_DEFAULT_MODEL})",
+    )
+    v.add_argument(
+        "--vision-model",
+        default=DESCRIBE_DEFAULT_MODEL,
+        metavar="NAME",
+        help=f"the vision model (default {DESCRIBE_DEFAULT_MODEL})",
+    )
+    v.set_defaults(fn=cmd_videos)
 
 
 def cmd_videos(a: argparse.Namespace) -> None:
-    """`videos fetch` (`_fetch`)."""
+    """`videos fetch` (`_fetch`) and `videos infer` (`_infer`)."""
     if a.verb == "fetch":
         _fetch(a)
+    elif a.verb == "infer":
+        _infer(a)
+
+
+def _infer(a: argparse.Namespace) -> None:
+    """`videos infer [--since DAY] [--limit N] [--keep] [--dry-run]`: the cached files read on this
+    machine (`labs.scenes.run`), a line per file on stderr as it goes, then what was written. Nothing in
+    the cache says so and asks for nothing; exit 2 when ffmpeg, an extra or a model is missing."""
+    from ..core.export import parse_day
+    from ..labs import scenes as infer
+
+    if a.since is not None:
+        try:
+            parse_day(a.since)
+        except ValueError as e:
+            print(f"videos infer: {e}", file=sys.stderr)
+            sys.exit(2)
+    if a.limit is not None and a.limit < 1:
+        print("videos infer: --limit is a number of files, 1 or more", file=sys.stderr)
+        sys.exit(2)
+    lb = Logbook.find()
+    engines = None
+    if not a.dry_run and _anything_cached(lb):
+        try:
+            engines = infer.detect(a.speech_model, a.vision_model)
+        except infer.EngineMissing as e:
+            print(f"videos infer: {e}", file=sys.stderr)
+            sys.exit(2)
+    media, speech, vision = engines if engines is not None else (None, None, None)
+    try:
+        report = infer.run(
+            lb,
+            media,
+            speech,
+            vision,
+            since=a.since,
+            limit=a.limit,
+            keep=a.keep,
+            dry_run=a.dry_run,
+            progress=lambda text: print(text, file=sys.stderr),
+        )
+    except (infer.ModelMissing, infer.EngineMissing) as e:
+        print(f"videos infer: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(infer.summary(report))
+
+
+def _anything_cached(lb: Logbook) -> bool:
+    """Whether the cache holds a whole file: with none, no engine is looked for."""
+    from ..contrib import videos
+
+    return bool(videos.Cache(lb.root).complete())
 
 
 def _fetch(a: argparse.Namespace) -> None:
