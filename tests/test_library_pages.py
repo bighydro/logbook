@@ -23,8 +23,9 @@ from urllib.parse import urlencode
 
 import phone_width
 import pytest
-from four_years import ASTRID, BJORN, FRODE, INGRID, KRISTIN, OBSERVED
+from four_years import ASTRID, BJORN, FRODE, HANS, INGRID, KRISTIN, OBSERVED
 from library_record import ASTRID_ELSEWHERE, BERGEN_WINTER, PROMISE, dream, library_record
+from persona import transcript, utc
 
 from logbook import cli
 from logbook.contrib import people_review, serve
@@ -47,6 +48,33 @@ PAGES = (
     *(f"/people/{p['id']}" for p in (ASTRID, BJORN, FRODE, INGRID, KRISTIN)),
 )
 UNSTAMPED = ("id", "hash", "prev", "recorded_at")  # what two copies of one write cannot share
+GITHUB_HANDLE = "github:bjorn-example"  # a handle a service names: an observed person's key (#281)
+
+
+def _github_commit(at: str) -> dict[str, Any]:
+    """A commit of Bjørn's as `sync github` writes it: an event line whose organizer is his handle
+    and whose actor carries the name the commit gave (`logbook.contrib.adapters.github.line`)."""
+    return {
+        "at": at,
+        "end": None,
+        "source": "github",
+        "kind": "event",
+        "tier": 1,
+        "payload": {
+            "schema": "event/v1",
+            "raw_id": "github:commit:example-org/example-repo:0123abcd",
+            "title": "Fix the harbour map",
+            "calendar": {"id": "github", "name": "GitHub"},
+            "all_day": False,
+            "modified_at": at,
+            "organizer": {"kind": "handle", "value": GITHUB_HANDLE},
+            "extra": {
+                "action": "commit",
+                "repo": "example-org/example-repo",
+                "actor": {"login": "bjorn-example", "type": "User", "name": BJORN["name"], "role": "other"},
+            },
+        },
+    }
 
 
 @pytest.fixture(scope="module")
@@ -228,6 +256,41 @@ def test_the_people_of_the_year_canonical_only_then_the_review_queue(lb: Logbook
     assert re.findall(r'href="/people/[^"]+"><b>([^<]+)</b>', past)[:2] == ["Elin Moe", ASTRID["name"]]
 
 
+def test_a_machine_participant_is_on_no_shelf_no_page_and_in_no_queue(lb: Logbook) -> None:
+    """#279: an agent is never a person. A transcript participant marked `machine: true` is not on
+    the People shelf, not in the review queue (neither proposed nor among the unplaced), has no
+    page, and one named after a person of the record adds nothing to that person's page."""
+    bot, named = "Harbour Bot", HANS["name"]
+    lb.append_many(
+        [
+            transcript(
+                utc("2025-09-03", "10:00"),
+                utc("2025-09-03", "10:30"),
+                "A session",
+                [{"name": "owner"}, {"name": bot, "machine": True}],
+            ),
+            transcript(
+                utc("2025-09-04", "10:00"),
+                utc("2025-09-04", "10:30"),
+                "Another",
+                [{"name": "owner"}, {"name": named, "machine": True}],
+            ),
+        ]
+    )
+    site = _site(lb)
+    page = _get(site, "/people")
+    assert bot not in page, "nowhere on the People page: not listed, not in the queue"
+    listed, review = page.split('<h2 id="review">')
+    assert f'href="/people/{HANS["id"]}"' not in listed, (
+        "a bot named after a person is not that person's year"
+    )
+    assert "1 proposal · 2 seen, not placed" in review and named not in review
+    assert site.respond(f"/people/{bot}", "").status == 404, "no page of its own"
+    hans = _get(site, f"/people/{HANS['id']}")
+    assert "2025" not in _section(hans, "<h2>Days together", "<h2>")
+    assert "spoke in Another" not in hans and "transcript" not in hans.split("<h2>")[0]
+
+
 def test_a_person_s_page(lb: Logbook) -> None:
     site = _site(lb)
     bjorn = _get(site, f"/people/{BJORN['id']}")
@@ -301,6 +364,52 @@ def test_merge_and_not_the_same_person_write_what_people_review_writes(
         assert again.status == 409 and "not in the queue" in again.body.decode("utf-8")
     merged = _get(_site(Logbook(tmp_path / "merge-page")), f"/people/{ASTRID['id']}")
     assert ASTRID_ELSEWHERE["email"] in merged, "merged: an address of hers now"
+
+
+def test_a_github_handle_in_the_queue_renders_and_its_acts_write_what_people_review_writes(
+    pristine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#281: an observed person keyed by a service's handle (`github:<login>`, the organizer of a
+    GitHub line) is proposed against the person of that name, shown by the handle with the name
+    the commit gave, and Merge and Not the same person write exactly what `people review
+    --accept` and `--reject` write for that proposal. The commit is appended once, to one copy both
+    roots are then copies of: the alias line cites it by id and the head it was read at."""
+    base = tmp_path / "base"
+    shutil.copytree(pristine, base)
+    lb = Logbook(base)
+    lb.append_many([_github_commit(utc("2025-09-10", "09:00"))])
+    report = people_review.read(lb)
+    [n] = [i for i, p in enumerate(report.proposals, 1) if p.observed.key == ("handle", GITHUB_HANDLE)]
+    proposal = report.proposals[n - 1]
+    listed, review = _get(_site(lb), "/people").split('<h2 id="review">')
+    assert GITHUB_HANDLE not in listed, "the handle is in the queue only, never on the shelf"
+    assert f"{GITHUB_HANDLE} ({BJORN['name']}; event 1)" in review
+    assert (
+        f'href="/people/{BJORN["id"]}">{BJORN["name"]}</a>' in review
+        and f"same name {BJORN['name']}" in review
+    )
+    for act, flag in (("merge", "--accept"), ("reject", "--reject")):
+        mine_root, theirs_root = tmp_path / f"{act}-page", tmp_path / f"{act}-cli"
+        shutil.copytree(base, mine_root)
+        shutil.copytree(base, theirs_root)
+        seq = int(lb.meta["seq"])
+        _cli_on(theirs_root, monkeypatch, "people", "review", flag, str(n))
+        site = _site(Logbook(mine_root))
+        response = site.write(
+            serve.PEOPLE_REVIEW_PATH, {"act": act, "id": proposal.id, "year": "2025"}, LOOPBACK, None
+        )
+        assert response.status == 303 and response.location == "/people?year=2025#review"
+        mine, theirs = _written(mine_root, seq), _written(theirs_root, seq)
+        assert len(mine) == len(theirs) == 1
+        assert all(_same(a, b, "at") for a, b in zip(mine, theirs, strict=True)), "the clock aside"
+        assert mine[0]["kind"] == ("resolution" if act == "merge" else "people-review")
+        if act == "merge":
+            assert mine[0]["payload"]["ref"] == {"kind": "handle", "value": GITHUB_HANDLE}
+        after = _section(_get(site, "/people"), '<h2 id="review">')
+        assert f'id="{proposal.id}"' not in after, "out of the queue either way"
+        assert (GITHUB_HANDLE in after) == (act == "reject"), "told apart: still seen, unplaced"
+    merged = _get(_site(Logbook(tmp_path / "merge-page")), f"/people/{BJORN['id']}")
+    assert GITHUB_HANDLE in merged, "merged: a handle of his now"
 
 
 def test_a_bad_or_stale_form_writes_nothing(lb: Logbook) -> None:
