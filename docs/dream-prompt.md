@@ -4,9 +4,9 @@
 [`logbook/contrib/dream-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-prompt.md)
 in the package with the day and the language filled in, and the day's material as JSON. This page
 explains the prompt; `logbook dream day DAY --show-prompt` prints both as they go. The prompt's name,
-`dream-day/2`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
+`dream-day/3`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
 change to the prompt that changes what a draft holds bumps the number (`dream-day/2` added the proposed
-events; a `dream-day/1` draft has none).
+events, so a `dream-day/1` draft has none; `dream-day/3` added rule 5, agents).
 
 ## What it asks for
 
@@ -37,6 +37,10 @@ dropped and counted ([the dream](dream.md#proposed-events)).
    where the record is silent; where it is silent the draft is silent or asks.
 3. **The names as given.** No nicknames, no titles, no guess at who someone is.
 4. **Brief and plain.** No headings, no bullets inside the text, no greeting and no sign-off.
+5. **Agents are not people.** A counterpart marked `agent` is a program the owner runs (a Telegram
+   bot, a coding assistant) and a text marked `machine` is what it wrote ([your own
+   agents](adapters/agents.md)): never one of the `people`, and its words never the owner's or anyone's
+   promise. The owner's own words to it are the owner's.
 
 The prompt also says the day (`$day`, `$weekday`, `$tz`) and the language to write in (`$language`,
 a BCP 47 tag, and `$language_name`): the language most of the day's own text is in, as the dream
@@ -50,10 +54,11 @@ read under), `night_before` and `night_after` (where, home or away, the referenc
 transcripts, mail threads, calls, photos as a count, keepers and who was there, confirmed and proposed,
 each with references and, for a canonical person, the `person` id; a stay or stop also its `place`, a
 named place's name or `place:<lat>,<lon>`), `unplaced`, `messages` (by counterpart: the count, the
-references, the texts and the counterpart's `person` id when the record resolves one), `notes` (in
-full), `commitments`, `people` (every canonical person the material names, `id` and `name`; never
-the owner), `health` (only when tier 3 is under the ceiling) and `signed` (when and the note you wrote
-on signing). Every item carries `ref`, a reference such as `L12`; a
+references, the texts and the counterpart's `person` id when the record resolves one; `agent` on a
+counterpart that is one of the owner's agents, `machine` on a text it wrote), `notes` (in full),
+`commitments`, `people` (every canonical person the material names, `id` and `name`; never the owner),
+`health` (only when tier 3 is under the ceiling) and `signed` (when and the note you wrote on
+signing). Every item carries `ref`, a reference such as `L12`; a
 reference stands for one line id of the day, and only lines of the day get one, so the model cannot
 cite a line from the night before even though the material describes that night.
 
@@ -62,4 +67,4 @@ cite a line from the night before even though the material describes that night.
 So that the words a model is given are versioned with the code that checks its answer, readable
 without running anything, and the same on every machine: an orchestrator that rebuilds a Day from the
 record and a second implementation that writes drafts can read the same prompt and know what a
-`dream-day/1` draft was asked for.
+`dream-day/3` draft was asked for.

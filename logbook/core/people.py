@@ -29,7 +29,9 @@ Everything is read through the index and nothing is written: the resolution and 
 columns (`reading.owner_track`), and the lines of the six kinds above streamed one kind at a time
 over the window (`Index.of_kind`), each read once and kept only when it names a person — a year of
 messages is counted as it streams and never held; its ids are kept. A retracted line, and one
-another line of its kind `supersedes` (an edited calendar entry), counts for nothing."""
+another line of its kind `supersedes` (an edited calendar entry), counts for nothing; nor does an
+agent (`logbook.core.machine`): a message in a conversation with one, whoever wrote it, and a
+transcript's participant marked machine, whatever its name, name nobody."""
 
 from __future__ import annotations
 
@@ -40,7 +42,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import day_start, policy, present, reading, resolve, stays, trips
+from . import day_start, machine, policy, present, reading, resolve, stays, trips
 from . import places as named_places
 from .chain import Line
 from .day_start import DayStart
@@ -413,7 +415,7 @@ class _Gather:
             found = []
             participants = payload.get("participants")
             for participant in participants if isinstance(participants, list) else []:
-                if isinstance(participant, dict):
+                if isinstance(participant, dict) and not machine.is_machine_participant(participant):
                     found.append(self._participant(participant))
             return [(e, None) for e in dict.fromkeys(found) if e is not None]
         if channel == "faces":
@@ -430,6 +432,8 @@ class _Gather:
     def _message(
         self, payload: Mapping[str, Any], day: str, at: str, id_: str, tier: int
     ) -> list[tuple[str, str | None]]:
+        if machine.is_machine(payload) or machine.with_agent(payload):
+            return []  # a conversation with an agent names nobody, whichever side wrote the line
         chat = payload.get("chat")
         chat_id = str(chat.get("id")) if isinstance(chat, dict) and chat.get("id") else None
         direct = isinstance(chat, dict) and chat.get("type") == "direct"
@@ -508,7 +512,11 @@ def _names_someone(line: Line) -> bool:
     if kind == "event":
         return bool(payload.get("attendees"))
     if kind == "transcript":
-        return bool(payload.get("participants"))
+        participants = payload.get("participants")
+        return any(
+            not machine.is_machine_participant(p)
+            for p in (participants if isinstance(participants, list) else [])
+        )
     if kind == "photo":
         extra = payload.get("extra")
         return bool(payload.get("people")) or bool(isinstance(extra, dict) and extra.get("faces"))

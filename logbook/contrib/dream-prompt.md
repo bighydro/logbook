@@ -8,6 +8,7 @@ Rules, each of them strict:
 2. Say only what the material says. Do not guess at feelings, weather, or what happened where the record is silent. Where the record is silent, the draft is silent too, or it asks.
 3. Names: use the names the material gives. Never a nickname, a title or a guess at who someone is.
 4. Be brief. Plain sentences, no headings, no bullet marks inside the text, no greeting and no sign-off.
+5. Agents are not people. A counterpart marked `"agent": true` is a program the owner runs (a bot, a coding assistant), and a text marked `"machine": true` is what it wrote. Never list an agent under `people`, and never give its words as the owner's or as anyone's promise; the owner's own words to it are the owner's.
 
 Write one JSON object and nothing else, no prose before or after it, with these six keys, the first five each a list of segments `{"text": "...", "evidence": ["L1", "L2"]}` or `{"text": "...", "unsupported": true}`:
 

@@ -36,7 +36,8 @@ and has no display name is a bare address and is dropped, and a calendar system 
 
 *** Only a participant the record resolves to a person: by email, phone or provider id, else by
 the spoken name matching a label. A diarization label (`Speaker A`), `me`, `them`, `Unknown` or
-a name no resolution knows is not company. A note's name follows the same rule: "with Ola" names
+a name no resolution knows is not company, and neither is a participant marked `machine` (an agent,
+`logbook.core.machine`), whatever name it was given. A note's name follows the same rule: "with Ola" names
 Ola Nordmann when a resolution line gives a person that label (`_by_name`); "with US", "with
 XYZ", a country, an acronym or a name the record does not know names nobody.
 
@@ -60,6 +61,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from . import machine
 from .chain import Line
 from .places import Place, distance_m
 from .resolve import Identity, Ref
@@ -240,8 +242,8 @@ def from_transcript(
         title = str(payload.get("title") or "a recording")
         participants = payload.get("participants")
         for participant in participants if isinstance(participants, list) else []:
-            if not isinstance(participant, dict):
-                continue
+            if not isinstance(participant, dict) or machine.is_machine_participant(participant):
+                continue  # an agent (`machine`) is nobody's company, whatever name it was given
             person, label, ref = None, None, None
             for kind, field in (("email", "email"), ("phone", "phone"), ("provider_id", "provider_id")):
                 value = participant.get(field)

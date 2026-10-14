@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from ..core import people, present, reading, stays
+from ..core import machine, people, present, reading, stays
 from ..core.flights import Airports
 from ..core.resolve import Ref
 from ..core.store import Logbook, retractions
@@ -119,7 +119,7 @@ def real_contacts(lb: Logbook, report: people.Report) -> dict[str, Contact]:
                 else:
                     participants = payload.get("participants")
                     for participant in participants if isinstance(participants, list) else []:
-                        if isinstance(participant, dict):
+                        if isinstance(participant, dict) and not machine.is_machine_participant(participant):
                             saw(_participant(participant, report), day, MEETING, id_)
     for chat_id, chat in chats.items():
         if chat.mine is None:
@@ -148,7 +148,10 @@ def _message(
 ) -> None:
     """A message line: theirs in a direct chat is a contact with its sender; the owner's in a
     direct chat waits for the chat's people (`real_contacts`); a group's line is nobody's. A chat
-    given as a string (the shape before RFC 0008) is a direct chat's name, as SPEC §3.2 reads it."""
+    given as a string (the shape before RFC 0008) is a direct chat's name, as SPEC §3.2 reads it. A
+    line of a conversation with an agent (`logbook.core.machine`) is nobody's."""
+    if machine.is_machine(payload) or machine.with_agent(payload):
+        return
     chat = payload.get("chat")
     if isinstance(chat, dict):
         if chat.get("type") != "direct":
