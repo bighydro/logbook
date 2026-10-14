@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, story
+from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, speakers, story
 from ..core.chain import Line, is_sealed, number_text
 from ..core.resolve import Ref
 from . import trip_bundle
@@ -461,9 +461,11 @@ def _event_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
 
 
 def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
-    """`<title> — <participants>; <turns>, <length>` (RFC 0004). A participant is named by a
-    resolution of its email when one exists, else as the source names it; `--raw` uses the source's
-    name. Never the text: that is an attachment."""
+    """`<title> — <participants>; <turns>, <length>` (RFC 0004), then the voices when the line has
+    them, `· you 3 min · S2 1 min` (RFC 0038 §2: a label, or the name the source displayed, and the
+    owner only from `from_me`). A participant is named by a resolution of its email when one exists,
+    else as the source names it; `--raw` uses the source's name. Never the text: that is an
+    attachment."""
     who = [
         _name({"kind": "email", "value": q.get("email")}, names) or str(q.get("name") or q.get("email") or "")
         for q in p.get("participants") or []
@@ -480,7 +482,8 @@ def _transcript_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     duration = extra.get("duration_s")
     if isinstance(duration, int | float) and duration >= 0:
         parts.append(f"{duration / 60:.0f} min" if duration >= 60 else f"{duration:.0f} s")
-    return head + ("; " + ", ".join(parts) if parts else "")
+    voices = speakers.row_text(p)
+    return head + ("; " + ", ".join(parts) if parts else "") + (f" · {voices}" if voices else "")
 
 
 def _attendee(attendee: object, names: Mapping[Ref, str] | None) -> str:

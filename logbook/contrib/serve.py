@@ -1029,7 +1029,7 @@ class Site:
                 parts.append(
                     f'<li title="line {escape(item["line"])}"><span class="clock">{escape(span)}</span> '
                     f'<span class="kind">{escape(item["kind"])}</span> '
-                    f"{escape(item['title'] + day_reader.sources_text(item))}"
+                    f"{escape(item['title'] + day_reader.sources_text(item) + day_reader.voices_text(item))}"
                     f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
                 )
             parts.append("</ul>\n")
@@ -2232,7 +2232,7 @@ def _attached_html(
         span = day_reader.span_text(e["start"], e["end"], tz)
         items.append(("event", f"{e['title']} {span}{day_reader.sources_text(e)}", e["lines"]))
     for t in attached["transcripts"]:
-        items.append(("transcript", t["title"], [t["line"]]))
+        items.append(("transcript", t["title"] + day_reader.voices_text(t), [t["line"]]))
     for n in attached["notes"]:
         items.append(("note", n["text"], [n["line"]]))
     for m in attached["mail"]:

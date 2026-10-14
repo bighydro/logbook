@@ -449,6 +449,16 @@ def to_json(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def json_text(entries: Iterable[Mapping[str, Any]]) -> str:
+    """The voices of a reader's JSON (`to_json`) in one run, as `row_text` gives them."""
+    out: list[str] = []
+    for entry in entries:
+        shown = OWNER if entry.get("owner") is True else str(entry.get("name") or entry.get("label") or "")
+        spoken = entry.get("seconds")
+        out.append(f"{shown} {duration_text(spoken)}" if isinstance(spoken, int | float) else shown)
+    return " · ".join(out)
+
+
 def _number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value) or value < 0:
         return None
