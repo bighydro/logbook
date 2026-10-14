@@ -9,10 +9,13 @@ reviewed by RFC 0036's `review/v1`. The entity is named as `review` and the page
 an id, a label or an alias, a word of a label: `entities.lookup`). The line supersedes the standing
 status of the entity, so the current status is the last line standing; any status may follow any. A
 status equal to the standing one is refused on the same local day, and on a later day unless it
-comes with a new reason (the owner reaffirmed, and said why). `--reason` writes one `note/v1` beside
-it at the status line's tier (3 for an org: a reason about a company can name money), label
-`status`, the reason as its text, the status line's id under `extra`, so the owner's words are on
-the day and in `search`. A place let go and an asset sold or let go close their registry entry:
+comes with a new reason (the owner reaffirmed, and said why). `--reason` puts the owner's words in
+the status line's own `reason`, and for an idea, a place or an asset also writes one `note/v1`
+beside it, tier 2 as RFC 0010 makes every note (MUST), label `status`, the reason as its text, the
+status line's id under `extra`, so the owner's words are on the day and in `search`. An org's reason
+stays on its tier-3 line and is never a note: a reason about a company can name money, and a note
+at 2 would carry it wherever tier 2 crosses. No note is ever written above tier 2 (SPEC §4: a MUST
+tier is the profile's). A place let go and an asset sold or let go close their registry entry:
 `until`, the line's local day, is written into the entry of `places.json` or `assets.json`, every
 other key kept; the entry is never deleted (ADR 0018, rule 4). Everything is read and written under
 one hold of the writer lock, and the head is read again before the first line: a head that moved is
@@ -130,7 +133,8 @@ def write(
     evidence: Sequence[str] = (),
 ) -> Written:
     """One `status/v1` line for the entity of `kind` that `name` names, at the kind's tier
-    (`entities.status_tier`), with its note at the same tier when there is a `reason`, and the
+    (`entities.status_tier`), the `reason` on it; with the reason also as a tier-2 note when the
+    line is no higher than a note (`reason_note`: an idea, a place or an asset, never an org), and the
     registry entry closed when the disposition closes one; under one hold of the writer lock, the
     head read again before the first line. `proposal` is what the dream proposed, when the owner
     answers one (`proposed_by` `dream`), and `evidence` the ids of the lines it rested on: a status
@@ -189,12 +193,12 @@ def write(
             raise HeadMoved(HEAD_MOVED.format(was=meta["seq"], now=now["seq"]))
         line = lb.append(at=stamp, source=entities.SOURCE, kind=KIND, tier=tier, payload=payload)
         note = None
-        if reason is not None:
-            note = lb.append(  # the status line's tier: a reason about a company can name money
+        if reason is not None and reason_note(kind):
+            note = lb.append(
                 at=stamp,
                 source=entities.SOURCE,
                 kind=notes.KIND,
-                tier=tier,
+                tier=notes.TIER,
                 payload={
                     "schema": notes.SCHEMA,
                     "text": reason,
@@ -212,6 +216,13 @@ def write(
             close(lb.root, kind, entity.id, day)
             until = day
     return Written(entity, line, note, until)
+
+
+def reason_note(kind: str) -> bool:
+    """Whether a status reason about an entity of `kind` is also written as a `note/v1`: only when
+    the status line's tier is no higher than a note's, which RFC 0010 fixes at 2 (MUST), so the note
+    shows nothing the line keeps higher. An org's status is tier 3, so its reason stays on the line."""
+    return entities.status_tier(kind) <= notes.TIER
 
 
 def close(root: Path, kind: str, entity_id: str, day: str) -> Path:
@@ -353,6 +364,8 @@ def written_rows(w: Written) -> Iterator[str]:
     yield f"{w.entity.label}: {status} (#{w.status['seq']})"
     if w.note is not None:
         yield f"  the reason as a note (#{w.note['seq']})"
+    elif w.status["payload"].get("reason") is not None:
+        yield f"  the reason on the line, tier {w.status['tier']}, no note: {w.status['payload']['reason']}"
     if w.until is not None:
         registry = places.PLACES_FILE if w.entity.kind == PLACE else assets.ASSETS_FILE
         yield f"  closed in {registry} with until {w.until}"

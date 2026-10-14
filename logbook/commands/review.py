@@ -346,10 +346,12 @@ def status_arguments(sub: Subparsers) -> None:
         "status",
         help="what you decided about an org, idea, place or asset; list KIND",
         description="One status/v1 line (RFC 0037): an org's hold, add, sell, let-go, exited or passed; an"
-        " idea's spark, exploring, build, built or killed; a place let go; an asset sold or let go. Tier 2,"
-        " no money on it; --reason writes your words as a note beside it; a place or an asset it closes"
-        " keeps its registry entry, closed with `until`. `status list KIND`: every one of a kind, its"
-        " current status, stale ones and muted proposals said. A person has no status; a goal is reviewed.",
+        " idea's spark, exploring, build, built or killed; a place let go; an asset sold or let go. Tier 3"
+        " for an org, 2 for the rest, no money on it; --reason puts your words on the line, and for an idea,"
+        " a place or an asset also as a tier-2 note beside it (an org's stay on its line); a place or an"
+        " asset it closes keeps its registry entry, closed with `until`. `status list KIND`: every one of a"
+        " kind, its current status, stale ones and muted proposals said. A person has no status; a goal is"
+        " reviewed.",
     )
     s.add_argument(
         "words",

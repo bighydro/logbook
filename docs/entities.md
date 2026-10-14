@@ -133,7 +133,7 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 | `entity` | object | MUST | `{ type, id, registry }`, `type` `org`, `idea`, `place` or `asset` |
 | `label` | string | SHOULD | the entity's label at the time |
 | `status` | string | MUST | one of the kind's dispositions; any other makes the line invalid |
-| `reason` | string | SHOULD; MUST for `passed`, `let-go`, `killed` | the owner's words on why |
+| `reason` | string | SHOULD; MUST for `passed`, `let-go`, `killed` | the owner's words on why; for an org, the only place they are written |
 | `proposed_by` | string | MUST | `dream` when the owner disposed of a proposal, `owner` when unprompted |
 | `proposal` | object | MAY | what the dream proposed, `{ status, score, because }` |
 | `since` | date | MAY | the local day it took effect when not the line's own day |
@@ -143,10 +143,15 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 
 **Rules.** The current status is the last standing line's; any status may follow any. A status
 equal to the standing one on the same local day is refused; on a later day it is written only with a
-new reason (the owner reaffirmed, and said why). `status --reason "…"` also writes one `note/v1`
-line at the status line's tier (3 for an org: a reason about a company can name money), label
-`status`, beside the status line, so the owner's words are on the day and in `search`. A place let go and an asset sold or let go close their registry entry with `until`, the
-line's local day: the entry in `places.json` or `assets.json` is never deleted (ADR 0018, rule 4).
+new reason (the owner reaffirmed, and said why). `status --reason "…"` puts the owner's words in
+the line's `reason`. For an idea, a place or an asset it also writes one `note/v1` line, tier 2,
+label `status`, beside the status line, so the owner's words are on the day and in `search`. An
+org's reason stays on its tier-3 status line and is never a note: RFC 0010 fixes a note at tier 2
+(MUST), and a reason about a company can name money, so a note would carry it wherever tier 2
+crosses. No status writes a note above tier 2. `status list` and the status command's output read
+the reason from the status line. A place let go and an asset sold or let go close their registry
+entry with `until`, the line's local day: the entry in `places.json` or `assets.json` is never
+deleted (ADR 0018, rule 4).
 
 **Readers' rules**, never lines (`policy/entities.json`):
 
