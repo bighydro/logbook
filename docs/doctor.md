@@ -29,9 +29,11 @@ no reader shows: 2026-06-10 (#5440, tier 3); the 'dream' entry allows max_tier 2
 
 When either variable of the Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
 `LOGBOOK_DRIVE_USER`), one `google` line comes before the `sync:` lines of the sources it covers: the key
-file present and a service-account key, the user an address, and which of `gmail`, `gcal`, `drive` and
-`gtasks` are on it, a source switched off in `policy/import.json` named as disabled —
-`pass  google  key present, user set; sources on the key: gmail, gcal, drive, gtasks`. A key not set,
+file present and a service-account key, the user an address, which of `gmail`, `gcal`, `drive`, `gtasks`,
+`meet` and `gaudit` are on it, a source switched off in `policy/import.json` named as disabled, and what
+`people review --from-google` reads on it —
+`pass  google  key present, user set; sources on the key: gmail, gcal, drive, gtasks, meet, gaudit; people
+review --from-google: contacts, other contacts`. A key not set,
 not readable or not a service-account key, or a user that is not an address, is a warn naming the
 variable. The line reads the key on this machine and asks Google nothing, and never prints the path or
 the address ([the tour, *Google, on one key*](tour.md#google-on-one-key)).

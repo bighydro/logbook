@@ -79,6 +79,8 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "gcal",
         "drive",
         "gtasks",
+        "meet",
+        "gaudit",
         "ais",
         "adsb",
         "mail",

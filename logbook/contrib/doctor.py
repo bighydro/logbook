@@ -29,9 +29,10 @@ The checks, in the order they print:
   install line when not (a warn).
 - `google`: when either variable of the one Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
   `LOGBOOK_DRIVE_USER`), whether the key file is there and is a service-account key, whether the user
-  is an address, and which of the sources on the key (gmail, gcal, drive, gtasks) are enabled, a
-  disabled one named as such. Read from this machine alone: Google is asked nothing, and neither the
-  path nor the address is printed. Something missing or wrong is a warn.
+  is an address, which of the sources on the key (gmail, gcal, drive, gtasks, meet, gaudit) are
+  enabled, a disabled one named as such, and what `people review --from-google` reads on it (contacts,
+  other contacts: names for the review, never lines). Read from this machine alone: Google is asked
+  nothing, and neither the path nor the address is printed. Something missing or wrong is a warn.
 - `sync:<name>`: for each live source the record uses — a `state/<name>.json` watermark, or lines of
   that source when the index is current — the variables its adapter reads are set. Names only,
   never a value: a missing one is a warn naming it, a set one the adapter refuses says to run
@@ -367,8 +368,9 @@ def syncs_used(
 
 def google_check(lb: Logbook, env: Mapping[str, str]) -> Check | None:
     """The one Google key, when either of its variables is set: the key file there and a service-account
-    key, the user an address, and the sources on the key that are enabled. Nothing is sent anywhere and
-    no value is printed; None when neither variable is set."""
+    key, the user an address, the sources on the key that are enabled, and what `people review
+    --from-google` reads on it. Nothing is sent anywhere and no value is printed; None when neither
+    variable is set."""
     raw_key = env.get(service_account.KEY_ENV, "").strip()
     user = env.get(service_account.USER_ENV, "").strip()
     if not raw_key and not user:
@@ -394,13 +396,18 @@ def google_check(lb: Logbook, env: Mapping[str, str]) -> Check | None:
     on = [name for name in service_account.SOURCES if name not in disabled] or ["none"]
     off = [name for name in service_account.SOURCES if name in disabled]
     sources = ", ".join(on) + (f" ({', '.join(off)} disabled)" if off else "")
-    return Check("google", status, f"{', '.join(said)}; sources on the key: {sources}")
+    names = ", ".join(service_account.NAMES)
+    return Check(
+        "google",
+        status,
+        f"{', '.join(said)}; sources on the key: {sources}; people review --from-google: {names}",
+    )
 
 
 def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterator[Check]:
     """Names only, never a value: a missing variable is named; one the adapter refuses is not echoed.
-    An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers; `drive`
-    and `gtasks` read their service-account key here and ask Google nothing."""
+    An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers; the
+    sources on the Google key read it here and ask Google nothing."""
     for adapter in syncs_used(lb, sources, env):
         name = f"sync:{adapter.NAME}"
         try:

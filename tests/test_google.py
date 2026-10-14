@@ -63,13 +63,18 @@ def _google(lb: Logbook, env: dict[str, str] | None = None) -> doctor.Check | No
 
 
 def test_every_google_source_is_named_with_its_one_read_only_scope() -> None:
-    assert service_account.SOURCES == ("gmail", "gcal", "drive", "gtasks")
+    assert service_account.SOURCES == ("gmail", "gcal", "drive", "gtasks", "meet", "gaudit")
+    assert service_account.NAMES == ("contacts", "other contacts"), "names for people review, not lines"
     assert service_account.SCOPES == {
         "gmail": "https://www.googleapis.com/auth/gmail.readonly",
         "gcal": "https://www.googleapis.com/auth/calendar.readonly",
         "drive": "https://www.googleapis.com/auth/drive.activity.readonly",
         "drive paths": "https://www.googleapis.com/auth/drive.metadata.readonly",
         "gtasks": "https://www.googleapis.com/auth/tasks.readonly",
+        "meet": "https://www.googleapis.com/auth/meetings.space.readonly",
+        "gaudit": "https://www.googleapis.com/auth/admin.reports.audit.readonly",
+        "contacts": "https://www.googleapis.com/auth/contacts.readonly",
+        "other contacts": "https://www.googleapis.com/auth/contacts.other.readonly",
     }
     assert all(scope.endswith(".readonly") for scope in service_account.SCOPES.values())
 
@@ -117,7 +122,10 @@ def test_doctor_shows_one_google_line_key_user_and_the_sources_on_it(lb: Logbook
     check = _google(lb)
     assert check is not None
     assert check.status == "pass"
-    assert check.detail == "key present, user set; sources on the key: gmail, gcal, drive, gtasks"
+    assert check.detail == (
+        "key present, user set; sources on the key: gmail, gcal, drive, gtasks, meet, gaudit"
+        "; people review --from-google: contacts, other contacts"
+    )
     assert fake.requests == [], "doctor asks Google nothing"
     assert USER not in check.detail and "google-sa.json" not in check.detail
 
@@ -145,7 +153,10 @@ def test_doctor_names_a_disabled_source_on_the_google_line(lb: Logbook, fake: Fa
     )
     check = _google(lb)
     assert check is not None and check.status == "pass"
-    assert check.detail.endswith("sources on the key: gcal, drive (gmail, gtasks disabled)")
+    assert check.detail.endswith(
+        "sources on the key: gcal, drive, meet, gaudit (gmail, gtasks disabled);"
+        " people review --from-google: contacts, other contacts"
+    )
 
 
 def test_doctor_without_either_variable_shows_no_google_line(lb: Logbook) -> None:
@@ -188,39 +199,53 @@ def test_doctor_says_when_the_key_file_is_not_a_service_account_key(lb: Logbook,
 def test_every_source_on_the_key_runs_and_no_token_is_ever_written(
     lb: Logbook, fake: Fake, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
 ) -> None:
-    """`sync --all` with the four sources on the key, against a mailbox, two calendars, a Drive and a
-    task list; then every file under the test's temporary root — the record, its state, the home
-    directory the index lives under — is read for the tokens the run was given: none is there, nor
-    any word of one, and the home holds no credential file."""
+    """`sync --all` with the six sources on the key, against a mailbox, two calendars, a Drive, a task
+    list, Meet calls and a sign-in log; then every file under the test's temporary root — the record,
+    its state, the home directory the index lives under — is read for the tokens the run was given:
+    none is there, nor any word of one, and the home holds no credential file."""
     import copy
 
     from test_drive import DRIVE_FILES, _activities
+    from test_gaudit import _logins
     from test_gcal_account import CALENDARS, SAILING_EVENTS, SAILING_ID, WORK_EVENTS, WORK_ID
     from test_gmail import _mailbox
     from test_gtasks import LISTS, _tasks
+    from test_meet import _server
 
     from logbook import cli
     from logbook.contrib import adapters
-    from logbook.contrib.adapters import drive, gcal, gmail, gtasks
+    from logbook.contrib.adapters import drive, gaudit, gcal, gmail, gtasks, meet
 
     _mailbox(fake)
     fake.calendars = [c for c in copy.deepcopy(CALENDARS) if c["id"] in (SAILING_ID, WORK_ID)]
     fake.events = {SAILING_ID: copy.deepcopy(SAILING_EVENTS), WORK_ID: copy.deepcopy(WORK_EVENTS)}
     fake.drive, fake.files = _activities(), copy.deepcopy(DRIVE_FILES)
     fake.lists, fake.tasks = [dict(x) for x in LISTS], _tasks()
-    monkeypatch.setattr(adapters, "live_adapters", lambda: [gmail, gcal, drive, gtasks])
+    calls = _server(fake.key)
+    fake.conferences, fake.participants, fake.spaces = calls.conferences, calls.participants, calls.spaces
+    fake.transcripts, fake.entries = calls.transcripts, calls.entries
+    fake.logins = _logins()
+    monkeypatch.setattr(adapters, "live_adapters", lambda: [gmail, gcal, drive, gtasks, meet, gaudit])
     try:
         cli.main(["sync", "--all"])
     except SystemExit as e:
         assert e.code in (0, None)
     out = capsys.readouterr().out
-    assert out.splitlines()[0] == "running gmail, gcal, drive, gtasks"
+    assert out.splitlines()[0] == "running gmail, gcal, drive, gtasks, meet, gaudit"
     summary = out[out.index("sync --all:") :].splitlines()[1:]
     assert [line.split()[:2] for line in summary] == [[name, "ok"] for name in service_account.SOURCES]
     # each under the source its file side writes (ADR 0017): gmail as `mail`, gtasks as Takeout Tasks
-    assert {line["source"] for line in lb.lines()} == {"mail", "ics", "drive", "google-takeout"}
-    scopes = set(fake.issued.values())
-    assert scopes == set(service_account.SCOPES.values()), "a token per scope, each minted once"
+    assert {line["source"] for line in lb.lines()} == {
+        "mail",
+        "ics",
+        "drive",
+        "google-takeout",
+        "meet",
+        "gaudit",
+    }
+    scopes = sorted(fake.issued.values())
+    on_the_sources = {service_account.SCOPES[name] for name in (*service_account.SOURCES, "drive paths")}
+    assert scopes == sorted(on_the_sources), "a token per scope, each minted once; no contacts scope"
     secrets = [t.encode() for t in fake.issued] + [b"access_token", b"refresh_token", b"Bearer "]
     for path in (p for p in tmp_path.rglob("*") if p.is_file()):
         data = path.read_bytes()

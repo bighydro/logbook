@@ -278,6 +278,8 @@ def test_the_real_adapters_run_immich_last_under_all() -> None:
         "gcal",
         "drive",
         "gtasks",
+        "meet",
+        "gaudit",
         "ais",
         "adsb",
         "mail",
