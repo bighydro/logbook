@@ -58,7 +58,25 @@ from ...core.attachments import reference
 from ...core.transcripts import Turn
 from .transcript import KIND, draft
 
-__all__ = ["ASSISTANT", "KIND", "NAME", "OWNER", "TIER", "run", "sniff"]
+__all__ = [
+    "ASSISTANT",
+    "GROWN",
+    "KIND",
+    "NAME",
+    "NEW",
+    "OWNER",
+    "PARTICIPANTS",
+    "TIER",
+    "UNCHANGED",
+    "first_words",
+    "run",
+    "say",
+    "sniff",
+    "stamp",
+    "stored",
+    "versioned",
+    "words",
+]
 
 NAME = "claude-code"
 TIER = 2  # RFC 0004's SHOULD: the owner's words and the assistant's, no third party's
@@ -191,13 +209,35 @@ class _Session:
         self.images = 0
 
     def say(self, speaker: str, text: str) -> None:
-        text = text.strip()
-        if not text:
-            return
-        if self.turns and self.turns[-1].speaker == speaker:
-            self.turns[-1] = Turn(speaker, f"{self.turns[-1].text}\n\n{text}")
-        else:
-            self.turns.append(Turn(speaker, text))
+        say(self.turns, speaker, text)
+
+
+def say(turns: list[Turn], speaker: str, text: str) -> None:
+    """`text` as `speaker`'s: consecutive text of one side is one turn, blank text nothing."""
+    text = text.strip()
+    if not text:
+        return
+    if turns and turns[-1].speaker == speaker:
+        turns[-1] = Turn(speaker, f"{turns[-1].text}\n\n{text}")
+    else:
+        turns.append(Turn(speaker, text))
+
+
+def stored(turns: list[Turn]) -> bytes:
+    """The bytes the line's `content` names: the turns as JSON, `{"turns": [{"speaker", "text"}]}`."""
+    return json.dumps(
+        {"turns": [{"speaker": t.speaker, "text": t.text} for t in turns]},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def words(turns: list[Turn]) -> dict[str, int]:
+    """The words of each side, `{owner, machine}`."""
+    return {
+        "owner": sum(len(t.text.split()) for t in turns if t.speaker == OWNER),
+        "machine": sum(len(t.text.split()) for t in turns if t.speaker == ASSISTANT),
+    }
 
 
 def _session(file: Path, counts: dict[str, int], tier: int) -> tuple[dict[str, Any], bytes] | None:
@@ -217,15 +257,7 @@ def _session(file: Path, counts: dict[str, int], tier: int) -> tuple[dict[str, A
         _count(counts, "skipped_empty")
         return None
     session = _session_id(file)
-    data = json.dumps(
-        {"turns": [{"speaker": t.speaker, "text": t.text} for t in held.turns]},
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    words = {
-        "owner": sum(len(t.text.split()) for t in held.turns if t.speaker == OWNER),
-        "machine": sum(len(t.text.split()) for t in held.turns if t.speaker == ASSISTANT),
-    }
+    data = stored(held.turns)
     extra: dict[str, Any] = {"session": session}
     if held.cwd:
         extra["project"] = PureWindowsPath(held.cwd).name or held.cwd  # either separator, by parts
@@ -240,7 +272,7 @@ def _session(file: Path, counts: dict[str, int], tier: int) -> tuple[dict[str, A
     extra["tools"] = dict(sorted(held.tools.items()))
     if held.images:
         extra["images"] = held.images
-    extra["words"] = words
+    extra["words"] = words(held.turns)
     extra["counterpart"] = dict(COUNTERPART)
     stamps = sorted(held.stamps)
     line = draft(
@@ -251,7 +283,7 @@ def _session(file: Path, counts: dict[str, int], tier: int) -> tuple[dict[str, A
         content=reference(data, MEDIA_TYPE),
         turns=held.turns,
         tier=tier,
-        title=held.summary or _first_words(held.turns),
+        title=held.summary or first_words(held.turns),
         participants=[dict(p) for p in PARTICIPANTS],
         extra=extra,
     )
@@ -269,9 +301,9 @@ def _entry(entry: Mapping[str, Any], held: _Session, counts: dict[str, int]) -> 
     if entry.get("isSidechain") is True:
         _count(counts, "skipped_sidechain")
         return
-    stamp = _stamp(entry.get("timestamp"))
-    if stamp is not None:
-        held.stamps.append(stamp)
+    when = stamp(entry.get("timestamp"))
+    if when is not None:
+        held.stamps.append(when)
     held.cwd = held.cwd or _text(entry.get("cwd"))
     held.branch = held.branch or _text(entry.get("gitBranch"))
     held.version = held.version or _text(entry.get("version"))
@@ -333,7 +365,8 @@ def _session_id(file: Path) -> str:
     return file.stem
 
 
-def _first_words(turns: list[Turn]) -> str | None:
+def first_words(turns: list[Turn]) -> str | None:
+    """The first line of the owner's first turn, cut at TITLE_CHARS: a title when the source has none."""
     first = next((t.text for t in turns if t.speaker == OWNER), None)
     if first is None:
         return None
@@ -342,35 +375,49 @@ def _first_words(turns: list[Turn]) -> str | None:
 
 
 def _versioned(line: dict[str, Any], existing: Existing | None, counts: dict[str, int]) -> dict[str, Any]:
-    """The line as it goes to the record: as it is when the record has no line for its session, or
-    one whose text is the same (the record's dedupe then writes nothing); a correction `:v<n>` that
-    supersedes the latest version when the session's text changed. One batched lookup per version."""
+    line, how = versioned(line, existing)
+    if how == GROWN:
+        _count(counts, "grown")
+    return line
+
+
+NEW, GROWN, UNCHANGED = "new", "grown", "unchanged"  # what `versioned` found the record to hold
+
+
+def versioned(line: dict[str, Any], existing: Existing | None) -> tuple[dict[str, Any], str]:
+    """The line as it goes to the record, and what the record held for it: as it is when the record
+    has no line for its conversation (NEW, or when there is no `existing` to ask), or one whose text
+    is the same (UNCHANGED: the record's dedupe then writes nothing); a correction `:v<n>` that
+    supersedes the latest version when the text changed (GROWN). Keyed by the line's own source and
+    `raw_id`; one batched lookup per version."""
     if existing is None:
-        return line
+        return line, NEW
+    source = str(line["source"])
     raw_id = str(line["payload"]["raw_id"])
     latest: Mapping[str, Any] | None = None
     version = 1
     while True:
-        wanted = (NAME, raw_id if version == 1 else f"{raw_id}:v{version}")
+        wanted = (source, raw_id if version == 1 else f"{raw_id}:v{version}")
         found = existing([wanted]).get(wanted)
         if found is None:
             break
         latest, version = found, version + 1
     if latest is None:
-        return line
+        return line, NEW
     if (latest.get("payload") or {}).get("schema") == SEALED:
-        return line  # sealed and no identity here to open it: nothing to compare, nothing re-written
-    stored = (latest.get("payload") or {}).get("content")
-    if isinstance(stored, Mapping) and stored.get("sha256") == line["payload"]["content"]["sha256"]:
-        return line  # the same session: deduped by its raw_id
+        return line, UNCHANGED  # sealed and no identity here to open it: nothing to compare or re-write
+    content = (latest.get("payload") or {}).get("content")
+    if isinstance(content, Mapping) and content.get("sha256") == line["payload"]["content"]["sha256"]:
+        return line, UNCHANGED  # the same conversation: deduped by its raw_id
     payload = dict(line["payload"])
     payload["raw_id"] = f"{raw_id}:v{version}"
     payload["supersedes"] = str(latest["id"])
-    _count(counts, "grown")
-    return {**line, "payload": payload}
+    return {**line, "payload": payload}, GROWN
 
 
-def _stamp(value: object) -> str | None:
+def stamp(value: object) -> str | None:
+    """An instant as the record spells it, `YYYY-MM-DDTHH:MM:SSZ` in UTC; a time without an offset is
+    UTC. None when the value is not one."""
     if not isinstance(value, str) or not value.strip():
         return None
     try:
