@@ -98,8 +98,7 @@ nothing but files) for two signals: the picture's scene score of each frame, fro
 to 1 (another picture entirely), and the soundtrack's loudness in windows of a quarter of a second. A
 scene begins at:
 
-- **a cut**: a frame scoring 0.30 or more, unless it is half of a **flash** (two such cuts within half a
-  second with the sound unbroken: a camera's flash, a lamp, a door, and the picture came back);
+- **a cut**: a frame scoring 0.30 or more;
 - **a weak cut with a break in the soundtrack**: a frame scoring 0.10 or more when, within half a second
   of it, the loudness of the second after differs from the second before by 6 dB or more, or the sound
   falls silent (-55 dB or less). Two recordings in the same room look alike; their sound seldom does;
@@ -107,9 +106,13 @@ scene begins at:
   at its middle, whatever the picture does.
 
 A camera that pans, a child running past the lens, someone who stops talking: none of these is a
-boundary on its own. Boundaries closer than 3 seconds are one (the strongest kept), so a glitch of a
-few frames between two recordings is one boundary; none is kept within 3 seconds of the file's start or
-end; every scene is therefore 3 seconds or longer. The numbers are hypotheses, as `policy/stays.json`'s
+boundary on its own. Breaks within 3 seconds of the first of a run are one (the strongest kept), so a
+glitch of a few frames between two recordings is one boundary, and no run of weak breaks swallows a
+strong one beyond it; none is kept within 3 seconds of the file's start or end; every scene is therefore
+3 seconds or longer. The rules lean one way on purpose: a sudden change of light inside a recording (a
+camera's flash, a lamp) can split it in two, which costs one more draft to answer, while a missed join
+would mix two recordings in one proposal. A fade or a dissolve changes the picture too slowly to score a
+cut, and is found only when the soundtrack breaks with it. The numbers are hypotheses, as `policy/stays.json`'s
 are, and they are part of what a file is inferred under: other settings infer it again.
 
 Of each scene, `videos infer` hears the sound (the transcribe extra, through its own `hear`, the scene's
@@ -149,15 +152,18 @@ evidence does not:
   A sign that names nothing you have is said, and proposes nothing; two places with the same weight
   propose neither.
 - **a date** from the camcorder's burned-in stamp, to the precision it shows: a day, a month, a year;
-  a stamp whose day and month could be either way round (`07.08.94`) proposes the range between the two
-  readings, and stamps that disagree their range; a stamp that is no real date (`31.02.1994`, a clock
-  never set past today) dates nothing. Without a stamp, a year written in a frame or said aloud (`low`),
-  narrowed to spring, summer or autumn when the frames agree on the season (the north's seasons); a
-  season alone dates nothing.
+  a stamp whose day and month could be either way round (`07.08.94`) is one or the other and proposes
+  the span from one to the other, and stamps that disagree their range; a stamp that is no real date
+  (`31.02.1994`, a date after today) dates nothing; 1 January at midnight is a clock never set and dates
+  nothing, and 1 January without a time is proposed `low` and said so; the time in a stamp is never read
+  as a year. Without a stamp, a year written in a frame or said aloud (`low`), but never one a shop or a
+  banner has stood since ("SINCE 1952", "etablert 1965"), narrowed to spring, summer or autumn when the
+  frames agree on the season (the north's seasons); a season alone dates nothing.
 - **nothing to go on**: a scene with neither gets a draft that says so, and proposes nothing.
 
 Nothing opens a socket while it runs: no model is fetched (a model that is not here is one sentence
-naming `videos fetch --models`), the Hugging Face hub is told it is offline, and ffmpeg opens files only.
+naming `videos fetch --models`), the Hugging Face hub is told it is offline before any engine is even
+imported, and ffmpeg opens files only.
 The file is deleted from the cache once inferred, unless `--keep`; a run that stops keeps what it wrote
 and the next carries on. `--dry-run` says which cached files would be inferred and needs no engine.
 

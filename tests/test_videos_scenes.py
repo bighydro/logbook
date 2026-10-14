@@ -52,8 +52,6 @@ def test_cuts_with_a_soundtrack_break_split_and_a_pan_does_not() -> None:
         (40.0, 0.72),  # a hard cut: the next recording
         (90.0, 0.18),  # weak, but the sound jumps 10 dB with it: another recording in the same room
         (130.0, 0.41),  # a hard cut, the sound changing with it
-        (150.0, 0.95),  # a camera's flash: out ...
-        (150.1, 0.93),  # ... and back, the sound unbroken
     ]
     levels = _levels((0, 40, -30), (40, 90, -18), (90, 130, -28), (130, 170, -40))
     scenes = infer.find_scenes(170.0, cuts, levels)
@@ -284,3 +282,63 @@ def test_on_a_generated_tape_the_scenes_are_found_where_the_recordings_join(tmp_
     sound = tmp_path / "sound.wav"
     tool.audio(tape, 6.0, 12.0, sound)
     assert sound.read_bytes()[:4] == b"RIFF" and 180_000 < sound.stat().st_size < 200_000  # 6 s, 16 kHz
+
+
+# -- the independent check of scenes and dates ------------------------------------------------------
+
+
+def test_a_chain_of_weak_breaks_never_swallows_a_join() -> None:
+    cuts = [(100.0, 0.9), (120.0, 0.9)] + [(float(t), 0.15) for t in range(102, 120, 2)]
+    spans = [(0.0, 100.0, -30.0)] + [
+        (float(t), float(t + 2), -20.0 if (t // 2) % 2 == 0 else -30.0) for t in range(100, 120, 2)
+    ]
+    scenes = infer.find_scenes(160.0, cuts, _levels(*spans, (120.0, 160.0, -40.0)))
+    assert 100.0 in _edges(scenes) and 120.0 in _edges(scenes), _edges(scenes)
+
+
+def test_a_glitch_of_a_few_frames_between_two_recordings_in_the_same_room_is_one_boundary() -> None:
+    levels = _levels((0, 120, -30))
+    assert _edges(infer.find_scenes(120.0, [(60.0, 0.95)], levels)) == [60.0]
+    assert _edges(infer.find_scenes(120.0, [(60.0, 0.95), (60.08, 0.7), (60.12, 0.9)], levels)) == [60.0]
+
+
+@pytest.mark.parametrize("stamp", ["JUL 14 10:42", "14 JUL 10:42", "JUL 14 10.42", "AUTO 14 1994"])
+def test_a_stamp_with_a_time_and_no_year_dates_nothing_more_than_it_shows(stamp: str) -> None:
+    found = infer.stamp_when(stamp, TODAY)
+    assert found is None or found.precision == "year"  # AUTO is no month: at most the year it shows
+
+
+def test_a_day_and_a_year_with_a_comma_and_no_space_is_the_day() -> None:
+    assert infer.stamp_when("JUL 14,1994", TODAY) == When(date(1994, 7, 14), date(1994, 7, 14), "day")
+
+
+@pytest.mark.parametrize("stamp", ["JAN 1 2000 12:00 AM", "1.1.2000 0:00", "01/01/2000 00:00", "JAN 1 2000"])
+def test_a_camcorder_clock_never_set_is_not_a_sure_day(stamp: str) -> None:
+    found = infer.propose([infer.Frame(1.0, "A garden.", None, None, (), stamp, ())], [], [], [], TODAY)
+    assert found.confidence != "high"
+    if ":" in stamp:
+        assert found.when is None
+    else:
+        assert found.confidence == "low" and any("never set" in s.text for s in found.segments)
+
+
+def test_a_year_a_shop_has_stood_since_dates_no_scene() -> None:
+    frames = [infer.Frame(1.0, "A shop front.", None, None, ("SINCE 1952", "ETABLERT 1965"), None, ())]
+    assert infer.propose(frames, [], [], [], TODAY).when is None
+
+
+def test_frame_is_asked_to_open_nothing_but_files(tmp_path: Path) -> None:
+    asked: list[list[str]] = []
+
+    class Done:
+        returncode, stdout, stderr = 0, "", ""
+
+    def run(args: list[str], **_kw: object) -> Done:
+        asked.append(args)
+        (tmp_path / "f.jpg").write_bytes(b"\xff\xd8")
+        return Done()
+
+    media.Ffmpeg("ffmpeg", "ffprobe", run).frame(tmp_path / "a.mp4", 9.0, tmp_path / "f.jpg")
+    (args,) = asked
+    i = args.index("-protocol_whitelist")
+    assert args[i + 1] == "file,pipe" and i < args.index("-ss") < args.index("-i")

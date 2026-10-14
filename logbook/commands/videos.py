@@ -128,29 +128,30 @@ def _infer(a: argparse.Namespace) -> None:
         print("videos infer: --limit is a number of files, 1 or more", file=sys.stderr)
         sys.exit(2)
     lb = Logbook.find()
-    engines = None
-    if not a.dry_run and _anything_cached(lb):
+    with infer.offline():  # before an engine's module is imported: the hub reads the flag once, then
+        engines = None
+        if not a.dry_run and _anything_cached(lb):
+            try:
+                engines = infer.detect(a.speech_model, a.vision_model)
+            except infer.EngineMissing as e:
+                print(f"videos infer: {e}", file=sys.stderr)
+                sys.exit(2)
+        media, speech, vision = engines if engines is not None else (None, None, None)
         try:
-            engines = infer.detect(a.speech_model, a.vision_model)
-        except infer.EngineMissing as e:
+            report = infer.run(
+                lb,
+                media,
+                speech,
+                vision,
+                since=a.since,
+                limit=a.limit,
+                keep=a.keep,
+                dry_run=a.dry_run,
+                progress=lambda text: print(text, file=sys.stderr),
+            )
+        except (infer.ModelMissing, infer.EngineMissing) as e:
             print(f"videos infer: {e}", file=sys.stderr)
             sys.exit(2)
-    media, speech, vision = engines if engines is not None else (None, None, None)
-    try:
-        report = infer.run(
-            lb,
-            media,
-            speech,
-            vision,
-            since=a.since,
-            limit=a.limit,
-            keep=a.keep,
-            dry_run=a.dry_run,
-            progress=lambda text: print(text, file=sys.stderr),
-        )
-    except (infer.ModelMissing, infer.EngineMissing) as e:
-        print(f"videos infer: {e}", file=sys.stderr)
-        sys.exit(2)
     print(infer.summary(report))
 
 

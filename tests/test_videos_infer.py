@@ -620,3 +620,30 @@ def test_the_videos_transcript_is_no_call_for_the_synthesis(inferred: Any, lb: L
     bounds = day_start.of(lb.meta)
     found = synthesis.waiting(Logbook(lb.root).lines(), bounds.day_of, "2026-10-01", 3)
     assert found.total == 0
+
+
+def test_the_hub_is_told_it_is_offline_before_any_engine_module_is_imported(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
+) -> None:
+    """An engine's module reads the hub's offline flag once, when it is imported, which `detect`
+    does: the flag must be set before, and put back after."""
+    import os
+
+    from logbook.labs import describe
+
+    seen: dict[str, str | None] = {}
+    fake = FakeMedia({HOME_01: TAPE})
+
+    def mark(name: str, value: Any) -> Any:
+        seen[name] = os.environ.get("HF_HUB_OFFLINE")
+        return value
+
+    monkeypatch.setattr(media, "detect", lambda *a, **k: mark("media", fake))
+    monkeypatch.setattr(transcribe, "detect", lambda m: mark("speech", FakeSpeech()))
+    monkeypatch.setattr(describe, "detect", lambda m: mark("vision", FakeVision()))
+    before = os.environ.get("HF_HUB_OFFLINE")
+    _video(lb, HOME_01, "Home 01")
+    _cache(lb, HOME_01)
+    assert _run() == 0
+    assert seen == {"media": "1", "speech": "1", "vision": "1"}, seen
+    assert os.environ.get("HF_HUB_OFFLINE") == before

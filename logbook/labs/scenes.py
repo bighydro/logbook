@@ -16,9 +16,7 @@ found from two signals ffmpeg reads (`media`): the picture's scene score of each
 picture; 1, another picture entirely) and the soundtrack's level in dB over windows of `window_s`
 (0.25 s). With the thresholds of `Settings`, the defaults written here, a scene begins at:
 
-- **a cut**: a frame scoring `cut` (0.30) or more, unless it is half of a **flash** (two such cuts
-  within `flash_s`, 0.5 s, with the soundtrack unbroken around them: the picture went white or dark and
-  came back, a camera's flash, a lamp, a door);
+- **a cut**: a frame scoring `cut` (0.30) or more;
 - **a weak cut with a break in the soundtrack**: a frame scoring `soft_cut` (0.10) or more, when within
   `pair_s` (0.5 s) of it the soundtrack breaks: its mean level over the `side_s` (1 s) after differs
   from the second before by `jump_db` (6 dB) or more, or a window is silent (`quiet_db`, -55 dB or
@@ -27,9 +25,14 @@ picture; 1, another picture entirely) and the soundtrack's level in dB over wind
   recordings on a tape, at its middle, whatever the picture does.
 
 A camera that pans, a child that runs past the lens, someone who stops talking: none of them is a
-boundary on its own. Boundaries closer than `merge_s` (3 s) are one, the strongest kept, so a glitch of a
-few frames between two recordings is one boundary; and no boundary is kept within `merge_s` of the
-file's start or end. Every scene is therefore `merge_s` long or longer. These numbers are hypotheses,
+boundary on its own. Breaks within `merge_s` (3 s) of the first of a run are one, the strongest kept,
+so a glitch of a few frames between two recordings is one boundary, and no run of weak breaks can
+swallow a strong one beyond it; no boundary is kept within `merge_s` of the file's start or end. Every
+scene is therefore `merge_s` long or longer. The rules lean one way on purpose: a sudden change of
+light inside a recording (a camera's flash, a lamp switched on) can split it in two, which costs one
+more draft to answer, while a join they missed would mix two recordings' evidence in one proposal. A
+fade or a dissolve between two recordings changes the picture too slowly to score a cut and is found
+only when the soundtrack breaks with it. These numbers are hypotheses,
 as `policy/stays.json`'s are, and the key carries them: other settings infer the file again.
 
 **What is read of a scene.** Its sound, cut out at 16 kHz and heard by the transcribe extra through its
@@ -52,9 +55,12 @@ description (`low`). Its coordinates are the registry's, never the line's: a dra
 name, never a latitude. A sign that names nothing of the registries is said, and proposes nothing. Two
 places with the same weight propose neither. A date is proposed from the camera's date stamp, to the
 precision it shows (a day, a month, a year; a stamp whose day and month could be either way round is
-the range between the two readings), `high`, or `medium` when the stamps disagree (their range); else
-from a year written in a frame or said aloud (`low`), narrowed to a season when the frames agree on
-spring, summer or autumn; a season alone dates nothing. A scene with nothing to go on gets a draft that
+the span from one reading to the other), `high`, or `medium` when the stamps disagree (their range); a
+stamp of 1 January at midnight is a camera's clock never set and dates nothing, and 1 January without a
+time is `low` and said so; a stamp's time is never read as a year. Else from a year written in a frame
+or said aloud (`low`), but never one a shop or a banner has stood since ("SINCE 1952", "etablert
+1965"), narrowed to a season when the frames agree on spring, summer or autumn; a season alone dates
+nothing. A scene with nothing to go on gets a draft that
 says so and proposes nothing. Every sentence cites its evidence: the video line for what the frames
 show, the transcript line for what was said, and under `extra.segments` which frames and which time
 range.
@@ -68,6 +74,7 @@ it by its tier like any line."""
 
 from __future__ import annotations
 
+import bisect
 import calendar
 import hashlib
 import itertools
@@ -94,6 +101,7 @@ from ..core.store import Logbook, now_utc, retractions
 from . import describe, transcribe
 
 RULES = "video-rules/1"
+offline = transcribe.offline  # the hub told it is offline, around the engines' import and every read
 SOURCE = videos.DRAFT_SOURCE  # `model:video-rules/1`
 PROMPT_NAME = "video-frames/1"
 TRANSCRIPT_SOURCE = "video-transcription"  # heard here, as a memo is; no call: synthesis leaves it out
@@ -142,7 +150,6 @@ class Settings:
 
     cut: float = 0.30
     soft_cut: float = 0.10
-    flash_s: float = 0.5
     pair_s: float = 0.5
     side_s: float = 1.0
     jump_db: float = 6.0
@@ -195,17 +202,14 @@ def find_scenes(
     whole file, when nothing breaks it."""
     if duration <= 0:
         return []
-    levels = sorted(levels)
+    sound = _Sound(levels, settings)
     breaks: list[_Break] = []
-    hard = sorted((t, s) for t, s in cuts if s >= settings.cut)
-    flashes = _flashes(hard, levels, settings)
     for t, score in sorted(cuts):
         if score >= settings.cut:
-            if t not in flashes:
-                breaks.append(_Break(t, score + (0.5 if _sound_breaks(t, levels, settings) else 0.0), "cut"))
-        elif score >= settings.soft_cut and _sound_breaks(t, levels, settings):
+            breaks.append(_Break(t, score + (0.5 if sound.breaks(t) else 0.0), "cut"))
+        elif score >= settings.soft_cut and sound.breaks(t):
             breaks.append(_Break(t, score + 0.5, "cut and sound"))
-    breaks.extend(_gaps(levels, settings))
+    breaks.extend(sound.gaps())
     kept = _merge(sorted(breaks, key=lambda b: b.at), settings.merge_s)
     kept = [b for b in kept if settings.merge_s <= b.at <= duration - settings.merge_s]
     edges = [0.0, *(round(b.at, 2) for b in kept), round(duration, 2)]
@@ -217,65 +221,77 @@ def find_scenes(
     ]
 
 
-def _mean(levels: Sequence[tuple[float, float]], start: float, end: float) -> float | None:
-    found = [db for t, db in levels if start <= t < end]
-    return sum(found) / len(found) if found else None
+class _Sound:
+    """The soundtrack's windows, indexed: a mean over any stretch and the silent windows near a moment
+    in logarithmic time, so a three-hour DVD with thousands of weak cuts is read in seconds."""
 
+    def __init__(self, levels: Sequence[tuple[float, float]], settings: Settings) -> None:
+        found = sorted(levels)
+        self.settings = settings
+        self.times = [t for t, _db in found]
+        self.levels = [db for _t, db in found]
+        self.sums = [0.0, *itertools.accumulate(self.levels)]
+        self.quiet = [0, *itertools.accumulate(int(db <= settings.quiet_db) for db in self.levels)]
 
-def _sound_breaks(at: float, levels: Sequence[tuple[float, float]], settings: Settings) -> bool:
-    """Whether the soundtrack breaks near `at`: a silent window within `pair_s`, or its level over the
-    `side_s` after differing from the `side_s` before by `jump_db` or more (each window wholly on its
-    side of the moment)."""
-    if not levels:
-        return False
-    w = settings.window_s
-    if any(db <= settings.quiet_db for t, db in levels if abs(t + w / 2 - at) <= settings.pair_s + w / 2):
-        return True
-    for shift in (-settings.pair_s, 0.0, settings.pair_s):
-        moment = at + shift
-        before = _mean(levels, moment - settings.side_s, moment - w + 1e-9)
-        after = _mean(levels, moment, moment + settings.side_s)
-        if before is not None and after is not None and abs(after - before) >= settings.jump_db:
+    def _span(self, start: float, end: float) -> tuple[int, int]:
+        return bisect.bisect_left(self.times, start), bisect.bisect_left(self.times, end)
+
+    def mean(self, start: float, end: float) -> float | None:
+        """The mean level of the windows that begin in [start, end)."""
+        a, b = self._span(start, end)
+        return (self.sums[b] - self.sums[a]) / (b - a) if b > a else None
+
+    def breaks(self, at: float) -> bool:
+        """Whether the soundtrack breaks near `at`: a silent window within `pair_s`, or its level over
+        the `side_s` after differing from the `side_s` before by `jump_db` or more (each window wholly
+        on its side of the moment)."""
+        if not self.times:
+            return False
+        s, w = self.settings, self.settings.window_s
+        a, b = self._span(at - s.pair_s - w, at + s.pair_s + 1e-9)
+        if self.quiet[b] - self.quiet[a] > 0:
             return True
-    return False
+        for shift in (-s.pair_s, 0.0, s.pair_s):
+            moment = at + shift
+            before = self.mean(moment - s.side_s, moment - w + 1e-9)
+            after = self.mean(moment, moment + s.side_s)
+            if before is not None and after is not None and abs(after - before) >= s.jump_db:
+                return True
+        return False
 
-
-def _flashes(
-    hard: Sequence[tuple[float, float]], levels: Sequence[tuple[float, float]], settings: Settings
-) -> set[float]:
-    """The cuts that are half of a flash: two within `flash_s` of each other, the soundtrack unbroken."""
-    found: set[float] = set()
-    for (t1, _), (t2, _) in itertools.pairwise(hard):
-        if t2 - t1 <= settings.flash_s and not (
-            _sound_breaks(t1, levels, settings) or _sound_breaks(t2, levels, settings)
-        ):
-            found.update((t1, t2))
-    return found
-
-
-def _gaps(levels: Sequence[tuple[float, float]], settings: Settings) -> list[_Break]:
-    """A break at the middle of every silence of `gap_s` or more."""
-    found: list[_Break] = []
-    run: list[float] = []
-    for t, db in [*levels, (float("inf"), 0.0)]:
-        if db <= settings.quiet_db and (not run or t - run[-1] <= settings.window_s * 1.5):
-            run.append(t)
-            continue
-        if run and run[-1] + settings.window_s - run[0] >= settings.gap_s:
-            found.append(_Break((run[0] + run[-1] + settings.window_s) / 2, 0.9, "silence"))
-        run = [t] if db <= settings.quiet_db else []
-    return found
+    def gaps(self) -> list[_Break]:
+        """A break at the middle of every silence of `gap_s` or more."""
+        s = self.settings
+        found: list[_Break] = []
+        run: list[float] = []
+        for t, db in [*zip(self.times, self.levels, strict=True), (float("inf"), 0.0)]:
+            if db <= s.quiet_db and (not run or t - run[-1] <= s.window_s * 1.5):
+                run.append(t)
+                continue
+            if run and run[-1] + s.window_s - run[0] >= s.gap_s:
+                found.append(_Break((run[0] + run[-1] + s.window_s) / 2, 0.9, "silence"))
+            run = [t] if db <= s.quiet_db else []
+        return found
 
 
 def _merge(breaks: Sequence[_Break], merge_s: float) -> list[_Break]:
-    """Breaks closer than `merge_s` to the one before are one group; the strongest of each is kept."""
+    """Breaks within `merge_s` of the first of a group are one, the strongest kept; then, of two kept
+    breaks closer than `merge_s`, the stronger. Anchored to the first, a long run of weak breaks can
+    never swallow a strong one beyond it."""
     groups: list[list[_Break]] = []
     for b in breaks:
-        if groups and b.at - groups[-1][-1].at < merge_s:
+        if groups and b.at - groups[-1][0].at < merge_s:
             groups[-1].append(b)
         else:
             groups.append([b])
-    return [max(group, key=lambda b: (b.strength, -b.at)) for group in groups]
+    kept: list[_Break] = []
+    for b in (max(group, key=lambda b: (b.strength, -b.at)) for group in groups):
+        if kept and b.at - kept[-1].at < merge_s:
+            if b.strength > kept[-1].strength:
+                kept[-1] = b
+            continue
+        kept.append(b)
+    return kept
 
 
 def frame_times(scene: Scene, settings: Settings = SETTINGS) -> list[float]:
@@ -390,15 +406,25 @@ MONTHS = {
     "dec": 12,
     "des": 12,
 }
-_MONTH = r"(?P<mon>[A-Za-zÆØÅæøå]{3,9})\.?"
-_YEAR = r"(?P<y>\d{4}|'?\d{2})"
-STAMPS = (  # tried in this order; the first that reads as a real date wins
+# a month's name in English or Norwegian, abbreviated or whole: never any other word ("AUTO", "MODE")
+_MONTH = rf"(?P<mon>(?:{'|'.join(MONTHS)})[a-zæøå]{{0,6}})\.?"
+# a year: four digits, or two after an apostrophe or alone, never the hours of a time (`10:42`, `10.42`)
+_YEAR = r"(?P<y>\d{4}|'?\d{2})(?![\d:]|\.\d)"
+STAMPS = (  # tried in this order; the first the text holds decides
     ("ymd", re.compile(r"(?<!\d)(?P<y>\d{4})[./-](?P<a>\d{1,2})[./-](?P<b>\d{1,2})(?!\d)")),
-    ("mdy", re.compile(rf"(?<![A-Za-z]){_MONTH}\s*(?P<d>\d{{1,2}})(?:st|nd|rd|th)?,?\s+{_YEAR}(?!\d)")),
-    ("dmy", re.compile(rf"(?<!\d)(?P<d>\d{{1,2}})\.?\s*{_MONTH}\s*,?\s*{_YEAR}(?!\d)")),
-    ("abY", re.compile(r"(?<!\d)(?P<a>\d{1,2})[./-](?P<b>\d{1,2})[./-](?P<y>\d{4}|\d{2})(?!\d)")),
-    ("mY", re.compile(rf"(?<![A-Za-z]){_MONTH}\s*,?\s*(?P<y>\d{{4}})(?!\d)")),
+    ("mdy", re.compile(rf"(?<![a-z]){_MONTH}\s*(?P<d>\d{{1,2}})(?:st|nd|rd|th)?(?:,\s*|\s+){_YEAR}", re.I)),
+    ("dmy", re.compile(rf"(?<!\d)(?P<d>\d{{1,2}})\.?\s*{_MONTH}\s*,?\s*{_YEAR}", re.I)),
+    ("abY", re.compile(r"(?<!\d)(?P<a>\d{1,2})[./-](?P<b>\d{1,2})[./-](?P<y>\d{4}|\d{2})(?![\d:]|\.\d)")),
+    ("mY", re.compile(rf"(?<![a-z]){_MONTH}\s*,?\s*(?P<y>\d{{4}})(?!\d)", re.I)),
     ("Y", re.compile(r"(?<!\d)(?P<y>19\d\d|20\d\d)(?!\d)")),
+)
+# the time a camera's clock shows when it was never set, beside 1 January: midnight
+MIDNIGHT = re.compile(r"(?<![\d:])(?:0?0[:.]00(?::00)?|12:00(?::00)?\s*AM)(?!\d)", re.I)
+NEVER_SET = "1 January is also what a camera's clock shows when it was never set."
+# a year that says how long something has stood, not when the picture was taken: a shop's sign, a banner
+SINCE_YEAR = re.compile(
+    r"(?i)(?:\bsince|\best\.?|\bestablished|\betablert|\bsiden|\bgrunnlagt|\banno|\u00a9)\s*(?:in\s+)?"
+    r"(19\d\d|20\d\d)(?!\d)"
 )
 YEAR_WORD = re.compile(r"(?<!\d)(19[5-9]\d|20[0-9]\d)(?!\d)")
 SEASON_WORDS = {
@@ -421,8 +447,15 @@ def stamp_when(text: str, today: date) -> When | None:
     for form, pattern in STAMPS:
         found = pattern.search(text)
         if found is not None:
-            return _stamp(form, found, today)
+            when = _stamp(form, found, today)
+            if when is not None and _new_year(when) and MIDNIGHT.search(text):
+                return None  # 1 January at midnight: the clock was never set
+            return when
     return None
+
+
+def _new_year(when: When) -> bool:
+    return when.precision == "day" and (when.first.month, when.first.day) == (1, 1)
 
 
 def _year(text: str, today: date) -> int | None:
@@ -737,7 +770,8 @@ def _when(
     if stamped:
         for frame, found in stamped:
             either = (
-                f", which reads as {found.first.isoformat()} or {found.last.isoformat()}: between the two"
+                f", which reads as {found.first.isoformat()} or {found.last.isoformat()}, one or the other:"
+                " proposed as the span from one to the other"
                 if found.precision == "range"
                 else f": {found.text()}"
             )
@@ -757,6 +791,9 @@ def _when(
         else:
             when = When(min(w.first for w in whens), max(w.last for w in whens), "range")
             confidence = "medium"
+        if _new_year(when):  # a stamp at midnight was refused already; one without a time is doubtful
+            confidence = "low"
+            segments.append(Segment(NEVER_SET, "when", ("video",), tuple(f.offset_s for f, _w in stamped)))
         if seasons and len(seasons) == 1 and when.precision in ("day", "month"):
             season = next(iter(seasons))
             if season != _season_of(when.first.month):
@@ -773,8 +810,9 @@ def _when(
     years: dict[int, list[Segment]] = {}
     for frame in frames:
         for sign in frame.signs:
+            since = set(SINCE_YEAR.findall(sign))  # how long a shop has stood: no date of the picture
             for y in YEAR_WORD.findall(sign):
-                if int(y) <= today.year:
+                if int(y) <= today.year and y not in since:
                     years.setdefault(int(y), []).append(
                         Segment(
                             f'"{y}" is written in the frame at {videos.clock(frame.offset_s)}.',
@@ -784,8 +822,9 @@ def _when(
                         )
                     )
     for said in speech:
+        since = set(SINCE_YEAR.findall(said.text))
         for y in YEAR_WORD.findall(said.text):
-            if int(y) <= today.year:
+            if int(y) <= today.year and y not in since:
                 years.setdefault(int(y), []).append(
                     Segment(
                         f'At {videos.span(said.start, said.end)} someone says "{_quote(said.text)}".',
@@ -1086,7 +1125,11 @@ def _speech(
     finally:
         sound.unlink(missing_ok=True)
     said = [
-        Speech(round(scene.start + s.start, 2), round(min(scene.end, scene.start + s.end), 2), s.text)
+        Speech(
+            round(min(scene.end, scene.start + max(0.0, s.start)), 2),
+            round(min(scene.end, scene.start + s.end), 2),
+            s.text,
+        )
         for s in result.segments
         if s.text.strip()
     ]
