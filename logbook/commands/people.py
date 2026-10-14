@@ -7,12 +7,14 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..core import people, policy, reading, stays
 from ..core.store import Logbook
 from .common import Subparsers, _plural
+from .review import Queue
 
 if TYPE_CHECKING:
     from ..contrib import google_contacts, people_merge
@@ -284,11 +286,14 @@ def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
     """`people review [--from-google] [--accept N[,N]] [--reject N[,N]] [--all-above SCORE] [--json]`:
     the observed people the record has not placed, proposed against the canonical ones, ranked by the
     evidence and numbered (`logbook.contrib.people_review`); nothing is written unless told. `--accept`
-    and `--all-above` append the alias lines `people merge` writes, `--reject` one `people-review/v1`
-    line per pair, all through `Logbook.append`; every number is checked before the first line. With
-    `--from-google` the owner's Google contacts are a name source too (`logbook.contrib.google_contacts`):
-    read on the one Google key, or from the cache in state/ within its TTL, never a line of them."""
+    and `--all-above` append the alias lines `people merge` writes, `--reject` one `entity-review/v1`
+    line of type person per pair, all through `Logbook.append`; every number is checked before the
+    first line. With `--from-google` the owner's Google contacts are a name source too
+    (`logbook.contrib.google_contacts`): read on the one Google key, or from the cache in state/ within
+    its TTL, never a line of them. The sitting is `review person`'s (`logbook.commands.review.sitting`),
+    the book handed to `PersonQueue`."""
     from ..contrib import people_review
+    from .review import sitting
 
     if any(getattr(a, flag) for flag in MERGE_FLAGS):
         print(
@@ -298,45 +303,61 @@ def _people_review(lb: Logbook, a: argparse.Namespace) -> None:
         sys.exit(2)
     book = _google_contacts(lb) if a.from_google else None
     try:
-        report = people_review.read(lb, book)
-        accepted = people_review.numbers(a.accept)
-        rejected = people_review.numbers(a.reject)
-        both = sorted(set(accepted) & set(rejected))
-        if both:
-            raise people_review.ReviewError(
-                f"proposal {', '.join(map(str, both))} is both accepted and rejected; say one"
-            )
-        if a.all_above is not None:
-            accepted = [
-                *accepted,
-                *(p.number for p in people_review.above(report, a.all_above) if p.number not in accepted),
-            ]
-        if accepted or rejected:
-            to_accept = people_review.pick(report, accepted)
-            to_reject = people_review.pick(report, rejected)
-            written = [
-                *people_review.accept(lb, report, to_accept),
-                *people_review.reject(lb, report, to_reject),
-            ]
-            if a.json:
-                print(json.dumps({"written": [w.to_json() for w in written]}, indent=2, ensure_ascii=False))
-                return
-            if not written:
-                print("nothing to write: no proposal at or above that score")
-            for text in people_review.written_rows(written):
-                print(text)
-            return
-        if a.all_above is not None:
-            print("nothing to write: no proposal at or above that score")
-            return
+        sitting(PersonQueue(book), lb, a)
     except (people_review.ReviewError, ValueError, stays.SettingsError, policy.PolicyError) as e:
         print(f"people review: {e}", file=sys.stderr)
         sys.exit(2)
-    if a.json:
-        print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
-        return
-    for text in people_review.rows(report):
-        print(text)
+
+
+class PersonQueue(Queue):
+    """The person's queue as `review` drives it (`logbook.commands.review.sitting`): people review's
+    reading and writing (`logbook.contrib.people_review`), its numbers and its rows. `book` is the
+    owner's Google contacts (`people review --from-google`), a name source the reading weighs; None
+    without the flag, and always from `review person`."""
+
+    kind = "person"
+
+    def __init__(self, book: google_contacts.Book | None = None) -> None:
+        from ..contrib import people_review
+
+        self.module = people_review
+        self.error = people_review.ReviewError
+        self.book = book
+
+    def named(self, a: argparse.Namespace) -> list[tuple[str, str]]:
+        found = super().named(a)
+        if found:
+            raise self.error(
+                "--name goes with a new org, idea, asset or place;"
+                " a person's name is their resolution's label"
+            )
+        return found
+
+    def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
+        return self.module.read(lb, self.book)
+
+    def numbers(self, text: Sequence[str] | None) -> list[int]:
+        return self.module.numbers(text)
+
+    def pick(self, report: Any, wanted: Sequence[int]) -> list[Any]:
+        return self.module.pick(report, wanted)
+
+    def above(self, report: Any, score: str) -> list[Any]:
+        return self.module.above(report, score)
+
+    def write(
+        self, lb: Logbook, report: Any, chosen: Sequence[tuple[Any, str | None]], rejected: Sequence[Any]
+    ) -> list[Any]:
+        return [
+            *self.module.accept(lb, report, [p for p, _name in chosen]),
+            *self.module.reject(lb, report, rejected),
+        ]
+
+    def rows(self, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> Iterable[str]:
+        return self.module.rows(report)
+
+    def written_rows(self, written: Sequence[Any]) -> Iterable[str]:
+        return self.module.written_rows(written)
 
 
 def _google_contacts(lb: Logbook) -> google_contacts.Book:

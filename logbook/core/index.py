@@ -100,9 +100,10 @@ SCHEMA = (
 # reads it (`logbook.contrib.people_review`, `places_review`, `entity_review`) and stamped per kind in
 # `observed_entities_meta`, never a line. `ord` is the row's place in its kind's queue order; `hint`
 # an org's guess at what it is (company, brand, community, personal), for ranking only; `labels`,
-# `refs`, `sources`, `kinds`, `days` and `samples` JSON, their shape the kind's; `lat` to `aboard` a
-# place's own. `observed_people` and `observed_places` are the person and place rows under the
-# columns those tables had until 0.7 (one release), so a reader of the old tables reads on unchanged.
+# `refs`, `sources`, `kinds`, `days`, `samples` and `people` (the canonical people seen on its lines)
+# JSON, their shape the kind's; `lat` to `aboard` a place's own. `observed_people` and
+# `observed_places` are the person and place rows under the columns those tables had until 0.7 (one
+# release), so a reader of the old tables reads on unchanged.
 OBSERVED = "observed_entities"
 OBSERVED_META = "observed_entities_meta"
 OBSERVED_VIEWS = ("observed_people", "observed_places")
@@ -125,6 +126,7 @@ OBSERVED_COLUMNS = (
     "count",
     "tier",
     "samples",
+    "people",
     "lat",
     "lon",
     "nights",
@@ -138,8 +140,9 @@ OBSERVED_SCHEMA = (
     " key_value TEXT NOT NULL, name TEXT, entity TEXT, hint TEXT, labels TEXT NOT NULL DEFAULT '{}',"
     " refs TEXT NOT NULL DEFAULT '[]', sources TEXT NOT NULL DEFAULT '{}', kinds TEXT NOT NULL DEFAULT '{}',"
     " days TEXT NOT NULL DEFAULT '[]', first TEXT, last TEXT, count INTEGER NOT NULL DEFAULT 0,"
-    " tier INTEGER NOT NULL DEFAULT 0, samples TEXT NOT NULL DEFAULT '[]', lat REAL, lon REAL,"
-    " nights INTEGER, hours REAL, spread_m REAL, aboard TEXT)",
+    " tier INTEGER NOT NULL DEFAULT 0, samples TEXT NOT NULL DEFAULT '[]',"
+    " people TEXT NOT NULL DEFAULT '[]', lat REAL, lon REAL, nights INTEGER, hours REAL, spread_m REAL,"
+    " aboard TEXT)",
     f"CREATE INDEX {OBSERVED}_key ON {OBSERVED} (kind, key_kind, key_value)",
     f"CREATE TABLE {OBSERVED_META} (kind TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,"
     " PRIMARY KEY (kind, key))",
@@ -526,7 +529,7 @@ class Index:
             self.db.execute(f"DELETE FROM {OBSERVED} WHERE kind = ?", (kind,))
             self.db.execute(f"DELETE FROM {OBSERVED_META} WHERE kind = ?", (kind,))
             defaults = {"labels": "{}", "refs": "[]", "sources": "{}", "kinds": "{}", "days": "[]",
-                        "count": 0, "tier": 0, "samples": "[]"}  # fmt: skip
+                        "count": 0, "tier": 0, "samples": "[]", "people": "[]"}  # fmt: skip
             self.db.executemany(
                 INSERT_OBSERVED,
                 [
