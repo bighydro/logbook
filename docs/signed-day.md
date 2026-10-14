@@ -113,6 +113,19 @@ offset or `Z` (the message shows the shape); a moment more than five minutes ahe
 machine's clock (a phone runs a few minutes fast, never hours); and a moment before the day you
 are signing starts, in the record's zone. Without `--at`, the signature is at now, as before.
 
+**When the day begins at `day_start`.** The day starts where the record says it does
+([settings](settings.md#where-your-day-begins-day_start)), and `--at` is checked by the same rule
+the index puts every line on its day by, so the moment you sign and the page you sign agree. With
+`"day_start": "06:00"`, 01:30 on the 10th is still the 9th: `day sign 2026-06-09 --at
+2026-06-10T01:30:00+02:00` signs the 9th, whose page is its lines up to 06:00 on the 10th, the
+lines `day 2026-06-09` shows, and the same moment for the 10th is refused, since the 10th has not
+begun (`--at … is before 2026-06-10 starts at 06:00 in Europe/Oslo`). The check is made when a
+signature is written and never again: a signature already in the record stands as it was written,
+even one whose moment would be too early under a boundary set later. No signature records the
+boundary it was signed under; one written before `day_start` was set was signed under midnight.
+Its page is read under the boundary the record has now, so a page the move changed reads `the
+page has changed since` until you sign it again (RFC 0036).
+
 ## Closing the day by voice
 
 At the end of the day you say a few sentences about it: what went out, what did not, what you will do
