@@ -74,10 +74,13 @@ DESCRIBE_DEFAULT_MODEL = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
 
 
 def cmd_transcribe(a: argparse.Namespace) -> None:
-    """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]`: a
-    transcript/v1 line per standing voice memo whose audio is in the store, heard by a local engine
-    (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is needed for a dry run."""
-    from ..labs import transcribe
+    """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]
+    [--no-speakers]`: a transcript/v1 line per standing voice memo whose audio is in the store,
+    heard by a local engine (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is
+    needed for a dry run. When the diarizer and its models are on this machine the same run
+    separates the voices (RFC 0038 §2); `--fetch-model` fetches the Whisper model only, never a
+    speaker model (`setup speakers --fetch-model` does that)."""
+    from ..labs import diarize, transcribe
 
     if a.source != "voice-memos":
         print(f"transcribe: voice-memos can be transcribed, not {a.source!r}", file=sys.stderr)
@@ -90,15 +93,25 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
             sys.exit(2)
     lb = Logbook.find()
     engine: transcribe.Engine | None = None
+    diarizer: diarize.Diarizer | None = None
     if not a.dry_run:
+        if not a.no_speakers:
+            diarizer = diarize.detect()
         try:
-            engine = transcribe.detect(a.model)
+            engine = transcribe.detect(a.model, words=diarizer is not None)
         except transcribe.EngineMissing as e:
             print(f"transcribe: {e}", file=sys.stderr)
             sys.exit(2)
     try:
         report = transcribe.run(
-            lb, engine, since=a.since, dry_run=a.dry_run, fetch_model=a.fetch_model, progress=print
+            lb,
+            engine,
+            since=a.since,
+            dry_run=a.dry_run,
+            fetch_model=a.fetch_model,
+            progress=print,
+            diarizer=diarizer,
+            separate=not a.no_speakers,
         )
     except transcribe.ModelMissing as e:
         print(f"transcribe: {e}", file=sys.stderr)
@@ -248,7 +261,13 @@ def derive_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--fetch-model",
         action="store_true",
-        help="download the model first when it is not on this machine (the only network use, ever)",
+        help="download the Whisper model first when it is not on this machine (the only network use;"
+        " the speaker models come from `setup speakers --fetch-model`)",
+    )
+    v.add_argument(
+        "--no-speakers",
+        action="store_true",
+        help="do not separate the voices, even when the diarizer is on this machine (RFC 0038)",
     )
     v.set_defaults(fn=cmd_transcribe)
 

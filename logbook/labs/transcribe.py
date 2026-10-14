@@ -24,6 +24,16 @@ fetches it, `--fetch-model`, which downloads the model before the first chunk an
 Long recordings are read in fixed windows of `CHUNK_S` seconds, so a two-hour memo never sits in an
 engine's context at once; segment times are offset by the window's start. A memo whose audio holds
 no words is skipped and counted.
+
+**Voices** (RFC 0038 §2). When the diarizer and its models are on this machine (`diarize.detect`),
+the same run, on the samples the engine decoded, separates the voices and the line gains `speakers`
+and `diarization`: each line of the text is given the voice that speaks most of it (of its words,
+when the engine was asked for word times), the spans file goes into the attachment store beside the
+text (`logbook.core.speakers`). A memo whose source keeps a call's sides apart says so on its line,
+`extra.channels` naming the file's channels in order (`["mic", "system"]`); such a file is diarized a
+channel at a time, and the microphone's voice is `from_me` when it is alone in its channel. Any other
+recording, a stereo memo included, is one room. Without the diarizer the line is today's, and the run
+says once, at the end, `speakers: not separated (logbook setup speakers --fetch-model)`.
 """
 
 from __future__ import annotations
@@ -41,9 +51,10 @@ from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from ..contrib.adapters import transcript
-from ..core import attachments
+from ..core import attachments, speakers
 from ..core.chain import Line
 from ..core.store import Logbook
+from . import diarize
 
 SOURCE = "transcription"  # the `source` of every transcript this command writes, whatever the engine
 MEMO_KIND = "voice-memo"
@@ -54,6 +65,8 @@ CHUNK_S = 600.0  # ten minutes of audio per engine call
 SAMPLE_RATE = 16_000  # what both engines decode to
 EXTRA = "openlogbook[transcribe]"
 OFFLINE = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+CHANNELS_KEY = "channels"  # `extra.channels` of a memo whose source keeps a call's sides apart
 
 NO_AUDIO = "skipped_no_audio"
 RETRACTED = "skipped_retracted"
@@ -80,6 +93,7 @@ class Segment:
     start: float  # seconds from the start of the recording
     end: float
     text: str
+    words: tuple[tuple[float, float], ...] = ()  # each word's start and end, when the engine gave them
 
 
 @dataclass(frozen=True)
@@ -144,6 +158,34 @@ class Report:
     dry_run: bool
     written: int = 0
     done: list[Done] = field(default_factory=list)
+    separate: bool = True  # whether the run was to separate voices (`--no-speakers` says not)
+    diarizer: str | None = None  # the diarizer that ran, None when none was on this machine
+    separated: int = 0  # memos whose voices were separated
+    voiceless: int = 0  # memos heard in which the diarizer found no voice
+
+
+@dataclass(frozen=True)
+class Hearing:
+    """One recording heard: its text, one segment a line, the language, the windows, the segments,
+    and the samples the engine decoded, for the diarizer to hear the same audio."""
+
+    text: str
+    language: str
+    windows: list[tuple[int, int]]
+    segments: list[Segment]
+    samples: Sequence[float]
+    rate: int
+
+
+@dataclass(frozen=True)
+class Voices:
+    """The voices of one recording: the turns, labelled; for a recording whose sides were kept
+    apart, the channel of each voice and the one that is `from_me`; how many channels it has."""
+
+    turns: list[speakers.VoiceTurn]
+    channels: int = 1
+    channel_of: dict[str, str] | None = None
+    from_me: str | None = None
 
 
 def run(
@@ -154,22 +196,28 @@ def run(
     fetch_model: bool = False,
     chunk_s: float = CHUNK_S,
     progress: Callable[[str], None] | None = None,
+    diarizer: diarize.Diarizer | None = None,
+    separate: bool = True,
 ) -> Report:
     """Transcribe every standing voice memo from local day `since` on whose audio is in the store
     and that has no transcript yet; a line is appended per memo as soon as it is heard, so an
     interrupted run keeps what it did and the next run carries on. `dry_run` lists and writes
-    nothing (no engine needed). `progress` gets one line per memo."""
+    nothing (no engine needed). `progress` gets one line per memo. With `diarizer` (and `separate`,
+    the default) each memo's voices are separated in the same run; `separate` False is
+    `--no-speakers`: no diarizer is used and nothing is said of voices."""
     counts: dict[str, int] = {}
     memos, already = _standing(lb, since, counts)
-    report = Report(len(memos), already, counts, memos, dry_run)
+    diarizer = diarizer if separate else None
+    report = Report(len(memos), already, counts, memos, dry_run, separate=separate)
+    report.diarizer = diarizer.name if diarizer is not None else None
     if dry_run or not memos:
         return report
     if engine is None:
         raise EngineMissing(f"no transcription engine; install {EXTRA}")
     _ready(engine, fetch_model)
     zone = ZoneInfo(str(lb.meta["timezone"]))
-    with offline():
-        report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress))
+    with diarize.quiet():  # the hub offline, and pyannote's usage reporting off, for the whole run
+        report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress, diarizer))
     return report
 
 
@@ -179,8 +227,8 @@ def hear(engine: Engine, audio: Path, fetch_model: bool = False, chunk_s: float 
     (`logbook day reflect`). The model must be on this machine unless `fetch_model` (ModelMissing)."""
     _ready(engine, fetch_model)
     with offline():
-        _text, language, _windows, segments = _hear(engine, audio, chunk_s)
-    return Result(segments, language)
+        heard = _hear(engine, audio, chunk_s)
+    return Result(heard.segments, heard.language)
 
 
 def _ready(engine: Engine, fetch_model: bool) -> None:
@@ -203,7 +251,9 @@ def chunks(samples: int, rate: int, chunk_s: float) -> list[tuple[int, int]]:
 
 
 def describe(report: Report) -> str:
-    """The closing lines of the command: what was done, what already was, what was skipped."""
+    """The closing lines of the command: what was done, what already was, what was skipped; then,
+    for a run that heard a memo and was to separate voices, how many it separated, or, with no
+    diarizer on this machine, the one sentence that says so and names the command that fetches it."""
     memos = _plural(report.found if report.dry_run else report.written, "voice memo")
     already = f" ({report.already} already transcribed)" if report.already else ""
     if report.dry_run:
@@ -211,7 +261,15 @@ def describe(report: Report) -> str:
     else:
         head = f"transcribed {memos}{already}"
     skipped = [f"{n:,} {PHRASES.get(key, key)}" for key, n in report.counts.items() if n]
-    return head + (f"\n  skipped {', '.join(skipped)}" if skipped else "")
+    text = head + (f"\n  skipped {', '.join(skipped)}" if skipped else "")
+    if report.dry_run or not report.done or not report.separate:
+        return text
+    if report.diarizer is None:
+        return f"{text}\n{diarize.NOT_SEPARATED}"
+    said = f"  voices separated in {_plural(report.separated, 'voice memo')}"
+    if report.voiceless:
+        said += f"; no voice found in {report.voiceless:,}"
+    return f"{text}\n{said}"
 
 
 # -- the memos -------------------------------------------------------------------------------------
@@ -271,30 +329,42 @@ def _drafts(
     report: Report,
     zone: ZoneInfo,
     progress: Callable[[str], None] | None,
+    diarizer: diarize.Diarizer | None = None,
 ) -> Iterator[dict[str, Any]]:
     for memo in memos:
         started = time.monotonic()
+        voices: Voices | None = None
         with lb.attachment(memo.audio.name) as audio:  # the plaintext, when the store holds it sealed
-            text, language, windows, segments = _hear(engine, audio, chunk_s)
+            heard = _hear(engine, audio, chunk_s)
+            if diarizer is not None and heard.segments:
+                voices = separate_voices(diarizer, heard, audio, channels_of(memo.line))
         seconds = time.monotonic() - started
-        if not segments:
+        if not heard.segments:
             _count(report.counts, NO_SPEECH)
             if progress is not None:
                 progress(f"  {_clock(memo.at, zone)}  {memo.title}: no words heard ({seconds:.1f}s)")
             continue
-        data = text.encode("utf-8")
+        data = heard.text.encode("utf-8")
         lb.attach(data)  # a transcript is tier 2 or higher: sealed when the record names recipients
-        words = len(text.split())
-        report.done.append(Done(memo, language, words, seconds))
+        words = len(heard.text.split())
+        report.done.append(Done(memo, heard.language, words, seconds))
+        draft = _draft(memo, engine, data, heard.language, len(heard.windows), len(heard.segments))
+        said = ""
+        if voices is not None and voices.turns and diarizer is not None:
+            labelled = label(draft, voices, heard.segments, data, diarizer, memo)
+            lb.attach(labelled)  # the spans file, sealed as the text is
+            report.separated += 1
+            said = f", {_plural(len(draft['payload']['speakers']), 'voice')}"
+        elif voices is not None:
+            report.voiceless += 1
+            said = ", no voice found"
         if progress is not None:
-            heard = f"{_plural(words, 'word')}, {language}, {seconds:.1f}s"
-            progress(f"  {_clock(memo.at, zone)}  {memo.title}: {heard}")
-        yield _draft(memo, engine, data, language, len(windows), len(segments))
+            text = f"{_plural(words, 'word')}, {heard.language}{said}, {seconds:.1f}s"
+            progress(f"  {_clock(memo.at, zone)}  {memo.title}: {text}")
+        yield draft
 
 
-def _hear(
-    engine: Engine, audio: Path, chunk_s: float
-) -> tuple[str, str, list[tuple[int, int]], list[Segment]]:
+def _hear(engine: Engine, audio: Path, chunk_s: float) -> Hearing:
     """The text of one recording, window by window; the language detected on the first window is
     asked of every later one, so a recording is heard in one language."""
     samples, rate = engine.load(audio)
@@ -306,12 +376,93 @@ def _hear(
         language = language or (result.language or None)
         offset = start / rate
         segments += [
-            Segment(s.start + offset, s.end + offset, s.text.strip())
+            Segment(
+                s.start + offset,
+                s.end + offset,
+                s.text.strip(),
+                tuple((a + offset, b + offset) for a, b in s.words),
+            )
             for s in result.segments
             if s.text.strip()
         ]
     text = "".join(f"{s.text}\n" for s in segments)
-    return text, language or "", windows, segments
+    return Hearing(text, language or "", windows, segments, samples, rate)
+
+
+# -- the voices ------------------------------------------------------------------------------------
+
+
+def channels_of(line: Line) -> list[str] | None:
+    """The channels a memo's source names, in the file's order, when it keeps a call's sides apart:
+    `extra.channels`, `mic` and `system` each once. None for anything else: one room."""
+    extra = (line.get("payload") or {}).get("extra")
+    said = extra.get(CHANNELS_KEY) if isinstance(extra, dict) else None
+    if isinstance(said, list) and sorted(map(str, said)) == sorted(speakers.CHANNELS) and len(said) == 2:
+        return [str(name) for name in said]
+    return None
+
+
+def separate_voices(
+    diarizer: diarize.Diarizer,
+    heard: Hearing,
+    audio: Path,
+    channels: list[str] | None,
+    hint: int | None = None,
+) -> Voices:
+    """The voices of a recording. A room: the samples the engine decoded, heard once, `hint` the
+    number of voices the owner says it held. A recording whose source names its channels: each
+    channel heard on its own, labelled by the channel; the microphone's voice is `from_me` when it
+    is the one voice there. A file that does not hold the channels its source named is a room."""
+    if channels is not None:
+        apart, rate = diarizer.channels(audio)
+        if len(apart) == len(channels):
+            turns = speakers.label_channels(
+                {name: diarizer.diarize(samples, rate) for name, samples in zip(channels, apart, strict=True)}
+            )
+            voices = speakers.order(turns)
+            channel_of = {voice: voice.split(".")[0] for voice in voices}
+            return Voices(turns, len(channels), channel_of, speakers.MIC if speakers.MIC in voices else None)
+    return Voices(speakers.label_room(diarizer.diarize(heard.samples, heard.rate, hint)))
+
+
+def label(
+    draft: dict[str, Any],
+    voices: Voices,
+    segments: Sequence[Segment],
+    data: bytes,
+    diarizer: diarize.Diarizer,
+    memo: Memo,
+) -> bytes:
+    """`speakers` and `diarization` on `draft`, the transcript of `memo` whose text is `data`; the
+    spans file's bytes, for the caller to store. A segment whose text holds several lines is a
+    segment per line of the content, each with the segment's times, so the spans number the lines."""
+    spans = [
+        speakers.Span(s.start, s.end, s.words)
+        for s in segments
+        for part in s.text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        if part.strip()
+    ]
+    assigned = speakers.assign(spans, voices.turns)
+    content = draft["payload"]["content"]["sha256"]
+    spans_data = speakers.spans_bytes(speakers.spans_document(content, spans, assigned, voices.turns))
+    payload = draft["payload"]
+    payload["speakers"] = speakers.speakers_field(
+        speakers.order(voices.turns),
+        assigned,
+        speakers.seconds(voices.turns),
+        channels=voices.channel_of,
+        from_me=voices.from_me,
+    )
+    media = (memo.line.get("payload") or {}).get("media") or {}
+    payload["diarization"] = speakers.diarization_field(
+        diarizer.name,
+        voices.channels,
+        model=diarizer.model,
+        audio=media.get("sha256") if isinstance(media.get("sha256"), str) else None,
+        overlap_s=speakers.overlap_seconds(voices.turns),
+        spans=attachments.reference(spans_data, speakers.MEDIA_TYPE),
+    )
+    return spans_data
 
 
 def _draft(
@@ -344,9 +495,11 @@ def detect(
     model: str = DEFAULT_MODEL,
     importer: Callable[[str], Any] = importlib.import_module,
     platform: tuple[str, str] | None = None,
+    words: bool = False,
 ) -> Engine:
     """The engine this machine has: `mlx-whisper` first on Apple silicon, `faster-whisper` wherever
-    it is installed; EngineMissing, naming the extra, when neither is."""
+    it is installed; EngineMissing, naming the extra, when neither is. `words` asks it for each
+    word's times, which a run that separates voices assigns by."""
     here = platform or (sys.platform, machine())
     candidates: list[type[MlxWhisper] | type[FasterWhisper]] = (
         [MlxWhisper, FasterWhisper] if here == ("darwin", "arm64") else [FasterWhisper, MlxWhisper]
@@ -356,7 +509,7 @@ def detect(
             module = importer(engine.module)
         except ImportError:
             continue
-        return engine(model, module, importer)
+        return engine(model, module, importer, words)
     raise EngineMissing(
         f"no transcription engine is installed; install {EXTRA} (mlx-whisper on Apple silicon,"
         " faster-whisper elsewhere; mlx-whisper decodes audio with ffmpeg, which must be on the PATH)"
@@ -369,8 +522,8 @@ class MlxWhisper:
     name = "mlx-whisper"
     module = "mlx_whisper"
 
-    def __init__(self, model: str, mlx: Any, importer: Callable[[str], Any]) -> None:
-        self.model, self._mlx, self._import = model, mlx, importer
+    def __init__(self, model: str, mlx: Any, importer: Callable[[str], Any], words: bool = False) -> None:
+        self.model, self._mlx, self._import, self.words = model, mlx, importer, words
         self.repo_id = self.repo(model)
 
     @staticmethod
@@ -392,9 +545,16 @@ class MlxWhisper:
         options: dict[str, Any] = {"path_or_hf_repo": self.repo_id, "verbose": False}
         if language:
             options["language"] = language
+        if self.words:
+            options["word_timestamps"] = True
         out = self._mlx.transcribe(samples, **options)
         segments = [
-            Segment(float(s.get("start", 0.0)), float(s.get("end", 0.0)), str(s.get("text", "")))
+            Segment(
+                float(s.get("start", 0.0)),
+                float(s.get("end", 0.0)),
+                str(s.get("text", "")),
+                tuple((float(w["start"]), float(w["end"])) for w in s.get("words") or ()),
+            )
             for s in out.get("segments", [])
         ]
         return Result(segments, str(out.get("language") or language or ""))
@@ -406,8 +566,8 @@ class FasterWhisper:
     name = "faster-whisper"
     module = "faster_whisper"
 
-    def __init__(self, model: str, fw: Any, importer: Callable[[str], Any]) -> None:
-        self.model, self._fw, self._import = model, fw, importer
+    def __init__(self, model: str, fw: Any, importer: Callable[[str], Any], words: bool = False) -> None:
+        self.model, self._fw, self._import, self.words = model, fw, importer, words
         self.repo_id = self.repo(model)
         self._loaded: Any = None
 
@@ -428,10 +588,16 @@ class FasterWhisper:
     def transcribe(self, samples: Sequence[float], rate: int, language: str | None) -> Result:
         if self._loaded is None:
             self._loaded = self._fw.WhisperModel(self.repo_id, local_files_only=True)
-        found, info = self._loaded.transcribe(samples, language=language)
-        segments = [
-            Segment(float(s.start), float(s.end), str(s.text)) for s in found
-        ]  # a generator: heard here
+        found, info = self._loaded.transcribe(samples, language=language, word_timestamps=self.words)
+        segments = [  # a generator: heard here
+            Segment(
+                float(s.start),
+                float(s.end),
+                str(s.text),
+                tuple((float(w.start), float(w.end)) for w in (getattr(s, "words", None) or ())),
+            )
+            for s in found
+        ]
         return Result(segments, str(getattr(info, "language", None) or language or ""))
 
 
