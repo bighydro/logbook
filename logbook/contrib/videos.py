@@ -559,3 +559,82 @@ def _gb_for(n: int) -> str:
 
 def cache_text(used: int, cap: int) -> str:
     return f"{_size(used)} of {_size(cap)}"
+
+
+# -- what doctor counts --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Counts:
+    """The videos as `doctor` says them, from the record's lines and the cache."""
+
+    files: int  # standing video lines
+    bytes: int  # their sizes, as Drive reported them
+    fetched: int  # files `videos fetch` has fetched, ever (`state/videos.json`)
+    inferred: int  # files with scene drafts
+    waiting: int  # whole files in the cache now
+    scenes: int  # scenes of each file's latest inference
+    proposed: int  # of those, the scenes with a proposal
+    confirmed: int  # scenes with a standing attribution
+    used: int  # the cache's bytes
+    cap: int
+
+
+def counts(lb: Logbook, lines: Iterable[Line]) -> Counts:
+    """`lines`: the record's video, draft, attribution and retraction lines, opened. StateError when
+    `state/videos.json` is not the shape."""
+    found = list(lines)
+    gone = set(retractions(line for line in found if line.get("kind") == "retraction"))
+    replaced = {str((line.get("payload") or {}).get("supersedes")) for line in found}
+    listed = standing_videos(found, gone, replaced)
+    drafts_of = [line for line in found if is_scene_draft(line) and str(line["id"]) not in gone]
+    latest: dict[str, str] = {}
+    for line in sorted(drafts_of, key=lambda line: int(line["seq"])):
+        scene = scene_of(line)
+        extra = (line.get("payload") or {}).get("extra")
+        if scene is not None and isinstance(extra, dict):
+            latest[scene[0]] = str(extra.get("inference"))
+    scenes = proposed = 0
+    for line in drafts_of:
+        scene = scene_of(line)
+        extra = (line.get("payload") or {}).get("extra")
+        if (
+            scene is None
+            or not isinstance(extra, dict)
+            or str(extra.get("inference")) != latest.get(scene[0])
+        ):
+            continue
+        scenes += 1
+        proposed += isinstance(extra.get("proposal"), dict)
+    confirmed = {
+        ref
+        for line in found
+        if line.get("kind") == ATTRIBUTION_KIND
+        and str(line["id"]) not in gone | replaced
+        and (ref := ((line.get("payload") or {}).get("ref") or {}).get("value")) is not None
+    }
+    state = read_state(lb.root)
+    cache = Cache(lb.root)
+    return Counts(
+        len(listed),
+        sum(v.bytes or 0 for v in listed),
+        len(state.fetched),
+        len(inferred(drafts_of)),
+        len(cache.complete()),
+        scenes,
+        proposed,
+        len(confirmed),
+        cache.used(),
+        state.cap_bytes,
+    )
+
+
+def counts_text(found: Counts) -> str:
+    """`3 video files in the record (9.6 GB); 2 fetched, 1 inferred, 1 waiting in the cache; 12 scenes,
+    5 proposed, 2 confirmed; cache 3.2 GB of 8.0 GB`."""
+    return (
+        f"{found.files} video file{'s' if found.files != 1 else ''} in the record ({_size(found.bytes)});"
+        f" {found.fetched} fetched, {found.inferred} inferred, {found.waiting} waiting in the cache;"
+        f" {found.scenes} scene{'s' if found.scenes != 1 else ''}, {found.proposed} proposed,"
+        f" {found.confirmed} confirmed; cache {cache_text(found.used, found.cap)}"
+    )

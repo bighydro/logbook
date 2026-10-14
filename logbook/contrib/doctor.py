@@ -58,6 +58,13 @@ The checks, in the order they print:
   which it leaves, with the `dream --catch-up --since DAY` that reaches the oldest; and those above
   the entry's ceiling, which stay home. A pass; a record whose every call has a synthesis has no line.
   Read as the `drafts` line reads.
+- `videos`: when the record names the family's videos (`sync drive --videos`, RFC 0039) or the cache
+  under `state/videos/` exists, how many video files the record holds and their size, how many `videos
+  fetch` has fetched and `videos infer` has inferred and how many wait in the cache, how many scenes
+  the latest inference of each file found, how many it proposed a place or a date for and how many the
+  owner confirmed, and the cache's size against its cap. A pass; a cache over its cap, or a
+  `state/videos.json` that is not the shape, is a warn naming it. Read from this machine alone, as the
+  `drafts` line reads; a record with no video and no cache has no line.
 - `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
   names this machine, or no home is set (a pass either way); another machine is a warn: writers
   belong on the home.
@@ -100,7 +107,7 @@ from zoneinfo import ZoneInfo
 from ..core import assets, attachments, day_start, drafts, index, places, plausible, policy, sealing
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
-from . import adapters, first_run, home, last_run, schedule, serve, synthesis
+from . import adapters, first_run, home, last_run, schedule, serve, synthesis, videos
 from . import service as serve_service
 from .adapters import service_account
 
@@ -602,6 +609,25 @@ def synthesis_check(lb: Logbook, state: str, now: datetime) -> Check | None:
     return Check("synthesis", "pass", synthesis.waiting_text(found))
 
 
+def videos_check(lb: Logbook, state: str) -> Check | None:
+    """The family's videos (RFC 0039): the files, what was fetched and inferred, the scenes proposed
+    and confirmed, the cache against its cap. None when the record names no video and there is no
+    cache; a warn when the cache is over its cap or its state file is not the shape."""
+    lines = kind_lines(lb, state, (videos.KIND, videos.DRAFT_KIND, videos.ATTRIBUTION_KIND, RETRACTION))
+    cache = videos.Cache(lb.root)
+    known = any(line.get("kind") == videos.KIND for line in lines)
+    if not known and not cache.dir.is_dir() and not lb.root.joinpath(*videos.STATE_FILE.parts).is_file():
+        return None
+    try:
+        found = videos.counts(lb, lines)
+    except videos.StateError as e:
+        return Check("videos", "warn", f"{e}; delete it and `videos fetch` writes it again")
+    text = videos.counts_text(found)
+    if found.used > found.cap:
+        return Check("videos", "warn", f"{text}: over its cap; `videos infer` empties it as it goes")
+    return Check("videos", "pass", text)
+
+
 def _ceiling_text(c: policy.Ceiling) -> str:
     """`hermes 2`, `cloud-model 2 until 2026-12-31`, `mcp 2 write sign_day,note_day`,
     `dream 2 until 2026-12-31 model qwen2.5-7b-instruct`: the ceiling as it counts today, the write
@@ -849,6 +875,9 @@ def run(
     calls = synthesis_check(lb, state, now or last_run.now())
     if calls is not None:
         checks.append(calls)
+    family = videos_check(lb, state)
+    if family is not None:
+        checks.append(family)
     checks.append(home_check(lb.root))
     checks.append(last_run_check(lb, env))
     checks.append(restore_test_check(lb))
