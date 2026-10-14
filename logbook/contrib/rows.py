@@ -151,6 +151,10 @@ def _line_text(
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
         text = _voice_memo_text(p)
+    elif line["kind"] == "video" and p.get("schema") == "video/v1":
+        text = _video_text(p)
+    elif line["kind"] == "attribution" and p.get("schema") == "attribution/v1":
+        text = _attribution_text(p)
     elif line["kind"] in ("trip", "journey") and p.get("schema") in (
         "trip/v1",
         "journey/v1",
@@ -309,6 +313,57 @@ def _place_name(place: object) -> str:
     if isinstance(place, dict):
         return str(place.get("name") or place.get("address") or place.get("code") or "")
     return str(place) if isinstance(place, str) else ""
+
+
+def _video_text(p: dict[str, Any]) -> str:
+    """A family's video file (RFC 0039) as `Home 01 · 1 h 07 min · 3.2 GB`: its name, its length, its
+    size; nothing it shows, which only an attribution says."""
+    parts = [str(p.get("title") or "a video file")]
+    seconds = p.get("duration_s")
+    if isinstance(seconds, int | float) and not isinstance(seconds, bool) and seconds >= 0:
+        parts.append(duration_text(int(seconds)))
+    size = p.get("bytes")
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+        parts.append(
+            f"{size / 1e9:.1f} GB"
+            if size >= 1e9
+            else f"{size / 1e6:.0f} MB"
+            if size >= 1e6
+            else f"{size:,} bytes"
+        )
+    return " · ".join(parts)
+
+
+def _attribution_text(p: dict[str, Any]) -> str:
+    """The owner's word on a scene (RFC 0039): the stretch of the file (`scene 0:40` en dash `1:30`),
+    an arrow, then the place and the date or range."""
+    found = p.get("scene")
+    scene: dict[str, Any] = found if isinstance(found, dict) else {}
+    start, end = scene.get("start_s"), scene.get("end_s")
+    where = "scene"
+    if (
+        isinstance(start, int | float)
+        and isinstance(end, int | float)
+        and not isinstance(start, bool)
+        and not isinstance(end, bool)
+        and 0 <= start < end
+    ):
+        where = f"scene {_offset(float(start))}\u2013{_offset(float(end))}"
+    bound = []
+    place = p.get("place")
+    if isinstance(place, dict):
+        bound.append(str(place.get("label") or place.get("id") or "a place"))
+    when = p.get("when")
+    if isinstance(when, dict):
+        first, last = str(when.get("from") or "?"), str(when.get("to") or "?")
+        bound.append(first if first == last else f"{first}..{last}")
+    return f"{where} \u2192 {', '.join(bound) or 'nothing'}"
+
+
+def _offset(seconds: float) -> str:
+    hours, rest = divmod(int(seconds), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
 
 
 def _voice_memo_text(p: dict[str, Any]) -> str:

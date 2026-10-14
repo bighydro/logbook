@@ -14,6 +14,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from test_videos_infer import (
@@ -76,6 +77,7 @@ def _ref(lb: Logbook, start: str, end: str) -> str:
     return f"{lb.video['id']}#t={start},{end}"  # type: ignore[attr-defined]
 
 
+EN_DASH = "\u2013"
 PIER = ("40.00", "90.00")
 GARDEN = ("90.00", "130.00")
 
@@ -305,3 +307,18 @@ def test_nothing_proposed_yet_says_so(
     monkeypatch.setenv("LOGBOOK_HOME", str(empty.root))
     assert _review() == 0
     assert "nothing to review" in capsys.readouterr().out
+
+
+def test_show_prints_the_video_and_the_attribution_readably(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seq = _seq(lb)
+    assert _review("--accept", "1") == 0
+    (line,) = _new(lb, seq)
+    day = datetime.fromisoformat(line["at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Oslo")).date()
+    capsys.readouterr()
+    cli.main(["show", day.isoformat()])
+    cli.main(["show", "2026-10-14"])
+    out = capsys.readouterr().out
+    assert f"scene 0:40{EN_DASH}1:30 \u2192 Vollen Brygge" in out
+    assert "Home 01 \u00b7 3 min \u00b7 12 bytes" in out  # its name, length and size; nothing it shows
