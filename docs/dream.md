@@ -78,7 +78,11 @@ what changes is what the readers show.
   `day --json` carries the same under `draft_withheld` (`line`, `seq`, `tier`, `max_tier`, `why`), a key
   present only then; `--no-dream` leaves it out. A reader through a gate of its own (`export site`, the
   MCP door) hides the draft without the row, as it hides every line above its gate; the door counts it
-  among the lines it withheld, and its `line` tool refuses it naming the entry.
+  among the lines it withheld, and its `line` tool refuses it naming the entry. A withheld draft's
+  [proposed events](#proposed-events) are withheld with it: none is on the Day, `day sign` and `day
+  reflect` list none of them, and `--accept` naming one is refused with the same reason. When an earlier
+  draft the entry allows is shown in its place, its own proposals are the ones shown and listed. An
+  event you confirmed before the entry changed stays in the record, your line and not the model's.
 - **`doctor` warns** with a `drafts` line naming each day whose standing draft is above what the entry
   allows, its seq and tier, and what to do.
 - **`dream --catch-up` dreams such a day again** under the entry as it is now: a standing draft above
@@ -221,7 +225,9 @@ Nothing is written without `--accept`: not by `dream`, not by `day`, not by `ser
 `serve` page; once accepted it says `confirmed as #seq`, and the event itself sits among the day's
 events in the timeline, where it places its attendees as any calendar entry held at the stay does. A
 proposal whose lines were retracted since is marked unsupported and cannot be accepted. Dreaming the day
-again proposes afresh; an event you confirmed stays in the record whatever the next draft says.
+again proposes afresh; an event you confirmed stays in the record whatever the next draft says. The
+proposals follow the policy with their draft: a draft the `dream` entry no longer allows shows and
+offers none of them ([When the entry changes](#when-the-entry-changes)).
 
 Sending a confirmed event to an external calendar would be a crossing, and nothing does it yet.
 

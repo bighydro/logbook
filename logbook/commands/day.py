@@ -458,8 +458,8 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
         day = parse_day(a.signed_day).isoformat()
         wanted = [] if a.accept is None else reflect.numbers(a.accept)
         confirm, dispositions = _confirm(a), _dispositions(a)
-        found = dream_events.listed(lb, day)
-        taken = dream_events.chosen(found, wanted, day)
+        found = dream_events.listed(lb, day)  # the draft the Day shows: a withheld one proposes nothing
+        taken = dream_events.chosen(found, wanted, day, dream_events.held_back(lb, day) if wanted else None)
         if taken:  # every flag checked before an event is written
             dream_events.check_signature(lb, day, confirm, dispositions, a.at, a.note)
         for text in dream_events.rows(found):
@@ -664,9 +664,11 @@ def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: l
         have = f"{len(proposals)} proposal{'s' if len(proposals) != 1 else ''}"
         if events:
             have += f" and the dream {len(events)} proposed event{'s' if len(events) != 1 else ''}"
-        raise reflect.ReflectError(
-            f"no proposal {', '.join(missing)}; the reflection has {have}, numbered above"
-        )
+        text = f"no proposal {', '.join(missing)}; the reflection has {have}, numbered above"
+        held = dream_events.held_back(lb, day)
+        if held is not None:
+            text += f"; the dream's standing draft is withheld with its proposed events, {held}"
+        raise reflect.ReflectError(text)
     accepted = reflect.chosen(proposals, [n for n in chosen if n <= len(proposals)])
     taken = dream_events.chosen(events, [n for n in chosen if n > len(proposals)], day)
     _reflect_sign(lb, a, day, today, r, accepted, zone, taken, first=len(proposals) + 1)

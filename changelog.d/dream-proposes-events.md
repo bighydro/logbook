@@ -11,3 +11,7 @@
   under the writer lock the signature takes and confirmed in it. Nothing is written without `--accept`.
 - The Day shows a proposed event greyed (`?` and `proposed` in text) and a confirmed one as an event of the
   day; `day --json` carries them under `draft.proposals`, each with `confirmed`.
+- Proposed events follow the policy with their draft: a draft the `dream` entry no longer allows is withheld
+  with its proposals, so the Day shows none of them and `day sign`/`day reflect` list none and refuse
+  `--accept` for them with the reason; the draft the entry still allows, shown in its place, brings its own.
+  An event confirmed before the entry changed stays in the record.
