@@ -9,7 +9,7 @@ else (`tests/test_layout.py` holds the tree to it).
                        adapters (one registry), import-backup, sync, the exports (vault, paper, trip
                        bundles), and the derived readers whose output is a reader's own
     logbook/labs/      everything that runs a model, or is still an experiment: judge, describe,
-                       transcribe, demo --years
+                       transcribe and its diarizer, demo --years
     logbook/commands/  the CLI, one module per command family; `cli.py` is the entry point
 
 The arrow points down: core imports core; contrib imports core and contrib; labs imports anything;
@@ -63,6 +63,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "search",
         "share",
         "signing",
+        "speakers",
         "stays",
         "store",
         "story",
@@ -129,6 +130,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "chapters",
         "demo_life",
         "describe",
+        "diarize",
         "introductions",
         "judge",
         "transcribe",
@@ -146,6 +148,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
         "chapter",
         "chapters",
         "day_start",
+        "diarize",
         "drafts",
         "dream",
         "dream_events",
@@ -178,6 +181,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
         "service",
         "signing",
         "site",
+        "speakers",
         "stream",
         "synthesis",
         "transcripts",

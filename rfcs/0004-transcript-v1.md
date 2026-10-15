@@ -1,6 +1,6 @@
 # RFC 0004 — payload profile `transcript/v1`
 
-Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks · amended 2026-10-14 (`speakers`, `diarization`; RFC 0038 §2, additive under RFC 0031 rule 1)
 
 ## Summary
 
@@ -50,3 +50,39 @@ identity resolution and any model-extracted structure are separate, derived laye
   self-entry.
 - Consumers MUST ignore unknown payload fields and MUST NOT reject a line for an unknown `participants`
   sub-field.
+
+## Amendment 2026-10-14: `speakers` and `diarization` (RFC 0038 §2)
+
+Two payload fields, both MAY, additive under RFC 0031 rule 1: no field is removed, renamed or retyped,
+no MUST changes. A line with neither is a transcript as this RFC defines it, and every reader reads it
+as before; the fixture under `conformance/profiles/transcript/` carries neither and is unchanged. The
+JSON Schema of the whole payload, these two fields included, is
+[`schema/transcript-v1.schema.json`](../schema/transcript-v1.schema.json).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `speakers` | array of object | MAY | the voices of the recording, one per anonymous label, in order of first speech: `{ label, seconds?, turns, channel?, from_me?, name? }`. Not to be confused with `extra.speakers`, the count the file adapter writes |
+| `diarization` | object | MUST when `speakers` is present | how the labels were made: `{ engine, model?, audio?, channels, overlap_s?, spans? }` |
+
+A `speakers` entry: `label` (MUST; matches `^[^#\n]{1,64}$`, unique in the line: `S1`, `S2`, … for the
+voices of one channel by first speech, `mic` and `system` for a channel that holds one voice, `mic.1`,
+`mic.2`, … for one that holds several, or a provider's own label verbatim); `seconds` (SHOULD; the
+voice's own speech, overlaps counted for each voice; absent when the source gives no times); `turns`
+(MUST; how many segments of the content are the voice's); `channel` (MAY; `mic` or `system`); `from_me`
+(MAY; `true` when the source says the channel is the owner's own microphone and the channel holds this
+voice alone, a statement of the source as in `message/v1`, never a resolution); `name` (MAY; a name the
+source displayed for the voice, never a resolution).
+
+`diarization`: `engine` (MUST; `pyannote`, `whisperx`, `channels` when no model ran and each channel is
+one voice as the source split it, or the provider whose labels an adapter took, `granola`);
+`model` (MAY; `pyannote/speaker-diarization-3.1`); `audio` (MAY; the SHA-256 of the audio heard, absent
+when the labels came from a provider and the record holds no audio); `channels` (MUST; 1 for a room, 2
+for a call that keeps its sides apart); `overlap_s` (MAY; the seconds in which two voices or more speak
+at once); `spans` (SHOULD when the source gives times; an attachment reference of SPEC §1.1 with
+`media_type` `application/json`, never inline): the spans file, `speaker-spans/1`, a segment per
+segment of the content `{ from, to, speaker, overlap? }` and the diarizer's own turns.
+
+The labels are anonymous and mean something only inside their line. Who a voice is stays out of this
+profile, as `participants` do (*Raw, not resolved*): RFC 0038 §3 binds a voice to a person in a
+`resolution/v1` line of its own, and nothing in a transcript line changes when it does. What writes
+the fields, and how a reader shows them, is [docs/speakers.md](../docs/speakers.md).

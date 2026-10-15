@@ -12,7 +12,11 @@ logbook transcribe voice-memos --dry-run        # which memos would be transcrib
 logbook transcribe voice-memos --fetch-model    # the first time: download the model, then transcribe
 logbook transcribe voice-memos                  # every standing memo with its audio in the store and no transcript yet
 logbook transcribe voice-memos --since 2026-03-01 --model medium
+logbook transcribe voice-memos --no-speakers    # transcribe only, even with the speaker models here
+logbook derive speakers --dry-run               # transcripts heard before the voices were separated
 ```
+
+`logbook transcribe` is `logbook derive transcripts` since 0.6; both spellings run the same command.
 
 ## The recording: `voice-memo/v1`
 
@@ -47,6 +51,8 @@ which no transcript line exists yet, and transcribes them in time order. Each me
 | `payload.language` | what the engine detected on the first chunk, as it names it (`en`, `nb`) |
 | `payload.content` | the text, one segment per line, a `text/plain` file in `attachments/` by digest; never inline |
 | `payload.extra` | `recording` (the memo's `raw_id`, as RFC 0023 says), `chunks`, `segments`, `duration_s`, `turns` 0, `speakers` 0 |
+| `payload.speakers` | only when the voices were separated (below): the voices, `S1`, `S2`, … or `mic`/`system`, each with its `seconds` and `turns` |
+| `payload.diarization` | with `speakers`: `{engine, model, audio, channels, overlap_s, spans}`, the spans file in `attachments/` beside the text |
 
 The transcript never carries `supersedes`. A memo that was retracted is left alone; a memo another
 memo line supersedes (a re-import after a trim) is left alone and the standing one is transcribed,
@@ -62,6 +68,28 @@ A synthetic example, the Oslo persona's:
  "provenance":{"source":"019a2c3d-0000-7000-8000-000000000042","engine":"mlx-whisper","model":"small"},
  "extra":{"recording":"7A1B2C3D-0000-4000-8000-000000000001","chunks":1,"segments":7,"format":"text","turns":0,"speakers":0,"duration_s":102}}}
 ```
+
+## The voices (RFC 0038)
+
+When the diarizer and its models are on this machine (`logbook setup speakers` says whether they are;
+`logbook setup speakers --fetch-model` fetches them, the one download), the same run separates the
+voices of each memo on the audio it decoded, and the line gains `speakers` and `diarization`: each
+line of the text is given the voice that speaks most of it (the engine is asked for word times), a
+spans file goes into `attachments/` beside the text, and the progress line says how many voices it
+heard (`Middag: 4,212 words, nb, 3 voices, 41.8s`). Without the diarizer the line is exactly as
+before, and the run ends with one sentence:
+
+```
+speakers: not separated (logbook setup speakers --fetch-model)
+```
+
+`--no-speakers` turns separation off for a run. A memo is one room, its voices `S1`, `S2`, … by first
+speech, unless its source says the file keeps a call's two sides apart, `extra.channels` naming the
+file's channels in order (`["mic", "system"]`); then each channel is heard on its own and the
+microphone's voice is `from_me` when it is alone there. Memos transcribed before the voices could be
+separated are heard again by `logbook derive speakers`, each into a new line that supersedes the old
+one. The fields, the labels, the spans file, the cost of hearing a transcript again and what the
+readers show are on [Speakers](../speakers.md).
 
 ## Resumable
 
@@ -86,8 +114,11 @@ default) or a Hugging Face repository; a size becomes `mlx-community/whisper-<si
 `Systran/faster-whisper-<size>`.
 
 Audio never leaves the machine and the command opens no network connection: while it transcribes,
-the Hugging Face hub is told it is offline (`HF_HUB_OFFLINE=1`), so the engines cannot reach out
-whatever they would do on their own. The one exception is explicit: a model not yet on this machine
-stops the command, and `--fetch-model` downloads it before the first chunk is heard. A test fakes the
-engine, feeds it a two-second synthetic WAV and refuses every socket for the length of the run; no
-model is downloaded in CI.
+the Hugging Face hub is told it is offline (`HF_HUB_OFFLINE=1`, and the switch the hub client read
+when it was first imported), so the engines cannot reach out whatever they would do on their own, and
+pyannote.audio's own usage reporting is switched off (`PYANNOTE_METRICS_ENABLED=0`). The one exception
+is explicit: a Whisper model not yet on this machine stops the command, and `--fetch-model` downloads
+it before the first chunk is heard; it never fetches a speaker model, which is `setup speakers
+--fetch-model`'s alone. The extra brings pyannote.audio, and with it torch, on every platform. A test
+fakes the engine and the diarizer, feeds them a two-second synthetic WAV and refuses every socket for
+the length of the run; no model is downloaded in CI.

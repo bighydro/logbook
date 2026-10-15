@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Iterator, Mapping
 from datetime import date, datetime
@@ -71,13 +72,17 @@ def cmd_infer(a: argparse.Namespace) -> None:
 # imported only when the command runs, so `--help` loads no model code; a test holds these copies to them.
 TRANSCRIBE_DEFAULT_MODEL = "small"
 DESCRIBE_DEFAULT_MODEL = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
+SPEAKERS_MODEL = "pyannote/speaker-diarization-3.1"  # `diarize.MODEL`
 
 
 def cmd_transcribe(a: argparse.Namespace) -> None:
-    """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]`: a
-    transcript/v1 line per standing voice memo whose audio is in the store, heard by a local engine
-    (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is needed for a dry run."""
-    from ..labs import transcribe
+    """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]
+    [--no-speakers]`: a transcript/v1 line per standing voice memo whose audio is in the store,
+    heard by a local engine (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is
+    needed for a dry run. When the diarizer and its models are on this machine the same run
+    separates the voices (RFC 0038 §2); `--fetch-model` fetches the Whisper model only, never a
+    speaker model (`setup speakers --fetch-model` does that)."""
+    from ..labs import diarize, transcribe
 
     if a.source != "voice-memos":
         print(f"transcribe: voice-memos can be transcribed, not {a.source!r}", file=sys.stderr)
@@ -90,20 +95,190 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
             sys.exit(2)
     lb = Logbook.find()
     engine: transcribe.Engine | None = None
+    diarizer: diarize.Diarizer | None = None
     if not a.dry_run:
+        if not a.no_speakers:
+            diarizer = diarize.detect()
         try:
-            engine = transcribe.detect(a.model)
+            engine = transcribe.detect(a.model, words=diarizer is not None)
         except transcribe.EngineMissing as e:
             print(f"transcribe: {e}", file=sys.stderr)
             sys.exit(2)
     try:
         report = transcribe.run(
-            lb, engine, since=a.since, dry_run=a.dry_run, fetch_model=a.fetch_model, progress=print
+            lb,
+            engine,
+            since=a.since,
+            dry_run=a.dry_run,
+            fetch_model=a.fetch_model,
+            progress=print,
+            diarizer=diarizer,
+            separate=not a.no_speakers,
         )
-    except transcribe.ModelMissing as e:
+    except (transcribe.ModelMissing, diarize.ModelsMissing) as e:
         print(f"transcribe: {e}", file=sys.stderr)
         sys.exit(2)
     print(transcribe.describe(report))
+
+
+def cmd_speakers(a: argparse.Namespace) -> None:
+    """`derive speakers [--since DAY] [--speakers N] [--dry-run]` (RFC 0038 §2.8): each standing
+    transcript heard before voices were separated, whose recording's audio is in the store, heard
+    again and separated, a new transcript/v1 line superseding the old one; what that costs (signed
+    days, closed promises) said before anything is written. Nothing to do needs no engine; a dry run
+    needs none either. Without the diarizer: one sentence naming `setup speakers --fetch-model`, exit 2."""
+    from ..labs import diarize, transcribe
+
+    if a.since is not None:
+        try:
+            parse_day(a.since)
+        except ValueError as e:
+            print(f"derive speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    report = transcribe.unseparated(lb, since=a.since, dry_run=a.dry_run)
+    if report.dry_run:
+        for row in transcribe.found_rows(report, ZoneInfo(str(lb.meta["timezone"]))):
+            print(row)
+    if report.found:
+        for said in transcribe.cost(report):
+            print(said)
+    if report.dry_run or not report.found:
+        print(transcribe.describe_again(report))
+        return
+    calls = sum(1 for item in report.found if transcribe.channels_of(item.memo.line) is not None)
+    if a.speakers and calls:
+        print(
+            f"--speakers {a.speakers} is for a room: {_plural(calls, 'recording')} of these keep a call's"
+            " two sides apart and are heard a channel at a time, without it"
+        )
+    diarizer = diarize.detect()
+    if diarizer is None:
+        print(
+            f"derive speakers: the diarizer and its models are not on this machine; {diarize.FETCH} fetches"
+            " them, the one time anything uses the network",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        transcribe.rehear(
+            lb,
+            report,
+            lambda model: transcribe.detect(model, words=True),
+            diarizer,
+            hint=a.speakers,
+            progress=print,
+        )
+    except (transcribe.EngineMissing, transcribe.ModelMissing, diarize.ModelsMissing) as e:
+        print(f"derive speakers: {e}", file=sys.stderr)
+        sys.exit(2)
+    print(transcribe.describe_again(report))
+
+
+def speakers_arguments(sub: Subparsers) -> None:
+    """`logbook setup speakers [--fetch-model]` (RFC 0038 §2.9): what separates voices on this
+    machine, and the one command that downloads its models. Declared beside `derive speakers`."""
+    s = sub.add_parser(
+        "speakers",
+        help="the diarizer that separates voices: what is on this machine; --fetch-model, the one download",
+        description="what separates the voices of a recording on this machine (RFC 0038): the engine,"
+        f" pyannote.audio, and the models {SPEAKERS_MODEL} reads, each here or not, and what the record"
+        " holds; opens no connection. --fetch-model downloads those models into the Hugging Face cache,"
+        " the one time anything here uses the network, with your access token read from HF_TOKEN for"
+        " those requests only, never written and never printed",
+    )
+    s.add_argument(
+        "--fetch-model",
+        action="store_true",
+        help="download the diarization models (gated on Hugging Face: accept their conditions first);"
+        " HF_TOKEN is read for these requests only",
+    )
+    s.set_defaults(fn=cmd_setup_speakers)
+
+
+def cmd_setup_speakers(a: argparse.Namespace) -> None:
+    """`setup speakers`: the engine and each model, here or not, and what the record holds (no
+    socket). `setup speakers --fetch-model`: the models fetched first (`diarize.fetch`), a refusal
+    naming the page to accept their conditions on (exit 2), then the same."""
+    from ..labs import diarize
+
+    if a.fetch_model:
+        switches = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+        offline = [name for name in switches if diarize._truthy(os.environ.get(name))]
+        if offline:
+            print(
+                f"setup speakers: {' and '.join(offline)} set in this shell, so the hub would refuse;"
+                " unset it for this one command",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        print(
+            "fetching the speaker models into the Hugging Face cache, the one time anything here uses the"
+            f" network ({diarize.TOKEN} is read for these requests and never kept):"
+        )
+        try:
+            diarize.fetch(os.environ, progress=lambda repo: print(f"  {repo}"))
+        except ImportError:
+            print(
+                f"setup speakers: the hub client is not installed; install {diarize.EXTRA}", file=sys.stderr
+            )
+            sys.exit(2)
+        except (diarize.Refused, OSError) as e:
+            print(f"setup speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+    for row in _speakers_rows(diarize.status()):
+        print(row)
+
+
+def _speakers_rows(found: Any) -> Iterator[str]:
+    """The engine, each model, what the record holds, and what to do next."""
+    from ..core import speakers
+    from ..labs import diarize, transcribe
+
+    if found.version is None:
+        yield f"engine     pyannote.audio not installed; install {diarize.EXTRA}"
+    else:
+        yield f"engine     pyannote.audio {found.version}"
+    for repo, here in found.models.items():
+        yield f"model      {repo}  {'here' if here else 'not here'}"
+    try:
+        lb = Logbook.find()
+    except FileNotFoundError:
+        lb = None
+    if lb is not None:
+        again = transcribe.unseparated(lb)
+        with lb.index() as idx:
+            standing = [
+                line for line in idx.by_kind(transcribe.TRANSCRIPT_KIND) if line["payload"].get("speakers")
+            ]
+        mine = [
+            voice.seconds
+            for line in standing
+            for voice in speakers.voices(line["payload"])
+            if voice.from_me and voice.seconds is not None
+        ]
+        said = f"voices separated in {_plural(again.already, 'transcript')}"
+        if again.found:
+            said += f"; {len(again.found):,} more can be (logbook derive speakers)"
+        yield f"record     {said}"
+        if mine:
+            minutes, count = speakers.duration_text(sum(mine)), _plural(len(mine), "transcript")
+            yield f"record     your own microphone: {minutes} in {count}"
+    if found.ready:
+        yield "ready      derive transcripts separates the voices of what it hears"
+    else:
+        yield f"not ready  {diarize.FETCH} fetches the models (accept their conditions on Hugging Face first)"
+
+
+def _voices(text: str) -> int:
+    """`--speakers N`: a whole number of voices, one or more."""
+    try:
+        n = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"a number of voices, not {text!r}") from None
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"a number of voices, one or more, not {n}")
+    return n
 
 
 def cmd_describe(a: argparse.Namespace) -> None:
@@ -187,14 +362,15 @@ def _infer_keepers(a: argparse.Namespace) -> None:
 
 
 def derive_arguments(sub: Subparsers) -> None:
-    """`logbook derive stays|flights|keepers|transcripts|descriptions`: what the record reads out of
-    itself. `flights` and `keepers` were `infer`, `transcripts` was `transcribe`, `descriptions`
-    was `describe`, until 0.6; each keeps its options."""
+    """`logbook derive stays|flights|keepers|transcripts|speakers|descriptions`: what the record reads
+    out of itself. `flights` and `keepers` were `infer`, `transcripts` was `transcribe`,
+    `descriptions` was `describe`, until 0.6; each keeps its options. `speakers` is RFC 0038's."""
     s = sub.add_parser(
         "derive",
-        help="stays; flights and keepers inferred; transcripts; descriptions",
+        help="stays; flights, keepers; transcripts, speakers; descriptions",
         description="what the record reads out of itself: stays (nothing appended); flights and keepers"
-        " (inferred, RFC 0013, RFC 0024); transcripts of voice memos and descriptions of keepers, by a"
+        " (inferred, RFC 0013, RFC 0024); transcripts of voice memos, the voices in them, and descriptions"
+        " of keepers, by a"
         " local model, nothing leaving the machine",
     )
     verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")
@@ -248,9 +424,34 @@ def derive_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--fetch-model",
         action="store_true",
-        help="download the model first when it is not on this machine (the only network use, ever)",
+        help="download the Whisper model first when it is not on this machine (the only network use;"
+        " the speaker models come from `setup speakers --fetch-model`)",
+    )
+    v.add_argument(
+        "--no-speakers",
+        action="store_true",
+        help="do not separate the voices, even when the diarizer is on this machine (RFC 0038)",
     )
     v.set_defaults(fn=cmd_transcribe)
+
+    v = verbs.add_parser(
+        "speakers",
+        help="the voices of transcripts heard before they were separated: each heard again from its"
+        " recording, a new line superseding the old (RFC 0038); nothing leaves the machine",
+    )
+    v.add_argument("--since", metavar="YYYY-MM-DD", help="only transcripts from this local day on")
+    v.add_argument(
+        "--speakers",
+        type=_voices,
+        metavar="N",
+        help="a hint to the diarizer that the room held N voices",
+    )
+    v.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list what would be heard again and what it would change (signed days, promises); write nothing",
+    )
+    v.set_defaults(fn=cmd_speakers)
 
     v = verbs.add_parser(
         "descriptions",

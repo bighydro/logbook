@@ -203,6 +203,9 @@ def cmd_show(a: argparse.Namespace) -> None:
         rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
         retracted = retractions(idx.retractions())
         superseded = idx.superseded(flights.KIND)  # a flight another flight line replaced (RFC 0013 rule 4)
+        heard_again = idx.superseded("transcript")  # RFC 0038 §2.8: a transcript heard again and separated
+        by = idx.ids(heard_again.values())
+        superseded.update({old: seq for old, seq in heard_again.items() if by.get(seq) not in retracted})
         names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
         signature = signing.signature_of(idx, day, str(lb.meta["owner_id"]))  # RFC 0034: the header
         held = chapter.for_day(idx.by_kind(chapter.KIND), retracted, day)  # RFC 0036: the header too

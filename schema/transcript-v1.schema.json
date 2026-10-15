@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://logbook.dev/schema/transcript-v1.json",
+  "title": "transcript/v1 payload (RFC 0004, with the amendment of 2026-10-14: speakers and diarization, RFC 0038 §2)",
+  "description": "The payload of a line of kind `transcript`. The fields of RFC 0004 are checked for their type only, and a field this schema does not name is allowed: consumers MUST ignore unknown payload fields (RFC 0004), and writers keep `extra` and `provenance` beside them. `speakers` and `diarization` are as RFC 0038 §2.2 defines them; a transcript without them is a transcript as RFC 0004 defines it.",
+  "type": "object",
+  "required": ["schema", "provider"],
+  "properties": {
+    "schema": {"const": "transcript/v1"},
+    "provider": {"type": "string", "minLength": 1},
+    "raw_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "participants": {"type": "array", "items": {"type": "object"}},
+    "summary": {"type": "string"},
+    "language": {"type": "string"},
+    "content": {
+      "type": "object",
+      "required": ["sha256", "bytes", "media_type"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "path": {"type": "string", "pattern": "^attachments/[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"enum": ["text/markdown", "text/vtt", "text/plain", "application/json"]}
+      }
+    },
+    "source_uri": {"type": "string"},
+    "supersedes": {"type": "string", "minLength": 1},
+    "speakers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label", "turns"],
+        "properties": {
+          "label": {"type": "string", "pattern": "^[^#\\n]{1,64}$"},
+          "seconds": {"type": "number", "minimum": 0},
+          "turns": {"type": "integer", "minimum": 0},
+          "channel": {"type": "string", "minLength": 1},
+          "from_me": {"type": "boolean"},
+          "name": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "diarization": {
+      "type": "object",
+      "required": ["engine", "channels"],
+      "properties": {
+        "engine": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "audio": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "channels": {"type": "integer", "minimum": 1},
+        "overlap_s": {"type": "number", "minimum": 0},
+        "spans": {
+          "type": "object",
+          "required": ["sha256", "bytes", "media_type"],
+          "properties": {
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "path": {"type": "string", "pattern": "^attachments/[0-9a-f]{64}$"},
+            "bytes": {"type": "integer", "minimum": 0},
+            "media_type": {"const": "application/json"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "dependentRequired": {"speakers": ["diarization"]}
+}

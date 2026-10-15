@@ -125,6 +125,7 @@ from . import (
     reading,
     share,
     signing,
+    speakers,
     stays,
     story,
     trips,
@@ -233,7 +234,8 @@ def of_reading(
     if lines is None:
         lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and bounds.day(at) == d]
     lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
-    folded, stands_for = events.fold(lines, flight_lines.Airlines.load())  # one row per calendar entry
+    placeable = _standing_transcripts(lines)  # a transcript heard again stands for the one it supersedes
+    folded, stands_for = events.fold(placeable, flight_lines.Airlines.load())  # one row per calendar entry
     owner = rd.owner
     segments = [s for s in rd.derived.folded if s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
@@ -669,7 +671,7 @@ def _attached(
                 }
             )
         elif kind == "transcript":
-            transcripts.append({"title": _title(line), "line": id_})
+            transcripts.append({"title": _title(line), "line": id_, **_voices(payload)})
         elif kind == "note":
             notes.append({"text": _note_text(payload), "line": id_})
         elif kind == "mail":
@@ -773,8 +775,39 @@ def _unplaced(
         }
         if kind == "event":
             item.update(_stands_for(line, stands_for))
+        if kind == "transcript":
+            item.update(_voices(payload))
         out.append(item)
     return out
+
+
+def _voices(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """`speakers` for a transcript's entry, only when the line has voices (RFC 0038 §2): the Day's
+    object is otherwise unchanged. Shaped for the attributions to come (`speakers.to_json`)."""
+    found = speakers.to_json(payload)
+    return {"speakers": found} if found else {}
+
+
+def voices_text(item: Mapping[str, Any]) -> str:
+    """` · you 31 min · S2 14 min` after a transcript's title on the Day; nothing without voices."""
+    found = item.get("speakers")
+    return f"{DOT}{speakers.json_text(found)}" if isinstance(found, list) and found else ""
+
+
+def _standing_transcripts(lines: Sequence[Line]) -> list[Line]:
+    """The day's lines without the transcripts another transcript of the day supersedes (SPEC §3:
+    a superseded line does not stand). `derive speakers` writes its line at the instant of the one it
+    hears again, so the two are on the same day; `lines` are standing already, so a retracted
+    superseder supersedes nothing (a chain whose middle line was retracted then shows its first and
+    last lines; `derive speakers` never writes one, superseding the standing line directly)."""
+    replaced = {
+        str((line.get("payload") or {}).get("supersedes"))
+        for line in lines
+        if line.get("kind") == "transcript" and isinstance((line.get("payload") or {}).get("supersedes"), str)
+    }
+    if not replaced:
+        return list(lines)
+    return [line for line in lines if not (line.get("kind") == "transcript" and str(line["id"]) in replaced)]
 
 
 # -- health and sources ----------------------------------------------------------------------------------
@@ -921,7 +954,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             span = span_text(item["at"], item["end"], tz)
             mark = signing.mark(marks, item["line"])
             lead = f"{span}  {item['kind']:<6} {mark}"
-            yield _row("unplaced", f"{lead}{item['title']}{sources_text(item)}")
+            yield _row("unplaced", f"{lead}{item['title']}{sources_text(item)}{voices_text(item)}")
             if item["kind"] == "transcript":  # its synthesis, or the policy's row, under the title
                 for block in syntheses.get(item["line"], ()):
                     yield _row("", " " * len(lead) + drafts.synthesis_row(block))
@@ -1120,7 +1153,7 @@ def _entry_rows(
             yield f"{inner}{'event':<12} {signing.mark(marks, e['line'])}{e['title']} {span}{sources_text(e)}"
         for t in attached["transcripts"]:
             mark = signing.mark(marks, t["line"])
-            yield f"{inner}{'transcript':<12} {mark}{t['title']}"
+            yield f"{inner}{'transcript':<12} {mark}{t['title']}{voices_text(t)}"
             for block in (syntheses or {}).get(t["line"], ()):
                 yield f"{inner}{'':<12} {' ' * len(mark)}{drafts.synthesis_row(block)}"
         for n in attached["notes"]:

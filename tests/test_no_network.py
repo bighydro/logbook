@@ -59,6 +59,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("rollup", "flights", "--json"),
     ("derive", "stays", "--day", "2026-06-03", "--dry-run"),
     ("derive", "stays", "--since", "2026-06-01", "--until", "2026-06-30", "--dry-run", "--json"),
+    ("derive", "speakers", "--dry-run"),  # RFC 0038 §2.8: what would be heard again, nothing heard
+    ("derive", "transcripts", "voice-memos", "--dry-run"),  # no engine, no diarizer asked for
     ("show", "year", "2026"),
     ("show", "year", "2026", "--json"),
     ("show", "year", "2026", "--html", OUT),
@@ -79,6 +81,7 @@ READERS: tuple[tuple[str, ...], ...] = (
         "keepers",
     ),
     ("setup", "places", "list"),
+    ("setup", "speakers"),  # RFC 0038 §2.9: what is here; only --fetch-model reaches the network
     ("people",),
     ("setup", "assets", "status"),
     ("doctor", "sources", "--gaps"),

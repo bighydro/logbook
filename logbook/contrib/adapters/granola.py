@@ -29,6 +29,16 @@ made without recording (one empty turn from an instant to the same instant: `dur
 words) is not a transcript: no transcript/v1 line, nothing stored, only the summary, whose `raw_id`
 is as ever and whose `extra.derived_from` names a transcript only when the record already has one.
 
+**Voices** (RFC 0038 §2.5). Granola keeps the two sides of a call apart and marks each segment as
+the microphone's (`source` `microphone`, `attribution` `me`) or the system audio's (`speaker`, `them`).
+The line takes those marks as its `speakers`: `mic` and `system`, `system.1`, `system.2`, … (and
+`mic.1`, …) where Granola's own `diarization_label` tells a side's voices apart, `from_me` on `mic`
+when it is the microphone's one voice, the name Granola displayed as `name`; `diarization` is
+`{engine: granola, channels: 2}` with no `audio`, since Granola kept it. When every segment is timed
+the voices' seconds and `overlap_s` are counted and the spans file (`speaker-spans/1`, each segment
+the voice Granola gave it) is stored beside the text through `store`, before the line. A note whose
+segments carry no channel mark gets neither field. Nothing is resolved: a name stays the source's.
+
 The watermark is the recording's end; `resume` starts a pull a lookback (24 h,
 `LOGBOOK_GRANOLA_LOOKBACK_H`) before it and dedupe absorbs the overlap. Every request is retried
 once on a connection failure, a timeout, 429 or a 5xx; then the pull fails with one clear message
@@ -49,6 +59,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from ...core import speakers
 from ...core.attachments import reference
 from ...core.store import uuid7
 from ...core.transcripts import Turn, _stamp_of, participants
@@ -65,6 +76,7 @@ __all__ = [
     "pull",
     "recorded",
     "resume",
+    "spans_file",
     "summary_of",
     "transcript_of",
     "watermark",
@@ -88,6 +100,9 @@ MEDIA_TYPE = "application/json"
 SUMMARY_TIER = 2
 NO_SUMMARY = "no_summary"
 NO_RECORDING = "no_recording"
+CHANNEL_OF = {"microphone": speakers.MIC, "speaker": speakers.SYSTEM}  # Granola's `source`
+SIDE_OF = {"me": speakers.MIC, "them": speakers.SYSTEM}  # its `attribution`, when there is no source
+CHANNELS = 2  # Granola keeps the microphone and the system audio apart
 
 
 @dataclass(frozen=True)
@@ -167,7 +182,7 @@ def pull(
         cursor = page.get("cursor") if page.get("hasMore") else None
         if not cursor:
             break
-    pairs: list[tuple[dict[str, Any], bytes, dict[str, Any] | None, bool]] = []
+    pairs: list[tuple[dict[str, Any], bytes, bytes | None, dict[str, Any] | None, bool]] = []
     for stub in listed:
         note, segments = _note_with_transcript(config, str(stub["id"]))
         line = transcript_of(note, segments)
@@ -182,12 +197,16 @@ def pull(
             summary = summary_of(note, line, existing or (str(line["id"]) if has_recording else None))
             if summary is None:
                 counts[NO_SUMMARY] = counts.get(NO_SUMMARY, 0) + 1
-        pairs.append((line, _content(segments), summary, has_recording))
+        pairs.append(
+            (line, _content(segments), spans_file(segments, str(line["at"])), summary, has_recording)
+        )
     pairs.sort(key=lambda p: str(p[0]["at"]))  # stable: the server's order within a second
-    for line, data, summary, has_recording in pairs:
+    for line, data, spans, summary, has_recording in pairs:
         if has_recording:
             if store is not None:
                 store(data)
+                if spans is not None:
+                    store(spans)
             yield line
         if summary is not None:
             yield summary
@@ -224,7 +243,7 @@ def transcript_of(note: Mapping[str, Any], segments: list[Any]) -> dict[str, Any
         extra["folders"] = folders
     title = note.get("title")
     web_url = note.get("web_url")
-    return draft(
+    line = draft(
         source=NAME,
         at=at,
         end=end,
@@ -237,6 +256,21 @@ def transcript_of(note: Mapping[str, Any], segments: list[Any]) -> dict[str, Any
         source_uri=str(web_url) if isinstance(web_url, str) and web_url else None,
         extra=extra,
     )
+    voices = _voices(segments, at)
+    if voices is not None:
+        line["payload"]["speakers"] = voices.field
+        spans = None if voices.spans is None else reference(voices.spans, speakers.MEDIA_TYPE)
+        line["payload"]["diarization"] = speakers.diarization_field(
+            NAME, CHANNELS, overlap_s=voices.overlap_s, spans=spans
+        )
+    return line
+
+
+def spans_file(segments: list[Any], at: str) -> bytes | None:
+    """The spans file of a note's transcript whose line starts at `at` (RFC 0038 §2.3), None when
+    no segment carries a channel mark or a segment is not timed."""
+    voices = _voices(segments, at)
+    return None if voices is None else voices.spans
 
 
 def summary_of(
@@ -358,6 +392,99 @@ def _decode(body: bytes, path: str) -> dict[str, Any]:
 
 
 # -- the mapping's pieces --------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Voices:
+    field: list[dict[str, Any]]  # `payload.speakers`
+    overlap_s: float | None  # None when a segment is not timed
+    spans: bytes | None  # the spans file, likewise
+
+
+def _voices(segments: list[Any], at: str) -> _Voices | None:
+    """The voices Granola's channel marks give a note's segments; None when no segment has one.
+    A side's voices are told apart by Granola's `diarization_label`: one on a side is labelled by
+    the side, several are numbered by first speech. Every segment is the voice Granola gave it."""
+    keys = [_mark(s) for s in segments]
+    if not any(key is not None for key in keys):
+        return None
+    start = _instant(at)
+    timed = [_span(s, start) for s in segments]
+    every = start is not None and all(span is not None for span in timed)
+    first: dict[tuple[str, str | None], float] = {}
+    for i, key in enumerate(keys):
+        span = timed[i]
+        if key is not None and key not in first:
+            first[key] = span.start if every and span is not None else float(i)
+    by_side: dict[str, list[tuple[str, str | None]]] = {}
+    for key in sorted(first, key=lambda k: (first[k], k[0], k[1] or "")):
+        by_side.setdefault(key[0], []).append(key)
+    names: dict[tuple[str, str | None], str] = {}
+    for side, found in by_side.items():
+        for n, key in enumerate(found, 1):
+            names[key] = side if len(found) == 1 else f"{side}.{n}"
+    given = [names[key] if key is not None else None for key in keys]
+    voices = [names[key] for key in sorted(first, key=lambda k: (first[k], names[k]))]
+    shown: dict[str, str] = {}
+    for segment, voice in zip(segments, given, strict=True):
+        name = _display(segment)
+        if voice is not None and name and voice not in shown:
+            shown[voice] = name
+    channel_of = {voice: voice.split(".")[0] for voice in voices}
+    from_me = speakers.MIC if speakers.MIC in voices else None
+    if not every:
+        assigned = [speakers.Assigned(voice) for voice in given]
+        field = speakers.speakers_field(
+            voices, assigned, None, channels=channel_of, from_me=from_me, names=shown
+        )
+        return _Voices(field, None, None)
+    spans = [span for span in timed if span is not None]
+    turns = [
+        speakers.VoiceTurn(span.start, span.end, voice)
+        for span, voice in zip(spans, given, strict=True)
+        if voice is not None and span.end > span.start
+    ]
+    assigned = speakers.assign(spans, turns, given)
+    field = speakers.speakers_field(
+        voices, assigned, speakers.seconds(turns), channels=channel_of, from_me=from_me, names=shown
+    )
+    content = reference(_content(segments), MEDIA_TYPE)["sha256"]
+    data = speakers.spans_bytes(speakers.spans_document(content, spans, assigned, turns))
+    return _Voices(field, speakers.overlap_seconds(turns), data)
+
+
+def _mark(segment: object) -> tuple[str, str | None] | None:
+    """A segment's side, from Granola's `source` (else its `attribution`), and the voice label
+    Granola's own diarization gives it on that side; None for a segment with neither mark."""
+    speaker = segment.get("speaker") if isinstance(segment, dict) else None
+    if not isinstance(speaker, dict):
+        return None
+    side = CHANNEL_OF.get(str(speaker.get("source"))) or SIDE_OF.get(str(speaker.get("attribution")))
+    if side is None:
+        return None
+    label = speaker.get("diarization_label")
+    return side, label.strip() if isinstance(label, str) and label.strip() else None
+
+
+def _display(segment: object) -> str | None:
+    speaker = segment.get("speaker") if isinstance(segment, dict) else None
+    name = speaker.get("name") if isinstance(speaker, dict) else None
+    return name.strip() if isinstance(name, str) and name.strip() else None
+
+
+def _span(segment: object, start: datetime | None) -> speakers.Span | None:
+    """A segment's times in seconds from `start`, None when either is missing or not an instant."""
+    if not isinstance(segment, dict) or start is None:
+        return None
+    begins, ends = _instant(segment.get("start_time")), _instant(segment.get("end_time"))
+    if begins is None or ends is None:
+        return None
+    return speakers.Span((begins - start).total_seconds(), (ends - start).total_seconds())
+
+
+def _instant(value: object) -> datetime | None:
+    stamp = _stamp(value)
+    return None if stamp is None else datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
 def _content(segments: list[Any]) -> bytes:

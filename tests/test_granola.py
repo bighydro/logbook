@@ -491,10 +491,13 @@ def test_store_receives_the_transcript_bytes_when_the_line_is_yielded(monkeypatc
     _serve(monkeypatch, [_note()])
     stored: list[bytes] = []
     lines = granola.pull(CONFIG, None, store=stored.append)
-    next(lines)
-    assert stored == [_content(SEGMENTS)]
+    line = next(lines)
+    spans = granola.spans_file(SEGMENTS, line["at"])  # the voices' spans file (RFC 0038 §2.3)
+    assert spans is not None
+    assert stored == [_content(SEGMENTS), spans]
+    assert attachments.reference(spans, "application/json") == line["payload"]["diarization"]["spans"]
     list(lines)
-    assert stored == [_content(SEGMENTS)]  # the summary is inline text, nothing to store
+    assert stored == [_content(SEGMENTS), spans]  # the summary is inline text, nothing to store
 
 
 # -- failure: retry once, then a clear error, nothing yielded -----------------------------------------
@@ -704,3 +707,173 @@ def test_sync_network_failure_exits_1_writes_nothing_and_never_prints_the_key(lb
     assert "connection refused" in captured.err and KEY not in captured.err + captured.out
     assert list(lb.lines()) == []
     assert not (lb.root / "state").exists() and not (lb.root / "attachments").exists()
+
+
+# -- voices: the provider's channel marks (RFC 0038 §2.5) -------------------------------------------
+
+TRANSCRIPT_SCHEMA = json.loads((ROOT / "schema" / "transcript-v1.schema.json").read_text(encoding="utf-8"))
+
+
+def _schema_errors(payload: dict[str, Any]) -> list[str]:
+    return [e.message for e in Draft202012Validator(TRANSCRIPT_SCHEMA).iter_errors(payload)]
+
+
+def test_the_microphone_and_the_system_audio_are_two_voices_labelled_by_their_channel(monkeypatch):
+    """Granola marks each segment as the microphone's (`me`) or the system audio's (`them`): the
+    labels are `mic` and `system`, the mic `from_me`, each with the name Granola displayed."""
+    _serve(monkeypatch, [_note()])
+    line = next(granola.pull(CONFIG, None))
+    p = line["payload"]
+    assert p["speakers"] == [
+        {
+            "label": "mic",
+            "seconds": 14.0,
+            "turns": 2,
+            "channel": "mic",
+            "from_me": True,
+            "name": "Kari Nordmann",
+        },
+        {"label": "system", "seconds": 5.0, "turns": 1, "channel": "system", "name": "Ola Nordmann"},
+    ]
+    assert p["diarization"] == {
+        "engine": "granola",
+        "channels": 2,
+        "overlap_s": 0.0,
+        "spans": attachments.reference(granola.spans_file(SEGMENTS, line["at"]) or b"", "application/json"),
+    }
+    assert "audio" not in p["diarization"] and "model" not in p["diarization"]  # Granola kept the audio
+    assert _schema_errors(p) == []
+    spans = json.loads(granola.spans_file(SEGMENTS, line["at"]) or b"")
+    assert spans["content"] == p["content"]["sha256"]
+    assert spans["segments"] == [
+        {"from": 0.0, "to": 4.0, "speaker": "mic"},
+        {"from": 4.0, "to": 9.0, "speaker": "system"},
+        {"from": 2090.0, "to": 2100.0, "speaker": "mic"},
+    ]
+    assert [t["speaker"] for t in spans["turns"]] == ["mic", "system", "mic"]
+
+
+def test_the_far_end_s_voices_are_numbered_when_granola_tells_them_apart():
+    them = {"source": "speaker", "attribution": "them"}
+    segments = [
+        _segment(None, "Hei", "2026-03-01T13:00:00Z", "2026-03-01T13:00:02Z"),
+        _segment(
+            None, "Hallo", "2026-03-01T13:00:02Z", "2026-03-01T13:00:05Z", **them, diarization_label="B"
+        ),
+        _segment(None, "Ja", "2026-03-01T13:00:05Z", "2026-03-01T13:00:06Z", **them, diarization_label="A"),
+        _segment(None, "Nei", "2026-03-01T13:00:06Z", "2026-03-01T13:00:09Z", **them, diarization_label="B"),
+    ]
+    p = granola.transcript_of(_note(transcript=segments), segments)["payload"]
+    assert [(s["label"], s["turns"], s["seconds"]) for s in p["speakers"]] == [
+        ("mic", 1, 2.0),
+        ("system.1", 2, 6.0),  # B spoke first at the far end
+        ("system.2", 1, 1.0),
+    ]
+    assert [s.get("from_me") for s in p["speakers"]] == [True, None, None]
+    assert _schema_errors(p) == []
+
+
+def test_voices_on_the_microphone_told_apart_carry_no_from_me():
+    segments = [
+        _segment(None, "Hei", "2026-03-01T13:00:00Z", "2026-03-01T13:00:02Z", diarization_label="Speaker A"),
+        _segment(
+            None, "Hallo", "2026-03-01T13:00:02Z", "2026-03-01T13:00:05Z", diarization_label="Speaker B"
+        ),
+    ]
+    p = granola.transcript_of(_note(transcript=segments), segments)["payload"]
+    assert [(s["label"], s.get("from_me")) for s in p["speakers"]] == [("mic.1", None), ("mic.2", None)]
+
+
+def test_speech_over_the_other_side_is_counted_for_both_and_listed_under_overlap():
+    them = {"source": "speaker", "attribution": "them"}
+    segments = [
+        _segment("Kari Nordmann", "Hei", "2026-03-01T13:00:00Z", "2026-03-01T13:00:04Z"),
+        _segment("Ola Nordmann", "Ja", "2026-03-01T13:00:02.500Z", "2026-03-01T13:00:09Z", **them),
+    ]
+    line = granola.transcript_of(_note(transcript=segments), segments)
+    p = line["payload"]
+    assert [s["seconds"] for s in p["speakers"]] == [4.0, 6.5]
+    assert p["diarization"]["overlap_s"] == 1.5
+    spans = json.loads(granola.spans_file(segments, line["at"]) or b"")
+    assert spans["segments"] == [
+        {"from": 0.0, "to": 4.0, "speaker": "mic", "overlap": ["system"]},
+        {"from": 2.5, "to": 9.0, "speaker": "system", "overlap": ["mic"]},
+    ]
+
+
+def test_without_times_the_voices_are_counted_and_no_spans_are_written():
+    segments = [
+        {"speaker": {"source": "microphone", "attribution": "me"}, "text": "Hei"},
+        {"speaker": {"source": "speaker", "attribution": "them"}, "text": "Ja"},
+    ]
+    p = granola.transcript_of(_note(transcript=segments, created="2026-03-01T13:00:00Z"), segments)["payload"]
+    assert p["speakers"] == [
+        {"label": "mic", "turns": 1, "channel": "mic", "from_me": True},
+        {"label": "system", "turns": 1, "channel": "system"},
+    ]
+    assert p["diarization"] == {"engine": "granola", "channels": 2}
+    assert granola.spans_file(segments, "2026-03-01T13:00:00Z") is None
+    assert _schema_errors(p) == []
+
+
+def test_the_attribution_alone_marks_the_channel_when_granola_gives_no_source():
+    segments = [
+        {
+            "speaker": {"attribution": "me"},
+            "text": "Hei",
+            "start_time": "2026-03-01T13:00:00Z",
+            "end_time": "2026-03-01T13:00:01Z",
+        },
+        {
+            "speaker": {"attribution": "them"},
+            "text": "Ja",
+            "start_time": "2026-03-01T13:00:01Z",
+            "end_time": "2026-03-01T13:00:03Z",
+        },
+    ]
+    p = granola.transcript_of(_note(transcript=segments), segments)["payload"]
+    assert [s["label"] for s in p["speakers"]] == ["mic", "system"]
+
+
+def test_segments_with_no_channel_mark_give_no_voices():
+    segments = [
+        {
+            "speaker": {"name": "Kari Nordmann"},
+            "text": "Hei",
+            "start_time": "2026-03-01T13:00:00Z",
+            "end_time": "2026-03-01T13:00:01Z",
+        },
+        {
+            "speaker": {},
+            "text": "Ja",
+            "start_time": "2026-03-01T13:00:01Z",
+            "end_time": "2026-03-01T13:00:03Z",
+        },
+    ]
+    p = granola.transcript_of(_note(transcript=segments), segments)["payload"]
+    assert "speakers" not in p and "diarization" not in p
+    assert granola.spans_file(segments, "2026-03-01T13:00:00Z") is None
+
+
+def test_a_segment_without_a_mark_among_marked_ones_is_nobody_s_in_the_spans():
+    segments = [
+        _segment(None, "Hei", "2026-03-01T13:00:00Z", "2026-03-01T13:00:02Z"),
+        {
+            "speaker": {},
+            "text": "...",
+            "start_time": "2026-03-01T13:00:02Z",
+            "end_time": "2026-03-01T13:00:03Z",
+        },
+    ]
+    line = granola.transcript_of(_note(transcript=segments), segments)
+    assert [(s["label"], s["turns"]) for s in line["payload"]["speakers"]] == [("mic", 1)]
+    spans = json.loads(granola.spans_file(segments, line["at"]) or b"")
+    assert [s["speaker"] for s in spans["segments"]] == ["mic", None]
+
+
+def test_sync_stores_the_spans_file_beside_the_text(lb, monkeypatch, capsys):
+    _serve(monkeypatch, [_note()])
+    _sync()
+    t, _s = lb.lines()
+    ref = t["payload"]["diarization"]["spans"]
+    assert json.loads((lb.root / ref["path"]).read_bytes())["format"] == "speaker-spans/1"
