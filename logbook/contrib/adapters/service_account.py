@@ -38,7 +38,10 @@ and a lost connection are retried after a wait that doubles from one second (`Re
 server sends one, is honoured up to `BACKOFF_MAX_S`), `RETRIES` times; then the run stops with the last
 error. A 401 mints the token again, once. Any other answer that is not a success is an `ApiError`
 carrying the status and Google's reasons, so a source can tell a history too old to read (404) or a
-start too long ago (410) from a failure. Tests put an in-process fake in place of `send` and of `sleep`."""
+start too long ago (410) from a failure. A session told not to wait (`wait_on_limits=False`, a dry run)
+raises `LimitReached` on the first 429, rate-limit or quota 403 (`quotaExceeded`, `dailyLimitExceeded`) or
+`RESOURCE_EXHAUSTED`, with Google's own words, and sleeps not at all. Tests put an in-process fake in place
+of `send` and of `sleep`."""
 
 from __future__ import annotations
 
@@ -55,6 +58,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+from . import LimitReached
 
 __all__ = [
     "BACKOFF_MAX_S",
@@ -114,6 +119,7 @@ BACKOFF_S = 1.0  # the first wait; each next one doubles
 BACKOFF_MAX_S = 64.0  # no wait is longer, whatever Retry-After says
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 RATE_REASONS = frozenset({"rateLimitExceeded", "userRateLimitExceeded"})
+QUOTA_REASONS = frozenset({"quotaExceeded", "dailyLimitExceeded"})  # a day's quota spent: never retried
 EXTRA = 'pip install "openlogbook[crypto]"'
 NO_CRYPTO = f"signing with the service-account key needs the crypto extra: {EXTRA}"
 USER_AGENT = "logbook"
@@ -294,9 +300,10 @@ class Session:
     """One run's calls to one Google API as the user, with one scope: the token minted on the first call
     and again when it nears its end or a call says it is no longer good."""
 
-    def __init__(self, account: Account, scope: str) -> None:
+    def __init__(self, account: Account, scope: str, wait_on_limits: bool = True) -> None:
         self.account = account
         self.scope = scope
+        self.wait_on_limits = wait_on_limits
         self._token: str | None = None
         self._expires = 0.0
 
@@ -322,6 +329,8 @@ class Session:
                 continue
             if response is not None and 200 <= response.status < 300:
                 return _parse(response)
+            if response is not None and not self.wait_on_limits and _limited(response):
+                raise LimitReached(_api_error(response))
             if response is not None and not _retryable(response):
                 raise ApiError(_api_error(response), response.status, frozenset(_reasons(response)))
             if response is not None:
@@ -350,6 +359,8 @@ class Session:
                     raise GoogleError("the token endpoint answered without a token")
                 lifetime = data.get("expires_in")
                 return token, now + (float(lifetime) if isinstance(lifetime, int | float) else LIFETIME_S)
+            if response is not None and response.status == 429 and not self.wait_on_limits:
+                raise LimitReached("token endpoint: HTTP 429")
             if response is not None and response.status not in RETRY_STATUS:
                 message, refused = self._refused(response)
                 raise ScopeRefused(message, self.scope) if refused else GoogleError(message)
@@ -394,6 +405,14 @@ def _retryable(response: Response) -> bool:
     if response.status in RETRY_STATUS:
         return True
     return response.status == 403 and bool(_reasons(response) & RATE_REASONS)
+
+
+def _limited(response: Response) -> bool:
+    """A quota or rate-limit answer: a 429, or a 403 whose reason is a rate limit or a spent quota
+    (`RESOURCE_EXHAUSTED` counts as a rate limit, `_reasons`)."""
+    if response.status == 429:
+        return True
+    return response.status == 403 and bool(_reasons(response) & (RATE_REASONS | QUOTA_REASONS))
 
 
 def _wait(response: Response | None, retry: int) -> float:

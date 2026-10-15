@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from google_fake import DRIVE_SCOPE, GMAIL_SCOPE, USER, Fake, private_key, write_key
 
-from logbook.contrib import doctor
+from logbook.contrib import adapters, doctor
 from logbook.contrib.adapters import service_account
 from logbook.core import policy
 from logbook.core.store import Logbook
@@ -259,3 +259,51 @@ def test_every_source_on_the_key_runs_and_no_token_is_ever_written(
         for part in name.parts
         for word in ("token", "credential", "oauth")
     ), names
+
+
+# -- a dry run and the source's limit ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (429, None),
+        (403, "rateLimitExceeded"),
+        (403, "userRateLimitExceeded"),
+        (403, "quotaExceeded"),
+        (403, "dailyLimitExceeded"),
+    ],
+)
+def test_a_session_told_not_to_wait_stops_at_the_first_limit_answer(
+    fake: Fake, status: int, reason: str | None
+) -> None:
+    fake.fail(status, retry_after="30", reason=reason)
+    with pytest.raises(adapters.LimitReached) as e:
+        service_account.Session(_account(), GMAIL_SCOPE, wait_on_limits=False).get_json(PROFILE, {})
+    assert str(e.value) == f"HTTP {status}: synthetic failure {status}", "Google's own words, one line"
+    assert not isinstance(e.value, service_account.ApiError), "never taken for one calendar's own error"
+    assert fake.waits == []  # type: ignore[attr-defined]
+
+
+def test_resource_exhausted_is_a_limit_answer(fake: Fake) -> None:
+    said = "Quota exceeded for quota metric 'Queries'"
+    error = {"code": 403, "status": "RESOURCE_EXHAUSTED", "message": said}
+    fake.failures.append((403, {}, json.dumps({"error": error}).encode("utf-8")))
+    with pytest.raises(adapters.LimitReached, match="Quota exceeded"):
+        service_account.Session(_account(), GMAIL_SCOPE, wait_on_limits=False).get_json(PROFILE, {})
+
+
+def test_a_session_told_not_to_wait_still_asks_again_after_a_server_error(fake: Fake) -> None:
+    fake.fail(503)
+    assert service_account.Session(_account(), GMAIL_SCOPE, wait_on_limits=False).get_json(PROFILE, {})
+    assert fake.waits == [1.0], "a 503 is not a limit: the one wait a dry run still makes"  # type: ignore[attr-defined]
+
+
+def test_a_session_that_waits_waits_out_a_429_and_a_spent_quota_is_one_error_as_before(fake: Fake) -> None:
+    fake.fail(429, retry_after="7")
+    assert service_account.Session(_account(), GMAIL_SCOPE).get_json(PROFILE, {})
+    assert fake.waits == [7.0]  # type: ignore[attr-defined]
+    fake.fail(403, reason="dailyLimitExceeded")
+    with pytest.raises(service_account.ApiError) as e:
+        service_account.Session(_account(), GMAIL_SCOPE).get_json(PROFILE, {})
+    assert e.value.status == 403 and fake.waits == [7.0]  # type: ignore[attr-defined]

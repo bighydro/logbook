@@ -201,6 +201,7 @@ def pull(
     recorded: Callable[[str | None], Iterable[dict[str, Any]]] | None = None,
     cache: dict[str, Any] | None = None,
     notice: Callable[[str], None] | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Every activity from `since` (RFC3339; None for all the API keeps) folded per file, hour and
     activity into event/v1 line drafts, oldest first, each with its file's folder path when the metadata
@@ -210,7 +211,7 @@ def pull(
     the paths are missing for want of the scope. Raises service_account.GoogleError (an OSError) when
     Google cannot be read; nothing is yielded before every page is in and every path resolved."""
     counts = counts if counts is not None else {}
-    session = service_account.Session(config, SCOPE)
+    session = service_account.Session(config, SCOPE, wait_on_limits)
     raw = _query(session, since, progress)
     known = _known(recorded(since) if recorded is not None else ())
     cutoff = _now() - timedelta(seconds=SETTLE_S)
@@ -228,7 +229,8 @@ def pull(
     tz = timezone or "UTC"
     drafts = [_draft(file_id, word, hour, folded, tz) for (file_id, word, hour), folded in hours.items()]
     if drafts:
-        _paths(config, drafts, _touched(raw), cache if cache is not None else {}, counts, notice)
+        paths_cache = cache if cache is not None else {}
+        _paths(config, drafts, _touched(raw), paths_cache, counts, notice, wait_on_limits)
     yield from sorted(drafts, key=lambda d: (d["at"], d["payload"]["raw_id"]))
 
 
@@ -588,13 +590,14 @@ def _paths(
     cache: dict[str, Any],
     counts: dict[str, int],
     notice: Callable[[str], None] | None,
+    wait_on_limits: bool = True,
 ) -> None:
     """Each draft's `file.path`, the folders above it root first: the file's parent asked once this run,
     each folder from the cache or asked once and put there. Without the metadata scope delegated, no
     path and one notice."""
     now = _now()
     folders = _folders(cache, now, touched)
-    session = service_account.Session(config, METADATA_SCOPE)
+    session = service_account.Session(config, METADATA_SCOPE, wait_on_limits)
     parents: dict[str, str | None] = {}
     try:
         for draft in drafts:

@@ -147,12 +147,16 @@ files a commit changed, who closed an issue and who merged a pull request are as
 for a line the record does not hold yet. A comment edited after its line was written is not written
 again: the record keeps what was said when the sync first read it.
 
-**The watermark is per repo** (`marks` in `state/github.json`): the newest `modified_at` seen there,
-read back a week — the commits list filters by the committer's date, and a commit pushed days after it
-was made would otherwise be missed. A repo with no mark yet is read from its beginning, so a repo you
-add to the list later is read whole; `--since` reads every repo from an exact time; `--dry-run` counts
-and writes nothing. A commit pushed more than a week after it was made comes in with `--since` or the
-export.
+**The watermark is per repo** (`marks` in `state/github.json`): the newest `modified_at` seen there, read
+back a week — the commits list filters by the committer's date, and a commit pushed days after it was
+made would otherwise be missed. A repo with no mark yet is read from its beginning, so a repo you add to
+the list later is read whole; `--since` reads every repo from an exact time; `--dry-run` counts and
+writes nothing, and stops on one line at a rate limit instead of waiting it out. The source's first
+scheduled run reads every repo from 14 days back, not from its beginning ([the
+schedule](../schedule.md#a-sources-first-scheduled-run)); `--since` reads the rest. A run with `--since`,
+the scheduled first run among them, marks a repo it found nothing in at that time, so the next run reads
+it on from there and never from its beginning. A commit pushed more than a week after it was made comes
+in with `--since` or the export.
 
 **Rate limits.** At most ten requests a second. GitHub's secondary limit is waited out as its
 `Retry-After` says (a minute when it says nothing), its hourly limit until its reset, a 429 or a server

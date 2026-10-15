@@ -37,6 +37,7 @@ from urllib.request import Request, urlopen
 
 from ...core.assets import Asset, by_icao24
 from ...core.store import utc
+from . import LimitReached
 
 __all__ = [
     "ENV",
@@ -62,6 +63,7 @@ URL_ENV = "LOGBOOK_OPENSKY_URL"
 DEFAULT_URL = "https://opensky-network.org/api"
 UNIT = "states"
 GROUP_MARKS = True  # `sync` keeps a watermark per group (per asset) in the state file
+HISTORY = False  # `states/all` is the present: a first scheduled run has nothing to bound
 TIMEOUT_S = 60
 # Beyond datetime's range on every platform (Windows refuses negative and far-future stamps).
 MAX_UNIX = 32_503_680_000  # 3000-01-01
@@ -199,7 +201,8 @@ def _get(config: Config, addresses: list[str]) -> dict[str, Any]:
         if e.code == 401:
             raise OSError("OpenSky refused the credentials (401); check LOGBOOK_OPENSKY_USER/PASS") from None
         if e.code == 429:
-            raise OSError("OpenSky rate limit reached (429); try again later or set credentials") from None
+            limit = "OpenSky rate limit reached (429); try again later or set credentials"
+            raise LimitReached(limit) from None  # an OSError: never waited out, here or anywhere
         raise OSError(f"OpenSky answered {e.code} {e.reason}") from None
     except URLError as e:
         raise OSError(f"OpenSky unreachable: {e.reason}") from None

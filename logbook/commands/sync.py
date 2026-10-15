@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..contrib import asset_status, gaps, home, last_run, schedule
+from ..contrib import asset_status, first_run, gaps, home, last_run, schedule
 from ..core import assets, places, policy, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
@@ -111,7 +111,10 @@ def sync_arguments(sub: Subparsers) -> None:
         " in policy/owner.json."
         " mail: a mailbox over IMAP, read-only (LOGBOOK_IMAP_HOST, _USER, _PASSWORD), resumed per folder"
         " from the last batch written; --restart reads every folder from its first message again."
-        " immich: the first run walks the whole library and says how many assets the server holds before it"
+        " a source's first scheduled run (--scheduled) reads its last 14 days, never its whole history;"
+        " --since reads the rest."
+        " immich: the first run by hand walks the whole library and says how many assets the server holds"
+        " before it"
         " starts, then counts `x of N`; a walk interrupted (Ctrl-C, a lost connection, a server error) is"
         " checkpointed in state/immich.json and the next run resumes where it stopped instead of walking"
         " the library again; --restart walks it from the beginning",
@@ -161,7 +164,7 @@ def sync_arguments(sub: Subparsers) -> None:
         help="what the schedule runs: `sync --all`, then `doctor`; the outcome to state/last-run.json; the"
         " restore test on the first Sunday of the month; one Telegram message when something is wrong or"
         " on Sunday evening, with LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT set"
-        " (never prompts)",
+        " (never prompts); a source with no watermark yet reads its last 14 days, not its whole history",
     )
     s.add_argument(
         "--close",
@@ -192,7 +195,11 @@ def sync_arguments(sub: Subparsers) -> None:
         help="beeper: the networks to pull, comma-separated (whatsapp,signal,telegram,…; default: every one"
         " but imessage, which `sync imessage` reads from this Mac's own database)",
     )
-    s.add_argument("--dry-run", action="store_true", help="show what would be appended; write nothing")
+    s.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show what would be appended; write nothing; a quota or rate-limit answer stops it at once",
+    )
     s.add_argument(
         "--restart",
         action="store_true",
@@ -252,10 +259,14 @@ def _sync_all(a: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _run_all(a: argparse.Namespace) -> tuple[list[last_run.Source], bool]:
+def _run_all(
+    a: argparse.Namespace, bound: first_run.Window | None = None
+) -> tuple[list[last_run.Source], bool]:
     """`sync --all`'s run: every source in order, each printing as a single run prints, and one
     `Source` per source with its result and the lines it appended (the record's `seq` before and
-    after it). The second value is whether a Ctrl-C ended the run."""
+    after it). The second value is whether a Ctrl-C ended the run. `bound` is the window a source's
+    first scheduled run reads (`logbook.contrib.first_run`), given by `sync --scheduled` alone: `sync
+    --all` by hand passes none, and every source starts where it always did."""
     from ..contrib import adapters
 
     if a.name is not None:
@@ -297,7 +308,8 @@ def _run_all(a: argparse.Namespace) -> tuple[list[last_run.Source], bool]:
         status = 0
         before = int(lb.meta["seq"])
         try:
-            _sync_source(argparse.Namespace(**{**vars(a), "name": name, "all": False, "scheduled": False}))
+            one = {**vars(a), "name": name, "all": False, "scheduled": False, "first_run": bound}
+            _sync_source(argparse.Namespace(**one))
         except SystemExit as e:
             status = e.code if isinstance(e.code, int) else 1
         except Exception as e:
@@ -331,7 +343,9 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     the first Sunday of the month, once that day, the restore test (`backup --restore-test`, on the
     backup `state/last-backup.json` names); then `doctor`, printed as by hand. The outcome goes to
     `state/last-run.json` (`logbook.contrib.last_run`), written once after the sync so the doctor's
-    own `last-run` line reads this run, and once at the end with the doctor's counts. Then one
+    own `last-run` line reads this run, and once at the end with the doctor's counts. A source's
+    first scheduled run reads the last 14 local days, not its whole history: the window is taken
+    once, from this run's clock (`logbook.contrib.first_run`), and handed to every source. Then one
     message when something is wrong or on Sunday evening, if the notifier is configured
     (`logbook.contrib.notify`); nothing is sent and nothing said about it when it is not. Exit 1
     when a source failed or a check failed, as `sync --all` and `doctor` would. It never prompts.
@@ -352,7 +366,7 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     before = last_run.previous(lb.root)
     week = before.week if before is not None else ()
     weekly_sent = before.weekly_sent if before is not None else None
-    runs, interrupted = _run_all(a)
+    runs, interrupted = _run_all(a, first_run.window(lb.meta, started))
     _say_all(runs, interrupted)
     first = next((f"{r.name}  {r.result}" for r in runs if r.failed), None)
     run = last_run.Run(started, tuple(runs), None, first)
@@ -643,7 +657,8 @@ def _sync_one(a: argparse.Namespace) -> None:
     if not a.dry_run:  # before a request: a dry run writes nothing, so it needs no identity
         _require_identity_for_mixed_tiers(lb, adapter, "sync")
     state_path = lb.root / "state" / f"{a.name}.json"
-    stored = _read_state(state_path).get("since")
+    state = _read_state(state_path)
+    stored = state.get("since")
     since, resumed_from_record = _start(lb, adapter, config, a.since, stored)
     walks = _takes(adapter, "walk", live=True)
     resumes = walks and bool(getattr(adapter, "RESUMES", False))  # the checkpoint is its lasting resume state
@@ -659,6 +674,19 @@ def _sync_one(a: argparse.Namespace) -> None:
         sys.exit(2)
     if restart:  # the whole library again, whatever the watermark says; the checkpoint goes too
         since, resumed_from_record = None, None
+    own_state = resumes and bool(state.get(ResumeState.KEY))  # it carries on from its own marks
+    bound: first_run.Window | None = getattr(a, "first_run", None)  # given by `sync --scheduled` alone
+    from_bound = False  # this run starts where a first scheduled run was bounded to
+    if bound is not None and a.since is None and not restart and bool(getattr(adapter, "HISTORY", True)):
+        begin = first_run.start(state, since, resumed_from_record, bound, resumes)
+        since, resumed_from_record = begin.since, begin.resumed_from_record
+        from_bound = begin.bounded is not None or begin.from_mark
+        if begin.bounded is not None and not a.dry_run:  # before the pull: a run that fails leaves it
+            _write_state(state_path, {**state, first_run.KEY: {"from": bound.since, "day": bound.day}})
+            print(
+                f"{a.name}: first scheduled run read from {bound.day}; for the history run"
+                f" `logbook sync {a.name} --since <date>`"
+            )
     seen: dict[str, Any] = {
         "count": 0,
         "first": None,
@@ -725,6 +753,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["failed"] = failed
     if _takes(adapter, "assets", live=True):
         options["assets"] = _registry(lb, "sync")
+    if _takes(adapter, "wait_on_limits", live=True):  # a dry run stops on a quota answer, never waits
+        options["wait_on_limits"] = not a.dry_run
     parse_networks = getattr(adapter, "networks", None)  # the adapter's own parser of the flag's value
     if networks is not None and parse_networks is not None:
         try:
@@ -757,7 +787,13 @@ def _sync_one(a: argparse.Namespace) -> None:
     seen["groups"] = Counter()
     seen["group_marks"] = {}  # the largest watermark per group, kept in the state when GROUP_MARKS
     already_in_group: Counter[str] = Counter()
-    progress = _page_progress(unit, status, total=total, since=since, walks=walks)
+    report = _page_progress(unit, status, total=total, since=since, walks=walks)
+    read = [0]  # what the progress lines counted: a source that yields only once every page is in
+
+    def progress(count: int, elapsed: float) -> None:
+        read[0] = count
+        report(count, elapsed)
+
     drafts = _watch(
         adapter.pull(config, since, progress=progress, counts=counts, **options),
         adapter.watermark,
@@ -775,7 +811,11 @@ def _sync_one(a: argparse.Namespace) -> None:
                 committed=walk.commit if walk is not None else None,
             )
     except (OSError, ValueError) as e:  # urllib's errors are OSErrors, a malformed page a ValueError;
-        print(f"sync: {a.name}: {e}", file=sys.stderr)  # what was pulled before is checkpointed
+        said = str(e)  # what was pulled before is checkpointed
+        if a.dry_run and isinstance(e, adapters.LimitReached):  # told not to wait, and it did not
+            so_far = f", {read[0]:,} {unit} read" if read[0] else ""
+            said = f"dry run stopped at the source's limit after {seen['count']:,} lines{so_far}: {e}"
+        print(f"sync: {a.name}: {said}", file=sys.stderr)
         sys.exit(1)
     if walk is not None and not a.dry_run:
         walk.finish()  # the walk completed: the checkpoint goes, the watermark below takes over
@@ -823,6 +863,9 @@ def _sync_one(a: argparse.Namespace) -> None:
     else:
         kept = ""
         mark = stored
+    if not failed and not status.get("interrupted"):
+        history_read = not from_bound and _reads_back(state_path, a.since, restart, since, stored, own_state)
+        _settle_first_run(state_path, history_read)
     already = seen["count"] - n
     if isinstance(walk, ResumeState):  # the marks are the source's own, per folder, said below
         tail = f"; marks in {_under_root(lb, state_path)}"
@@ -1212,6 +1255,9 @@ def _state(
     took `marks`, the watermark per conversation it raised, merged the same way."""
     stored = _read_state(path).get("since")
     state: dict[str, Any] = {"since": mark if not isinstance(stored, str) else max(mark, stored)}
+    bounded = first_run.mark(_read_state(path))  # until a run reads the history the bound left out
+    if bounded is not None:
+        state[first_run.KEY] = bounded
     if marks is not None:
         kept = _marks(path)
         for key, conversation_mark in marks.items():
@@ -1225,6 +1271,31 @@ def _state(
                 groups[name] = group_mark
         state["groups"] = dict(sorted(groups.items()))
     return state
+
+
+def _reads_back(
+    path: Path, given: str | None, restart: bool, since: str | None, stored: str | None, own_state: bool
+) -> bool:
+    """Whether this run, which completed, read the history a bounded first run left out
+    (`first_run.reads_back`); False when the source has no such mark."""
+    found = first_run.mark(_read_state(path))
+    return found is not None and first_run.reads_back(found, given, restart, since, stored, own_state)
+
+
+def _settle_first_run(path: Path, history_read: bool) -> None:
+    """After a run that completed: the mark of a bounded first run goes when the run read the history
+    (`doctor` names the source no more), else it says a run from it completed (`complete`), once."""
+    state = _read_state(path)
+    found = first_run.mark(state)
+    if found is None:
+        return
+    if history_read:
+        del state[first_run.KEY]
+    elif found.get("complete"):
+        return
+    else:
+        state[first_run.KEY] = {**found, "complete": True}
+    _write_state(path, state)
 
 
 def _marks(path: Path) -> dict[str, str]:

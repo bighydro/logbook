@@ -55,6 +55,10 @@ and optionally:
                                                 # it, every variable of ENV still unset, joined by `and`
     SOURCE: str                                 # the `source` its lines carry when it is not NAME
                                                 # (`gmail` writes `mail` lines), for what `sync` counts
+    HISTORY: bool                               # False for a source that holds no history to read: a
+                                                # stream (`ais`), the present (`adsb`), what a server
+                                                # keeps for a day (`telegram`); a first scheduled run
+                                                # then has nothing to bound (True if absent)
 
 `pull` may also take `timezone: str` (the record's IANA zone, as a file adapter's `run` may), `assets`
 (the registry, as `run` may) and `failed: list[str]`: a source made of several feeds appends one line per
@@ -74,7 +78,10 @@ mail road, `logbook.contrib.mail_lookup`) and `notice(text)` (one line of its ow
 for a progress line that says what is true: fetched, new, already in the record, never a guessed total),
 and `previous(prefixes) -> {prefix: [payload]}` (the payloads of the record's lines of its source and KIND
 under each raw_id prefix, in chain order, so a source that keeps no history of its own — `notion` — can
-tell a move or a changed property from the line before).
+tell a move or a changed property from the line before). A source that waits out a quota or rate
+limit (a 429, Google's rate-limit 403s, GitHub's hourly limit) may take `wait_on_limits: bool`: `sync`
+passes False on a dry run, and the first such answer then raises `LimitReached` with what the limit
+said instead of being waited out; a run that writes passes True and waits as before.
 
 A source can have both kinds under one NAME (`dawarich` reads an export and pulls live; `imessage`
 reads a phone backup's sms.db and the Mac's own chat.db; `mail` reads a Takeout mbox and pulls the
@@ -193,6 +200,12 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
 class Unreadable(ValueError):
     """The input is not what the adapter reads, or cannot be read: one sentence naming it, which
     `add` says before exiting 2 (`github`: a folder that is no clone and no account export)."""
+
+
+class LimitReached(OSError):
+    """The source answered that its quota or rate limit is spent, and the pull was told not to wait
+    (`wait_on_limits=False`, a dry run): what the limit said, in one line that carries no token or key.
+    An OSError, so a caller that does not know it says it on one line, as for a source not reached."""
 
 
 @runtime_checkable

@@ -47,7 +47,8 @@ the newest `modified_at` the run saw there, read back `LOOKBACK_H` — a week, f
 days after it was made (the commits list filters by the committer's date) and for the lists GitHub
 fills late; a commit pushed later than that comes in with `--since` or the export. A repo with no
 mark is read from its beginning, so a repo added to the list later is read whole; `--since` reads
-every repo from there. A line is written for an act at or after the start: a created line when the
+every repo from there, and marks a repo with nothing from then on at that time, so the next run reads it
+on from there and not whole. A line is written for an act at or after the start: a created line when the
 item was created then, a close or a merge when it happened then, a comment or a review when it was
 left then. A comment edited after its line was written is not written again: the record keeps what
 was said when it was first read.
@@ -68,7 +69,7 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from ... import __version__
-from . import github
+from . import LimitReached, github
 from .github import CLOSED, COMMENTED, CREATED, MERGED, REVIEWED, Owner, Who
 
 __all__ = [
@@ -199,6 +200,7 @@ def pull(
     notice: Callable[[str], None] | None = None,
     failed: list[str] | None = None,
     owner_aliases: Mapping[str, Iterable[str]] | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """The lines of every repo, a repo at a time, each repo's oldest act first. A repo starts from its
     mark in `marks` (`<owner>/<name>` in lower case → RFC 3339) less the lookback, which is raised to
@@ -213,7 +215,7 @@ def pull(
     marks = marks if marks is not None else {}
     marked = bool(marks)
     floor = github.instant(since) if since is not None else None
-    client = _Client(config)
+    client = _Client(config, wait_on_limits)
     me = client.get("/user")
     owner = Owner.of(owner_aliases)
     login = _text(me.get("login")) if isinstance(me, dict) else None
@@ -234,6 +236,8 @@ def pull(
             if key not in marks or mark > marks[key]:
                 marks[key] = mark
             yield draft
+        if key not in marks and floor is not None:  # nothing from `since` on: what came before is not this
+            marks[key] = floor.strftime("%Y-%m-%dT%H:%M:%SZ")  # run's, and the next reads on from there
 
 
 def _start(mark: str | None, floor: datetime | None, marked: bool) -> datetime | None:
@@ -266,13 +270,16 @@ def _dict(value: object) -> dict[str, Any]:
 
 
 class _Again(Exception):
-    """A request worth asking again: a rate limit, a 5xx, a connection that failed."""
+    """A request worth asking again: a rate limit (`limit`), a 5xx, a connection that failed."""
 
-    def __init__(self, what: str, after: float | None = None, connect: bool = False) -> None:
+    def __init__(
+        self, what: str, after: float | None = None, connect: bool = False, limit: bool = False
+    ) -> None:
         super().__init__(what)
         self.what = what
         self.after = after
         self.connect = connect
+        self.limit = limit
 
 
 class _Unreachable(OSError):
@@ -285,12 +292,14 @@ class _Unreachable(OSError):
 
 class _Client:
     """Every call to GitHub: paced, retried, GET only. The token goes in the header only, and only to
-    the configured address."""
+    the configured address. Told not to wait (`wait_on_limits=False`, a dry run), a rate limit raises
+    `LimitReached` at once."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, wait_on_limits: bool = True) -> None:
         self.config = config
         self.base = urlsplit(config.url)
         self.last: float | None = None
+        self.wait_on_limits = wait_on_limits
 
     def get(self, path: str, query: Mapping[str, Any] | None = None) -> Any:
         doc, _following = self._call(self._url(path, query))
@@ -337,6 +346,8 @@ class _Client:
                 return self._once(url, path)
             except _Again as again:
                 failure = again.what if again.connect else f"GitHub API GET {path}: {again.what}"
+                if again.limit and not self.wait_on_limits:
+                    raise LimitReached(failure) from None
                 connects += again.connect
                 if attempt == RETRIES or connects > CONNECT_RETRIES:
                     break
@@ -377,19 +388,21 @@ class _Client:
         retry_after = _seconds(e.headers.get("Retry-After"))
         if e.code in (403, 429):
             if retry_after is not None:
-                return _Again("rate limited (GitHub's secondary limit)", retry_after)
+                return _Again("rate limited (GitHub's secondary limit)", retry_after, limit=True)
             if e.headers.get("X-RateLimit-Remaining") == "0":
                 reset = _seconds(e.headers.get("X-RateLimit-Reset"))
                 if reset is not None:
                     until = datetime.fromtimestamp(reset, UTC).strftime("%H:%M UTC")
                     return _Again(
-                        f"rate limited until {until} (GitHub's hourly limit)", max(reset - _time(), 0) + 1
+                        f"rate limited until {until} (GitHub's hourly limit)",
+                        max(reset - _time(), 0) + 1,
+                        limit=True,
                     )
-                return _Again("rate limited (GitHub's hourly limit)")
+                return _Again("rate limited (GitHub's hourly limit)", limit=True)
             if e.code == 429:
-                return _Again("rate limited (429)")
+                return _Again("rate limited (429)", limit=True)
             if "secondary rate limit" in said.casefold():
-                return _Again("rate limited (GitHub's secondary limit)", SECONDARY_WAIT_S)
+                return _Again("rate limited (GitHub's secondary limit)", SECONDARY_WAIT_S, limit=True)
         if e.code in RETRY_STATUSES:
             return _Again(f"answered {e.code}")
         if e.code == 401:

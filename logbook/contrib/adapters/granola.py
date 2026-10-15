@@ -63,6 +63,7 @@ from ...core import speakers
 from ...core.attachments import reference
 from ...core.store import uuid7
 from ...core.transcripts import Turn, _stamp_of, participants
+from . import LimitReached
 from .transcript import KIND, TIER, draft
 
 __all__ = [
@@ -154,6 +155,7 @@ def pull(
     counts: dict[str, int] | None = None,
     store: Callable[[bytes], object] | None = None,
     lookup: Callable[[str, str], str | None] | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Every note created after `since` (RFC3339 UTC; None means all), oldest first: one
     transcript/v1 draft each, followed by its summary as a note/v1 draft; a note with no recording
@@ -172,7 +174,7 @@ def pull(
         params["page_size"] = PAGE_SIZE
         if cursor:
             params["cursor"] = cursor
-        page = _get(config, "/notes", params)
+        page = _get(config, "/notes", params, wait_on_limits)
         notes = page.get("notes")
         if not isinstance(notes, list):
             raise ValueError("expected a JSON object with a `notes` array from GET /notes")
@@ -184,7 +186,7 @@ def pull(
             break
     pairs: list[tuple[dict[str, Any], bytes, bytes | None, dict[str, Any] | None, bool]] = []
     for stub in listed:
-        note, segments = _note_with_transcript(config, str(stub["id"]))
+        note, segments = _note_with_transcript(config, str(stub["id"]), wait_on_limits)
         line = transcript_of(note, segments)
         has_recording = recorded(line, segments)
         if has_recording:
@@ -310,26 +312,28 @@ def summary_of(
 # -- the API -----------------------------------------------------------------------------------------
 
 
-def _note_with_transcript(config: Config, note_id: str) -> tuple[dict[str, Any], list[Any]]:
+def _note_with_transcript(
+    config: Config, note_id: str, wait_on_limits: bool = True
+) -> tuple[dict[str, Any], list[Any]]:
     """The note with its segments: inline when the API allows, else the note alone and the paged
     transcript endpoint."""
     try:
-        note = _get(config, f"/notes/{note_id}", {"include": "transcript"})
+        note = _get(config, f"/notes/{note_id}", {"include": "transcript"}, wait_on_limits)
     except _TooLarge:
-        note = _get(config, f"/notes/{note_id}", {})
-        return note, _paged_transcript(config, note_id)
+        note = _get(config, f"/notes/{note_id}", {}, wait_on_limits)
+        return note, _paged_transcript(config, note_id, wait_on_limits)
     segments = note.get("transcript")
     return note, segments if isinstance(segments, list) else []
 
 
-def _paged_transcript(config: Config, note_id: str) -> list[Any]:
+def _paged_transcript(config: Config, note_id: str, wait_on_limits: bool = True) -> list[Any]:
     segments: list[Any] = []
     cursor: str | None = None
     while True:
         params: dict[str, Any] = {"page_size": SEGMENT_PAGE_SIZE}
         if cursor:
             params["cursor"] = cursor
-        page = _get(config, f"/notes/{note_id}/transcript", params)
+        page = _get(config, f"/notes/{note_id}/transcript", params, wait_on_limits)
         part = page.get("transcript")
         if not isinstance(part, list):
             raise ValueError(f"expected a `transcript` array from GET /notes/{note_id}/transcript")
@@ -343,9 +347,10 @@ class _TooLarge(Exception):
     """413 TRANSCRIPT_TOO_LARGE: fetch the transcript by its own endpoint."""
 
 
-def _get(config: Config, path: str, params: Mapping[str, Any]) -> dict[str, Any]:
+def _get(config: Config, path: str, params: Mapping[str, Any], wait_on_limits: bool = True) -> dict[str, Any]:
     """One GET, retried once on a connection failure, a timeout, 429 or a 5xx. The only network
-    call in this module. Raises OSError with a message that names the request, never the key."""
+    call in this module. Raises OSError with a message that names the request, never the key; told
+    not to wait (`wait_on_limits=False`, a dry run), a 429 raises `LimitReached` at once."""
     query = f"?{urlencode(params)}" if params else ""
     req = Request(
         f"{config.url}{path}{query}",
@@ -362,6 +367,8 @@ def _get(config: Config, path: str, params: Mapping[str, Any]) -> dict[str, Any]
                 raise _TooLarge() from None
             if e.code not in RETRY_STATUSES:
                 raise OSError(_explain(path, f"HTTP {e.code} {e.reason}", e.code)) from None
+            if e.code == 429 and not wait_on_limits:
+                raise LimitReached(_explain(path, f"HTTP {e.code} {e.reason}", e.code)) from None
             failure = f"HTTP {e.code} {e.reason}"
         except URLError as e:
             failure = str(e.reason)

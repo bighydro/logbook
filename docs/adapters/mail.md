@@ -120,7 +120,10 @@ update them. On a server without the extension the line carries neither.
 leaves the mark at the last batch written and the next run resumes there; a folder whose
 `UIDVALIDITY` changed is read from its first message again, which costs headers and writes nothing
 new; a walk after a lost mark writes nothing new either, because the dedupe on `(source, raw_id)`
-refuses what the record holds.
+refuses what the record holds. A first run by hand reads every folder from its first message; the first
+scheduled run reads the last 14 days ([the schedule](../schedule.md#a-sources-first-scheduled-run)) as
+`--since` does, `SINCE` that day, and a folder with no message from that day on is marked at its last
+message, so the next run reads only what arrives after it.
 
 **Headers first.** Each batch of 200 UIDs is fetched as `Message-ID` and size alone, the record is
 asked which of those it holds (one SELECT), and only the other bodies are fetched, in batches of at
@@ -169,14 +172,17 @@ will carry, which would then be refused), a message in Spam or Trash, and one de
 listed and being read: each is counted.
 
 **Headers first, history next.** Each page of message ids is read as metadata (the `Message-ID` header
-alone), the record is asked which it holds, and only the other bodies are fetched: after a Takeout
-import or an IMAP sync, the first run costs one small request per message and no body. The state in
-`state/gmail.json` is Gmail's **history id**, taken before anything is listed, and the newest
-**internal date** handled, written once the lines are in the record. A run reads the history since the
-id and lists nothing; when Gmail no longer keeps that history (about a week) the run says so and lists
-what Gmail received from a day before the newest message. The first run lists every message; `--since`
-gives a shorter one, which then leaves a mark, and on a later run lists from that time for that run
-alone, the mark left as it was. Rate limits and server errors are retried with a doubling wait; anything
+alone), the record is asked which it holds, and only the other bodies are fetched: after a Takeout import
+or an IMAP sync, the first run costs one small request per message and no body. The state in
+`state/gmail.json` is Gmail's **history id**, taken before anything is listed, and the newest **internal
+date** handled, written once the lines are in the record. A run reads the history since the id and lists
+nothing; when Gmail no longer keeps that history (about a week) the run says so and lists what Gmail
+received from a day before the newest message. The first run by hand lists every message; `--since` gives
+a shorter one, which then leaves a mark (its time as the newest date when nothing came after it, so a
+later list by date never reaches back past it), and on a later run lists from that time for that run
+alone, the mark left as it was. The first scheduled run is such a shorter one, the last 14 days ([the
+schedule](../schedule.md#a-sources-first-scheduled-run)). A dry run stops at the first rate limit or
+quota answer instead of waiting. Rate limits and server errors are retried with a doubling wait; anything
 else stops the run on one line, exit 1, the mark where it was.
 
 ### IMAP or the API

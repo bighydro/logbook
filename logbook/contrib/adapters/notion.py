@@ -84,6 +84,8 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+from . import LimitReached
+
 __all__ = [
     "ENV",
     "KIND",
@@ -228,6 +230,7 @@ def pull(
     timezone: str | None = None,
     previous: Previous | None = None,
     notice: Callable[[str], None] | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """The lines for every page last edited at or after `since` (every page when None), oldest edit
     first, each page's `created` line before its edit's. The pages are listed first, newest edit
@@ -240,7 +243,7 @@ def pull(
     counts = counts if counts is not None else {}
     zone = ZoneInfo(timezone or "UTC")
     started = time.monotonic()
-    client = _Client(config)
+    client = _Client(config, wait_on_limits)
     me = client.get("/users/me")
     owner = config.owner_id or _token_owner(me)
     floor = _instant(since) if since is not None else None
@@ -274,13 +277,16 @@ def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
 
 
 class _Again(Exception):
-    """A request worth asking again: a 429, a 5xx, a connection that failed."""
+    """A request worth asking again: a 429 (`limit`), a 5xx, a connection that failed."""
 
-    def __init__(self, what: str, after: float | None = None, connect: bool = False) -> None:
+    def __init__(
+        self, what: str, after: float | None = None, connect: bool = False, limit: bool = False
+    ) -> None:
         super().__init__(what)
         self.what = what
         self.after = after
         self.connect = connect
+        self.limit = limit
 
 
 class _Unreachable(OSError):
@@ -300,11 +306,13 @@ class _Withheld(OSError):
 
 
 class _Client:
-    """Every call to Notion: paced, retried, read-only. The token goes in the header only."""
+    """Every call to Notion: paced, retried, read-only. The token goes in the header only. Told not to
+    wait (`wait_on_limits=False`, a dry run), a 429 raises `LimitReached` at once."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, wait_on_limits: bool = True) -> None:
         self.config = config
         self.last: float | None = None
+        self.wait_on_limits = wait_on_limits
 
     def get(self, path: str, query: Mapping[str, Any] | None = None) -> dict[str, Any]:
         return self._call("GET", path, query, None)
@@ -333,6 +341,8 @@ class _Client:
                 return self._once(method, path, query, body)
             except _Again as again:
                 failure = again.what if again.connect else f"Notion API {method} {path}: {again.what}"
+                if again.limit and not self.wait_on_limits:
+                    raise LimitReached(failure) from None
                 connects += again.connect
                 if attempt == RETRIES or connects > CONNECT_RETRIES:
                     break
@@ -368,7 +378,7 @@ class _Client:
             if e.code in RETRY_STATUSES:
                 what = "rate limited (429)" if e.code == 429 else f"answered {e.code}"
                 after = _retry_after(e.headers.get("Retry-After")) if e.code in (429, 503) else None
-                raise _Again(what, after) from None
+                raise _Again(what, after, limit=e.code == 429) from None
             if e.code == 401:
                 raise OSError(f"Notion refused the token (401): {TOKEN_HINT}") from None
             if e.code in (403, 404):

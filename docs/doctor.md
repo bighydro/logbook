@@ -69,6 +69,15 @@ not readable or not a service-account key, or a user that is not an address, is 
 variable. The line reads the key on this machine and asks Google nothing, and never prints the path or
 the address ([the tour, *Google, on one key*](tour.md#google-on-one-key)).
 
+## A source whose history was never read
+
+A source's first scheduled run reads its last 14 days, not its whole history ([the
+schedule](schedule.md#a-sources-first-scheduled-run)). Until a run reads the rest (`--since` before
+that window, or `--restart`), the source's `sync:` line says so after what it says of the
+variables: ``pass  sync:drive  configured (LOGBOOK_DRIVE_SA_KEY, LOGBOOK_DRIVE_USER); first run bounded
+to 14 days; history not read (before 2026-09-25: `logbook sync drive --since <date>`)``. The note never
+changes the line's status: nothing is broken, and the history may be one you never want read.
+
 ## Implausible dates
 
 A calendar entry a parser placed in 1948, or a mail a sender's broken clock dated 2612, is not a

@@ -108,6 +108,7 @@ def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: 
     `assets` (the asset registry, ADR 0018), `places` (the record's named places), `report` (lines
     `add` prints after the counts), `listen_s`, `notice` and `status` (a source that listens
     to a stream, `ais`), `owner_aliases` (`_owner_aliases`: the owner's handles, addresses and names),
+    `wait_on_limits` (False on a dry run: a quota or rate-limit answer raises `LimitReached` at once),
     or one of `add`'s own options. A module can be both a file and a live
     adapter (`ais`), so `sync` asks about `pull`, never `run`."""
     from ..contrib import adapters
