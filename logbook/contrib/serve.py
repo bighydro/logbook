@@ -9,15 +9,24 @@ assets and the last fix of each (`asset_status.read`); `/gaps` where each source
 (`gaps.report`); `/world?from=&to=` the page `logbook export world` writes (`world.py`): the
 globe, the places, the assets on their tracks, the stays, the journeys and a time scrubber; `/today`
 redirects to the Day the owner is in now: the current date in the record's timezone, the date before
-until the record's `day_start` (RFC 0036), whose Day then says where it begins. Every page is built
-from the index and the readers, so a Day renders in the time `logbook day` takes whatever the
-record's length, and nothing is written by a GET: every page is answered from the record at its head.
+until the record's `day_start` (RFC 0036), whose Day then says where it begins. The Library's
+shelves: `/journeys?year=` the journeys that began in a year, the latest first (`journeys.shelf`),
+and `/journeys/FIRST/LAST` one journey (`journeys.read`): its days linking their Days, its stays as
+dots on a plain canvas drawn here, the promises made on it; `/people?year=` the canonical people of
+a year by days together (`person_page.ranked`) and the review queue of `people review`, and
+`/people/ID` one person (`person_page.read`). Every derived row on them carries its evidence folded:
+what it rests on, the day, the ids of the lines. Every page is built from the index and the
+readers, so a Day renders in the time `logbook day` takes whatever the record's length, and nothing
+is written by a GET: every page is answered from the record at its head.
 
-Two pages write, on a POST. `/places` carries the review queue of `setup places review`
+Four pages write, on a POST. `/places` carries the review queue of `setup places review`
 (`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
 `/places/review` (`Site.write`), which names a cluster or rejects it through the engine's own
 `accept` and `reject`, so `places.json`, the naming note and `state/places-review.json` are what the
-CLI writes. The Day carries the owner's two acts on it, Reflect and Sign (`Site._reflect`,
+CLI writes. A journey's page posts its name to `/journeys/name` (`journeys.name`, what `logbook add
+--trip` runs); the People page's queue posts to `/people/review`, Merge through
+`people_review.accept` and Not the same person through `people_review.reject` (`people review
+--accept`, `--reject`). The Day carries the owner's two acts on it, Reflect and Sign (`Site._reflect`,
 `Site._sign`): the reflection posts to `/day/YYYY-MM-DD/reflect` and is written through `day
 reflect`'s own `reflect.write` (the day's Wispr Flow draft offered prefilled, a recording heard
 through `day reflect --audio`'s path when the command wired one in, `Voice`), and the proposals
@@ -28,10 +37,11 @@ signature. The Library's write acts, allowed because the server binds 127.0.0.1 
 record's own user: a POST is answered only when the connection comes from this machine (the client
 address is loopback) and the form was submitted from the server's own pages (the browser's
 `Origin`, when it sends one, names 127.0.0.1); anything else is a 403 and nothing is written. Every
-write is one at a time (`Site._write_lock`) and through the CLI's own function; the Day's never
-waits for another writer. After a write the head has moved, and the next request reads the record
-again as after a sync. The policy's `write` list (the MCP door, ADR 0022) is never read: this is
-the owner's own page.
+write is one at a time (`Site._write_lock`) and through the CLI's own function, under the record's
+writer lock and never waiting for it: another command writing is a 503 on the Places, Journeys and
+People forms and a 409 on the Day's, and nothing is written. After a write the head has moved, and
+the next request reads the record again as after a sync. The policy's `write` list (the MCP door,
+ADR 0022) is never read: this is the owner's own page.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -87,8 +97,8 @@ from email.utils import collapse_rfc2231_value
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PureWindowsPath
-from typing import Any, NamedTuple
-from urllib.parse import parse_qs, urlsplit
+from typing import TYPE_CHECKING, Any, NamedTuple
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 from ..core import (
@@ -97,6 +107,7 @@ from ..core import (
     day_start,
     drafts,
     goals,
+    people,
     places,
     reading,
     share,
@@ -111,7 +122,10 @@ from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook
-from . import asset_status, dream, gaps, places_review, reflect, world
+from . import asset_status, dream, gaps, journeys, person_page, places_review, reflect, trip_page, world
+
+if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
+    from . import people_review
 
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
@@ -120,11 +134,19 @@ HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
-RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places", "/world"})  # and every Day: not the clock's
+# the record's pages, not the clock's (and every Day, journey and person)
+RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places", "/world", "/journeys", "/people"})
+JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
+PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
+NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
+PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review --accept`, `--reject`
+WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH)  # the Library's forms, under the writer lock
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
+CLOCK_PAGES = ("/people",)  # pages the record's today moves too (this year, anniversaries, drift): in the tag
+ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
@@ -191,6 +213,7 @@ DAY_SCRIPT_HASH = "sha256-" + base64.b64encode(hashlib.sha256(DAY_SCRIPT.encode(
 DAY_CSP = CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
 WORLD_CSP = CSP.replace("style-src", f"script-src '{world.SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
+DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
 Cell = str | tuple[str, str]  # a table cell: text, or (text, css class)
@@ -278,12 +301,33 @@ ul.signed{color:var(--mute);margin:.4rem 0}
 code.sha{overflow-wrap:anywhere}
 footer .footnote{display:inline-block;margin-top:.3rem}
 @media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}}
+ol.shelf{list-style:none;padding:0;margin:0}
+ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.shelf p{margin:.1rem 0}
+p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
+p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
+details.evidence,details.draft{margin:.25rem 0 0}
+details.evidence>summary{color:var(--mute);font-size:.85rem}
+details.evidence ul.evidence{font-size:.85rem;margin:.2rem 0 0 .8rem}
+details.evidence details{margin:0 0 0 .8rem}
+span.id{font:.78rem ui-monospace,monospace;color:var(--mute)}
+details.draft>summary{font-size:.9rem}
+div.draft p.segment{margin:.3rem 0}
+p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
+.dates{white-space:nowrap}
+svg.stays{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.stays circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
+svg.stays line{stroke:var(--mute)}
+li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
 """
 
 NAV = (
-    '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a><a href="/trips">trips</a>'
-    '<a href="/places">places</a><a href="/assets">assets</a><a href="/gaps">gaps</a>'
-    '<a href="/world">world</a>'
+    '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
+    '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/places">places</a>'
+    '<a href="/assets">assets</a><a href="/gaps">gaps</a><a href="/world">world</a>'
 )
 
 
@@ -292,7 +336,7 @@ class HostError(ValueError):
 
 
 class NotFound(Exception):
-    """No page at this path."""
+    """No page at this path; the message says so, and why when there is a reason."""
 
 
 class Redirect(Exception):
@@ -400,7 +444,8 @@ class Site:
         self.footer = footer
         self.voice = voice
         self._lock = threading.Lock()
-        self._review_lock = threading.Lock()  # the queue is read (its table built once) and acted on under it
+        # the review queues are read (their tables built once) and acted on under it
+        self._review_lock = threading.Lock()
         # one write at a time: the store's writer lock re-enters within a process, so it keeps out
         # another process's writer, never this server's other thread
         self._write_lock = threading.Lock()
@@ -430,8 +475,8 @@ class Site:
         again rather than keeping a stale page."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
-        if path == REVIEW_PATH:
-            return self._error(405, f"{REVIEW_PATH} takes the Places page's forms (POST), nothing else")
+        if path in WRITE_PATHS:
+            return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
         meta = self.current()
@@ -446,8 +491,8 @@ class Site:
             csp = DAY_CSP
         try:
             return Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
-        except NotFound:
-            return self._error(404, f"no page at {path}")
+        except NotFound as e:
+            return self._error(404, str(e))
         except Redirect as r:
             body = f'<p><a href="{escape(r.location)}">{escape(r.location)}</a></p>\n'
             return Response(302, self.document("places", body).encode("utf-8"), location=r.location)
@@ -459,6 +504,8 @@ class Site:
             day_start.DayStartError,
         ) as e:
             return self._error(500, str(e))
+        except people.PersonError as e:  # nobody the record names, several, or the owner
+            return self._error(404, f"no page at {path}: {e}")
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
 
@@ -470,67 +517,89 @@ class Site:
         origin: str | None,
         upload: Upload | None = None,
     ) -> Response:
-        """A POST. The Places page's form: `act` `name` (the field `name`, else the name proposed) or
-        `reject` on the cluster `id`, through `places_review.accept` and `reject`, the one path the
-        CLI's `--name`, `--accept` and `--reject` take. A Day's: Reflect and Sign (`_reflect`,
-        `_sign`), through `day reflect`'s own functions. Refused (403, nothing written) unless
-        `client`, the connection's address, is loopback and `origin`, the browser's Origin header
-        when it sent one, names 127.0.0.1: this machine, the server's own pages. A field sent more
-        than once (the Sign form's boxes) arrives as its values joined with commas, as `--accept N,N`
-        takes them; `upload` is the file a form carried, the Day's recording.
-
-        On the Places page a cluster no longer in the queue (named or rejected since the page was
-        read) is a 409; a name the engine refuses a 400. Done, a 303 to the page the form came from,
-        at the next cluster."""
+        """A POST: one of the forms of the server's own pages, each through the function the CLI
+        runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
+        Places page's (`_write_place`), the Journeys page's name (`_write_name`) and the People
+        page's review (`_write_review`); another command writing the record is a 503 and nothing
+        written, try again. A Day's: Reflect and Sign (`_reflect`, `_sign`), through `day
+        reflect`'s own functions. Refused (403, nothing written) unless `client`, the connection's
+        address, is loopback and `origin`, the browser's Origin header when it sent one, names
+        127.0.0.1: this machine, the server's own pages. A field sent more than once (the Sign
+        form's boxes) arrives as its values joined with commas, as `--accept N,N` takes them;
+        `upload` is the file a form carried, the Day's recording. One write at a time
+        (`_write_lock`)."""
         day_act = DAY_ACT.match(path)
-        if path != REVIEW_PATH and day_act is None:
+        if path not in WRITE_PATHS and day_act is None:
+            posts = ", ".join(WRITE_PATHS)
             return self._error(
                 404,
-                f"nothing to post at {path}; the Places page posts to {REVIEW_PATH}, a Day to"
+                f"nothing to post at {path}; the server's own forms post to {posts}, a Day's to"
                 " /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign",
             )
         if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
-            what = (
-                "a place is named from this machine only, through the server's own pages or"
-                " `logbook setup places review`"
-                if day_act is None
-                else "a day is reflected on and signed from this machine only, through the server's own"
-                " pages or `logbook day reflect`"
+            what = {
+                REVIEW_PATH: "a place is named from this machine only, through the server's own pages or"
+                " `logbook setup places review`",
+                NAME_PATH: "a journey is named from this machine only, through the server's own pages or"
+                " `logbook add --trip`",
+                PEOPLE_REVIEW_PATH: "a person is merged or told apart from this machine only, through the"
+                " server's own pages or `logbook people review`",
+            }.get(
+                path,
+                "a day is reflected on and signed from this machine only, through the server's own"
+                " pages or `logbook day reflect`",
             )
             return self._error(403, f"refused {where}: {what}; nothing was written")
         if day_act is not None:
             day, act = day_act.group(1), day_act.group(2)
             return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
+        acts = {
+            REVIEW_PATH: self._write_place,
+            NAME_PATH: self._write_name,
+            PEOPLE_REVIEW_PATH: self._write_review,
+        }
+        with self._write_lock, self._review_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    return acts[path](form)
+            except Locked as e:
+                return self._error(503, _not_waiting(e))
+
+    def _write_place(self, form: Mapping[str, str]) -> Response:
+        """The Places page's form: `act` `name` (the field `name`, else the name proposed) or
+        `reject` on the cluster `id`, through `places_review.accept` and `reject`, the one path the
+        CLI's `--name`, `--accept` and `--reject` take. A cluster no longer in the queue (named or
+        rejected since the page was read) is a 409; a name the engine refuses a 400. Done, a 303 to
+        the page the form came from, at the next cluster."""
         act, cluster = form.get("act", ""), form.get("id", "")
         page = form.get("page", "1")
         page = page if page.isdigit() and int(page) >= 1 else "1"
         if act not in ("name", "reject") or not cluster:
             return self._error(400, "the form names a cluster (id) and an act: name or reject")
-        with self._write_lock, self._review_lock:
-            self.current()
-            try:
-                report = places_review.read(self.lb)
-            except places_review.ReviewError as e:
-                return self._error(500, str(e))
-            found = [n for n, p in enumerate(report.proposals) if p.id == cluster]
-            if not found:
-                back = f"/places?page={page}"
-                return self._error(
-                    409,
-                    f"{cluster} is not in the queue: named or rejected already, or the page was older than"
-                    f" the record; {back} is the queue as it stands",
-                )
-            n = found[0]
-            proposal = report.proposals[n]
-            try:
-                if act == "name":
-                    given = " ".join(form.get("name", "").split()) or None
-                    places_review.accept(self.lb, [(proposal, given)])
-                else:
-                    places_review.reject(self.lb, [proposal])
-            except (places_review.ReviewError, places.PlaceError, stays.SettingsError) as e:
-                return self._error(400, str(e))
+        self.current()
+        try:
+            report = places_review.read(self.lb)
+        except places_review.ReviewError as e:
+            return self._error(500, str(e))
+        found = [n for n, p in enumerate(report.proposals) if p.id == cluster]
+        if not found:
+            back = f"/places?page={page}"
+            return self._error(
+                409,
+                f"{cluster} is not in the queue: named or rejected already, or the page was older than"
+                f" the record; {back} is the queue as it stands",
+            )
+        n = found[0]
+        proposal = report.proposals[n]
+        try:
+            if act == "name":
+                given = " ".join(form.get("name", "").split()) or None
+                places_review.accept(self.lb, [(proposal, given)])
+            else:
+                places_review.reject(self.lb, [proposal])
+        except (places_review.ReviewError, places.PlaceError, stays.SettingsError) as e:
+            return self._error(400, str(e))
         following = report.proposals[n + 1 : n + 2]
         location = f"/places?page={page}" + (f"#{following[0].id}" if following else "")
         return Response(303, b"", location=location)
@@ -682,6 +751,58 @@ class Site:
         """Whether a Day page carries the recording form and its script: a server that can hear."""
         return not self.static and self.voice is not None and self.voice.hear is not None
 
+    def _write_name(self, form: Mapping[str, str]) -> Response:
+        """The Journeys page's form: the field `name` names the journey `id` through
+        `journeys.name`, what `logbook add --trip ID "NAME"` runs. A journey that is no longer one
+        (the record moved its bounds since the page was read) is a 409; no words a 400. Done, a 303
+        to the journey's page, which reads the record again."""
+        trip_id = form.get("id", "")
+        bounds = trip_id.split(":")
+        if len(bounds) != 3 or bounds[0] != "trip" or not all(DAY.fullmatch(b) for b in bounds[1:]):
+            return self._error(400, "the form names a journey (id, trip:YYYY-MM-DD:YYYY-MM-DD) and its name")
+        self.current()
+        try:
+            journeys.name(self.lb, trip_id, form.get("name", ""), self.airports)
+        except journeys.JourneyError as e:
+            return self._error(400, str(e))
+        except stays.SettingsError as e:
+            return self._error(500, str(e))
+        except ValueError as e:
+            back = f"/journeys?year={bounds[1][:4]}"
+            return self._error(409, f"{trip_id} is not a journey of the record as it stands ({e}); {back}")
+        return Response(303, b"", location=f"/journeys/{bounds[1]}/{bounds[2]}")
+
+    def _write_review(self, form: Mapping[str, str]) -> Response:
+        """The People page's review queue: `act` `merge` accepts the proposal `id` through
+        `people_review.accept` (what `people review --accept N` writes: an alias line per
+        identifier seen), `reject` writes through `people_review.reject` (`--reject N`: the two are
+        not the same person). A proposal no longer in the queue is a 409; one the engine refuses a
+        400. Done, a 303 to the queue on the page the form came from (`year`)."""
+        from . import people_review
+
+        act, proposal_id = form.get("act", ""), form.get("id", "")
+        year = form.get("year", "")
+        if act not in ("merge", "reject") or not proposal_id:
+            return self._error(400, "the form names a proposal (id) and an act: merge or reject")
+        back = "/people" + (f"?year={year}" if YEAR.fullmatch(year) else "") + "#review"
+        self.current()
+        report = people_review.read(self.lb)
+        found = [p for p in report.proposals if p.id == proposal_id]
+        if not found:
+            return self._error(
+                409,
+                f"{proposal_id} is not in the queue: merged or told apart already, or the page was older"
+                f" than the record; {back.partition('#')[0]} is the queue as it stands",
+            )
+        try:
+            if act == "merge":
+                people_review.accept(self.lb, report, found)
+            else:
+                people_review.reject(self.lb, report, found)
+        except people_review.ReviewError as e:
+            return self._error(400, str(e))
+        return Response(303, b"", location=back)
+
     def current(self) -> dict[str, Any]:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
         appended while the server runs), the index is brought to the new head here, once, under a
@@ -705,7 +826,12 @@ class Site:
         (its forms are there from that day on). One page's tag never stands for
         another's, and a request that is an error is given none. None for a page the clock moves
         (`/assets`, `/gaps`) or a path with no page."""
-        if path not in RECORD_PAGES and DAY_PATH.match(path) is None:
+        if (
+            path not in RECORD_PAGES
+            and DAY_PATH.match(path) is None
+            and JOURNEY_PATH.match(path) is None
+            and PERSON_PATH.match(path) is None
+        ):
             return None
         root = self.lb.root
         circle = root / share.CIRCLE_DIR
@@ -719,7 +845,9 @@ class Site:
             *senders,
         ]
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        if DAY_PATH.match(path) is not None:  # its forms are there from the day the owner is in
+        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
+            # a Day's forms are there from the day the owner is in; this year, the coming
+            # anniversaries and a silence move with it too
             try:
                 parts.append(day_start.of(meta).today(self.now()).isoformat())
             except day_start.DayStartError:
@@ -755,13 +883,21 @@ class Site:
             return self.page_trips(params.get("year") or None)
         if path == "/places":
             return self.page_places(params.get("page") or "1", params.get("at") or None)
+        if path == "/journeys":
+            return self.page_journeys(params.get("year") or None)
+        if (m := JOURNEY_PATH.match(path)) is not None:
+            return self.page_journey(m.group(1), m.group(2))
+        if path == "/people":
+            return self.page_people(params.get("year") or None)
+        if (m := PERSON_PATH.match(path)) is not None:
+            return self.page_person(unquote(m.group(1)))
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
             return self.page_gaps(params.get("since") or None)
         if path == "/world":
             return self.page_world(params.get("from") or None, params.get("to") or None)
-        raise NotFound(path)
+        raise NotFound(f"no page at {path}")
 
     def _error(self, status: int, message: str) -> Response:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
@@ -818,6 +954,10 @@ class Site:
             f"<li>{self.link('The last day', f'/day/{whole[1]}')}, {whole[1]}: the Day as a timeline.</li>\n"
             f"<li>{self.link('The last fortnight', f'/days?from={a}&to={b}')}, one row per day.</li>\n"
             f"<li>{self.link(f'Trips of {year}', f'/trips?year={year}')}: runs of nights away.</li>\n"
+            f"<li>{self.link('Journeys', '/journeys')}: the trips one at a time, named, with their days,"
+            " stays, photos and promises.</li>\n"
+            f"<li>{self.link('People', '/people')}: the people the record names, by days together;"
+            " the review of who it has not placed.</li>\n"
             f"<li>{self.link('Places', '/places')}: the named places of the record.</li>\n"
             f"<li>{self.link('Assets', '/assets')}: the assets tracked and the last fix of each.</li>\n"
             f"<li>{self.link('Gaps', '/gaps')}: where each source went quiet.</li>\n"
@@ -1279,14 +1419,7 @@ class Site:
         if not lines:
             out.append('<ul class="evidence"><li>no source names it</li></ul>\n')
         else:
-            out.append('<ul class="evidence">\n')
-            out.extend(f"<li>{escape(line, quote=False)}</li>\n" for line in lines[: places_review.SHOWN])
-            out.append("</ul>\n")
-            rest = lines[places_review.SHOWN :]
-            if rest:
-                out.append(f'<details><summary>… and {len(rest)} more</summary>\n<ul class="evidence">\n')
-                out.extend(f"<li>{escape(line, quote=False)}</li>\n" for line in rest)
-                out.append("</ul>\n</details>\n")
+            out.append(_folded([escape(line, quote=False) for line in lines]))
         out.append(
             f'<form class="name" method="post" action="{REVIEW_PATH}">'
             f'<input type="hidden" name="id" value="{escape(p.id)}">'
@@ -1299,6 +1432,453 @@ class Site:
             out.append(f'<a class="skip" href="{escape(skip)}">Skip</a>')
         out.append('<button name="act" value="reject">Not a place</button></form>\n</li>\n')
         return "".join(out)
+
+    # -- /journeys ------------------------------------------------------------------------------------------
+
+    def page_journeys(self, year: str | None) -> str:
+        """The journeys that began in the year (default the record's last), the latest first, each
+        a row: its name or dates linking its page, the bounds, the nights away, the places, the
+        canonical people, the photos, the draft folded, and the evidence folded."""
+        shelf = journeys.shelf(self.lb, year, self.airports, self.tiers)
+        if shelf.year is None:
+            return self.document("journeys", f"<h1>Journeys</h1>\n<p>{escape(shelf.warning or '')}</p>\n")
+        links = DOT.join(
+            f"<b>{y}</b>" if y == shelf.year else self.link(y, f"/journeys?year={y}") for y in shelf.years
+        )
+        parts = [f"<h1>Journeys <small>{shelf.year}</small></h1>\n", f'<p class="pager">{links}</p>\n']
+        if shelf.warning:
+            parts.append(f"<p>{escape(shelf.warning)}</p>\n")
+        elif not shelf.journeys:
+            parts.append(f"<p>no journeys began in {shelf.year}: every night was at home</p>\n")
+        else:
+            parts.append(
+                '<p class="mute">The runs of nights away from home that began in this year, the latest'
+                " first: derived from the nights every time, never written; a name is yours, written as"
+                " a note on the journey's page or with <code>logbook add --trip</code>.</p>\n"
+            )
+            parts.append('<ol class="shelf">\n')
+            parts.extend(self._journey_row(j) for j in shelf.journeys)
+            parts.append("</ol>\n")
+        return self.document(f"journeys {shelf.year}", "".join(parts))
+
+    def _journey_row(self, j: journeys.Journey) -> str:
+        t = j.trip
+        dates = f"{t.start} {EN_DASH} {t.end}"
+        title = escape(j.name.text) if j.name else _dates(dates)
+        head = self.link(f"<b>{title}</b>", f"/journeys/{t.start}/{t.end}")
+        facts = [journeys.nights_text(j.to_json()), f"home {t.until}"]
+        if t.route:
+            facts.append(f" {ARROW} ".join(t.route))
+        facts.append(_plural(len(j.photos), "photo"))
+        with_ = self._people_links(j.people, j.unplaced)
+        out = [
+            f'<li id="{escape(t.id.replace(":", "-"))}">\n<p class="head">{head}'
+            + (f' <span class="mute">{_dates(dates)}</span>' if j.name else "")
+            + "</p>\n",
+            f'<p class="facts">{escape(DOT.join(facts))}</p>\n',
+        ]
+        if t.places:
+            out.append(f'<p class="facts">places {escape(", ".join(t.places))}</p>\n')
+        if with_:
+            out.append(f'<p class="facts">with {with_}</p>\n')
+        if j.draft is not None:
+            out.append(_draft_folded(j.draft))
+        if j.draft_withheld is not None:  # the policy no longer allows it: the row, never the text
+            out.append(_withheld_html(j.draft_withheld, heading=False))
+        out.append(self._evidence(self._journey_evidence(j)))
+        out.append("</li>\n")
+        return "".join(out)
+
+    def _journey_evidence(self, j: journeys.Journey) -> list[Evidence]:
+        """Where a journey row comes from: each run of nights at one place with the lines of its
+        stays, the flights, each person with the lines that put them there, the photos, the name."""
+        items: list[Evidence] = []
+        run: list[dict[str, Any]] = []
+        for night in [*j.nights_of, None]:
+            if run and (night is None or night["where"] != run[-1]["where"]):
+                first, last = run[0]["day"], run[-1]["day"]
+                span = first if first == last else f"{first} {EN_DASH} {last}"
+                lines = list(dict.fromkeys(i for n in run for i in n["lines"]))
+                items.append((f"{_plural(len(run), 'night')} {span} {run[0]['where']}", lines, first))
+                run = []
+            if night is not None:
+                run.append(night)
+        for f in j.trip.flights:
+            name = f"{f['carrier']} {f['number']} " if f.get("number") else ""
+            items.append((f"flight {name}{f['from']} {ARROW} {f['to']}", list(f["lines"]), str(f["date"])))
+        for p in j.people:
+            items.append((f"with {p['name']}", p["lines"], None))
+        if j.photos:
+            items.append((_plural(len(j.photos), "photo"), j.photos, None))
+        if j.name is not None:
+            items.append((f"named {j.name.text}", [j.name.line], None))
+        return items
+
+    def _people_links(self, found: Sequence[Mapping[str, Any]], unplaced: int = 0) -> str:
+        """The canonical people, each a link to their page; the ones no line names counted, a link
+        to the review queue."""
+        names = [self.link(escape(str(p["name"])), _person_path(str(p["id"]))) for p in found]
+        if unplaced:
+            names.append(self.link(f"{unplaced} not placed", "/people#review"))
+        return ", ".join(names)
+
+    def page_journey(self, start: str, end: str) -> str:
+        """One journey: its name (and the form that names it), its draft folded, its stays as dots
+        on a plain canvas and one row each, its days one row each linking the Day, the promises
+        made on it, its people and photos; every row with its evidence folded."""
+        try:
+            data = journeys.read(self.lb, f"trip:{start}:{end}", self.airports, self.tiers)
+        except stays.SettingsError:
+            raise
+        except ValueError as e:
+            raise NotFound(f"no journey at /journeys/{start}/{end}: {e}") from e
+        row = data["journey"]
+        named = row["name"]
+        dates = f"{data['start']} {EN_DASH} {data['end']}"
+        title = f"{escape(named['text'])} <small>{_dates(dates)}</small>" if named else _dates(dates)
+        year = data["start"][:4]
+        parts = [
+            f"<h1>{title}</h1>\n",
+            f'<p class="mute">{escape(trip_page.head_text(data))}{DOT}'
+            f"{_plural(row['photos']['count'], 'photo')}</p>\n",
+            f'<p class="pager">{self.link(f"← journeys of {year}", f"/journeys?year={year}")}{DOT}'
+            f"{self.link('its days', f'/days?from={data["start"]}&to={data["until"]}')}</p>\n",
+        ]
+        if not self.static:
+            parts.append(
+                f'<form class="name" method="post" action="{NAME_PATH}">'
+                f'<input type="hidden" name="id" value="{escape(data["id"])}">'
+                f'<input type="text" name="name" value="{escape(named["text"] if named else "")}"'
+                ' placeholder="what you call it" aria-label="name this journey" autocomplete="off">'
+                "<button>Name this journey</button></form>\n"
+            )
+        if named:
+            parts.append(self._evidence([("named", [named["line"]], None)], "the name"))
+        if row["draft"] is not None:
+            parts.append(_draft_folded(row["draft"]))
+        if row["draft_withheld"] is not None:  # the policy no longer allows it: the row, never the text
+            parts.append(_withheld_html(row["draft_withheld"], heading=False))
+        parts.append("<h2>Stays</h2>\n")
+        parts.append(_stays_svg(data["route"]))
+        parts.append('<ol class="shelf">\n')
+        for s in data["route"]:
+            span = s["first"] if s["first"] == s["last"] else f"{s['first']} {EN_DASH} {s['last']}"
+            what = f"{s['n']}. {span}{DOT}{_plural(s['nights'], 'night')}{DOT}{trip_page.stay_text(s)}"
+            evidence = [(f"stay {s['stay']}", s["lines"], s["first"])] if s["stay"] else []
+            parts.append(f"<li><p>{escape(what)}</p>\n{self._evidence(evidence)}</li>\n")
+        parts.append("</ol>\n")
+        parts.append('<h2>Days</h2>\n<ol class="shelf">\n')
+        for r in data["days"]:
+            day = str(r["day"])
+            parts.append(
+                f'<li><p class="head">{self.link(day, f"/day/{day}")} <span class="mute">'
+                f"{escape(r['weekday'][:3])}</span> {escape(days_reader.night_text(r))}</p>\n"
+                f'<p class="facts">{escape(DOT.join(days_reader.parts(r)))}</p>\n'
+                f"{self._evidence(self._day_evidence(r))}</li>\n"
+            )
+        parts.append("</ol>\n")
+        parts.append("<h2>Promises made on it</h2>\n")
+        if data["promises"]:
+            parts.append('<ol class="shelf">\n')
+            parts.extend(self._promise_row(p) for p in data["promises"])
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none: no sentence on its days reads like one</p>\n')
+        parts.append("<h2>People</h2>\n")
+        confirmed = [p for p in data["people"]["confirmed"] if p["id"]]
+        if confirmed:
+            parts.append('<ol class="shelf">\n')
+            for p in confirmed:
+                parts.append(
+                    f"<li><p>{self.link(escape(p['name']), _person_path(p['id']))}"
+                    f' <span class="mute">{escape(", ".join(p["sources"]))}</span></p>\n'
+                    f"{self._evidence([(f'with {p["name"]}', p['lines'], None)])}</li>\n"
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">nobody the record names was confirmed on it</p>\n')
+        unplaced = row["unplaced"]
+        if unplaced:
+            parts.append(
+                f'<p class="mute">and {self.link(f"{unplaced} not placed", "/people#review")}: seen,'
+                " named by no line of the record</p>\n"
+            )
+        if row["photos"]["count"]:
+            parts.append(f"<h2>Photos</h2>\n<p>{_plural(row['photos']['count'], 'photo')} on its days</p>\n")
+            parts.append(self._evidence([("photos", row["photos"]["lines"], None)]))
+        return self.document(named["text"] if named else f"journey {dates}", "".join(parts))
+
+    def _day_evidence(self, r: Mapping[str, Any]) -> list[Evidence]:
+        """Where a day row comes from: the night's stay and its lines, then each source's lines on
+        the day, counted; a day with none says so."""
+        items: list[Evidence] = []
+        night = r["night"]
+        if night.get("stay"):
+            items.append((f"night: stay {night['stay']}", r.get("night_lines") or [], None))
+        for source in r["sources"]:
+            items.append((f"{source['source']}: {_plural(int(source['lines']), 'line')}", [], None))
+        if not items:
+            items.append(("no line on the day: nothing places the night", [], None))
+        return items
+
+    def _promise_row(self, p: Mapping[str, Any]) -> str:
+        who = {
+            "promise": "you",
+            "request": f"asked of you{f' by {p["speaker"]}' if p.get('speaker') else ''}",
+            "theirs": str(p.get("speaker") or "?"),
+        }.get(str(p.get("role")), str(p.get("speaker") or "?"))
+        to = f" to {p['counterpart']}" if p.get("counterpart") and p.get("role") == "promise" else ""
+        due = f"{DOT}due {p['due']}" if p.get("due") else ""
+        status = f"{DOT}{p['status']}" if p.get("status") else ""
+        day = str(p["day"])
+        return (
+            f'<li><p class="head">{self.link(day, f"/day/{day}")} <span class="mute">{escape(who + to)}'
+            f"{escape(due + status)}</span></p>\n<p>{escape(str(p['quote']))}</p>\n"
+            f"{self._evidence([(f'{p["kind"]} ({p["source"]})', [p['line']], day)])}</li>\n"
+        )
+
+    # -- /people -------------------------------------------------------------------------------------------
+
+    def page_people(self, year: str | None) -> str:
+        """The canonical people heard in the year (default this year, or the record's last), by days
+        together then last real contact, each a link to their page with its evidence folded; then
+        the review queue: who the sources saw that the record has not placed, proposed against the
+        people it names, with Merge and Not the same person; the observed are listed there only."""
+        data = person_page.ranked(self.lb, year, self.now())
+        if data["year"] is None:
+            return self.document("people", "<h1>People</h1>\n<p>no people: the record has no lines</p>\n")
+        year = str(data["year"])
+        links = DOT.join(
+            f"<b>{y}</b>" if y == year else self.link(y, f"/people?year={y}") for y in data["years"]
+        )
+        parts = [f"<h1>People <small>{year}</small></h1>\n", f'<p class="pager">{links}</p>\n']
+        if not data["people"]:
+            parts.append(f"<p>nobody the record names was heard in {year}</p>\n")
+        else:
+            parts.append(
+                '<p class="mute">The people the record names, by days together this year, then the last'
+                " real contact. Someone the sources saw and the record has not placed is in the review"
+                " below, never here.</p>\n"
+            )
+            parts.append('<ol class="shelf">\n')
+            for r in data["people"]:
+                parts.append(self._person_row(r))
+            parts.append("</ol>\n")
+        if not self.static:
+            from . import people_review
+
+            with self._review_lock:  # the observed table is built once, as the Places page's queue is
+                report = people_review.read(self.lb)
+            parts.append(self._review_html(report, year))
+        return self.document(f"people {year}", "".join(parts))
+
+    def _person_row(self, r: Mapping[str, Any]) -> str:
+        days = int(r["days"])
+        facts = [f"{_plural(days, 'day')} together" if days else "no day together"]
+        if r["nights"]:
+            facts.append(f"{_plural(int(r['nights']), 'night')} under one roof")
+        contact = r["last_real_contact"]
+        facts.append(
+            f"last real contact {contact['day']} ({contact['via']})" if contact else "no real contact"
+        )
+        items: list[Evidence] = [
+            (f"together at {d['where']}", d["lines"], str(d["day"])) for d in reversed(r["together"])
+        ]
+        if contact:
+            items.insert(0, (f"last real contact, {contact['via']}", [contact["line"]], str(contact["day"])))
+        for name, c in r["channels"].items():
+            span = c["first"] if c["first"] == c["last"] else f"{c['first']} {EN_DASH} {c['last']}"
+            items.append(
+                (f"{name}: {_plural(int(c['lines']), 'line')}, {span}, the last", [c["last_line"]], None)
+            )
+        return (
+            f'<li><p class="head">{self.link(f"<b>{escape(str(r['name']))}</b>", _person_path(str(r["id"])))}'
+            f'</p>\n<p class="facts">{escape(DOT.join(facts))}</p>\n{self._evidence(items)}</li>\n'
+        )
+
+    def _review_html(self, report: people_review.Report, year: str) -> str:
+        """The review queue of `people review`, in its order: each proposal with its evidence and
+        the two acts; then the observed people nobody matches, folded."""
+        proposed = {p.observed.key for p in report.proposals}
+        alone = [o for o in report.unplaced if o.key not in proposed]
+        head = f"{_plural(len(report.proposals), 'proposal')}{DOT}{len(report.unplaced)} seen, not placed"
+        out = [f'<h2 id="review">Review <small>{escape(head)}</small></h2>\n']
+        if not report.proposals and not report.unplaced:
+            out.append('<p class="mute">nothing to review: everyone the sources saw is placed</p>\n')
+            return "".join(out)
+        out.append(
+            '<p class="mute">Who the sources saw that the record has not placed, proposed against the'
+            " people it names, as <code>people review</code> ranks them. Merge writes what"
+            " <code>--accept</code> writes, an alias line for each identifier seen; Not the same person"
+            " what <code>--reject</code> writes, so the pair is never proposed again.</p>\n"
+        )
+        if report.proposals:
+            out.append('<ol class="shelf queue">\n')
+            for p in report.proposals:
+                o = p.observed
+                shown = o.key[1] if o.key[0] != "name" else o.name
+                seen = ", ".join(f"{kind} {n}" for kind, n in sorted(o.kinds.items()))
+                who = f"{shown} ({o.name}; {seen})" if o.name != shown else f"{shown} ({seen})"
+                c = p.canonical  # None for a Google contact's name (`--from-google`), a new person
+                into = (
+                    self.link(escape(c.label), _person_path(c.entity)) if c is not None else escape(p.label)
+                )
+                items: list[Evidence] = [(why, [], None) for why in p.evidence]
+                items.append(
+                    (f"seen {o.first} {EN_DASH} {o.last}, {_plural(o.lines, 'line')}", o.samples, None)
+                )
+                out.append(
+                    f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b>'
+                    f' {escape(who)} {ARROW} {into} <span class="mute">score {p.score}</span></p>\n'
+                    f"{self._evidence(items, open_=True)}"
+                    f'<form method="post" action="{PEOPLE_REVIEW_PATH}">'
+                    f'<input type="hidden" name="id" value="{escape(p.id)}">'
+                    f'<input type="hidden" name="year" value="{escape(year)}">'
+                    '<button name="act" value="merge">Merge</button>'
+                    '<button name="act" value="reject">Not the same person</button></form>\n</li>\n'
+                )
+            out.append("</ol>\n")
+        if alone:
+            out.append(f"<details><summary>{_plural(len(alone), 'more seen')}, nobody matches</summary>\n")
+            out.append('<ol class="shelf">\n')
+            for o in alone:
+                shown = o.key[1] if o.key[0] != "name" else o.name
+                seen = ", ".join(f"{kind} {n}" for kind, n in sorted(o.kinds.items()))
+                facts = f"{shown} ({seen}){DOT}{_plural(len(o.days), 'day')}{DOT}{o.first} {EN_DASH} {o.last}"
+                out.append(
+                    f"<li><p>{escape(facts)}</p>\n"
+                    f"{self._evidence([(f'seen in {_plural(o.lines, "line")}', o.samples, None)])}</li>\n"
+                )
+            out.append("</ol>\n</details>\n")
+        return "".join(out)
+
+    def page_person(self, name: str) -> str:
+        """One person's page: the numbers, the last real contact and what it was, the drift, the
+        days together by year, the promises both ways, the anniversaries of the coming month, the
+        places; every row with its evidence folded."""
+        data = person_page.read(self.lb, name, self.now(), self.airports)
+        refs = ", ".join(str(r["value"]) for r in data["refs"])
+        parts = [
+            f"<h1>{escape(data['name'])}</h1>\n",
+            f'<p class="mute">{escape(refs)}'
+            + (f"{DOT}birthday {escape(data['birthday'])}" if data["birthday"] else "")
+            + "</p>\n",
+            f'<p class="pager">{self.link("← people", "/people")}</p>\n',
+            '<ol class="shelf">\n',
+        ]
+        together = [d for y in data["years"] for d in y["together"]]
+        days = f"{_plural(data['days'], 'day')} together" if data["days"] else "no day together"
+        if data["nights"]:
+            days += f"{DOT}{_plural(data['nights'], 'night')} under one roof"
+        parts.append(
+            f"<li><p>{escape(days)}</p>\n"
+            f"{self._evidence([(f'at {d["where"]}', d['lines'], str(d['day'])) for d in together])}</li>\n"
+        )
+        contact = data["last_real_contact"]
+        if contact is None:
+            parts.append("<li><p>no real contact in the record</p></li>\n")
+        else:
+            parts.append(
+                f"<li><p>last real contact {self.link(str(contact['day']), f'/day/{contact["day"]}')}"
+                f"{DOT}{escape(str(contact['what']))}</p>\n"
+                f"{self._evidence([(str(contact['via']), [contact['line']], str(contact['day']))])}</li>\n"
+            )
+        drift = data["drift"]
+        best = next((y for y in data["years"] if y["year"] == drift["year"]), None)
+        drift_items: list[Evidence] = []
+        if best is not None:
+            drift_items.append((f"{_plural(best['days'], 'day')} together in {best['year']}", [], None))
+        if contact is not None:
+            drift_items.append(("the last real contact", [contact["line"]], str(contact["day"])))
+        parts.append(f"<li><p>{escape(drift['text'])}</p>\n{self._evidence(drift_items)}</li>\n</ol>\n")
+        parts.append("<h2>Days together</h2>\n")
+        if data["years"]:
+            parts.append('<ol class="shelf">\n')
+            for y in data["years"]:
+                items = [(f"at {d['where']}", d["lines"], str(d["day"])) for d in y["together"]]
+                parts.append(
+                    f"<li><p><b>{y['year']}</b>{DOT}{_plural(y['days'], 'day')}</p>\n"
+                    f"{self._evidence(items, 'the days')}</li>\n"
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none: no stay of yours confirms them there</p>\n')
+        parts.append("<h2>Promises</h2>\n")
+        for key, label in (("you_owe", "You owe"), ("they_owe", "They owe")):
+            found = data["promises"][key]
+            parts.append(f"<h3>{label}</h3>\n")
+            if not found:
+                parts.append('<p class="mute">nothing open</p>\n')
+                continue
+            parts.append('<ol class="shelf">\n')
+            for p in found:
+                due = f"{DOT}due {p['due']}" if p["due"] else ""
+                day = str(p["day"])
+                parts.append(
+                    f'<li><p class="head">{self.link(day, f"/day/{day}")}'
+                    f'<span class="mute">{escape(due)}</span>'
+                    f"</p>\n<p>{escape(str(p['quote']))}</p>\n"
+                    f"{self._evidence([(f'{p["kind"]} ({p["source"]})', [p['line']], day)])}</li>\n"
+                )
+            parts.append("</ol>\n")
+        parts.append(f"<h2>Anniversaries <small>{escape(data['today'])} and the month after</small></h2>\n")
+        if data["anniversaries"]:
+            parts.append('<ol class="shelf">\n')
+            for a in data["anniversaries"]:
+                ago = _plural(int(a["years"]), "year")
+                parts.append(
+                    f"<li><p>{escape(str(a['on']))}{DOT}{ago} since "
+                    f"{self.link(str(a['day']), f'/day/{a["day"]}')}"
+                    f" at {escape(str(a['where']))}</p>\n"
+                    f"{self._evidence([('together', a['lines'], str(a['day']))])}</li>\n"
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none in the coming month</p>\n')
+        parts.append("<h2>Places</h2>\n")
+        if data["places"]:
+            parts.append('<ol class="shelf">\n')
+            for pl in data["places"]:
+                there: list[Evidence] = [
+                    ("the days there", pl["lines"], None),
+                    *[(d, [], d) for d in pl["on"]],
+                ]
+                parts.append(
+                    f"<li><p>{escape(str(pl['where']))}{DOT}{_plural(int(pl['days']), 'day')}</p>\n"
+                    f"{self._evidence(there)}</li>\n"
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none yet</p>\n')
+        return self.document(str(data["name"]), "".join(parts))
+
+    # -- the evidence --------------------------------------------------------------------------------------
+
+    def _evidence(self, items: Sequence[Evidence], label: str = "evidence", open_: bool = False) -> str:
+        """Where a derived row comes from, folded: a disclosure, closed unless `open_`, whose summary
+        counts the lines, and in it one row per piece of evidence, what it is, the day it links and
+        the ids of the lines (the whole id on hover), `places_review.SHOWN` rows shown and the rest
+        behind "… and N more" (`_folded`, the Places page's own). Nothing when there is none."""
+        if not items:
+            return ""
+        lines = {i for _what, ids, _day in items for i in ids}
+        rows = []
+        for what, ids, day in items:
+            if day and DAY.fullmatch(day):
+                text = f"{escape(what)} {self.link(day, f'/day/{day}')}"
+            else:
+                text = escape(what) + (f" {escape(day)}" if day else "")
+            shown = " ".join(
+                f'<span class="id" title="line {escape(i)}">{escape(drafts.short_id(i))}</span>'
+                for i in ids[:ID_SHOWN]
+            )
+            more = f" +{len(ids) - ID_SHOWN}" if len(ids) > ID_SHOWN else ""
+            rows.append(f"{text}{' ' + shown if shown else ''}{more}")
+        count = _plural(len(lines), "line") if lines else _plural(len(items), "row")
+        return (
+            f'<details class="evidence"{" open" if open_ else ""}>'
+            f"<summary>{escape(label)}{DOT}{count}</summary>\n{_folded(rows)}</details>\n"
+        )
 
     def page_assets(self) -> str:
         registry = assets.read(self.lb.root)
@@ -1529,10 +2109,26 @@ def _draft_html(draft: Mapping[str, Any]) -> str:
     muted block marked with the word, never run into the prose around it; then the events it
     proposes, a proposed one greyed and marked, a confirmed one plain with the line it became (the
     event itself is in the timeline, among the day's events)."""
-    parts = [
-        "<h2>Draft</h2>\n",
-        f'<p class="mute">{escape(drafts.head_text(draft))}</p>\n<div class="draft">\n',
-    ]
+    return (
+        f'<h2>Draft</h2>\n<p class="mute">{escape(drafts.head_text(draft))}</p>\n<div class="draft">\n'
+        f"{_draft_body(draft)}</div>\n"
+    )
+
+
+def _draft_folded(draft: Mapping[str, Any]) -> str:
+    """The standing draft of a unit other than the day (a journey), folded under its head: a
+    proposal until the owner confirms it, never shown open as if it were the record."""
+    return (
+        f'<details class="draft"><summary>{escape(drafts.head_text(draft))}</summary>\n<div class="draft">\n'
+        f"{_draft_body(draft)}</div>\n</details>\n"
+    )
+
+
+def _draft_body(draft: Mapping[str, Any]) -> str:
+    """A draft's segments, one paragraph each with its evidence ids (the whole id on hover); an
+    unsupported one a muted block marked with the word and why, never run into the prose; then the
+    events it proposes and the earlier drafts."""
+    parts: list[str] = []
     for segment in draft["segments"]:
         label = escape(drafts.PART_LABELS.get(str(segment.get("part")), "")) if segment.get("part") else ""
         head = f'<span class="kind">{label}</span> ' if label else ""
@@ -1555,7 +2151,6 @@ def _draft_html(draft: Mapping[str, Any]) -> str:
     if draft.get("earlier"):
         earlier = ", ".join(escape(drafts.short_id(e)) for e in draft["earlier"])
         parts.append(f'<p class="mute">earlier drafts: {earlier}</p>\n')
-    parts.append("</div>\n")
     return "".join(parts)
 
 
@@ -1584,7 +2179,8 @@ def _proposal_html(p: Mapping[str, Any]) -> str:
 def _withheld_html(row: Mapping[str, Any], heading: bool = True) -> str:
     """A standing draft the `dream` entry no longer allows (`drafts.withheld_json`): one muted line
     that says so and why, and nothing of what the draft says; under the Draft heading of an earlier
-    draft the entry does allow, when the Day shows one."""
+    draft the entry does allow, when the Day shows one. A journey's row and page carry it without a
+    heading, after the folded draft the entry does allow, when there is one."""
     line = escape(str(row["line"]))
     head = "<h2>Draft</h2>\n" if heading else ""
     return f'{head}<p class="mute" title="line {line}">{escape(drafts.withheld_text(row))}</p>\n'
@@ -1730,6 +2326,53 @@ def _spot_svg(p: places_review.Proposal) -> str:
     return "".join(out)
 
 
+STAYS_W, STAYS_PAD = 320, 18
+
+
+def _stays_svg(route: Sequence[Mapping[str, Any]]) -> str:
+    """A journey's stays as dots on a plain canvas, drawn here: an equirectangular projection about
+    their mean latitude, one dot per place slept at (its area by the nights there, the stays at one
+    point one dot), each with the numbers of the stays at it, and a scale bar. No tile, no fetch."""
+    located = [s for s in route if s["lat"] is not None and s["lon"] is not None]
+    if not located:
+        return '<p class="mute">no stay with a position to draw</p>\n'
+    k = math.cos(math.radians(sum(float(s["lat"]) for s in located) / len(located)))
+    xs = [float(s["lon"]) * k for s in located]
+    ys = [-float(s["lat"]) for s in located]
+    span_x, span_y = max(xs) - min(xs), max(ys) - min(ys)
+    inner = STAYS_W - 2 * STAYS_PAD
+    scale = inner / max(span_x, span_y * 2, 0.02)  # px per degree; a canvas twice as wide as high at most
+    height = max(120, min(240, round(span_y * scale) + 2 * STAYS_PAD))
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    dots: dict[tuple[int, int], list[Mapping[str, Any]]] = {}
+    for s, x, y in zip(located, xs, ys, strict=True):
+        at = (round((x - cx) * scale + STAYS_W / 2), round((y - cy) * scale + height / 2))
+        dots.setdefault(at, []).append(s)
+    out = [f'<svg class="stays" viewBox="0 0 {STAYS_W} {height}" role="img" aria-label="the stays">']
+    for (x, y), found in dots.items():
+        r = 3 + math.sqrt(sum(int(s["nights"]) for s in found)) * 1.2
+        label = ", ".join(str(s["n"]) for s in found)
+        anchor, tx = ("end", x - r - 3) if x > STAYS_W * 0.7 else ("start", x + r + 3)
+        out.append(f'<circle cx="{x}" cy="{y}" r="{min(r, 14):.1f}"/>')
+        out.append(f'<text x="{tx:.0f}" y="{y + 4}" text-anchor="{anchor}">{escape(label)}</text>')
+    km = 111.2 / scale * (STAYS_W / 4)
+    bar_km = max(
+        (b for b in (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000) if b <= km), default=0.1
+    )
+    bar = bar_km / 111.2 * scale
+    out.append(f'<line x1="8" y1="{height - 8}" x2="{8 + bar:.1f}" y2="{height - 8}"/>')
+    out.append(f'<text x="8" y="{height - 12}">{bar_km:g} km</text>')
+    out.append("</svg>\n")
+    return "".join(out)
+
+
+def _dates(text: str) -> str:
+    """A span of days that never breaks inside a day's hyphens, only at its dash."""
+    return f" {EN_DASH} ".join(
+        f'<span class="dates">{escape(day)}</span>' for day in text.split(f" {EN_DASH} ")
+    )
+
+
 def _loopback(client: str) -> bool:
     """The connection's address is this machine's loopback: 127.0.0.0/8 or ::1 (and ::1 mapped)."""
     try:
@@ -1826,6 +2469,26 @@ def _texts(lines: Iterable[Line], retracted: Collection[str]) -> list[str]:
 
 
 # -- fragments --------------------------------------------------------------------------------------------
+
+Evidence = tuple[str, Sequence[str], str | None]  # what (plain text), the line ids, the day it links
+
+
+def _folded(rows: Sequence[str]) -> str:
+    """The evidence pattern every page shares (the Places page's first): rows already marked up,
+    `places_review.SHOWN` of them in a list, the rest behind a toggle that counts them."""
+    out = ['<ul class="evidence">\n']
+    out.extend(f"<li>{row}</li>\n" for row in rows[: places_review.SHOWN])
+    out.append("</ul>\n")
+    rest = rows[places_review.SHOWN :]
+    if rest:
+        out.append(f'<details><summary>… and {len(rest)} more</summary>\n<ul class="evidence">\n')
+        out.extend(f"<li>{row}</li>\n" for row in rest)
+        out.append("</ul>\n</details>\n")
+    return "".join(out)
+
+
+def _person_path(entity: str) -> str:
+    return "/people/" + quote(entity, safe="")
 
 
 def _table(head: Sequence[Cell], rows: Iterable[Sequence[Cell]], ids: Sequence[str] | None = None) -> str:

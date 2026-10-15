@@ -151,6 +151,12 @@ def read(
     ref = parse_ref(text)
     airports = airports or Airports.load()
     rd, trip = locate(lb, ref, airports, tiers)
+    return compose(lb, rd, trip, tiers)
+
+
+def compose(lb: Logbook, rd: Reading, trip: trips.Trip, tiers: Sequence[int] | None = None) -> dict[str, Any]:
+    """The Trip of `trip`, found in the reading `rd` (`locate`), as `read` returns it; for a
+    reader that keeps the reading (`logbook.contrib.journeys`) and reads no day twice."""
     span = day_range(trip.start, trip.until)
     before = (date.fromisoformat(trip.start) - timedelta(days=1)).isoformat()
     with lb.index() as idx:

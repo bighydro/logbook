@@ -280,26 +280,14 @@ def drift(
     if whole is None:
         return None
     report = people.read(lb, *whole, airports)
-    today = report.days.today(datetime.now(UTC)).isoformat()
-    until = min(whole[1], today)
-    end = date.fromisoformat(until)
+    until = until_of(report, whole[1])
     contacts = real_contacts(lb, report)
     found = []
     for person in report.people:
-        by_year = Counter(day[:4] for day in person.days)
-        if year is None:
-            if not by_year:
-                continue
-            best, n = max(by_year.items(), key=lambda item: (item[1], item[0]))
-        else:
-            best, n = year, by_year.get(year, 0)
-        if n < min_days:
-            continue
-        contact = contacts.get(person.entity)
-        silent = None if contact is None else (end - date.fromisoformat(contact.day)).days
-        if silent is not None and silent <= quiet_days:
-            continue
-        found.append((person, best, n, contact, silent))
+        v = verdict(person, contacts.get(person.entity), until, min_days, quiet_days, year)
+        if v.drifted:
+            assert v.year is not None
+            found.append((person, v.year, v.days_in_year, v.contact, v.silent))
     owed = open_promises(lb, [person for person, *_ in found]) if found else {}
     rows = [
         Drifted(person, best, n, contact, silent, *owed.get(person.entity, (0, 0)))
@@ -315,16 +303,98 @@ def drift(
     return Drift(whole[0], until, min_days, quiet_days, year, rows)
 
 
+@dataclass(frozen=True)
+class Verdict:
+    """Whether one person has drifted, and why not when not: the year counted (their best, or the
+    one asked for; None when they have no day together at all), its days together, the last real
+    contact and the days of silence since it, to `until`."""
+
+    drifted: bool
+    year: str | None
+    days_in_year: int
+    contact: Contact | None
+    silent: int | None
+    min_days: int
+    quiet_days: int
+
+    def text(self) -> str:
+        """`drifting: 25 days together in 2022, no real contact in 1,035 days`, or why not."""
+        if self.year is None:
+            return "not drifting: no day together"
+        together = f"{_plural(self.days_in_year, 'day')} together in {self.year}"
+        silence = (
+            "no real contact"
+            if self.contact is None
+            else f"last real contact {self.contact.day}, {self.silent:,} days ago"
+        )
+        if self.drifted:
+            return f"drifting: {together}, {silence}"
+        if self.days_in_year < self.min_days:
+            return f"not drifting: {together}, under {self.min_days}"
+        return f"not drifting: {together}; {silence}, within {self.quiet_days:,}"
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "drifted": self.drifted,
+            "year": self.year,
+            "days_in_year": self.days_in_year,
+            "last_real_contact": None if self.contact is None else self.contact.to_json(),
+            "silent_days": self.silent,
+            "min_days": self.min_days,
+            "quiet_days": self.quiet_days,
+        }
+
+
+def until_of(report: people.Report, last: str) -> str:
+    """The day a silence is counted to: the record's last day, today when the record runs past it
+    (a planned entry is not a day that happened)."""
+    return min(last, report.days.today(datetime.now(UTC)).isoformat())
+
+
+def verdict(
+    person: people.Person,
+    contact: Contact | None,
+    until: str,
+    min_days: int = DEFAULT_MIN_DAYS,
+    quiet_days: int = DEFAULT_QUIET_DAYS,
+    year: str | None = None,
+) -> Verdict:
+    """The drift rule for one person: at least `min_days` days together in their best year (or
+    `year`), and no real contact in more than `quiet_days` days before `until`; never one with no
+    day together, unless `year` is asked for."""
+    by_year = Counter(day[:4] for day in person.days)
+    if year is None:
+        if not by_year:
+            return Verdict(False, None, 0, contact, None, min_days, quiet_days)
+        best, n = max(by_year.items(), key=lambda item: (item[1], item[0]))
+    else:
+        best, n = year, by_year.get(year, 0)
+    silent = None if contact is None else (date.fromisoformat(until) - date.fromisoformat(contact.day)).days
+    drifted = n >= min_days and (silent is None or silent > quiet_days)
+    return Verdict(drifted, best, n, contact, silent, min_days, quiet_days)
+
+
 def open_promises(lb: Logbook, who: Iterable[people.Person]) -> dict[str, tuple[int, int]]:
-    """(you owe, they owe) per person, from the open proposals of `promises`: the owner's own and
-    what was asked of the owner are owed by the owner; theirs are owed to the owner. A proposal is
-    theirs when its speaker resolves to them, else when its counterpart is their name, a name only
-    one of them carries."""
+    """(you owe, they owe) per person, from the open proposals of `promises` (`promises_with`)."""
+    out: dict[str, tuple[int, int]] = {}
+    for entity, found in promises_with(lb, who).items():
+        mine = sum(1 for _p, owed_by_owner in found if owed_by_owner)
+        out[entity] = (mine, len(found) - mine)
+    return out
+
+
+def promises_with(
+    lb: Logbook, who: Iterable[people.Person]
+) -> dict[str, list[tuple[promise_reader.Proposal, bool]]]:
+    """The open proposals of `promises` with each person, in day order, each with whether the
+    owner owes it: the owner's own and what was asked of the owner are owed by the owner; theirs
+    are owed to the owner. A proposal is theirs when its speaker resolves to them, else when its
+    counterpart is their name, a name only one of them carries."""
     wanted = list(who)
     by_entity = {p.entity for p in wanted}
     names = Counter(p.name.casefold() for p in wanted)
     by_name = {p.name.casefold(): p.entity for p in wanted if names[p.name.casefold()] == 1}
-    out: dict[str, list[int]] = {}
+    out: dict[str, list[tuple[promise_reader.Proposal, bool]]] = {}
     for proposal in promise_reader.extract(lb).proposals:
         if proposal.status != "open" or not proposal.shows or proposal.role is None:
             continue
@@ -335,9 +405,9 @@ def open_promises(lb: Logbook, who: Iterable[people.Person]) -> dict[str, tuple[
             entity = by_name.get(proposal.counterpart.casefold())
         if entity is None:
             continue
-        owed = out.setdefault(entity, [0, 0])
-        owed[0 if proposal.role in (promise_reader.PROMISE, promise_reader.ASKED) else 1] += 1
-    return {entity: (owed[0], owed[1]) for entity, owed in out.items()}
+        owed_by_owner = proposal.role in (promise_reader.PROMISE, promise_reader.ASKED)
+        out.setdefault(entity, []).append((proposal, owed_by_owner))
+    return out
 
 
 def days_together(person: people.Person) -> list[dict[str, Any]]:

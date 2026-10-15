@@ -11,9 +11,12 @@ logbook serve --install-service   # kept running by launchd or systemd (As a ser
 It is a reader (ADR 0013) with another output: the pages are the commands' own readers rendered as
 HTML instead of text, built from the index and nothing else, and nothing is written by reading. Open
 the address it prints, read, close it. There is no login because there is no one to log in: the server
-answers this machine and no other. Two pages ask you something and write your answer: the Places
-page names the places you return to ([Places — name this place](#places--name-this-place)), and the
-Day is where you reflect on the day and sign it ([Reflect and Sign](#reflect-and-sign)).
+answers this machine and no other. Four pages ask you something and write your answer, each
+through the command that writes the same thing: the Places page names the places you return to
+([Places — name this place](#places--name-this-place)), a journey's page names the journey
+([Journeys](#journeys)), the People page merges or tells apart who the sources saw
+([People](#people)), and the Day is where you reflect on the day and sign it
+([Reflect and Sign](#reflect-and-sign)).
 
 ![The Day of 17 June of the demo record, every attachment toggle open](serve.png)
 
@@ -27,6 +30,10 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries; your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts, notes, mail threads, calls, keepers named; messages and photos counted) and company (confirmed, then proposed) under a toggle; what is unplaced; the health line; the sources and when each last spoke; at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook trips --year` |
+| `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
+| `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
+| `/people?year=` | the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
+| `/people/ID` | one person: days together by year, the last real contact and what it was, drift and why, the promises open both ways, the anniversaries of the coming month, the places you have been with them | `logbook people NAME`, `people drift` |
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
@@ -70,10 +77,13 @@ page and checks each attribute that can hold a URL, the inline style, each scrip
 **Read-only, but for the forms you click.** Every GET is answered from the record at its head
 through the readers, and the readers never write, not even `policy/stays.json`. The test takes the
 head and every file before and after serving every page and finds them the same. The writes are the
-Places page's form ([below](#places--name-this-place)) and the Day's Reflect and Sign
-([below](#reflect-and-sign)), each a POST from this machine only, each through the command's own
-function, one at a time. The server keeps nothing
-but the head it last saw: when a sync, or that form, moves the head while it runs, the next request
+Places page's form ([below](#places--name-this-place)), a journey's name ([below](#journeys)), the
+People page's review ([below](#people)) and the Day's Reflect and Sign ([below](#reflect-and-sign)),
+each a POST from this machine only, each through the command's own function, one at a time, and none
+waits for another writer: while another command holds the record's writer lock (a sync running),
+the Library's three forms are answered `503` and the Day's `409`, and nothing is written, rather than
+leaving the browser waiting. The server keeps nothing
+but the head it last saw: when a sync, or a form, moves the head while it runs, the next request
 brings the index to the new head first and every page reads the new lines, with no restart. That
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
 rather than each starting their own on the same file.
@@ -88,15 +98,23 @@ read ([docs/day.md](day.md), *Performance*). `/days` reads the window in chunks 
 command does; a year is a dozen readings. The airports table is loaded once, when the server starts.
 
 A reload at the same head costs nothing. Every page that is the record's and nothing else (`/`, a
-Day, `/days`, `/trips`, `/places`, `/world`) carries an `ETag`: the first twelve characters of the head, then a
-digest of the request and of what else the page reads (the rest of `logbook.json`, `places.json`,
-`assets.json`, `policy/`, `state/places-review.json`, the pages received from the circle) and of
-the server's start; a Day's also of the day you are in, since its forms are there from that day on. It is sent
-with `Cache-Control: no-cache`, so the browser keeps the page and asks every time; when the tag it
-sends back is the page's, the answer is a `304` with no body and nothing is read or rendered. A sync
+Day, `/days`, `/trips`, `/places`, `/world`, the journeys, the people) carries an `ETag`: the first
+twelve characters of the head, then a digest of the request and of what else the page reads (the
+rest of `logbook.json`, `places.json`, `assets.json`, `policy/`, `state/places-review.json`, the
+pages received from the circle) and of the server's start; a Day's also of the day you are in, since
+its forms are there from that day on, and the People pages' of the record's today, since this year,
+the coming anniversaries and a silence move with it. It is sent with `Cache-Control: no-cache`, so
+the browser keeps the page and asks every time; when the tag it sends back is the page's, the
+answer is a `304` with no body and nothing is read or rendered. A sync
 that moves the head, a place renamed or a restart changes the tag, and the next reload is the page
 again. `/assets` and `/gaps`, which the clock moves (the age of a fix, a silence that runs to now),
 and every error carry no tag and `Cache-Control: no-store`, as before.
+
+A journeys page is one reading of its year and a month either side, and a journey's page one
+reading of its days and a week either side, as `show trip` reads it; the People page is `people`
+over the year and the review queue's table, built once per head; a person's page reads the whole
+record's people once. On the four synthetic years of the tests each answers in about a fifth of a
+second.
 
 The server is the standard library's (`http.server`, one thread per request); it is meant for one
 reader on one machine, not for a crowd.
@@ -296,12 +314,106 @@ draft.* It is true because the rows are computed by the readers and the proposal
 one thing a model writes about a day, the dream's draft, is headed *Draft* with the model's name and
 every unsupported sentence marked.
 
+## Journeys
+
+A journey is a trip ([ADR 0019](adr/0019-trips-are-derived.md)): a run of nights away from home,
+derived from the nights every time and never written, its id `trip:FIRST:LAST`. `/journeys` is the
+trips reader grown, one year at a time (the year's reading takes a month either side, so a journey
+over New Year is read whole and listed once, under the year it began), the latest first. Each row:
+
+- the **name**, when you gave it one, else the dates; a link to the journey's page;
+- the **nights away** (and how many in transit), the return day, the **route** as `show trips`
+  prints it, the **photos** dated on its days (first day to return day), the named **places**;
+- the **people** confirmed on it whom the record names, each a link to their page; someone the with
+  module saw that no resolution line names is counted (*1 not placed*), a link to the People page's
+  review, and never named here;
+- the **draft** of the journey (RFC 0036, `unit` `journey`, a `subject` naming its id), folded under
+  its head: a proposal, each sentence with its lines, an unsupported one set apart and marked, a
+  sentence resting on a line from outside the journey's days marked so. It follows the `dream` entry
+  of the crossing policy as the Day's draft does ([dream](dream.md#when-the-entry-changes)): a draft
+  above the entry's `max_tier` today is not shown, and when the journey's standing draft is one, the
+  row says `superseded by policy` and why, its line on hover, and nothing of its text;
+- the **evidence**, folded: each run of nights at one place with the lines of its stays, the
+  flights, each person with the lines that put them there, the photos, the name.
+
+`/journeys/FIRST/LAST` is one journey, read as `logbook show trip` reads it: the name and a field to
+change it, the draft folded, its **stays** as dots on a plain canvas drawn by the server (an
+equirectangular projection about their latitude, a dot per place slept at sized by its nights, the
+stays' numbers beside it, a scale bar; no tile, no map host, nothing fetched) and one row each with
+its lines, its **days** one row each (the night, what `show days` prints, a link to the Day; the
+evidence is the night's stay and each source's lines that day), the **promises made on it** (every
+proposal of `logbook promises` dated on its days, open or done, who to whom, the sentence, the due
+day, the line), its people confirmed and the photos.
+
+**Name this journey.** The field posts to `/journeys/name`, and the server names it through the
+function `logbook add --trip` runs:
+
+```bash
+logbook add --trip trip:2026-06-14:2026-06-20 "Midsummer aboard"   # or any day of it: --trip 2026-06-16
+```
+
+That is one `note/v1` line in your words (whitespace folded), label `name`, the journey's id under
+`extra.trip`, tier 2, source `manual`, dated inside the journey (now, if today is one of its days,
+else the last minute of its last day away): the captain's naming ADR 0019 asks for, and the only
+part of a journey that enters the record. The latest standing name wins; a name dated on one of its
+days still names it after a recompute has moved its bounds. A name is never read out of a note's
+prose: only the label and the id make a note a name. A form from a page older than the record,
+naming a journey that is no longer one, is a `409`; a blank name a `400`; nothing written either way.
+
+## People
+
+`/people` ranks the people the record names, never you, heard in the year (default this year, the
+record's last when it ended before): by **days together** that year, then the **last real contact**
+(later first: a day together, a meeting, an answered call, a message in a direct chat; never a mail),
+then the name. Each row says how many days and nights, the last real contact and how, and folds
+its evidence: the last real contact's line, each day together with where and its lines, each
+channel heard through that year with its count and last line. Every name is a link to the person.
+
+**Review.** Below the list is the review queue of `logbook people review`
+([people](people.md)), in its order: each observed person (what one source saw: an address, a
+number, a spoken name) proposed against someone the record names, with the score and the evidence
+open, and two acts. **Merge** writes what `people review --accept N` writes: an alias line per
+identifier the observed person was seen as, through `people_review.accept`. **Not the same person**
+writes what `--reject N` writes: one `people-review/v1` line saying the two are not the same, through
+`people_review.reject`, so the pair is never proposed again (RFC 0035 defines that one verdict, so
+the act is a pair's, not a verdict that someone is no person at all). The observed people that match
+nobody are folded below. This section is the only place an observed person appears on any page.
+Both acts post to `/people/review`, from this machine only; a proposal no longer in the queue is a
+`409`.
+
+`/people/ID` is one person (the id the resolution lines give them):
+
+- **days together** (and nights under one roof), counted by year, each year's days folded with
+  where and their lines;
+- the **last real contact** and what it was, in the record's words and never a message's: the place
+  of a day together, the entry's title and where it was held, the call's direction and length, the
+  chat a message was in;
+- **drift**, by `people drift`'s rule at its defaults (20 days together in the best year, no real
+  contact in over 365 days), and why not when not;
+- the **promises** open both ways, as `people drift` counts them: what you owe them, what they owe
+  you, each with the sentence, the day and the line;
+- the **anniversaries** of the coming month: a day together exactly 1, 2, 3, 5 or 10 years before
+  one of the next thirty days, the Day's rule;
+- the **places** you have been with them, by days there, with the days and the lines.
+
+## Phone first
+
+Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
+facts with the evidence folded under it, a day never breaks inside its hyphens, the canvas scales to
+the column. `tests/test_library_pages.py` holds the Journeys, a journey, the People page and a person
+to that column without a browser: `tests/phone_width.py` parses each page with every disclosure
+open, applies the page's own stylesheet as a 400 px phone would (its phone breakpoint included), and
+fails when an element's fixed width, min-width or row of columns, with the margins, borders and
+padding around it, passes the column, when an image or a `pre` has no `max-width` to keep it inside,
+or when the stylesheet has no phone breakpoint. Its estimates err wide, and a stylesheet it cannot
+read fails the test rather than passing it.
+
 ## What it is not
 
-Not an editor: the pages write nothing but the naming, the reflection and the signature above, and
-the captain's other words — a note, a confirmation of a line — go through the CLI as lines in the
-record, which the next page reads. Not a web application: no framework, no build step, no state but
-the record, and two inline scripts, a dozen lines for three keys and a score for one button. Not the
-circle (ADR 0009): a page
+Not an editor: the pages write nothing but the namings, the review, the reflection and the signature
+above, and the captain's other words — a note, a confirmation of a line — go through the CLI as lines
+in the record, which the next page reads. Not a web application: no framework, no build step, no
+state but the record, and two inline scripts, a dozen lines for three keys and a score for one
+button. Not the circle (ADR 0009): a page
 here is for the owner's eyes on the owner's machine; a shared page is a signed bundle, and that is
 another layer.

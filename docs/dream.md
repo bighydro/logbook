@@ -67,8 +67,8 @@ what changes is what the readers show.
   "until": "2026-12-31"}` (`model` and `until` `null` when the entry does not set them). The same values
   give the same version however the file spells them and whatever else the entry says.
 - **A reader shows a draft only while the entry allows its tier.** A draft above the entry's `max_tier`
-  today is not on the Day, not on `serve`'s Day page and not through the MCP door, whichever head the
-  record is at; an expired entry counts as `max_tier` 0, and so does a file with no `dream` entry, so
+  today is not on the Day, not on `serve`'s Day page or its Journeys pages (a journey's draft, unit
+  `journey`, is held to the same rule) and not through the MCP door, whichever head the record is at; an expired entry counts as `max_tier` 0, and so does a file with no `dream` entry, so
   nothing a model wrote is shown until the entry is back. The line stays in the record, as every line
   does. `day` says why in one row and nothing of the draft's text:
 
