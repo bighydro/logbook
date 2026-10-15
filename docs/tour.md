@@ -370,8 +370,10 @@ and the duration sit under `extra`.
 
 Mail becomes `mail/v1` lines (RFC 0015), one per message, tier 2 by default (`--tier` sets another for the whole
 import, never per message). `logbook add mail <file.mbox|folder>` reads a Google Takeout `Mail/` export — or any mbox —
-streamed, one message in memory at a time however large the file: the `Message-ID` as `raw_id` (prefixed by the
-mailbox when `--account` names it, so a re-import and a later live puller append nothing), the thread root from
+streamed, one message in memory at a time however large the file (the lines read from the last 200 wait while the
+record is asked about them): the `Message-ID` as `raw_id` (prefixed by the
+mailbox when `--account` names it, so a re-import appends nothing; a live puller appends nothing either way, since
+every mail road asks the record by the normalised `Message-ID` before it writes), the thread root from
 `References`, the sender and recipients as `{email, name}` exactly as the headers spell them (a resolution of the
 address names them in `show`, as for a message's sender), the subject, the `Date` header with its offset kept and
 `at` in UTC, Gmail's labels, the body as plain text (an HTML-only message stripped to its text, no library), the

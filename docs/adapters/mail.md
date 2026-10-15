@@ -6,7 +6,9 @@ mbox file or folder of them; `logbook sync mail` reads the same mailbox live ove
 ([below](#mail-imap)), and `logbook sync gmail` a Gmail mailbox over the Gmail API on the one Google
 key ([below](#gmail-over-the-api)). Each writes one `mail/v1` line per message (RFC 0015): who, when,
 the subject, the thread, the labels, the body as text, the attachments by name and size. Tier 2 by
-default. All three write the same line for the same message, so they dedupe each other.
+default. All three write the same line for the same message, and each, before it writes, skips a message
+the record already holds by its `Message-ID` from any of the three
+([One email, one line](#one-email-one-line)).
 
 ```bash
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # the whole export
@@ -21,7 +23,8 @@ logbook add mail inbox.mbox --restart                                   # from t
 | Field | What it holds |
 |---|---|
 | `at`, `date` | the `Date` header in UTC, and as written with its own offset; a message with no readable `Date` takes the mbox separator's time and has no `date` (counted) |
-| `raw_id`, `message_id` | the `Message-ID` without its brackets, `<account>:` first when `--account` names the mailbox; no `Message-ID` → `sha256:<digest of the message>` (counted). The dedupe key: the same export twice appends nothing |
+| `raw_id` | the `Message-ID` without its brackets, as the header spells it, `<account>:` first when `--account` names the mailbox; no `Message-ID` (or one of brackets alone, `<>`) → `sha256:<digest of the message>` (counted). The store's dedupe key: the same export twice appends nothing |
+| `message_id` | the `Message-ID` normalised: whitespace around it and its brackets off, the domain part (after the last `@`) lower-cased, the part before it as written. The key the three roads share ([One email, one line](#one-email-one-line)) |
 | `thread` | the root of `References`, else `In-Reply-To`, else the message's own id; Gmail's own thread id is `extra.gmail_thread_id` |
 | `from`, `to`, `cc`, `bcc` | `{email, name?}` as the headers spell them, the address lower-cased, the display name as written |
 | `direction` | `sent` when the sender is one of `owner_emails` in `logbook.json` or the `--account`, else `received` |
@@ -38,7 +41,8 @@ are the candidates `people merge` proposes from. The adapter writes no resolutio
 ## Built for a 20 GB export
 
 The file is read in 8 MB chunks and scanned for separator lines; one message is in memory at a
-time, whatever its size. Headers are parsed by hand, the MIME tree is walked by byte offsets, and an
+time, whatever its size (with the record to ask, what was read of up to 200 messages, 32 MB at most,
+waits for its answer). Headers are parsed by hand, the MIME tree is walked by byte offsets, and an
 attachment is never decoded or copied: its length is counted from the base64 text (exact for base64
 and unencoded parts). Only with `--attachments` is a part decoded, hashed and put in the store.
 On a laptop this reads well over 40 MB/s, so an export of twenty gigabytes is read in under ten
@@ -190,6 +194,54 @@ else stops the run on one line, exit 1, the mark where it was.
   the `LOGBOOK_IMAP_*` variables, or switch `gmail` off in `policy/import.json` (its key stays for the
   other Google sources).
 
+## One email, one line
+
+The same message can reach the record by all three roads: the Takeout export, `sync mail` and
+`sync gmail`. They write the same line, but its key differs when the mailbox is named differently: an
+export added without `--account` keys its lines `<Message-ID>`, the live roads `<account>:<Message-ID>`, and
+the store refuses only the very same key. So every road, before it writes, asks the record whether it holds
+the message by its normalised `Message-ID` (`message_id` above), from any road, and skips and counts it
+when it does. Nothing written is touched; a message the record does not hold is written as before.
+
+- **The mailbox decides.** A line of the same mailbox (`account`), or one written without a mailbox (an
+  export added without `--account`), holds the message. A line of another of your mailboxes does not: a
+  message you received in two mailboxes is two lines, each with its own labels (RFC 0015, rule 1). An
+  export added without `--account` names no mailbox, so a line of any of yours holds its message.
+- **Spelled the same, or not.** The record is asked by the keys a line of the message can carry (the id as
+  the header spells it and normalised, under the road's account and bare; for an export without
+  `--account`, under each of your `owner_emails` too): one query per batch of headers, before `sync mail`
+  and `sync gmail` fetch a body, so a message the record holds under one of those keys costs a header and
+  nothing more. A message read and still not found (the export asks once per 200 messages, the live roads
+  again for the bodies they read) is then looked for among the mail lines of its days, by normalised
+  `Message-ID`: a spelling no key guessed (`<Berth.9@Mail.Example.ORG>` in the export,
+  `Berth.9@MAIL.EXAMPLE.ORG` on the server) is the same message, found at the cost of its body. Each day
+  is read once per run, in whatever order the messages come. Two ids that differ before the `@`, even
+  only in case, are two messages.
+- **No `Message-ID`, no shared key.** A message without one is keyed by the digest of its own bytes, and
+  each road dedupes itself, as before: the Takeout export adds two headers of its own, so its bytes are not
+  the server's and the two roads write a line each. An id without an `@` (`unknown`, `(none)`) is no
+  Message-ID either: a mailer that writes one writes it on every message, so it is never a key across
+  roads, though each road's own key still dedupes it. `Message-ID: <>` names no message and is keyed by its
+  bytes; before this, every such message of an export shared the key `<>` and was one line, so re-adding an
+  export added before writes each of them, the first a second copy of what that line holds.
+- **Said, dry run included.** Each holder has a line of its own after the counts:
+
+  ```
+  gmail: 0 new lines of 0 seen from the beginning; marks in state/gmail.json
+    history id 48213, newest message 2026-03-04T10:15:00Z
+    3,412 already in the record from mail (an import without --account)
+  ```
+
+  or `from mail (you@example.org)` for a line of that mailbox. `--dry-run` says the same and writes
+  nothing.
+- **A record that seals.** Mail is tier 2: in a record that seals (RFC 0029) its lines are sealed and the
+  index holds their keys blinded. With your identity here both questions are answered as above. Without
+  it nothing can be read by `Message-ID`: a dry run counts every message as new, and a run is refused by
+  the record, which writes no sealed line without the identity.
+
+Adding a Takeout export with `--account <the address>` still helps: its lines then name the mailbox, so a
+second mailbox's copy of the same message stays its own.
+
 ## What is counted, never dropped silently
 
 `add` reports: messages without a `Message-ID` (keyed by digest), timed by the mbox separator (no
@@ -197,6 +249,8 @@ else stops the run on one line, exit 1, the mark where it was.
 attachments referenced or stored, and messages skipped by label. A message with neither a readable
 `Date` nor a readable separator is the only one skipped (`skipped_no_date`).
 
+`add mail`, `sync mail` and `sync gmail` report messages already in the record from another road or
+under another key, one line per mailbox ([One email, one line](#one-email-one-line)).
 `sync mail` reports, besides these: messages already in the record by `Message-ID`, whose bodies
 were never fetched, and folders read from the first message again because their `UIDVALIDITY`
 changed.

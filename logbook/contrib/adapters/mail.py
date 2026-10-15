@@ -15,6 +15,10 @@ is missing or unreadable (counted `date_from_separator`), `tz` the record's zone
 `Message-ID` without its brackets, prefixed by `<account>:` when `--account` names the mailbox, so a
 re-import and a later live puller of the same mailbox append nothing (ADR 0017); a message with no
 `Message-ID` is keyed `sha256:<digest of its bytes>` and counted (`no_message_id`), never skipped.
+`message_id` is the id normalised (`normalise_id`: brackets and surrounding whitespace off, the domain
+part lower-cased), the key every mail road asks the record by before it writes (`held`,
+`logbook.contrib.mail_lookup`): a message the record holds from any road under another key is counted
+per mailbox (`HELD`) and not yielded (RFC 0015, amendment of 2026-10-14).
 `thread` is the root of `References`, else `In-Reply-To`, else the message's own id. `from`, `to`,
 `cc` and `bcc` are `{email, name?}` as the headers spell them, the address lower-cased, never
 resolved: a `resolution/v1` line for `{kind: "email", value}` names them (RFC 0006), and the names
@@ -52,13 +56,15 @@ import hashlib
 import html
 import quopri
 import re
+import string
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.header import decode_header, make_header
 from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
-from typing import IO, Any, Protocol
+from typing import IO, Any, Protocol, TypeGuard
 from urllib.parse import unquote_to_bytes
 
 from ...core.attachments import DIR as ATTACHMENTS_DIR
@@ -75,17 +81,21 @@ LABELS_HEADER = "x-gmail-labels"
 THREAD_HEADER = "x-gm-thrid"
 NO_DATE = "skipped_no_date"
 BY_LABEL = "skipped_label"
+HELD = "already_in_record_from:"  # a count per holder, `<HELD>mail (<mailbox>)`, said on a line of its own
 
 CHUNK = 8 * 1024 * 1024  # bytes read at a time
 BODY_CAP = 64 * 1024  # bytes of a body part read; the rest is cut
 PROGRESS_EVERY = 10_000  # messages between progress reports
 MAX_DEPTH = 32  # nested multiparts walked
+LOOKUP_BATCH = 200  # drafts asked about at once (`held`)
+LOOKUP_BYTES = 32 * 1024 * 1024  # ... and at most this many bytes of messages waiting for the answer
 
 SEPARATOR = re.compile(rb"From \S+ [^\r\n]*\r?\n")  # `From <id> <date>`, at the start of a line
 ESCAPED_FROM = re.compile(rb"^>(>*From )", re.MULTILINE)  # mboxrd: one `>` off, the rest stays
 BLANK_LINE = re.compile(rb"\r?\n\r?\n")  # ends a header block
 SEPARATOR_DATE = ("%a %b %d %H:%M:%S %z %Y", "%a %b %d %H:%M:%S %Y")
 MESSAGE_ID = re.compile(r"<([^<>]+)>")
+ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)  # a Message-ID's domain part
 PARAM = re.compile(r';\s*([^=;\s]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]*))')
 PARAM_KEY = re.compile(r"^(.*?)(?:\*(\d+))?(\*)?$")
 SIMPLE_ADDRESS = re.compile(
@@ -99,6 +109,34 @@ TAG = re.compile(r"<[^>]*>")
 BLANK_LINES = re.compile(r"\n{3,}")
 
 Progress = Callable[[int, int, float], None]
+
+
+@dataclass(frozen=True)
+class Asked:
+    """One message a mail source asks the record about before it writes it (`held`): the key its line
+    would carry (`raw_id`), its Message-ID normalised (`normalise_id`) and as the header spells it, the
+    mailbox the source reads (None: an mbox imported without `--account`) and, once the message is read,
+    its `at`."""
+
+    raw_id: str
+    message_id: str
+    spelled: str
+    account: str | None
+    at: str | None = None
+
+
+@dataclass(frozen=True)
+class Holder:
+    """The line that holds a message already: under the very key the asker's line would carry (`own`,
+    which the store refuses on its own), or under another, of the mailbox `account` (None: a line written
+    without one, by an mbox imported without `--account`)."""
+
+    own: bool
+    account: str | None
+
+
+# the record's answer for a batch, one entry per message, in order: its holder, or None
+Held = Callable[[Sequence[Asked]], list[Holder | None]]
 
 
 class Cursor(Protocol):
@@ -154,10 +192,14 @@ def run(
     progress: Progress | None = None,
     cursor: Cursor | None = None,
     chunk_size: int = CHUNK,
+    held: Held | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One mail/v1 line draft per message of the mbox at `path` (or of every `.mbox` in the folder,
     in name order), streamed. `since` is RFC3339 UTC; messages with `at` before it are not
-    yielded. `timezone` is the record's zone (the line's `tz`). `tier` applies to the whole run."""
+    yielded. `timezone` is the record's zone (the line's `tz`). `tier` applies to the whole run.
+    With `held`, the drafts wait in windows of LOOKUP_BATCH (LOOKUP_BYTES at most) and the record is
+    asked once per window: a message it holds under another key, from any road, is counted (`HELD`) and
+    not yielded; one it holds under this very key goes on, for the store to refuse as before."""
     counts = counts if counts is not None else {}
     path = Path(path)
     files = [path] if path.is_file() else sorted(f for f in path.iterdir() if _is_mbox(f))
@@ -168,6 +210,27 @@ def run(
     skip = {label.strip().lower() for label in (skip_labels or []) if label.strip()}
     read = ordinal = done = 0  # messages read, drafts yielded, bytes of the files already finished
     started = time.monotonic()
+    waiting: list[tuple[dict[str, Any], list[bytes], int]] = []  # drafts, their blobs and ends, for `held`
+    waiting_bytes = 0
+
+    def release(file: Path) -> Iterator[dict[str, Any]]:
+        """The drafts that waited, in order, less the ones the record holds under another key."""
+        nonlocal ordinal, waiting_bytes
+        holders = ask_record([line for line, _blobs, _end in waiting], held)
+        for (line, blobs, end), holder in zip(waiting, holders, strict=True):
+            if holder is not None and not holder.own:
+                count_held(counts, holder)
+                continue
+            if store is not None:
+                for blob in blobs:
+                    store(blob)
+            ordinal += 1
+            if cursor is not None:
+                cursor.reached(file, ordinal, end)
+            yield line
+        waiting.clear()
+        waiting_bytes = 0
+
     for file in files:
         start = cursor.start(file) if cursor is not None else 0
         with file.open("rb") as fh:
@@ -195,13 +258,11 @@ def run(
                     continue
                 if since and line["at"] < since:
                     continue
-                if store is not None:
-                    for blob in blobs:
-                        store(blob)
-                ordinal += 1
-                if cursor is not None:
-                    cursor.reached(file, ordinal, end)
-                yield line
+                waiting.append((line, blobs, end))
+                waiting_bytes += len(raw)
+                if held is None or len(waiting) >= LOOKUP_BATCH or waiting_bytes >= LOOKUP_BYTES:
+                    yield from release(file)
+            yield from release(file)  # before the file's end is told to the cursor
             size = fh.seek(0, 2)
         done += size - start
         if cursor is not None:
@@ -518,7 +579,7 @@ def parse_message(
         "raw_id": f"{account.strip().lower()}:{own}" if account else own,
     }
     if message_id is not None:
-        payload["message_id"] = message_id
+        payload["message_id"] = normalise_id(message_id)  # the key the roads share; raw_id keeps the spelling
     payload["thread"] = references[0] if references else in_reply_to or own
     if sender:
         payload["from"] = sender[0]
@@ -603,14 +664,96 @@ def first_id(value: str | None) -> str | None:
     return ids[0] if ids else None
 
 
+def ask(message_id: str | None, account: str | None, at: str | None = None) -> Asked | None:
+    """What a mail source asks the record about a message whose Message-ID header gives `message_id`
+    (`first_id`'s spelling), read from the mailbox `account`; None for a message without one, whose
+    line is keyed by its own bytes, so the store's (source, raw_id) is its only dedupe, as before; and
+    None for an id without an `@` (`unknown`, `(none)`) or with nothing on one side of it: RFC 5322 has
+    no such Message-ID, and a mailer that writes one writes it on every message, so it is never a key
+    across roads."""
+    normal = normalise_id(message_id)
+    if message_id is None or not _shared(normal):
+        return None
+    mailbox = account.strip().lower() if account else None
+    return Asked(f"{mailbox}:{message_id}" if mailbox else message_id, normal, message_id, mailbox, at)
+
+
+def ask_record(lines: Sequence[dict[str, Any]], held: Held | None) -> list[Holder | None]:
+    """The record's holder of each parsed draft (None: not held, or no `held` to ask), one `held` call
+    for them all; a draft without a Message-ID is never asked."""
+    found: list[Holder | None] = [None] * len(lines)
+    if held is None:
+        return found
+    asked = {n: q for n, line in enumerate(lines) if (q := _asked(line)) is not None}
+    if asked:
+        for n, holder in zip(asked, held(list(asked.values())), strict=True):
+            found[n] = holder
+    return found
+
+
+def unheld(
+    lines: Sequence[dict[str, Any]], held: Held | None, counts: dict[str, int]
+) -> list[dict[str, Any]]:
+    """The parsed drafts the record does not hold under another key; the others counted (`HELD`)."""
+    kept: list[dict[str, Any]] = []
+    for line, holder in zip(lines, ask_record(lines, held), strict=True):
+        if holder is not None and not holder.own:
+            count_held(counts, holder)
+        else:
+            kept.append(line)
+    return kept
+
+
+def count_held(counts: dict[str, int], holder: Holder) -> None:
+    """One more message the record holds from another road or key, counted by its holder's mailbox."""
+    _count(counts, f"{HELD}{NAME} ({holder.account or 'an import without --account'})")
+
+
+def _asked(line: dict[str, Any]) -> Asked | None:
+    """`ask` for a parsed draft: the key it carries, its Message-ID, its mailbox and its `at`."""
+    payload = line["payload"]
+    normal, raw_id, account = payload.get("message_id"), str(payload.get("raw_id")), payload.get("account")
+    if not isinstance(normal, str) or not _shared(normal):
+        return None
+    prefix = f"{account}:" if account else ""
+    spelled = raw_id.removeprefix(prefix)
+    return Asked(raw_id, normal, spelled, str(account) if account else None, str(line["at"]))
+
+
+def _shared(normal: str | None) -> TypeGuard[str]:
+    """Whether a normalised Message-ID may key a message across roads: something on both sides of its
+    last `@`, as RFC 5322 has it (`<@>` or `<a@>` stamped on every message names none of them)."""
+    if normal is None:
+        return False
+    local, at, domain = normal.rpartition("@")
+    return bool(at and local and domain)
+
+
+def normalise_id(message_id: str | None) -> str | None:
+    """A Message-ID as every mail source asks the record by it (`payload.message_id`): surrounding
+    whitespace and one pair of angle brackets off, and the ASCII letters after the last `@` lower-cased,
+    since the domain part is case-insensitive (RFC 5322, the DNS). The part before it is kept as written:
+    two ids that differ there, in case or in a space, are two messages. None when nothing is left."""
+    if message_id is None:
+        return None
+    text = message_id.strip()
+    if text.startswith("<") and text.endswith(">"):
+        text = text[1:-1].strip()
+    if not text:
+        return None
+    local, at, domain = text.rpartition("@")
+    return local + at + domain.translate(ASCII_LOWER) if at else text
+
+
 def _ids(value: str | None) -> list[str]:
-    """Message ids without their angle brackets; a bare token without brackets counts too."""
+    """Message ids without their angle brackets; a bare token without brackets counts too, a token of
+    brackets alone (`<>`) does not."""
     if not value:
         return []
     found = MESSAGE_ID.findall(value)
     if found:
         return [token.strip() for token in found if token.strip()]
-    return [token for token in value.split() if token]
+    return [token for token in value.split() if token.strip("<>")]
 
 
 def _addresses(headers: Headers, name: str) -> list[dict[str, Any]]:

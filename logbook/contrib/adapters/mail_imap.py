@@ -29,11 +29,12 @@ read from its first message again (the record refuses what it holds); `--restart
 refuse) and still advances the marks; `--dry-run` fetches and counts and writes nothing.
 
 Headers first: each batch of `BATCH` UIDs is fetched as `Message-ID` and size alone, the record is
-asked which of those ids it holds (`existing`, one SELECT), and only the bodies of the rest are
-fetched, in batches bounded by `BODY_BATCH_BYTES` — so the first run over a 400,000-message All Mail
-after a Takeout import asks for no body the record would refuse. The progress line per batch says
-what is true: fetched, new, already in the record; never a guessed total. One connection, closed on
-the way out, on success and on error alike.
+asked which of those messages it holds by normalised Message-ID, from any mail road (`held`,
+`logbook.contrib.mail_lookup`: one query; without it `existing`, this source's own keys), and only
+the bodies of the rest are fetched, in batches bounded by `BODY_BATCH_BYTES` — so the first run over a
+400,000-message All Mail after a Takeout import asks for no body the record would refuse. The progress
+line per batch says what is true: fetched, new, already in the record; never a guessed total. One
+connection, closed on the way out, on success and on error alike.
 
 Gmail's labels and thread id (the `X-GM-EXT-1` extension: `X-GM-LABELS`, `X-GM-THRID`) are fetched
 with the body and written as the mbox adapter writes Takeout's `X-Gmail-Labels` and `X-GM-THRID`:
@@ -186,13 +187,16 @@ def pull(
     existing: Callable[[Iterable[tuple[str, str]]], set[tuple[str, str]]] | None = None,
     walk: Walk | None = None,
     notice: Callable[[str], None] | None = None,
+    held: mail.Held | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One mail/v1 line draft per message the record does not hold, folder by folder, UID order
     within a folder. `since` (RFC3339 UTC) searches each folder SINCE that day in place of its mark.
     `walk` is `sync`'s checkpoint keeper: its `start()` holds the marks, `reached(ordinal, marks)`
-    is told after every batch. `existing` is the record's answer to a batch of (source, raw_id)
-    keys. `notice` prints one line per batch; `progress` is not used, since that line is the
-    progress and names no total. Raises OSError or ValueError with one plain sentence."""
+    is told after every batch. `held` is the record's answer by Message-ID, from any mail road
+    (`logbook.contrib.mail_lookup`): asked for a batch's headers before any body is fetched, and again
+    for the bodies read, now with their `at`; without it, `existing` answers for this source's own
+    (source, raw_id) keys alone. `notice` prints one line per batch; `progress` is not used, since that
+    line is the progress and names no total. Raises OSError or ValueError with one plain sentence."""
     counts = counts if counts is not None else {}
     say = notice if notice is not None else (lambda _text: None)
     owners = {e.strip().lower() for e in (owner_emails or []) if e.strip()}
@@ -228,22 +232,26 @@ def pull(
             fetched = new = already = 0
             for batch in _batches(uids, BATCH):
                 heads = _fetch_heads(imap, shown, batch)
-                keys = {
-                    (NAME, f"{config.account}:{message_id}")
-                    for uid in batch
-                    if (message_id := heads.get(uid, (None, 0))[0]) is not None
-                }
-                held = existing(keys) if existing is not None and keys else set()
-                wanted = [
-                    uid
-                    for uid in batch
-                    if uid not in heads
-                    or heads[uid][0] is None
-                    or (NAME, f"{config.account}:{heads[uid][0]}") not in held
-                ]
+                if held is not None:
+                    wanted = _not_held(batch, heads, config.account, held, counts)
+                else:
+                    keys = {
+                        (NAME, f"{config.account}:{message_id}")
+                        for uid in batch
+                        if (message_id := heads.get(uid, (None, 0))[0]) is not None
+                    }
+                    refused = existing(keys) if existing is not None and keys else set()
+                    wanted = [
+                        uid
+                        for uid in batch
+                        if uid not in heads
+                        or heads[uid][0] is None
+                        or (NAME, f"{config.account}:{heads[uid][0]}") not in refused
+                    ]
+                    _count(counts, ALREADY, len(batch) - len(wanted))
                 already += len(batch) - len(wanted)
-                _count(counts, ALREADY, len(batch) - len(wanted))
                 for bodies in _by_size(wanted, heads):
+                    read: list[dict[str, Any]] = []
                     for raw, internaldate, labels, thread_id in _fetch_bodies(imap, shown, bodies, gmail):
                         line, _blobs = mail.parse_message(
                             raw,
@@ -259,6 +267,10 @@ def pull(
                         if line is None:
                             continue
                         mail.gmail_fields(line["payload"], labels, thread_id)
+                        read.append(line)
+                    kept = mail.unheld(read, held, counts)  # read now, so known by their days too
+                    already += len(read) - len(kept)
+                    for line in kept:
                         ordinal += 1
                         new += 1
                         yield line
@@ -271,6 +283,31 @@ def pull(
                 walk.reached(ordinal, {"folders": dict(marks)})
     finally:
         _close(imap)
+
+
+def _not_held(
+    batch: list[int],
+    heads: Mapping[int, tuple[str | None, int]],
+    account: str,
+    held: mail.Held,
+    counts: dict[str, int],
+) -> list[int]:
+    """The UIDs of a batch whose bodies are to be fetched: every one the record does not hold by its
+    Message-ID, from any mail road; one it holds is counted, `ALREADY` under this source's own key, by
+    its holder's mailbox under another (`mail.count_held`). A UID with no head or no Message-ID is
+    fetched: the store's own key is its dedupe."""
+    asked = {uid: q for uid in batch if (q := mail.ask(heads.get(uid, (None, 0))[0], account)) is not None}
+    holders = dict(zip(asked, held(list(asked.values())), strict=True)) if asked else {}
+    wanted: list[int] = []
+    for uid in batch:
+        holder = holders.get(uid)
+        if holder is None:
+            wanted.append(uid)
+        elif holder.own:
+            _count(counts, ALREADY)
+        else:
+            mail.count_held(counts, holder)
+    return wanted
 
 
 # -- the protocol -----------------------------------------------------------------------------------
