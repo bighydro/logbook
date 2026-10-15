@@ -1,11 +1,12 @@
 """`logbook status KIND ENTITY DISPOSITION` and `status list KIND` (RFC 0037 §9; decisions 5, 6, 9, 10,
 11): one `status/v1` line for an org, an idea, a place or an asset, at the kind's tier (3 for an org,
 RFC 0037 §8; 2 for the rest, never citing a tier-3 line), under the writer lock with the head read
-again; the reason on the line, and for an idea, a place or an asset also as a `note/v1` beside it at
-tier 2 (RFC 0010's MUST), while an org's reason stays on its tier-3 line and no note is written; a
-place let go or an asset sold closes its registry entry with `until`, never deleted; a person and a
-goal take no status; the 365-day mute and the stale rule are a reader's. On the synthetic record of
-`entities_record`."""
+again; the reason on the line, and for an idea, a place or an asset also as a `note/v1` at tier 2
+(RFC 0010's MUST), written first and named by the status line's `note` (RFC 0037 §10.5), a pair
+written the other way before still read the same, while an org's reason stays on its tier-3 line and
+no note is written; a place let go or an asset sold closes its registry entry with `until`, never
+deleted; a person and a goal take no status; the 365-day mute and the stale rule are a reader's. On
+the synthetic record of `entities_record`, the clock pinned (`clock`)."""
 
 from __future__ import annotations
 
@@ -19,14 +20,31 @@ import pytest
 from entities_record import YARD, record
 
 from logbook import cli
+from logbook.commands import export as export_command
 from logbook.contrib import entities, entity_review, entity_status
-from logbook.core import assets, day_start, places
+from logbook.core import assets, day_start, notes, places, store
 from logbook.core.store import HeadMoved, Logbook
 
 ZONE = ZoneInfo("Europe/Oslo")
-TODAY = datetime.now(ZONE).date().isoformat()  # the writer's today is the clock's, in the record's zone
+NOW = "2026-10-14T22:30:00Z"  # the clock every test reads (`clock`): 00:30 in Oslo, still the 14th in UTC
+# the record's today, 2026-10-15: its day starts at midnight (`entities_record` sets no `day_start`)
+TODAY = datetime.fromisoformat(NOW).astimezone(ZONE).date().isoformat()
 MUTED_TO = (date.fromisoformat(TODAY) + timedelta(days=364)).isoformat()  # the 365th day, today counted
 A_YEAR_ON = (date.fromisoformat(TODAY) + timedelta(days=365)).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every clock these tests reach reads NOW, whatever the wall clock says: the writer's and the
+    list's today (`notes.today_in`, under the record's zone and day start), the moment of a status
+    given today (`notes.moment`'s now) and the stamps the store, the review writer and `export` take
+    (each module that imported `now_utc` keeps its own name for it). Read from
+    the wall clock, a run that straddled midnight in Oslo wrote `until` a day after TODAY and found
+    nothing muted."""
+    instant = datetime.fromisoformat(NOW)
+    for module in (store, notes, entity_review, export_command):
+        monkeypatch.setattr(module, "now_utc", lambda: NOW)
+    monkeypatch.setattr(notes, "today_in", lambda days: days.today(instant).isoformat())
 
 
 @pytest.fixture
@@ -85,6 +103,8 @@ def test_an_org_status_is_one_tier_three_line_with_its_reason_on_it_and_no_note(
     assert not [line for line in _after(lb, seq) if line["kind"] == "note"], "no note/v1 written"
     assert "the yard is still compounding" in out, "the reason shows to the owner, read from the line"
     assert "reason: the yard is still compounding" in _status(capsys, "list", "org")
+    [row] = json.loads(_status(capsys, "list", "org", "--json"))["entities"]
+    assert (row["line"], row["reason"], row["note"]) == (status["id"], "the yard is still compounding", None)
     assert Logbook(lb.root).verify()[2] == []
 
 
@@ -138,7 +158,7 @@ def test_an_idea_status_names_the_idea_by_a_word_of_its_label(
 ) -> None:
     seq = int(lb.meta["seq"])
     _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written")
-    status, _note = _after(lb, seq)
+    _note, status = _after(lb, seq)
     assert status["payload"]["entity"]["type"] == "idea" and status["payload"]["label"] == "the fjord kiosk"
     assert status["tier"] == 2
 
@@ -148,13 +168,13 @@ def test_an_idea_status_with_a_reason_is_a_tier_two_line_and_a_tier_two_note(
 ) -> None:
     seq = int(lb.meta["seq"])
     out = _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written")
-    status, note = _after(lb, seq)
+    note, status = _after(lb, seq)
     assert (status["kind"], status["tier"]) == ("status", 2)
     assert status["payload"]["reason"] == "pricing page written"
     assert (note["kind"], note["source"], note["tier"], note["at"]) == ("note", "manual", 2, status["at"])
     assert note["payload"]["schema"] == "note/v1" and note["payload"]["labels"] == ["status"]
     assert note["payload"]["text"] == "pricing page written"
-    assert note["payload"]["extra"]["status"] == status["id"]
+    assert status["payload"]["note"] == note["id"], "the status line names its note (RFC 0037 §10.5)"
     assert note["payload"]["extra"]["entity"]["type"] == "idea"
     assert f"the reason as a note (#{note['seq']})" in out
 
@@ -164,7 +184,7 @@ def test_a_place_status_is_tier_two_and_never_cites_a_tier_three_line(
 ) -> None:
     seq = int(lb.meta["seq"])
     _status(capsys, "place", "Hytta", "let-go", "--reason", "sold the cabin")
-    status, note = _after(lb, seq)
+    note, status = _after(lb, seq)
     assert (status["kind"], status["tier"], status["payload"]["entity"]["type"]) == ("status", 2, "place")
     assert note["tier"] == 2, "the note at the status line's tier"
     payment = next(line for line in Logbook(lb.root).lines() if line["kind"] == "transaction")
@@ -192,9 +212,9 @@ def test_an_export_under_a_ceiling_of_two_carries_no_org_status_and_not_its_reas
     org_reason, idea_reason = "orders through 2027 at the yard", "pricing page written"
     _status(capsys, "org", YARD["label"], "hold", "--reason", org_reason, "--at", "2026-10-01")
     _status(capsys, "idea", "kiosk", "exploring", "--reason", idea_reason, "--at", "2026-10-02")
-    org_status, idea_status, idea_note = _after(lb, seq)
-    assert [line["kind"] for line in (org_status, idea_status, idea_note)] == ["status", "status", "note"]
-    assert [line["tier"] for line in (org_status, idea_status, idea_note)] == [3, 2, 2]
+    org_status, idea_note, idea_status = _after(lb, seq)
+    assert [line["kind"] for line in (org_status, idea_note, idea_status)] == ["status", "note", "status"]
+    assert [line["tier"] for line in (org_status, idea_note, idea_status)] == [3, 2, 2]
     out = tmp_path / "out"
     cli.main(["export", "crossing", "--to", "hermes", "--since", "2026-09-01T00:00:00Z", "--until",
               "2026-10-05T00:00:00Z", "--tier", "1,2", "--unsigned", "--out", str(out)])  # fmt: skip
@@ -339,7 +359,247 @@ def test_a_retracted_status_counts_for_nothing_and_the_one_before_stands(
     _status(capsys, "idea", "kiosk", "spark", "--at", "2026-09-20")
     seq = int(Logbook(lb.root).meta["seq"])
     _status(capsys, "idea", "kiosk", "killed", "--reason", "a ferry kiosk exists already")
-    status, _note = _after(lb, seq)
+    _note, status = _after(lb, seq)
     Logbook(lb.root).retract(int(status["seq"]), "not killed after all")
     [row] = entity_status.listing(Logbook(lb.root), "idea", today=TODAY).rows
     assert row.current is not None and (row.current.status, row.since) == ("spark", "2026-09-20")
+
+
+# -- the reason as a note: written first, named by the status line (RFC 0037 §10.5) ---------------------
+
+
+@pytest.mark.parametrize(
+    ("kind", "name", "disposition", "entity"),
+    [
+        ("idea", "kiosk", "exploring", None),
+        ("place", "Hytta", "let-go", "Hytta"),
+        ("asset", "Solvind", "let-go", "solvind"),
+    ],
+)
+def test_a_reason_is_a_note_written_first_and_the_status_line_names_it(
+    lb: Logbook,
+    capsys: pytest.CaptureFixture[str],
+    kind: str,
+    name: str,
+    disposition: str,
+    entity: str | None,
+) -> None:
+    seq, reason = int(lb.meta["seq"]), f"why the {kind} is {disposition}"
+    out = _status(capsys, kind, name, disposition, "--reason", reason)
+    note, status = _after(lb, seq)
+    assert (int(note["seq"]), int(status["seq"])) == (seq + 1, seq + 2), "the note first, then the status"
+    assert (note["kind"], note["source"], note["tier"], note["at"]) == ("note", "manual", 2, status["at"])
+    entity_ref = status["payload"]["entity"]
+    assert entity_ref["type"] == kind and (entity is None or entity_ref["id"] == entity)
+    assert note["payload"] == {
+        "schema": "note/v1",
+        "text": reason,
+        "labels": ["status"],
+        "extra": {"entity": entity_ref},
+    }, "the words and the entity, never the disposition, and no back link: the status names the note"
+    assert (status["kind"], status["tier"]) == ("status", 2)
+    assert (status["payload"]["reason"], status["payload"]["note"]) == (reason, note["id"])
+    assert entities.validate_status(status["payload"]) == []
+    assert out.splitlines() == [
+        f"{status['payload']['label']}: {disposition} (#{status['seq']})",
+        f"  the reason as a note (#{note['seq']})",
+        *out.splitlines()[2:],
+    ]
+    [row] = [r for r in json.loads(_status(capsys, "list", kind, "--json"))["entities"] if r["status"]]
+    assert (row["line"], row["reason"], row["note"]) == (status["id"], reason, note["id"])
+    assert f"reason: {reason}" in _status(capsys, "list", kind)
+    assert Logbook(lb.root).verify()[2] == []
+
+
+def test_a_status_refused_with_a_reason_writes_no_note_either(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Everything is checked, and the head read again, before the first line, which is now the note."""
+    payment = next(line for line in lb.lines() if line["kind"] == "transaction")
+    seq = int(lb.meta["seq"])
+    with pytest.raises(entity_status.StatusError, match="never cites a tier-3 line"):
+        entity_status.write(lb, "idea", "kiosk", "exploring", "pricing", evidence=[str(payment["id"])])
+    assert int(Logbook(lb.root).meta["seq"]) == seq, "refused inside the lock: no note, no line"
+    _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written")
+    seq = int(Logbook(lb.root).meta["seq"])
+    assert "one status a day" in _refused(capsys, "idea", "kiosk", "exploring", "--reason", "again")
+    real = entity_status._read
+
+    def another_writer(lb2: Logbook) -> Any:
+        found = real(lb2)
+        lb2.append(at=NOW, source="manual", kind="note", tier=2,
+                   payload={"schema": "note/v1", "text": "written under the reading"})  # fmt: skip
+        return found
+
+    monkeypatch.setattr(entity_status, "_read", another_writer)
+    with pytest.raises(HeadMoved):
+        entity_status.write(lb, "idea", "kiosk", "build", "the repo is busy")
+    after = _after(lb, seq)
+    assert [line["payload"].get("text") for line in after] == ["written under the reading"], (
+        "no status note, no status line"
+    )
+
+
+def _old_order(
+    lb: Logbook, kind: str, entity_id: str, label: str, status: str, reason: str, at: str
+) -> tuple:
+    """A pair as the writer wrote it before it kept RFC 0037 §10.5's order: the status line first, its
+    reason on it and no `note` field, then the note naming it under `extra.status`, with the label
+    and the disposition beside it."""
+    line = Logbook(lb.root).append(
+        at=at, source="manual", kind="status", tier=2,
+        payload=entities.status_payload(kind, entity_id, label, status, reason),
+    )  # fmt: skip
+    note = Logbook(lb.root).append(
+        at=at, source="manual", kind="note", tier=2,
+        payload={"schema": "note/v1", "text": reason, "labels": ["status"],
+                 "extra": {"status": line["id"], "entity": entities.entity_ref(kind, entity_id),
+                           "label": label, "disposition": status}},
+    )  # fmt: skip
+    return line, note
+
+
+def test_a_pair_written_the_old_way_reads_as_it_did(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    """A status line written before the note came first has no `note`; its note names it under
+    `extra.status`. The list reads the same status, day, reason and note from it as from a pair
+    written now, and a status written after it supersedes it as before."""
+    with lb.index() as idx:
+        [idea] = [line for line in idx.by_kind("entity") if line["payload"]["entity"]["type"] == "idea"]
+    idea_id = idea["payload"]["entity"]["id"]
+    old_status, old_note = _old_order(
+        lb, "idea", idea_id, "the fjord kiosk", "exploring", "pricing page written", "2026-10-02T18:00:00Z"
+    )
+    old_place, old_place_note = _old_order(
+        lb, "place", "Hytta", "Hytta", "let-go", "sold the cabin", "2026-10-03T18:00:00Z"
+    )
+    assert "note" not in old_status["payload"] and entities.validate_status(old_status["payload"]) == []
+    [row] = [r for r in entity_status.listing(Logbook(lb.root), "idea", today=TODAY).rows if r.current]
+    assert row.current is not None
+    assert (row.current.status, row.since, row.current.reason, row.current.line, row.current.note) == (
+        "exploring",
+        "2026-10-02",
+        "pricing page written",
+        old_status["id"],
+        old_note["id"],
+    ), "the old note found by its extra.status"
+    [place] = json.loads(_status(capsys, "list", "place", "--json"))["entities"][:1]
+    assert (place["status"], place["until"], place["reason"], place["note"]) == (
+        "let-go",
+        "2026-10-03",
+        "sold the cabin",
+        old_place_note["id"],
+    )
+    assert "reason: pricing page written" in _status(capsys, "list", "idea")
+    # the same words written now, in the RFC's order, read the same but for the ids
+    seq = int(Logbook(lb.root).meta["seq"])
+    _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written, again")
+    new_note, new_status = _after(lb, seq)
+    assert new_status["payload"]["supersedes"] == old_status["id"], "the old line was the standing one"
+    with Logbook(lb.root).index() as idx:
+        lines = [*idx.retractions(), *idx.by_kind("status"), *idx.by_kind("note")]
+    before = [line for line in lines if line["id"] != new_status["id"]]
+    for found, pair in ((before, (old_status, old_note)), (lines, (new_status, new_note))):
+        [current] = entities.statuses(found)[("idea", idea_id)]
+        assert (current.line, current.note) == (pair[0]["id"], pair[1]["id"]), (
+            "each status joined to its own note, whichever way the pair was written"
+        )
+    Logbook(lb.root).retract(int(old_place_note["seq"]), "the note taken back")
+    [place] = json.loads(_status(capsys, "list", "place", "--json"))["entities"][:1]
+    assert (place["reason"], place["note"]) == ("sold the cabin", None), (
+        "a retracted note names nothing; the reason is still on the line"
+    )
+    assert old_place["id"] == place["line"]
+
+
+IDEA_ID = "019cadd3-6bc0-7dcd-9133-000000000301"
+
+
+def test_a_status_line_s_note_is_a_line_id_never_an_org_s_and_never_without_a_reason() -> None:
+    idea = entities.status_payload(
+        "idea",
+        IDEA_ID,
+        "the fjord kiosk",
+        "exploring",
+        "because",
+        note="019cadd3-6bc0-7dcd-9133-0000000001d3",
+    )
+    assert entities.validate_status(idea) == []
+    assert any("note" in p for p in entities.validate_status({**idea, "note": 7}))
+    org = entities.status_payload(
+        "org", YARD["id"], YARD["label"], "hold", "because", note="019cadd3-6bc0-7dcd-9133-0000000001d3"
+    )
+    assert any("an org's reason stays on its tier-3 line" in p for p in entities.validate_status(org))
+    bare = {k: v for k, v in idea.items() if k != "reason"}
+    assert any("a status without a reason has none" in p for p in entities.validate_status(bare))
+
+
+def test_a_retracted_note_is_no_reason_note_and_an_org_is_never_joined_to_one(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Whichever way the pair was written, a retracted note counts for nothing; and an org's line is
+    never joined to a note, not by a `note` on it nor by a note naming it under `extra.status`."""
+    seq = int(lb.meta["seq"])
+    _status(capsys, "asset", "Solvind", "let-go", "--reason", "given to the sailing club")
+    note, status = _after(lb, seq)
+    Logbook(lb.root).retract(int(note["seq"]), "the note taken back")
+    [row] = [r for r in json.loads(_status(capsys, "list", "asset", "--json"))["entities"] if r["status"]]
+    assert (row["line"], row["reason"], row["note"]) == (status["id"], "given to the sailing club", None)
+    # an org's line, written by hand with a `note` (the writer never does), and a stray note naming
+    # another org line the old way; an old-order idea pair turns the old road on
+    with lb.index() as idx:
+        [idea] = [line for line in idx.by_kind("entity") if line["payload"]["entity"]["type"] == "idea"]
+    _old_order(lb, "idea", idea["payload"]["entity"]["id"], "the fjord kiosk", "spark", "a sketch",
+               "2026-10-02T18:00:00Z")  # fmt: skip
+    org = Logbook(lb.root).append(
+        at="2026-10-03T18:00:00Z", source="manual", kind="status", tier=3,
+        payload={**entities.status_payload("org", YARD["id"], YARD["label"], "hold", "orders"),
+                 "note": idea["id"]},
+    )  # fmt: skip
+    assert any("an org's reason stays" in p for p in entities.validate_status(org["payload"]))
+    [row] = json.loads(_status(capsys, "list", "org", "--json"))["entities"]
+    assert (row["line"], row["note"]) == (org["id"], None), "an org's `note` is never read"
+    stray = Logbook(lb.root).append(
+        at="2026-10-04T18:00:00Z", source="manual", kind="status", tier=3,
+        payload=entities.status_payload("org", YARD["id"], YARD["label"], "add", "more orders"),
+    )  # fmt: skip
+    Logbook(lb.root).append(
+        at="2026-10-04T18:00:00Z", source="manual", kind="note", tier=2,
+        payload={"schema": "note/v1", "text": "more orders", "labels": ["status"],
+                 "extra": {"status": stray["id"], "entity": entities.entity_ref("org", YARD["id"])}},
+    )  # fmt: skip
+    [row] = json.loads(_status(capsys, "list", "org", "--json"))["entities"]
+    assert (row["line"], row["note"]) == (stray["id"], None), "an org is never joined to a note"
+
+
+def test_notes_are_read_only_for_a_standing_line_written_the_old_way_and_only_around_its_day(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A record the writer wrote note first reads no note to list or write a status; an old-order line
+    makes the reader read the `manual` status notes of its day, a day either side, and nothing more."""
+    from logbook.core import index
+
+    asked: list[tuple[Any, ...]] = []
+    real = index.Index.of_kind
+
+    def spy(self: index.Index, kind: str, *args: Any, **kwargs: Any) -> Any:
+        asked.append((kind, *args, *sorted(kwargs.items())))
+        return real(self, kind, *args, **kwargs)
+
+    monkeypatch.setattr(index.Index, "of_kind", spy)
+    _status(capsys, "idea", "kiosk", "exploring", "--reason", "pricing page written")
+    _status(capsys, "place", "Hytta", "let-go", "--reason", "sold the cabin")
+    _status(capsys, "list", "idea")
+    assert not [a for a in asked if a[0] == "note"], "no old-order line: no note read"
+    _old_order(lb, "asset", "solvind", "Solvind", "let-go", "given away", "2026-10-02T18:00:00Z")
+    asked.clear()
+    [row] = [r for r in json.loads(_status(capsys, "list", "asset", "--json"))["entities"] if r["status"]]
+    assert row["reason"] == "given away" and row["note"] is not None
+    assert [a for a in asked if a[0] == "note"] == [
+        ("note", "2026-10-01", "2026-10-03", ("source", "manual"))
+    ]
+    seq = int(Logbook(lb.root).meta["seq"])
+    _status(capsys, "asset", "Solvind", "sold")  # supersedes the old-order line
+    asked.clear()
+    _status(capsys, "list", "asset")
+    assert int(Logbook(lb.root).meta["seq"]) == seq + 1
+    assert not [a for a in asked if a[0] == "note"], "the old-order line no longer stands: no note read"
