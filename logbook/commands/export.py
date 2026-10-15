@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from ..contrib import notion_export, site, trip_bundle, vault, world
+from ..contrib import notion_export, site, trip_bundle, vault, world, world_chart
 from ..core import crossing, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
@@ -24,8 +24,9 @@ def export_arguments(sub: Subparsers) -> None:
         description="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a"
         " crossing-package/v1, `notion FOLDER`: the record's facts for the owner's Notion, as a crossing,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
-        " readers as static HTML, `world`: one page with the globe, the places, the assets and a time"
-        " scrubber, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
+        " readers as static HTML, `world`: one page with the globe (or the chart, `--style chart`), the"
+        " places, the assets and a time scrubber, `trip-bundle TRIP`: one trip for a member of the circle,"
+        " or `share day"
         " YYYY-MM-DD --to NAME`: one day as a signed page",
     )
     s.add_argument(
@@ -101,6 +102,35 @@ def export_arguments(sub: Subparsers) -> None:
         "--airports",
         metavar="FILE",
         help=f"trip-bundle, site, world: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
+    )
+    s.add_argument(
+        "--style",
+        choices=world_chart.STYLES,
+        help="world: modern, the globe (default), or chart, the record on a period chart (docs/world.md)",
+    )
+    s.add_argument(
+        "--chart",
+        metavar="FILE",
+        help="world: your own chart, a PNG or JPEG, as the paper of --style chart (with --control-points"
+        " and --chart-credit); read from disk, carried in the page",
+    )
+    s.add_argument(
+        "--control-points",
+        metavar="FILE",
+        help='world --chart: {"points": [{"x", "y", "lat", "lon", "name"}, …]}, three or more pixels of the'
+        " image tied to positions",
+    )
+    s.add_argument(
+        "--chart-credit",
+        metavar="TEXT",
+        help="world --chart: the chart's source in your words, for the legend",
+    )
+    s.add_argument(
+        "--journey",
+        action="append",
+        metavar="ID",
+        help="world: the page of one journey, a trip as `show trips` prints it (trip:FIRST:LAST, or a day"
+        " inside it) or a journey/v1 line's id; again for another page",
     )
     s.add_argument(
         "--open",
@@ -454,38 +484,66 @@ def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def _export_world(lb: Logbook, a: argparse.Namespace) -> None:
-    """world [--out DIR] [--from DAY] [--to DAY] [--tier 1|1,2|1,2,3]: one self-contained HTML page,
-    the globe with the places, the assets on their tracks, the stays, the journeys and a time scrubber
-    (`logbook/contrib/world.py`), tier-gated under the `world` ceiling in policy/crossing.json (ADR
-    0016; tier 2 when the file does not name it), recorded as a crossing/v1 line (RFC 0011). The page
-    is rewritten only when its content changed."""
+    """world [--out DIR] [--from DAY] [--to DAY] [--tier 1|1,2|1,2,3] [--style modern|chart] [--chart
+    FILE --control-points FILE --chart-credit TEXT] [--journey ID]…: one self-contained HTML page,
+    the globe (or the chart) with the places, the assets on their tracks, the stays, the journeys and
+    a time scrubber (`logbook/contrib/world.py`), tier-gated under the `world` ceiling in
+    policy/crossing.json (ADR 0016; tier 2 when the file does not name it), recorded as a crossing/v1
+    line (RFC 0011); with `--journey`, one page per journey, each its own line. A page is rewritten
+    only when its content changed. The chart and its points are read and the fit checked before any
+    page is written."""
     generated_at = now_utc()
+    asked = a.chart or a.control_points or a.chart_credit
+    style = a.style or (world_chart.CHART if asked else world_chart.MODERN)
+    paper = None
     try:
         if a.target:
             raise world.WorldError(f"export world takes no folder but --out DIR, not {a.target!r}")
         tiers = None if a.tier is None else world.parse_tiers(a.tier)
-        req = world.request(lb, a.from_day, a.to, tiers)
-    except world.WorldError as e:
+        if style == world_chart.MODERN and asked:
+            raise world.WorldError("--chart, --control-points and --chart-credit draw on --style chart")
+        if a.journey and (a.from_day or a.to):
+            raise world.WorldError("--journey sets the page's days; give --journey or --from and --to")
+        if style == world_chart.CHART:
+            paper = world_chart.paper(
+                Path(a.chart).expanduser() if a.chart else None,
+                Path(a.control_points).expanduser() if a.control_points else None,
+                a.chart_credit,
+            )
+        airports = _airports(a.airports)
+        if a.journey:
+            asked_for = list(dict.fromkeys(text.strip() for text in a.journey))  # one page each, once
+            reqs = [world.journey_request(lb, text, tiers, airports) for text in asked_for]
+        else:
+            found = world.request(lb, a.from_day, a.to, tiers)
+            reqs = [] if found is None else [found]
+    except (world.WorldError, world_chart.ChartError) as e:
         print(f"export world: {e}", file=sys.stderr)
         sys.exit(2)
-    if req is None:
+    if not reqs:
         print("world: the record has no day; nothing written, nothing appended")
         return
     folder = Path(a.out).expanduser() if a.out else world.default_out(lb)
     try:
-        built = world.build(lb, req, _airports(a.airports))
-        result = world.export(lb, built, folder, generated_at)
-    except (world.WorldError, stays.SettingsError, OSError) as e:
+        pages = [
+            world.build(lb, req, airports, style, paper) for req in reqs
+        ]  # every page, before any is written
+    except (world.WorldError, stays.SettingsError) as e:
         print(f"export world: {e}", file=sys.stderr)
         sys.exit(2)
-    for text in world.console(built, result):
-        print(text)
-    if 3 in req.tiers:
-        text = (
-            f"WARNING: {crossing.TIER3_WARNING}: {_plural(built.by_tier['3'], 'tier-3 line')} of the window"
-        )
-        print(text)
-        print(text, file=sys.stderr)
+    for req, built in zip(reqs, pages, strict=True):
+        try:
+            result = world.export(lb, built, folder, generated_at)
+        except OSError as e:
+            print(f"export world: {e}", file=sys.stderr)
+            sys.exit(2)
+        for text in world.console(built, result):
+            print(text)
+        if 3 in req.tiers:
+            lines = _plural(built.by_tier["3"], "tier-3 line")
+            text = f"WARNING: {crossing.TIER3_WARNING}: {lines} of the window"
+            print(text)
+            print(text, file=sys.stderr)
 
 
 def _export_trip_bundle(lb: Logbook, a: argparse.Namespace) -> None:

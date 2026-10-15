@@ -40,7 +40,14 @@ file does not name it; tier 3 needs the entry). The page says how many lines it 
 export appends one `crossing/v1` line (RFC 0011) with the destination `world`, the window, the counts
 and the digest of the page, through `Logbook.append`; nothing else is written to the record. The page
 is a function of the record's lines and settings alone (no head, no clock), so a re-run that changes
-nothing rewrites nothing."""
+nothing rewrites nothing.
+
+`--style chart` draws the same bundle on paper instead of the globe — Mercator's chart drawn on the
+canvas, or the owner's own scanned chart fitted to their control points (`world_chart`, `chart_fit`,
+`chart_image`) — and `--journey ID` makes the page of one journey: a trip as `show trips` names it
+(`trip:FIRST:LAST`, its days to the return day, every journey line of them drawn) or one journey line
+(its days, that line alone). Each page has its own file (`file_name`), so pages of other journeys and
+styles in the same folder stay, and its own crossing line."""
 
 from __future__ import annotations
 
@@ -67,6 +74,7 @@ from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.places import Place, distance_m
 from ..core.store import RETRACTION, Logbook, retractions, uuid7
+from . import trip_page, world_chart
 from .vault import digest, write
 
 DESTINATION = policy.WORLD_DESTINATION
@@ -102,13 +110,32 @@ class WorldError(ValueError):
 
 
 @dataclass(frozen=True)
+class Journey:
+    """The journey a page is of: a trip (`trip:FIRST:LAST`, every journey line of its days drawn) or one
+    journey line (that line alone)."""
+
+    id: str  # as the page and the crossing line name it: the trip's id, or the line's
+    line: str | None  # the one journey line the page draws; None for a trip
+    name: str
+
+    @property
+    def slug(self) -> str:
+        """The page's file name stem: no colon, which Windows does not allow in a name."""
+        if self.line is None:
+            return "world-trip-" + self.id.removeprefix("trip:").replace(":", "-")
+        return "world-journey-" + self.line
+
+
+@dataclass(frozen=True)
 class Request:
-    """One page, checked against the policy: the local days it covers and the tiers asked for."""
+    """One page, checked against the policy: the local days it covers and the tiers asked for, and the
+    journey it is of, when it is one's."""
 
     first: str  # local days, inclusive
     last: str
     tiers: tuple[int, ...]
     max_tier: int
+    journey: Journey | None = None
 
     @property
     def chunks(self) -> list[tuple[str, str]]:
@@ -166,6 +193,61 @@ def request(
     if since > until:
         raise WorldError(f"--from {since} is after --to {until}")
     return Request(since, until, tuple(tiers), max_tier)
+
+
+def journey_request(
+    lb: Logbook, text: str, tiers: tuple[int, ...] | None = None, airports: Airports | None = None
+) -> Request:
+    """The page of one journey, held against the policy as `request` holds a page: `text` a trip's id
+    as `show trips` prints it (`trip:FIRST:LAST`) or a day inside one — the page covers its days to the
+    return day — or the id of one `journey/v1` (`trip/v1`) line — the page covers the local days from
+    its `at` to its `end` and draws that line alone. The trip is found through the gate (a stay of a
+    tier not asked for places nothing), and a line above the tiers asked for is refused."""
+    base = request(lb, None, None, tiers)
+    if base is None:
+        raise WorldError(f"--journey {text}: the record has no day")
+    text = text.strip()
+    if text.startswith("trip:") or _is_day(text):
+        try:
+            _rd, trip = trip_page.locate(lb, trip_page.parse_ref(text), airports, base.tiers)
+        except ValueError as e:
+            raise WorldError(f"--journey {text}: {e}") from e
+        found = Journey(trip.id, None, trip.id)
+        return Request(trip.start, trip.until, base.tiers, base.max_tier, found)
+    with lb.index() as idx:
+        line = idx.by_id(text)
+        retracted = retractions(idx.retractions())
+    if line is None:
+        raise WorldError(
+            f"--journey {text}: no line has that id; a journey is a trip as `show trips` prints it"
+            " (trip:FIRST:LAST), a day inside one, or the id of a journey/v1 line"
+        )
+    payload = line.get("payload") or {}
+    if line.get("kind") not in JOURNEY_KINDS or payload.get("schema") not in JOURNEY_SCHEMAS:
+        raise WorldError(f"--journey {text}: a {line.get('kind')} line, not a journey/v1 line")
+    if int(line.get("tier", 0)) not in base.tiers:
+        shown = ",".join(map(str, base.tiers))
+        raise WorldError(f"--journey {text}: a tier-{line.get('tier')} line, and the page is tier {shown}")
+    if str(line["id"]) in retracted:
+        raise WorldError(f"--journey {text}: the line is retracted")
+    at, end = stays.instant(line.get("at")), stays.instant(line.get("end"))
+    if at is None:
+        raise WorldError(f"--journey {text}: the line has no time")
+    bounds = day_start.of(lb.meta)
+    first = bounds.day(at).isoformat()
+    last = max(first, bounds.day(end).isoformat()) if end is not None else first
+    name = payload.get("name") if isinstance(payload.get("name"), str) and payload.get("name") else None
+    found = Journey(str(line["id"]), str(line["id"]), name or str(payload.get("mode") or "journey"))
+    return Request(first, last, base.tiers, base.max_tier, found)
+
+
+def file_name(req: Request, style: str = world_chart.MODERN) -> str:
+    """`world.html` for the globe of the window, as before; a journey's page under its own name, and the
+    chart's beside the globe's (`-chart`), so no page overwrites another."""
+    stem = "world" if req.journey is None else req.journey.slug
+    if style == world_chart.MODERN:
+        return FILE_NAME if req.journey is None else f"{stem}.html"
+    return f"{stem}-{style}.html"
 
 
 def default_out(lb: Logbook) -> Path:
@@ -252,6 +334,12 @@ class Build:
     by_tier: dict[str, int]
     by_kind: dict[str, int]
     held_by_kind: dict[str, int]
+    style: str = world_chart.MODERN
+    paper: world_chart.Paper | None = None  # the chart style's paper
+    chart: str | None = None  # the chart style's chart block, as the page embeds it
+    file_name: str = FILE_NAME
+    outside: int = 0  # positions the owner's chart does not hold
+    beyond: int = 0  # positions on it beyond the control points' spread: placed by extrapolation
 
     @property
     def held_back(self) -> int:
@@ -296,6 +384,7 @@ class _Builder:
         self.by_tier: Counter[int] = Counter()
         self.by_kind: Counter[str] = Counter()
         self.held_by_kind: Counter[str] = Counter()
+        self._drawn: tuple[dict[str, list[_Fix]], list[_Stay], list[dict[str, Any]]] = ({}, [], [])
 
     # -- reading --
 
@@ -451,8 +540,12 @@ class _Builder:
         subjects = self._subjects(journeys)
         assets = []
         kept = 0
+        fixes: dict[str, list[_Fix]] = {}
         for subject in subjects:
-            track = self._thin(subject, step, hold, gap)
+            fixes[subject] = self._kept(subject, step, hold, gap)
+            track: list[float | int] = []
+            for f in fixes[subject]:
+                track += [self._minute(f.at), f.lat, f.lon]
             kept += len(track) // 3
             registered = self.registry.get(subject)
             assets.append(
@@ -465,6 +558,7 @@ class _Builder:
             )
         merged = self._merged_stays()
         shown = [s for s in merged if s.night or (s.end - s.start).total_seconds() >= cut_h * 3600]
+        self._drawn = (fixes, shown, journeys)
         return {
             "format": FORMAT,
             "window": {
@@ -512,11 +606,11 @@ class _Builder:
         named |= {s.aboard for s in self.stays if s.aboard}
         return [*self.registry, *sorted(named - set(self.registry))]
 
-    def _thin(self, subject: str, step: int, hold: int, gap: int) -> list[float | int]:
-        """One asset's track as the page holds it, `[minute, lat, lon, …]`: a fix is kept when it is
-        `step` minutes after the last one kept and the asset has moved `MOVED_M` since (the fix before
-        it too, so a departure is not smeared over the hours at anchor), or `hold` minutes after it
-        whatever; the first and the last, and both ends of a silence longer than `gap`, always."""
+    def _kept(self, subject: str, step: int, hold: int, gap: int) -> list[_Fix]:
+        """The fixes of one asset's track the page holds, as `[minute, lat, lon, …]`: a fix is kept when
+        it is `step` minutes after the last one kept and the asset has moved `MOVED_M` since (the fix
+        before it too, so a departure is not smeared over the hours at anchor), or `hold` minutes after
+        it whatever; the first and the last, and both ends of a silence longer than `gap`, always."""
         fixes = sorted(self.fixes.get(subject, {}).values(), key=lambda f: (f.at, f.seq))
         kept: list[_Fix] = []
         for i, f in enumerate(fixes):
@@ -536,10 +630,7 @@ class _Builder:
                 kept.append(f)
             elif since >= hold:
                 kept.append(f)
-        out: list[float | int] = []
-        for f in kept:
-            out += [self._minute(f.at), f.lat, f.lon]
-        return out
+        return kept
 
     def _merged_stays(self) -> list[_Stay]:
         """The owner's stays in time order; the two halves of a stay a year's end cut (the readings
@@ -586,12 +677,15 @@ class _Builder:
         not cancelled, in time order, each with its route, its asset and the places at its ends."""
         lines = list(self.journey_lines.values())
         superseded = {str(p["supersedes"]) for line in lines if (p := line["payload"]).get("supersedes")}
+        alone = self.req.journey.line if self.req.journey is not None else None
         out = []
         for line in sorted(
             lines, key=lambda line: (stays.instant(line.get("at")) or self.start, line["seq"])
         ):
             payload = line["payload"]
             if str(line["id"]) in superseded or payload.get("status") == "cancelled":
+                continue
+            if alone is not None and str(line["id"]) != alone:
                 continue
             at, end = stays.instant(line.get("at")), stays.instant(line.get("end"))
             if at is None:
@@ -603,6 +697,8 @@ class _Builder:
             out.append(
                 {
                     "subject": subject or None,
+                    "at": at,
+                    "end": end,
                     "json": {
                         "id": str(line["id"]),
                         "name": name or f" {ARROW} ".join(names) or str(payload.get("mode") or "journey"),
@@ -661,6 +757,28 @@ class _Builder:
                 "last": self._day(max(fixes)) if fixes else None,
             }
         return out
+
+    def day_marks(self) -> dict[str, Any]:
+        """The chart's dates, from the instants the record holds and never from the page's minutes
+        (rounded, a fix half a minute before midnight is on the next one): each journey's first and last
+        day, and per day it runs the first fix of its asset's track at or after its start (an index into
+        the track as the page holds it); each stay's first day on the page. A day is a number of days
+        from the window's first, the record's day as its zone and `day_start` cut it."""
+        first = date.fromisoformat(self.req.first)
+        fixes, shown, journeys = self._drawn
+
+        def day(instant: datetime) -> int:
+            return (self.bounds.day(instant) - first).days
+
+        out: dict[str, Any] = {}
+        for j in journeys:
+            at, end = j["at"], j["end"]
+            marks: list[list[int]] = []
+            for i, f in enumerate(fixes.get(j["subject"] or "", [])):
+                if at <= f.at <= (end or at) and all(m[1] != day(f.at) for m in marks):
+                    marks.append([i, day(f.at)])
+            out[j["json"]["id"]] = {"from": day(at), "to": None if end is None else day(end), "marks": marks}
+        return {"journeys": out, "stays": [day(s.start) for s in shown]}
 
     # -- helpers --
 
@@ -769,10 +887,23 @@ def validate(bundle: Mapping[str, Any]) -> list[str]:
     return problems
 
 
-def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Build:
-    """Read the record and make the page; nothing is written. `WorldError` when the page would not fit
-    under `CAP_BYTES` however thin, or (a bug) refers to an id it does not hold; `stays.SettingsError`
-    when the record's settings, places or assets file is not what it should be."""
+def build(
+    lb: Logbook,
+    req: Request,
+    airports: Airports | None = None,
+    style: str = world_chart.MODERN,
+    paper: world_chart.Paper | None = None,
+) -> Build:
+    """Read the record and make the page; nothing is written. `style` the globe (`modern`) or the chart
+    (`chart`, on `paper`: the drawn chart unless the owner's is given); the record's JSON is the same
+    for both. `WorldError` when the page would not fit under `CAP_BYTES` however thin, a chart page not
+    under `world_chart.PAGE_BYTES`, a journey's page has no standing journey, or (a bug) the page refers
+    to an id it does not hold; `stays.SettingsError` when the record's settings, places or assets file
+    is not what it should be."""
+    if style not in world_chart.STYLES:
+        raise WorldError(f"--style is modern or chart, not {style!r}")
+    if style == world_chart.MODERN and paper is not None:
+        raise WorldError("the owner's chart is paper for --style chart, not for the globe")
     builder = _Builder(lb, req, airports or Airports.load())
     builder.read()
     steps = [TRACK_STEP_MIN]
@@ -794,16 +925,41 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Build:
     problems = validate(bundle)
     if problems:
         raise WorldError("the page refers to what it does not hold: " + "; ".join(problems))
+    if req.journey is not None and req.journey.line is not None and not bundle["journeys"]:
+        raise WorldError(f"--journey {req.journey.id}: the journey does not stand (superseded or cancelled)")
+    chart = None
+    off = beyond = 0
+    if style == world_chart.MODERN:
+        written = page(text, standalone=True).encode("utf-8")
+    else:
+        paper = paper or world_chart.Paper()
+        years = req.first[:4] != req.last[:4]
+        off, beyond = world_chart.outside(paper, bundle)
+        chart = world_chart.chart_json(paper, req.first, builder.day_marks(), years)
+        written = chart_page(text, chart, paper, standalone=True, journey=req.journey, beyond=beyond).encode(
+            "utf-8"
+        )
+        if len(written) > world_chart.PAGE_BYTES:
+            raise WorldError(
+                f"the chart page is {len(written):,} bytes, over its cap of {world_chart.PAGE_BYTES:,};"
+                " narrow it with --from and --to, or give a smaller chart image"
+            )
     return Build(
         req,
         bundle,
         text,
-        page(text, standalone=True).encode("utf-8"),
+        written,
         builder.logged,
         builder.crossed,
         {str(t): builder.by_tier.get(t, 0) for t in policy.TIERS},
         dict(sorted(builder.by_kind.items())),
         dict(sorted(builder.held_by_kind.items())),
+        style,
+        paper,
+        chart,
+        file_name(req, style),
+        off,
+        beyond,
     )
 
 
@@ -892,12 +1048,7 @@ def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
     file has no headers; the Library sends it as one and passes its navigation as `nav`."""
     bundle = json.loads(json_text)
     window = bundle["window"]
-    tiers = ",".join(map(str, bundle["tiers"]))
-    span = window["from"] if window["from"] == window["to"] else f"{window['from']} {EN_DASH} {window['to']}"
-    head = f"{span}{DOT}tier {tiers}{DOT}{window['tz']}"
-    held = bundle["held_back"]["lines"]
-    if held:
-        head += f"{DOT}held back: {_plural(held, 'line')} above tier {max(bundle['tiers'])}"
+    head = _head(bundle)
     policy_meta = f'<meta http-equiv="Content-Security-Policy" content="{POLICY}">\n' if standalone else ""
     return (
         "<!doctype html>\n"
@@ -931,7 +1082,80 @@ def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
     )
 
 
-def _noscript(bundle: Mapping[str, Any]) -> str:
+def _head(bundle: Mapping[str, Any]) -> str:
+    """The line under the page's title: the window, the tiers, the zone, what was held back."""
+    window = bundle["window"]
+    tiers = ",".join(map(str, bundle["tiers"]))
+    span = window["from"] if window["from"] == window["to"] else f"{window['from']} {EN_DASH} {window['to']}"
+    head = f"{span}{DOT}tier {tiers}{DOT}{window['tz']}"
+    held = bundle["held_back"]["lines"]
+    if held:
+        head += f"{DOT}held back: {_plural(held, 'line')} above tier {max(bundle['tiers'])}"
+    return head
+
+
+def chart_page(
+    json_text: str,
+    chart_text: str,
+    paper: world_chart.Paper,
+    nav: str = "",
+    standalone: bool = True,
+    journey: Journey | None = None,
+    beyond: int = 0,
+) -> str:
+    """The chart's page around the record's JSON — the same JSON as the globe's — and its chart block:
+    the canvas, the legend, the fit in a corner when the paper is the owner's (with `beyond`, the
+    positions placed by extrapolation), the scrubber, the land table (none on the owner's chart), the
+    image as a data block, the chart's script."""
+    bundle = json.loads(json_text)
+    window = bundle["window"]
+    head = _head(bundle)
+    if journey is not None:
+        head = f"{journey.name}{DOT}{head}"
+    policy_meta = (
+        f'<meta http-equiv="Content-Security-Policy" content="{world_chart.POLICY}">\n' if standalone else ""
+    )
+    land = land_json() if paper.image is None else world_chart.NO_LAND
+    image = world_chart.image_text(paper)
+    image_block = (
+        f'<script type="text/plain" id="chart-image">{image}</script>\n' if image is not None else ""
+    )
+    return (
+        "<!doctype html>\n"
+        '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        f"{policy_meta}"
+        "<title>The chart · Logbook</title>\n"
+        f"<style>{world_chart.STYLE}</style>\n</head>\n<body>\n"
+        f"<header>{f'<nav>{nav}</nav>' if nav else ''}"
+        f"<h1>The chart <small>{escape(head)}</small></h1>"
+        '<p id="readout" aria-live="polite"></p></header>\n'
+        "<main>\n"
+        '<canvas id="globe" aria-label="the chart: the named places, the assets on their tracks, the stays'
+        ' and the journeys at the time the scrubber shows; drag to move it, scroll to zoom"></canvas>\n'
+        '<ul id="list" aria-label="the places and the assets"></ul>\n'
+        '<div id="tools"><button id="zoom-in" aria-label="zoom in">+</button>'
+        '<button id="zoom-out" aria-label="zoom out">\u2212</button>'
+        '<button id="fit">fit</button><button id="whole">chart</button></div>\n'
+        '<aside id="panel" aria-live="polite" hidden></aside>\n'
+        f"{world_chart.legend(paper)}"
+        f"{world_chart.residuals(paper, beyond)}"
+        f"{_noscript(bundle, 'The chart')}"
+        "</main>\n"
+        '<footer><button id="play">play</button><div class="scrub">'
+        '<canvas id="bands" aria-hidden="true"></canvas>'
+        f'<input id="time" type="range" min="0" max="{int(window["minutes"])}" step="1" value="0"'
+        ' aria-label="the time the chart shows"></div><span id="clock"></span></footer>\n'
+        f'<script type="application/json" id="land">{land}</script>\n'
+        f'<script type="application/json" id="world">{json_text}</script>\n'
+        f'<script type="application/json" id="chart">{chart_text}</script>\n'
+        f"{image_block}"
+        f"<script>{world_chart.SCRIPT}</script>\n"
+        "</body>\n</html>\n"
+    )
+
+
+def _noscript(bundle: Mapping[str, Any], drawn: str = "The globe") -> str:
     """The summaries as a table, for a browser that runs no script."""
     rows = []
     for key, s in bundle["summaries"].items():
@@ -945,7 +1169,7 @@ def _noscript(bundle: Mapping[str, Any]) -> str:
         ]
         rows.append("<tr>" + "".join(f"<td>{escape(str(c))}</td>" for c in cells) + "</tr>")
     return (
-        "<noscript><p>The globe draws with the page's one script. Its summaries:</p><table>"
+        f"<noscript><p>{drawn} draws with the page's one script. Its summaries:</p><table>"
         "<tr><th>name</th><th>what</th><th>nights</th><th>journeys</th><th>photos</th></tr>"
         f"{''.join(rows)}</table></noscript>\n"
     )
@@ -972,7 +1196,7 @@ def export(lb: Logbook, built: Build, folder: Path, generated_at: str) -> Result
     policy.write_default(lb.root)  # the first export writes the default; an existing file is kept
     req, bundle = built.request, built.bundle
     head = str(lb.meta["head"])
-    files = {FILE_NAME: built.page}
+    files = {built.file_name: built.page}
     written, _unchanged = write(folder, files)
     sha256 = digest(files)
     bounds = day_start.of(lb.meta)
@@ -1005,12 +1229,40 @@ def export(lb: Logbook, built: Build, folder: Path, generated_at: str) -> Result
                     "chapters": len(bundle["chapters"]),
                     "thinned": bundle["thinned"],
                     "written": bool(written),
+                    **_chart_extra(built),
                 }
             },
         },
         recorded_at=generated_at,
     )
-    return Result(Path(folder) / FILE_NAME, bool(written), sha256, line)
+    return Result(Path(folder) / built.file_name, bool(written), sha256, line)
+
+
+def _chart_extra(built: Build) -> dict[str, Any]:
+    """What a chart's or a journey's crossing line says beyond the globe's: the style, the journey, and
+    the owner's chart by its digest and its fit (the credit in the owner's words); nothing for the
+    globe of a window, whose line is as it was."""
+    out: dict[str, Any] = {}
+    if built.style != world_chart.MODERN:
+        out["style"] = built.style
+    if built.request.journey is not None:
+        out["journey"] = built.request.journey.id
+    paper = built.paper
+    if paper is not None and paper.image is not None and paper.fit is not None:
+        worst = paper.fit.worst
+        out["chart"] = {
+            "credit": paper.credit,
+            "image_sha256": hashlib.sha256(paper.image.data).hexdigest(),
+            "image_bytes": len(paper.image.data),
+            "image_type": paper.image.mime,
+            "downscaled": paper.image.factor,
+            "fit": paper.fit.kind,
+            "points": len(paper.fit.points),
+            "worst_residual_px": None if worst is None else round(worst, 2),
+            "outside": built.outside,
+            "beyond_spread": built.beyond,
+        }
+    return out
 
 
 def _summary_lines(built: Build) -> Iterable[str]:
@@ -1037,6 +1289,40 @@ def _summary_lines(built: Build) -> Iterable[str]:
         yield f"  held back: {_plural(built.held_back, 'line')} above tier {top} ({by_kind})"
 
 
+def _chart_lines(built: Build) -> Iterator[str]:
+    """What the console says about the chart's paper."""
+    paper = built.paper
+    if built.style == world_chart.MODERN or paper is None:
+        return
+    yield f"  the chart: {paper.credit}"
+    if paper.image is None or paper.fit is None:
+        return
+    image, fit = paper.image, paper.fit
+    worst = fit.worst
+    checked = (
+        f"worst residual {worst:,.1f} px, the limit {fit.limit_px:,.1f} px"
+        if worst is not None
+        else "exact through three points, unchecked"
+    )
+    yield f"  the fit: {fit.kind}, {_plural(len(fit.points), 'control point')}, {checked}"
+    embedded = f"{len(image.data):,} bytes"
+    if image.factor > 1:
+        width, height = image.embedded_size
+        embedded += (
+            f", downscaled by {image.factor} to {width:,} × {height:,} (from {image.given_bytes:,} bytes)"
+        )
+    if image.dropped:
+        embedded += f"; left out: {', '.join(image.dropped)}"
+    yield f"  the image: {image.mime}, {image.width:,} × {image.height:,}, {embedded}"
+    if built.outside:
+        yield f"  {_plural(built.outside, 'position')} of the page fall off the chart"
+    if built.beyond:
+        yield (
+            f"  {_plural(built.beyond, 'position')} of the page lie beyond the control points' spread:"
+            " placed by extrapolation, which the residuals do not check"
+        )
+
+
 def console(built: Build, result: Result) -> Iterator[str]:
     """The lines `export world` prints."""
     req = built.request
@@ -1044,6 +1330,12 @@ def console(built: Build, result: Result) -> Iterator[str]:
     tiers = ",".join(map(str, req.tiers))
     window = f"{req.first} {EN_DASH} {req.last}"
     yield f"world: {_plural(days, 'day')} {window}, tier {tiers} {ARROW} {result.path}"
+    if req.journey is not None:
+        named = (
+            req.journey.id if req.journey.name == req.journey.id else f"{req.journey.name} ({req.journey.id})"
+        )
+        yield f"  the journey {named}"
+    yield from _chart_lines(built)
     yield from _summary_lines(built)
     state = "written" if result.written else "unchanged"
     seq, sha = result.line["seq"], result.sha256[:12]

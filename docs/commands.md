@@ -70,7 +70,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 
 | Command | What it does |
 |---|---|
-| `export` | the whole log as one `.jsonl`, day packages, `crossing` (signed days only unless `--unsigned`), `notion FOLDER` (your people, ideas and orgs for your Notion, as a crossing, [export for Notion](export-notion.md)), `vault FOLDER`, `site FOLDER`, `world` (one page: the globe, your places, your assets on their tracks and a time scrubber, [the world](world.md)), `trip-bundle TRIP`, or `share day YYYY-MM-DD --to NAME` |
+| `export` | the whole log as one `.jsonl`, day packages, `crossing` (signed days only unless `--unsigned`), `notion FOLDER` (your people, ideas and orgs for your Notion, as a crossing, [export for Notion](export-notion.md)), `vault FOLDER`, `site FOLDER`, `world` (one page: the globe, your places, your assets on their tracks and a time scrubber, [the world](world.md); `--style chart` the record on a period chart, `--chart FILE --control-points FILE --chart-credit TEXT` on your own, `--journey ID` one page per journey), `trip-bundle TRIP`, or `share day YYYY-MM-DD --to NAME` |
 
 ## Try
 
