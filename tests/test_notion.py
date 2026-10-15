@@ -16,24 +16,38 @@ from typing import Any
 
 import pytest
 from notion_api import (
+    ALLOTMENT,
+    AREAS,
+    AREAS_ID,
     BOATS,
     BOT,
     COLUMN,
+    ENGINE,
     FERRY,
     IDEAS,
     INES,
+    LOOSE,
+    NOTES,
+    NOTES_ID,
     OLA,
     OLD_NOTES,
     PACKING,
+    RELATION_LIMIT,
     RESEARCH,
     SAIL_PLAN,
     SAIL_PLAN_TEXT,
+    SEAMANSHIP,
+    SERVICE,
+    SHELVES,
     TASKS,
     TOKEN,
     UNSHARED,
     VERSION,
+    WORKSHOP,
     FakeNotion,
     block,
+    note_properties,
+    notes_workspace,
     page,
     parent_of,
     uid,
@@ -79,6 +93,20 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
 @pytest.fixture
 def fake(monkeypatch: pytest.MonkeyPatch, clock: Clock) -> Any:
     server = workspace()
+    server.start()
+    monkeypatch.setenv(TOKEN_ENV, TOKEN)
+    monkeypatch.setenv(URL_ENV, server.url)
+    monkeypatch.setenv(OWNER_ENV, INES)
+    try:
+        yield server
+    finally:
+        server.stop()
+
+
+@pytest.fixture
+def notes(monkeypatch: pytest.MonkeyPatch, clock: Clock) -> Any:
+    """The workspace with Ines's Notes and Areas databases, whose rows link to each other."""
+    server = notes_workspace()
     server.start()
     monkeypatch.setenv(TOKEN_ENV, TOKEN)
     monkeypatch.setenv(URL_ENV, server.url)
@@ -436,6 +464,515 @@ def test_a_page_whose_parent_is_not_shared_has_the_path_it_can_see(lb: Logbook, 
     assert _sync() == 0
     extra = _keyed(lb)[_key(lone, "2026-03-02", "created")]["payload"]["extra"]
     assert extra["path"] == [] and extra["parent"] == {"type": "page", "id": UNSHARED}
+
+
+# -- relations: a row's links to other rows, by id ------------------------------------------------------
+
+
+def _extra(lb: Logbook, page_id: str, day: str, action: str) -> dict[str, Any]:
+    extra: dict[str, Any] = _keyed(lb)[_key(page_id, day, action)]["payload"]["extra"]
+    return extra
+
+
+def test_a_rows_relations_are_the_ids_notion_gives_in_its_order(lb: Logbook, notes: FakeNotion) -> None:
+    assert _sync() == 0
+    engine = _extra(lb, ENGINE, "2026-03-02", "edited")
+    assert engine["relations"] == {"Areas": [SEAMANSHIP]}
+    assert engine["database"] == {"id": NOTES} and engine["parent"] == {"type": "database", "id": NOTES}
+    assert engine["properties"] == {"Type": "Idea"}, "the rollup over the relation is never a property"
+    shelves = _extra(lb, SHELVES, "2026-03-02", "created")
+    assert shelves["relations"] == {"Areas": [WORKSHOP, ALLOTMENT]}, "as Ines put them, never sorted"
+    assert _extra(lb, LOOSE, "2026-02-25", "created")["relations"] == {"Areas": []}, "an empty relation"
+    assert _extra(lb, SERVICE, "2026-03-02", "created")["relations"] == {"Notes": [ENGINE]}
+    ferry = _extra(lb, FERRY, "2026-03-02", "edited")
+    assert ferry["relations"] == {"Notes": []} and ferry["database"] == {"id": TASKS}
+    assert "relations_changed" not in engine, "nothing in the record to compare with"
+    text = json.dumps(
+        [_keyed(lb)[_key(ENGINE, "2026-03-02", "edited")], _keyed(lb)[_key(SHELVES, "2026-03-02", "created")]]
+    )
+    for never in ("Seamanship", "Workshop", "Allotment", "Area count", "Area names", "Area label", "rollup"):
+        assert never not in text, never
+
+
+def test_the_line_that_does_not_hold_the_page_carries_its_database_and_no_relations(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    """Engine noise was made on 1 March and edited on 2 March: the edit's line holds the row."""
+    assert _sync() == 0
+    created = _extra(lb, ENGINE, "2026-03-01", "created")
+    assert created["database"] == {"id": NOTES}
+    assert "relations" not in created and "properties" not in created
+
+
+def test_a_page_that_is_not_a_database_row_has_no_relations_and_no_database(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    assert _sync() == 0
+    for line in _lines(lb):
+        extra = line["payload"]["extra"]
+        if extra["page"]["id"] in (RESEARCH, BOATS, SAIL_PLAN, OLD_NOTES, IDEAS, PACKING):
+            assert "relations" not in extra and "database" not in extra, line["payload"]["raw_id"]
+    area = _extra(lb, SEAMANSHIP, "2026-01-20", "created")
+    assert area["database"] == {"id": AREAS} and "relations" not in area, "a row with no relation property"
+
+
+def test_relation_ids_are_never_looked_up(
+    lb: Logbook, notes: FakeNotion, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only Notes is read: the Areas rows its relations point at are never asked for, nor their bodies."""
+    monkeypatch.setenv(ROOTS_ENV, NOTES)
+    assert _sync() == 0
+    assert _extra(lb, ENGINE, "2026-03-02", "edited")["relations"] == {"Areas": [SEAMANSHIP]}
+    for r in notes.requests:  # the search lists them, by Notion's cursor; nothing asks for one
+        for unread in (SEAMANSHIP, ALLOTMENT, WORKSHOP):  # (the roots check reads the Areas database)
+            assert unread not in r.path, (r.method, r.path)
+
+
+def test_a_relation_only_change_is_one_line_that_says_what_was_gained_and_lost(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _sync() == 0
+    capsys.readouterr()
+    notes.relate(ENGINE, "Areas", [WORKSHOP, ALLOTMENT], "2026-03-04T09:00Z")
+    assert _sync() == 0
+    out = capsys.readouterr().out
+    assert "notion: 1 new lines of " in out and "  edited: 1 new of 1 seen" in out.splitlines()
+    extra = _extra(lb, ENGINE, "2026-03-04", "edited")
+    assert extra["relations"] == {"Areas": [WORKSHOP, ALLOTMENT]}
+    assert extra["relations_changed"] == [
+        {"name": "Areas", "added": [WORKSHOP, ALLOTMENT], "removed": [SEAMANSHIP]}
+    ]
+    assert "changed" not in extra and extra["body"]["words_delta"] == 0, "nothing else changed"
+
+
+def test_an_unchanged_re_sync_writes_nothing_and_an_edit_elsewhere_says_no_relation_changed(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _sync() == 0
+    written = lb.meta["seq"]
+    capsys.readouterr()
+    assert _sync() == 0
+    assert "notion: 0 new lines of " in capsys.readouterr().out, (
+        "the lookback lists rows, the record has them"
+    )
+    assert _sync("--since", "2026-01-01T00:00:00Z") == 0
+    assert "notion: 0 new lines" in capsys.readouterr().out, "every key is in the record already"
+    assert lb.meta["seq"] == written
+    notes.write(ENGINE, "Knocking at low revs; check the mounts.", "The mounts were fine.")
+    notes.edit(ENGINE, "2026-03-05T10:00Z")
+    assert _sync() == 0
+    extra = _extra(lb, ENGINE, "2026-03-05", "edited")
+    assert extra["relations"] == {"Areas": [SEAMANSHIP]} and "relations_changed" not in extra
+
+
+def test_a_reorder_is_no_relation_change(lb: Logbook, notes: FakeNotion) -> None:
+    assert _sync() == 0
+    notes.relate(SHELVES, "Areas", [ALLOTMENT, WORKSHOP], "2026-03-04T09:00Z")
+    assert _sync() == 0
+    extra = _extra(lb, SHELVES, "2026-03-04", "edited")
+    assert extra["relations"] == {"Areas": [ALLOTMENT, WORKSHOP]}, "the order Notion gives now"
+    assert "relations_changed" not in extra, "the same ids: nothing gained, nothing lost"
+
+
+def test_a_renamed_relation_property_loses_its_ids_under_the_old_name_and_gains_them_under_the_new(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    assert _sync() == 0
+    notes.pages[ENGINE]["properties"]["Topics"] = notes.pages[ENGINE]["properties"].pop("Areas")
+    notes.edit(ENGINE, "2026-03-04T09:00Z")
+    assert _sync() == 0
+    extra = _extra(lb, ENGINE, "2026-03-04", "edited")
+    assert extra["relations"] == {"Topics": [SEAMANSHIP]}
+    assert extra["relations_changed"] == [
+        {"name": "Areas", "added": [], "removed": [SEAMANSHIP]},
+        {"name": "Topics", "added": [SEAMANSHIP], "removed": []},
+    ]
+
+
+def test_a_row_moved_out_of_its_database_says_once_that_its_links_are_gone(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    """Under a page it is a row no more: no database, no relation property."""
+    assert _sync() == 0
+    notes.pages[ENGINE]["properties"] = {"title": notes.pages[ENGINE]["properties"]["Name"]}
+    notes.edit(ENGINE, "2026-03-04T09:00Z", parent=parent_of("page", RESEARCH))
+    assert _sync() == 0
+    extra = _extra(lb, ENGINE, "2026-03-04", "moved")
+    assert "database" not in extra and extra["moved_from"]["parent"] == {"type": "database", "id": NOTES}
+    assert extra["relations"] == {}
+    assert extra["relations_changed"] == [{"name": "Areas", "added": [], "removed": [SEAMANSHIP]}]
+    notes.edit(ENGINE, "2026-03-05T09:00Z")
+    assert _sync() == 0
+    later = _extra(lb, ENGINE, "2026-03-05", "edited")
+    assert "relations" not in later and "relations_changed" not in later
+
+
+def test_a_relation_property_gone_from_the_database_loses_its_ids(lb: Logbook, notes: FakeNotion) -> None:
+    assert _sync() == 0
+    del notes.pages[SERVICE]["properties"]["Notes"]
+    notes.edit(SERVICE, "2026-03-04T09:00Z")
+    assert _sync() == 0
+    extra = _extra(lb, SERVICE, "2026-03-04", "edited")
+    assert extra["relations"] == {}, "none left: the row's latest line with relations says so"
+    assert extra["relations_changed"] == [{"name": "Notes", "added": [], "removed": [ENGINE]}]
+    notes.edit(SERVICE, "2026-03-05T09:00Z")
+    assert _sync() == 0
+    assert "relations" not in _extra(lb, SERVICE, "2026-03-05", "edited"), "said once"
+
+
+def _many() -> list[str]:
+    """More links than Notion serves with a page, in an order no sort gives (the second half reversed)."""
+    ids = [uid(0x600 + n) for n in range(RELATION_LIMIT + 2)]
+    return ids[:14] + ids[14:][::-1]
+
+
+def test_a_relation_longer_than_notion_serves_is_read_whole_from_the_property(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    """Notion serves a relation's first 25 references and `has_more`; the rest come, paged, from
+    `GET /v1/pages/{id}/properties/{property id}`, the id as Notion spells it (URL-encoded)."""
+    many = _many()
+    notes.pages[SHELVES]["properties"]["Areas"]["relation"] = [{"id": i} for i in many]
+    assert _sync() == 0
+    assert _extra(lb, SHELVES, "2026-03-02", "created")["relations"] == {"Areas": many}
+    asked = [r for r in notes.requests if r.path.startswith("/v1/pages/") and "/properties/" in r.path]
+    assert {r.path for r in asked} == {f"/v1/pages/{SHELVES}/properties/{AREAS_ID}"}, "only the long one"
+    assert len(asked) == 14 and "start_cursor" not in asked[0].query, "two references a page here"
+    assert all(r.query.get("start_cursor") for r in asked[1:])
+
+
+def test_a_long_relation_is_asked_for_by_its_property_id_as_notion_spells_it(
+    lb: Logbook, notes: FakeNotion
+) -> None:
+    """`n%3Ft` is `n?t`: sent as given, never decoded into a query or encoded twice."""
+    many = _many()
+    notes.pages[SERVICE]["properties"]["Notes"]["relation"] = [{"id": i} for i in many]
+    assert _sync() == 0
+    assert _extra(lb, SERVICE, "2026-03-02", "created")["relations"] == {"Notes": many}
+    asked = {r.path for r in notes.requests if "/properties/" in r.path}
+    assert asked == {f"/v1/pages/{SERVICE}/properties/{NOTES_ID}"}
+
+
+def test_a_long_relation_without_a_property_id_is_left_off_and_never_asked_for(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes.pages[SHELVES]["properties"]["Areas"]["relation"] = [{"id": i} for i in _many()]
+    del notes.pages[SHELVES]["properties"]["Areas"]["id"]
+    assert _sync() == 0
+    assert "  also 1 rows whose relations could not be read whole" in capsys.readouterr().out.splitlines()
+    assert "relations" not in _extra(lb, SHELVES, "2026-03-02", "created")
+    assert not [r for r in notes.requests if "/properties/" in r.path]
+
+
+def test_a_reference_without_an_id_leaves_the_relations_off_never_a_shorter_list(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """In the page object (Engine noise) and in the property endpoint's pages (Garden shelves)."""
+    notes.pages[ENGINE]["properties"]["Areas"]["relation"] = [{"id": SEAMANSHIP}, {}]
+    many: list[Any] = [{"id": i} for i in _many()]
+    many[RELATION_LIMIT + 1] = {"id": None}
+    notes.pages[SHELVES]["properties"]["Areas"]["relation"] = many
+    notes.pages[LOOSE]["properties"]["Areas"]["relation"] = None  # not a list at all
+    assert _sync() == 0
+    assert "  also 3 rows whose relations could not be read whole" in capsys.readouterr().out.splitlines()
+    assert "relations" not in _extra(lb, LOOSE, "2026-02-25", "created")
+    assert "relations" not in _extra(lb, ENGINE, "2026-03-02", "edited")
+    assert "relations" not in _extra(lb, SHELVES, "2026-03-02", "created")
+    notes.relate(ENGINE, "Areas", [SEAMANSHIP], "2026-03-04T09:00Z")
+    assert _sync() == 0
+    later = _extra(lb, ENGINE, "2026-03-04", "edited")
+    assert later["relations"] == {"Areas": [SEAMANSHIP]} and "relations_changed" not in later, "no false gain"
+
+
+@pytest.mark.parametrize(("status", "code"), [(404, "object_not_found"), (403, "restricted_resource")])
+def test_a_relation_that_cannot_be_read_whole_is_left_off_the_line_and_counted(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str], status: int, code: str
+) -> None:
+    notes.pages[SHELVES]["properties"]["Areas"]["relation"] = [{"id": i} for i in _many()]
+    notes.refuse[f"/v1/pages/{SHELVES}/properties/{AREAS_ID}"] = (status, code, "Not for this integration.")
+    assert _sync() == 0
+    assert "  also 1 rows whose relations could not be read whole" in capsys.readouterr().out.splitlines()
+    shelves = _extra(lb, SHELVES, "2026-03-02", "created")
+    assert "relations" not in shelves and shelves["properties"] == {"Type": "Idea"}, (
+        "never the first 25 alone"
+    )
+    del notes.refuse[f"/v1/pages/{SHELVES}/properties/{AREAS_ID}"]
+    notes.edit(SHELVES, "2026-03-04T09:00Z")
+    assert _sync() == 0
+    later = _extra(lb, SHELVES, "2026-03-04", "edited")
+    assert later["relations"] == {"Areas": _many()} and "relations_changed" not in later
+
+
+# -- --relations-backfill: rows synced before relations were recorded ---------------------------------
+
+BACKFILLED = {  # the rows of notes_workspace with a relation property, at their last edit, in Oslo
+    LOOSE: "2026-02-25",
+    ENGINE: "2026-03-02",
+    FERRY: "2026-03-02",
+    SHELVES: "2026-03-02",
+    SERVICE: "2026-03-02",
+}
+
+
+def _before_relations(lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]) -> int:
+    """The record `sync notion` wrote before it read relations: every page, no line with relations.
+    Notion then serves them again, and a sync writes nothing: no row has changed."""
+    notes.relations_hidden = True
+    assert _sync() == 0
+    notes.relations_hidden = False
+    assert not any("relations" in line["payload"]["extra"] for line in _lines(lb))
+    written = lb.meta["seq"]
+    assert _sync() == 0 and lb.meta["seq"] == written, "rows get their relations on their next change"
+    capsys.readouterr()
+    return written
+
+
+def _backfill(*args: str) -> int:
+    return _sync("--relations-backfill", *args)
+
+
+def test_the_backfill_writes_one_line_per_row_whose_relations_the_record_lacks(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    written = _before_relations(lb, notes, capsys)
+    asked, state = len(notes.requests), _state(lb)
+    assert _backfill() == 0
+    out = capsys.readouterr().out
+    assert "notion: 5 new lines of 5 rows whose relations the record did not hold, from the beginning" in out
+    assert lb.meta["seq"] == written + 5
+    assert _state(lb) == state, "the watermark is the sync's: never moved"
+    keyed = _keyed(lb)
+    assert {k for k in keyed if k.endswith("/relations")} == {
+        _key(row, day, "relations") for row, day in BACKFILLED.items()
+    }
+    line = keyed[_key(ENGINE, "2026-03-02", "relations")]
+    assert line["at"] == "2026-03-02T08:00:00Z", "the row as it was at its last edit, which the record holds"
+    assert line["kind"] == "event" and line["tier"] == 1 and line["payload"]["title"] == "Engine noise"
+    assert line["payload"]["modified_at"] == "2026-03-02T08:00:00Z"
+    extra = line["payload"]["extra"]
+    assert extra["action"] == "relations" and extra["page"]["id"] == ENGINE
+    assert extra["relations"] == {"Areas": [SEAMANSHIP]} and extra["database"] == {"id": NOTES}
+    assert extra["path"] == ["Notes"] and extra["parent"] == {"type": "database", "id": NOTES}
+    for never in ("actor", "body", "properties", "relations_changed", "changed"):
+        assert never not in extra, never
+    assert keyed[_key(LOOSE, "2026-02-25", "relations")]["payload"]["extra"]["relations"] == {"Areas": []}
+    assert not [r for r in notes.requests[asked:] if r.path.endswith("/children")], "no body is read"
+    assert _backfill() == 0
+    assert "notion: 0 new lines of 0 rows" in capsys.readouterr().out, "the record holds them now"
+    assert _sync() == 0
+    assert lb.meta["seq"] == written + 5, "and the sync has nothing to add"
+    notes.relate(ENGINE, "Areas", [], "2026-03-04T09:00Z")
+    assert _sync() == 0
+    assert _extra(lb, ENGINE, "2026-03-04", "edited")["relations_changed"] == [
+        {"name": "Areas", "added": [], "removed": [SEAMANSHIP]}
+    ], "a later change is told against the backfill's line"
+
+
+def test_a_dry_run_of_the_backfill_counts_the_rows_and_writes_nothing(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    written = _before_relations(lb, notes, capsys)
+    state = _state(lb)
+    assert _backfill("--dry-run") == 0
+    out = capsys.readouterr().out
+    assert "notion: 5 rows whose relations the record does not hold yet, from the beginning (dry run" in out
+    assert lb.meta["seq"] == written and _state(lb) == state
+
+
+def test_the_backfill_since_a_day_takes_the_rows_last_edited_since_that_local_day(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Oslo is UTC+1: 23:30 UTC on 1 March is 2 March there, 22:30 UTC still 1 March."""
+    notes.edit(LOOSE, "2026-03-01T23:30Z")
+    notes.edit(ENGINE, "2026-03-01T22:30Z")
+    _before_relations(lb, notes, capsys)
+    assert _backfill("--since", "2026-03-02", "--dry-run") == 0
+    out = capsys.readouterr().out
+    assert "notion: 4 rows whose relations the record does not hold yet, since 2026-03-02 (dry run" in out
+    asked = len(notes.requests)
+    assert _backfill("--since", "2026-03-02") == 0
+    assert {k for k in _keyed(lb) if k.endswith("/relations")} == {
+        _key(LOOSE, "2026-03-02", "relations"),
+        _key(FERRY, "2026-03-02", "relations"),
+        _key(SHELVES, "2026-03-02", "relations"),
+        _key(SERVICE, "2026-03-02", "relations"),
+    }
+    searched = [r for r in notes.requests[asked:] if r.path == "/v1/search"]
+    assert len(searched) == 4, "the walk stops at the first page last edited before the day: 8 of 14 listed"
+
+
+def test_the_backfill_leaves_a_row_the_record_does_not_hold_to_the_sync(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _before_relations(lb, notes, capsys)
+    fresh = uid(43)
+    notes.pages[fresh] = page(
+        fresh,
+        "Mooring lines",
+        parent_of("database", NOTES),
+        "2026-03-03T08:00Z",
+        "2026-03-03T08:00Z",
+        properties=note_properties("Idea", SEAMANSHIP),
+    )
+    assert _backfill() == 0
+    out = capsys.readouterr().out
+    assert "notion: 5 new lines of 5 rows" in out
+    assert "  skipped 1 rows not in the record yet (the next sync writes them, relations and all)" in out
+    assert _sync() == 0
+    assert _extra(lb, fresh, "2026-03-03", "created")["relations"] == {"Areas": [SEAMANSHIP]}
+
+
+def test_the_backfill_never_stands_in_for_an_edit_a_move_or_an_archival_the_record_lacks(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _before_relations(lb, notes, capsys)
+    notes.write(ENGINE, "Knocking at low revs; check the mounts.", "The mounts were fine.")
+    notes.edit(ENGINE, "2026-03-04T09:00Z")
+    notes.edit(FERRY, "2026-03-04T10:00Z", parent=parent_of("database", NOTES))  # a task filed as a note
+    notes.edit(LOOSE, "2026-03-04T11:00Z", archived=True, in_trash=True)
+    assert _backfill() == 0
+    assert _extra(lb, ENGINE, "2026-03-04", "relations")["relations"] == {"Areas": [SEAMANSHIP]}
+    assert _extra(lb, FERRY, "2026-03-04", "relations")["database"] == {"id": NOTES}
+    assert _extra(lb, LOOSE, "2026-03-04", "relations")["relations"] == {"Areas": []}
+    assert _sync() == 0
+    engine = _extra(lb, ENGINE, "2026-03-04", "edited")
+    assert engine["body"]["words_delta"] == 4 and engine["relations"] == {"Areas": [SEAMANSHIP]}
+    assert "relations_changed" not in engine
+    ferry = _extra(lb, FERRY, "2026-03-04", "moved")
+    assert ferry["moved_from"] == {"parent": {"type": "database", "id": TASKS}, "path": ["Tasks"]}
+    loose = _extra(lb, LOOSE, "2026-03-04", "archived")
+    assert loose["relations"] == {"Areas": []} and "relations_changed" not in loose
+
+
+def test_a_second_relation_change_on_a_day_with_its_line_waits_for_the_backfill_or_the_next_day(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One line per page, day and action: the sync refuses the day's second edit, as for any change."""
+    assert _sync() == 0
+    notes.relate(ENGINE, "Areas", [SEAMANSHIP, WORKSHOP], "2026-03-04T09:00Z")
+    assert _sync() == 0
+    notes.relate(ENGINE, "Areas", [WORKSHOP], "2026-03-04T15:00Z")
+    capsys.readouterr()
+    assert _sync() == 0
+    assert "notion: 0 new lines" in capsys.readouterr().out, "the day's edited line is in the record"
+    assert _backfill() == 0
+    late = _extra(lb, ENGINE, "2026-03-04", "relations")
+    assert late["relations"] == {"Areas": [WORKSHOP]}
+    assert late["relations_changed"] == [{"name": "Areas", "added": [], "removed": [SEAMANSHIP]}]
+    notes.relate(ENGINE, "Areas", [WORKSHOP, ALLOTMENT], "2026-03-05T09:00Z")
+    assert _sync() == 0
+    assert _extra(lb, ENGINE, "2026-03-05", "edited")["relations_changed"] == [
+        {"name": "Areas", "added": [ALLOTMENT], "removed": []}
+    ], "against the backfill's line, the row's latest with relations"
+
+
+def test_relations_changed_without_an_edit_are_backfilled_once_a_day(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A link set from the other side may leave this row's edit time alone: the backfill sees it."""
+    assert _sync() == 0
+    notes.pages[ENGINE]["properties"]["Areas"]["relation"] = [{"id": WORKSHOP}]
+    assert _backfill() == 0
+    assert "notion: 1 new lines of 1 rows" in capsys.readouterr().out
+    extra = _extra(lb, ENGINE, "2026-03-02", "relations")
+    assert extra["relations"] == {"Areas": [WORKSHOP]}
+    assert extra["relations_changed"] == [{"name": "Areas", "added": [WORKSHOP], "removed": [SEAMANSHIP]}]
+    notes.pages[ENGINE]["properties"]["Areas"]["relation"] = []
+    assert _backfill("--dry-run") == 0
+    out = capsys.readouterr().out
+    assert "notion: 0 rows whose relations" in out
+    assert "on a day that already holds their relations line (an edit on another day records them)" in out
+
+
+def test_the_backfill_honours_the_roots_and_only_reads(
+    lb: Logbook, notes: FakeNotion, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _before_relations(lb, notes, capsys)
+    monkeypatch.setenv(ROOTS_ENV, NOTES)
+    asked = len(notes.requests)
+    assert _backfill() == 0
+    out = capsys.readouterr().out
+    assert "notion: 3 new lines of 3 rows" in out and "skipped 2 outside LOGBOOK_NOTION_ROOTS" in out
+    for r in notes.requests[asked:]:  # a related row is never asked for, nor its body
+        assert not any(row in r.path for row in (SEAMANSHIP, ALLOTMENT, WORKSHOP)), r.path
+    assert {method for method, _route in notes.methods()} <= {"GET", "POST"}
+    assert {route for method, route in notes.methods() if method == "POST"} == {"/v1/search"}
+
+
+def test_the_backfill_waits_out_a_short_rate_limit_and_paces_itself(
+    lb: Logbook, notes: FakeNotion, clock: Clock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _before_relations(lb, notes, capsys)
+    asked, started = len(notes.requests), clock.now()
+    notes.throttle["/v1/search"] = 2
+    assert _backfill() == 0
+    assert clock.sleeps.count(7.0) == 2 and "notion: 5 new lines" in capsys.readouterr().out
+    n = len(notes.requests) - asked
+    assert clock.now() - started >= (n - 1) / 3 - 1e-9, "never faster than three requests a second"
+
+
+@pytest.mark.parametrize(
+    ("throttled", "retry_after", "said"), [(1000, "7", "429"), (1, "3600", "asks to wait")]
+)
+def test_a_quota_answer_stops_the_backfill_on_one_line(
+    lb: Logbook,
+    notes: FakeNotion,
+    clock: Clock,
+    capsys: pytest.CaptureFixture[str],
+    throttled: int,
+    retry_after: str,
+    said: str,
+) -> None:
+    written = _before_relations(lb, notes, capsys)
+    notes.throttle["/v1/search"], notes.retry_after = throttled, retry_after
+    assert _backfill() == 1
+    err = [line for line in capsys.readouterr().err.splitlines() if line.startswith("sync:")]
+    assert len(err) == 1 and err[0].startswith("sync: notion:") and said in err[0]
+    assert lb.meta["seq"] == written
+
+
+def test_a_backfill_stopped_midway_keeps_what_it_wrote_and_the_next_one_finishes(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str]
+) -> None:
+    many = _many()
+    notes.pages[SHELVES]["properties"]["Areas"]["relation"] = [{"id": i} for i in many]
+    _before_relations(lb, notes, capsys)
+    notes.throttle[f"/v1/pages/{SHELVES}/properties/{AREAS_ID}"] = 1000
+    assert _backfill() == 1
+    said = [line for line in capsys.readouterr().err.splitlines() if line.startswith("sync:")]
+    assert len(said) == 1 and said[0].startswith("sync: notion:") and "429" in said[0]
+    done = {k for k in _keyed(lb) if k.endswith("/relations")}
+    assert done == {_key(row, BACKFILLED[row], "relations") for row in (LOOSE, ENGINE, FERRY)}
+    notes.throttle.clear()
+    assert _backfill() == 0
+    assert "notion: 2 new lines of 2 rows" in capsys.readouterr().out
+    assert _extra(lb, SHELVES, "2026-03-02", "relations")["relations"] == {"Areas": many}
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("sync", "immich", "--relations-backfill"),
+        ("sync", "--all", "--relations-backfill"),
+        ("sync", "notion", "--relations-backfill", "--restart"),
+        ("sync", "notion", "--relations-backfill", "--since", "2026-03-02T00:00:00Z"),
+        ("sync", "notion", "--relations-backfill", "--listen", "30"),
+        ("sync", "notion", "--relations-backfill", "--until", "2026-03-02"),
+        ("sync", "notion", "--relations-backfill", "--networks", "signal"),
+        ("sync", "--scheduled", "--relations-backfill"),
+        ("sync", "--install-schedule", "--relations-backfill"),
+        ("sync", "--uninstall-schedule", "--relations-backfill"),
+    ],
+)
+def test_the_backfill_is_for_notion_and_a_day_only(
+    lb: Logbook, notes: FakeNotion, capsys: pytest.CaptureFixture[str], args: tuple[str, ...]
+) -> None:
+    with pytest.raises(SystemExit) as e:
+        cli.main(list(args))
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and err.startswith("sync: ")
+    assert not notes.requests and lb.meta["seq"] == 0
 
 
 # -- blocks the API withholds, blocks gone while a page is read -------------------------------------

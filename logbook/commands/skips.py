@@ -91,6 +91,9 @@ SKIP_PHRASES = {
     "skipped_no_id": "without a message id",
     "skipped_merged_chat": "merged chats, whose member chats carry the messages",
     "skipped_outside_roots": "outside LOGBOOK_NOTION_ROOTS",
+    "skipped_not_synced": "rows not in the record yet (the next sync writes them, relations and all)",
+    "skipped_relations_day_held": "rows whose relations changed again on a day that already holds their"
+    " relations line (an edit on another day records them)",
     "skipped_not_a_file": "not a file",
     "skipped_not_a_bot_chat": "chats that are not with a bot, never read",
     "skipped_service": "service messages (a pin, a cleared history)",
@@ -163,6 +166,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "actor_unnamed": "with the actor named by id only (the integration may not read user information)",
     "body_withheld": "pages with blocks the API withholds",
     "body_not_found": "pages with a block deleted while they were read",
+    "relations_unreadable": "rows whose relations could not be read whole",
     "held_open_hour": "in an hour not over yet, written by a later run",
     "no_folder_path": "with no folder path (the file is gone, or in no folder of yours)",
     "already_in_lines": "already in a line of the record",

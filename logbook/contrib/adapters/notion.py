@@ -16,47 +16,56 @@ usually it does not, and the run says so). `LOGBOOK_NOTION_URL` (optional) is an
 the API: https, or http on this machine only, so the token never crosses a network in the clear.
 
 The calls, `Notion-Version: 2022-06-28`, and nothing that writes (the search is a POST that changes
-nothing; no other POST, no PATCH, no DELETE is ever sent): `GET /v1/users/me` first (the token
-works; whose integration it is); `POST /v1/search` for pages, newest edit first, `PAGE_SIZE` a page
-by `start_cursor`, until a page last edited before `since`; `GET /v1/pages/{id}`, `/databases/{id}`
-and `/blocks/{id}` for the titles above a page, each once a run; `GET /v1/blocks/{id}/children`,
-paged and recursed (a child page or database is its own page, never part of this one's body), for
-the body's text, which is hashed and counted and never kept; `GET /v1/users/{id}` for an actor's
-name, once per person a run, and never again in the run once Notion says the integration may not
-read people. Requests start at least a third of a second apart (Notion's documented average is three
-a second); a 429 or a 503 waits what `Retry-After` says, one without a usable one and any other
-5xx wait 1 s doubling to 60 s, up to `RETRIES` times, then the pull fails with one sentence and
-`sync` keeps the watermark it had. A connection that fails is tried `CONNECT_RETRIES` more times.
-Reading a page's blocks, a 400 `validation_error` naming a block type the API withholds from
-integrations (`ai_block`) or a 404 (a block deleted while the page is read) marks that page's body
-unavailable and the run goes on; the block type is said once a run, never the page; any other 400
-stops the run. Network happens only inside `pull`, which only `logbook sync notion` calls; `doctor`
-asks Notion nothing.
+nothing; no other POST, no PATCH, no DELETE is ever sent): `GET /v1/users/me` first (the token works;
+whose integration it is); `POST /v1/search` for pages, newest edit first, `PAGE_SIZE` a page by
+`start_cursor`, until a page last edited before `since`; `GET /v1/pages/{id}`, `/databases/{id}` and
+`/blocks/{id}` for the titles above a page, each once a run; `GET /v1/blocks/{id}/children`, paged and
+recursed (a child page or database is its own page, never part of this one's body), for the body's text,
+which is hashed and counted and never kept; `GET /v1/pages/{id}/properties/{property id}`, paged, for a
+relation Notion serves cut short (`has_more`: the page object holds its first 25 references), the
+property id sent as Notion spells it, and never a related page itself; `GET /v1/users/{id}` for an
+actor's name, once per person a run, and never again in the run once Notion says the integration may not
+read people. Requests start at least a third of a second apart (Notion's documented average is three a
+second); a 429 or a 503 waits what `Retry-After` says, one without a usable one and any other 5xx wait
+1 s doubling to 60 s, up to `RETRIES` times, then the pull fails with one sentence and `sync` keeps the
+watermark it had. A connection that fails is tried `CONNECT_RETRIES` more times. Reading a page's
+blocks, a 400 `validation_error` naming a block type the API withholds from integrations (`ai_block`) or
+a 404 (a block deleted while the page is read) marks that page's body unavailable and the run goes on;
+the block type is said once a run, never the page; any other 400 stops the run; a 403 or 404 reading a
+relation's references leaves that line's relations off. Network happens only inside `pull` and
+`backfill`, which only `logbook sync notion` calls; `doctor` asks Notion nothing.
 
-A line: `kind` `event`, `tier` 1 — SPEC §4 and RFC 0009 give `event/v1` tier 1, and a line here
-carries a title, the titles above it and who acted, as a calendar entry carries a title and its
-organizer; RFC 0009's tier 2 is for entries with attendees, which a page has none of. The tier is
-where a line may travel, never who wrote it: a line Ola made is tier 1 as a line Ines made is.
-`at` is the page's `created_time` for `created` and its `last_edited_time` for the other actions,
-`end` null; the day is the record's local day of `at`. The payload: `raw_id` `<page id>/<day>/
-<action>`, the dedupe key; `title` the page's title verbatim (absent when it has none); `calendar`
-`{notion, Notion}`; `all_day` false; `modified_at` the `last_edited_time` this run saw (the
-watermark); and under `extra`: `action`; `page` (`id`, `url`, never the public link); `path`, the
-titles above the page, the top first, as far as the integration can see (a block between them has
-none); `parent` (`type` page, database, block or workspace, and `id`); `actor` (`id`, `name`, `type`
-person or bot, and `role` owner or other once the owner is known), the creator on `created`, the
-last editor otherwise; `moved_from` (`parent`, `path`) on a move; and on the line that holds the page
-as it is now (the action at its last edit; a `created` line only when it is that edit too) `body` —
-`sha256` and `bytes` of the text in UTF-8, `media_type` text/plain and no `path`, the record holds a
-digest, not the text (SPEC §1.1) — `words` (whitespace-separated) and `words_delta` against the
-page's previous line that has a count; or, when the blocks cannot all be read, `{unavailable:
-withheld}` (the API withholds a block type the page holds) or `{unavailable: not_found}` (a block was
-deleted while the page was read), never a digest of part of the text; `properties`, a database
-row's `status`, `select`, `multi_select`, `date` and `checkbox` values by name (never text, a number,
-a person, a phone, an email, a url, a file, a formula or a relation); and `changed`, `[{name, old,
-new}]` for those that differ from the page's previous line. Notion's API keeps no history of a page,
-so the record is its history: `pull` takes `previous`, which hands it the lines the record holds for
-a page, and compares with them.
+A line: `kind` `event`, `tier` 1 — SPEC §4 and RFC 0009 give `event/v1` tier 1, and a line here carries
+a title, the titles above it and who acted, as a calendar entry carries a title and its organizer; RFC
+0009's tier 2 is for entries with attendees, which a page has none of. The tier is where a line may
+travel, never who wrote it: a line Ola made is tier 1 as a line Ines made is. `at` is the page's
+`created_time` for `created` and its `last_edited_time` for the other actions, `end` null; the day is
+the record's local day of `at`. The payload: `raw_id` `<page id>/<day>/<action>`, the dedupe key;
+`title` the page's title verbatim (absent when it has none); `calendar` `{notion, Notion}`; `all_day`
+false; `modified_at` the `last_edited_time` this run saw (the watermark); and under `extra`: `action`;
+`page` (`id`, `url`, never the public link); `path`, the titles above the page, the top first, as far as
+the integration can see (a block between them has none); `parent` (`type` page, database, block or
+workspace, and `id`); on every line of a database row, `database` (`id`), the database it is a row of;
+`actor` (`id`, `name`, `type` person or bot, and `role` owner or other once the owner is known), the
+creator on `created`, the last editor otherwise; `moved_from` (`parent`, `path`) on a move; and on the
+line that holds the page as it is now (the action at its last edit; a `created` line only when it is
+that edit too) `body` — `sha256` and `bytes` of the text in UTF-8, `media_type` text/plain and no
+`path`, the record holds a digest, not the text (SPEC §1.1) — `words` (whitespace-separated) and
+`words_delta` against the page's previous line that has a count; or, when the blocks cannot all be read,
+`{unavailable: withheld}` (the API withholds a block type the page holds) or `{unavailable: not_found}`
+(a block was deleted while the page was read), never a digest of part of the text; `properties`, a
+database row's `status`, `select`, `multi_select`, `date` and `checkbox` values by name (never text, a
+number, a person, a phone, an email, a url, a file, a formula or a rollup); `changed`, `[{name, old,
+new}]` for those that differ from the page's previous line; `relations`, the row's relation properties
+as `{name: [page id, ...]}`, each id as Notion gives it (spelled as it spells a page's id, so it joins
+`page.id`) and in its order, never looked up — no title, body or rollup of a related page — present when
+the row has a relation property, and as `{}` once when the record's latest relations for it name a page
+and it now has no relation property; when a relation cut short cannot be read whole the line has no
+`relations` (counted), never the first part alone; and `relations_changed`, `[{name, added, removed}]`
+for each relation that gained or lost an id since the page's latest line with `relations` (RFC 0009 has
+no field for links between entries, so they go under `extra`; a reorder gains and loses nothing).
+Notion's API keeps no history of a page, so the record is its history: `pull` takes `previous`, which
+hands it the lines the record holds for a page, and compares with them.
 
 Which lines a page gives, per run: `created` when its `created_time` is at or after `since` (every
 page on a first run); then, unless the record already holds the page at this `last_edited_time`,
@@ -66,6 +75,14 @@ seen with its creation in one run, is the `created` line, which then holds the p
 line per page and day touched. A page edited twice on one day is one line: the second edit's key is
 the first's, and the record refuses it. A later edit the same day after a `created` line is in the
 record is an `edited` line beside it. A page removed without Notion listing it again leaves no line.
+
+`backfill` (`sync notion --relations-backfill`) is for rows whose lines the record holds without
+their relations (written before relations were kept, or linked from the other side of a relation
+with their edit time left alone): one line per such row, `relations` its action, at its last edit,
+`raw_id` `<page id>/<day>/relations`, holding the reference, title, path, parent, database,
+`relations` and `relations_changed`, and nothing else. Read back through `previous`, such a line gives
+its key and its relations only: it never stands in for an edit, a move or an archival the sync has
+yet to write.
 """
 
 from __future__ import annotations
@@ -80,7 +97,7 @@ from datetime import UTC, datetime, timedelta
 from http.client import HTTPException
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -92,6 +109,7 @@ __all__ = [
     "NAME",
     "TIER",
     "Config",
+    "backfill",
     "configure",
     "group",
     "notion_id",
@@ -128,6 +146,7 @@ MAX_DEPTH = 32  # blocks within blocks, and pages above pages
 BATCH = 100  # pages per question to the record
 CALENDAR = {"id": "notion", "name": "Notion"}
 CREATED, EDITED, MOVED, ARCHIVED = "created", "edited", "moved", "archived"
+RELATIONS = "relations"  # `backfill`'s line: a row's relations as of its last edit, which the record lacked
 WITHHELD, NOT_FOUND = "withheld", "not_found"  # why a page's body is unavailable
 OWNER, OTHER = "owner", "other"
 PROPERTY_TYPES = frozenset({"status", "select", "multi_select", "date", "checkbox"})
@@ -247,20 +266,17 @@ def pull(
     me = client.get("/users/me")
     owner = config.owner_id or _token_owner(me)
     floor = _instant(since) if since is not None else None
-    listed = _list(client, floor, progress, started)
-    pages = [p for p in (_Page.of(item) for item in listed) if p is not None]
-    _count(counts, "skipped_bad_date", len(listed) - len(pages))
+    pages = _pages(client, floor, progress, started, counts)
     tree = _Tree(client, pages)
     people = _People(client, owner)
     bodies = _Bodies(client, notice)
-    pages.sort(key=lambda p: (p.edited, p.id))
+    links = _Links(client)
     for n in range(0, len(pages), BATCH):
         batch = pages[n : n + BATCH]
         held = previous([f"{p.id}/" for p in batch]) if previous is not None else {}
         for p in batch:
-            yield from _drafts(
-                p, _Seen.of(held.get(f"{p.id}/", [])), floor, zone, config, tree, people, bodies, counts
-            )
+            seen = _Seen.of(held.get(f"{p.id}/", []))
+            yield from _drafts(p, seen, floor, zone, config, tree, people, bodies, links, counts)
         if notice is not None and len(pages) > BATCH:
             notice(f"{n + len(batch):,} of {len(pages):,} pages read")
     if owner is None and notice is not None and people.seen:  # so a dry run tells the owner their id
@@ -268,9 +284,67 @@ def pull(
         notice(f"no owner known; the people who acted: {named}; set {OWNER_ENV} to yours")
 
 
+def backfill(
+    config: Config,
+    since: str | None = None,
+    progress: Callable[[int, float], None] | None = None,
+    counts: dict[str, int] | None = None,
+    timezone: str | None = None,
+    previous: Previous | None = None,
+    notice: Callable[[str], None] | None = None,
+) -> Iterator[dict[str, Any]]:
+    """`sync notion --relations-backfill`: a `relations` line for every database row last edited at or after
+    `since` (every row when None) whose relations the record does not hold — its lines were written
+    before relations were, or its links changed from the other side of a relation and left its edit time
+    alone — oldest edit first. The line holds the row's relations as the run reads them, dated at its
+    last edit: `at` and `modified_at` that edit, `raw_id` `<page id>/<day>/relations`, the page's
+    reference, path, parent and database, its `relations` and, when the record held others,
+    `relations_changed`; never a body, a property or an actor. Nothing is read but the search, the
+    titles above a row (for the roots) and the relations Notion serves cut short. A row the record holds
+    no line of is left to the sync, and one whose `relations` line for that day is in the record with
+    other ids is left to an edit on another day; both are counted. A relation Notion serves cut short is
+    read whole on every run, to compare: a request per hundred links. The client is `pull`'s: paced,
+    retried, and stopped on one sentence (OSError) when Notion keeps saying wait; the lines yielded
+    before stay yielded."""
+    counts = counts if counts is not None else {}
+    zone = ZoneInfo(timezone or "UTC")
+    started = time.monotonic()
+    client = _Client(config)
+    client.get("/users/me")  # the token works, before the walk
+    floor = _instant(since) if since is not None else None
+    pages = _pages(client, floor, progress, started, counts)
+    rows = [p for p in pages if p.relations]
+    tree = _Tree(client, pages)
+    links = _Links(client)
+    for n in range(0, len(rows), BATCH):
+        batch = rows[n : n + BATCH]
+        held = previous([f"{p.id}/" for p in batch]) if previous is not None else {}
+        for p in batch:
+            line = _relations_line(p, _Seen.of(held.get(f"{p.id}/", [])), zone, config, tree, links, counts)
+            if line is not None:
+                yield line
+        if notice is not None and len(rows) > BATCH:
+            notice(f"{n + len(batch):,} of {len(rows):,} rows read")
+
+
 def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
     if n:
         counts[key] = counts.get(key, 0) + n
+
+
+def _pages(
+    client: _Client,
+    floor: datetime | None,
+    progress: Callable[[int, float], None] | None,
+    started: float,
+    counts: dict[str, int],
+) -> list[_Page]:
+    """Every page the search lists from `floor` on, oldest edit first; one without usable times
+    counted."""
+    listed = _list(client, floor, progress, started)
+    pages = [p for p in (_Page.of(item) for item in listed) if p is not None]
+    _count(counts, "skipped_bad_date", len(listed) - len(pages))
+    return sorted(pages, key=lambda p: (p.edited, p.id))
 
 
 # -- the API ---------------------------------------------------------------------------------------------
@@ -533,6 +607,17 @@ class _Ref:
 
 
 @dataclass(frozen=True)
+class _Relation:
+    """A relation property as the page object serves it: the property's id, the ids of the
+    references it holds (its first 25; None when one of them is not a reference with an id) and
+    whether Notion holds more (`has_more`)."""
+
+    property_id: str | None
+    ids: tuple[str, ...] | None
+    more: bool
+
+
+@dataclass(frozen=True)
 class _Page:
     id: str
     created: datetime
@@ -544,6 +629,7 @@ class _Page:
     title: str | None
     url: str | None
     properties: dict[str, Any]
+    relations: dict[str, _Relation]
 
     @classmethod
     def of(cls, item: dict[str, Any]) -> _Page | None:
@@ -564,7 +650,13 @@ class _Page:
             title=_page_title(item),
             url=url if isinstance(url, str) and url else None,
             properties=_properties(item.get("properties")),
+            relations=_relation_properties(item.get("properties")),
         )
+
+    @property
+    def database(self) -> str | None:
+        """The database the page is a row of; None for a page that is not a row."""
+        return self.parent.id if self.parent is not None and self.parent.type == "database" else None
 
 
 @dataclass(frozen=True)
@@ -682,21 +774,27 @@ class _Seen:
     path: list[Any] | None = None
     words: int | None = None
     properties: dict[str, Any] | None = None
+    relations: dict[str, list[str]] | None = None
 
     @classmethod
     def of(cls, payloads: Iterable[dict[str, Any]]) -> _Seen:
+        """A `relations` line (the backfill's) gives its key and its relations only: it holds the
+        row's links as of an edit, never the edit itself, so the edit's own line is still owed."""
         keys: set[str] = set()
         modified: datetime | None = None
-        parent = path = words = properties = None
+        parent = path = words = properties = relations = None
         for payload in payloads:
             if isinstance(payload.get("raw_id"), str):
                 keys.add(payload["raw_id"])
+            extra = payload.get("extra")
+            extra = extra if isinstance(extra, dict) else {}
+            if isinstance(extra.get("relations"), dict):
+                relations = _relation_ids(extra["relations"])
+            if extra.get("action") == RELATIONS:
+                continue
             when = _instant(payload.get("modified_at"))
             if when is not None and (modified is None or when > modified):
                 modified = when
-            extra = payload.get("extra")
-            if not isinstance(extra, dict):
-                continue
             if isinstance(extra.get("parent"), dict):
                 parent = extra["parent"]
                 path = extra.get("path") if isinstance(extra.get("path"), list) else []
@@ -705,7 +803,7 @@ class _Seen:
                 words = body["words"]
             if isinstance(extra.get("properties"), dict):
                 properties = extra["properties"]
-        return cls(frozenset(keys), modified, parent, path, words, properties)
+        return cls(frozenset(keys), modified, parent, path, words, properties, relations)
 
 
 # -- the lines -------------------------------------------------------------------------------------------
@@ -720,12 +818,12 @@ def _drafts(
     tree: _Tree,
     people: _People,
     bodies: _Bodies,
+    links: _Links,
     counts: dict[str, int],
 ) -> Iterator[dict[str, Any]]:
     """The page's lines this run: `created`, then the action at its last edit (module docstring)."""
     path, above = tree.above(page.parent)
-    if config.roots and page.id not in config.roots and not above.intersection(config.roots):
-        _count(counts, "skipped_outside_roots")
+    if _outside_roots(config, page, above, counts):
         return
     created_day = _day(page.created, zone)
     edited_day = _day(page.edited, zone)
@@ -744,12 +842,12 @@ def _drafts(
     if folded:
         action = None  # the creation day's edit: the created line holds the page as it is
     if with_created:
-        state = _state(bodies, page, seen, counts) if folded else None
+        state = _state(bodies, links, page, seen, counts) if folded else None
         actor = people.actor(page.created_by, counts)
         yield _line(page, CREATED, page.created, created_day, path, parent, actor, state, counts)
     if action is not None:
         known = _raw_id(page.id, edited_day, action) in seen.keys  # the record refuses it: fetch nothing
-        state = None if known else _state(bodies, page, seen, counts)
+        state = None if known else _state(bodies, links, page, seen, counts)
         actor = people.actor(page.edited_by, counts)
         line = _line(page, action, page.edited, edited_day, path, parent, actor, state, counts)
         if action == MOVED:
@@ -757,8 +855,54 @@ def _drafts(
         yield line
 
 
-def _state(bodies: _Bodies, page: _Page, seen: _Seen, counts: dict[str, int]) -> dict[str, Any]:
-    """The page as it is now: its body's digest and word count, its properties, what changed."""
+def _outside_roots(config: Config, page: _Page, above: set[str], counts: dict[str, int]) -> bool:
+    """Whether `LOGBOOK_NOTION_ROOTS` leaves the page out (counted): it is none of them and under
+    none of them."""
+    if config.roots and page.id not in config.roots and not above.intersection(config.roots):
+        _count(counts, "skipped_outside_roots")
+        return True
+    return False
+
+
+def _relations_line(
+    page: _Page,
+    seen: _Seen,
+    zone: ZoneInfo,
+    config: Config,
+    tree: _Tree,
+    links: _Links,
+    counts: dict[str, int],
+) -> dict[str, Any] | None:
+    """The row's `relations` line (`backfill`), or None when the record holds its relations already,
+    holds no line of the row, or holds this day's `relations` line with other ids."""
+    path, above = tree.above(page.parent)
+    if _outside_roots(config, page, above, counts):
+        return None
+    if seen.modified is None:  # never synced: the sync writes it, its relations on its line
+        _count(counts, "skipped_not_synced")
+        return None
+    relations = links.of(page, counts)
+    if relations is None:
+        return None
+    moved = _relations_changed(seen.relations, relations)
+    if seen.relations is not None and not moved:
+        return None
+    day = _day(page.edited, zone)
+    if _raw_id(page.id, day, RELATIONS) in seen.keys:  # changed again since that line, the edit time not
+        _count(counts, "skipped_relations_day_held")
+        return None
+    state: dict[str, Any] = {"relations": relations}
+    if moved:
+        state["relations_changed"] = moved
+    parent = page.parent.to_json() if page.parent is not None else None
+    return _line(page, RELATIONS, page.edited, day, path, parent, None, state, counts)
+
+
+def _state(
+    bodies: _Bodies, links: _Links, page: _Page, seen: _Seen, counts: dict[str, int]
+) -> dict[str, Any]:
+    """The page as it is now: its body's digest and word count, its properties, its relations, and
+    what changed in them."""
     state: dict[str, Any] = {}
     body = bodies.of(page.id, counts)
     if body is not None:
@@ -770,6 +914,23 @@ def _state(bodies: _Bodies, page: _Page, seen: _Seen, counts: dict[str, int]) ->
         changed = _changed(seen.properties, page.properties)
         if changed:
             state["changed"] = changed
+    state.update(_relations_state(links, page, seen, counts))
+    return state
+
+
+def _relations_state(links: _Links, page: _Page, seen: _Seen, counts: dict[str, int]) -> dict[str, Any]:
+    """`relations` when the row has a relation property, or had related pages the record holds and
+    has none now; `relations_changed` for each property that gained or lost an id since the row's
+    latest line with relations. Nothing when a relation cannot be read whole."""
+    if not page.relations and not any((seen.relations or {}).values()):
+        return {}
+    relations = links.of(page, counts)
+    if relations is None:
+        return {}
+    state: dict[str, Any] = {"relations": relations}
+    moved = _relations_changed(seen.relations, relations)
+    if moved:
+        state["relations_changed"] = moved
     return state
 
 
@@ -799,6 +960,8 @@ def _line(
     extra: dict[str, Any] = {"action": action, "page": reference, "path": path}
     if parent is not None:
         extra["parent"] = parent
+    if page.database is not None:
+        extra["database"] = {"id": page.database}
     if actor is not None:
         extra["actor"] = actor
     extra.update(state or {})
@@ -828,6 +991,115 @@ def _changed(before: dict[str, Any] | None, now: dict[str, Any]) -> list[dict[st
         for name in sorted(set(before) | set(now))
         if before.get(name) != now.get(name)
     ]
+
+
+def _relations_changed(
+    before: dict[str, list[str]] | None, now: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    """`[{name, added, removed}]` for each relation property that gained or lost an id since the
+    row's latest line with relations, the ids in the order their own list has them; a property that
+    is gone lost them all. A reorder gains and loses nothing. Nothing when the record has no
+    relations to compare with."""
+    if before is None:
+        return []
+    out = []
+    for name in sorted(set(before) | set(now)):
+        old, new = before.get(name, []), now.get(name, [])
+        was, now_ids = set(old), set(new)
+        added = [i for i in new if i not in was]
+        removed = [i for i in old if i not in now_ids]
+        if added or removed:
+            out.append({"name": name, "added": added, "removed": removed})
+    return out
+
+
+def _relation_properties(raw: object) -> dict[str, _Relation]:
+    """A row's relation properties by name, sorted: each one's id and the references the page object
+    holds, every id as Notion spells it, in Notion's order."""
+    if not isinstance(raw, dict):
+        return {}
+    found: dict[str, _Relation] = {}
+    for name, prop in raw.items():
+        if not isinstance(name, str) or not isinstance(prop, dict) or prop.get("type") != "relation":
+            continue
+        refs = prop.get("relation")
+        property_id = prop.get("id")
+        ids = _ref_ids(refs) if isinstance(refs, list) else None
+        found[name] = _Relation(
+            property_id if isinstance(property_id, str) and property_id else None,
+            tuple(ids) if ids is not None else None,
+            prop.get("has_more") is True,
+        )
+    return dict(sorted(found.items()))
+
+
+def _ref_ids(refs: Iterable[object]) -> list[str] | None:
+    """The `id` of each reference (`{"id": ...}`), verbatim: never resolved, never respelled, none
+    dropped; None when one is not a reference with an id, so a part is never taken for the whole."""
+    ids: list[str] = []
+    for ref in refs:
+        found = ref.get("id") if isinstance(ref, dict) else None
+        if not isinstance(found, str) or not found:
+            return None
+        ids.append(found)
+    return ids
+
+
+def _relation_ids(raw: dict[str, Any]) -> dict[str, list[str]]:
+    """A line's `relations` as the record holds them, anything that is not a list of ids left out."""
+    return {
+        name: [i for i in ids if isinstance(i, str)]
+        for name, ids in raw.items()
+        if isinstance(name, str) and isinstance(ids, list)
+    }
+
+
+class _Links:
+    """A row's relations, `{property name: [related page ids]}`: the ids the page object holds, and
+    for a relation Notion serves cut short (`has_more`), every id, paged, from `GET
+    /pages/{id}/properties/{property id}`. A related page is never asked for."""
+
+    def __init__(self, client: _Client) -> None:
+        self.client = client
+
+    def of(self, page: _Page, counts: dict[str, int]) -> dict[str, list[str]] | None:
+        """None, counted, when a relation cannot be read whole (cut short and the rest unreadable,
+        or a reference without an id): never a part, which would read as references lost."""
+        found: dict[str, list[str]] = {}
+        for name, relation in page.relations.items():
+            if relation.more:
+                ids = self._all(page, relation)
+            else:
+                ids = list(relation.ids) if relation.ids is not None else None
+            if ids is None:
+                _count(counts, "relations_unreadable")
+                return None
+            found[name] = ids
+        return found
+
+    def _all(self, page: _Page, relation: _Relation) -> list[str] | None:
+        """Every id of a relation cut short, paged from the property endpoint; None when it cannot
+        be read whole."""
+        if relation.property_id is None:
+            return None
+        path = f"/pages/{page.id}/properties/{quote(relation.property_id, safe='%')}"
+        ids: list[str] = []
+        try:
+            for results in self.client.pages_of(path):
+                part = _ref_ids(_relation_items(results))
+                if part is None:
+                    return None
+                ids.extend(part)
+        except _Unreachable:  # the page or the property went while the run read it
+            return None
+        return ids
+
+
+def _relation_items(results: list[Any]) -> Iterator[object]:
+    """The reference of each of one page of a relation's `property_item`s (None for an item that
+    is not a relation's)."""
+    for item in results:
+        yield item.get("relation") if isinstance(item, dict) and item.get("type") == "relation" else None
 
 
 def _properties(raw: object) -> dict[str, Any]:

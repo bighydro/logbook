@@ -407,7 +407,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `imessage` | none required: this Mac's `~/Library/Messages/chat.db` (`LOGBOOK_IMESSAGE_DB` for another store; `LOGBOOK_IMESSAGE_LOOKBACK_H`, default 24; `LOGBOOK_IMESSAGE_HASH_MEDIA=0` to skip hashing) | one `message/v1` line per message, identical to the line the phone backup's sms.db gives |
 | `beeper` | `LOGBOOK_BEEPER_TOKEN` (`LOGBOOK_BEEPER_URL`, default `http://localhost:23373`; `LOGBOOK_BEEPER_ALLOW_REMOTE=1` to read a Beeper on another machine, which the design says not to) | one `message/v1` line per message of every chat Beeper Desktop bridges, `source` `beeper-<network>`; attachments referenced by asset id, never fetched; `--networks` chooses, default every one but imessage |
 | `granola` | `LOGBOOK_GRANOLA_KEY` (`LOGBOOK_GRANOLA_URL`, default `https://public-api.granola.ai/v1`; `LOGBOOK_GRANOLA_LOOKBACK_H`, default 24; `LOGBOOK_GRANOLA_SUMMARIES=0` to skip the summaries) | one `transcript/v1` line per recording, tier 3, the transcript in `attachments/`; plus Granola's AI summary as a tier-2 `note/v1` line with `extra.derived_from` the transcript line's id |
-| `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values; never the text ([Notion](#notion)) |
+| `notion` | `LOGBOOK_NOTION_TOKEN` (`LOGBOOK_NOTION_ROOTS`: page or database ids or links to limit to; `LOGBOOK_NOTION_OWNER_ID`: your Notion user id, to mark your own actions) | one `event/v1` line per page, day and action (`created`, `edited`, `moved`, `archived`), tier 1: title, path, id, url, who acted, the body's digest and word count, a row's status, select, date and checkbox values, its database and the ids of the rows its relations link to; never the text ([Notion](#notion)) |
 | `github` | `LOGBOOK_GITHUB_TOKEN` (a fine-grained token, read-only) and `LOGBOOK_GITHUB_REPOS` (`owner/name`, comma-separated, or `--all`; `LOGBOOK_GITHUB_URL` for a GitHub Enterprise Server); your logins under `handles` in `policy/owner.json` | one `event/v1` line per commit, issue or pull request created, closed or merged, review and comment, tier 1 (tier 2 from a private repository): the message, body or comment in full, who acted (`owner` or `other`), `agent: true` when an agent's session marker is in the text; a watermark per repo ([GitHub](#github)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 | `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
@@ -512,6 +512,8 @@ export LOGBOOK_NOTION_ROOTS='https://www.notion.so/…/Research-…, …'   # op
 logbook sync notion --dry-run                               # count, write nothing
 logbook sync notion                                         # then four times a day with the schedule
 logbook sync notion --since 2026-01-01T00:00:00Z            # every page edited since then, once
+logbook sync notion --relations-backfill --dry-run          # rows whose relations the record lacks: count
+logbook sync notion --relations-backfill                    # then write them, one line a row
 ```
 
 **The token.** In Notion, *Settings → Connections → Develop or manage integrations → New integration*,
@@ -540,20 +542,55 @@ anything is written: a line is never rewritten. The owner id marks; it decides n
 | `title` | the page's title, verbatim; a database row's name |
 | `raw_id` | `<page id>/<day>/<action>`: the dedupe key, so a page edited twice on one day is one line |
 | `modified_at` | the page's last edit as the sync saw it, which is also the watermark |
-| `extra.action` | `created`, `edited`, `moved` or `archived` |
+| `extra.action` | `created`, `edited`, `moved` or `archived`; `relations` on a line `--relations-backfill` wrote |
 | `extra.page` | the page's `id` and `url` (the private link, which opens only for people the page is shared with) |
 | `extra.path`, `extra.parent` | the titles above the page, the top first, as far as the integration can see; the parent's type and id |
+| `extra.database` | a database row's database, `{id}`: every line of a row has it, a page that is not a row never |
 | `extra.actor` | `id`, `name`, `type` (`person` or `bot`) and `role` (`owner` or `other`) |
 | `extra.body` | `sha256` and `bytes` of the page's text, `words`, and `words_delta` since the page's previous line: a digest, never the text |
 | `extra.properties` | a database row's status, select, multi-select, date and checkbox values, by name |
 | `extra.changed` | each of those that changed since the page's previous line, `{name, old, new}` |
+| `extra.relations` | a database row's relation properties, `{name: [page id, …]}`: the ids of the rows it links to, as Notion gives them and in its order, never their titles |
+| `extra.relations_changed` | each relation that gained or lost an id since the row's latest line with relations, `{name, added, removed}` |
 | `extra.moved_from` | on a move, the parent and path the page had |
 
 **What a line never holds.** The page's text, its comments, its files, its cover or icon, its public
 link, anyone's email or avatar, and every property but the few above: no text, number, person, phone,
-email, url, file, formula or relation value, so a contacts database gives the names of its pages and
-none of their details. The digest lets you check a copy of the text against the line; a very short
+email, url, file, formula or rollup value, and of a relation only the ids, so a contacts database gives
+the names of its pages and none of their details. The digest lets you check a copy of the text against the line; a very short
 body could be guessed from it, as from its word count.
+
+**Relations.** A database row's links to other rows — an idea's *Areas*, a task's project — are on the
+line that holds the row as it is (the one with the body's digest), as `extra.relations`, one entry per
+relation property: `{"Areas": ["<page id>", …]}`, the ids exactly as Notion gives them and in the order
+the row has them, an empty list for a relation that links nothing. A reader learns which rows belong
+together from the record alone: the sync never looks a related page up, so the line holds no title, body
+or rollup of it, and a reader that wants the title reads the related row's own lines. The row's database
+is on every line of the row as `extra.database`, so "a row of Notes" needs no question to Notion either.
+RFC 0009 has no field for links between entries, so the ids go under `extra`, where the profile keeps
+whatever else a source reports. A relation is a change like any other: an edit that only links or
+unlinks a row writes its one line, with `extra.relations_changed` saying which relation gained and lost
+which ids (a reorder gains and loses nothing); a re-sync of a row nobody touched writes nothing. As for
+any change, a relation changed again later on a day whose line is written waits for the row's next line
+on another day (or the backfill below), which tells it against the row's latest line with relations.
+Notion serves a relation's first 25 links with a page and the rest on request; the sync asks for the
+rest, paged, and when it cannot have them all it leaves `relations` off that line and counts the row,
+never writing the first 25 as if the others were gone.
+
+**Rows synced before the record kept relations** get them with their next edit. To have them now,
+`logbook sync notion --relations-backfill` writes one line per row whose relations the record does not
+hold yet — `--dry-run` counts them first, `--since 2026-09-01` takes only the rows edited since that
+local day. Each line has `extra.action` `relations`, is dated at the row's last edit (`raw_id` `<page
+id>/<day>/relations`) and holds the row's reference, path, parent, database and its relations as the
+backfill reads them; no body, property or actor, and it reads no page's blocks. It also catches links
+set from the other side of a relation when Notion left this row's edit time alone, saying what changed
+(two lines then stand at the row's last edit, and the later in the record's order is the newer); to
+compare, it reads every relation of more than 25 links whole on every run, a request per hundred links.
+A row the record holds no line of yet is left to the next sync, which writes it with its relations; the
+backfill never moves the watermark and never stands in for an edit or a move the sync has yet to write.
+It keeps to the same three requests a second and stops on one line when Notion's rate limit does not
+lift, the lines already written kept: running it again writes only what is still missing. In the Day a
+backfilled row shows once more, at its last edit, as a second Notion entry with its title.
 
 **The tier.** Every line is tier 1: SPEC §4 and RFC 0009 give `event/v1` tier 1, and a Notion line is
 an event with a title, a place in a tree and who acted, as a calendar entry is a title, a place and an
