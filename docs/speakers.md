@@ -12,6 +12,7 @@ voiceprints that propose a name, and the text-only road for recordings whose aud
 builds. No `resolution/v1` line is written here, and no reader binds a label to a person.
 
 ```bash
+uv tool install "openlogbook[transcribe,speakers]"   # the Whisper engine and the diarizer (or pipx install --force)
 logbook setup speakers                          # what is here: the engine, each model, what the record holds; no socket
 logbook setup speakers --fetch-model            # the one network event: the models, with HF_TOKEN for those requests only
 logbook derive transcripts voice-memos          # transcribes, and separates the voices when the models are here
@@ -99,16 +100,26 @@ A memo imported without `--attachments`, a copy of the record missing a file, a 
 handed over audio: nothing is diarized at ingest, `derive transcripts` skips such a memo as it always
 did, and nothing breaks. A provider's own marks, when it gives them, are still taken by its adapter.
 
-## Without the models
+## Without the extra, or without the models
 
-When the diarizer or one of its models is not on this machine, `derive transcripts` transcribes
-exactly as before, writes no `speakers`, and says once at the end:
+When the diarizer (the `openlogbook[speakers]` extra) or one of its models is not on this machine,
+`derive transcripts` transcribes exactly as before, writes no `speakers`, and says once at the end
+which is missing. `openlogbook[transcribe]` alone, the diarizer not installed:
+
+```
+speakers: not separated (install openlogbook[speakers], then logbook setup speakers --fetch-model)
+```
+
+The extra installed and a model not fetched:
 
 ```
 speakers: not separated (logbook setup speakers --fetch-model)
 ```
 
-`--no-speakers` turns separation off for a run and says nothing of it.
+Without the extra, `setup speakers` and `derive speakers` exit 2 with the first sentence, and
+`setup speakers --fetch-model` fetches nothing: the hub client comes with `openlogbook[transcribe]`
+too, and models nothing here could run are never downloaded. `derive speakers --dry-run` hears
+nothing and needs no extra. `--no-speakers` turns separation off for a run and says nothing of it.
 
 ## Heard again: `derive speakers`
 
@@ -142,8 +153,11 @@ spans writes nothing.
 ## The models, and the one download
 
 The diarizer is [pyannote.audio](https://github.com/pyannote/pyannote-audio)'s pipeline
-`pyannote/speaker-diarization-3.1`, part of the `openlogbook[transcribe]` extra, which brings torch to
-every platform. It runs on the CPU and on Apple silicon behind either Whisper engine. The pipeline
+`pyannote/speaker-diarization-3.1`, its own extra, `openlogbook[speakers]`, which brings torch to every
+platform (and CUDA's libraries on Linux). `openlogbook[transcribe]` does not bring it, so a memo is
+transcribed without a gigabyte of torch; a machine that separates voices installs both,
+`openlogbook[transcribe,speakers]`. It runs on the CPU and on Apple silicon behind either Whisper
+engine. The pipeline
 reads two more models, `pyannote/segmentation-3.0` and the embedding model
 `pyannote/wespeaker-voxceleb-resnet34-LM`; all three are gated on Hugging Face. Accept the conditions
 on each model's page while signed in, make a read token, and:

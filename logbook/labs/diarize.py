@@ -2,8 +2,10 @@
 `derive speakers` run beside the Whisper engine, and the one command that downloads its models.
 
 The engine is pyannote.audio's pretrained pipeline `pyannote/speaker-diarization-3.1`, which runs on
-the CPU and on Apple silicon through torch behind either Whisper engine. It is part of the
-`openlogbook[transcribe]` extra and imported only when a command runs. The pipeline reads two more
+the CPU and on Apple silicon through torch behind either Whisper engine. It is the
+`openlogbook[speakers]` extra, apart from `openlogbook[transcribe]` so that a memo can be transcribed
+without torch's diarization stack (RFC 0038 open question 13), and it is imported only when a command
+separates voices: `installed` asks whether it is here without importing it. The pipeline reads two more
 models, `pyannote/segmentation-3.0` and the embedding model `pyannote/wespeaker-voxceleb-resnet34-LM`;
 all three are gated on Hugging Face behind accepting their conditions, and all three must be in the
 hub's cache on this machine before a run can separate voices.
@@ -19,7 +21,9 @@ hub is offline inside, whichever code imported it first, and a download outside 
 `derive transcripts --fetch-model` fetches) is not refused for having followed one.
 Whether the models are here is asked of the hub's cache with `local_files_only`, which opens nothing.
 `detect` answers None when the package or a model is missing, and the run then transcribes as it
-always did and says once `speakers: not separated (logbook setup speakers --fetch-model)`.
+always did and says once why: `speakers: not separated (install openlogbook[speakers], then logbook
+setup speakers --fetch-model)` without the extra, `speakers: not separated (logbook setup speakers
+--fetch-model)` with it and without the models.
 
 **The one download** is `fetch`, behind `logbook setup speakers --fetch-model` and nothing else: the
 three repositories into the hub's cache, with the owner's own access token read from `HF_TOKEN` for
@@ -31,6 +35,7 @@ page to accept them on.
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import os
 import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -45,13 +50,15 @@ SEGMENTATION = "pyannote/segmentation-3.0"
 EMBEDDING = "pyannote/wespeaker-voxceleb-resnet34-LM"
 MODELS = (MODEL, SEGMENTATION, EMBEDDING)  # what the pipeline reads; all three gated, all three fetched
 MODULE = "pyannote.audio"
+DISTRIBUTION = "pyannote.audio"  # the installed distribution `installed` looks for, by its metadata
 HUB = "huggingface_hub"
-EXTRA = "openlogbook[transcribe]"
+EXTRA = "openlogbook[speakers]"
 TOKEN = "HF_TOKEN"  # the owner's own access token, read by `fetch` alone
 PAGE = "https://huggingface.co/{repo}"
 SAMPLE_RATE = 16_000
 FETCH = "logbook setup speakers --fetch-model"
-NOT_SEPARATED = f"speakers: not separated ({FETCH})"
+NOT_SEPARATED = f"speakers: not separated ({FETCH})"  # the extra here, a model not
+NOT_INSTALLED = f"speakers: not separated (install {EXTRA}, then {FETCH})"  # the extra not here
 METRICS = "PYANNOTE_METRICS_ENABLED"
 HUB_CONSTANTS = "huggingface_hub.constants"  # where the hub keeps the offline switch it read at import
 QUIET = {
@@ -145,6 +152,25 @@ def _truthy(value: str | None) -> bool:
     return value is not None and value.strip().upper() in ("1", "ON", "YES", "TRUE")
 
 
+def installed() -> bool:
+    """Whether pyannote.audio is on this machine, the `speakers` extra, asked without importing it
+    (it brings torch): a module already in the process (None there blocks the import, so it is not
+    here), else an installed distribution of that name."""
+    if MODULE in sys.modules:
+        return sys.modules[MODULE] is not None
+    try:
+        importlib.metadata.distribution(DISTRIBUTION)
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+
+
+def missing() -> str:
+    """Why no voices are separated on this machine, in the one sentence a run ends with: the extra
+    to install when it is not here, else the command that fetches the models."""
+    return NOT_SEPARATED if installed() else NOT_INSTALLED
+
+
 def status(importer: Importer = importlib.import_module) -> Status:
     """The engine and the models on this machine; no socket (`quiet`, `local_files_only`)."""
     with quiet():
@@ -161,7 +187,7 @@ def status(importer: Importer = importlib.import_module) -> Status:
 
 def detect(importer: Importer = importlib.import_module) -> Diarizer | None:
     """The diarizer when the engine and every model are on this machine, else None (the run then
-    says `NOT_SEPARATED`). Never downloads anything. The cache is asked first, so a machine without
+    says `missing()`). Never downloads anything. The cache is asked first, so a machine without
     the models never pays for importing the engine (torch) on a run that will not use it."""
     with quiet():
         try:

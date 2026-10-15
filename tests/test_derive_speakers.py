@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
@@ -289,6 +291,41 @@ def test_without_the_diarizer_the_command_names_the_one_that_fetches_it_and_writ
     assert e.value.code == 2
     assert "logbook setup speakers --fetch-model" in capsys.readouterr().err
     assert len(_transcripts(lb)) == 1
+
+
+def test_without_the_speakers_extra_the_command_names_it_and_writes_nothing(lb, monkeypatch, capsys):
+    _heard_before(lb)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", None)  # `openlogbook[transcribe]` alone
+    monkeypatch.setattr(transcribe, "detect", lambda model, **_k: FakeEngine(model))
+    with pytest.raises(SystemExit) as e:
+        cli.main(["derive", "speakers"])
+    assert e.value.code == 2
+    assert capsys.readouterr().err.splitlines()[-1] == (
+        "speakers: not separated (install openlogbook[speakers], then logbook setup speakers --fetch-model)"
+    )
+    assert len(_transcripts(lb)) == 1
+
+
+def test_with_the_extra_and_without_the_models_the_command_names_the_fetch_alone(lb, monkeypatch, capsys):
+    _heard_before(lb)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", types.ModuleType("pyannote.audio"))
+    monkeypatch.setattr(transcribe, "detect", lambda model, **_k: FakeEngine(model))
+    with pytest.raises(SystemExit) as e:
+        cli.main(["derive", "speakers"])
+    err = capsys.readouterr().err
+    assert e.value.code == 2 and "logbook setup speakers --fetch-model" in err and "install" not in err
+    assert len(_transcripts(lb)) == 1
+
+
+def test_a_dry_run_and_nothing_to_do_need_no_speakers_extra(lb, monkeypatch, capsys):
+    """Neither hears anything, so neither needs pyannote.audio: both say what they say and exit 0."""
+    monkeypatch.setitem(sys.modules, "pyannote.audio", None)
+    cli.main(["derive", "speakers"])
+    assert "nothing to separate" in capsys.readouterr().out
+    _heard_before(lb)
+    cli.main(["derive", "speakers", "--dry-run"])
+    out = capsys.readouterr().out
+    assert "dry run: the voices of 1 transcript would be separated" in out and "openlogbook" not in out
 
 
 def test_with_nothing_to_separate_the_command_needs_no_diarizer(lb, monkeypatch, capsys):

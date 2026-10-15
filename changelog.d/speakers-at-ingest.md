@@ -1,6 +1,6 @@
 ### Added
 - Speakers, build 1 of RFC 0038: `derive transcripts` separates the voices of each recording on this
-  machine when the diarizer (pyannote.audio, in the `transcribe` extra) and its models are here, and
+  machine when the diarizer (pyannote.audio, the `speakers` extra) and its models are here, and
   the `transcript/v1` line gains `speakers` (anonymous labels `S1`, `S2`…, or `mic` and `system` for a
   call whose source keeps its sides apart, `from_me` on the microphone's one voice) and `diarization`,
   with a spans file in the attachment store; without the models it transcribes as before and says

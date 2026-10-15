@@ -2757,13 +2757,15 @@ mcp = [
 sealed = [
     { name = "pyrage" },
 ]
+speakers = [
+    { name = "pyannote-audio" },
+]
 stream = [
     { name = "ijson" },
 ]
 transcribe = [
     { name = "faster-whisper", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "pyannote-audio" },
 ]
 
 [package.dev-dependencies]
@@ -2789,12 +2791,12 @@ requires-dist = [
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'describe'", specifier = ">=0.1.20" },
     { name = "mlx-whisper", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'transcribe'", specifier = ">=0.4" },
     { name = "pillow-heif", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'describe'", specifier = ">=0.18" },
-    { name = "pyannote-audio", marker = "extra == 'transcribe'", specifier = ">=3.1" },
+    { name = "pyannote-audio", marker = "extra == 'speakers'", specifier = ">=3.1" },
     { name = "pyrage", marker = "extra == 'sealed'", specifier = ">=1.2" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
     { name = "websockets", marker = "extra == 'ais'", specifier = ">=13" },
 ]
-provides-extras = ["crypto", "sealed", "stream", "ais", "transcribe", "judge", "describe", "mcp"]
+provides-extras = ["crypto", "sealed", "stream", "ais", "transcribe", "speakers", "judge", "describe", "mcp"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4487,7 +4489,6 @@ version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "colorama", marker = "python_version < '0'" },
     { name = "rich" },
     { name = "shellingham" },
 ]

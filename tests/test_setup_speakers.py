@@ -2,10 +2,13 @@
 and the one network event, the diarization pipeline and the models it reads fetched into the Hugging
 Face cache with the owner's token read from `HF_TOKEN` for those requests only, never written, never
 printed. No other command fetches a speaker model. The hub here is a fake module put where
-`import huggingface_hub` finds it; no model is downloaded, no socket opened."""
+`import huggingface_hub` finds it; no model is downloaded, no socket opened. pyannote.audio is its own
+extra, `openlogbook[speakers]`, never part of `openlogbook[transcribe]` (RFC 0038 open question 13):
+without it this command exits 2 with the one sentence that names it, and asks the hub nothing."""
 
 from __future__ import annotations
 
+import functools
 import sys
 import types
 from pathlib import Path
@@ -19,6 +22,10 @@ from logbook.labs import diarize, transcribe
 
 TOKEN = "hf_synthetic0000000000000000000000"  # not a token: the shape of one
 TZ = "Europe/Oslo"
+NOT_INSTALLED = (
+    "speakers: not separated (install openlogbook[speakers], then logbook setup speakers --fetch-model)"
+)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class GatedRepoError(Exception):
@@ -74,6 +81,12 @@ def pyannote(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     return module
 
 
+@pytest.fixture
+def no_pyannote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """pyannote.audio not on this machine, the `speakers` extra not installed: its import fails."""
+    monkeypatch.setitem(sys.modules, "pyannote.audio", None)
+
+
 def _importer(**modules: Any) -> Any:
     def import_module(name: str) -> Any:
         if name in modules:
@@ -86,14 +99,32 @@ def _importer(**modules: Any) -> Any:
 # -- what is here ---------------------------------------------------------------------------------
 
 
-def test_without_the_extra_it_says_what_to_install_and_that_nothing_separates_voices(lb, monkeypatch, capsys):
+@pytest.mark.parametrize("argv", [["setup", "speakers"], ["setup", "speakers", "--fetch-model"]])
+def test_without_the_extra_it_exits_2_naming_it_and_asks_the_hub_nothing(
+    lb, hub, no_pyannote, no_network, monkeypatch, capsys, argv
+):
+    """`openlogbook[transcribe]` alone brings the hub client (the Whisper engines read their models
+    through it), so the hub is here; still it is asked nothing, and no speaker model is fetched that
+    nothing on this machine could run."""
+    monkeypatch.setenv("HF_TOKEN", TOKEN)
+    with pytest.raises(SystemExit) as e:
+        cli.main(argv)
+    out, err = capsys.readouterr()
+    assert e.value.code == 2 and err == f"{NOT_INSTALLED}\n" and out == ""
+    assert hub.calls == [] and no_network == []
+
+
+def test_an_installed_engine_that_will_not_import_is_named_with_its_extra(lb, monkeypatch, capsys):
+    """The distribution is here and `import pyannote.audio` fails (a broken install): the rows say so,
+    name the extra to install again and the fetch, and nothing separates voices."""
+    monkeypatch.setattr(diarize, "installed", lambda: True)
     monkeypatch.setattr(
         diarize, "status", lambda *_a, **_k: diarize.Status(None, dict.fromkeys(diarize.MODELS, False))
     )
     cli.main(["setup", "speakers"])
     out = capsys.readouterr().out
-    assert "not installed" in out and "openlogbook[transcribe]" in out
-    assert "logbook setup speakers --fetch-model" in out
+    assert "pyannote.audio not installed; install openlogbook[speakers]" in out
+    assert "[transcribe]" not in out and "logbook setup speakers --fetch-model" in out
 
 
 def test_it_names_each_model_here_or_not_and_what_the_record_holds(lb, hub, pyannote, capsys):
@@ -220,11 +251,19 @@ def test_a_refusal_is_known_by_the_hub_s_error_or_by_a_401_or_403():
             diarize.fetch({"HF_TOKEN": TOKEN}, _importer(huggingface_hub=hub))
 
 
-def test_fetch_model_without_the_extra_names_it(lb, monkeypatch, capsys):
+def test_fetch_model_without_the_extra_names_it(lb, no_pyannote, monkeypatch, capsys):
     monkeypatch.setitem(sys.modules, "huggingface_hub", None)  # an import that fails
     with pytest.raises(SystemExit) as e:
         cli.main(["setup", "speakers", "--fetch-model"])
-    assert e.value.code == 2 and "openlogbook[transcribe]" in capsys.readouterr().err
+    assert e.value.code == 2 and NOT_INSTALLED in capsys.readouterr().err
+
+
+def test_fetch_model_with_the_extra_and_no_hub_client_names_the_extra(lb, pyannote, monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, "huggingface_hub", None)  # an import that fails
+    with pytest.raises(SystemExit) as e:
+        cli.main(["setup", "speakers", "--fetch-model"])
+    err = capsys.readouterr().err
+    assert e.value.code == 2 and "install openlogbook[speakers]" in err and "[transcribe]" not in err
 
 
 def test_an_offline_shell_is_said_before_the_hub_is_asked(lb, hub, pyannote, monkeypatch, capsys):
@@ -329,7 +368,9 @@ def test_a_refusal_the_hub_wraps_in_another_error_is_still_named_as_one():
         )
 
 
-def test_the_hub_s_own_words_never_reach_the_screen_even_when_they_hold_the_token(lb, monkeypatch, capsys):
+def test_the_hub_s_own_words_never_reach_the_screen_even_when_they_hold_the_token(
+    lb, pyannote, monkeypatch, capsys
+):
     for failure in (GatedRepoError(f"denied for {TOKEN}"), RuntimeError(f"500 for Bearer {TOKEN}")):
 
         def snapshot(repo: str, failure: Exception = failure, **_options: Any) -> str:
@@ -343,9 +384,10 @@ def test_the_hub_s_own_words_never_reach_the_screen_even_when_they_hold_the_toke
             cli.main(["setup", "speakers", "--fetch-model"])
         out, err = capsys.readouterr()
         assert TOKEN not in out and TOKEN not in err and "Bearer" not in err
+        assert "could not hand over" in err or "refused" in err  # the hub was asked, and its words held back
 
 
-def test_transformers_offline_is_an_offline_shell_too(lb, hub, monkeypatch, capsys):
+def test_transformers_offline_is_an_offline_shell_too(lb, hub, pyannote, monkeypatch, capsys):
     monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
     with pytest.raises(SystemExit) as e:
@@ -449,28 +491,121 @@ def test_hearing_again_has_the_hub_s_own_switch_off_too(lb, monkeypatch):
     assert seen == [True] and constants.HF_HUB_OFFLINE is False  # type: ignore[attr-defined]
 
 
-def test_the_diarizer_is_in_the_transcribe_extra_and_nowhere_else():
+def test_the_diarizer_is_its_own_extra_speakers_and_nowhere_else():
+    """`openlogbook[transcribe]` declares the two Whisper engines it declared before speakers 1, and
+    nothing else; pyannote.audio is `openlogbook[speakers]`, alone, in no other extra, group or base
+    dependency (RFC 0038 open question 13). Names are read as an installer reads them, so neither
+    `pyannote_audio` nor `Pyannote.Audio` passes for another package."""
     import tomllib
 
-    project = tomllib.loads(
-        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
-    )
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     def names(specs: list[str]) -> set[str]:
-        return {
-            spec.split(";")[0].split(">")[0].split("=")[0].split("<")[0].strip().lower() for spec in specs
-        }
+        return {canonicalize_name(Requirement(spec).name) for spec in specs}
 
     extras = project["project"]["optional-dependencies"]
-    assert "pyannote.audio" in names(extras["transcribe"])
+    assert names(extras["transcribe"]) == {"mlx-whisper", "faster-whisper"}
+    assert names(extras["speakers"]) == {"pyannote-audio"}
+    assert all("pyannote-audio" not in names(specs) for extra, specs in extras.items() if extra != "speakers")
+    assert "pyannote-audio" not in names(project["project"]["dependencies"])
     assert all(
-        "pyannote.audio" not in names(specs) for extra, specs in extras.items() if extra != "transcribe"
-    )
-    assert "pyannote.audio" not in names(project["project"]["dependencies"])
-    assert all(
-        "pyannote.audio" not in names([s for s in specs if isinstance(s, str)])
+        "pyannote-audio" not in names([s for s in specs if isinstance(s, str)])
         for specs in project["dependency-groups"].values()
     )
+
+
+# What each extra resolves to in uv.lock, on each platform the tests run on and Linux on ARM, under
+# each Python CI runs: the packages `pip install "openlogbook[EXTRA]"` brings there, the extra's own
+# markers and each edge's evaluated with that platform's values (`packaging.markers`, as an installer
+# evaluates them; every variable given, so no marker is judged by the machine the test runs on).
+PLATFORMS = {
+    "linux-x86_64": {"sys_platform": "linux", "platform_machine": "x86_64", "platform_system": "Linux"},
+    "linux-aarch64": {"sys_platform": "linux", "platform_machine": "aarch64", "platform_system": "Linux"},
+    "macos-arm64": {"sys_platform": "darwin", "platform_machine": "arm64", "platform_system": "Darwin"},
+    "macos-x86_64": {"sys_platform": "darwin", "platform_machine": "x86_64", "platform_system": "Darwin"},
+    "windows-amd64": {"sys_platform": "win32", "platform_machine": "AMD64", "platform_system": "Windows"},
+}
+PYTHONS = ("3.12", "3.13")
+# what pyannote.audio brings and the Whisper engines never did: the diarizer and its training stack
+DIARIZER = ("pyannote-", "torch-audiomentations", "torchaudio", "lightning", "pytorch-lightning", "optuna")
+# torch and what it brings off Apple silicon, where only mlx-whisper (never faster-whisper) needs torch
+TORCH = ("torch", "triton", "nvidia-", "cuda-")
+
+
+@functools.cache
+def _lock() -> dict[str, Any]:
+    import tomllib
+
+    lock: dict[str, Any] = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    return lock
+
+
+def _resolved(extra: str, platform: str, python: str) -> set[str]:
+    from packaging.markers import Marker
+
+    environment = {
+        "python_version": python,
+        "python_full_version": f"{python}.0",
+        "implementation_name": "cpython",
+        "implementation_version": f"{python}.0",
+        "platform_python_implementation": "CPython",
+        "platform_release": "",
+        "platform_version": "",
+        "os_name": "nt" if PLATFORMS[platform]["sys_platform"] == "win32" else "posix",
+        "extra": "",
+        **PLATFORMS[platform],
+    }
+    packages: dict[str, list[dict[str, Any]]] = {}
+    for package in _lock()["package"]:
+        packages.setdefault(package["name"], []).append(package)
+    [root] = packages["openlogbook"]
+
+    def edges(deps: list[dict[str, Any]]) -> list[tuple[str, str | None]]:
+        here = [d for d in deps if "marker" not in d or Marker(d["marker"]).evaluate(environment)]
+        return [(d["name"], None) for d in here] + [(d["name"], e) for d in here for e in d.get("extra", [])]
+
+    todo, seen = edges(root["optional-dependencies"][extra]), set()
+    while todo:
+        name, wanted = todo.pop()
+        if (name, wanted) in seen:
+            continue
+        seen.add((name, wanted))
+        for package in packages[name]:  # every version of a name the lock holds: never fewer than installed
+            todo += edges(
+                package.get("dependencies", [])
+                if wanted is None
+                else package.get("optional-dependencies", {}).get(wanted, [])
+            )
+    return {name for name, _wanted in seen}
+
+
+@pytest.mark.parametrize("python", PYTHONS)
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_the_transcribe_extra_resolves_to_none_of_the_diarizer(platform, python):
+    """uv.lock, read: `openlogbook[transcribe]` brings what it brought before speakers 1, its Whisper
+    engine and that engine's own dependencies, and nothing of pyannote's; torch only on Apple silicon,
+    where mlx-whisper needs it, and CUDA nowhere. `openlogbook[speakers]` is where they all are."""
+    transcribe_extra = _resolved("transcribe", platform, python)
+    speakers_extra = _resolved("speakers", platform, python)
+    engine = "mlx-whisper" if platform == "macos-arm64" else "faster-whisper"
+    assert engine in transcribe_extra and "huggingface-hub" in transcribe_extra  # the reader reads
+    assert not {name for name in transcribe_extra if name.startswith(DIARIZER)}
+    assert "pyannote-audio" not in transcribe_extra and "torch-audiomentations" not in transcribe_extra
+    if platform != "macos-arm64":
+        assert not {name for name in transcribe_extra if name.startswith(TORCH)}
+    assert not {name for name in transcribe_extra if name.startswith(("nvidia-", "cuda-", "triton"))}
+    assert {"pyannote-audio", "torch-audiomentations", "torch"} <= speakers_extra
+    assert not {"faster-whisper", "mlx-whisper"} & speakers_extra  # voices are separated, not heard
+
+
+def test_the_lock_declares_the_speakers_extra():
+    [root] = [package for package in _lock()["package"] if package["name"] == "openlogbook"]
+    assert "speakers" in root["metadata"]["provides-extras"]
+    assert [d["name"] for d in root["optional-dependencies"]["speakers"]] == ["pyannote-audio"]
+    assert "pyannote-audio" not in [d["name"] for d in root["optional-dependencies"]["transcribe"]]
 
 
 def test_detect_asks_the_cache_before_it_imports_the_engine():

@@ -10,6 +10,8 @@ import math
 import os
 import socket
 import struct
+import sys
+import types
 import wave
 from array import array
 from pathlib import Path
@@ -26,6 +28,22 @@ TZ = "Europe/Oslo"
 RATE = 16_000
 SECONDS = 2
 MEMO = "voice-memos"
+NOT_SEPARATED = "speakers: not separated (logbook setup speakers --fetch-model)"
+NOT_INSTALLED = (
+    "speakers: not separated (install openlogbook[speakers], then logbook setup speakers --fetch-model)"
+)
+
+
+@pytest.fixture
+def speakers_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`openlogbook[speakers]` installed, as far as `import pyannote.audio` can tell; no model."""
+    monkeypatch.setitem(sys.modules, "pyannote.audio", types.ModuleType("pyannote.audio"))
+
+
+@pytest.fixture
+def no_speakers_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`openlogbook[transcribe]` alone: pyannote.audio is not here, and importing it fails."""
+    monkeypatch.setitem(sys.modules, "pyannote.audio", None)
 
 
 def _wav(seconds: float = SECONDS, tone_hz: float = 440.0, channels: int = 1) -> bytes:
@@ -527,7 +545,7 @@ def test_the_text_is_the_same_whether_or_not_the_voices_were_separated(lb, tmp_p
     } | {"provenance": with_voices["payload"]["provenance"]}
 
 
-def test_without_the_model_the_line_is_today_s_and_the_run_says_so_once_at_the_end(lb):
+def test_without_the_model_the_line_is_today_s_and_the_run_says_so_once_at_the_end(lb, speakers_extra):
     _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
     _memo(lb, "7A1B2C3D-0000-4000-8000-000000000002", "2026-03-03T20:14:07Z", audio=_wav())
     report = transcribe.run(lb, FakeEngine(), diarizer=None)
@@ -547,6 +565,32 @@ def test_without_the_model_the_line_is_today_s_and_the_run_says_so_once_at_the_e
     text = transcribe.describe(report)
     assert text.count("speakers: not separated (logbook setup speakers --fetch-model)") == 1
     assert text.splitlines()[-1] == "speakers: not separated (logbook setup speakers --fetch-model)"
+    assert "install" not in text  # the extra is here: what is missing is the models
+
+
+def test_without_the_speakers_extra_the_line_is_today_s_and_the_run_names_the_extra_once(
+    lb, tmp_path, no_speakers_extra
+):
+    """`openlogbook[transcribe]` alone transcribes exactly as before: the same line as a run told not
+    to separate voices, and one closing sentence that names the extra and then the fetch."""
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000002", "2026-03-03T20:14:07Z", audio=_wav())
+    report = transcribe.run(lb, FakeEngine(), diarizer=None)
+    other = Logbook.init(tmp_path / "other", TZ)
+    _memo(other, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    _memo(other, "7A1B2C3D-0000-4000-8000-000000000002", "2026-03-03T20:14:07Z", audio=_wav())
+    transcribe.run(other, FakeEngine(), diarizer=None, separate=False)
+    assert report.written == 2
+
+    def heard(record: Logbook) -> list[dict[str, Any]]:  # the memo's line id is the record's own
+        return [
+            line["payload"] | {"provenance": {**line["payload"]["provenance"], "source": None}}
+            for line in _transcripts(record)
+        ]
+
+    assert heard(lb) == heard(other)
+    text = transcribe.describe(report)
+    assert text.count("speakers: not separated") == 1 and text.splitlines()[-1] == NOT_INSTALLED
 
 
 def test_told_not_to_the_run_neither_separates_nor_says_anything_about_it(lb):
@@ -695,7 +739,7 @@ def test_the_command_separates_with_the_diarizer_here_and_asks_the_engine_for_wo
 
 
 def test_the_command_without_the_model_transcribes_and_names_the_command_that_fetches_it(
-    lb, monkeypatch, capsys
+    lb, speakers_extra, monkeypatch, capsys
 ):
     _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
     asked: list[dict[str, Any]] = []
@@ -710,6 +754,42 @@ def test_the_command_without_the_model_transcribes_and_names_the_command_that_fe
     assert asked == [{"words": False}]
     assert out.count("speakers: not separated (logbook setup speakers --fetch-model)") == 1
     assert "transcribed 1 voice memo" in out and "speakers" not in _transcripts(lb)[0]["payload"]
+
+
+def test_the_command_without_the_speakers_extra_transcribes_as_before_and_names_it_once(
+    lb, no_speakers_extra, monkeypatch, capsys
+):
+    """`openlogbook[transcribe]` alone, the hub client here with every speaker model in its cache (a
+    machine that fetched them once): the memo is transcribed as before, without word times, and the
+    run ends with the one sentence that names the extra; nothing is diarized."""
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    asked: list[dict[str, Any]] = []
+
+    def detect(model: str, **kwargs: Any) -> FakeEngine:
+        asked.append(kwargs)
+        return FakeEngine(model)
+
+    hub = types.ModuleType("huggingface_hub")
+    hub.snapshot_download = lambda repo, **_options: f"/cache/{repo}"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
+    monkeypatch.setattr(transcribe, "detect", detect)
+    cli.main(["derive", "transcripts", "voice-memos"])
+    out = capsys.readouterr().out
+    assert asked == [{"words": False}]
+    assert out.count("speakers: not separated") == 1 and out.splitlines()[-1] == NOT_INSTALLED
+    assert "transcribed 1 voice memo" in out
+    [line] = _transcripts(lb)
+    assert "speakers" not in line["payload"] and "diarization" not in line["payload"]
+
+
+def test_the_command_with_no_speakers_says_nothing_of_the_extra_either(
+    lb, no_speakers_extra, monkeypatch, capsys
+):
+    _memo(lb, "7A1B2C3D-0000-4000-8000-000000000001", "2026-03-02T20:14:07Z", audio=_wav())
+    monkeypatch.setattr(transcribe, "detect", lambda model, **_k: FakeEngine(model))
+    cli.main(["derive", "transcripts", "voice-memos", "--no-speakers"])
+    out = capsys.readouterr().out
+    assert "transcribed 1 voice memo" in out and "speakers" not in out and "openlogbook" not in out
 
 
 def test_the_command_with_no_speakers_asks_for_no_diarizer_and_says_nothing_of_voices(
