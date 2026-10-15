@@ -7,8 +7,9 @@ as `apple-photos` writes it, or under `extra`, as `immich` does) and an `art` ke
 photo is in an album named Art (`albums` or `album`, at the top or under `extra`). The
 draft's `raw_id` is `<photo line id>:<lane>`, so `append_many` writes each mark once, and a
 retracted keeper (an unmarked favourite) is never written again because its `(source, raw_id)` is
-still in the record. `standing(lines)` is the reader: the keeper lines not retracted, for
-`logbook keepers` and for a day's hero photos. `people_by_month` is `logbook keepers --people`:
+still in the record. `standing(lines)` is the reader: the keeper lines not retracted and not named
+in a later keeper's `supersedes` (RFC 0024's amendment of 2026-10-14), for `logbook keepers` and for
+a day's hero photos. `people_by_month` is `logbook keepers --people`:
 who appears on the keepers, per month, from the faces the library named on each keeper's photo
 line (`extra.faces`) and the people it tagged by id (`people`), every one a proposal — a face
 never confirms (the with module's rule, `present.from_photos`). Nothing here opens a file or a
@@ -94,10 +95,21 @@ def infer(photos: Iterable[Line], counts: dict[str, int] | None = None) -> Itera
 
 
 def standing(lines: Iterable[Line]) -> list[Line]:
-    """The keeper lines not retracted, in chain order, from keeper and retraction lines."""
+    """The keeper lines standing, in chain order, from keeper and retraction lines: not retracted,
+    and not named in a later keeper's `supersedes` (SPEC §3.2; a star given a new note, RFC 0024's
+    amendment of 2026-10-14)."""
     kept = sorted(lines, key=lambda line: int(line["seq"]))
     retracted = retractions(line for line in kept if line.get("kind") == RETRACTION)
-    return [line for line in kept if line.get("kind") == KIND and str(line["id"]) not in retracted]
+    superseded = {
+        str(by)
+        for line in kept
+        if line.get("kind") == KIND and isinstance(by := (line.get("payload") or {}).get("supersedes"), str)
+    }
+    return [
+        line
+        for line in kept
+        if line.get("kind") == KIND and str(line["id"]) not in retracted and str(line["id"]) not in superseded
+    ]
 
 
 def summary(line: Line, day: str) -> dict[str, Any]:
@@ -114,9 +126,12 @@ def summary(line: Line, day: str) -> dict[str, Any]:
 
 
 def text(line: Line) -> str:
-    """A keeper as `show` prints it: `hero photo (memory): IMG_0001.HEIC`."""
+    """A keeper as `show` prints it: `hero photo (memory): IMG_0001.HEIC`, then the owner's note
+    when the star carries one (RFC 0024's amendment of 2026-10-14)."""
     payload = line.get("payload") or {}
-    return f"hero photo ({payload.get('lane')}): {name_of(line)}"
+    note = payload.get("note")
+    head = f"hero photo ({payload.get('lane')}): {name_of(line)}"
+    return f"{head} · {note}" if isinstance(note, str) and note else head
 
 
 def name_of(line: Line) -> str:

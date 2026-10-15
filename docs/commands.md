@@ -1,6 +1,6 @@
 # The commands
 
-`logbook` has 28 commands, grouped here by what you are doing. `logbook --help` is this list on one
+`logbook` has 31 commands, grouped here by what you are doing. `logbook --help` is this list on one
 screen; `logbook <command> --help` has a command's arguments. Everything that was a command of its
 own before 0.6 still answers to its old name: it prints one line saying the new one and runs it (the
 table at the end, generated from the code by `scripts/command_aliases.py`).
@@ -32,6 +32,9 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 | `chapter` | a stretch of your life you name, one `chapter/v1` line, tier 2: `chapter open NAME [--from DAY] [--to DAY] [--rules TEXT]`, `chapter close [--to DAY]` (the open chapter written again with its last day), `chapter list [--json]`; chapters do not overlap, and the Day's header names the chapter a day is in ([goals](goals.md#chapters)) |
 | `review` | one sitting for what the sources saw and the record has not placed: `review person` (= `people review`), `review org`, `review idea`, `review asset`, `review place` (= `setup places review`), each proposal numbered with its evidence or as a new one; `--accept N[,N]`, `--name N "…"`, `--reject N[,N]`, `--all-above SCORE`; nothing written unless told, nothing looked up; `review` alone lists every queue ([review](review.md)) |
 | `status` | `status KIND ENTITY DISPOSITION [--reason "…"] [--at YYYY-MM-DD]`: what you decided about an org (`hold`, `add`, `sell`, `let-go`, `exited`, `passed`), an idea (`spark`, `exploring`, `build`, `built`, `killed`), a place (`let-go`) or an asset (`sold`, `let-go`), one `status/v1` line, tier 3 for an org and 2 for the rest, the reason on it, and for an idea, a place or an asset also as a tier-2 note (an org's reason stays on its tier-3 line); a place or asset it closes keeps its registry entry, closed with `until`; `status list KIND` ([the profiles](entities.md#statusv1)) |
+| `star` | `star LINE [--note TEXT]` marks a line worth keeping: one `star/v1` line at the line's own time and tier, so it travels where the line does; a photo's star is a `memory` keeper, the Day's hero and the photo the press picks; starred again with another note, the new note supersedes ([the acts](acts.md)) |
+| `unstar` | `unstar LINE` takes a star back: a retraction of the line's star, or of each `memory` keeper of a photo, at the star's tier; nothing is rewritten ([the acts](acts.md)) |
+| `with` | `with DAY NAME [NAME…] [--at HH:MM]` says who was there when the record could not see: one `note/v1` line per person, `with <name>`, which `people` and the Day read as company; a name the record does not place is refused with the `people review` hint ([the acts](acts.md)) |
 
 ## Read
 

@@ -29,7 +29,7 @@ from hypothesis import strategies as st
 
 from logbook import cli
 from logbook.contrib import demo
-from logbook.core import rollup
+from logbook.core import keepers, rollup
 from logbook.core.index import local_date
 from logbook.core.keepers import LANES
 from logbook.core.store import Logbook
@@ -143,10 +143,11 @@ OPTIONAL: dict[str, tuple[str, ...]] = {
     "transaction/v1": ("merchant", "category", "date", "account", "status", "note", "extra"),
     "highlight/v1": ("title", "author", "asset_id", "note", "location", "page", "modified_at", "extra"),
     "voice-memo/v1": ("title", "duration_s", "file_name", "media", "folder", "extra"),
-    "keeper/v1": ("marked_at", "supersedes"),
+    "keeper/v1": ("marked_at", "supersedes", "note"),
     "goal/v1": ("until", "supersedes"),
     "review/v1": ("note",),
     "chapter/v1": ("to", "supersedes"),
+    "star/v1": ("note", "supersedes"),
 }
 
 # IANA-shaped, in no edition of the zone database: a name a newer edition has and this host lacks.
@@ -238,9 +239,35 @@ def goals_and_chapters(drafts: list[Draft], rng: random.Random) -> None:
     )  # fmt: skip
 
 
+def owner_acts(drafts: list[Draft], rng: random.Random) -> None:
+    """The owner's acts on lines already there: a star on a few lines (RFC 0041; a photo's is a
+    `memory` keeper, RFC 0024) at each line's `at` and tier, and on a few days the note `logbook with`
+    writes, `with <name>` labelled `with`."""
+    marked = [d for d in drafts if d["kind"] not in ("star", "keeper", "retraction", "resolution")]
+    for d in rng.sample(marked, min(8, len(marked))):
+        d.setdefault("id", str(uuid.UUID(int=rng.getrandbits(128), version=4)))  # a draft may bring its id
+        if d["kind"] == "photo":
+            keeper = keepers.draft(d, keepers.MEMORY)
+            keeper["source"] = keeper["payload"]["source"] = "manual"
+            keeper["payload"]["note"] = "worth keeping"
+            drafts.append(keeper)
+            continue
+        star = {"schema": "star/v1", "line": d["id"], "kind": d["kind"], "note": "worth keeping"}
+        drafts.append({"at": d["at"], "source": "manual", "kind": "star", "tier": d["tier"], "payload": star})
+    for d in rng.sample(drafts, min(3, len(drafts))):
+        said = {
+            "schema": "note/v1",
+            "text": "with Ola Nordmann",
+            "labels": ["with"],
+            "extra": {"person": "p"},
+        }
+        drafts.append({"at": d["at"], "source": "manual", "kind": "note", "tier": 2, "payload": said})
+
+
 MUTATIONS: dict[str, Mutation | None] = {
     "goals-and-chapters": goals_and_chapters,
     "optional-fields": drop_optional_fields,
+    "owner-acts": owner_acts,
     "string-chat": string_chat,
     "unknown-line-tz": unknown_line_tz,
     "tier-3-day": tier_3_day,

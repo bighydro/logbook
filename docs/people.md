@@ -80,7 +80,9 @@ lines that name them included, so it is 2 in practice and 3 when a transcript wa
   `trips` and `rollup people`): an attendee of a timed calendar entry held at one of your stays, a
   speaker of a recording made inside it, a note written there that says "with <name>". The day is
   the evidence line's own. A tagged face and an all-day entry's attendee are proposals, not a day
-  together.
+  together. `logbook with DAY NAME [--at HH:MM]` writes that note for you when no source saw them:
+  one line per person, `with <name>`, at the clock you give (noon without one), so the stay it falls
+  in counts the day ([the acts](acts.md)).
 - **Nights under one roof**: the nights whose overnight stay the person was confirmed at on that
   day — the night at anchor after the note says you grilled with them, the night of the dinner in
   the hotel.

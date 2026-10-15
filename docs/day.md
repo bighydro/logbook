@@ -74,7 +74,9 @@ are as they always were.
    `away`; `in transit` when no stay reaches the minimum); the country, from the night's position
    by the same rule `rollup countries` uses (a place's own country, else the nearest large
    airport's zone), from the longest stay of the day when the night is in transit; the day's
-   all-day calendar entries. Beside the night after's place, the day's weather in short, `4° ·
+   all-day calendar entries; and, on a day you said who was there (`logbook with`, [the
+   acts](acts.md)), **with**: everyone a row confirms and everyone you stated, your word marked
+   `(you said)`. Beside the night after's place, the day's weather in short, `4° ·
    rain`, when the day has a [weather](adapters/weather.md) line of that place.
 
    Under the night before, **the Night line**, when a night ends on the day:
@@ -125,7 +127,8 @@ are as they always were.
    stay — and **proposed** — a face the photo library tagged, by id or by the name it gave it
    (`extra.faces`; a person only when the name is exactly a resolution line's label, else as
    written), an attendee of an all-day entry. The owner is never their own company. A move
-   carries attachments but no company.
+   carries attachments but no company. A line you starred (`logbook star`) is marked `★` where it
+   is listed, your goal, review and chapter rows among them.
 3. **Unplaced** — the day's events, transcripts, notes, mail and calls that fall inside no stay or
    move: what the calendar planned where the track has nothing, or what happened while the tracker
    was silent.
@@ -366,7 +369,11 @@ object carries `reflection`, the latest standing one: `line`, `seq`, `at`, `at_l
 `text`; the key is absent on every other day. Likewise `chapter` (`name`, `line`, `from`, `to`, and `clash` when another
 standing chapter holds the day), `reviews` (`line`, `goal`, `goal_text`, `disposition`, `period`,
 `note`, `recorded_at`), `goals` and `chapters` (the lines written on the day, each with `superseded`)
-are there only on a day that has them ([goals](goals.md#on-the-day)).
+are there only on a day that has them ([goals](goals.md#on-the-day)). On a day with a star
+standing (`logbook star`, RFC 0041) it carries `stars`, each `{line, star, kind, note}`: the starred line, the star line, the starred line's kind
+and your note; a photo's star is its keeper, under `keepers` as before. On a day you said who was
+there (`logbook with`) it carries `stated`, each `{person, name, at, line}`. Both keys are absent on
+every other day ([the acts](acts.md)).
 
 ## A window of days
 

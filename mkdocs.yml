@@ -104,6 +104,7 @@ nav:
   - "Speakers: who spoke": speakers.md
   - The synthesis prompt: synthesis-prompt.md
   - In a browser: serve.md
+  - The acts: acts.md
   - The rollups: rollups.md
   - The lab: labs.md
   - The ledger: ledger.md

@@ -40,6 +40,15 @@ the keepers as hero photos. `--print` needs `--html PATH`; alone it exits 2 and 
 
 Page numbers come from the page counter and sit in the bottom margin; the cover has none.
 
+## The photos are the ones you starred
+
+The press picks no picture of its own. A span's photo page is its **keepers** (RFC 0024): the photos
+your library marked favourites (`logbook derive keepers` reads them in) and the photos you starred,
+`logbook star PHOTO-LINE [--note TEXT]` or the star beside a photo on the Day page of `serve`
+([the acts](acts.md)). A photo star is a keeper of lane `memory`; its note is printed under the photo
+as its caption. To choose the pictures of a year's book or a trip's, star them; to take one out,
+`logbook unstar` it. The Art album's keepers (lane `art`) are laid out too.
+
 ## Photos are referenced, never copied
 
 A keeper points at a `photo/v1` line, and the document points at that photo's pixels where they

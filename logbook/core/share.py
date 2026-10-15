@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import crossing, day_start, policy
+from . import crossing, day_start, policy, stars
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -265,7 +265,9 @@ class Selection:
 
 def select(lb: Logbook, day: str, max_tier: int) -> Selection:
     """The day's lines at or under `max_tier`, in time order then chain order (SPEC §3.2): a
-    retracted line stays home, and a retraction is not an event of the day it was written."""
+    retracted line stays home, and a retraction is not an event of the day it was written. A star
+    (RFC 0041) is at its line's day and tier, so it crosses with its line, and never without it; so
+    does a photo's star, its `memory` keeper (`stars.beside`)."""
     with lb.index() as idx:
         rows = [line for line in idx.day(day) if line.get("kind") != RETRACTION]
         retracted = retractions(idx.retractions())
@@ -273,6 +275,8 @@ def select(lb: Logbook, day: str, max_tier: int) -> Selection:
     lines = sorted(
         (line for line in rows if int(line["tier"]) <= max_tier), key=lambda r: (str(r["at"]), int(r["seq"]))
     )
+    crossing_ids = {str(line["id"]) for line in lines}
+    lines = [line for line in lines if stars.beside(line, crossing_ids)]
     blobs, missing = crossing.blobs(lb, lines)
     return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing)
 

@@ -107,7 +107,7 @@ import textwrap
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime, time, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from . import (
@@ -120,12 +120,14 @@ from . import (
     ledger,
     notes,
     policy,
+    presence,
     present,
     readiness,
     reading,
     share,
     signing,
     speakers,
+    stars,
     stays,
     story,
     trips,
@@ -145,6 +147,7 @@ from .store import Logbook, retractions
 ABOARD, FLIGHT, GAP = "aboard", "flight", "gap"
 NAMED = ("event", "transcript", "note", "mail", "call", keepers.KIND)  # attachments listed by name
 COUNTED = ("message", "photo")  # attachments counted
+STATED = "you said"  # how the Day marks a person the owner stated present (`logbook with`)
 PLACED = ("event", "transcript", "note", "mail", "call")  # the kinds `unplaced` lists
 NOTE_CHARS = 72
 REFLECTION_WIDTH = 76  # the reflection's words, wrapped under its label
@@ -207,6 +210,12 @@ def read(
     if syntheses_withheld:
         data["syntheses_withheld"] = syntheses_withheld  # only on a day with a call's synthesis withheld
     data.update(owner_lines(day, on_day, chapters, goal_lines, retracted, tz))
+    starred = stars_of(on_day, retracted)
+    if starred:  # RFC 0041: only on a day with a star standing; the Day's object is otherwise unchanged
+        data["stars"] = starred
+    said = stated_of(on_day, retracted)
+    if said:  # `logbook with`: only on a day the owner said who was there
+        data["stated"] = said
     data["readiness"] = readiness.of_lines(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
@@ -918,16 +927,19 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         head += f"{DOT}{span_words(data['day_start'])}"
     yield head
     marks = _marks(data)
+    company = company_of_day(data)
     yield _row("night before", night_text(data["nights"]["before"]))
     if data.get("night"):  # the night that ended on the day, slept through the night before's place
         yield _row("night", slept_text(data["night"], data["tz"]))
     yield _row("night after", night_text(data["nights"]["after"]) + _weather_beside(data))
     yield _row("country", country_text(data["country"]))
     if data["all_day"]:
-        yield _row(
-            "all day",
-            ", ".join(signing.mark(marks, a["line"]) + a["title"] + sources_text(a) for a in data["all_day"]),
+        entries = (
+            _mark(marks, a["line"], also=a["lines"]) + a["title"] + sources_text(a) for a in data["all_day"]
         )
+        yield _row("all day", ", ".join(entries))
+    if any(c["stated"] for c in company):  # the owner's word on the day: everyone, theirs marked
+        yield _row("with", company_text(company))
     if data.get("reflection"):
         yield ""
         yield from reflection_rows(data["reflection"], tz)
@@ -952,7 +964,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield ""
         for item in data["unplaced"]:
             span = span_text(item["at"], item["end"], tz)
-            mark = signing.mark(marks, item["line"])
+            mark = _mark(marks, item["line"], also=item.get("lines", ()))
             lead = f"{span}  {item['kind']:<6} {mark}"
             yield _row("unplaced", f"{lead}{item['title']}{sources_text(item)}{voices_text(item)}")
             if item["kind"] == "transcript":  # its synthesis, or the policy's row, under the title
@@ -987,13 +999,17 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
 def owner_rows(data: Mapping[str, Any]) -> Iterator[str]:
     """The reviews made on the day (`let go · month · <goal> · <note> · written 2026-10-11 20:30`),
     then the goal and chapter lines written on it, each `· superseded` when a later line replaced
-    it (RFC 0036)."""
+    it (RFC 0036); a line the owner starred (RFC 0041) begins with the star."""
+    starred = _marks(data).starred
     for i, row in enumerate(data.get("reviews") or ()):
-        yield _row("reviews" if i == 0 else "", goals.review_row_text(row, str(data["day"]), str(data["tz"])))
+        text = goals.review_row_text(row, str(data["day"]), str(data["tz"]))
+        yield _row("reviews" if i == 0 else "", stars.mark(starred, row.get("line")) + text)
     for row in data.get("goals") or ():
-        yield _row("goal", goals.goal_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
+        text = goals.goal_text(row) + (f"{DOT}superseded" if row.get("superseded") else "")
+        yield _row("goal", stars.mark(starred, row.get("line")) + text)
     for row in data.get("chapters") or ():
-        yield _row("chapter", chapter.row_text(row) + (f"{DOT}superseded" if row.get("superseded") else ""))
+        text = chapter.row_text(row) + (f"{DOT}superseded" if row.get("superseded") else "")
+        yield _row("chapter", stars.mark(starred, row.get("line")) + text)
 
 
 def syntheses_of(data: Mapping[str, Any]) -> dict[str, list[Mapping[str, Any]]]:
@@ -1004,6 +1020,54 @@ def syntheses_of(data: Mapping[str, Any]) -> dict[str, list[Mapping[str, Any]]]:
     for block in [*(data.get("syntheses") or []), *(data.get("syntheses_withheld") or [])]:
         found.setdefault(str(block["transcript"]), []).append(block)
     return found
+
+
+def stars_of(lines: Sequence[Line], retracted: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """The day's `stars` (RFC 0041): the `star/v1` lines standing on the day's lines, in the day's
+    order, each `{line, star, kind, note}`; a star is on its line's day, so the day's lines hold
+    both, and one whose line is not among them (above the reader's gate) or is a model's draft is
+    not listed (`stars.shown`). A photo's star is its keeper, which the Day lists under `keepers` as
+    it always has."""
+    found = stars.standing([line for line in lines if line.get("kind") == stars.KIND], frozenset(retracted))
+    found = stars.shown(found, {str(line["id"]): line for line in lines})
+    order = {str(line["id"]): n for n, line in enumerate(lines)}
+    return [s.to_json() for s in sorted(found.values(), key=lambda s: order.get(s.line, len(order)))]
+
+
+def stated_of(lines: Sequence[Line], retracted: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """The day's `stated`: who the owner said was there (`logbook with`), in the day's order, each
+    `{person, name, at, line}`."""
+    return [
+        {
+            "person": presence.person_of(line),
+            "name": presence.name_of(line),
+            "at": str(line["at"]),
+            "line": str(line["id"]),
+        }
+        for line in presence.stated(lines, retracted)
+    ]
+
+
+def company_of_day(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Everyone with the owner on the day: the people confirmed at any row, each once, in the day's
+    order, then the people the owner stated who were not; `stated` true for each the owner said was
+    there, whatever else confirms them."""
+    found: dict[str, dict[str, Any]] = {}
+    for entry in data["timeline"]:
+        for c in (entry.get("with") or {}).get("confirmed") or []:
+            key = str(c.get("person") or str(c.get("name") or "").casefold())
+            found.setdefault(key, {"person": c.get("person"), "name": c["name"], "stated": False})
+    for s in data.get("stated") or []:
+        key = str(s.get("person") or str(s.get("name") or "").casefold())
+        found.setdefault(key, {"person": s.get("person"), "name": s["name"], "stated": False})["stated"] = (
+            True
+        )
+    return list(found.values())
+
+
+def company_text(company: Sequence[Mapping[str, Any]]) -> str:
+    """`Kari Nordmann, Ola Nordmann (you said)`: the day's company, the owner's word marked."""
+    return ", ".join(str(c["name"]) + (f" ({STATED})" if c["stated"] else "") for c in company)
 
 
 def reflection_json(line: Line, tz: str) -> dict[str, Any]:
@@ -1040,11 +1104,28 @@ def anniversary_text(item: Mapping[str, Any]) -> str:
     return f"{ago}, {item['day']}: {item['name']}{DOT}{item['where']}"
 
 
-def _marks(data: Mapping[str, Any]) -> dict[str, str]:
-    """The dispositions of the day's standing signature, line id → word; empty on an unsigned day."""
+class Marks(NamedTuple):
+    """What a row of the Day's text may carry before its title: the dispositions of the day's standing
+    signature (line id → word; empty on an unsigned day) and the starred lines (RFC 0041)."""
+
+    dispositions: Mapping[str, str]
+    starred: frozenset[str]
+
+
+def _marks(data: Mapping[str, Any]) -> Marks:
     signed = data.get("signed")
     found = signed.get("dispositions") if isinstance(signed, dict) else None
-    return dict(found) if isinstance(found, dict) else {}
+    starred = frozenset(str(s["line"]) for s in data.get("stars") or [])
+    return Marks(dict(found) if isinstance(found, dict) else {}, starred)
+
+
+def _mark(marks: Marks | None, *line_ids: str | None, also: Iterable[str] = ()) -> str:
+    """The disposition's symbol of `line_ids` (`signing.mark`, the ids main's Day reads it on), then
+    the star when any of `line_ids` or `also` is starred: a folded calendar entry is starred through
+    any of the lines it stands for."""
+    if marks is None:
+        return ""
+    return signing.mark(marks.dispositions, *line_ids) + stars.mark(marks.starred, *line_ids, *also)
 
 
 def received_text(page: dict[str, Any]) -> str:
@@ -1100,18 +1181,19 @@ def _entry_rows(
     tz: ZoneInfo,
     indent: str,
     inside: bool = False,
-    marks: Mapping[str, str] | None = None,
+    marks: Marks | None = None,
     syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> Iterator[str]:
     """One row for the entry, then its inner rows (an `aboard` entry's), then one row per named
     attachment and one for its company. `inside` rows are an asset's own grammar and do not repeat
-    the asset's name. `marks` are the signed day's dispositions by line id: a named line that has
-    one prints its symbol first. `syntheses` are the day's by transcript line (`syntheses_of`): a
-    transcript that has one gets the synthesis's collapsed row under its own, or the policy's row."""
+    the asset's name. `marks` are the signed day's dispositions by line id and the starred lines: a
+    named line that has a disposition prints its symbol first, a starred one the star. `syntheses`
+    are the day's by transcript line (`syntheses_of`): a transcript that has one gets the
+    synthesis's collapsed row under its own, or the policy's row."""
     if entry["kind"] == FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = span_text(entry["start"], entry["end"], tz)
-        mark = signing.mark(marks, entry.get("line"))
+        mark = _mark(marks, entry.get("line"))
         yield f"{indent}{clock:<12} {FLIGHT:<6} {mark}{route}{DOT}{entry['evidence']}"
         return
     clock = span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
@@ -1150,21 +1232,22 @@ def _entry_rows(
     if attached:
         for e in attached["events"]:
             span = span_text(e["start"], e["end"], tz)
-            yield f"{inner}{'event':<12} {signing.mark(marks, e['line'])}{e['title']} {span}{sources_text(e)}"
+            mark = _mark(marks, e["line"], also=e["lines"])
+            yield f"{inner}{'event':<12} {mark}{e['title']} {span}{sources_text(e)}"
         for t in attached["transcripts"]:
-            mark = signing.mark(marks, t["line"])
+            mark = _mark(marks, t["line"])
             yield f"{inner}{'transcript':<12} {mark}{t['title']}{voices_text(t)}"
             for block in (syntheses or {}).get(t["line"], ()):
                 yield f"{inner}{'':<12} {' ' * len(mark)}{drafts.synthesis_row(block)}"
         for n in attached["notes"]:
-            yield f"{inner}{'note':<12} {signing.mark(marks, n['line'])}{n['text']}"
+            yield f"{inner}{'note':<12} {_mark(marks, n['line'])}{n['text']}"
         for m in attached["mail"]:
-            mark = signing.mark(marks, *m["lines"])
+            mark = _mark(marks, *m["lines"])
             yield f"{inner}{'mail':<12} {mark}{m['subject']} ({_plural(m['messages'], 'message')})"
         for c in attached["calls"]:
-            yield f"{inner}{'call':<12} {signing.mark(marks, c['line'])}{call_text(c)}"
+            yield f"{inner}{'call':<12} {_mark(marks, c['line'])}{call_text(c)}"
         for k in attached["keepers"]:
-            yield f"{inner}{'keeper':<12} {signing.mark(marks, k['line'])}{k['name']} ({k['lane']})"
+            yield f"{inner}{'keeper':<12} {_mark(marks, k['line'])}{k['name']} ({k['lane']})"
     company = entry.get("with")
     if company and (company["confirmed"] or company["proposed"]):
         confirmed = ", ".join(companion_text(c) for c in company["confirmed"])
