@@ -10,11 +10,13 @@ an id, a label or an alias, a word of a label: `entities.lookup`). The line supe
 status of the entity, so the current status is the last line standing; any status may follow any. A
 status equal to the standing one is refused on the same local day, and on a later day unless it
 comes with a new reason (the owner reaffirmed, and said why). `--reason` puts the owner's words in
-the status line's own `reason`, and for an idea, a place or an asset also writes one `note/v1`
-beside it, tier 2 as RFC 0010 makes every note (MUST), label `status`, the reason as its text, the
-status line's id under `extra`, so the owner's words are on the day and in `search`. An org's reason
-stays on its tier-3 line and is never a note: a reason about a company can name money, and a note
-at 2 would carry it wherever tier 2 crosses. No note is ever written above tier 2 (SPEC §4: a MUST
+the status line's own `reason`, and for an idea, a place or an asset first writes one `note/v1`, tier
+2 as RFC 0010 makes every note (MUST), label `status`, the reason as its text, the entity under
+`extra.entity` and never the disposition, and then the status line, whose `note` names it (RFC 0037
+§10.5), so the owner's words are on the day and in `search`; a pair written before the writer kept
+that order (the status line first, the note naming it under `extra.status`) is read the same. An
+org's reason stays on its tier-3 line and is never a note: a reason about a company can name money,
+and a note at 2 would carry it wherever tier 2 crosses. No note is ever written above tier 2 (SPEC §4: a MUST
 tier is the profile's). A place let go and an asset sold or let go close their registry entry:
 `until`, the line's local day, is written into the entry of `places.json` or `assets.json`, every
 other key kept; the entry is never deleted (ADR 0018, rule 4). Everything is read and written under
@@ -36,7 +38,7 @@ import json
 import os
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +50,7 @@ from . import entities
 from .entities import DISPOSITIONS, PLACE
 
 KIND = entities.STATUS
-NOTE_LABEL = "status"
+NOTE_LABEL = entities.STATUS_NOTE_LABEL
 HEAD_MOVED = (
     "the record's head moved from seq {was} to seq {now} while the status was read, so the line"
     " would rest on a record it did not read; nothing was written"
@@ -90,11 +92,39 @@ def check_kind(kind: str) -> None:
 def _read(
     lb: Logbook,
 ) -> tuple[dict[tuple[str, str], entities.Entity], dict[tuple[str, str], list[entities.Status]]]:
+    """The canonical entities and the standing status lines of each, every status joined to its
+    reason note (`entities.statuses`). A line names its note (`note`, RFC 0037 §10.5); an idea's, a
+    place's or an asset's standing line with a reason and no `note`, written before the note came
+    first, is named by its note instead, so only then are notes read: the `manual` notes labelled
+    `status` of the days of those lines, where the writer put each note, at its line's `at`."""
     with lb.index() as idx:
         marks = idx.retractions()
         lines = [*marks, *idx.resolutions(), *idx.by_kind(entities.ENTITY)]
-        found = entities.statuses([*marks, *idx.by_kind(KIND)])
+        said = idx.by_kind(KIND)
+        older = [line for line in entities.standing([*marks, *said], KIND) if _older(line["payload"])]
+        reasons = []
+        if older:
+            local = day_start.of(lb.meta)
+            days = sorted(local.day(_instant(str(line["at"]))) for line in older)
+            # a day either side: the index's day of a line was derived under the day start of its time
+            first, last = (
+                (days[0] - timedelta(days=1)).isoformat(),
+                (days[-1] + timedelta(days=1)).isoformat(),
+            )
+            reasons = [
+                n
+                for n in idx.of_kind(notes.KIND, first, last, source=entities.SOURCE)
+                if notes.labelled(n, NOTE_LABEL)
+            ]
+        found = entities.statuses([*marks, *said, *reasons])
     return entities.known(lines, lb.root), found
+
+
+def _older(payload: Mapping[str, Any]) -> bool:
+    """Whether a status line was written before the note came first: a reason a note carries, and
+    no `note` naming it."""
+    kind = entities.kind_of(payload.get("entity"))
+    return kind is not None and reason_note(kind) and "reason" in payload and "note" not in payload
 
 
 def _cited(lb: Logbook, evidence: Sequence[str]) -> dict[str, int]:
@@ -134,13 +164,15 @@ def write(
 ) -> Written:
     """One `status/v1` line for the entity of `kind` that `name` names, at the kind's tier
     (`entities.status_tier`), the `reason` on it; with the reason also as a tier-2 note when the
-    line is no higher than a note (`reason_note`: an idea, a place or an asset, never an org), and the
-    registry entry closed when the disposition closes one; under one hold of the writer lock, the
-    head read again before the first line. `proposal` is what the dream proposed, when the owner
-    answers one (`proposed_by` `dream`), and `evidence` the ids of the lines it rested on: a status
-    about an idea, a place or an asset that cites a tier-3 line is refused (`entities.tier_problems`);
-    one about an org may. `StatusError` or `entities.EntityError` says why a status is refused;
-    `HeadMoved` when another writer moved the record."""
+    line is no higher than a note (`reason_note`: an idea, a place or an asset, never an org),
+    written first and named by the line's `note` (RFC 0037 §10.5), and the registry entry closed
+    when the disposition closes one; under one hold of the writer lock, everything checked and the
+    head read again before the first line, so a refused status writes nothing. `proposal` is what
+    the dream proposed, when the owner answers one (`proposed_by` `dream`), and `evidence` the ids of
+    the lines it rested on: a status about an idea, a place or an asset that cites a tier-3 line is
+    refused (`entities.tier_problems`); one about an org may. `StatusError` or
+    `entities.EntityError` says why a status is refused; `HeadMoved` when another writer moved the
+    record."""
     check_kind(kind)
     if disposition not in DISPOSITIONS[kind]:
         raise StatusError(
@@ -170,18 +202,14 @@ def write(
                     f"{entity.label} is {disposition} since {since} already;"
                     ' to reaffirm it, say why: --reason "…"'
                 )
-        payload = entities.status_payload(
-            kind,
-            entity.id,
-            entity.label,
-            disposition,
-            reason,
-            proposed_by="dream" if proposal is not None else entities.METHOD,
-            proposal=proposal,
-            evidence=evidence,
-            supersedes=None if current is None else current.line,
-            head=str(meta["head"]),
-        )
+        fields: dict[str, Any] = {
+            "proposed_by": "dream" if proposal is not None else entities.METHOD,
+            "proposal": proposal,
+            "evidence": evidence,
+            "supersedes": None if current is None else current.line,
+            "head": str(meta["head"]),
+        }
+        payload = entities.status_payload(kind, entity.id, entity.label, disposition, reason, **fields)
         tier = entities.status_tier(kind)
         problems = entities.validate_status(payload) + entities.tier_problems(
             entities.STATUS_SCHEMA, tier, cited, kind
@@ -191,9 +219,8 @@ def write(
         now = lb.meta
         if now["head"] != meta["head"]:
             raise HeadMoved(HEAD_MOVED.format(was=meta["seq"], now=now["seq"]))
-        line = lb.append(at=stamp, source=entities.SOURCE, kind=KIND, tier=tier, payload=payload)
         note = None
-        if reason is not None and reason_note(kind):
+        if reason is not None and reason_note(kind):  # first the note, then the line naming it (§10.5)
             note = lb.append(
                 at=stamp,
                 source=entities.SOURCE,
@@ -203,14 +230,13 @@ def write(
                     "schema": notes.SCHEMA,
                     "text": reason,
                     "labels": [NOTE_LABEL],
-                    "extra": {
-                        "status": str(line["id"]),
-                        "entity": entities.entity_ref(kind, entity.id),
-                        "label": entity.label,
-                        "disposition": disposition,
-                    },
+                    "extra": {"entity": entities.entity_ref(kind, entity.id)},
                 },
             )
+            payload = entities.status_payload(
+                kind, entity.id, entity.label, disposition, reason, note=str(note["id"]), **fields
+            )
+        line = lb.append(at=stamp, source=entities.SOURCE, kind=KIND, tier=tier, payload=payload)
         until = None
         if disposition in entities.CLOSING.get(kind, ()) and entity.registry:
             close(lb.root, kind, entity.id, day)
@@ -222,7 +248,7 @@ def reason_note(kind: str) -> bool:
     """Whether a status reason about an entity of `kind` is also written as a `note/v1`: only when
     the status line's tier is no higher than a note's, which RFC 0010 fixes at 2 (MUST), so the note
     shows nothing the line keeps higher. An org's status is tier 3, so its reason stays on the line."""
-    return entities.status_tier(kind) <= notes.TIER
+    return entities.reason_note(kind)
 
 
 def close(root: Path, kind: str, entity_id: str, day: str) -> Path:
@@ -270,6 +296,7 @@ class Row:
             "reason": None if self.current is None else self.current.reason,
             "proposed_by": None if self.current is None else self.current.proposed_by,
             "line": None if self.current is None else self.current.line,
+            "note": None if self.current is None else self.current.note,
             "stale": self.stale,
             "muted": [{"status": s, "until": d} for s, d in self.muted],
             "until": self.until,

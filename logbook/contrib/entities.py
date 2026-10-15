@@ -43,11 +43,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from ..core import assets, places, resolve
+from ..core import assets, notes, places, resolve
 from ..core.chain import Line
 from ..core.store import RETRACTION, retractions
 
 ENTITY, ENTITY_REVIEW, STATUS = "entity", "entity-review", "status"  # the lines' `kind`
+STATUS_NOTE_LABEL = "status"  # the one label of the note/v1 carrying a status's reason (§10.5)
 ENTITY_SCHEMA, ENTITY_REVIEW_SCHEMA, STATUS_SCHEMA = "entity/v1", "entity-review/v1", "status/v1"
 PEOPLE_REVIEW, PEOPLE_REVIEW_SCHEMA = "people-review", "people-review/v1"  # RFC 0035: read forever
 RESOLUTION = resolve.RESOLUTION
@@ -306,7 +307,8 @@ def validate_entity_review(payload: Mapping[str, Any]) -> list[str]:
 
 def validate_status(payload: Mapping[str, Any]) -> list[str]:
     """Every way `payload` is not a `status/v1` (RFC 0037 §9.2; decisions 5, 10 and 11), in words;
-    empty when it is one."""
+    empty when it is one. `note` is checked when present and never required: a line with a reason
+    written before the writer put the note first has none, and stays valid (§10.5)."""
     problems: list[str] = []
     if payload.get("schema") != STATUS_SCHEMA:
         problems.append(f"schema is {payload.get('schema')!r}, not {STATUS_SCHEMA!r}")
@@ -321,6 +323,11 @@ def validate_status(payload: Mapping[str, Any]) -> list[str]:
         problems.append("reason must be the owner's words")
     if status in REASON_REQUIRED and not (isinstance(reason, str) and reason.strip()):
         problems.append(f"a status of {status} must say why: reason")
+    problems += _maybe_string(payload, "note", "the id of the note/v1 line written with this one")
+    if "note" in payload and kind == ORG:
+        problems.append("note: an org's reason stays on its tier-3 line, never a note (RFC 0037 §10.5)")
+    elif "note" in payload and "reason" not in payload:
+        problems.append("note names the note that carries the reason; a status without a reason has none")
     problems += _maybe_string(payload, "label", "the entity's label at the time")
     if payload.get("proposed_by") not in PROPOSED_BY:
         problems.append(f"proposed_by must be one of {', '.join(PROPOSED_BY)}")
@@ -355,6 +362,14 @@ def status_tier(kind: str) -> int:
     money and whose `passed` and `let-go` would otherwise give that away by contrast; 2 for an idea,
     a place or an asset, a decision about one's own work, place or craft."""
     return STATUS_TIERS.get(kind, TIER)
+
+
+def reason_note(kind: str) -> bool:
+    """Whether a status reason about an entity of `kind` is also written as a `note/v1` (RFC 0037
+    §10.5): only when the status line's tier is no higher than a note's, which RFC 0010 fixes at 2
+    (MUST), so the note shows nothing the line keeps higher. An org's status is tier 3, so its
+    reason stays on the line and no note is ever its reason."""
+    return status_tier(kind) <= notes.TIER
 
 
 def tier_problems(schema: str, tier: int, cited: Mapping[str, int], kind: str | None = None) -> list[str]:
@@ -497,14 +512,18 @@ def status_payload(
     evidence: Sequence[str] = (),
     supersedes: str | None = None,
     head: str | None = None,
+    note: str | None = None,
 ) -> dict[str, Any]:
-    """A `status/v1` payload: the owner's disposition of one entity, with the reason when given."""
+    """A `status/v1` payload: the owner's disposition of one entity, with the reason when given and
+    `note`, the id of the `note/v1` line written before it with the same words (RFC 0037 §10.5)."""
     payload: dict[str, Any] = {"schema": STATUS_SCHEMA, "entity": entity_ref(kind, entity_id)}
     if label is not None:
         payload["label"] = label
     payload["status"] = status
     if reason is not None:
         payload["reason"] = reason
+    if note is not None:
+        payload["note"] = note
     payload["proposed_by"] = proposed_by
     if proposal is not None:
         payload["proposal"] = dict(proposal)
@@ -889,6 +908,7 @@ class Status:
     at: str
     line: str
     seq: int
+    note: str | None = None  # the id of the note/v1 carrying the reason, when there is one (§10.5)
 
     def day(self, local: Any) -> str:
         """The local day the status took effect: `since`, else the line's day under `local`."""
@@ -903,12 +923,28 @@ class Status:
             "proposal": self.proposal,
             "label": self.label,
             "line": self.line,
+            "note": self.note,
         }
 
 
 def statuses(lines: Iterable[Line]) -> dict[tuple[str, str], list[Status]]:
     """(kind, id) → the standing status lines of each entity, in chain order; the last is its
-    current status. `lines` are the status lines and the retractions, in any order."""
+    current status. `lines` are the status lines, the retractions and the status notes, in any order.
+
+    A status's reason note is the one its `note` field names (RFC 0037 §10.5: the note is written
+    first, the status line after it names it). A line written before the writer kept that order has
+    no `note` field: its note came after it and names it under `extra.status`, and is read so, so a
+    pair already in a record keeps its meaning. Either way a retracted note is no reason note, and
+    an org's line is never joined to one (its reason stays on the line)."""
+    lines = list(lines)
+    retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
+    named = {
+        str(extra["status"]): str(note["id"])
+        for note in standing(lines, notes.KIND)
+        if notes.labelled(note, STATUS_NOTE_LABEL)
+        and isinstance(extra := (note.get("payload") or {}).get("extra"), dict)
+        and isinstance(extra.get("status"), str)
+    }
     found: dict[tuple[str, str], list[Status]] = {}
     for line in standing(lines, STATUS):
         payload = line.get("payload") or {}
@@ -921,6 +957,9 @@ def statuses(lines: Iterable[Line]) -> dict[tuple[str, str], list[Status]]:
             continue
         proposal = payload.get("proposal")
         proposed = proposal.get("status") if isinstance(proposal, dict) else None
+        note = _text(payload.get("note")) or named.get(str(line["id"]))
+        if note in retracted or not reason_note(kind):
+            note = None
         found.setdefault((kind, entity_id), []).append(
             Status(
                 kind,
@@ -934,6 +973,7 @@ def statuses(lines: Iterable[Line]) -> dict[tuple[str, str], list[Status]]:
                 str(line.get("at")),
                 str(line["id"]),
                 int(line["seq"]),
+                note,
             )
         )
     return found

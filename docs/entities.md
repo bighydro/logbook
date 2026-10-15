@@ -134,6 +134,7 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 | `label` | string | SHOULD | the entity's label at the time |
 | `status` | string | MUST | one of the kind's dispositions; any other makes the line invalid |
 | `reason` | string | SHOULD; MUST for `passed`, `let-go`, `killed` | the owner's words on why; for an org, the only place they are written |
+| `note` | string | MUST when `reason` is given, except for an org | the id of the `note/v1` line written just before this one with the same words; an org's line has none |
 | `proposed_by` | string | MUST | `dream` when the owner disposed of a proposal, `owner` when unprompted |
 | `proposal` | object | MAY | what the dream proposed, `{ status, score, because }` |
 | `since` | date | MAY | the local day it took effect when not the line's own day |
@@ -144,12 +145,16 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 **Rules.** The current status is the last standing line's; any status may follow any. A status
 equal to the standing one on the same local day is refused; on a later day it is written only with a
 new reason (the owner reaffirmed, and said why). `status --reason "…"` puts the owner's words in
-the line's `reason`. For an idea, a place or an asset it also writes one `note/v1` line, tier 2,
-label `status`, beside the status line, so the owner's words are on the day and in `search`. An
+the line's `reason`. For an idea, a place or an asset it first writes one `note/v1` line, tier 2,
+label `status`, the words as its text and the entity under `extra.entity` (never the disposition),
+then the status line, whose `note` names it, both under one hold of the writer lock (RFC 0037
+§10.5), so the owner's words are on the day and in `search`. A pair written before the writer kept
+this order, the status line first and the note naming it under `extra.status`, is read the same. An
 org's reason stays on its tier-3 status line and is never a note: RFC 0010 fixes a note at tier 2
 (MUST), and a reason about a company can name money, so a note would carry it wherever tier 2
 crosses. No status writes a note above tier 2. `status list` and the status command's output read
-the reason from the status line. A place let go and an asset sold or let go close their registry
+the reason from the status line, and `status list --json` names its note (`note`, null for an org).
+A place let go and an asset sold or let go close their registry
 entry with `until`, the line's local day: the entry in `places.json` or `assets.json` is never
 deleted (ADR 0018, rule 4).
 
@@ -173,12 +178,14 @@ A passed company, the dream's proposal kept beside the owner's word:
  "logbook_head":"8f1c000000000000000000000000000000000000000000000000000000000000"}}
 ```
 
-An idea the owner moved on without being asked:
+An idea the owner moved on without being asked (its note `…01d3`, labelled `status` and written
+just before it, holds the reason):
 
 ```json
 {"at":"2026-10-11T22:05:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"status","tier":2,
  "payload":{"schema":"status/v1","entity":{"type":"idea","id":"019cadd3-6bc0-7dcd-9133-000000000301","registry":"logbook"},
- "label":"the fjord kiosk","status":"exploring","proposed_by":"owner","reason":"pricing page written; talk to the ferry company first"}}
+ "label":"the fjord kiosk","status":"exploring","proposed_by":"owner","reason":"pricing page written; talk to the ferry company first",
+ "note":"019cadd3-6bc0-7dcd-9133-0000000001d3"}}
 ```
 
 ## The dedupe keys

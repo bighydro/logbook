@@ -103,6 +103,7 @@ BUILT: dict[str, tuple[str, dict[str, Any]]] = {
             "the fjord kiosk",
             "exploring",
             "pricing page written; talk to the ferry company first",
+            note="019cadd3-6bc0-7dcd-9133-0000000001d3",
         ),
     ),
     "review-org": (
