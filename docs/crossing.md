@@ -80,4 +80,6 @@ that more than one export was written into may hold files its manifest does not 
 `resolution_file`. Look before you hand such a folder over, or export into it once more.
 
 `logbook export trip-bundle` ([shared trips](trips-shared.md)) writes its package the same way, its
-`trip.json` among the listed files, and takes `--force` too.
+`trip.json` among the listed files, and takes `--force` too. `logbook export notion`
+([export for Notion](export-notion.md)) writes its folder the same way, its own manifest listing its
+files, and replaces only an earlier folder of its own.
