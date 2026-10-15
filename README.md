@@ -10,7 +10,7 @@
 
 **What never happens.** No feed, no followers, no account. No model writes your day. A model's draft is marked as a draft. Nothing leaves without a name. Every way out is an entry in one file you write, naming who receives and how much.
 
-![The Day of 17 June for Ines Nordmann, who does not exist: a week aboard](docs/serve.png)
+<p align="center"><img src="docs/the-day.png" width="360" alt="The Day of 17 June for Ines Nordmann, who does not exist: a week aboard"></p>
 
 [Why I built it](docs/letters/2026-10-12-why-i-built-it.md) · [The manifesto](MANIFESTO.md) · [First questions](docs/faq.md)
 
