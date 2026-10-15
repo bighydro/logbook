@@ -33,7 +33,10 @@ text (`logbook.core.speakers`). A memo whose source keeps a call's sides apart s
 `extra.channels` naming the file's channels in order (`["mic", "system"]`); such a file is diarized a
 channel at a time, and the microphone's voice is `from_me` when it is alone in its channel. Any other
 recording, a stereo memo included, is one room. Without the diarizer the line is today's, and the run
-says once, at the end, `speakers: not separated (logbook setup speakers --fetch-model)`.
+says once, at the end, why (`diarize.missing`): `speakers: not separated (install openlogbook[speakers],
+then logbook setup speakers --fetch-model)` without the `speakers` extra, which `openlogbook[transcribe]`
+does not bring, and `speakers: not separated (logbook setup speakers --fetch-model)` with it and
+without its models.
 
 **Heard again** (`derive speakers`, RFC 0038 §2.8). A standing transcript with no `speakers`, whose
 recording (`provenance.source`, a voice memo not retracted) has its audio in the store, is heard again
@@ -180,6 +183,7 @@ class Report:
     done: list[Done] = field(default_factory=list)
     separate: bool = True  # whether the run was to separate voices (`--no-speakers` says not)
     diarizer: str | None = None  # the diarizer that ran, None when none was on this machine
+    unseparated: str = diarize.NOT_SEPARATED  # why none ran: the closing sentence (`diarize.missing`)
     separated: int = 0  # memos whose voices were separated
     voiceless: int = 0  # memos heard in which the diarizer found no voice
     rooms: int = 0  # memos whose source named two channels the diarizer could not read apart: one room
@@ -238,6 +242,8 @@ def run(
     if engine is None:
         raise EngineMissing(f"no transcription engine; install {EXTRA}")
     _ready(engine, fetch_model)
+    if diarizer is None and separate:
+        report.unseparated = diarize.missing()  # the extra to install, or the models to fetch
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with diarize.quiet():  # the hub offline, and pyannote's usage reporting off, for the whole run
         report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress, diarizer))
@@ -276,7 +282,7 @@ def chunks(samples: int, rate: int, chunk_s: float) -> list[tuple[int, int]]:
 def describe(report: Report) -> str:
     """The closing lines of the command: what was done, what already was, what was skipped; then,
     for a run that heard a memo and was to separate voices, how many it separated, or, with no
-    diarizer on this machine, the one sentence that says so and names the command that fetches it."""
+    diarizer on this machine, the one sentence that says so and names what to install or fetch."""
     memos = _plural(report.found if report.dry_run else report.written, "voice memo")
     already = f" ({report.already} already transcribed)" if report.already else ""
     if report.dry_run:
@@ -288,7 +294,7 @@ def describe(report: Report) -> str:
     if report.dry_run or not report.done or not report.separate:
         return text
     if report.diarizer is None:
-        return f"{text}\n{diarize.NOT_SEPARATED}"
+        return f"{text}\n{report.unseparated}"
     said = f"  voices separated in {_plural(report.separated, 'voice memo')}"
     if report.voiceless:
         said += f"; no voice found in {report.voiceless:,}"

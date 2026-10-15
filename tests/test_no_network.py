@@ -11,6 +11,8 @@ The same guard covers `verify` on the conformance sample, which must still print
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "conformance" / "sample-logbook"
 EXPECTED = ROOT / "conformance" / "expected.json"
 OUT = "OUT"  # replaced by a file under the test's tmp_path, for the commands that write a page
+
+# A reader of what an extra's engine finds reads only with the extra installed; without it, it exits 2
+# with the sentence that names the extra (tests/test_setup_speakers.py, under the same guard). Here a
+# stand-in module is where `import` finds the engine, so the reader runs to its end: the engine itself
+# is never what says whether a model is here.
+INSTALLED: dict[tuple[str, ...], tuple[str, ...]] = {("setup", "speakers"): ("pyannote.audio",)}
 
 # every reader of the record, as the user runs it: text first, then its --json and other forms
 READERS: tuple[tuple[str, ...], ...] = (
@@ -110,8 +118,11 @@ def test_a_reader_opens_no_connection(
     lb: Logbook,
     no_network: list[str],
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    for name in INSTALLED.get(argv, ()):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
     cli.main([str(tmp_path / "page.html") if arg == OUT else arg for arg in argv])
     assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"
     assert capsys.readouterr().out, "the command printed nothing"

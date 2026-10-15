@@ -71,15 +71,18 @@ A synthetic example, the Oslo persona's:
 
 ## The voices (RFC 0038)
 
-When the diarizer and its models are on this machine (`logbook setup speakers` says whether they are;
-`logbook setup speakers --fetch-model` fetches them, the one download), the same run separates the
+When the diarizer (the `openlogbook[speakers]` extra) and its models are on this machine (`logbook
+setup speakers` says whether they are; `logbook setup speakers --fetch-model` fetches them, the one
+download), the same run separates the
 voices of each memo on the audio it decoded, and the line gains `speakers` and `diarization`: each
 line of the text is given the voice that speaks most of it (the engine is asked for word times), a
 spans file goes into `attachments/` beside the text, and the progress line says how many voices it
 heard (`Middag: 4,212 words, nb, 3 voices, 41.8s`). Without the diarizer the line is exactly as
-before, and the run ends with one sentence:
+before, and the run ends with one sentence, naming the extra when it is not installed and the fetch
+when a model is not here:
 
 ```
+speakers: not separated (install openlogbook[speakers], then logbook setup speakers --fetch-model)
 speakers: not separated (logbook setup speakers --fetch-model)
 ```
 
@@ -119,6 +122,8 @@ when it was first imported), so the engines cannot reach out whatever they would
 pyannote.audio's own usage reporting is switched off (`PYANNOTE_METRICS_ENABLED=0`). The one exception
 is explicit: a Whisper model not yet on this machine stops the command, and `--fetch-model` downloads
 it before the first chunk is heard; it never fetches a speaker model, which is `setup speakers
---fetch-model`'s alone. The extra brings pyannote.audio, and with it torch, on every platform. A test
+--fetch-model`'s alone. The diarizer is a second extra, `openlogbook[speakers]`: pyannote.audio, and
+with it torch on every platform. `openlogbook[transcribe]` does not bring it, so `[transcribe]` alone
+transcribes and `[transcribe,speakers]` separates the voices too. A test
 fakes the engine and the diarizer, feeds them a two-second synthetic WAV and refuses every socket for
 the length of the run; no model is downloaded in CI.

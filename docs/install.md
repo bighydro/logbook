@@ -273,16 +273,18 @@ it again.
 
 Some features need an extra library: reading an encrypted iPhone backup and sharing a signed page
 (both `crypto`), serving the record to an AI assistant (`mcp`), listening to ships (`ais`),
-transcribing voice memos (`transcribe`), and the two local models on Apple silicon (`judge`,
-`describe`). Logbook tells you when a command needs one; `logbook doctor` lists them with a
-`pass` or `warn` each. You add one by installing the package with the extra's name in brackets:
+transcribing voice memos (`transcribe`), telling the voices of a recording apart (`speakers`, beside
+`transcribe`; it brings torch), and the two local models on Apple silicon (`judge`, `describe`).
+Logbook tells you when a command needs one; `logbook doctor` lists four of them (`ais`, `crypto`,
+`sealed`, `transcribe`) with a `pass` or `warn` each. You add one by installing the package with the
+extra's name in brackets:
 
 ```bash
 pipx install --force "openlogbook[crypto]"
 uv tool install "openlogbook[crypto]"
 ```
 
-Several at once are a comma-separated list: `"openlogbook[encrypted,share]"`. The quotes matter;
+Several at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter;
 the brackets mean something else to the terminal without them. The Homebrew formula installs the
 base package only: a Mac that needs an extra uses `pipx` or `uv` for Logbook instead, which is a
 `brew uninstall logbook` followed by one of the two lines above. Your record is untouched either way.

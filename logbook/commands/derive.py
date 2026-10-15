@@ -73,15 +73,17 @@ def cmd_infer(a: argparse.Namespace) -> None:
 TRANSCRIBE_DEFAULT_MODEL = "small"
 DESCRIBE_DEFAULT_MODEL = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
 SPEAKERS_MODEL = "pyannote/speaker-diarization-3.1"  # `diarize.MODEL`
+SPEAKERS_EXTRA = "openlogbook[speakers]"  # `diarize.EXTRA`
 
 
 def cmd_transcribe(a: argparse.Namespace) -> None:
     """`transcribe voice-memos [--since DAY] [--model NAME] [--dry-run] [--fetch-model]
     [--no-speakers]`: a transcript/v1 line per standing voice memo whose audio is in the store,
     heard by a local engine (RFC 0004, RFC 0023); a re-run transcribes nothing twice. No engine is
-    needed for a dry run. When the diarizer and its models are on this machine the same run
-    separates the voices (RFC 0038 §2); `--fetch-model` fetches the Whisper model only, never a
-    speaker model (`setup speakers --fetch-model` does that)."""
+    needed for a dry run. When the diarizer (the `speakers` extra) and its models are on this
+    machine the same run separates the voices (RFC 0038 §2), else it ends with one sentence naming
+    the extra or the fetch; `--fetch-model` fetches the Whisper model only, never a speaker model
+    (`setup speakers --fetch-model` does that)."""
     from ..labs import diarize, transcribe
 
     if a.source != "voice-memos":
@@ -97,7 +99,8 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
     engine: transcribe.Engine | None = None
     diarizer: diarize.Diarizer | None = None
     if not a.dry_run:
-        if not a.no_speakers:
+        # the diarizer only for a run that will hear a memo: finding one imports the engine (torch)
+        if not a.no_speakers and transcribe.run(lb, None, since=a.since, dry_run=True).memos:
             diarizer = diarize.detect()
         try:
             engine = transcribe.detect(a.model, words=diarizer is not None)
@@ -126,7 +129,9 @@ def cmd_speakers(a: argparse.Namespace) -> None:
     transcript heard before voices were separated, whose recording's audio is in the store, heard
     again and separated, a new transcript/v1 line superseding the old one; what that costs (signed
     days, closed promises) said before anything is written. Nothing to do needs no engine; a dry run
-    needs none either. Without the diarizer: one sentence naming `setup speakers --fetch-model`, exit 2."""
+    needs none either. Without the diarizer, exit 2 with one sentence: without the `speakers` extra
+    it names the extra and then `setup speakers --fetch-model`, with it and without the models the
+    fetch alone."""
     from ..labs import diarize, transcribe
 
     if a.since is not None:
@@ -153,6 +158,9 @@ def cmd_speakers(a: argparse.Namespace) -> None:
             " two sides apart and are heard a channel at a time, without it"
         )
     diarizer = diarize.detect()
+    if diarizer is None and not diarize.installed():
+        print(diarize.NOT_INSTALLED, file=sys.stderr)
+        sys.exit(2)
     if diarizer is None:
         print(
             f"derive speakers: the diarizer and its models are not on this machine; {diarize.FETCH} fetches"
@@ -182,10 +190,11 @@ def speakers_arguments(sub: Subparsers) -> None:
         "speakers",
         help="the diarizer that separates voices: what is on this machine; --fetch-model, the one download",
         description="what separates the voices of a recording on this machine (RFC 0038): the engine,"
-        f" pyannote.audio, and the models {SPEAKERS_MODEL} reads, each here or not, and what the record"
-        " holds; opens no connection. --fetch-model downloads those models into the Hugging Face cache,"
-        " the one time anything here uses the network, with your access token read from HF_TOKEN for"
-        " those requests only, never written and never printed",
+        f" pyannote.audio ({SPEAKERS_EXTRA}; without it this command exits 2 and says so), and the"
+        f" models {SPEAKERS_MODEL} reads, each here or not, and what the record holds; opens no"
+        " connection. --fetch-model downloads those models into the Hugging Face cache, the one time"
+        " anything here uses the network, with your access token read from HF_TOKEN for those requests"
+        " only, never written and never printed",
     )
     s.add_argument(
         "--fetch-model",
@@ -199,9 +208,14 @@ def speakers_arguments(sub: Subparsers) -> None:
 def cmd_setup_speakers(a: argparse.Namespace) -> None:
     """`setup speakers`: the engine and each model, here or not, and what the record holds (no
     socket). `setup speakers --fetch-model`: the models fetched first (`diarize.fetch`), a refusal
-    naming the page to accept their conditions on (exit 2), then the same."""
+    naming the page to accept their conditions on (exit 2), then the same. Without the `speakers`
+    extra, exit 2 with the sentence that names it, before the hub is asked anything: the hub client
+    comes with `openlogbook[transcribe]` too, and models nothing here could run are never fetched."""
     from ..labs import diarize
 
+    if not diarize.installed():
+        print(diarize.NOT_INSTALLED, file=sys.stderr)
+        sys.exit(2)
     if a.fetch_model:
         switches = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
         offline = [name for name in switches if diarize._truthy(os.environ.get(name))]
@@ -430,7 +444,8 @@ def derive_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--no-speakers",
         action="store_true",
-        help="do not separate the voices, even when the diarizer is on this machine (RFC 0038)",
+        help=f"do not separate the voices, even when the diarizer ({SPEAKERS_EXTRA}) is on this machine"
+        " (RFC 0038)",
     )
     v.set_defaults(fn=cmd_transcribe)
 

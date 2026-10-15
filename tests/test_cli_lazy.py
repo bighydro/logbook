@@ -68,6 +68,7 @@ def test_the_help_text_copies_match_their_originals() -> None:
     assert derive.TRANSCRIBE_DEFAULT_MODEL == transcribe.DEFAULT_MODEL
     assert derive.DESCRIBE_DEFAULT_MODEL == describe.DEFAULT_MODEL
     assert derive.SPEAKERS_MODEL == diarize.MODEL
+    assert derive.SPEAKERS_EXTRA == diarize.EXTRA
     assert promises.JUDGE_DEFAULT_MODEL == judge.DEFAULT_MODEL
     assert promises.JUDGE_EXTRA == judge.EXTRA
     assert record.SETUP_STEPS == setup.STEPS
