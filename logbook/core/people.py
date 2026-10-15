@@ -36,7 +36,7 @@ transcript's participant marked machine, whatever its name, name nobody."""
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -252,9 +252,18 @@ def empty() -> dict[str, Any]:
 # -- reading -------------------------------------------------------------------------------------------------
 
 
-def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -> Report:
-    """The people of `[first, last]` (local days, inclusive). Raises `stays.SettingsError` or
-    `policy.PolicyError` as the readers it builds on do; writes nothing."""
+def read(
+    lb: Logbook,
+    first: str,
+    last: str,
+    airports: Airports | None = None,
+    admit: Callable[[Line], bool] | None = None,
+) -> Report:
+    """The people of `[first, last]` (local days, inclusive). `admit`, when given, is a gate every
+    resolution line and every line of evidence must pass before it counts (a crossing's tier and
+    signed days: `export notion`), so no person, channel, contact or day together rests on a line it
+    refuses. Raises `stays.SettingsError` or `policy.PolicyError` as the readers it builds on do;
+    writes nothing."""
     days = day_start.of(lb.meta)  # a line's day under the record's day_start (RFC 0036)
     tz = days.zone
     airports = airports or Airports.load()
@@ -262,7 +271,7 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
     track = reading.owner_track(lb, first, last, airports)
     with lb.index() as idx:
         marks = idx.retractions()
-        resolutions = idx.resolutions()
+        resolutions = [line for line in idx.resolutions() if admit is None or admit(line)]
         retracted = frozenset(retractions(marks))
         identities = resolve.identities_from([*marks, *resolutions])
         owner = present.owner_of(
@@ -276,8 +285,8 @@ def read(lb: Logbook, first: str, last: str, airports: Airports | None = None) -
         evidence: list[Line] = []
         for channel in CHANNELS:
             kind = KIND_OF[channel]
-            evidence.extend(gather.stream(channel, _standing(idx, kind, first, spill, retracted)))
-        evidence.extend(gather.stream("notes", _standing(idx, "note", first, spill, retracted)))
+            evidence.extend(gather.stream(channel, _standing(idx, kind, first, spill, retracted, admit)))
+        evidence.extend(gather.stream("notes", _standing(idx, "note", first, spill, retracted, admit)))
     gather.finish_messages()
     _together(known, evidence, track, identities, owner, tz, first, last, airports)
     heard = sorted(
@@ -292,13 +301,20 @@ def _desc(day: str | None) -> str:
     return "".join(chr(ord("9") - ord(c) + ord("0")) if c.isdigit() else c for c in (day or "")) or "~"
 
 
-def _standing(idx: Index, kind: str, first: str, last: str, retracted: frozenset[str]) -> Iterator[Line]:
+def _standing(
+    idx: Index,
+    kind: str,
+    first: str,
+    last: str,
+    retracted: frozenset[str],
+    admit: Callable[[Line], bool] | None = None,
+) -> Iterator[Line]:
     """The lines of `kind` in the window that stand: not retracted, not superseded by a line of
-    the same kind (a calendar entry edited since is one entry)."""
+    the same kind (a calendar entry edited since is one entry), and through `admit` when given."""
     superseded = idx.superseded(kind)
     for line in idx.of_kind(kind, first, last):
         id_ = str(line.get("id"))
-        if id_ in retracted or id_ in superseded:
+        if id_ in retracted or id_ in superseded or (admit is not None and not admit(line)):
             continue
         yield line
 

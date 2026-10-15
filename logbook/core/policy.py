@@ -11,7 +11,9 @@ name the write tools the owner lets through the door by name (ADR 0022), `"write
 is allowed by default, and none once the entry has expired. An entry has a version (`version`): the
 SHA-256 of the three things that decide what crosses, `max_tier`, `until` and `model`, which a line
 derived through the crossing records (`draft/v1` `extra.policy_version`), so a reader can tell the
-material was made under another entry: derived material follows the policy, not the head.
+material was made under another entry: derived material follows the policy, not the head. The `notion`
+entry (`logbook export notion`) may say `"include_unsigned": true`, which lets `--include-unsigned`
+lift the signed-day gate for it; without it only signed days leave, flag or no flag.
 
 `import.json` lists the sources the owner has switched off: `{"disabled": [{"source", "reason"}]}`.
 `add`, `sync` and `import-backup` skip a disabled source and say so; `logbook sources` lists every
@@ -59,6 +61,8 @@ SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 WORLD_DESTINATION = "world"  # `logbook export world`: one page you can scrub, for the owner and the circle
 WORLD_DEFAULT_TIER = 2  # the ceiling for a record whose file does not name it
 DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and drafts it (RFC 0036)
+NOTION_DESTINATION = "notion"  # `logbook export notion`: the record's facts for the owner's Notion
+INCLUDE_UNSIGNED = "include_unsigned"  # an entry's optional key: `--include-unsigned` may lift the gate
 MODEL = "model"  # an entry's optional key: the one model the destination is
 DEFAULT_POLICY: dict[str, Any] = {
     DEFAULT_DESTINATION: {"max_tier": 2},
@@ -139,6 +143,7 @@ class Ceiling:
     write: tuple[str, ...] = ()  # the write tools the file names, expired or not
     window_days: int = WRITE_WINDOW_DAYS
     model: str | None = None  # the `model` the entry names, when it names one (`dream`)
+    include_unsigned: bool = False  # whether `--include-unsigned` may lift the signed-day gate for it
 
     @property
     def max_tier(self) -> int:
@@ -204,6 +209,9 @@ def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
     model = entry.get(MODEL)
     if model is not None and (not isinstance(model, str) or not model.strip()):
         raise PolicyError(f"{path}: {destination!r} has a model that is not a name; write the model's name")
+    unsigned = entry.get(INCLUDE_UNSIGNED, False)
+    if not isinstance(unsigned, bool):
+        raise PolicyError(f"{path}: {destination!r} has an {INCLUDE_UNSIGNED} that is not true or false")
     return Ceiling(
         destination,
         int(entry["max_tier"]),
@@ -212,6 +220,7 @@ def _entry(path: Path, destination: str, entry: Any, on: date) -> Ceiling:
         _write(path, destination, entry),
         _window(path, destination, entry),
         model,
+        unsigned,
     )
 
 
@@ -363,6 +372,31 @@ def dream_entry(root: Path) -> Ceiling:
             f"{path}: the {DREAM_DESTINATION!r} entry expired on {found.until.isoformat()} and counts as"
             " max_tier 0, so no day crosses to a model and no reader shows a draft above it; write a new"
             " until there or remove the entry"
+        )
+    return found
+
+
+def notion_entry(root: Path) -> Ceiling:
+    """The `notion` entry of the policy, held against today (`logbook export notion`): handing the
+    record's facts to the owner's Notion is a crossing like any other, so a record whose file does not
+    name the destination, or whose entry has expired, lets nothing leave. The message is one sentence
+    and says what to write."""
+    path = policy_path(root)
+    entry = read(root).get(NOTION_DESTINATION)
+    if entry is None:
+        raise PolicyError(
+            f"{path} names no {NOTION_DESTINATION!r} entry, so nothing leaves for Notion; add"
+            f' {{"{NOTION_DESTINATION}": {{"max_tier": 2}}}} to it to allow the export'
+        )
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS:
+        raise PolicyError(
+            f'{path}: {NOTION_DESTINATION!r} must be {{"max_tier": 1, 2 or 3}}, with an optional "until" date'
+        )
+    found = _entry(path, NOTION_DESTINATION, entry, today())
+    if found.expired and found.until is not None:
+        raise PolicyError(
+            f"{path}: the {NOTION_DESTINATION!r} entry expired on {found.until.isoformat()} and counts as"
+            " max_tier 0, so nothing leaves for Notion; write a new until there or remove the entry"
         )
     return found
 

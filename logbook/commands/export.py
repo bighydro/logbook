@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from ..contrib import site, trip_bundle, vault, world
+from ..contrib import notion_export, site, trip_bundle, vault, world
 from ..core import crossing, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
@@ -22,7 +22,7 @@ def export_arguments(sub: Subparsers) -> None:
         "export",
         help=".jsonl, days, crossing, vault, site, world, trip-bundle, share day",
         description="the whole log as one .jsonl, one day-package/v1 per day, `crossing`: a"
-        " crossing-package/v1,"
+        " crossing-package/v1, `notion FOLDER`: the record's facts for the owner's Notion, as a crossing,"
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
         " readers as static HTML, `world`: one page with the globe, the places, the assets and a time"
         " scrubber, `trip-bundle TRIP`: one trip for a member of the circle, or `share day"
@@ -31,14 +31,16 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "path",
         nargs="?",
-        help=".jsonl file for the whole log, `crossing` (RFC 0005), `vault` (docs/vault.md),"
+        help=".jsonl file for the whole log, `crossing` (RFC 0005), `notion` (docs/export-notion.md),"
+        " `vault` (docs/vault.md),"
         " `site` (docs/site.md), `world` (docs/world.md), `trip-bundle` (RFC 0030) or `share day` (RFC 0025)",
     )
     s.add_argument(
         "target",
         nargs="?",
         metavar="FOLDER|TRIP|day",
-        help="vault: the folder to write the pages into (an Obsidian vault); site: the folder to write"
+        help="notion: the folder to write, replaced whole; vault: the folder to write the pages into (an"
+        " Obsidian vault); site: the folder to write"
         " the HTML into; trip-bundle: the trip id as `show trips` prints it, or a day inside it; share:"
         " the word `day`",
     )
@@ -68,7 +70,8 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--since",
         metavar="RFC3339|last|DAY",
-        help="crossing: window start, or the last window's end; vault: the first day (default: the record's)",
+        help="crossing: window start, or the last window's end; vault, notion: the first day (default: the"
+        " record's)",
     )
     s.add_argument(
         "--until",
@@ -87,7 +90,7 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--dry-run",
         action="store_true",
-        help="crossing, trip-bundle: count and show the policy; write nothing",
+        help="crossing, trip-bundle, notion: count and show the policy; write nothing",
     )
     s.add_argument(
         "--attachments",
@@ -115,9 +118,16 @@ def export_arguments(sub: Subparsers) -> None:
         help="crossing: cross the lines of unsigned days too (default: signed days only; RFC 0034)",
     )
     s.add_argument(
+        "--include-unsigned",
+        action="store_true",
+        help="notion: the facts of unsigned days too, when the policy's notion entry allows it"
+        " (default: signed days only)",
+    )
+    s.add_argument(
         "--force",
         action="store_true",
-        help="crossing, trip-bundle: replace an --out that is not an earlier bundle, and all in it",
+        help="crossing, trip-bundle, notion: replace an --out (notion: FOLDER) that is not an earlier"
+        " bundle, and all in it",
     )
     s.set_defaults(fn=cmd_export)
 
@@ -142,6 +152,9 @@ def cmd_export(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if a.path == crossing.KIND:
         _export_crossing(lb, a)
+        return
+    if a.path == notion_export.DESTINATION:
+        _export_notion(lb, a)
         return
     if a.path == vault.DESTINATION:
         _export_vault(lb, a)
@@ -306,6 +319,65 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         _tier3_warning(req, sel)
     seq, digest = result.line["seq"], result.package_sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…; watermark {req.until}")
+
+
+def _export_notion(lb: Logbook, a: argparse.Namespace) -> None:
+    """notion FOLDER [--since DAY] [--include-unsigned] [--force] [--dry-run]: the record's facts for the
+    owner's Notion (`logbook/contrib/notion_export.py`): persons, ideas and orgs, each by the key Notion
+    matches on, under the `notion` entry of policy/crossing.json (ADR 0016), signed days only unless
+    the entry and the flag both lift it (RFC 0034), recorded as a crossing/v1 line (RFC 0011). The
+    folder replaces FOLDER whole (docs/crossing.md); nothing is asked of or created in Notion."""
+    try:
+        if not a.target:
+            raise notion_export.NotionError("export notion needs a folder: logbook export notion <folder>")
+        crossing_only = (
+            ("--until", a.until),
+            ("--tier", a.tier),
+            ("--unsigned", a.unsigned),
+            ("--out", a.out),
+            ("--to", a.to),
+            ("--from", a.from_day),
+            ("--kinds", a.kinds),
+            ("--open", a.open),
+            ("--attachments", a.attachments),
+            ("--sealed", a.sealed),
+            ("--empty", a.empty),
+            ("--day", a.day),
+            ("--days", a.days),
+        )
+        unused = [flag for flag, given in crossing_only if given]
+        if unused:
+            raise notion_export.NotionError(
+                f"export notion takes no {unused[0]}: FOLDER is where it writes, the window ends now, the"
+                " tiers are the notion entry's, and --include-unsigned lifts the signed-day gate when the"
+                " entry allows it"
+            )
+        req = notion_export.request(lb, a.since, include_unsigned=a.include_unsigned)
+        out = Path(a.target).expanduser()
+        if a.dry_run:
+            built = notion_export.build(lb, req, _airports(a.airports))
+            print(f"dry run: {notion_export.describe(req)}; nothing written")
+            entry = req.entry
+            print(f"  policy: {policy.policy_path(lb.root)} {entry.destination} max_tier {entry.max_tier}")
+            for text in notion_export.rows(req, built):
+                print(text)
+            try:
+                notion_export.check_target(lb, out, a.force)
+            except notion_export.NotionError as e:
+                print(f"  a real run would be refused: {e}")
+            return
+        built, result = notion_export.export(lb, req, out, force=a.force, airports=_airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:  # NotionError, and a policy file a reader refuses
+        print(f"export notion: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"export notion: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"{notion_export.describe(req)} {ARROW} {out}")
+    for text in notion_export.rows(req, built):
+        print(text)
+    seq, digest = result.line["seq"], result.package_sha256[:12]
+    print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, manifest sha256 {digest}…; nothing sent to Notion")
 
 
 def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:

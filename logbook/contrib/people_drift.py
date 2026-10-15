@@ -42,6 +42,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from ..core import machine, people, present, reading, stays
+from ..core.chain import Line
 from ..core.flights import Airports
 from ..core.resolve import Ref
 from ..core.store import Logbook, retractions
@@ -384,18 +385,23 @@ def open_promises(lb: Logbook, who: Iterable[people.Person]) -> dict[str, tuple[
 
 
 def promises_with(
-    lb: Logbook, who: Iterable[people.Person]
+    lb: Logbook,
+    who: Iterable[people.Person],
+    admit: Callable[[Line], bool] | None = None,
+    since: str | None = None,
+    until: str | None = None,
 ) -> dict[str, list[tuple[promise_reader.Proposal, bool]]]:
     """The open proposals of `promises` with each person, in day order, each with whether the
     owner owes it: the owner's own and what was asked of the owner are owed by the owner; theirs
     are owed to the owner. A proposal is theirs when its speaker resolves to them, else when its
-    counterpart is their name, a name only one of them carries."""
+    counterpart is their name, a name only one of them carries. `admit`, `since` and `until` are
+    `promises.extract`'s: a gate on the lines it reads and the local days it reads them on."""
     wanted = list(who)
     by_entity = {p.entity for p in wanted}
     names = Counter(p.name.casefold() for p in wanted)
     by_name = {p.name.casefold(): p.entity for p in wanted if names[p.name.casefold()] == 1}
     out: dict[str, list[tuple[promise_reader.Proposal, bool]]] = {}
-    for proposal in promise_reader.extract(lb).proposals:
+    for proposal in promise_reader.extract(lb, since, until=until, admit=admit).proposals:
         if proposal.status != "open" or not proposal.shows or proposal.role is None:
             continue
         entity = None

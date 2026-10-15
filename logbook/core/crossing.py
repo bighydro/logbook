@@ -485,13 +485,32 @@ def write_bundle(
     A line the record holds sealed crosses in its sealed form with `payload_enc` resealed to the
     destination's recipient, or, under `--open`, with `payload_open` in its place (RFC 0029 §7);
     its hashed fields are the owner's, verbatim, either way."""
+    raw = place(
+        out, lambda folder: _write_package(lb, sel, manifest, folder, req, dict(extra or {})), lb.root, force
+    )
+    return hashlib.sha256(raw).hexdigest()
+
+
+def place(
+    out: Path,
+    fill: Callable[[Path], bytes],
+    root: Path,
+    force: bool = False,
+    schemas: frozenset[str] = frozenset({SCHEMA}),
+) -> bytes:
+    """Build a folder from nothing and put it at `out` whole (#280): `fill` writes every file into an
+    empty staging folder beside `out`, the manifest last, and returns the manifest's bytes; the
+    folder is checked against that manifest's `files` (`verify_package`) and renamed to `out`, the
+    earlier folder there moved aside and removed. `out` is refused before anything is written when
+    it holds anything but an earlier folder of one of `schemas`, unless `force`, and always when it
+    is the record at `root` or in it outside `export/` (`check_target`). Returns what `fill` did."""
     out = _target(out)
-    check_target(out, force, lb.root)
+    check_target(out, force, root, schemas)
     out.parent.mkdir(parents=True, exist_ok=True)
     staging = _beside(out, "staging")
     staging.mkdir()
     try:
-        raw = _write_package(lb, sel, manifest, staging, req, dict(extra or {}))
+        raw = fill(staging)
         verify_package(staging)
         aside = _replace(staging, out)
     except BaseException:
@@ -505,7 +524,7 @@ def write_bundle(
                 f"the bundle is at {out}, but the earlier one, moved aside to {aside}, could not be "
                 f"removed ({e}); delete that folder before you hand anything beside it over"
             ) from e
-    return hashlib.sha256(raw).hexdigest()
+    return raw
 
 
 def _write_package(
@@ -588,30 +607,37 @@ def verify_package(folder: Path) -> dict[str, Any]:
     return manifest
 
 
-def is_bundle(folder: Path) -> bool:
+def is_bundle(folder: Path, schemas: frozenset[str] = frozenset({SCHEMA})) -> bool:
     """Whether `folder` holds a crossing package: a manifest.json a JSON parser reads as one of ours
-    (any profile of it, a trip bundle too, and one written before `files` existed)."""
+    (any profile of it, a trip bundle too, and one written before `files` existed), or, with
+    `schemas`, a folder of another export written the same way (`export notion`)."""
     try:
         manifest = json.loads((Path(folder) / MANIFEST_FILE).read_bytes())
     except (OSError, ValueError):
         return False
-    return isinstance(manifest, dict) and manifest.get("schema") == SCHEMA
+    return isinstance(manifest, dict) and manifest.get("schema") in schemas
 
 
-def check_target(out: Path, force: bool = False, root: Path | None = None) -> None:
+def check_target(
+    out: Path, force: bool = False, root: Path | None = None, schemas: frozenset[str] = frozenset({SCHEMA})
+) -> None:
     """Refuse an output that exists and is not an earlier bundle, before anything is written: a file,
-    or a folder that holds anything and no manifest of ours. Such a folder is replaced, and all of
-    it removed, only under `force`. Nothing there, or an empty folder, is a fresh target. Whatever
-    the flags, the record at `root` is never replaced, nor a folder that holds it, nor one inside it
-    anywhere but under `export/` (`_outside_the_record`)."""
+    or a folder that holds anything and no manifest of ours (of one of `schemas`). Such a folder is
+    replaced, and all of it removed, only under `force`. Nothing there, or an empty folder, is a fresh
+    target. Whatever the flags, the record at `root` is never replaced, nor a folder that holds it,
+    nor one inside it anywhere but under `export/` (`_outside_the_record`)."""
     out = _target(out)
     if root is not None:
         _outside_the_record(out, Path(root))
     if force or not out.exists():
         return
-    if out.is_dir() and (is_bundle(out) or not any(out.iterdir())):
+    if out.is_dir() and (is_bundle(out, schemas) or not any(out.iterdir())):
         return
-    what = "a file" if not out.is_dir() else f"a folder with no {MANIFEST_FILE} of a {SCHEMA}"
+    what = (
+        "a file"
+        if not out.is_dir()
+        else f"a folder with no {MANIFEST_FILE} of a {' or '.join(sorted(schemas))}"
+    )
     raise CrossingError(
         f"{out} is {what}, not an earlier bundle, so it is not replaced; "
         "choose another --out, or pass --force to replace it and everything in it with the bundle"
