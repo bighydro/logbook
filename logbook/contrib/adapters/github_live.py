@@ -2,7 +2,8 @@
 
 The owner builds this project, and kept older ones, on GitHub; the record keeps what happened there,
 one `event/v1` line per act, built by the mapping `github` shares with `add github-export` (that
-module says what a line holds, which text it keeps and why its tier is 1): a commit on a repo's
+module says what a line holds, which text it keeps and its tier: 1 for a public repo, 2 for a
+private one, with the reason on the line): a commit on a repo's
 default branch, an issue or a pull request created, closed or merged, a review submitted, a comment
 left on an issue, a pull request or a line of its diff.
 
@@ -18,10 +19,14 @@ in the clear. The owner is whoever `policy/owner.json` lists under `handles` (th
 
 The calls, `X-GitHub-Api-Version: 2022-11-28`, every one a GET and nothing that writes: `GET /user`
 first (the token works; whose it is); the repos, `GET /repos/{repo}` each or `GET /user/repos` for
-`--all`; then per repo, every list paged by its `Link` header, `PAGE_SIZE` a page: `GET .../commits`
-on the default branch since its start, `GET .../issues` (issues and pull requests, oldest update
-first), `GET .../issues/comments` and `GET .../pulls/comments` since it, and `GET
-.../pulls/{n}/reviews` for each pull request the issues list names. Three details are asked one by
+`--all`, whose answer marks each repo public or private (`private`, `visibility`;
+`github.visibility_of`) as it is at this run, so every line of a private repo, or of one the answer
+does not mark public, is tier 2, and a repo whose visibility changes is read at its new tier from
+then on, the lines already written left as they are; then per repo, every list paged by its `Link`
+header, `PAGE_SIZE` a page: `GET .../commits` on the default branch since its start, `GET
+.../issues` (issues and pull requests, oldest update first), `GET .../issues/comments` and `GET
+.../pulls/comments` since it, and `GET .../pulls/{n}/reviews` for each pull request the issues list
+names. Three details are asked one by
 one, and only for a line the record does not hold yet (`existing`): `GET .../commits/{sha}` for how
 many files a commit changed, its files paged; `GET .../issues/{n}` for who closed one; `GET
 .../pulls/{n}` for who merged one and what it changed. A next page at an address other than the
@@ -69,6 +74,7 @@ from .github import CLOSED, COMMENTED, CREATED, MERGED, REVIEWED, Owner, Who
 __all__ = [
     "ENV",
     "KIND",
+    "MIXED_TIERS",
     "NAME",
     "TIER",
     "Config",
@@ -81,6 +87,7 @@ __all__ = [
 NAME = github.NAME
 KIND = github.KIND
 TIER = github.TIER
+MIXED_TIERS = github.MIXED_TIERS  # `sync` needs the identity in a record that seals (`github.MIXED_TIERS`)
 TOKEN_ENV = "LOGBOOK_GITHUB_TOKEN"
 REPOS_ENV = "LOGBOOK_GITHUB_REPOS"
 URL_ENV = "LOGBOOK_GITHUB_URL"
@@ -513,6 +520,9 @@ class _Repo:
         self.client = client
         self.name = name
         self.key = name.casefold()
+        self.visibility = github.visibility_of(
+            info
+        )  # as the API marks it at this run: the tier of every line
         self.branch = _text(info.get("default_branch"))
         self.start = start
         self.owner = owner
@@ -520,6 +530,8 @@ class _Repo:
         self.existing = existing
         self.notice = notice
         self.listed = listed
+        if self.visibility == github.UNKNOWN and notice is not None:
+            notice(f"{name}: GitHub does not say whether it is public, so its lines are tier 2")
         self.titles: dict[int, str] = {}
         self.pulls: set[int] = set()
 
@@ -607,6 +619,7 @@ class _Repo:
                 who,
                 self.owner,
                 self.counts,
+                visibility=self.visibility,
             )
 
         return _Act(authored, github.commit_key(sha), build, detail=True)
@@ -682,6 +695,7 @@ class _Repo:
                     refs=refs,
                     extra=extra,
                     agent=agent,
+                    visibility=self.visibility,
                 )
 
             acts.append(_Act(created, github.item_key(self.name, pull, number, CREATED), opened))
@@ -722,6 +736,7 @@ class _Repo:
                 self.counts,
                 refs=github.item_ref(pull, number, url),
                 agent=agent,
+                visibility=self.visibility,
             )
 
         return _Act(at, key, build, detail=True)
@@ -757,6 +772,7 @@ class _Repo:
                 refs=github.item_ref(True, number, url),
                 extra=extra,
                 agent=agent,
+                visibility=self.visibility,
             )
 
         return _Act(at, key, build, detail=True)
@@ -835,6 +851,7 @@ class _Repo:
             refs=refs,
             extra=extra,
             agent=github.is_agent(body),
+            visibility=self.visibility,
         )
         return _Act(created, key, lambda _ask: draft)
 
@@ -884,6 +901,7 @@ class _Repo:
             notes=body,
             refs={**github.item_ref(True, number, None), "review": reference},
             agent=github.is_agent(body),
+            visibility=self.visibility,
         )
         return _Act(submitted, key, lambda _ask: draft)
 

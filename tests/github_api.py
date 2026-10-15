@@ -61,6 +61,7 @@ def repo(full_name: str, branch: str = "main", private: bool = False, fork: bool
         "full_name": full_name,
         "owner": INES if owner == INES["login"] else OLA,
         "private": private,
+        "visibility": "private" if private else "public",
         "fork": fork,
         "archived": False,
         "default_branch": branch,

@@ -28,6 +28,7 @@ from .common import (
     _plural,
     _progress,
     _registry,
+    _require_identity_for_mixed_tiers,
     _say_disabled,
     _takes,
     _under_home,
@@ -156,7 +157,7 @@ def _append_with(
     `recorded_as` — the input as the owner knows it (`import-backup` passes the source's folder
     under inbox/, whose every file the run read) — so `inbox list` can say the input is consumed.
     `given` are the command's own options (`source`, `tier`, `at`, `since`, `account`, `attachments`,
-    `only_labels`, `skip_labels`, `asset`, `routes`), passed when the adapter's `run` takes them;
+    `only_labels`, `skip_labels`, `public`, `asset`, `routes`), passed when the adapter's `run` takes them;
     one it does not take exits 2, so a flag is never silently ignored. An adapter whose `run` takes
     `owner_emails` gets the record's own addresses from `logbook.json` (RFC 0015), with a hint when
     there are none; one
@@ -175,6 +176,8 @@ def _append_with(
 
     if _say_disabled(lb, adapter.NAME):
         return 0
+    if not dry_run:
+        _require_identity_for_mixed_tiers(lb, adapter, "add")
     counts: dict[str, int] = {}
     report: list[str] = []
     run: Callable[..., Iterator[dict[str, Any]]] = adapter.run
@@ -488,6 +491,14 @@ def add_arguments(sub: Subparsers) -> None:
         " the last import of it got to",
     )
     s.add_argument(
+        "--public",
+        action="store_const",
+        const=True,
+        default=None,
+        help="github-export: the clone, and any repository the export does not mark, is public, so its"
+        " lines are tier 1 (default 2); a repository the export marks private stays 2",
+    )
+    s.add_argument(
         "--asset", metavar="ASSET-ID", help="passages: the registered asset the deck log belongs to"
     )
     s.add_argument(
@@ -569,6 +580,7 @@ def _add(a: argparse.Namespace) -> None:
         "only_labels": _csv(a.only_labels),
         "skip_labels": _csv(a.skip_labels),
         "restart": True if a.restart else None,
+        "public": a.public,
         "asset": a.asset,
         "routes": Path(a.routes).expanduser() if a.routes else None,
     }

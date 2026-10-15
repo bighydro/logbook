@@ -6,7 +6,7 @@ read-only; `logbook add github-export` reads an old project's clone, or the acco
 makes, and adds what the API cannot give back: each version of a README or a doc, so the ideas an old
 project wrote down have a first-said date. Both write the same line for the same act, so a commit (by
 its hash) and an issue (by its number) read both ways are one line. Every line is `event/v1`
-(RFC 0009), tier 1.
+(RFC 0009): tier 1 from a public repository, tier 2 from a private one ([below](#the-text-and-the-tier)).
 
 ```bash
 export LOGBOOK_GITHUB_TOKEN=github_pat_...                  # a fine-grained token, read-only: a password
@@ -15,6 +15,7 @@ logbook sync github --dry-run                               # count, write nothi
 logbook sync github                                         # then four times a day with the schedule
 logbook sync github --since 2026-01-01T00:00:00Z            # every repo from then, once
 logbook add github-export ~/code/oldboat                    # an old project's clone: its commits and its docs
+logbook add github-export ~/code/sailplan --public          # a clone of a public repository: tier 1
 logbook add github-export ~/Downloads/github-export         # GitHub's account export, unpacked
 ```
 
@@ -62,11 +63,46 @@ listed, however late you add them to `owner.json`.
 commit's message, an issue's or a pull request's body, a review's and a comment's text. A README's or a
 doc's text is never kept: a version is its digest, its length and its word count, as a Notion page is.
 
-Every line is **tier 1**, whoever wrote the words: SPEC §4 and RFC 0009 give `event/v1` tier 1, and
-the profile says it outright, "an entry whose notes carry someone else's words is still tier 1 by
-default". The tier is where a line may travel (tier 1 crosses by default, ADR 0016), never who wrote it:
-Ola's comment is tier 1 as yours is. A private repo's text is tier 1 too; set the crossing's ceilings
-(`policy/crossing.json`) if what crosses at tier 1 should not include it.
+The tier is where a line may travel (tier 1 crosses by default, ADR 0016), never who wrote it, so it
+follows **where the words were written**:
+
+- **A public repository's lines are tier 1**, whoever wrote the words: Ola's comment is tier 1 as yours
+  is. SPEC §4 and RFC 0009 give `event/v1` tier 1 ("`tier` SHOULD be 1"), and the profile says it
+  outright, "an entry whose notes carry someone else's words is still tier 1 by default". Anyone can
+  read those words on GitHub already.
+- **A private repository's lines are tier 2**, every one of them: a commit's message, an issue's text,
+  a review, other people's comments, a doc's version, and a pull request's created, closed and merged
+  lines (and the agent mark they carry). Its text was written for the people the repository is shared
+  with, so it does not go wherever tier 1 crosses; it crosses at tier 2, when you ask for it, and in a
+  record that names recipients it is sealed at rest (RFC 0029). The line says why:
+  `extra.tier_reason` is `private repository`. SPEC §4 lets a producer write a higher tier than a
+  SHOULD default "for a reason it states", and `event/v1`'s tier is a SHOULD, not a MUST.
+
+**Which repositories are public.** `sync github` takes GitHub's word at each run: the repository as the
+API answers it (`GET /repos/{repo}`, or the `--all` list) carries `private` and `visibility`, and a
+repository is public only when what it carries says so (`private` false, `visibility` `public`) and
+nothing in it says otherwise. An internal repository (GitHub Enterprise) is private, and so is one whose
+answer carries no mark (`tier_reason` `repository visibility not known`; the run says so). A repository you make public or private is read at its new tier from the next run on; the lines
+already written stay as they are, since a line is never rewritten. `add github-export` reads no
+network: GitHub's account export marks each repository it lists, and that mark decides. A clone says
+nothing of its visibility, and neither does an export's repository without a mark or an issue of a
+repository the export does not list, so their lines are tier 2 (`repository visibility not known`),
+and the run says so, unless you pass `--public` for that run. `--public` never makes a repository the
+export marks private tier 1, and it decides only the lines not yet in the record: pass it the first
+time (`--dry-run` says what the run would do), since adding the same clone again writes nothing.
+
+**The same act read twice.** A line is never rewritten and never written twice: the record knows an act
+by its `raw_id` whatever its tier, so the first road to write a commit or an issue decides its tier.
+Lines written before private repositories were tier 2 stay at tier 1, and a sync that reads one of
+them again writes nothing; a clone added before the sync (tier 2) keeps its commits at tier 2 when the
+API later says the repository is public, and the other way round. A commit in two repositories, a
+public one and a private one, is one line (`commit/<sha>`), at the tier of the repository read first.
+
+**In a record that seals** (RFC 0029, `recipients` in `logbook.json`), a tier 2 line is sealed at rest
+and its `raw_id` blinded, so only the identity can see that the record holds an act sealed. Since the
+same act may come at tier 1 or 2, `sync github` and `add github-export` need the identity to write
+anything there, a tier 1 line too: without it they refuse on one sentence, before asking GitHub
+anything, rather than write a sealed act a second time, plain. `--dry-run` writes nothing and needs none.
 
 ## What a line holds
 
@@ -88,6 +124,7 @@ Ola's comment is tier 1 as yours is. A private repo's text is tier 1 too; set th
 | `extra.file`, `extra.content` | a doc's version: `{path, blob}`, and `{sha256, bytes, media_type, words, words_delta}` |
 | `extra.actor` | who acted: `login`, `id`, `type`, `name`, `role` |
 | `extra.agent` | `true` when the line's own text carries an agent session's marker (below) |
+| `extra.tier_reason` | on a tier 2 line, why: `private repository`, or `repository visibility not known` |
 
 ## What an agent did
 
@@ -140,10 +177,12 @@ GitHub nothing; `sync --all` and the schedule run it with no more configuration.
   unpacked): each repository's bare clone as above, under the name the export gives, and its issues,
   pull requests (who closed and who merged from its events), reviews and comments as the lines
   `sync github` writes for the same acts, read leniently: a row without what a line needs is skipped
-  and counted.
+  and counted. Each repository's mark in the export (`private`, `visibility`) sets the tier of all its
+  lines, as above.
 
 `--since` keeps the acts at or after it (a doc's earlier versions are still read, so an old version is
-never new); `--dry-run` counts. Git runs read-only (`rev-parse`, `symbolic-ref`, `config`, `log`,
+never new); `--dry-run` counts; `--public` says the clone, and any repository the export does not mark,
+is public, so its lines are tier 1 (a clone's lines are tier 2 without it). Git runs read-only (`rev-parse`, `symbolic-ref`, `config`, `log`,
 `cat-file`), never a shell and never fetching: no lazy fetch of a partial clone, no prompt, no
 fsmonitor. Adding the same clone again writes nothing, and `add` never says a clone can be deleted: it
 is your working copy. A folder that is none of these is one sentence, exit 2.

@@ -65,6 +65,24 @@ def _say_disabled(lb: Logbook, name: str) -> bool:
     return True
 
 
+def _require_identity_for_mixed_tiers(lb: Logbook, adapter: object, command: str) -> None:
+    """A source whose same act may come at tier 1 or at tier 2 (`MIXED_TIERS`: `github`, by its
+    repository's visibility) needs the identity in a record that seals, for its tier 1 lines too: a
+    sealed line's `raw_id` is blinded (RFC 0029 §8), so without the identity the record cannot see that
+    it holds an act sealed and would write it a second time, plain. Exits 2 on one sentence."""
+    if not getattr(adapter, "MIXED_TIERS", False) or not lb.recipients or lb.identities:
+        return
+    name = getattr(adapter, "NAME", "")
+    print(
+        f"{command}: {name}: this record seals tiers 2 and 3, and a {name} line may be tier 1 or 2 for the"
+        " same act, so writing one needs the identity to see the sealed lines the record holds (RFC 0029"
+        f" §8); none at {lb.identity_file}: pass --identity-file, set LOGBOOK_IDENTITY_FILE, or run"
+        " `logbook key init`",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def _owner_aliases(lb: Logbook, command: str) -> dict[str, list[str]]:
     """What an adapter that tells the owner's own acts by their handles, addresses or names
     (`owner_aliases`: `github`) is given: `policy/owner.json`'s lists, its emails joined by
