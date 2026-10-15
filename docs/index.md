@@ -4,6 +4,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 
 ## Start
 
+- [Questions](faq.md): six first questions, each answer a few sentences with the file or test that backs each one.
 - [Install](install.md): one line on each platform, for someone who has never opened a terminal, with what each step prints.
 - [Try it](try-it.md): five minutes with a demo record, every reader on a month that never happened.
 - [The first hour](first-hour.md): `logbook setup` screen by screen, for someone who has never used a terminal.
@@ -19,6 +20,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Roadmap](ROADMAP.md): what is done, what is next, what 1.0 means.
 - [Open problems](PROBLEMS.md): what the format cannot do yet, stated so a collaborator can pick one.
 - [Letters](letters/2026-10-04-the-freeze.md): the captain to the builders; the first one is about the freeze.
+- [Letter 0](letters/2026-10-12-why-i-built-it.md): why it was built, why it is given away, and why under a pen name.
 - [Release notes](release-notes.md): what each version changed for you, five bullets each.
 - [Changelog](CHANGELOG.md): every change, in full.
 
