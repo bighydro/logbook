@@ -16,6 +16,7 @@ in files beside the log, each yours to edit. `logbook setup` asks about the ones
 | the digest's questions | `policy/questions.json` | `logbook setup questions` |
 | what may leave, and to whom | `policy/crossing.json` | by hand ([the signed day](signed-day.md)) |
 | how long a stay is, the night | `policy/stays.json` | by hand |
+| what names nobody's org, the review's thresholds | `policy/entities.json` | by hand ([the profiles](entities.md#policyentitiesjson)) |
 
 `policy/owner.json` is `{"names": [...], "emails": [...], "phones": [...], "handles": [...]}`: the
 ways the record meets you, so you are never your own company and never a person to review. `handles`

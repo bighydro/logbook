@@ -1,6 +1,6 @@
 # RFC 0037 — Entities: orgs, ideas, places and assets reviewed like people
 
-Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
+Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amended 2026-10-14: an org's status reason stays on its tier-3 line, never a `note/v1` (§8, §10.2, §10.5) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
 
 The record knows five kinds of thing that recur across its lines and that the owner wants a page for: a **person**, an **org** (a company invested in or passed on, a club, a brand), a **place**, an **asset** (a boat, an aircraft, a car) and an **idea** (a thread that starts as a repository README, continues in Notion, is spoken of in transcripts, and is built or killed). People review (RFC 0035, `docs/people.md#review`) settled the mechanism for one of them: observed references resolve to a canonical entity under the owner's control; an unresolved proposal is not an identity; nothing is promoted on its own. This RFC generalises that mechanism to the other four, so that one review sitting (`review KIND`) and one page pattern serve all five, and adds the one thing the other four need that a person does not: a **status**, as lines, proposed by the dream and disposed by the owner. A person has no status. A goal is not an entity and has its own verdict, RFC 0036's `review/v1`; a promise has RFC 0034's dispositions (§12).
 
@@ -310,7 +310,7 @@ SPEC §4: derived data inherits the highest tier of its evidence, and a profile 
 | `status/v1`, kind `org` | 3, MUST | `hold`, `add`, `sell` and `exited` describe a position in money; `passed` and `let-go` are decisions (2). The envelope's `tier` is plain (SPEC §4), so a line at 2 among lines at 3 would say, without a key, which companies the owner passed on and which they hold. One tier for all six statuses gives that away to nobody; the cost is that the anti-portfolio seals with age like the portfolio, which is right |
 | `status/v1`, kind `idea` | 2, MUST | a decision about one's own work; the reason is the owner's words |
 | `status/v1`, kind `place` or `asset` | 2, MUST | a decision about one's own place or one's own boat. **No money on the line**: no price, no amount, and no `transaction/v1` line cited; a sale's payment, when the record has one, is a tier-3 line of its own that the page may show beside the status within the ceiling |
-| `note/v1`, label `status` | 2, MUST (RFC 0010) | the owner's words on why, written with a status line that has a reason (§10.5). It carries the words and the entity, never the disposition, so for an org the disposition stays on the tier-3 line; the words themselves are readable at 2, as every note is |
+| `note/v1`, label `status` | 2, MUST (RFC 0010) | the owner's words on why, written with an idea's, a place's or an asset's status line that has a reason (§10.5), and never with an org's. SPEC §4 lets a producer write a higher tier only where the profile's default is a SHOULD, so the note cannot follow an org's line to 3, and at 2 it would carry an org's reason, which can name money, wherever tier 2 crosses: an org's reason stays in the `reason` of its tier-3 status line and nowhere else. No `note/v1` line is written above 2. The note carries the words and the entity, never the disposition; the words are readable at 2, as every note is |
 
 The page's tier is the highest of its lines; an org page that shows ledger lines is 3 and crosses nothing (RFC 0005, ADR 0016). The Manifest shelf groups the orgs by their status lines, which are 3, so it is 3 with or without `--money`; a reader under a ceiling of 2 lists every org under **no status** and says how many status lines it may not show. The Ideas shelf rests on lines at 2 or below and is 2.
 
@@ -334,7 +334,7 @@ The owner's other lines:
 |---|---|---|
 | `entity-review/v1` | `(type, ref, entity id)` against an entity; `(type, ref)` as new, and for a place `(place, point, name)`, the blank's name absent. A place's `point` is one key with every point within the cluster distance of it (§6.3 rule 4). A writer that finds the key held writes nothing and says so; `--migrate-rejects` uses the same key, so its second run writes nothing | `(place, point:55.600000,4.436000, —)` |
 | `status/v1` | `(entity, status, local day)`: the writer refuses a second status equal to the standing one on the same day; a status equal to the standing one on a later day with a new `reason` is written (the owner reaffirmed, and said why, which is how a `hold` mutes a proposal, §10.5) | `(org 019cadd3…0201, hold, 2026-10-12)` |
-| `note/v1`, label `status` | none of its own: one per status line that has a reason, written with it under the same hold of the lock and named by its `note` field | |
+| `note/v1`, label `status` | none of its own: one per idea's, place's or asset's status line that has a reason (an org's writes none, §10.5), written with it under the same hold of the lock and named by its `note` field | |
 
 The `--json` of every reader carries the key beside the id.
 
@@ -353,7 +353,7 @@ The `--json` of every reader carries the key beside the id.
 | `label` | string | SHOULD | the entity's label at the time, for reading the log without any table |
 | `status` | string | MUST | one of the kind's dispositions (§10.3); any other value makes the line invalid for its kind |
 | `reason` | string | SHOULD; MUST for `passed`, `let-go` and `killed` | the owner's words on why. The anti-portfolio is this field: a passed company keeps its thread and its reason |
-| `note` | string | MUST when `reason` is given | the id of the `note/v1` line written with this one, carrying the same words (§10.5) |
+| `note` | string | MUST when `reason` is given, except for an org | the id of the `note/v1` line written with this one, carrying the same words (§10.5). An org's line has none: its reason stays on its tier-3 line, because the note's tier is fixed at 2 by RFC 0010 |
 | `proposed_by` | string | MUST | `dream` when the owner disposed of a proposal the review showed, `owner` when they set it unprompted |
 | `proposal` | object | MAY | what the dream proposed, when `proposed_by` is `dream`: `{ status, score, because: [string] }`, so the record keeps the proposal even when the owner chose another status |
 | `since` | date | MAY | for an org or an idea, the local day the status took effect when it is not the line's own day (an exit in June entered in October) |
@@ -423,7 +423,9 @@ The proposals appear in `review org` and `review idea` under their own heading a
 
 ### 10.5 The reason, as a note
 
-When a status is given a reason, by `--reason` or the terminal's prompt, the writer appends two lines under one hold of the writer lock: first one `note/v1` line (RFC 0010: `source` `manual`, tier 2, `text` the reason as given, `labels` `["status"]`, `extra.entity` the entity's `{ type, id, registry }`), then the `status/v1` line, whose `reason` is the same words and whose `note` names the note. The note carries the entity and never the disposition, so an org's note says nothing at 2 that the owner did not write in it (§8). A status without a reason writes no note.
+When a status is given a reason, by `--reason` or the terminal's prompt, the reason is the `status/v1` line's `reason`, in the owner's words, for every kind. For an idea, a place or an asset the writer appends two lines under one hold of the writer lock: first one `note/v1` line (RFC 0010: `source` `manual`, tier 2, `text` the reason as given, `labels` `["status"]`, `extra.entity` the entity's `{ type, id, registry }`), then the `status/v1` line, whose `reason` is the same words and whose `note` names the note. The note carries the entity and never the disposition.
+
+**An org's reason stays on its tier-3 line, with no note.** RFC 0010 makes a `note/v1` line tier 2 as a MUST, and SPEC §4 allows a higher tier only where the profile's default is a SHOULD, so a note cannot be written at the org line's 3; left at 2, it would carry an org's reason, which can name money, everywhere tier 2 crosses. For an org the writer appends the `status/v1` line alone, its `reason` the words and no `note` field. No status writes a `note/v1` above tier 2, and a status without a reason writes no note. Every reader that shows a reason (`status list`, the review's and the status command's output, the pages) reads it from the status line when there is no note, so an org's reason shows to the owner wherever its tier-3 line may be read, and never at 2.
 
 The note is the owner's words in the place every reader already looks for them: the Day lists it on its day, `search` finds it, and the Ideas shelf reads an idea's **title thread** (§7) and its **reasons** (the status notes, oldest first) and nothing more. Notion bodies stay out of scope: `sync notion` keeps a page's title, hash and word count and never its text, and this RFC reads no body, Notion's or a mail's.
 
@@ -540,29 +542,22 @@ A place's no, carried over from `state/places-review.json` by `--migrate-rejects
  "extra":{"migrated_from":"state/places-review.json"}}}
 ```
 
-A passed company: the reason as a note first, then the status line that names it, the dream's proposal kept beside the owner's word:
-
-```json
-{"at":"2026-06-14T19:40:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"note","tier":2,
- "payload":{"schema":"note/v1","text":"good team, but a kiosk is a place and I do not want to own places","labels":["status"],
- "extra":{"entity":{"type":"org","id":"019cadd3-6bc0-7dcd-9133-000000000202","registry":"logbook"}}}}
-```
+A passed company: one line, tier 3, the reason on it and no note (§10.5), the dream's proposal kept beside the owner's word:
 
 ```json
 {"at":"2026-06-14T19:40:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"status","tier":3,
  "payload":{"schema":"status/v1","entity":{"type":"org","id":"019cadd3-6bc0-7dcd-9133-000000000202","registry":"logbook"},
  "label":"Fjordkiosk AS","status":"passed","reason":"good team, but a kiosk is a place and I do not want to own places",
- "note":"019cadd3-6bc0-7dcd-9133-0000000001d1",
  "proposed_by":"dream","proposal":{"status":"passed","score":40,"because":["3 meetings and 9 mails 2026-03-30 – 2026-05-02","no touch for 180 days","no status line"]},
  "evidence":["019cadd3-6bc0-7dcd-9133-0000000001b1"],"logbook_head":"8f1c…"}}
 ```
 
-A hold with a reason, in answer to a proposed `let-go`: proposals of `let-go` for this org are muted until 2027-10-12 (§10.5). Its note, written first, is `…01d2` and carries the same words:
+A hold with a reason, in answer to a proposed `let-go`: proposals of `let-go` for this org are muted until 2027-10-12 (§10.5). Its reason is on the line and nowhere else:
 
 ```json
 {"at":"2026-10-12T20:20:00Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"status","tier":3,
  "payload":{"schema":"status/v1","entity":{"type":"org","id":"019cadd3-6bc0-7dcd-9133-000000000204","registry":"logbook"},
- "label":"Nordmann Seil AS","status":"hold","reason":"quiet on purpose; the board meets once a year","note":"019cadd3-6bc0-7dcd-9133-0000000001d2",
+ "label":"Nordmann Seil AS","status":"hold","reason":"quiet on purpose; the board meets once a year",
  "proposed_by":"dream","proposal":{"status":"let-go","score":30,"because":["no touch for 365 days under hold"]},
  "supersedes":"019cadd3-6bc0-7dcd-9133-0000000001b2"}}
 ```
@@ -613,7 +608,7 @@ The comment period on the twelve questions closed on 2026-10-14; the owner decid
 2. **One no, or one per kind?** → One profile for every no, `entity-review/v1`; RFC 0035 is amended (an amendment section, not a rewrite) so `people review` writes `entity-review/v1` `type` `person` from now on, and readers accept `people-review/v1` forever (§6) → the sitting is one sitting, and the old lines keep their meaning.
 3. **A place's no: line or state file?** → A line, `entity-review/v1` `type` `place`; `--migrate-rejects` writes the state file's nos as lines once, and the file becomes a cache (§6.4) → a decision of the owner's belongs in the chain, which a backup keeps.
 4. **Who is an org?** → `org` is the only kind on a line; the observed row carries a `hint` (`company`, `brand`, `community`, `personal`) used for ranking only, never written to a line (§4.2) → the guess helps the queue without becoming a fact.
-5. **Ideas and the body?** → `status --reason` writes one `note/v1` (tier 2, label `status`) beside the status line when a reason is given; the Ideas shelf reads the title thread and the reasons; Notion bodies stay out of scope (§10.5, §11) → the owner's own words, kept where notes are, and nothing read that the record does not store.
+5. **Ideas and the body?** → `status --reason` writes one `note/v1` (tier 2, label `status`) beside the status line when a reason is given (for an idea, a place or an asset; an org's reason stays on its tier-3 line, with no note: amended 2026-10-14, §10.5); the Ideas shelf reads the title thread and the reasons; Notion bodies stay out of scope (§10.5, §11) → the owner's own words, kept where notes are, and nothing read that the record does not store.
 6. **A standing no on a status?** → No "never" line; a `hold` with a reason mutes proposals of the rejected disposition for that entity for 365 days, a documented reader rule, settable (§10.5) → the owner's answer is already the line, and a mute that ends cannot outlive the facts.
 7. **One table or three?** → One table, `observed_entities`, with a `kind` column; `observed_people` and `observed_places` become views for one release (§4) → one build and one shape check, without breaking today's readers at once.
 8. **Ledger evidence?** → The entity line never cites a tier-3 line and stays at 2; the owner's `entity-review/v1` line may cite the transaction and is then tier 3; the shelf derives money at read time (§8) → the names stay unsealed by money, and the evidence of a no is kept where it costs nothing.

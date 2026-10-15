@@ -224,23 +224,36 @@ def test_name_accepts_with_the_owner_s_own_name(lb: Logbook, capsys: pytest.Capt
     assert e.value.code == 2 and "already a place" in capsys.readouterr().err
 
 
-def test_reject_records_the_pair_beside_the_record_and_it_is_not_proposed_again(
+def test_reject_writes_one_line_the_file_is_its_cache_and_it_is_not_proposed_again(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     before = _seq(lb)
     out = _review(capsys, "--reject", "4")
     assert f"rejected 4 ≠ {BOATHOUSE}" in out
-    state = json.loads((lb.root / "state" / "places-review.json").read_text(encoding="utf-8"))
-    [pair] = state["rejected"]
+    cache = lb.root / "state" / "places-review.json"
+    [pair] = json.loads(cache.read_text(encoding="utf-8"))["rejected"]
     assert pair["name"] == BOATHOUSE and places.distance_m(pair["lat"], pair["lon"], *S[4]) < 10
-    assert _seq(lb) == before, "a note beside the record, never a line"
+    assert _seq(lb) == before + 1, "one entity-review/v1 line (RFC 0037, decision 3); the file is its cache"
+    line = Logbook(lb.root).line_by_seq(before + 1)
+    assert line is not None and (line["kind"], line["source"], line["tier"]) == ("entity-review", "manual", 2)
+    payload = line["payload"]
+    assert payload["schema"] == "entity-review/v1" and payload["entity"] == {"type": "place"}
+    assert payload["label"] == BOATHOUSE and payload["ref"]["kind"] == "centre" and pair["line"] == line["id"]
+    assert payload["evidence"], "the stays' lines, cited"
     data = _json(capsys)
     assert data["proposals"][3]["name"] is None, "its only name rejected: a blank now"
     assert any(e["name"] == BOATHOUSE for e in data["proposals"][3]["evidence"]), "the evidence stays"
+    cache.unlink()
+    assert _json(capsys) == data, "the cache deleted: nothing a reader shows changes"
+    assert json.loads(cache.read_text(encoding="utf-8"))["rejected"] == [pair], "rebuilt from the line"
     _review(capsys, "--reject", "4")
     data = _json(capsys)
     assert len(data["proposals"]) == 11 and data["held_back"] == 1, "a rejected blank: out of the queue"
     assert all(p["name"] != BOATHOUSE for p in data["proposals"])
+    assert _seq(lb) == before + 2
+    Logbook(lb.root).retract(before + 2, "the spot after all")
+    data = _json(capsys)
+    assert len(data["proposals"]) == 12 and data["held_back"] == 0, "the line retracted: the pair returns"
 
 
 def test_a_reviewed_place_renders_by_name_on_the_day_and_in_serve_at_once(
@@ -354,7 +367,8 @@ def test_the_table_is_served_while_the_record_stands_and_rebuilt_when_it_moves(
     places_review.observed(Logbook(lb.root))
     assert len(built) == 3, "the head moved: rebuilt"
     with sqlite3.connect(lb.index_path) as db:
-        db.execute(f"ALTER TABLE {places_review.TABLE} DROP COLUMN names")
+        db.execute(f"DROP VIEW {places_review.TABLE}")
+        db.execute("ALTER TABLE observed_entities DROP COLUMN spread_m")
     places_review.observed(Logbook(lb.root))
     assert len(built) == 4, "a table of another shape: rebuilt"
 

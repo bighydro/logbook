@@ -355,7 +355,7 @@ def test_merge_and_not_the_same_person_write_what_people_review_writes(
         mine, theirs = _written(mine_root, seq), _written(theirs_root, seq)
         assert len(mine) == len(theirs) == 1
         assert all(_same(a, b, "at") for a, b in zip(mine, theirs, strict=True)), "the clock aside"
-        kind = "resolution" if act == "merge" else "people-review"
+        kind = "resolution" if act == "merge" else people_review.KIND
         assert mine[0]["kind"] == kind and mine[0]["payload"]["raw_id"].startswith("review:")
         review = _section(_get(site, "/people"), '<h2 id="review">')
         assert f'id="{proposal.id}"' not in review, "out of the queue either way"
@@ -402,7 +402,7 @@ def test_a_github_handle_in_the_queue_renders_and_its_acts_write_what_people_rev
         mine, theirs = _written(mine_root, seq), _written(theirs_root, seq)
         assert len(mine) == len(theirs) == 1
         assert all(_same(a, b, "at") for a, b in zip(mine, theirs, strict=True)), "the clock aside"
-        assert mine[0]["kind"] == ("resolution" if act == "merge" else "people-review")
+        assert mine[0]["kind"] == ("resolution" if act == "merge" else people_review.KIND)
         if act == "merge":
             assert mine[0]["payload"]["ref"] == {"kind": "handle", "value": GITHUB_HANDLE}
         after = _section(_get(site, "/people"), '<h2 id="review">')

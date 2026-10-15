@@ -18,16 +18,18 @@ An address seen under three display names is one observed person with three name
 `+447700900101` and as `447700900101@s.whatsapp.net` is one. The other way, one person explodes
 into a row per observation.
 
-**The table.** Observed people are a derived table in the index, `observed_people` in
-`index.sqlite`, keyed by (kind, value) of the strongest identifier, with the display names and the
-identifiers as the lines wrote them, counts per source and per kind, the days seen, first and last
+**The table.** Observed people are the person rows of the index's derived table,
+`observed_entities` in `index.sqlite` (RFC 0037), read through its view `observed_people`, keyed
+by (kind, value) of the strongest identifier, with the display names and the identifiers as the
+lines wrote them, counts per source and per kind, the days seen, first and last
 seen, the tier, a few line ids as evidence, and the canonical person the observation resolves to
 when one of its identifiers has a resolution standing (as written: the readers look a ref up as the
 line carries it) or, for a name alone, when the people reader would place it by that name. The table
 is built from the lines through the index (`Index.of_kind`, mail, message, transcript and event,
-standing lines only, the owner's own identities left out), stamped with the head it was built at,
-served while the head stands and rebuilt when the record grows; its shape is checked with
-`PRAGMA table_info` and a table of another shape is built again. Nothing is stored in the record.
+standing lines only, the owner's own identities left out), stamped with the head it was built at (in
+`observed_entities_meta`), served while the head stands and rebuilt when the record grows; its shape
+is checked with `PRAGMA table_info` and a table of another shape is built again. Nothing is stored
+in the record.
 
 **The queue.** `people review` proposes each observed person not yet placed against each canonical
 person, ranked by the evidence, numbered from 1: the **same email** (an identifier of the observed
@@ -42,9 +44,10 @@ person with no identifier a resolution line can carry (a spoken name alone) is l
 observed person as the lines wrote it, the line `people merge` writes: one `resolution/v1`,
 `source` `manual`, `method` `owner`, `alias_of` the canonical person's own ref (a phone before an
 address), the head the proposal was read against and under `extra` the proposal id, the entity,
-the score and what matched. `--reject N[,N]` writes one `people-review/v1` line (RFC 0035) saying
-the observed person and the canonical person are not the same, with the identifiers, so the pair
-never comes back; retract it and the proposal returns. `--all-above SCORE` accepts every proposal at
+the score and what matched. `--reject N[,N]` writes one `entity-review/v1` line of type person
+(RFC 0037; RFC 0035's `people-review/v1` until then, and read as one forever) saying the observed
+person and the canonical person are not the same, with the identifiers, so the pair never comes
+back; retract it and the proposal returns. `--all-above SCORE` accepts every proposal at
 or above the score. Only `Logbook.append` writes.
 
 **Priority.** `people --priority` ranks the canonical people heard in the last year by a plain
@@ -70,22 +73,23 @@ from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
 from ..core.store import Logbook, now_utc, retractions, uuid7
-from . import google_contacts, people_merge
+from . import entities, google_contacts, people_merge
 from .adapters import phone as phones
 from .adapters import service_account
 from .adapters.ios_contacts import DIAL_PREFIX_ENV
 from .google_contacts import Contact
 
-KIND = "people-review"  # the line a rejection writes
-SCHEMA = "people-review/v1"
+KIND = entities.ENTITY_REVIEW  # the line a rejection writes (RFC 0037, decision 2)
+SCHEMA = entities.ENTITY_REVIEW_SCHEMA
+LEGACY_KIND, LEGACY_SCHEMA = entities.PEOPLE_REVIEW, entities.PEOPLE_REVIEW_SCHEMA  # RFC 0035: read forever
 DIFFERENT = "different"
 SOURCE = people_merge.SOURCE
 METHOD = people_merge.METHOD
 KINDS = ("mail", "message", "transcript", "event")  # the lines a counterpart is observed on
 REF_KINDS = ("email", "phone", "handle", "provider_id")  # an identifier a resolution line can carry
 HANDLE_SERVICES = ("github",)  # `<service>:<login>` handles: a person's own, keyed as a number is
-TABLE = "observed_people"
-TABLE_META = "observed_meta"
+TABLE = "observed_people"  # the view of the person rows of `observed_entities` (RFC 0037)
+OBSERVED_KIND = "person"
 # 2: an agent is never observed (`logbook.core.machine`); 3: a service's handle is a key (`github:<login>`)
 TABLE_VERSION = "3"
 COLUMNS = (
@@ -353,22 +357,24 @@ class Observed:
             "entity": self.entity,
         }
 
-    def _row(self) -> tuple[Any, ...]:
-        return (
-            self.key[0],
-            self.key[1],
-            self.entity,
-            json.dumps(dict(self.labels), ensure_ascii=False),
-            json.dumps([[k, v, n] for (k, v), n in self.identifiers.items()], ensure_ascii=False),
-            json.dumps(dict(self.sources), ensure_ascii=False),
-            json.dumps(dict(self.kinds), ensure_ascii=False),
-            json.dumps(sorted(self.days)),
-            self.first,
-            self.last,
-            self.lines,
-            self.tier,
-            json.dumps(self.samples),
-        )
+    def _row(self) -> dict[str, Any]:
+        """The row of `observed_entities` (`Index.store_observed`) the view reads back as `COLUMNS`."""
+        return {
+            "key_kind": self.key[0],
+            "key_value": self.key[1],
+            "name": self.name,
+            "entity": self.entity,
+            "labels": json.dumps(dict(self.labels), ensure_ascii=False),
+            "refs": json.dumps([[k, v, n] for (k, v), n in self.identifiers.items()], ensure_ascii=False),
+            "sources": json.dumps(dict(self.sources), ensure_ascii=False),
+            "kinds": json.dumps(dict(self.kinds), ensure_ascii=False),
+            "days": json.dumps(sorted(self.days)),
+            "first": self.first,
+            "last": self.last,
+            "count": self.lines,
+            "tier": self.tier,
+            "samples": json.dumps(self.samples),
+        }
 
     @classmethod
     def _from_row(cls, row: Sequence[Any]) -> Observed:
@@ -414,49 +420,23 @@ def observed(lb: Logbook) -> list[Observed]:
 def observed_in(lb: Logbook, idx: Index) -> list[Observed]:
     meta = lb.meta
     stamp = {"head": str(meta["head"]), "timezone": str(meta["timezone"]), "version": TABLE_VERSION}
-    if _table_current(idx.db, stamp):
+    if _table_current(idx, stamp):
         rows = idx.db.execute(
             f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY key_kind, key_value"
         ).fetchall()
         return [Observed._from_row(row) for row in rows]
     found = build(lb, idx)
-    _store(idx.db, found, stamp)
+    idx.store_observed(OBSERVED_KIND, [o._row() for o in found], stamp)
     return found
 
 
-def _table_current(db: sqlite3.Connection, stamp: Mapping[str, str]) -> bool:
-    """Whether the table is there, of the shape this module writes, and stamped with this head."""
+def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
+    """Whether the view is there, of the shape this module reads, and its rows stamped with this head."""
     try:
-        columns = {str(row[1]) for row in db.execute(f"PRAGMA table_info({TABLE})")}
-        if not set(COLUMNS) <= columns:
-            return False
-        stored = dict(db.execute(f"SELECT key, value FROM {TABLE_META}"))
+        columns = {str(row[1]) for row in idx.db.execute(f"PRAGMA table_info({TABLE})")}
     except sqlite3.DatabaseError:
         return False
-    return stored == dict(stamp)
-
-
-def _store(db: sqlite3.Connection, found: Sequence[Observed], stamp: Mapping[str, str]) -> None:
-    db.execute("BEGIN")
-    try:
-        db.execute(f"DROP TABLE IF EXISTS {TABLE}")
-        db.execute(f"DROP TABLE IF EXISTS {TABLE_META}")
-        db.execute(
-            f"CREATE TABLE {TABLE} (key_kind TEXT NOT NULL, key_value TEXT NOT NULL, entity TEXT,"
-            " labels TEXT NOT NULL, identifiers TEXT NOT NULL, sources TEXT NOT NULL, kinds TEXT NOT NULL,"
-            " days TEXT NOT NULL, first TEXT, last TEXT, lines INTEGER NOT NULL, tier INTEGER NOT NULL,"
-            " samples TEXT NOT NULL, PRIMARY KEY (key_kind, key_value))"
-        )
-        db.execute(f"CREATE TABLE {TABLE_META} (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany(
-            f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
-            [o._row() for o in found],
-        )
-        db.executemany(f"INSERT INTO {TABLE_META} VALUES (?, ?)", list(stamp.items()))
-        db.execute("COMMIT")
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
+    return set(COLUMNS) <= columns and idx.observed_stamp(OBSERVED_KIND) == dict(stamp)
 
 
 def build(lb: Logbook, idx: Index) -> list[Observed]:
@@ -629,7 +609,7 @@ def read(lb: Logbook, book: google_contacts.Book | None = None) -> Report:
     rows = observed(lb)
     with lb.index() as idx:
         marks, resolutions = idx.retractions(), idx.resolutions()
-        reviews = idx.by_kind(KIND)
+        reviews = [*idx.by_kind(LEGACY_KIND), *idx.by_kind(KIND)]
     lines = [*marks, *resolutions]
     standing = resolve.standing(lines)
     identities = resolve.identities_from(lines)
@@ -692,16 +672,19 @@ class Rejected:
 
 
 def rejections(reviews: Iterable[Line], retracted: frozenset[str]) -> Rejected:
-    """The standing `people-review/v1` lines with verdict `different`, read into `Rejected`."""
+    """The standing `entity-review/v1` lines of type person and `people-review/v1` lines with
+    verdict `different`, read into `Rejected`."""
     found: dict[str, set[Ref]] = {}
     pairs = 0
     for line in reviews:
         if str(line.get("id")) in retracted:
             continue
         payload = line.get("payload") or {}
-        if payload.get("schema") != SCHEMA or payload.get("verdict") != DIFFERENT:
+        if payload.get("schema") not in (SCHEMA, LEGACY_SCHEMA) or payload.get("verdict") != DIFFERENT:
             continue
         entity = payload.get("entity")
+        if payload.get("schema") == SCHEMA and entities.kind_of(entity) != entities.PERSON:
+            continue  # another kind's no
         entity_id = entity.get("id") if isinstance(entity, dict) else None
         if not isinstance(entity_id, str) or not entity_id:
             continue
@@ -1057,10 +1040,11 @@ def _named(lb: Logbook, report: Report, p: Proposal, minted: dict[str, str], at:
 
 
 def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[Written]:
-    """The proposals rejected: one `people-review/v1` line each, saying the observed person and
-    the canonical person are not the same, appended through `Logbook.append`. A contact proposal's no
-    writes no line, the contact not being in the record: its id is kept in
-    `state/google-contacts-review.json` (`google_contacts.reject`) and it is not proposed again."""
+    """The proposals rejected: one `entity-review/v1` line of type person each, saying the observed
+    person and the canonical person are not the same, appended through `Logbook.append`; its tier
+    the evidence's, never under 2 (a decision). A contact proposal's no writes no line, the contact
+    not being in the record: its id is kept in `state/google-contacts-review.json`
+    (`google_contacts.reject`) and it is not proposed again."""
     at = now_utc()
     passed = [p.id for p in proposals if p.canonical is None]
     if passed:
@@ -1085,7 +1069,9 @@ def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
             "raw_id": f"review:{DIFFERENT}:{p.id}",
             "extra": {"review": p.id, "score": p.score, "matched": list(p.evidence)},
         }
-        line = lb.append(at=at, source=SOURCE, kind=KIND, tier=p.tier, payload=payload)
+        line = lb.append(
+            at=at, source=SOURCE, kind=KIND, tier=entities.review_tier([p.tier]), payload=payload
+        )
         written.append(Written(p, "rejected", [line]))
     return written
 

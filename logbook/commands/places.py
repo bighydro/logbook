@@ -6,7 +6,7 @@ import argparse
 import dataclasses
 import json
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -16,6 +16,7 @@ from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import Logbook
 from .common import EN_DASH, Subparsers, _csv, _distance_text, _plural
+from .review import Queue
 
 if TYPE_CHECKING:
     from ..contrib.adapters.takeout import maps as takeout_maps
@@ -149,6 +150,11 @@ def places_arguments(sub: Subparsers) -> None:
         "--verbose",
         action="store_true",
         help="every name on its own: no folding of a street's addresses, no `… and N more`",
+    )
+    v.add_argument(
+        "--migrate-rejects",
+        action="store_true",
+        help="write the noes state/places-review.json holds from before 0.7 as entity-review/v1 lines, once",
     )
     v.add_argument("--json", action="store_true", help="the queue, or what was written, as one JSON object")
     v.set_defaults(fn=cmd_places)
@@ -349,83 +355,123 @@ def _ask_name(p: places.Proposal) -> str | None:
 
 def _places_review(lb: Logbook, a: argparse.Namespace) -> None:
     """`places review [--top N] [--near PLACE] [--accept N[,N]] [--name N NAME] [--reject N[,N]]
-    [--radius M] [--verbose] [--ask-photos [--all] [--limit N] [--photos-library PATH]] [--json]`: the
-    observed places at no named place, ranked and numbered, each with the name the record's sources
-    gave it and the evidence, folded by street and cut at three lines unless `--verbose`
-    (`logbook.contrib.places_review`). Nothing is written unless told: `--accept` and `--name` write
-    places.json and one naming note each, `--reject` the pair into `state/places-review.json`; every
-    number is checked before anything is written. On a terminal, with nothing told, it asks for each
-    proposal shown. `--ask-photos` adds what the photo libraries say about the blanks shown, or the
-    proposals told (`logbook.contrib.places_photos`), before any of that; the queue and its numbers
-    are the same without it."""
+    [--radius M] [--verbose] [--ask-photos [--all] [--limit N] [--photos-library PATH]]
+    [--migrate-rejects] [--json]`: the observed places at no named place, ranked and numbered, each
+    with the name the record's sources gave it and the evidence, folded by street and cut at three
+    lines unless `--verbose` (`logbook.contrib.places_review`). Nothing is written unless told:
+    `--accept` and `--name` write places.json and one naming note each, `--reject` one
+    `entity-review/v1` line of type place (RFC 0037, decision 3); every number is checked before
+    anything is written. On a terminal, with nothing told, it asks for each proposal shown.
+    `--ask-photos` adds what the photo libraries say about the blanks shown, or the proposals told
+    (`logbook.contrib.places_photos`), before any of that; the queue and its numbers are the same
+    without it. `--migrate-rejects` writes the noes `state/places-review.json` holds from before 0.7
+    as lines, once. The sitting is `review place`'s (`logbook.commands.review.sitting`)."""
+    from .review import sitting
+
+    sitting(PlaceQueue(), lb, a)
+
+
+class PlaceQueue(Queue):
+    """The place's queue as `review` drives it (`logbook.commands.review.sitting`): places review's
+    reading and writing (`logbook.contrib.places_review`), the photos asked, the terminal's questions."""
+
+    kind = "place"
+
+    def __init__(self) -> None:
+        from ..contrib import places_review
+
+        self.module = places_review
+        self.error = places_review.ReviewError
+
+    def check(self, a: argparse.Namespace) -> None:
+        if a.top is not None and a.top < 0:
+            raise self.error(f"--top takes a number from 0, not {a.top}")
+        _check_ask_photos(a)
+
+    def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
+        if getattr(a, "migrate_rejects", False):
+            _migrate_rejects(lb, a)
+        radius = self.module.CLUSTER_M if a.radius is None else float(a.radius)
+        report = self.module.read(lb, radius)
+        old = self.module.legacy(lb.root)
+        if old and not getattr(a, "migrate_rejects", False):
+            noes = _plural(len(old), "no", "noes")
+            print(
+                f"{noes} in {self.module.STATE_FILE} {'is' if len(old) == 1 else 'are'} not a line yet:"
+                " `setup places review --migrate-rejects` writes them, once",
+                file=sys.stderr,
+            )
+        return report
+
+    def numbers(self, text: Sequence[str] | None) -> list[int]:
+        return self.module.numbers(text)
+
+    def pick(self, report: Any, wanted: Sequence[int]) -> list[Any]:
+        return self.module.pick(report, wanted)
+
+    def above(self, report: Any, score: str) -> list[Any]:
+        raise self.error("a place's proposal has no score; --all-above goes with person, org, idea and asset")
+
+    def before_writing(
+        self,
+        lb: Logbook,
+        report: Any,
+        accepted: Sequence[int],
+        rejected: Sequence[int],
+        a: argparse.Namespace,
+    ) -> Any:
+        if a.ask_photos and (accepted or rejected):  # `--name` gives its own name: nothing to ask for it
+            report, _asked = _ask_photos(lb, report, self.module.pick(report, [*accepted, *rejected]), a)
+        return report
+
+    def write(
+        self, lb: Logbook, report: Any, chosen: Sequence[tuple[Any, str | None]], rejected: Sequence[Any]
+    ) -> list[Any]:
+        return [*self.module.accept(lb, chosen), *self.module.reject(lb, rejected)]
+
+    def shown(self, lb: Logbook, report: Any, a: argparse.Namespace) -> tuple[Any, list[Any], dict[str, Any]]:
+        shown = self.module.near(report, a.near) if a.near else report.proposals
+        if a.top is not None:
+            shown = shown[: a.top]
+        extra: dict[str, Any] = {}
+        if a.ask_photos:
+            report, asked = _ask_photos(lb, report, shown, a)
+            numbers = {p.number for p in shown}
+            shown = [p for p in report.proposals if p.number in numbers]
+            extra["asked_photos"] = [o.to_json() for o in asked]
+        return report, list(shown), extra
+
+    def report_json(self, report: Any, shown: Sequence[Any], extra: dict[str, Any]) -> dict[str, Any]:
+        data: dict[str, Any] = report.to_json(shown)
+        return {**data, **extra}
+
+    def rows(self, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> Iterable[str]:
+        return self.module.rows(report, shown, a.verbose)
+
+    def written_rows(self, written: Sequence[Any]) -> Iterable[str]:
+        return self.module.written_rows(written)
+
+    def ask_on_a_tty(self, lb: Logbook, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> bool:
+        if not _on_a_tty():
+            return False
+        _review_on_a_tty(lb, report, list(shown), a.verbose)
+        return True
+
+
+def _migrate_rejects(lb: Logbook, a: argparse.Namespace) -> None:
+    """`--migrate-rejects`: the noes of `state/places-review.json` from before 0.7 written once as
+    lines; said on stderr, so the queue that follows on stdout, and its JSON, stay as they are."""
     from ..contrib import places_review
 
-    radius = places_review.CLUSTER_M if a.radius is None else float(a.radius)
-    if a.top is not None and a.top < 0:
-        raise places_review.ReviewError(f"--top takes a number from 0, not {a.top}")
-    _check_ask_photos(a)
-    report = places_review.read(lb, radius)
-    accepted = places_review.numbers(a.accept)
-    rejected = places_review.numbers(a.reject)
-    named: list[tuple[int, str]] = []
-    for number, text in a.name or []:
-        found = places_review.numbers([number])
-        if len(found) != 1:
-            raise places_review.ReviewError(
-                f'--name takes one number and a name: --name 3 "The cabin", not {number!r}'
-            )
-        named.append((found[0], text))
-    told = [*accepted, *(n for n, _ in named)]
-    both = sorted(set(told) & set(rejected))
-    if both:
-        raise places_review.ReviewError(
-            f"proposal {', '.join(map(str, both))} is both accepted and rejected; say one"
-        )
-    twice = sorted({n for n in told if told.count(n) > 1})
-    if twice:
-        raise places_review.ReviewError(
-            f"proposal {', '.join(map(str, twice))} is given --accept and --name, or --name twice; say one"
-        )
-    if told or rejected:
-        if a.ask_photos and (accepted or rejected):  # `--name` gives its own name: nothing to ask for it
-            places_review.pick(report, told)  # every number checked before anything is asked
-            report, _asked = _ask_photos(lb, report, places_review.pick(report, [*accepted, *rejected]), a)
-        chosen: list[tuple[places_review.Proposal, str | None]] = [
-            (p, None) for p in places_review.pick(report, accepted)
-        ]
-        chosen += [
-            (p, text)
-            for p, (_n, text) in zip(places_review.pick(report, [n for n, _ in named]), named, strict=True)
-        ]
-        written = [
-            *places_review.accept(lb, chosen),
-            *places_review.reject(lb, places_review.pick(report, rejected)),
-        ]
-        if a.json:
-            print(json.dumps({"written": [w.to_json() for w in written]}, indent=2, ensure_ascii=False))
-            return
-        for text in places_review.written_rows(written):
-            print(text)
-        return
-    shown = places_review.near(report, a.near) if a.near else report.proposals
-    if a.top is not None:
-        shown = shown[: a.top]
-    asked: list[Any] | None = None
-    if a.ask_photos:
-        report, asked = _ask_photos(lb, report, shown, a)
-        numbers = {p.number for p in shown}
-        shown = [p for p in report.proposals if p.number in numbers]
-    if a.json:
-        data = report.to_json(shown)
-        if asked is not None:
-            data["asked_photos"] = [o.to_json() for o in asked]
-        print(json.dumps(data, indent=2, ensure_ascii=False))
-        return
-    if shown and _on_a_tty():
-        _review_on_a_tty(lb, report, shown, a.verbose)
-        return
-    for text in places_review.rows(report, shown, a.verbose):
-        print(text)
+    done = places_review.migrate_rejects(lb)
+    parts = [f"wrote {_plural(len(done.written), 'line')}"]
+    if done.already:
+        parts.append(f"{done.already} already lines")
+    if done.skipped:
+        parts.append(f"{done.skipped} not a pair, skipped")
+    seqs = [int(line["seq"]) for line in done.written]
+    span = f" (#{seqs[0]})" if len(seqs) == 1 else f" (#{seqs[0]}{EN_DASH}#{seqs[-1]})" if seqs else ""
+    print(f"migrate-rejects: {', '.join(parts)}{span}", file=sys.stderr)
 
 
 def _check_ask_photos(a: argparse.Namespace) -> None:

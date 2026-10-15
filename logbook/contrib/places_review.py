@@ -5,9 +5,10 @@ place is a spot the owner's track comes back to: a cluster of the owner's stays.
 is one the owner has given a name, an entry of `places.json`. Nothing here invents a third store:
 the named places are read as every reader reads them, and a naming is what `places name` writes.
 
-**The table.** Observed places are a derived table in the index, `observed_places` in
-`index.sqlite`. The owner's stays of the whole record (`reading.owner_track`: from the index alone,
-so two million points are read in seconds) are taken in order of hours, most first; a stay joins the
+**The table.** Observed places are the place rows of the index's derived table,
+`observed_entities` in `index.sqlite` (RFC 0037), read through its view `observed_places`. The
+owner's stays of the whole record (`reading.owner_track`: from the index alone, so two million
+points are read in seconds) are taken in order of hours, most first; a stay joins the
 nearest cluster whose anchor — its first stay, the one with the most hours — lies within
 `CLUSTER_M`, **75 m** by default (`--radius`), else it anchors a cluster of its own. An anchor, not
 a running centre, as the stays themselves are clustered, so a row of stays along a quay does not
@@ -17,10 +18,10 @@ stay's start, the last stay's end), its total **hours**, its centre (the mean of
 weighted by hours), its **spread** (the distance from the centre within which 95% of its hours
 lie), the named place it lies in (the one most of its hours were at, else the one whose radius holds
 its centre), the asset most of its hours were aboard, and the **names** the record holds for the
-spot. The table is built from the lines, stamped with the head, the zone, the radius and the digests
-of `places.json`, `assets.json` and `policy/stays.json`, served while the stamp holds and built
-again when it does not; its shape is checked with `PRAGMA table_info` and a table of another shape
-is built again. Nothing is stored in the record.
+spot. The rows are built from the lines, stamped with the head, the zone, the radius and the digests
+of `places.json`, `assets.json` and `policy/stays.json` (in `observed_entities_meta`), served while
+the stamp holds and built again when it does not; its shape is checked with `PRAGMA table_info`
+and a table of another shape is built again. Nothing is stored in the record.
 
 **The names.** Only what the record already holds, from any source; each name counts under the
 source that said it:
@@ -64,10 +65,16 @@ same folding, from the same code.
 **The owner's say.** Nothing is accepted on its own. `--accept N[,N]` writes each place into
 `places.json` — the cluster's centre, its fitted radius, kind `other` — and puts the naming in the
 record as `places name` does, one `note/v1` line through `Logbook.append` (`places.name`).
-`--name N "…"` accepts with the owner's own name. `--reject N[,N]` records the pair — the spot and
-the name proposed, or the blank — in `state/places-review.json`, bookkeeping beside the record and
-never a line: that name is not proposed for that spot again, and a rejected blank keeps the spot out
-of the queue until a source names it. Every number is checked before anything is written. On a
+`--name N "…"` accepts with the owner's own name. `--reject N[,N]` puts the pair — the spot and the
+name proposed, or the blank — in the record as one `entity-review/v1` line of type place (RFC 0037,
+decision 3 of 13 October 2026: its `ref` the spot's `centre`, its `label` the name, its `evidence` the
+stays' lines, its tier the highest of theirs and never under 2), under the writer lock; the Places
+page of `logbook serve` rejects through the same `reject`. That name is not proposed for that spot
+again, and a rejected blank keeps the spot out of the queue until a source names it; retract the line
+and the pair returns. `state/places-review.json` is a cache of those lines, rebuilt from them whenever
+the record has moved, never the truth: deleting it changes nothing a reader shows. A no it holds from
+before 0.7, when the pairs were kept there and never as lines, counts until `--migrate-rejects` writes
+it as a line, once (`migrate_rejects`). Every number is checked before anything is written. On a
 terminal, `review` asks for each proposal: y, n, or a name (`logbook.commands.places`).
 
 **The fitted radius.** The spread and 75 m for the scatter of one stay's own fixes, rounded up to
@@ -94,8 +101,10 @@ from zoneinfo import ZoneInfo
 
 from ..core import assets, places, reading, stays
 from ..core.chain import Line
+from ..core.index import Index
 from ..core.places import Place
 from ..core.store import RETRACTION, Logbook, now_utc
+from . import entities
 
 CLUSTER_M = 75.0  # a stay this close to a cluster's anchor is at that spot
 MATCH_M = 150.0  # a name with coordinates this close to a cluster's centre names it
@@ -103,8 +112,8 @@ EVENT_NEAR_M = 1000.0  # a calendar entry located farther than this from the clu
 SPREAD_SHARE = 0.95  # the spread: the distance within which this share of a cluster's hours lie
 FIT_MARGIN_M, FIT_STEP_M, FIT_MIN_M, FIT_MAX_M, FIT_FLOOR_M = 75.0, 5.0, 75.0, 300.0, 50.0
 NEAR_KM = 5.0  # `--near`: within this of the place
-TABLE = "observed_places"
-TABLE_META = "observed_places_meta"
+TABLE = "observed_places"  # the view of the place rows of `observed_entities` (RFC 0037)
+OBSERVED_KIND = "place"
 TABLE_VERSION = "1"
 COLUMNS = (
     "id",
@@ -121,7 +130,8 @@ COLUMNS = (
     "names",
     "lines",
 )
-STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: bookkeeping, never a line
+STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: a cache of the lines
+MIGRATED_FROM = str(STATE_FILE)  # `extra.migrated_from` of a line `--migrate-rejects` wrote
 TIMELINE_SEGMENTS = {"visit:": "visit", "placeVisit:": "placeVisit"}  # raw_id prefix → `extra.segment`
 # a line's weight for a specific name; `library` is a photo whose library was asked (`places_photos`)
 WEIGHTS = {"timeline": 3, "calendar": 3, "photo": 2, "dawarich": 2, "library": 2}
@@ -226,22 +236,26 @@ class Observed:
             "lines": list(self.lines),
         }
 
-    def _row(self) -> tuple[Any, ...]:
-        return (
-            self.id,
-            self.lat,
-            self.lon,
-            self.visits,
-            self.nights,
-            self.hours,
-            self.first,
-            self.last,
-            self.spread_m,
-            self.place,
-            self.aboard,
-            json.dumps([n.to_json() for n in self.names], ensure_ascii=False),
-            json.dumps(self.lines),
-        )
+    def _row(self) -> dict[str, Any]:
+        """The row of `observed_entities` (`Index.store_observed`) the view reads back as `COLUMNS`:
+        the spot's centre is its key, the named place it lies in its entity."""
+        return {
+            "key_kind": "centre",
+            "key_value": self.id.removeprefix("place:"),
+            "name": self.names[0].name if self.names else None,
+            "entity": self.place,
+            "labels": json.dumps([n.to_json() for n in self.names], ensure_ascii=False),
+            "first": self.first,
+            "last": self.last,
+            "count": self.visits,
+            "samples": json.dumps(self.lines),
+            "lat": self.lat,
+            "lon": self.lon,
+            "nights": self.nights,
+            "hours": self.hours,
+            "spread_m": self.spread_m,
+            "aboard": self.aboard,
+        }
 
     @classmethod
     def _from_row(cls, row: Sequence[Any]) -> Observed:
@@ -268,12 +282,12 @@ def observed(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     holds, built from the lines and stored otherwise. Writes nothing to the record."""
     stamp = _stamp(lb, cluster_m)
     with lb.index() as idx:
-        if _table_current(idx.db, stamp):
+        if _table_current(idx, stamp):
             rows = idx.db.execute(f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY rowid").fetchall()
             return [Observed._from_row(row) for row in rows]
     found = build(lb, cluster_m)
     with lb.index() as idx:
-        _store(idx.db, found, stamp)
+        idx.store_observed(OBSERVED_KIND, [o._row() for o in found], stamp)
     return found
 
 
@@ -297,39 +311,13 @@ def _digest(path: Path) -> str:
         return ""
 
 
-def _table_current(db: sqlite3.Connection, stamp: Mapping[str, str]) -> bool:
-    """Whether the table is there, of the shape this module writes, and stamped as asked."""
+def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
+    """Whether the view is there, of the shape this module reads, and its rows stamped as asked."""
     try:
-        columns = {str(row[1]) for row in db.execute(f"PRAGMA table_info({TABLE})")}
-        if not set(COLUMNS) <= columns:
-            return False
-        stored = dict(db.execute(f"SELECT key, value FROM {TABLE_META}"))
+        columns = {str(row[1]) for row in idx.db.execute(f"PRAGMA table_info({TABLE})")}
     except sqlite3.DatabaseError:
         return False
-    return stored == dict(stamp)
-
-
-def _store(db: sqlite3.Connection, found: Sequence[Observed], stamp: Mapping[str, str]) -> None:
-    db.execute("BEGIN")
-    try:
-        db.execute(f"DROP TABLE IF EXISTS {TABLE}")
-        db.execute(f"DROP TABLE IF EXISTS {TABLE_META}")
-        db.execute(
-            f"CREATE TABLE {TABLE} (id TEXT NOT NULL, lat REAL NOT NULL, lon REAL NOT NULL,"
-            " visits INTEGER NOT NULL, nights INTEGER NOT NULL, hours REAL NOT NULL, first TEXT NOT NULL,"
-            " last TEXT NOT NULL, spread_m REAL NOT NULL, place TEXT, aboard TEXT, names TEXT NOT NULL,"
-            " lines TEXT NOT NULL)"
-        )
-        db.execute(f"CREATE TABLE {TABLE_META} (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany(
-            f"INSERT INTO {TABLE} ({', '.join(COLUMNS)}) VALUES ({', '.join('?' * len(COLUMNS))})",
-            [o._row() for o in found],
-        )
-        db.executemany(f"INSERT INTO {TABLE_META} VALUES (?, ?)", list(stamp.items()))
-        db.execute("COMMIT")
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
+    return set(COLUMNS) <= columns and idx.observed_stamp(OBSERVED_KIND) == dict(stamp)
 
 
 def build(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
@@ -811,7 +799,7 @@ def read(lb: Logbook, cluster_m: float = CLUSTER_M) -> Report:
     found = observed(lb, cluster_m)
     known = stays.read_places(lb.root, stays.read_settings(lb.root).radius_m)
     taken = {p.name.casefold() for p in known}
-    rejected = _rejected(lb.root)
+    rejected = rejections(lb)
     proposals: list[Proposal] = []
     named = held_back = 0
     for o in found:
@@ -975,28 +963,80 @@ class Rejection:
     name: str | None
 
 
+def centre(lat: float, lon: float) -> str:
+    """A spot's `centre` ref value, `lat,lon` to six decimals, as the state file kept the pair."""
+    return f"{lat:.6f},{lon:.6f}"
+
+
 def reject(lb: Logbook, proposals: Sequence[Proposal]) -> list[Written]:
-    """Each proposal rejected: the pair — its spot and the name proposed, or the blank — appended to
-    `state/places-review.json`, so the pair is never proposed again. Never a line of the record."""
-    path = state_path(lb.root)
-    state = _state(path)
+    """Each proposal rejected: one `entity-review/v1` line of type place through `Logbook.append` —
+    the spot's centre and the name proposed, or the blank, citing the stays' lines, at the highest
+    of their tiers and never under 2 — under one hold of the writer lock, so the pair is never
+    proposed again; then the cache in `state/places-review.json` is rebuilt from the lines."""
     at = now_utc()
-    for p in proposals:
-        state["rejected"].append(
-            {"lat": round(p.lat, 6), "lon": round(p.lon, 6), "name": p.name, "id": p.id, "rejected_at": at}
-        )
+    written = []
+    with lb.writer():
+        head = str(lb.meta["head"])
+        with lb.index() as idx:
+            tiers = {
+                line_id: int(line.get("tier", 0))
+                for line_id, line in idx.by_ids(i for p in proposals for i in p.observed.lines).items()
+            }
+        for p in proposals:
+            evidence = list(p.observed.lines)
+            cited = [tiers[i] for i in evidence if i in tiers]
+            line = _no(lb, at, head, p.lat, p.lon, p.name, evidence, {"review": p.id}, cited)
+            written.append(Written(p, "rejected", p.name, line=line))
+    rejections(lb)
+    return written
+
+
+def _write_state(path: Path, state: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_bytes((json.dumps(state, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
     os.replace(temporary, path)
-    return [Written(p, "rejected", p.name) for p in proposals]
+
+
+def _no(
+    lb: Logbook,
+    at: str,
+    head: str,
+    lat: float,
+    lon: float,
+    name: str | None,
+    evidence: list[str],
+    extra: dict[str, Any],
+    cited: Iterable[int] = (),
+) -> Line:
+    """One `entity-review/v1` line of type place: `cited` the tiers of the `evidence` lines the record
+    has, so the line's tier is the highest of them and never under 2 (`entities.review_tier`)."""
+    payload = entities.review_payload(
+        entities.PLACE,
+        ("centre", centre(lat, lon)),
+        label=name,
+        evidence=evidence,
+        head=head,
+        raw_id=f"review:{entities.DIFFERENT}:place:{centre(lat, lon)}:{name or ''}",
+        extra=extra,
+    )
+    problems = entities.validate_entity_review(payload)
+    if problems:
+        raise ReviewError(problems[0])
+    return lb.append(
+        at=at,
+        source=entities.SOURCE,
+        kind=entities.ENTITY_REVIEW,
+        tier=entities.review_tier(cited),
+        payload=payload,
+    )
 
 
 def state_path(root: Path) -> Path:
     return Path(root).joinpath(*STATE_FILE.parts)
 
 
-def _state(path: Path) -> dict[str, list[dict[str, Any]]]:
+def _state(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"rejected": []}
     try:
@@ -1009,7 +1049,62 @@ def _state(path: Path) -> dict[str, list[dict[str, Any]]]:
     return {**data, "rejected": rows}
 
 
+def _pair(row: object) -> tuple[str, str | None] | None:
+    """(centre, the name casefolded, or None for the blank) of one state row; None when it is not one."""
+    if not isinstance(row, dict):
+        return None
+    lat, lon = _coordinates(row.get("lat"), row.get("lon"))
+    name = row.get("name")
+    if lat is None or lon is None or not (name is None or isinstance(name, str)):
+        return None
+    return centre(lat, lon), None if name is None else name.casefold()
+
+
+def _lines_rows(lb: Logbook) -> list[dict[str, Any]]:
+    """The standing place noes of the record, as rows of the state file, each naming its line."""
+    with lb.index() as idx:
+        noes = entities.reviews([*idx.retractions(), *idx.by_kind(entities.ENTITY_REVIEW)])
+    rows = []
+    for no in noes:
+        if no.kind != entities.PLACE or no.ref[0] != "centre" or no.entity is not None:
+            continue
+        try:
+            lat, lon = (float(x) for x in no.ref[1].split(","))
+        except ValueError:
+            continue
+        rows.append(
+            {"lat": lat, "lon": lon, "name": no.label, "id": f"place:{lat:.4f},{lon:.4f}",
+             "rejected_at": no.at, "line": no.line}
+        )  # fmt: skip
+    return rows
+
+
+def legacy(root: Path) -> list[dict[str, Any]]:
+    """The rows of `state/places-review.json` that are no line yet: written there before 0.7."""
+    return [
+        row for row in _state(state_path(root))["rejected"] if isinstance(row, dict) and "line" not in row
+    ]
+
+
+def rejections(lb: Logbook) -> list[Rejection]:
+    """The pairs the owner rejected: the cache when it was rebuilt at this head, else rebuilt now
+    from the standing `entity-review/v1` lines of type place and the rows from before 0.7 that no
+    line holds yet. The file is written only when it exists or has something to hold."""
+    path = state_path(lb.root)
+    state = _state(path)
+    head = str(lb.meta["head"])
+    if state.get("head") != head:
+        rows = _lines_rows(lb)
+        held = {_pair(row) for row in rows}
+        rows = [row for row in state["rejected"] if isinstance(row, dict) and "line" not in row
+                and _pair(row) not in held] + rows  # fmt: skip
+        if path.exists() or rows:
+            _write_state(path, {**state, "head": head, "rejected": rows})
+    return _rejected(lb.root)
+
+
 def _rejected(root: Path) -> list[Rejection]:
+    """The pairs the cache holds (`rejections` keeps it current; `places_photos` reads it after it)."""
     found = []
     for row in _state(state_path(root))["rejected"]:
         if not isinstance(row, dict):
@@ -1019,6 +1114,52 @@ def _rejected(root: Path) -> list[Rejection]:
         if lat is not None and lon is not None and (name is None or isinstance(name, str)):
             found.append(Rejection(lat, lon, name))
     return found
+
+
+@dataclass(frozen=True)
+class Migrated:
+    written: list[Line]
+    already: int  # rows a standing line holds already
+    skipped: int  # rows that are not a pair
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "written": [str(line["id"]) for line in self.written],
+            "already": self.already,
+            "skipped": self.skipped,
+        }
+
+
+def migrate_rejects(lb: Logbook) -> Migrated:
+    """`places review --migrate-rejects`: every no `state/places-review.json` holds from before
+    0.7 written once as an `entity-review/v1` line of type place, at the moment it was said
+    (`rejected_at`), under one hold of the writer lock; a pair a standing line holds already is
+    passed over, so a second run writes nothing. Then the file is rebuilt from the lines."""
+    written: list[Line] = []
+    already = skipped = 0
+    with lb.writer():
+        held = {_pair(row) for row in _lines_rows(lb)}
+        head = str(lb.meta["head"])
+        for row in legacy(lb.root):
+            pair = _pair(row)
+            if pair is None:
+                skipped += 1
+                continue
+            if pair in held:
+                already += 1
+                continue
+            held.add(pair)
+            lat, lon = _coordinates(row.get("lat"), row.get("lon"))
+            assert lat is not None and lon is not None
+            said = row.get("rejected_at")
+            at = said if isinstance(said, str) and stays.instant(said) is not None else now_utc()
+            extra = {
+                "migrated_from": MIGRATED_FROM,
+                "review": str(row.get("id") or f"place:{lat:.4f},{lon:.4f}"),
+            }
+            written.append(_no(lb, at, head, lat, lon, row.get("name"), [], extra))
+        rejections(lb)
+    return Migrated(written, already, skipped)
 
 
 # -- the evidence, folded ----------------------------------------------------------------------------------

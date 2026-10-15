@@ -130,7 +130,7 @@ def test_the_observed_table_lives_in_the_index_and_follows_the_record(
         columns = {row[1] for row in db.execute(f"PRAGMA table_info({people_review.TABLE})")}
         assert set(people_review.COLUMNS) <= columns
         assert db.execute(f"SELECT count(*) FROM {people_review.TABLE}").fetchone()[0] == len(before)
-        head = dict(db.execute(f"SELECT key, value FROM {people_review.TABLE_META}"))["head"]
+        head = dict(db.execute("SELECT key, value FROM observed_entities_meta WHERE kind = 'person'"))["head"]
         assert head == lb.meta["head"]
     finally:
         db.close()
@@ -145,7 +145,8 @@ def test_the_observed_table_lives_in_the_index_and_follows_the_record(
     assert len(after) == len(before) + 1, "rebuilt from the lines once the head moved"
     db = sqlite3.connect(lb.index_path)
     try:
-        db.execute(f"ALTER TABLE {people_review.TABLE} DROP COLUMN days")
+        db.execute(f"DROP VIEW {people_review.TABLE}")
+        db.execute("ALTER TABLE observed_entities DROP COLUMN days")
         db.commit()
     finally:
         db.close()
