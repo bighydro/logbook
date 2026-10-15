@@ -67,6 +67,7 @@ def _page_progress(
 
 
 SLOW_LAST = ("immich",)  # a walk over a photo library takes hours: `--all` runs it after the rest
+NOTION = "notion"  # the one source with `--relations-backfill`
 
 
 def _all_order(live: Iterable[adapters.LiveAdapter]) -> list[adapters.LiveAdapter]:
@@ -104,7 +105,9 @@ def sync_arguments(sub: Subparsers) -> None:
         " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
         " (LOGBOOK_GCAL_URLS) only without the two."
         " notion: what happened to each page on each day (LOGBOOK_NOTION_TOKEN; LOGBOOK_NOTION_ROOTS,"
-        " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text."
+        " LOGBOOK_NOTION_OWNER_ID), one event line per page, day and action, never the page's text; a"
+        " database row's relations as the ids of the rows it links to; --relations-backfill for the rows"
+        " whose relations the record does not hold yet."
         " github: commits, issues and pull requests created, closed and merged, reviews and comments, one"
         " event line each, read-only (LOGBOOK_GITHUB_TOKEN, a fine-grained read-only token;"
         " LOGBOOK_GITHUB_REPOS, owner/name list or --all), a watermark per repo; the owner by the handles"
@@ -176,7 +179,16 @@ def sync_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--since",
         metavar="RFC3339",
-        help="pull from here instead of the stored watermark (weather: a local day, YYYY-MM-DD)",
+        help="pull from here instead of the stored watermark (weather, and notion --relations-backfill: a"
+        " local day, YYYY-MM-DD)",
+    )
+    s.add_argument(
+        "--relations-backfill",
+        action="store_true",
+        help="notion: one line per database row whose relations the record does not hold yet (rows synced"
+        " before relations were recorded), the row as at its last edit: its related page ids by property,"
+        " never their titles; --since DAY for the rows edited since that local day, --dry-run counts them;"
+        " the watermark stays where it is",
     )
     s.add_argument(
         "--listen",
@@ -218,6 +230,9 @@ def cmd_sync(a: argparse.Namespace) -> None:
     scheduler (`_sync_schedule`, `logbook.contrib.schedule`)."""
     from ..contrib import adapters
 
+    if getattr(a, "relations_backfill", False) and (a.all or a.name != NOTION):  # the schedule's too
+        print(f"sync: --relations-backfill goes with `sync {NOTION}` alone", file=sys.stderr)
+        sys.exit(2)
     if a.install_schedule or a.uninstall_schedule:
         _sync_schedule(a)
         return
@@ -629,6 +644,9 @@ def _sync_one(a: argparse.Namespace) -> None:
     if adapter.NAME == weather_adapter.NAME:  # a window of local days from the record, not a watermark pull
         _sync_weather(a)
         return
+    if getattr(a, "relations_backfill", False):  # `cmd_sync` let it through for notion alone
+        _sync_relations_backfill(a, adapter)
+        return
     listens = _takes(adapter, "listen_s", live=True)  # a source that listens to a stream for a window (ais)
     listen_s = _listen_flag(a, listens)
     networks = getattr(a, "networks", None)  # `setup` builds its own namespace without the flag
@@ -888,6 +906,95 @@ def _sync_one(a: argparse.Namespace) -> None:
         sys.exit(1)
     if status.get("interrupted"):  # what was heard is written and summed up above; the shell still learns
         sys.exit(130)
+
+
+def _sync_relations_backfill(a: argparse.Namespace, adapter: adapters.LiveAdapter) -> None:
+    """`sync notion --relations-backfill [--since DAY] [--dry-run]`: one `relations` line per
+    database row whose relations the record does not hold yet (`adapters.notion.backfill`), for the
+    rows last edited since the local day `--since` names (every row without it). A dry run counts
+    them and writes nothing. The watermark and the state file are never touched: the sync's own
+    walk goes on from where it was. A failure (Notion refusing the token, a rate limit that does not
+    lift) stops on one line, exit 1, the lines already written kept: the next backfill writes only
+    what is still missing."""
+    from ..contrib import adapters
+    from ..contrib.adapters import notion
+
+    for flag, given in (
+        ("--restart", getattr(a, "restart", False)),
+        ("--listen", getattr(a, "listen", None)),
+        ("--until", getattr(a, "until", None)),
+        ("--networks", getattr(a, "networks", None)),
+    ):
+        if given:
+            print(f"sync: {flag} does not go with --relations-backfill", file=sys.stderr)
+            sys.exit(2)
+    lb = Logbook.find()
+    if _say_disabled(lb, adapter.NAME):
+        return
+    try:
+        config = notion.configure(os.environ)
+    except ValueError as e:
+        print(f"sync: {a.name}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if config is None:
+        print(f"sync: {a.name}: set {adapters.needs(adapter, os.environ)}", file=sys.stderr)
+        sys.exit(2)
+    zone = ZoneInfo(str(lb.meta["timezone"]))
+    since: str | None = None
+    if a.since is not None:
+        try:
+            first = parse_day(a.since)
+        except ValueError:
+            print(
+                f"sync: --since with --relations-backfill is a local day, YYYY-MM-DD, not {a.since!r}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        midnight = datetime.combine(first, datetime.min.time(), tzinfo=zone)
+        since = midnight.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    where = f"since {a.since}" if a.since is not None else "from the beginning"
+    counts: dict[str, int] = {}
+    seen = 0
+
+    def counted(draft: dict[str, Any]) -> dict[str, Any]:
+        nonlocal seen
+        seen += 1
+        return draft
+
+    drafts = (
+        counted(d)
+        for d in notion.backfill(
+            config,
+            since,
+            progress=_page_progress(str(notion.UNIT)),
+            counts=counts,
+            timezone=zone.key,
+            previous=_previous(lb, adapter),
+            notice=lambda text: print(f"  {text}", file=sys.stderr),
+        )
+    )
+    try:
+        if a.dry_run:
+            for _ in drafts:
+                pass
+        else:
+            n = lb.append_many(drafts)
+    except (OSError, ValueError) as e:  # what was taken before is written: the next run carries on
+        print(f"sync: {a.name}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if a.dry_run:
+        print(
+            f"{a.name}: {seen:,} rows whose relations the record does not hold yet, {where}"
+            " (dry run, nothing written)"
+        )
+    else:
+        already = seen - n
+        print(
+            f"{a.name}: {n:,} new lines of {seen:,} rows whose relations the record did not hold, {where}"
+            + (f" ({already:,} already in the record)" if already else "")
+            + "; the watermark untouched"
+        )
+    _report_skipped(counts)
 
 
 WEATHER_LOOKBACK_DAYS = 7  # a run without --since starts this far before the last day it covered

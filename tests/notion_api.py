@@ -2,8 +2,12 @@
 
 It serves the calls the source makes, in the shapes Notion's public API (version 2022-06-28) gives:
 `GET /v1/users/me`, `GET /v1/users/{id}`, `POST /v1/search` (pages only, newest edit first, paged by
-`start_cursor`), `GET /v1/pages/{id}`, `GET /v1/databases/{id}`, `GET /v1/blocks/{id}` and `GET
-/v1/blocks/{id}/children` (paged). Every request is recorded with its method, path, query and body;
+`start_cursor`), `GET /v1/pages/{id}`, `GET /v1/pages/{id}/properties/{property id}` (a relation's
+references, paged, as `property_item`s), `GET /v1/databases/{id}`, `GET /v1/blocks/{id}` and `GET
+/v1/blocks/{id}/children` (paged). A page keeps a relation's every reference; served, a relation
+holds the first `RELATION_LIMIT` and `has_more`, as Notion serves one. A test can hide every relation
+property (`relations_hidden`), as the source saw rows before it read them. Every request is recorded
+with its method, path, query and body;
 anything else (a PATCH, a DELETE, a POST that is not a search) is answered 405 and never acted on, so
 a test can hold the client to reading. `throttle` answers 429 with `Retry-After` to the next N
 requests of a path; `refuse` answers a path with one error every time. Pages are served `page_size`
@@ -29,6 +33,7 @@ TOKEN = "ntn_synthetic_token_not_a_real_one"
 VERSION = "2022-06-28"
 PAGE = 2  # results per page the fake serves, whatever the client asks: every list is paged
 WITHHELD = frozenset({"ai_block"})  # block types Notion refuses to give an integration
+RELATION_LIMIT = 25  # references a page object's relation holds; the rest through the property endpoint
 
 
 def uid(n: int) -> str:
@@ -40,6 +45,11 @@ INES, OLA, BOT = uid(0xA1), uid(0xA2), uid(0xB0)
 RESEARCH, BOATS, SAIL_PLAN, OLD_NOTES, IDEAS, PACKING = uid(1), uid(2), uid(3), uid(4), uid(5), uid(6)
 TASKS, FERRY, COLUMN = uid(10), uid(11), uid(20)
 UNSHARED = uid(99)  # a page the integration was never given: 404 to every call
+NOTES, AREAS, SERVICE = uid(30), uid(31), uid(12)  # `notes_workspace`: two databases and a task
+SEAMANSHIP, ALLOTMENT, WORKSHOP = uid(32), uid(33), uid(34)  # rows of Areas
+ENGINE, SHELVES, LOOSE = uid(40), uid(41), uid(42)  # rows of Notes
+AREAS_ID, NOTES_ID = "ar%3Bs", "n%3Ft"  # relation property ids, as Notion spells them: URL-encoded
+AREA_NAMES = {SEAMANSHIP: "Seamanship", ALLOTMENT: "Allotment", WORKSHOP: "Workshop"}
 
 USERS: dict[str, dict[str, Any]] = {
     INES: {
@@ -123,6 +133,25 @@ def status(name: str) -> dict[str, Any]:
     return {"id": "st", "type": "status", "status": {"id": f"s-{name}", "name": name, "color": "blue"}}
 
 
+def select(name: str) -> dict[str, Any]:
+    return {"id": "ty", "type": "select", "select": {"id": f"o-{name}", "name": name, "color": "green"}}
+
+
+def relation(property_id: str, *ids: str) -> dict[str, Any]:
+    """A relation property as the workspace keeps it: every reference (served, the first
+    `RELATION_LIMIT`)."""
+    return {"id": property_id, "type": "relation", "relation": [{"id": i} for i in ids], "has_more": False}
+
+
+def rollup(property_id: str, count: int) -> dict[str, Any]:
+    """A rollup over a relation: a number Notion computes, which a line never carries."""
+    return {
+        "id": property_id,
+        "type": "rollup",
+        "rollup": {"type": "number", "number": count, "function": "count"},
+    }
+
+
 def row_properties(state: str, due: str) -> dict[str, Any]:
     """A task row: the documented few (status, a date, select fields, a checkbox) and the ones a line
     never carries (a phone number, text, a person, a number)."""
@@ -186,6 +215,7 @@ class FakeNotion:
     throttle_status: int = 429  # the refusal: 429, or a 5xx
     retry_after: str = "7"
     refuse: dict[str, tuple[int, str, str]] = field(default_factory=dict)  # path → (status, code, message)
+    relations_hidden: bool = False  # serve pages without their relation properties
 
     def __post_init__(self) -> None:
         fake = self
@@ -290,7 +320,9 @@ class FakeNotion:
             return (200, found) if found else (404, _error(404, "object_not_found", "Could not find user."))
         if len(parts) == 2 and parts[0] == "pages":
             found = self.pages.get(parts[1])
-            return (200, found) if found else (404, _not_found("page", parts[1]))
+            return (200, self._served(found)) if found else (404, _not_found("page", parts[1]))
+        if len(parts) == 4 and parts[0] == "pages" and parts[2] == "properties":
+            return self._property(parts[1], parts[3], query)
         if len(parts) == 2 and parts[0] == "databases":
             found = self.databases.get(parts[1])
             return (200, found) if found else (404, _not_found("database", parts[1]))
@@ -316,7 +348,7 @@ class FakeNotion:
         wanted = (body.get("filter") or {}).get("value")
         rows: list[dict[str, Any]] = []
         if wanted in (None, "page"):
-            rows += list(self.pages.values())
+            rows += [self._served(p) for p in self.pages.values()]
         if wanted in (None, "database"):
             rows += list(self.databases.values())
         sort = body.get("sort") or {}
@@ -324,6 +356,60 @@ class FakeNotion:
             key=lambda r: (r["last_edited_time"], r["id"]), reverse=sort.get("direction") != "ascending"
         )
         return _page_of(rows, body.get("start_cursor"), int(body.get("page_size") or 100), "page_or_database")
+
+    def _served(self, kept: dict[str, Any]) -> dict[str, Any]:
+        """A page as Notion serves it: a relation's first `RELATION_LIMIT` references and
+        `has_more`; none at all while `relations_hidden`."""
+        served = copy.deepcopy(kept)
+        properties = served.get("properties") or {}
+        for name in list(properties):
+            prop = properties[name]
+            if prop.get("type") != "relation":
+                continue
+            if self.relations_hidden:
+                del properties[name]
+                continue
+            if isinstance(prop["relation"], list):  # a test may break one on purpose: served as it is
+                prop["has_more"] = len(prop["relation"]) > RELATION_LIMIT
+                prop["relation"] = prop["relation"][:RELATION_LIMIT]
+        return served
+
+    def _property(self, page_id: str, property_id: str, query: dict[str, str]) -> tuple[int, Any]:
+        """`GET /v1/pages/{id}/properties/{property id}` for a relation: every reference, paged, one
+        `property_item` each. The property id arrives decoded; the page keeps it as Notion spells it."""
+        kept = self.pages.get(page_id)
+        if kept is None:
+            return 404, _not_found("page", page_id)
+        found = next(
+            (
+                p
+                for p in (kept.get("properties") or {}).values()
+                if unquote(p.get("id", "")) == property_id and not self.relations_hidden
+            ),
+            None,
+        )
+        if found is None or found.get("type") != "relation":
+            return 404, _error(404, "object_not_found", f"Could not find property with ID: {property_id}.")
+        refs = found["relation"]
+        cursor = query.get("start_cursor")
+        start = int(cursor.removeprefix("ref-")) if cursor else 0  # every item has the property's id
+        end = start + min(int(query.get("page_size") or 100), PAGE)
+        return 200, {
+            "object": "list",
+            "results": [
+                {
+                    "object": "property_item",
+                    "id": found["id"],
+                    "type": "relation",
+                    "relation": {"id": r.get("id")},
+                }
+                for r in refs[start:end]
+            ],
+            "next_cursor": f"ref-{end}" if end < len(refs) else None,
+            "has_more": end < len(refs),
+            "type": "property_item",
+            "property_item": {"id": found["id"], "next_url": None, "type": "relation", "relation": {}},
+        }
 
     # -- the workspace, as a test changes it -----------------------------------------------------------
 
@@ -336,6 +422,11 @@ class FakeNotion:
 
     def set_status(self, page_id: str, name: str, at: str, by: str = INES) -> None:
         self.pages[page_id]["properties"]["Status"] = status(name)
+        self.edit(page_id, at, by)
+
+    def relate(self, page_id: str, name: str, ids: list[str], at: str, by: str = INES) -> None:
+        """The row's relation `name` now references `ids`, in that order: an edit."""
+        self.pages[page_id]["properties"][name]["relation"] = [{"id": i} for i in ids]
         self.edit(page_id, at, by)
 
     def write(self, page_id: str, *paragraphs: str) -> None:
@@ -441,4 +532,102 @@ def workspace() -> FakeNotion:
     fake.children[nested] = [block(uid(0x304), "paragraph", SAIL_PLAN_TEXT[2])]
     fake.children[FERRY] = [block(uid(0x310), "to_do", "Compare the two crossings")]
     fake.write(BOATS, "Notes on the boats we looked at.")
+    return fake
+
+
+def database(database_id: str, title: str, created: str) -> dict[str, Any]:
+    """A database at the top of the workspace, as `GET /v1/databases/{id}` gives it."""
+    return {
+        "object": "database",
+        "id": database_id,
+        "created_time": stamp(created),
+        "last_edited_time": stamp(created),
+        "title": rich(title),
+        "parent": parent_of("workspace"),
+        "archived": False,
+        "in_trash": False,
+        "properties": {},
+        "url": f"https://www.notion.so/{database_id.replace('-', '')}",
+    }
+
+
+def note_properties(kind: str, *areas: str) -> dict[str, Any]:
+    """A Notes row: its Type, its Areas (a relation to rows of Areas), a rollup counting them, a
+    rollup showing their titles and a formula spelling them: the related rows' titles as Notion
+    serves them on this row, which a line never carries."""
+    names = [AREA_NAMES.get(a, "") for a in areas]
+    return {
+        "Type": select(kind),
+        "Areas": relation(AREAS_ID, *areas),
+        "Area count": rollup("rc", len(areas)),
+        "Area names": {
+            "id": "rn",
+            "type": "rollup",
+            "rollup": {
+                "type": "array",
+                "array": [{"type": "title", "title": rich(n)} for n in names],
+                "function": "show_original",
+            },
+        },
+        "Area label": {
+            "id": "fl",
+            "type": "formula",
+            "formula": {"type": "string", "string": ", ".join(names)},
+        },
+    }
+
+
+def notes_workspace() -> FakeNotion:
+    """`workspace()` and Ines's notes, kept as database rows that link to other rows.
+
+    - Areas, a database at the top: Seamanship, Allotment and Workshop, rows with a name only.
+    - Notes, a database at the top, each row with a Type (a select), Areas (a relation to rows of
+      Areas, in the order Ines put them) and a rollup counting them: Engine noise (Seamanship), made
+      on 1 March and edited on 2 March; Garden shelves (Workshop, then Allotment), made and edited on
+      2 March; Loose ends, with no area, made on 25 February.
+    - Tasks gains a Notes relation: Service the engine, made on 2 March, links Engine noise; Book
+      the ferry links none.
+    """
+    fake = workspace()
+    fake.databases[AREAS] = database(AREAS, "Areas", "2026-01-20T09:00Z")
+    fake.databases[NOTES] = database(NOTES, "Notes", "2026-01-20T09:05Z")
+    for area, name in AREA_NAMES.items():
+        fake.pages[area] = page(
+            area, name, parent_of("database", AREAS), "2026-01-20T09:10Z", "2026-01-20T09:10Z", properties={}
+        )
+    in_notes = parent_of("database", NOTES)
+    fake.pages[ENGINE] = page(
+        ENGINE,
+        "Engine noise",
+        in_notes,
+        "2026-03-01T10:00Z",
+        "2026-03-02T08:00Z",
+        properties=note_properties("Idea", SEAMANSHIP),
+    )
+    fake.pages[SHELVES] = page(
+        SHELVES,
+        "Garden shelves",
+        in_notes,
+        "2026-03-02T12:00Z",
+        "2026-03-02T12:20Z",
+        properties=note_properties("Idea", WORKSHOP, ALLOTMENT),
+    )
+    fake.pages[LOOSE] = page(
+        LOOSE,
+        "Loose ends",
+        in_notes,
+        "2026-02-25T18:00Z",
+        "2026-02-25T18:00Z",
+        properties=note_properties("Reference"),
+    )
+    fake.pages[SERVICE] = page(
+        SERVICE,
+        "Service the engine",
+        parent_of("database", TASKS),
+        "2026-03-02T13:00Z",
+        "2026-03-02T13:00Z",
+        properties={**row_properties("To do", "2026-03-10"), "Notes": relation(NOTES_ID, ENGINE)},
+    )
+    fake.pages[FERRY]["properties"]["Notes"] = relation(NOTES_ID)
+    fake.write(ENGINE, "Knocking at low revs; check the mounts.")
     return fake
