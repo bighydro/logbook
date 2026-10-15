@@ -1,6 +1,6 @@
 # RFC 0024 — payload profile `keeper/v1`
 
-Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-10-01 · comment period: two weeks · amended 2026-10-14 (`note`, the owner's star on a photo; RFC 0041)
 
 One statement that the captain marked a photo a keeper: a photo worth coming back to, in one of two lanes — a *memory* (the day's hero photo, the one a Day page shows first) or *art* (a picture kept for itself, not for the day). A `photo/v1` line (RFC 0002) says a photo exists and what the library knows about it; this line says the owner chose it. The choice is an observation of the owner's own act, made in a photo library (a favourite, an album) or at the command line, and it is recorded as such: never inferred from faces, views or any model.
 
@@ -20,6 +20,7 @@ One statement that the captain marked a photo a keeper: a photo worth coming bac
 | `source` | string | MUST | where the mark was made: `ios-photos`, `immich`, `manual`, or another library's name as `photo/v1` spells `library` |
 | `marked_at` | RFC3339 UTC | MAY | when the owner made the mark, when the library says |
 | `supersedes` | string | MAY | the id of an earlier keeper line for the same photo and lane this one replaces |
+| `note` | string | MAY | the owner's words on the mark, one line (`logbook star --note`; amendment of 2026-10-14) |
 
 ## Rules
 
@@ -43,3 +44,11 @@ One statement that the captain marked a photo a keeper: a photo worth coming bac
 - **Why a line and not a field on the photo.** The photo line is what the library said when the photo was imported; the mark is a later act, and the log is not rewritten. A keeper is to a photo what a resolution (RFC 0006) is to an address: a separate line that readers join by id.
 - **Why two lanes and not a rating.** A rating is a reader's scale; the owner's acts in a library are a favourite and an album. Two lanes are what those acts mean. A later profile may add a lane; it will not add stars.
 - **Why not `favourite/v1`.** The name says what the owner meant by the mark, not which button they pressed; a library with no favourites but a "Best of" album produces the same line.
+
+## Amendment 2026-10-14: the owner's star on a photo, and its note
+
+A photo starred by the owner (`logbook star PHOTO-LINE`, or the star on its row of the Day page of `logbook serve`) is a keeper line of lane `memory`, `source` `manual`, `payload.source` `manual`: the Day's hero photo, and so the photo the press picks (`year --print`, `trip --print` lay out a span's keepers as its photos). The line is this profile's as it stands, and RFC 0041 (`star/v1`) marks every other kind of line. Three things are added or said, none of them a change to a field a reader already reads (RFC 0031 rule 1):
+
+1. **`note`**, MAY: the owner's words on the mark, one line, at the keeper's tier. The press prints it under the photo. A line written before this date has none and means what it always meant.
+2. **The tier is the photo's.** `tier` SHOULD be 1, as above; a manual keeper takes the tier of the photo line it marks, so it never crosses where its photo does not.
+3. **`supersedes` is read.** A star given a new note writes a keeper that `supersedes` the standing one for the same photo and lane; the reader takes the standing keepers as SPEC §3.2 defines *standing*: not retracted and not named in a later keeper's `supersedes`. Unstarring is rule 3's retraction, at the keeper's tier.

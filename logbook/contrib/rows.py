@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, speakers, story
+from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, speakers, stars, story
 from ..core.chain import Line, is_sealed, number_text
 from ..core.resolve import Ref
 from . import trip_bundle
@@ -143,6 +143,8 @@ def _line_text(
         text = _note_text(p, raw=names is None)
     elif line["kind"] == keepers.KIND:
         text = keepers.text(line)
+    elif line["kind"] == stars.KIND and p.get("schema") == stars.SCHEMA:
+        text = stars.text(line)
     elif line["kind"] == story.KIND and p.get("schema") == story.SCHEMA:
         text = story.text(p, names)
     elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":

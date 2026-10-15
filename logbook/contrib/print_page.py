@@ -221,7 +221,8 @@ def _coordinate(value: object) -> float | None:
 
 def keepers_by_day(rd: Reading, root: Path) -> dict[str, list[dict[str, Any]]]:
     """The keepers standing per local day, memory first then by time, each with the photo line it
-    points at and where its pixels are (`photo_source`)."""
+    points at and where its pixels are (`photo_source`); `note` when the owner's star carries one
+    (RFC 0024's amendment of 2026-10-14), the caption the press prints under the photo."""
     photos = {str(line["id"]): line for line in rd.of_kind(PHOTO)}
     found: dict[str, list[dict[str, Any]]] = {}
     for line in keepers.standing(rd.of_kind(keepers.KIND)):
@@ -231,19 +232,21 @@ def keepers_by_day(rd: Reading, root: Path) -> dict[str, list[dict[str, Any]]]:
         lane = str(payload.get("lane") or "")
         photo_payload = (photo.get("payload") or {}) if photo is not None else {}
         lat, lon = _coordinate(photo_payload.get("lat")), _coordinate(photo_payload.get("lon"))
-        found.setdefault(rd.day_of(line), []).append(
-            {
-                "day": rd.day_of(line),
-                "at": str(line["at"]),
-                "lane": lane,
-                "name": keepers.name_of(line),
-                "line": str(line["id"]),
-                "photo": None if photo is None else str(photo["id"]),
-                "src": photo_source(photo, root),
-                "lat": lat,
-                "lon": lon,
-            }
-        )
+        entry: dict[str, Any] = {
+            "day": rd.day_of(line),
+            "at": str(line["at"]),
+            "lane": lane,
+            "name": keepers.name_of(line),
+            "line": str(line["id"]),
+            "photo": None if photo is None else str(photo["id"]),
+            "src": photo_source(photo, root),
+            "lat": lat,
+            "lon": lon,
+        }
+        note = payload.get("note")
+        if isinstance(note, str) and note.strip():
+            entry["note"] = note.strip()
+        found.setdefault(rd.day_of(line), []).append(entry)
     order = {lane: n for n, lane in enumerate(keepers.LANES)}
     for day in found:
         found[day].sort(key=lambda k: (order.get(k["lane"], len(order)), k["at"], k["line"]))
@@ -805,7 +808,8 @@ def _photos_html(kept: Sequence[Mapping[str, Any]], heading: str) -> list[str]:
                 out.append(f'<img src="{escape(k["src"])}" alt="{escape(k["name"])}">')
             else:
                 out.append(f'<div class="frame">{escape(k["name"])}<br>not in the record</div>')
-            out.append(f"<figcaption>{escape(caption)}</figcaption>")
+            said = f"<br>{escape(str(k['note']))}" if k.get("note") else ""  # the owner's star's note
+            out.append(f"<figcaption>{escape(caption)}{said}</figcaption>")
             out.append("</figure>")
         out.append("</article>")
     return out

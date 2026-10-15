@@ -33,15 +33,20 @@ through `day reflect --audio`'s path when the command wired one in, `Voice`), an
 the rules read in it are checkboxes whose form posts to `/day/YYYY-MM-DD/sign`, which signs the
 day through `reflect.close`, the code `day reflect --sign` runs: `signing.sign` with the lines
 confirmed, the accepted dispositions and the reflection, a signed day signed again superseding its
-signature. The Library's write acts, allowed because the server binds 127.0.0.1 and runs as the
-record's own user: a POST is answered only when the connection comes from this machine (the client
-address is loopback) and the form was submitted from the server's own pages (the browser's
-`Origin`, when it sends one, names 127.0.0.1); anything else is a 403 and nothing is written. Every
-write is one at a time (`Site._write_lock`) and through the CLI's own function, under the record's
-writer lock and never waiting for it: another command writing is a 503 on the Places, Journeys and
-People forms and a 409 on the Day's, and nothing is written. After a write the head has moved, and
-the next request reads the record again as after a sync. The policy's `write` list (the MCP door,
-ADR 0022) is never read: this is the owner's own page.
+signature. The Day also carries the owner's two acts on lines already in the record: a star on
+every row that is a line, posting to `/star` (`Site._star`: `stars.star` and `stars.unstar`, the
+lines `logbook star` and `unstar` write), and a "with…" field in the header's `with` row, its names
+completed from the canonical people by a `datalist`, posting to `/with` (`Site._with`:
+`presence.state`, the lines `logbook with` writes). The Library's write acts, allowed because the
+server binds 127.0.0.1 and runs as the record's own user: a POST is answered only when the
+connection comes from this machine (the client address is loopback) and the form was submitted from
+the server's own pages (the browser's `Origin`, when it sends one, names 127.0.0.1); anything else
+is a 403 and nothing is written. Every write is one at a time (`Site._write_lock`) and through the
+CLI's own function, under the record's writer lock and never waiting for it: another command writing
+is a 503 on the Places, Journeys and People forms and a 409 on the Day's (Reflect, Sign, the star
+and the "with…" field), and nothing is written. After a write the head has moved, and the next
+request reads the record again as after a sync. The policy's `write` list (the MCP door, ADR 0022)
+is never read: this is the owner's own page.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -107,11 +112,14 @@ from ..core import (
     day_start,
     drafts,
     goals,
+    keepers,
     people,
     places,
+    presence,
     reading,
     share,
     signing,
+    stars,
     stays,
     trips,
     weather,
@@ -121,7 +129,7 @@ from ..core import days as days_reader
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
-from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook
+from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, retractions
 from . import asset_status, dream, gaps, journeys, person_page, places_review, reflect, trip_page, world
 
 if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
@@ -144,6 +152,9 @@ PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review
 WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH)  # the Library's forms, under the writer lock
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
+STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
+WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
+LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 CLOCK_PAGES = ("/people",)  # pages the record's today moves too (this year, anniversaries, drift): in the tag
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
@@ -217,6 +228,7 @@ DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
 HTML = "text/html; charset=utf-8"
 Cell = str | tuple[str, str]  # a table cell: text, or (text, css class)
+Toggle = Callable[[Sequence[str], bool], str]  # a row's line ids (and: only when starred) → its star
 Href = Callable[[str], str | None]  # a server path → the link to write, or None for plain text
 
 STYLE = """
@@ -266,6 +278,16 @@ input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--f
 border:1px solid var(--line);border-radius:3px}
 p.pager,p.mute,.mute{color:var(--mute)}
 a.name{font-size:.8rem;margin-left:.5rem}
+form.star{display:inline;margin:0 0 0 .3rem}
+form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
+font-size:1rem;line-height:1}
+form.star button[aria-pressed=true],.star.on{color:#c9a227}
+form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
+form.with input[type=text]{min-width:12rem}
+ul.starred{list-style:none;padding:0;margin:0}
+ul.starred li{padding:.2rem 0}
+ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
+dt#with:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
 ol.queue{list-style:none;padding:0;margin:0}
 li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
 border-bottom:1px solid var(--line)}
@@ -475,7 +497,7 @@ class Site:
         again rather than keeping a stale page."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
-        if path in WRITE_PATHS:
+        if path in WRITE_PATHS or path in LINE_ACTS:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
@@ -522,19 +544,21 @@ class Site:
         Places page's (`_write_place`), the Journeys page's name (`_write_name`) and the People
         page's review (`_write_review`); another command writing the record is a 503 and nothing
         written, try again. A Day's: Reflect and Sign (`_reflect`, `_sign`), through `day
-        reflect`'s own functions. Refused (403, nothing written) unless `client`, the connection's
+        reflect`'s own functions, and the star and the "with…" field (`_star`, `_with`), through
+        `logbook star`, `unstar` and `with`'s; another command writing the record is a 409 on
+        these, nothing written. Refused (403, nothing written) unless `client`, the connection's
         address, is loopback and `origin`, the browser's Origin header when it sent one, names
         127.0.0.1: this machine, the server's own pages. A field sent more than once (the Sign
         form's boxes) arrives as its values joined with commas, as `--accept N,N` takes them;
         `upload` is the file a form carried, the Day's recording. One write at a time
         (`_write_lock`)."""
         day_act = DAY_ACT.match(path)
-        if path not in WRITE_PATHS and day_act is None:
+        if path not in WRITE_PATHS and path not in LINE_ACTS and day_act is None:
             posts = ", ".join(WRITE_PATHS)
             return self._error(
                 404,
                 f"nothing to post at {path}; the server's own forms post to {posts}, a Day's to"
-                " /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign",
+                f" /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign, {STAR_PATH} and {WITH_PATH}",
             )
         if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
@@ -545,6 +569,10 @@ class Site:
                 " `logbook add --trip`",
                 PEOPLE_REVIEW_PATH: "a person is merged or told apart from this machine only, through the"
                 " server's own pages or `logbook people review`",
+                STAR_PATH: "a line is starred from this machine only, through the server's own pages or"
+                " `logbook star` and `logbook unstar`",
+                WITH_PATH: "company is stated from this machine only, through the server's own pages or"
+                " `logbook with`",
             }.get(
                 path,
                 "a day is reflected on and signed from this machine only, through the server's own"
@@ -554,6 +582,10 @@ class Site:
         if day_act is not None:
             day, act = day_act.group(1), day_act.group(2)
             return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
+        if path == STAR_PATH:
+            return self._star(form)
+        if path == WITH_PATH:
+            return self._with(form)
         acts = {
             REVIEW_PATH: self._write_place,
             NAME_PATH: self._write_name,
@@ -746,6 +778,66 @@ class Site:
         digest = hashlib.sha256(shown.encode("utf-8")).hexdigest()[:16]
         draft = pending[-1] if pending else None
         return Closing(lines, retracted, r, proposals, draft, earlier, kept, digest)
+
+    def _star(self, form: Mapping[str, str]) -> Response:
+        """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
+        `stars.star` and `stars.unstar`, the functions `logbook star` and `logbook unstar` run, so
+        the line written is theirs. A star on a line starred already writes nothing; an unstar of a
+        line no longer starred (the page was older than the record) is a 409, a line that takes no
+        star a 400; another command writing the record a 409, the Day's answer, and nothing
+        written. Done, a 303 to the Day at the row (`open` keeps an expanded page expanded)."""
+        act, line, day = form.get("act", ""), form.get("line", "").strip(), form.get("day", "")
+        if act not in ("star", "unstar") or not line:
+            return self._error(400, "the form names a line and an act: star or unstar")
+        try:
+            day = parse_day(day).isoformat()
+        except ValueError as e:
+            return self._error(400, str(e))
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    if act == "star":
+                        stars.star(self.lb, line)
+                    else:
+                        stars.unstar(self.lb, line)
+            except Locked as e:
+                return self._error(409, _not_waiting(e))
+            except stars.NotStarred as e:
+                return self._error(409, f"{e}; /day/{day} is the day as it stands")
+            except stars.StarError as e:
+                return self._error(400, str(e))
+            except HeadMoved as e:
+                return self._error(409, str(e))
+        back = f"/day/{day}" + ("?open=1" if form.get("open") == "1" else "") + f"#{_row_id(line)}"
+        return Response(303, b"", location=back)
+
+    def _with(self, form: Mapping[str, str]) -> Response:
+        """The Day page's "with…" field: the `names` given (one, or several split at commas) on
+        `day`, at `at` (`HH:MM`) when the clock was filled in, through `presence.state`, the function
+        `logbook with` runs, so the lines written are its. A name the record does not place is a
+        400 with the people-review hint; another command writing the record a 409, the Day's
+        answer; nothing is written either way. Done, a 303 to the Day."""
+        day, at = form.get("day", ""), form.get("at", "").strip() or None
+        names = [name for name in form.get("names", "").split(",") if name.strip()]
+        try:
+            day = parse_day(day).isoformat()
+        except ValueError as e:
+            return self._error(400, str(e))
+        if not names:
+            return self._error(400, "name at least one person in the field")
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    presence.state(self.lb, day, names, at, now=self.now())
+            except Locked as e:
+                return self._error(409, _not_waiting(e))
+            except presence.WithError as e:
+                return self._error(400, str(e))
+            except HeadMoved as e:
+                return self._error(409, str(e))
+        return Response(303, b"", location=f"/day/{day}#with")
 
     def _records(self) -> bool:
         """Whether a Day page carries the recording form and its script: a server that can hear."""
@@ -971,6 +1063,8 @@ class Site:
         """The Day; with `expanded` every toggle is open, so a page prints or saves whole."""
         data = day_reader.read(self.lb, day, self.airports, self.tiers)
         tz = ZoneInfo(data["tz"])
+        starred, photos = self._day_marks(day)
+        star = self._toggle(day, starred, expanded)
         d = date.fromisoformat(day)
         before, after = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=1)).isoformat()
         a, b = (d - timedelta(days=6)).isoformat(), (d + timedelta(days=7)).isoformat()
@@ -998,15 +1092,26 @@ class Site:
             _signed_html(data.get("signed")),
         ]
         if data["all_day"]:
-            parts.append(
-                _dt("all day", ", ".join(a["title"] + day_reader.sources_text(a) for a in data["all_day"]))
+            entries = ", ".join(
+                escape(a["title"] + day_reader.sources_text(a)) + star([a["line"], *a["lines"]], False)
+                for a in data["all_day"]
             )
+            parts.append(f"<dt>all day</dt><dd>{entries}</dd>\n")
+        company = day_reader.company_of_day(data)
+        if company or not self.static:  # the "with" row: who was there, and the field to say so
+            said = (
+                escape(day_reader.company_text(company))
+                if company
+                else '<span class="mute">nobody the record saw</span>'
+            )
+            field = "" if self.static else self._with_form(day)
+            parts.append(f'<dt id="with">with</dt><dd>{said}{field}</dd>\n')
         parts.append("</dl>\n")
         if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
             parts.append(_reflection_html(data["reflection"], tz))
         if data.get("draft"):
-            parts.append(_draft_html(data["draft"]))
-        parts.append(_owner_html(data))
+            parts.append(_draft_html(data["draft"], star))
+        parts.append(_owner_html(data, star))
         if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
             parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
@@ -1015,7 +1120,15 @@ class Site:
             parts.append('<ol class="timeline">\n')
             name_this = None if self.static else self._name_this
             parts.extend(
-                _entry_html(entry, tz, expanded=expanded, name_this=name_this, syntheses=syntheses)
+                _entry_html(
+                    entry,
+                    tz,
+                    expanded=expanded,
+                    name_this=name_this,
+                    syntheses=syntheses,
+                    star=star,
+                    photos=photos,
+                )
                 for entry in data["timeline"]
             )
             parts.append("</ol>\n")
@@ -1027,9 +1140,11 @@ class Site:
                 span = day_reader.span_text(item["at"], item["end"], tz)
                 blocks = syntheses.get(item["line"], []) if item["kind"] == "transcript" else []
                 parts.append(
-                    f'<li title="line {escape(item["line"])}"><span class="clock">{escape(span)}</span> '
+                    f'<li id="{_row_id(item["line"])}" title="line {escape(item["line"])}">'
+                    f'<span class="clock">{escape(span)}</span> '
                     f'<span class="kind">{escape(item["kind"])}</span> '
                     f"{escape(item['title'] + day_reader.sources_text(item) + day_reader.voices_text(item))}"
+                    f"{star([item['line'], *item.get('lines', ())], False)}"
                     f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
                 )
             parts.append("</ul>\n")
@@ -1193,6 +1308,64 @@ class Site:
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
         return "".join(out)
 
+    def _day_marks(self, day: str) -> tuple[dict[str, stars.Star], dict[str, str]]:
+        """The stars standing on the day's lines, a photo's `memory` keeper among them, by the line
+        each marks, each beside a line the page reads and never a model's draft (`stars.shown`); and
+        the day's photos standing, id → name; through the gate `tiers`."""
+        with self.lb.index() as idx:
+            lines = reading.crossing(idx.day(day), self.tiers)
+            retracted = retractions(idx.retractions())
+        marks = [line for line in lines if line.get("kind") in (stars.KIND, keepers.KIND)]
+        photos = {
+            str(line["id"]): stars.title(line)
+            for line in lines
+            if line.get("kind") == stars.PHOTO and str(line["id"]) not in retracted
+        }
+        by_id = {str(line["id"]): line for line in lines}
+        return stars.shown(stars.standing(marks, retracted), by_id), photos
+
+    def _toggle(self, day: str, starred: Mapping[str, stars.Star], expanded: bool) -> Toggle:
+        """The star of a row whose lines are `ids`: a form that posts to `STAR_PATH`, ★ to unstar
+        the line starred among them, else ☆ to star the first; a keeper's row (`only_on`) carries
+        one only while it is a star. A static page shows ★ alone, and nothing for a line unstarred."""
+        by_mark = {s.star: s for s in starred.values()}
+
+        def toggle(ids: Sequence[str], only_on: bool) -> str:
+            ids = [i for i in ids if i]
+            on = next((starred.get(i) or by_mark.get(i) for i in ids if i in starred or i in by_mark), None)
+            if not ids or (on is None and only_on):
+                return ""
+            said = f"starred: {on.note}" if on is not None and on.note else "starred"
+            if self.static:
+                return f' <span class="star on" title="{escape(said)}">{stars.SYMBOL}</span>' if on else ""
+            target = on.line if on is not None else ids[0]
+            act, symbol = ("unstar", stars.SYMBOL) if on is not None else ("star", "☆")
+            title = f"{said}; unstar" if on is not None else "star this line"
+            return (
+                f'<form class="star" method="post" action="{STAR_PATH}">'
+                f'<input type="hidden" name="day" value="{day}">'
+                f'<input type="hidden" name="line" value="{escape(target)}">'
+                + ('<input type="hidden" name="open" value="1">' if expanded else "")
+                + f'<button name="act" value="{act}" aria-pressed="{"true" if on else "false"}"'
+                f' title="{escape(title)}">{symbol}</button></form>'
+            )
+
+        return toggle
+
+    def _with_form(self, day: str) -> str:
+        """The "with…" field: names completed from the canonical people (a `datalist`, no script),
+        a clock when the owner knows it, posting to `WITH_PATH`."""
+        names = sorted({p.name for p in people.directory(self.lb).known.values()}, key=str.casefold)
+        options = "".join(f'<option value="{escape(name)}">' for name in names)
+        return (
+            f'<form class="with" method="post" action="{WITH_PATH}">'
+            f'<input type="hidden" name="day" value="{day}">'
+            '<input type="text" name="names" list="people" placeholder="with…" autocomplete="off"'
+            ' aria-label="who was there: a name, or several with commas">'
+            '<input type="time" name="at" aria-label="the clock, if you know it">'
+            f'<button>add</button></form><datalist id="people">{options}</datalist>'
+        )
+
     def _name_this(self, entry: Mapping[str, Any]) -> str:
         """The "name this place" link of a stay printed as coordinates: the Places page at its
         cluster (`/places?at=lat,lon`). Nothing for a named stay, a move, or a stay with no fix."""
@@ -1255,7 +1428,26 @@ class Site:
             rows,
             ids if self.static else None,
         )
+        body += self._starred(first, last)
         return self.document(f"days {first} {EN_DASH} {last}", body)
+
+    def _starred(self, first: str, last: str) -> str:
+        """The window's stars (RFC 0041), a photo's among them, in the order of the lines they mark:
+        the day and clock, the kind, what the line is called, linked to its row, and the note."""
+        found = stars.listed(self.lb, first, last, self.tiers)
+        if not found:
+            return ""
+        tz = self.tz
+        out = ["<h2>Starred</h2>\n", '<ul class="starred">\n']
+        for s in found:
+            note = f"{DOT}{escape(s['note'])}" if s["note"] else ""
+            out.append(
+                f'<li><span class="clock">{escape(s["day"])} {_instant(s["at"]).astimezone(tz):%H:%M}</span> '
+                f'<span class="kind">{escape(s["kind"])}</span> {stars.SYMBOL} '
+                f"{self.link(escape(s['title']), f'/day/{s["day"]}#{_row_id(s["line"])}')}{note}</li>\n"
+            )
+        out.append("</ul>\n")
+        return "".join(out)
 
     # -- /trips ---------------------------------------------------------------------------------------------
 
@@ -1990,19 +2182,25 @@ def _entry_html(
     expanded: bool = False,
     name_this: Callable[[Mapping[str, Any]], str] | None = None,
     syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+    star: Toggle | None = None,
+    photos: Mapping[str, str] | None = None,
 ) -> str:
     """One timeline row: the clock, the kind, what it was; then an `aboard` entry's inner rows;
     then, behind a toggle, the attachments by name and the company. The grammar is `day.rows`'.
     `name_this` gives a stay printed as coordinates its link to the Places page; `syntheses` (by
     transcript line, `day.syntheses_of`) put a call's synthesis under the call, behind a toggle of its
-    own, or the policy's row for one the `dream` entry withholds."""
+    own, or the policy's row for one the `dream` entry withholds; `star` gives a row that is a line
+    its star (a stay or a move is derived, not a line, and has none; a synthesis is a model's draft
+    and has none); `photos` names the photos a row counts, each with its star."""
     if entry["kind"] == day_reader.FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = day_reader.span_text(entry["start"], entry["end"], tz)
+        line = str(entry["line"])
         return (
-            f'<li class="row flight" title="line {escape(str(entry["line"]))}">'
+            f'<li class="row flight" id="{_row_id(line)}" title="line {escape(line)}">'
             f'<span class="clock">{escape(clock)}</span> <span class="kind">flight</span> '
-            f"{escape(route)}{DOT}{escape(str(entry['evidence']))}</li>\n"
+            f"{escape(route)}{DOT}{escape(str(entry['evidence']))}"
+            f"{star([line], False) if star is not None else ''}</li>\n"
         )
     clock = day_reader.span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
     kind = day_reader.GAP if entry["gap"] else str(entry["kind"])
@@ -2041,7 +2239,13 @@ def _entry_html(
         out.append('\n<ol class="inside">\n')
         out.extend(
             _entry_html(
-                {**s, "attached": None, "with": None}, tz, inside=True, expanded=expanded, name_this=name_this
+                {**s, "attached": None, "with": None},
+                tz,
+                inside=True,
+                expanded=expanded,
+                name_this=name_this,
+                star=star,
+                photos=photos,
             )
             for s in entry["inside"]
         )
@@ -2052,7 +2256,7 @@ def _entry_html(
             n = len(confirmed) + len(proposed)
             summary = f"{summary}{DOT}with {n}" if summary else f"with {n}"
         out.append(f"\n<details{' open' if expanded else ''}><summary>{escape(summary)}</summary>\n")
-        out.append(_attached_html(entry.get("attached"), tz, syntheses, expanded))
+        out.append(_attached_html(entry.get("attached"), tz, syntheses, expanded, star, photos))
         if confirmed or proposed:
             text = ", ".join(day_reader.companion_text(c) for c in confirmed)
             more = ", ".join(day_reader.companion_text(c) for c in proposed)
@@ -2076,16 +2280,19 @@ def _reflection_html(item: Mapping[str, Any], tz: ZoneInfo) -> str:
     )
 
 
-def _owner_html(data: Mapping[str, Any]) -> str:
+def _owner_html(data: Mapping[str, Any], star: Toggle | None = None) -> str:
     """RFC 0036 on the Day: the reviews made on the day, the goal's current text beside each, and
     `written` when it was written later; then the goal and chapter lines written on the day, marked
-    when superseded. Nothing on a day with none."""
+    when superseded. Nothing on a day with none. Each is the owner's line and carries its star
+    (`star`); a superseded one only while it is starred, since a star names the line that stands."""
     parts: list[str] = []
     if data.get("reviews"):
         parts.append('<h2>Reviews</h2>\n<ul class="unplaced">\n')
         for row in data["reviews"]:
             text = goals.review_row_text(row, str(data["day"]), str(data["tz"]))
-            parts.append(f'<li title="line {escape(str(row["line"]))}">{escape(text)}</li>\n')
+            line = str(row["line"])
+            mark = star([line], False) if star is not None else ""
+            parts.append(f'<li id="{_row_id(line)}" title="line {escape(line)}">{escape(text)}{mark}</li>\n')
         parts.append("</ul>\n")
     rows = [
         *(("goal", row, goals.goal_text(row)) for row in data.get("goals") or ()),
@@ -2095,23 +2302,26 @@ def _owner_html(data: Mapping[str, Any]) -> str:
         parts.append('<h2>Goals and chapters</h2>\n<ul class="unplaced">\n')
         for kind, row, text in rows:
             mark = f"{DOT}superseded" if row.get("superseded") else ""
+            line = str(row["line"])
+            starred = star([line], bool(row.get("superseded"))) if star is not None else ""
             parts.append(
-                f'<li title="line {escape(str(row["line"]))}"><span class="kind">{kind}</span> '
-                f"{escape(text + mark)}</li>\n"
+                f'<li id="{_row_id(line)}" title="line {escape(line)}"><span class="kind">{kind}</span> '
+                f"{escape(text + mark)}{starred}</li>\n"
             )
         parts.append("</ul>\n")
     return "".join(parts)
 
 
-def _draft_html(draft: Mapping[str, Any]) -> str:
+def _draft_html(draft: Mapping[str, Any], star: Toggle | None = None) -> str:
     """The standing draft of the day (RFC 0036) above the timeline: headed as a draft, one
     paragraph per segment with its evidence ids (the whole id on hover), an unsupported segment a
     muted block marked with the word, never run into the prose around it; then the events it
     proposes, a proposed one greyed and marked, a confirmed one plain with the line it became (the
-    event itself is in the timeline, among the day's events)."""
+    event itself is in the timeline, among the day's events). A draft is a model's proposal and
+    takes no star (`star`): the confirmed one carries the star of the event line it became."""
     return (
         f'<h2>Draft</h2>\n<p class="mute">{escape(drafts.head_text(draft))}</p>\n<div class="draft">\n'
-        f"{_draft_body(draft)}</div>\n"
+        f"{_draft_body(draft, star)}</div>\n"
     )
 
 
@@ -2124,7 +2334,7 @@ def _draft_folded(draft: Mapping[str, Any]) -> str:
     )
 
 
-def _draft_body(draft: Mapping[str, Any]) -> str:
+def _draft_body(draft: Mapping[str, Any], star: Toggle | None = None) -> str:
     """A draft's segments, one paragraph each with its evidence ids (the whole id on hover); an
     unsupported one a muted block marked with the word and why, never run into the prose; then the
     events it proposes and the earlier drafts."""
@@ -2146,7 +2356,7 @@ def _draft_body(draft: Mapping[str, Any]) -> str:
             )
     if draft.get("proposals"):
         parts.append('<ul class="proposals">\n')
-        parts.extend(_proposal_html(p) for p in draft["proposals"])
+        parts.extend(_proposal_html(p, star) for p in draft["proposals"])
         parts.append("</ul>\n")
     if draft.get("earlier"):
         earlier = ", ".join(escape(drafts.short_id(e)) for e in draft["earlier"])
@@ -2154,17 +2364,19 @@ def _draft_body(draft: Mapping[str, Any]) -> str:
     return "".join(parts)
 
 
-def _proposal_html(p: Mapping[str, Any]) -> str:
+def _proposal_html(p: Mapping[str, Any], star: Toggle | None = None) -> str:
     """One proposed event: greyed and marked `proposed` with its evidence ids until the owner accepts
-    it (`day sign --accept N`), then plain and marked with the event line it became; muted and
-    marked `unsupported` when its evidence is no longer on the day."""
+    it (`day sign --accept N`), then plain and marked with the event line it became, and that line's
+    star (`star`); muted and marked `unsupported` when its evidence is no longer on the day. A
+    proposal is the model's and takes no star until the owner has made it a line."""
     head = f'<span class="kind">event {int(p["number"])}</span> {escape(drafts.proposal_text(p))}'
     confirmed = p.get("confirmed")
     if confirmed:
         line = escape(str(confirmed["line"]))
+        mark = star([str(confirmed["line"])], False) if star is not None else ""
         return (
             f'<li class="proposal confirmed" title="line {line}">{head}'
-            f" <small>confirmed as #{int(confirmed['seq'])}</small></li>\n"
+            f" <small>confirmed as #{int(confirmed['seq'])}</small>{mark}</li>\n"
         )
     if not p["supported"]:
         why = f": {escape(str(p['why']))}" if p.get("why") else ""
@@ -2224,7 +2436,12 @@ def _attached_html(
     tz: ZoneInfo,
     syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     expanded: bool = False,
+    star: Toggle | None = None,
+    photos: Mapping[str, str] | None = None,
 ) -> str:
+    """A row's attachments, one item each, its star after it (`star`), then a call's synthesis
+    under it, which has none; a keeper's row carries a star only while it is one, and the photos a
+    row counts are named, each with its own."""
     if not attached:
         return ""
     items: list[tuple[str, str, Sequence[str]]] = []  # kind, text, the lines it points at
@@ -2250,13 +2467,28 @@ def _attached_html(
     for kind, text, lines in items:
         title = " ".join(lines[:3]) + (" …" if len(lines) > 3 else "")
         blocks = (syntheses or {}).get(lines[0], []) if kind == "transcript" and lines else []
+        mark, named = "", ""
+        if star is not None and kind not in ("messages", "photos"):
+            mark = star(lines, kind == "keeper")
+        if star is not None and kind == "photos" and photos:
+            named = ": " + ", ".join(
+                f'<span id="{_row_id(id_)}">{escape(photos[id_])}{star([id_], False)}</span>'
+                for id_ in lines
+                if id_ in photos
+            )
+        anchor = f' id="{_row_id(lines[0])}"' if lines and kind not in ("messages", "photos") else ""
         out.append(
-            f'<li title="{escape(_plural(len(lines), "line"))}: {escape(title)}">'
-            f'<span class="kind">{escape(kind)}</span> {escape(text)}'
+            f'<li{anchor} title="{escape(_plural(len(lines), "line"))}: {escape(title)}">'
+            f'<span class="kind">{escape(kind)}</span> {escape(text)}{named}{mark}'
             f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
         )
     out.append("</ul>\n")
     return "".join(out)
+
+
+def _row_id(line: str) -> str:
+    """The id of the row a line is listed in, the anchor a star's form comes back to."""
+    return "l-" + re.sub(r"[^A-Za-z0-9-]", "", line)
 
 
 def _trip_row(trip: trips.Trip, rd: reading.Reading, dates: str) -> list[Cell]:

@@ -26,7 +26,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, policy, sealing, signing
+from . import attachments, day_start, policy, sealing, signing, stars
 from .chain import Line, is_sealed
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
@@ -230,7 +230,8 @@ def select(lb: Logbook, req: Request) -> Selection:
     day unless the request lifts that gate (RFC 0034 rule 5: a line's day is the local day of its
     `at` in the record's zone, under its `day_start` (RFC 0036); a `signed-day` line's day is the day
     it signs), in chain order; the resolution lines their refs walk through; the attachments they
-    reference. The index says where; only the lines that cross are read from the files."""
+    reference. A star (RFC 0041 rule 5), and a photo's `memory` keeper, crosses only beside the line
+    it marks. The index says where; only the lines that cross are read from the files."""
     since, until = instant(req.since), instant(req.until)
     unsigned_held = 0
     with lb.index() as idx:
@@ -268,6 +269,8 @@ def select(lb: Logbook, req: Request) -> Selection:
                 "are in the window: add one (RFC 0029 §7), or pass --open to ship them opened"
             )
     lines = [lb.opened(line) for line in raw]
+    beside = {str(line["id"]) for line in lines}
+    lines = [line for line in lines if stars.beside(line, beside)]
     last = standing([*retraction_lines, *(lb.opened(line) for line in raw_resolutions)])
     overlay, held = _overlay(lines, last, req.tiers)
     found, missing = blobs(lb, lines)

@@ -41,7 +41,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from ..core import crossing, policy, present, stays, trips
+from ..core import crossing, keepers, policy, present, stars, stays, trips
 from ..core.chain import Line, compute_hash
 from ..core.flights import Airports
 from ..core.places import distance_m
@@ -57,7 +57,9 @@ TRIP_FILE = "trip.json"
 RECEIVED = "received"  # the kind and the source of a line that came from another record
 RECEIVED_SCHEMA = "received/v1"  # a received line: the sender's line verbatim under `line`
 PAGE_RAW_ID = "trip-share:"  # + the bundle id: the received page's dedupe key
-KINDS = frozenset({"photo", "flight"})  # the kinds of line a bundle carries
+KINDS = frozenset(
+    {"photo", "flight", "keeper", "star"}
+)  # what a bundle carries: photos, flights, their stars
 NAMING_TIER = 2  # the people rows and the overlay cross only when this tier is asked for
 AGREE_M = 300.0  # a stay of theirs this close to a stay of yours is the same place
 DOT = " · "
@@ -182,7 +184,8 @@ def select(
     attachments: bool,
 ) -> crossing.Selection:
     """What crosses: the standing `photo/v1` lines of the window and the trip's standing flights, in
-    the requested tiers, in chain order; the resolution lines the photos' people and the people rows
+    the requested tiers, and the stars standing on them (RFC 0041: a photo's `memory` keeper, a
+    flight's `star/v1`), in chain order; the resolution lines the photos' people and the people rows
     walk through, those above the requested tiers held back and counted; the photos' files only with
     `attachments`."""
     since, until = crossing.instant(req.since), crossing.instant(req.until)
@@ -198,11 +201,22 @@ def select(
         flight_ids = list(dict.fromkeys(id_ for f in trip.flights for id_ in f["lines"]))
         found = idx.by_ids(flight_ids)
         last = standing([*retraction_lines, *idx.resolutions()])
+        # a mark is on its line's local day: under a `day_start` (RFC 0036) a photo early on the
+        # first date of the window is on the day before; the carried ids decide what crosses
+        first = (date.fromisoformat(trip.start) - timedelta(days=1)).isoformat()
+        marks = [
+            *idx.by_kind(stars.KIND, first, trip.until),
+            *idx.by_kind(keepers.KIND, first, trip.until),
+        ]
     flights = [found[id_] for id_ in flight_ids if id_ in found]
+    carried = [*photos, *[f for f in flights if int(f["tier"]) in req.tiers]]
+    ids = {str(line["id"]) for line in carried}
+    starred = {s.star for s in stars.standing(marks, retracted).values() if s.line in ids}
+    kept = [m for m in marks if str(m["id"]) in starred]
     lines = sorted(
-        [*photos, *[f for f in flights if int(f["tier"]) in req.tiers]], key=lambda line: int(line["seq"])
+        [*carried, *(m for m in kept if int(m["tier"]) in req.tiers)], key=lambda line: int(line["seq"])
     )
-    logged = len(inside) + len(flights)
+    logged = len(inside) + len(flights) + len(kept)
     refs: set[Ref] = set()
     for line in lines:
         refs.update(crossing.refs(line.get("payload")))

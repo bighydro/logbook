@@ -296,6 +296,25 @@ def read(
     return Report(first, last, tz, heard, known, owner, identities, days)
 
 
+def directory(lb: Logbook) -> Report:
+    """Every person the record's resolution lines name, never the owner, and nothing read of their
+    evidence: what `find` needs to name one (`logbook with`), in the time two kinds take to read.
+    The report's window is empty and its `people` none."""
+    days = day_start.of(lb.meta)
+    with lb.index() as idx:
+        marks = idx.retractions()
+        resolutions = idx.resolutions()
+    identities = resolve.identities_from([*marks, *resolutions])
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
+    known = _people_of(identities, resolve.standing([*marks, *resolutions]), owner)
+    return Report("", "", days.zone, [], known, owner, identities, days)
+
+
 def _desc(day: str | None) -> str:
     """A key that sorts later days first: each digit flipped."""
     return "".join(chr(ord("9") - ord(c) + ord("0")) if c.isdigit() else c for c in (day or "")) or "~"

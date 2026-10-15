@@ -16,7 +16,9 @@ through the command that writes the same thing: the Places page names the places
 ([Places — name this place](#places--name-this-place)), a journey's page names the journey
 ([Journeys](#journeys)), the People page merges or tells apart who the sources saw
 ([People](#people)), and the Day is where you reflect on the day and sign it
-([Reflect and Sign](#reflect-and-sign)).
+([Reflect and Sign](#reflect-and-sign)), star a line and say who was there ([The Day — Star and
+With](#the-day--star-and-with)). The acts, from a terminal and on the page, are on
+[their own page](acts.md).
 
 ![The Day of 17 June of the demo record, every attachment toggle open](serve.png)
 
@@ -27,8 +29,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 
 | Page | What it is | The command it renders |
 |---|---|---|
-| `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries; your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages and photos counted) and company (confirmed, then proposed) under a toggle; what is unplaced; the health line; the sources and when each last spoke; at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect` |
-| `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
+| `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages counted; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
+| `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
 | `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
@@ -315,6 +317,40 @@ draft.* It is true because the rows are computed by the readers and the proposal
 one thing a model writes about a day, the dream's draft, is headed *Draft* with the model's name and
 every unsupported sentence marked.
 
+## The Day — Star and With
+
+The Day carries the two acts on lines the record already holds ([the acts](acts.md)):
+
+- **A star on every row that is a line**: an attached event, transcript, note, mail thread or call,
+  a flight, an unplaced item, an all-day entry, each photo a row counts, by name, your goals,
+  reviews and chapters of the day, and a proposed event you confirmed (the star of the event line
+  it became). ☆ stars the line, ★ takes the star back, and the page comes back at the row (expanded,
+  if it was). A keeper's row, and a goal or chapter a later one superseded, carries ★ only while it
+  is a star. A stay, a stop or a move is derived from many lines and is not one, so it has none;
+  messages are counted, not listed; the Night line and the weather are read from many lines. A
+  model's draft is never starred: not the dream's sentences, not a proposal you have not confirmed,
+  not a call's synthesis, and not the row of a draft the policy withholds (*superseded by policy*);
+  a draft is a proposal, not yours to keep as a memory ([the acts](acts.md#star-a-line-worth-keeping)),
+  and a star posted for one is a `400`. A starred photo is the press's pick
+  ([On paper](print.md)). The form posts to `/star`, which runs `stars.star` or `stars.unstar`, the
+  functions of `logbook star` and `logbook unstar`: the line is theirs, byte for byte but for the
+  clock. A line starred already is left as it is; an unstar of a line no longer starred (the page
+  was older than the record) is a `409`; a line that takes no star a `400`, with the reason.
+- **The `with` row and its field**: the day's company, everyone a row confirms and everyone you said
+  was there, your word marked *(you said)*; then a field, its names completed from the people the
+  record names (a `datalist` the server fills, so no script), several with commas, and a clock when
+  you know it. It posts to `/with`, which runs `presence.state`, the function of `logbook with`. A
+  name the record does not place is a `400` with the way to place it (`logbook people review`), and
+  nothing is written.
+
+**This machine only**, as the Places form: a `POST` to `/star` or `/with` is answered only when the
+client address is loopback and, when the browser sends an `Origin`, it names `127.0.0.1` or
+`[::1]`; anything else is a `403` and nothing is written. `GET /star` and `GET /with` are `405`.
+Writes are taken one at a time, and the page never waits for another writer: while a sync holds
+the record, a star, an unstar or a name says so (`409`, as Reflect and Sign do), nothing is
+written, and you click again. A static site (`logbook export site`) shows the stars, ★ beside the
+starred lines, and carries no form and no list of names.
+
 ## Journeys
 
 A journey is a trip ([ADR 0019](adr/0019-trips-are-derived.md)): a run of nights away from home,
@@ -411,9 +447,9 @@ read fails the test rather than passing it.
 
 ## What it is not
 
-Not an editor: the pages write nothing but the namings, the review, the reflection and the signature
-above, and the captain's other words — a note, a confirmation of a line — go through the CLI as lines
-in the record, which the next page reads. Not a web application: no framework, no build step, no
+Not an editor: the pages write nothing but the namings, the review, the reflection and the signature,
+the stars and the company said above, and the captain's other words — a note, a confirmation of a
+line — go through the CLI as lines in the record, which the next page reads. Not a web application: no framework, no build step, no
 state but the record, and two inline scripts, a dozen lines for three keys and a score for one
 button. Not the circle (ADR 0009): a page
 here is for the owner's eyes on the owner's machine; a shared page is a signed bundle, and that is
