@@ -28,7 +28,8 @@ track does not place (no stay reached three hours, the night was in transit) get
 
 The window: `--since` and `--until` are local days. Without `--until` the window ends yesterday
 (today is not over). Without `--since` the first run asks about **yesterday alone** — the record's
-past is asked about only when you name it, with `--since` — and every later run starts a week before
+past is asked about only when you name it, with `--since`, and the first scheduled run is no different
+— and every later run starts a week before
 the last day the previous run covered (`state/weather.json`, `since`), so points that reach the
 record late still get their days, but never before the first day any run covered (`from`): turning
 the source on never sends your history. Days already in the record are counted as already there and

@@ -131,6 +131,7 @@ def pull(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     recorded: Recorded | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """A task/v1 line draft for every task changed since `since` (RFC3339; None for all), oldest first.
     `recorded(None)` gives every task line of this source the record holds, for `supersedes` and how
@@ -138,7 +139,7 @@ def pull(
     after each page. Raises service_account.GoogleError (an OSError) when Google cannot be read; nothing
     is yielded before every list is in."""
     counts = counts if counts is not None else {}
-    session = service_account.Session(config, SCOPE)
+    session = service_account.Session(config, SCOPE, wait_on_limits)
     tasks = list(_read(session, since, progress, counts))
     history = _history(recorded(None)) if recorded is not None and tasks else {}
     tz = timezone or "UTC"

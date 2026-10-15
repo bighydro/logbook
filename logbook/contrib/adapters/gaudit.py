@@ -118,13 +118,14 @@ def pull(
     progress: Callable[[int, float], None] | None = None,
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """One event/v1 draft per login event of the owner's from `since` on (RFC3339; None for all the log
     keeps), oldest first. Skips are tallied in `counts`; `progress(activities, elapsed)` after each page.
     Raises service_account.GoogleError (an OSError) when Google cannot be read; nothing is yielded before
     every page is in."""
     counts = counts if counts is not None else {}
-    session = service_account.Session(config, SCOPE)
+    session = service_account.Session(config, SCOPE, wait_on_limits)
     params = {"maxResults": str(PAGE_SIZE)}
     if since:
         params["startTime"] = _z(_instant(since))

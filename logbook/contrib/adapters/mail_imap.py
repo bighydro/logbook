@@ -26,7 +26,9 @@ writes a mark only once the lines up to it are in the record, so a connection lo
 mark at the last batch written and the next run resumes there. A folder whose UIDVALIDITY changed is
 read from its first message again (the record refuses what it holds); `--restart` drops every mark;
 `--since RFC3339` searches `SINCE` that day instead (day granularity: the overlap is the record's to
-refuse) and still advances the marks; `--dry-run` fetches and counts and writes nothing.
+refuse) and still advances the marks, a folder with no mark yet and no message from that day on to its
+last message (UIDNEXT less one), so the next run never reads what came before the day; `--dry-run`
+fetches and counts and writes nothing.
 
 Headers first: each batch of `BATCH` UIDs is fetched as `Message-ID` and size alone, the record is
 asked which of those messages it holds by normalised Message-ID, from any mail road (`held`,
@@ -219,6 +221,7 @@ def pull(
         for folder in folders:
             shown = decode_utf7(folder)
             uidvalidity = _examine(imap, folder, shown, given)
+            uidnext = _uidnext(imap)
             mark = marks.get(folder)
             if mark is not None and mark["uidvalidity"] == uidvalidity:
                 start = mark["uid"] + 1
@@ -279,6 +282,9 @@ def pull(
                 if walk is not None:
                     walk.reached(ordinal, {"folders": dict(marks)})
                 say(f"{shown}: {fetched:,} fetched, {new:,} new, {already:,} already in the record")
+            if not uids and day is not None and uidnext is not None and marks[folder]["uid"] == 0:
+                marks[folder] = {"uidvalidity": uidvalidity, "uid": uidnext - 1}  # nothing from `since` on:
+                # a folder with no mark yet is marked at its end, what came before the day not this run's
             if not uids and walk is not None:  # an empty folder, or one started over with nothing in it
                 walk.reached(ordinal, {"folders": dict(marks)})
     finally:
@@ -416,6 +422,14 @@ def _examine(imap: imaplib.IMAP4, folder: str, shown: str, given: bool) -> int:
     if not isinstance(value, bytes) or not value.strip().isdigit():
         raise OSError(f"the server gave no UIDVALIDITY for the folder {shown}")
     return int(value)
+
+
+def _uidnext(imap: imaplib.IMAP4) -> int | None:
+    """The UIDNEXT the EXAMINE just answered (the UID the next message will get), or None when the
+    server gave none."""
+    _typ, values = imap.response("UIDNEXT")
+    value = values[0] if values else None
+    return int(value) if isinstance(value, bytes) and value.strip().isdigit() else None
 
 
 def _search(imap: imaplib.IMAP4, shown: str, start: int, day: str | None) -> list[int]:

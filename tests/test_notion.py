@@ -710,3 +710,17 @@ def test_sync_all_runs_notion_among_the_quick_sources(
     out = capsys.readouterr().out
     assert f"notion: {FIRST_RUN} new lines of {FIRST_RUN} seen" in out
     assert any(line.split() == ["notion", "ok"] for line in out.splitlines())
+
+
+def test_a_dry_run_stops_at_the_first_429_and_waits_for_nothing(
+    lb: Logbook, fake: FakeNotion, clock: Clock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake.throttle["/v1/search"] = 1000
+    assert _sync("--dry-run") == 1
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert err.startswith("sync: notion: dry run stopped at the source's limit after 0 lines: Notion API")
+    assert "rate limited (429)" in err
+    assert len([r for r in fake.requests if r.path == "/v1/search"]) == 1, "asked once, never again"
+    assert [s for s in clock.sleeps if s >= 1] == [], "only the pacing between requests"
+    assert lb.meta["seq"] == 0 and not (lb.root / "state").exists()

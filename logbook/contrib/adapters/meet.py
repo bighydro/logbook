@@ -126,6 +126,7 @@ def pull(
     timezone: str | None = None,
     store: Callable[[bytes], object] | None = None,
     existing: Existing | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """One event/v1 draft per conference that started from `since` on (RFC3339; None for all) and has
     ended, and one transcript/v1 draft per conference Meet transcribed, oldest first. `existing(keys)`
@@ -135,7 +136,7 @@ def pull(
     service_account.GoogleError (an OSError) when Google cannot be read; nothing is yielded before every
     conference is in."""
     counts = counts if counts is not None else {}
-    session = service_account.Session(config, SCOPE)
+    session = service_account.Session(config, SCOPE, wait_on_limits)
     records = _records(session, since, progress)
     tz = timezone or "UTC"
     keys = {(NAME, key) for record in records if (rid := _id(record)) for key in _keys(rid)}

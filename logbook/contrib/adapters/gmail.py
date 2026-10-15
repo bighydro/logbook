@@ -45,7 +45,8 @@ history id asks the history for the messages added since (`history.list`, `messa
 nothing; when Gmail no longer keeps that history (404, after about a week) it says so and lists the
 messages received from a day (`LOOKBACK_H`) before the newest internal date (`q=after:<epoch>`), and
 the record refuses what it holds. Without a state, the first run lists every message; give `--since`
-for a shorter one, which then leaves a mark. `--since` on a later run lists from that time for that run
+for a shorter one, which then leaves a mark (its time as the newest date when nothing came after it, so
+a later list by date never reaches back past it). `--since` on a later run lists from that time for that run
 and leaves the mark alone; `--restart` drops it and lists everything again (the record still refuses
 what it holds); `--dry-run` reads and counts and writes nothing.
 
@@ -146,6 +147,7 @@ def pull(
     walk: Walk | None = None,
     notice: Callable[[str], None] | None = None,
     held: mail.Held | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """One mail/v1 line draft per message the record does not hold, page by page, newest first within
     the list. `since` (RFC3339) lists the messages received from then on for this run. `walk` is
@@ -163,7 +165,7 @@ def pull(
     owners.add(account)
     saved = walk.start() if walk is not None else None
     stored_history, stored_newest = _mark(saved)
-    session = service_account.Session(config, SCOPE)
+    session = service_account.Session(config, SCOPE, wait_on_limits)
     history = str(session.get_json(f"{API}/profile", {}).get("historyId") or "") or None
     names = _label_names(session)
     newest = stored_newest
@@ -199,6 +201,8 @@ def pull(
             new += 1
             yield line
         say(f"{listed:,} listed, {new:,} new, {already:,} already in the record")
+    if newest is None and since is not None:  # nothing from `since` on: a later list by date starts there
+        newest = _instant(since)
     if walk is not None and (since is None or saved is None):  # --since on a later run leaves the mark
         walk.reached(ordinal, _checkpoint(history or stored_history, newest))
 

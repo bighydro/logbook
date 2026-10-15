@@ -82,7 +82,9 @@ happens twice, and `doctor` says so.
 run adds the dream's catch-up after the sync, above):
 
 1. **`sync --all`**: every configured live source in turn, each from its own watermark, a failure in one
-   never stopping the next, printed exactly as `sync --all` prints it ([the tour](tour.md#keep-it-flowing)).
+   never stopping the next, printed exactly as `sync --all` prints it ([the tour](tour.md#keep-it-flowing)),
+   except that a source with no watermark yet reads its last 14 days and not its whole history
+   ([below](#a-sources-first-scheduled-run)).
 2. **The restore test**, on the first Sunday of the month, once that day: the latest snapshot of the last
    backup is restored into a temporary folder, verified there, compared with what the record said when
    the backup was taken, and deleted again ([the monthly restore test](backup.md#the-monthly-restore-test)).
@@ -116,6 +118,58 @@ The exit status is 1 when a source failed or a check failed, as `sync --all` and
 The run never prompts: a source that needs a value it does not have is skipped and said so, a sealed
 record without its identity skips the restore test, and the scheduler's log holds the output
 (`~/Library/Logs/logbook-sync.log` on macOS, `journalctl --user -u logbook-sync.service` on Linux).
+
+## A source's first scheduled run
+
+A live source you add to the schedule has no watermark yet, and a run that starts from nothing walks the
+source's whole history: every activity Google keeps for a Drive, twenty years of a mailbox, a photo
+library. That is a backfill, and a backfill is something you ask for, not something a timer does: one
+first scheduled walk of 1.25 million Drive activities used up the account's API quota for the day. So
+the scheduled run reads a new source's **last 14 days** and no more, and says so in one line:
+
+```
+drive: first scheduled run read from 2026-09-25; for the history run `logbook sync drive --since <date>`
+```
+
+- **Which run.** `sync --scheduled` (and `sync --scheduled --close`), the command the installed agents or
+  timers run and that nothing else passes; typing it yourself is the same run. `logbook sync drive` and
+  `logbook sync --all` by hand start where they always did: from the watermark, or from the beginning
+  for a source that has none. `--since` always wins.
+- **Which source.** One with nothing in `state/<name>.json`: no watermark, no marks of its own (`mail`
+  and `gmail` keep theirs under `resume`), no walk under way. A source you synced by hand before carries
+  on from where it is. A source whose record already holds lines (an export imported, which `sync`
+  resumes from) starts from its newest line, less the source's lookback, when that line is inside the 14
+  days, and from the 14 days when it is older. A record restored from a snapshot has no `state/`, so
+  every source is new to it: each reads its last 14 days, and a `--since` from before the snapshot's day
+  reads what lies between. `ais`, `adsb` and `telegram` have no history to read (a stream, the present,
+  the day of updates a bot keeps) and are never bounded, and `weather` asks about yesterday alone on its
+  first run whatever runs it.
+- **The 14 days** are the record's local days, today included, from your `day_start` (midnight unless
+  you set one), taken once per run from its own clock and the same for every source in it. They are
+  counted in the source's own clock, as the watermark is: for a calendar, the events changed in those
+  days; for Drive, the activity in them. The watermark after the run is what the run saw, as after any
+  run, and the next scheduled run carries on from it.
+- **The mark.** Before it pulls, the bounded run writes `"first_run": {"from": "2026-09-24T22:00:00Z",
+  "day": "2026-09-25"}` in the source's state file, and a run from it that finishes adds `"complete":
+  true`. A run that fails or is interrupted, or one that found nothing in the window and so left no
+  watermark, is followed by runs from that same instant, never from a window that slid on: nothing
+  after it is skipped, an interrupted walk (`immich`) resumes, and the record refuses what a failed run
+  already wrote. `mail` and `gmail` carry on from their own marks once a run from it has finished.
+- **The history** is yours to read when you want it: `logbook sync drive --since 2020-01-01T00:00:00Z`
+  (an instant in UTC, as every `--since` but weather's, earlier than the day the line names: a day
+  before it is always enough), or
+  `--restart` for a source that walks a library (`immich`, `mail`, `gmail`). The record refuses the two
+  weeks it already holds, the watermark never moves back, and the mark goes. Until then `doctor` says
+  so on the source's own line —
+  ``pass  sync:drive  configured (LOGBOOK_DRIVE_SA_KEY, LOGBOOK_DRIVE_USER); first run bounded to 14 days;
+  history not read (before 2026-09-25: `logbook sync drive --since <date>`)`` — a note on a pass: nothing
+  is broken, and a warn would send the message at every run for a history you may never want.
+
+A dry run never waits out a source's quota or rate limit either: the first such answer (a 429, Google's
+rate-limit and quota 403s, GitHub's hourly limit) ends it on one line, exit 1, nothing written —
+`sync: drive: dry run stopped at the source's limit after 0 lines: HTTP 429: Quota exceeded for quota
+metric 'Queries' and limit 'Queries per day' …`. A run that writes waits the limit out as it always
+did.
 
 ## What `doctor` says about it
 

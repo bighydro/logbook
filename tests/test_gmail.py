@@ -549,3 +549,83 @@ def test_sync_all_runs_gmail_after_mail() -> None:
 
     names = [a.NAME for a in sync._all_order(adapters.live_adapters())]
     assert names.index("mail") < names.index("gmail") < names.index("immich")
+
+
+def test_a_first_run_with_since_and_nothing_after_it_marks_since_as_the_newest_date(
+    lb: Logbook, offline: Fake, capsys: pytest.CaptureFixture[str]
+) -> None:
+    status, out, _err = _sync(capsys, "--since", "2026-05-01T00:00:00Z")
+    assert status == 0 and "gmail: 0 new lines of 0 seen" in out
+    assert _state(lb) == {"history_id": str(offline.history_id), "internal_date": "2026-05-01T00:00:00Z"}
+    offline.history_floor = offline.history_id + 1  # a week on, Gmail keeps that history no more
+    status, out, _err = _sync(capsys)
+    assert status == 0 and "gmail: 0 new lines of 0 seen" in out
+    epoch = int(datetime(2026, 4, 30, 0, 0, tzinfo=UTC).timestamp())
+    assert offline.calls(MESSAGES)[-1]["q"] == f"after:{epoch - 1}", "a day before the mark, never everything"
+
+
+def test_a_bounded_first_scheduled_run_lists_two_weeks_and_skips_what_another_mail_road_wrote(
+    lb: Logbook,
+    offline: Fake,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`sync --scheduled` bounds gmail's first run to the last 14 local days, and within them the record
+    is still asked by Message-ID, from any mail road, before a body is fetched: two messages a Takeout
+    wrote without `--account` (keyed by the bare id, a key gmail's own never matches) are counted, not
+    fetched and not written; the two it does not hold are; one from before the window is never listed."""
+    from logbook.contrib import first_run, last_run, notify
+
+    monkeypatch.setattr(adapters, "live_adapters", lambda: [gmail])
+    monkeypatch.setattr(last_run, "now", lambda: datetime(2026, 3, 10, 12, 0, tzinfo=UTC))  # a Tuesday
+    for name in notify.ENV:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(doctor, "EXTRAS", ())  # what this machine has installed is not the test's
+    monkeypatch.setattr(doctor, "DISK_WARN_BYTES", 0)
+    early = T0 - timedelta(days=45)  # mid-January: history the bound leaves for a `--since`
+    offline.deliver(_raw("m0@mail.example.org", early), early, ("INBOX",))
+    mbox = tmp_path / "takeout.mbox"
+    with mbox.open("wb") as fh:  # the export of m1 and m2, as Takeout writes it
+        for n, (message_id, when, sent) in enumerate(
+            [("m1@mail.example.org", T0, False), ("m2@mail.example.org", T0 + timedelta(hours=12), True)]
+        ):
+            fh.write(f"From 179512345678901{n} {when.strftime('%a %b %d %H:%M:%S +0000 %Y')}\n".encode())
+            fh.write(b"X-Gmail-Labels: Inbox\r\n" + _raw(message_id, when, sent=sent) + b"\r\n")
+    cli.main(["add", "mail", str(mbox)])
+    assert {line["payload"]["raw_id"] for line in lb.lines()} == {
+        "m1@mail.example.org",
+        "m2@mail.example.org",
+    }
+    capsys.readouterr()
+
+    try:
+        cli.main(["sync", "--scheduled"])
+    except SystemExit as e:
+        assert not e.code, capsys.readouterr()
+    out, err = capsys.readouterr()
+
+    assert (
+        out.count(
+            "gmail: first scheduled run read from 2026-02-25; for the history run"
+            " `logbook sync gmail --since <date>`"
+        )
+        == 1
+    )
+    bound = int(datetime(2026, 2, 24, 23, 0, tzinfo=UTC).timestamp())  # Oslo's midnight of the 25th
+    assert offline.calls(MESSAGES)[0]["q"] == f"after:{bound - 1}", "the window, never the whole mailbox"
+    assert "  2 already in the record from mail (an import without --account)" in out.splitlines()
+    assert f"{LINES + 1} listed, 2 new, 2 already in the record" in err, "the draft is listed too"
+    fetched = [path for _m, path, q in offline.requests if q.get("format") == "raw"]
+    assert len(fetched) == 2, "no body the record holds from the Takeout was fetched"
+    written = [line["payload"]["raw_id"] for line in lb.lines()]
+    assert len(written) == 4 and set(written) == {
+        "m1@mail.example.org",
+        "m2@mail.example.org",
+        f"{USER}:m3@mail.example.org",
+        f"{USER}:m4@mail.example.org",
+    }, "each message once, m0 not read"
+    mark = first_run.read(lb.root, "gmail")
+    assert mark is not None and mark["from"] == "2026-02-24T23:00:00Z" and mark["day"] == "2026-02-25"
+    found = {c.name: c for c in doctor.run(Logbook.find(), os.environ)}
+    assert "history not read (before 2026-02-25" in found["sync:gmail"].detail

@@ -229,6 +229,7 @@ def pull(
     counts: dict[str, int] | None = None,
     timezone: str | None = None,
     failed: list[str] | None = None,
+    wait_on_limits: bool = True,
 ) -> Iterator[dict[str, Any]]:
     """Every event of every calendar changed since `since` (RFC3339; None means all), calendar by
     calendar (the order configured, or the primary first and then by name on the service account) and
@@ -244,7 +245,7 @@ def pull(
     started = time.monotonic()
     problems: list[str] = []
     read = (
-        _from_account(config.account, since, counts, problems)
+        _from_account(config.account, since, counts, problems, wait_on_limits)
         if config.account is not None
         else _from_feeds(config, problems)
     )
@@ -285,10 +286,16 @@ def _from_feeds(config: Config, problems: list[str]) -> Read:
 # -- the Calendar API, on the service account ----------------------------------------------------------
 
 
-def _from_account(account: Account, since: str | None, counts: dict[str, int], problems: list[str]) -> Read:
+def _from_account(
+    account: Account,
+    since: str | None,
+    counts: dict[str, int],
+    problems: list[str],
+    wait_on_limits: bool = True,
+) -> Read:
     """Each calendar the user owns as one VCALENDAR of the VEVENTs its feed would carry; a calendar
     whose events cannot be read is a line in `problems` and the others are still read."""
-    session = service_account.Session(account, SCOPE)
+    session = service_account.Session(account, SCOPE, wait_on_limits)
     read: Read = []
     for calendar in _owned(session):
         calendar_id = str(calendar["id"])

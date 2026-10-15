@@ -898,3 +898,29 @@ def test_people_review_proposes_a_handle_to_the_person_of_that_name(
         assert e.code in (0, None)
     out = capsys.readouterr().out
     assert "github:ola-example (Ola Nordmann; event 7) → Ola Nordmann: same name Ola Nordmann" in out
+
+
+def test_a_dry_run_stops_at_the_hourly_limit_instead_of_waiting_for_its_reset(
+    lb: Logbook, fake: FakeGitHub, clock: Clock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake.throttle_mode = "primary"
+    fake.throttle[f"/repos/{SAILPLAN}/commits"] = 1
+    assert _sync("--dry-run") == 1
+    err = capsys.readouterr().err
+    assert len([line for line in err.splitlines() if line.strip()]) == 1
+    assert err.startswith("sync: github: dry run stopped at the source's limit after ")
+    assert "GitHub's hourly limit" in err and TOKEN not in err
+    assert [s for s in clock.sleeps if s >= 1] == [], "the reset is not waited for"
+    assert lb.meta["seq"] == 0 and not (lb.root / "state" / "github.json").exists()
+
+
+def test_since_marks_a_repo_with_nothing_from_then_on_so_the_next_run_never_reads_it_whole(
+    lb: Logbook, fake: FakeGitHub
+) -> None:
+    assert _sync("--since", "2026-03-06T00:00:00Z") == 0  # sailplan's last act is on the 5th
+    assert _state(lb)["marks"][SAILPLAN.casefold()] == "2026-03-06T00:00:00Z"
+    fake.requests.clear()
+    assert _sync() == 0
+    since = {(r.path, r.query.get("since")) for r in fake.requests if "since" in r.query}
+    assert (f"/repos/{SAILPLAN}/commits", "2026-02-27T00:00:00Z") in since, "a week before its mark"
+    assert (f"/repos/{SAILPLAN}/commits", None) not in {(r.path, r.query.get("since")) for r in fake.requests}

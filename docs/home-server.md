@@ -151,13 +151,18 @@ logbook backup restore ~/snapshot ~/Logbook     # copied, verified, its head pri
 rm -r ~/snapshot
 ```
 
-A snapshot leaves `state/` out, so the first `sync` on the server reads each live source from its
-start; the record refuses what it already holds, and nothing doubles. If the record seals tiers 2
-and 3 (`logbook key show` says so, and where the identity is), the identity file goes to the server
-too, by `scp`, to the same place under `records`'s `~/.config/logbook/identities/`, at mode 600. Write
-nothing more to the laptop's record folder; once the server's first backup has passed a restore test
-(step 9), delete it, and the snapshot in `~/Transfer` with it. A read-only checkout (step 8) takes its
-place if you want one there.
+A snapshot leaves `state/` out, so every live source is new to the server. A `sync` by hand reads each
+from its start, and the record refuses what it already holds, so nothing doubles. The schedule's first
+run reads each source's last 14 days ([a source's first scheduled
+run](schedule.md#a-sources-first-scheduled-run)): the record already holds what came before the snapshot,
+and `doctor` names each source as `first run bounded to 14 days; history not read` until a `logbook sync
+<source> --since <date>` from before the snapshot's day reads the days between and clears it (when the
+snapshot is from today, there are none, and the record refuses all it reads). If the record seals tiers 2
+and 3 (`logbook key show` says so, and where the identity is), the identity file goes to the server too,
+by `scp`, to the same place under `records`'s `~/.config/logbook/identities/`, at mode 600. Write nothing
+more to the laptop's record folder; once the server's first backup has passed a restore test (step 9),
+delete it, and the snapshot in `~/Transfer` with it. A read-only checkout (step 8) takes its place if you
+want one there.
 
 **Check:** `logbook verify` as records prints `valid` and the head.
 

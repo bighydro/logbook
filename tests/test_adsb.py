@@ -329,3 +329,11 @@ def test_sync_with_a_broken_registry_exits_2_naming_the_file(lb, monkeypatch, ca
         _sync()
     assert e.value.code == 2
     assert "assets.json" in capsys.readouterr().err
+
+
+def test_a_rate_limit_is_the_sources_limit_and_never_waited_out(monkeypatch):
+    _serve(monkeypatch, status=429)
+    config = adsb.Config(url=adsb.DEFAULT_URL, user="pilot", password=PASSWORD)
+    with pytest.raises(adapters.LimitReached, match="rate limit reached") as e:
+        list(adsb.pull(config, assets=REGISTRY))
+    assert PASSWORD not in str(e.value)

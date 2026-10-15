@@ -877,3 +877,18 @@ def test_sync_stores_the_spans_file_beside_the_text(lb, monkeypatch, capsys):
     t, _s = lb.lines()
     ref = t["payload"]["diarization"]["spans"]
     assert json.loads((lb.root / ref["path"]).read_bytes())["format"] == "speaker-spans/1"
+
+
+def test_a_429_told_not_to_wait_is_the_limit_at_once(monkeypatch):
+    def limited(req: Any, timeout: float) -> Any:
+        raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", None, None)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(granola, "urlopen", limited)
+    calls: list[float] = []
+    monkeypatch.setattr(granola.time, "sleep", calls.append)
+    with pytest.raises(adapters.LimitReached, match=r"GET /notes: HTTP 429 Too Many Requests") as e:
+        list(granola.pull(CONFIG, None, wait_on_limits=False))
+    assert KEY not in str(e.value) and calls == []
+    with pytest.raises(OSError, match="twice"):
+        list(granola.pull(CONFIG, None))
+    assert calls == [granola.RETRY_AFTER_S], "a run that writes waits as before"

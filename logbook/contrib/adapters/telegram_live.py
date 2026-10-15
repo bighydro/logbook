@@ -57,6 +57,7 @@ from .telegram import KIND, Bot, Keys, draft, key, stamp
 __all__ = ["ENV", "KIND", "NAME", "Config", "configure", "group", "pull", "watermark"]
 
 NAME = "telegram"
+HISTORY = False  # the Bot API keeps a day at most: a first scheduled run has nothing to bound
 TOKENS_ENV = "LOGBOOK_TELEGRAM_BOT_TOKENS"
 OWNER_ENV = "LOGBOOK_TELEGRAM_OWNER_ID"
 API_ENV = "LOGBOOK_TELEGRAM_API"

@@ -633,3 +633,31 @@ def test_sync_all_runs_mail_among_the_quick_sources(
     assert "mail: 6 new lines of 6 seen" in out
     assert any(line.split() == ["mail", "ok"] for line in out.splitlines())
     assert len(_mail_lines(lb)) == 6
+
+
+def test_since_on_a_folder_with_nothing_from_that_day_marks_its_last_message(
+    lb: Logbook, server: FakeImap, capsys: pytest.CaptureFixture[str]
+) -> None:
+    status, out, _err = _sync(capsys, "--since", "2026-05-01T00:00:00Z")
+    assert status == 0 and "mail: 0 new lines of 0 seen" in out
+    assert _marks(lb) == {ALL_MAIL: {"uidvalidity": 1234, "uid": 6}}, "UIDNEXT less one, not 0"
+    server.folders[ALL_MAIL].messages[7] = _message(7, "m7@mail.example.org", hours=24.0 * 70)
+    del server.commands[:]
+    status, out, _err = _sync(capsys)
+    assert status == 0 and "mail: 1 new lines of 1 seen" in out, "what came before the day stays unread"
+    assert any("UID 7:*" in line for line in server.sent("SEARCH"))
+    assert [line["payload"]["message_id"] for line in _mail_lines(lb)] == ["m7@mail.example.org"]
+
+
+def test_since_with_nothing_from_that_day_leaves_a_folder_that_has_a_mark_as_it_was(
+    lb: Logbook, server: FakeImap, capsys: pytest.CaptureFixture[str]
+) -> None:
+    del server.folders[ALL_MAIL].messages[6]
+    _sync(capsys)
+    assert _marks(lb) == {ALL_MAIL: {"uidvalidity": 1234, "uid": 5}}
+    server.folders[ALL_MAIL].messages[6] = _message(6, "m6@mail.example.org", hours=72.0)
+    status, out, _err = _sync(capsys, "--since", "2026-05-01T00:00:00Z")
+    assert status == 0 and "mail: 0 new lines of 0 seen" in out
+    assert _marks(lb) == {ALL_MAIL: {"uidvalidity": 1234, "uid": 5}}, "uid 6 is still the next run's"
+    status, out, _err = _sync(capsys)
+    assert status == 0 and "mail: 1 new lines of 1 seen" in out

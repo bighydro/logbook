@@ -241,8 +241,10 @@ did not verify is an exit status 1 there and no new directory under `DEST`.
 ## What it does not do
 
 It does not encrypt: a snapshot is the record as it is, plain, and the disk it is on needs the protection
-the record's own disk has (FileVault, LUKS, a drive in a drawer). It does not go to a server, a bucket or a
-sync folder, and refuses the last. It does not keep `state/`, so a restored record's next `sync` reads each
-live source from its start; `append_many` skips what is already in the log, so nothing doubles. And it does
-not replace `logbook verify` on the live record: a backup of a broken record is refused, not repaired, and
-the command says to run `logbook verify` ([When verify fails](recovery.md) says what each failure means).
+the record's own disk has (FileVault, LUKS, a drive in a drawer). It does not go to a server, a bucket or
+a sync folder, and refuses the last. It does not keep `state/`, so a restored record's next `sync` by
+hand reads each live source from its start, and its first scheduled run each source's last 14 days ([the
+schedule](schedule.md#a-sources-first-scheduled-run)); `append_many` skips what is already in the log, so
+nothing doubles. And it does not replace `logbook verify` on the live record: a backup of a broken record
+is refused, not repaired, and the command says to run `logbook verify` ([When verify fails](recovery.md)
+says what each failure means).

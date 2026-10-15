@@ -38,7 +38,10 @@ The checks, in the order they print:
   that source when the index is current — the variables its adapter reads are set. Names only,
   never a value: a missing one is a warn naming it, a set one the adapter refuses says to run
   `logbook sync <name>`, a configured one names the variables it reads. A source `policy/import.json`
-  disables needs nothing.
+  disables needs nothing. A source whose first scheduled run was bounded to two weeks and whose
+  history no run has read since says so on its line (`first run bounded to 14 days; history not
+  read`, with the day it starts and the `--since` that reads the rest), whatever the line's status,
+  which it never changes.
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
   it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
@@ -94,7 +97,7 @@ from zoneinfo import ZoneInfo
 from ..core import assets, attachments, day_start, drafts, index, places, plausible, policy, sealing
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
-from . import adapters, home, last_run, schedule, serve, synthesis
+from . import adapters, first_run, home, last_run, schedule, serve, synthesis
 from . import service as serve_service
 from .adapters import service_account
 
@@ -423,29 +426,37 @@ def google_check(lb: Logbook, env: Mapping[str, str]) -> Check | None:
 def env_checks(lb: Logbook, env: Mapping[str, str], sources: set[str]) -> Iterator[Check]:
     """Names only, never a value: a missing variable is named; one the adapter refuses is not echoed.
     An adapter with `check` (`beeper`: `GET /v1/info`) is asked, once, whether its app answers; the
-    sources on the Google key read it here and ask Google nothing."""
+    sources on the Google key read it here and ask Google nothing. A source whose first scheduled run
+    was bounded to two weeks, and whose history no run has read since, is named as such on its line
+    (`first_run.text`), whatever the line's status, which it never changes: the schedule chose not to
+    read the history, nothing is broken, and a warn would send the alert at every run."""
     for adapter in syncs_used(lb, sources, env):
-        name = f"sync:{adapter.NAME}"
-        try:
-            config = adapter.configure(env)
-        except ValueError:
-            yield Check(
-                name, "warn", f"a variable is set but refused; `logbook sync {adapter.NAME}` says why"
-            )
-            continue
-        if config is None:
-            yield Check(name, "warn", "set " + adapters.needs(adapter, env))
-            continue
-        given = [v for v in adapter.ENV if env.get(v, "").strip()]  # the ones it reads; all when none is set
-        detail = "configured (" + ", ".join(given or adapter.ENV) + ")"
-        ask = getattr(adapter, "check", None)
-        if ask is None:
-            yield Check(name, "pass", detail)
-            continue
-        try:
-            yield Check(name, "pass", f"{detail}; {ask(config)}")
-        except (OSError, ValueError) as e:
-            yield Check(name, "warn", f"{detail}; {e}")
+        check = _env_check(adapter, env)
+        bounded = first_run.read(lb.root, adapter.NAME)
+        if bounded is not None:
+            said = first_run.text(bounded, adapter.NAME)
+            check = Check(check.name, check.status, f"{check.detail}; {said}")
+        yield check
+
+
+def _env_check(adapter: adapters.LiveAdapter, env: Mapping[str, str]) -> Check:
+    """One source's `sync:<name>` line, from its variables."""
+    name = f"sync:{adapter.NAME}"
+    try:
+        config = adapter.configure(env)
+    except ValueError:
+        return Check(name, "warn", f"a variable is set but refused; `logbook sync {adapter.NAME}` says why")
+    if config is None:
+        return Check(name, "warn", "set " + adapters.needs(adapter, env))
+    given = [v for v in adapter.ENV if env.get(v, "").strip()]  # the ones it reads; all when none is set
+    detail = "configured (" + ", ".join(given or adapter.ENV) + ")"
+    ask = getattr(adapter, "check", None)
+    if ask is None:
+        return Check(name, "pass", detail)
+    try:
+        return Check(name, "pass", f"{detail}; {ask(config)}")
+    except (OSError, ValueError) as e:
+        return Check(name, "warn", f"{detail}; {e}")
 
 
 def disk_check(root: Path, usage: Usage = shutil.disk_usage) -> Check:

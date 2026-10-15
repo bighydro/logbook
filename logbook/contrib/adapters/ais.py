@@ -80,6 +80,7 @@ BACKOFF_S = 1.0  # the first wait before a reconnect; doubles up to BACKOFF_MAX_
 BACKOFF_MAX_S = 60.0
 UNIT = "reports"
 GROUP_MARKS = True  # `sync` keeps a watermark per group (per asset) in the state file
+HISTORY = False  # the stream has none: a first scheduled run has nothing to bound
 TIMEOUT_S = 30
 CLOCK = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")  # HH:MM, two digits each
 POSITION_TYPES = ("PositionReport", "StandardClassBPositionReport")

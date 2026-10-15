@@ -468,3 +468,57 @@ def test_doctor_shows_sync_drive_configured_and_the_key_checked(lb: Logbook, fak
     assert check.status == "pass" and f"configured ({KEY_ENV}, {USER_ENV})" in check.detail
     assert "never stored" in check.detail
     assert fake.requests == [], "doctor asks Google nothing"
+
+
+# -- a dry run and the day's quota ------------------------------------------------------------------------
+
+QUOTA = (
+    "Quota exceeded for quota metric 'Queries' and limit 'Queries per day' of service"
+    " 'driveactivity.googleapis.com'"
+)
+
+
+def _spent(fake: Fake) -> None:
+    """Google's answer once the project's daily quota is used up: 429, RESOURCE_EXHAUSTED."""
+    error = {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": QUOTA}
+    fake.failures.append((429, {"retry-after": "60"}, json.dumps({"error": error}).encode("utf-8")))
+
+
+def test_a_dry_run_that_meets_the_days_quota_stops_at_once_on_one_line(
+    lb: Logbook, fake: Fake, capsys: Any
+) -> None:
+    _spent(fake)
+    assert _sync("--dry-run") == 1
+    out = capsys.readouterr()
+    lines = [line for line in out.err.splitlines() if line.strip()]
+    assert lines == [f"sync: drive: dry run stopped at the source's limit after 0 lines: HTTP 429: {QUOTA}"]
+    assert "dry run, nothing written" not in out.out
+    assert fake.waits == [], "nothing waited out"  # type: ignore[attr-defined]
+    assert lb.meta["seq"] == 0 and not (lb.root / "state").exists(), "no watermark, no cache"
+
+
+def test_a_run_that_writes_still_waits_the_limit_out(lb: Logbook, fake: Fake, capsys: Any) -> None:
+    _spent(fake)
+    assert _sync() == 0
+    assert fake.waits == [60.0]  # type: ignore[attr-defined]
+    assert f"drive: {LINES} new lines" in capsys.readouterr().out
+
+
+def test_a_dry_run_stopped_after_some_pages_says_how_far_it_read(
+    lb: Logbook, fake: Fake, capsys: Any
+) -> None:
+    real = fake._activity
+
+    def spent_after_the_first_page(scope: str, params: dict[str, Any]) -> Any:
+        if params.get("pageToken"):
+            error = {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": QUOTA}
+            return service_account.Response(429, {}, json.dumps({"error": error}).encode("utf-8"))
+        return real(scope, params)
+
+    fake._activity = spent_after_the_first_page  # type: ignore[method-assign]
+    fake.page = 3
+    assert _sync("--dry-run") == 1
+    err = capsys.readouterr().err
+    stop = "sync: drive: dry run stopped at the source's limit after 0 lines, 3 activities read"
+    assert err.splitlines()[-1] == f"{stop}: HTTP 429: {QUOTA}", "drive yields nothing before its last page"
+    assert fake.waits == [] and not (lb.root / "state").exists()  # type: ignore[attr-defined]

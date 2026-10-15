@@ -229,48 +229,51 @@ capture time, so a photo taken in 2015 and uploaded tomorrow is picked up by tom
 lands on its 2015 day. Each live source is configured by environment variables; missing ones are named
 and the command exits 2.
 
-The first `sync immich` walks the whole library, which takes hours for hundreds of thousands of
-assets. It says what it is walking before it starts — `immich: 426,121 assets on the server, 0
-already in the record` (the count the server gives; `total unknown` when it will not say) — and then
-counts every page as `x of N assets`, so a long walk is told from a loop. An interrupted walk (Ctrl-C,
-a lost connection, a server error) is checkpointed in `state/immich.json` as the lines land, and the
-next run says `resuming where the last run stopped, at x of N assets` and asks the server for nothing
-before that point; `--restart` walks the library from the beginning instead. Each asset is fetched
-once: the pages are ordered by capture time, which a burst or a batch of scans shares to the second,
-and the server serves such a run again at a page boundary; the adapter sees through that and the
-record's own refusal of a line it already holds stays the safety net.
+The first `sync immich` by hand walks the whole library, which takes hours for hundreds of thousands of
+assets (the first scheduled run reads the last 14 days: [the
+schedule](schedule.md#a-sources-first-scheduled-run)). It says what it is walking before it starts —
+`immich: 426,121 assets on the server, 0 already in the record` (the count the server gives; `total
+unknown` when it will not say) — and then counts every page as `x of N assets`, so a long walk is told
+from a loop. An interrupted walk (Ctrl-C, a lost connection, a server error) is checkpointed in
+`state/immich.json` as the lines land, and the next run says `resuming where the last run stopped, at x
+of N assets` and asks the server for nothing before that point; `--restart` walks the library from the
+beginning instead. Each asset is fetched once: the pages are ordered by capture time, which a burst or a
+batch of scans shares to the second, and the server serves such a run again at a page boundary; the
+adapter sees through that and the record's own refusal of a line it already holds stays the safety net.
 
 `sync mail` is the mailbox over IMAP (`LOGBOOK_IMAP_HOST`, `LOGBOOK_IMAP_USER`, `LOGBOOK_IMAP_PASSWORD`,
 an app password): read-only, every folder resumed from its own mark, and a message the Takeout import
 already wrote is refused by `Message-ID` before its body is fetched ([Mail](adapters/mail.md#mail-imap)).
 
 `logbook sync --all` runs every configured live source in turn — configured: at least one of its
-`LOGBOOK_*` variables set, and all it needs present — each from its own watermark; a disabled source
-or one with no variable set is skipped and said so, and a failure in one never stops the next. The
-quick sources go first and `immich` last, and the first line says the order, so a photo walk of hours
-never holds up the messages, the calendar, the positions or the weather. Each
-source prints its own summary as it runs, then one line per source closes the run (`ok`, `failed
-(status 1)`, `skipped (LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed.
-`logbook sync --install-schedule` makes the machine run `sync --scheduled` at 00:00, 12:00 and 18:00
-local and `sync --scheduled --close` at 06:00, the run that closes the day (the dream's catch-up after
-the sync, when the dream is there and allowed): two launchd agents on macOS
+`LOGBOOK_*` variables set, and all it needs present — each from its own watermark; a disabled source or
+one with no variable set is skipped and said so, and a failure in one never stops the next. The quick
+sources go first and `immich` last, and the first line says the order, so a photo walk of hours never
+holds up the messages, the calendar, the positions or the weather. Each source prints its own summary as
+it runs, then one line per source closes the run (`ok`, `failed (status 1)`, `skipped
+(LOGBOOK_GRANOLA_KEY not set)`), and the exit status is 1 when any failed. A dry run never waits out a
+source's quota or rate limit: the first such answer ends that source's dry run on one line (`sync: drive:
+dry run stopped at the source's limit after 0 lines: HTTP 429: …`), exit 1, nothing written, and `--all`
+goes on to the next. `logbook sync --install-schedule` makes the machine run `sync --scheduled` at 00:00,
+12:00 and 18:00 local and `sync --scheduled --close` at 06:00, the run that closes the day (the dream's
+catch-up after the sync, when the dream is there and allowed): two launchd agents on macOS
 (`~/Library/LaunchAgents/org.logbook.sync.plist` and `org.logbook.sync.close.plist`), two systemd user
 timers on Linux (`~/.config/systemd/user/logbook-sync.timer` and `logbook-sync-close.timer`). The plists
 or units are printed before they are written, nothing is written outside that directory, and
 `--uninstall-schedule` removes them again; `--system` writes daemons for a machine nobody logs in to and
-prints the two sudo commands that install them.
-Installing also names this machine the record's home in `state/home.json` ([ADR
-0022](adr/0022-the-records-home.md)): the one machine that writes, which `logbook doctor` checks on
-every machine and warns about on any other. The
-agent runs the Python that installed it and points at the record found at install time; the keys your
-sources need it reads from `~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write
-and the command never does. The scheduled run is `sync --all`, then `doctor`, with the outcome in
+prints the two sudo commands that install them. Installing also names this machine the record's home in
+`state/home.json` ([ADR 0022](adr/0022-the-records-home.md)): the one machine that writes, which `logbook
+doctor` checks on every machine and warns about on any other. The agent runs the Python that installed it
+and points at the record found at install time; the keys your sources need it reads from
+`~/.config/logbook/sync.env` (`KEY=value` lines, mode 600), which you write and the command never does.
+The scheduled run is `sync --all` (a source's first scheduled run reads its last 14 days, never its whole
+history: [the schedule](schedule.md#a-sources-first-scheduled-run)), then `doctor`, with the outcome in
 `state/last-run.json`, the restore test on the first Sunday of the month, and, with
 `LOGBOOK_NOTIFY_TELEGRAM_TOKEN` and `LOGBOOK_NOTIFY_TELEGRAM_CHAT` in that file, one Telegram message
 when something is wrong or on Sunday evening ([the schedule](schedule.md)). `sync weather` is the one
-source that asks a third party about your days: it asks nothing, by name or in `--all`, unless that
-file (or the environment) says `LOGBOOK_WEATHER=1`, and then each run asks about the days since the
-last, yesterday on the first.
+source that asks a third party about your days: it asks nothing, by name or in `--all`, unless that file
+(or the environment) says `LOGBOOK_WEATHER=1`, and then each run asks about the days since the last,
+yesterday on the first.
 
 ```bash
 logbook sync --all                                # every configured source, one after the other
@@ -437,16 +440,18 @@ logbook sync dawarich                                      # then, as often as y
 ```
 
 Both write the same line for the same point (same `raw_id`), so nothing you already imported is written
-twice. The first `sync` starts from the newest Dawarich point already in the record; after that from the
-last point it saw. A phone uploads in batches, so a point can reach the server after newer ones: each
-sync looks back 24 hours before its watermark and skips what the record already has, and says how many
-that was. Set `LOGBOOK_DAWARICH_LOOKBACK_H` for a longer or shorter window; `--since` pulls from an exact
-time instead.
+twice. The first `sync` starts from the newest Dawarich point already in the record (the first scheduled
+run from 14 days back when that point is older: [the
+schedule](schedule.md#a-sources-first-scheduled-run)); after that from the last point it saw. A phone
+uploads in batches, so a point can reach the server after newer ones: each sync looks back 24 hours
+before its watermark and skips what the record already has, and says how many that was. Set
+`LOGBOOK_DAWARICH_LOOKBACK_H` for a longer or shorter window; `--since` pulls from an exact time instead.
 
 On a Mac, `logbook sync imessage` reads the Messages database the Mac itself keeps, read-only, and writes
 the same line for the same message as the phone backup (same `raw_id`, the message guid), so a record
 seeded with `import-backup` carries on from its newest message and nothing is written twice. The first
-run starts from the newest iMessage line already in the record, later runs from the newest message seen,
+run starts from the newest iMessage line already in the record (the first scheduled run from 14 days
+back when that line is older, or when there is none), later runs from the newest message seen,
 each looking back 24 hours (`LOGBOOK_IMESSAGE_LOOKBACK_H`) for a conversation another device synced late.
 Attachments stay where Messages keeps them; a file that is there is hashed into the line, one that is
 not is flagged. The terminal needs **Full Disk Access** (System Settings → Privacy & Security) to read
@@ -480,11 +485,12 @@ reacts, marks read, archives or changes a thing, and a test holds it to that. `l
 Each chat keeps its own watermark (`marks` in `state/beeper.json`): a run reads a chat back to its newest
 message seen, less 24 hours for a message a bridge delivers late, and the record refuses what it already
 holds. A chat with no watermark yet — every chat on the first run, a new chat later — starts at the
-source's watermark, or at `--since`; to pull the history of a network you add to `--networks` later, give
-`--since` once. Reactions, hidden messages and events with neither text nor attachment (joins, calls,
-bridge state) are skipped and counted. An attachment is referenced by its Beeper asset id, size, media
-type and file name under `extra.media`, never downloaded: the bytes stay in Beeper. When the app is not
-running the sync says so on one line and exits 1, and `sync --all` goes on to the next source.
+source's watermark, or at `--since`, or, on the source's first scheduled run, 14 days back; to pull the
+history of a network you add to `--networks` later, give `--since` once. Reactions, hidden messages and
+events with neither text nor attachment (joins, calls, bridge state) are skipped and counted. An
+attachment is referenced by its Beeper asset id, size, media type and file name under `extra.media`,
+never downloaded: the bytes stay in Beeper. When the app is not running the sync says so on one line and
+exits 1, and `sync --all` goes on to the next source.
 
 **Known overlap.** Beeper is a second view of chats other sources already read: an iMessage from this Mac's
 own database (`sync imessage`), a WhatsApp message from a chat export or the phone's backup, the Beeper
@@ -569,16 +575,18 @@ one is still written, with `extra.body` `{"unavailable": "withheld"}` in place o
 word count (`"not_found"` when a block is deleted while the sync reads the page), and the run counts
 those pages, names the block type once, never the page, and goes on.
 
-**The watermark** is the newest last-edit time seen (`state/notion.json`); each run reads back two
-hours before it, because Notion stamps an edit to the minute and its search lists a fresh edit late,
-and the record refuses what it already holds. `--since` reads from an exact time; `--dry-run` counts
-and writes nothing. The first run reads every page once, its blocks included, to count its words: at
-three requests a second a workspace of a few thousand pages takes a quarter of an hour or more, and
-says how far it is every hundred pages; later runs read only what changed. The sync stays under Notion's rate limit — at most three requests a second; a 429
-waits as long as Notion's `Retry-After` says, a server error is tried again after 1, 2, 4… seconds —
-and when the limit does not lift it stops on one line, exit 1, the watermark where it was, so the next
-run carries on. `logbook doctor` lists `sync:notion` once the token is set, by name only, and asks
-Notion nothing; `sync --all` and the schedule run it with no more configuration.
+**The watermark** is the newest last-edit time seen (`state/notion.json`); each run reads back two hours
+before it, because Notion stamps an edit to the minute and its search lists a fresh edit late, and the
+record refuses what it already holds. `--since` reads from an exact time; `--dry-run` counts and writes
+nothing. The first run by hand reads every page once, its blocks included, to count its words (a first
+scheduled run reads the pages edited in the last 14 days, [the
+schedule](schedule.md#a-sources-first-scheduled-run)): at three requests a second a workspace of a few
+thousand pages takes a quarter of an hour or more, and says how far it is every hundred pages; later runs
+read only what changed. The sync stays under Notion's rate limit — at most three requests a second; a 429
+waits as long as Notion's `Retry-After` says, a server error is tried again after 1, 2, 4… seconds — and
+when the limit does not lift it stops on one line, exit 1, the watermark where it was, so the next run
+carries on. `logbook doctor` lists `sync:notion` once the token is set, by name only, and asks Notion
+nothing; `sync --all` and the schedule run it with no more configuration.
 
 Granola works the same way (ADR 0017: backfill and live share one mapping). Create the key under *Settings →
 Connectors → API keys* (Business and Enterprise plans; scope it to your personal notes), export it as
@@ -715,6 +723,9 @@ logbook sync gmail --since 2026-01-01T00:00:00Z            # a first run from a 
 logbook sync gmail                                         # then from Gmail's history id
 ```
 
+A first run by hand without `--since` lists every message; the first scheduled run reads the last 14 days
+and leaves its mark there ([the schedule](schedule.md#a-sources-first-scheduled-run)).
+
 ### Google Calendar
 
 `logbook sync gcal` reads the calendars you own. With the two variables above set it reads them over
@@ -730,7 +741,9 @@ answer, so a line read over the API lacks those two where a feed had them; the r
 has. The watermark is the newest last-modified time seen; each run keeps the events changed in the 24
 hours before it (`LOGBOOK_GCAL_LOOKBACK_H`) and reports, per calendar, how many it saw and how many were
 new. A calendar that fails (an expired secret address is a 404) is one line on stderr, the others are
-still written, the watermark stays put and the exit is 1.
+still written, the watermark stays put and the exit is 1. A first scheduled run keeps the events changed
+in the last 14 days ([the schedule](schedule.md#a-sources-first-scheduled-run)); an event planned long
+ago and unchanged since comes in with `--since`.
 
 ```bash
 export LOGBOOK_GCAL_URLS='Sailing=https://calendar.google.com/calendar/ical/…/private-…/basic.ics,https://…'
@@ -757,7 +770,9 @@ logbook sync drive --since 2026-01-01T00:00:00Z            # a first run from a 
 logbook sync drive                                         # then from where it left off
 ```
 
-A first run without `--since` reads all the activity Google keeps.
+A first run by hand without `--since` reads all the activity Google keeps. The first scheduled run reads
+the last 14 days ([the schedule](schedule.md#a-sources-first-scheduled-run)), and a dry run that meets
+the project's daily quota stops on one line instead of waiting it out.
 
 **What a line holds.** One `event/v1` line per file, per hour and per kind of activity, so an afternoon
 of editing is a handful of lines with a count, `Edited Budget 2027 ×14`, not hundreds. It holds the
@@ -814,6 +829,9 @@ logbook sync meet --dry-run                                # counts, nothing wri
 logbook sync meet --since 2026-09-01T00:00:00Z             # a first run from a day you choose
 logbook sync meet                                          # then from where it left off
 ```
+
+A first run by hand without `--since` reads every call Meet keeps; the first scheduled run reads the last
+14 days ([the schedule](schedule.md#a-sources-first-scheduled-run)).
 
 **The call.** One `event/v1` line per call, once it has ended (a call still going on is counted and
 written by the next run): when it started and ended, and who joined as Meet names them — a signed-in
