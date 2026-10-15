@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from ..contrib import serve
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
+ORGS = ("org", "orgs")  # RFC 0037: one org's page, and the orgs (the Manifest's text)
 
 
 def show_arguments(sub: Subparsers) -> None:
@@ -62,23 +63,25 @@ def show_arguments(sub: Subparsers) -> None:
     until 0.6 (`show year`, `show trip`, `show trips`, `show days`, `show keepers`, `show stats`)."""
     s = sub.add_parser(
         "show",
-        help="one day's lines, a page; year, trip, trips, days, keepers, stats",
-        description="one day's lines (default today), a page (person, asset, place), or a reader: year, trip,"
-        " trips, days, keepers, stats",
+        help="one day's lines, a page; year, trip(s), days, keepers, stats, orgs",
+        description="one day's lines (default today), a page (person, asset, place, org), or a reader: year,"
+        " trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most recent"
+        " touch first, stale ones said; the passed with their reasons; the people with more than one org)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
-        help="YYYY-MM-DD or today; person|asset|place NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats",
+        help="YYYY-MM-DD or today; person|asset|place|org NAME; year YYYY; trip ID-OR-DAY; trips; days;"
+        " keepers; stats; orgs",
     )
     s.add_argument(
         "name",
         nargs="?",
         metavar="NAME",
-        help="with person|asset|place: the name, entity id or asset id; with year: the calendar year; with"
-        " trip: a trip id as `show trips` prints it (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
+        help="with person|asset|place: the name, entity id or asset id; with org: its name, a word of it,"
+        " a domain or its id; with year: the calendar year; with trip: a trip id as `show trips` prints it"
+        " (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
     )
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
     s.add_argument(
@@ -86,7 +89,12 @@ def show_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="the page or the reader's answer as one JSON object (days: one object per line)",
     )
-    s.add_argument("--year", metavar="YYYY", help="trips: one calendar year (default: the whole record)")
+    s.add_argument(
+        "--year",
+        metavar="YYYY",
+        help="trips: one calendar year (default: the whole record); orgs --money: the ledger's year (default"
+        " this one)",
+    )
     s.add_argument(
         "--since",
         "--from",
@@ -139,6 +147,11 @@ def show_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="stats: one row per day of the health lines: sleep hours, steps, resting HR",
     )
+    s.add_argument(
+        "--money",
+        action="store_true",
+        help="org, orgs: the ledger's lines and its in, out and net too (tier 3)",
+    )
     s.set_defaults(fn=cmd_show)
 
 
@@ -180,6 +193,38 @@ def instant_of(stamp: str) -> datetime:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
+def _show_orgs(a: argparse.Namespace) -> None:
+    """`show orgs [--money [--year YYYY]] [--json]`: the orgs the owner named under their status,
+    the most recent touch first, then the people with more than one org; `show org NAME [--money]
+    [--json]`: one org's page (`logbook.contrib.orgs`). Every tier is read, as the owner's own
+    terminal reads it; the ledger only with `--money`. Nothing is written."""
+    from ..contrib import entities, orgs
+
+    lb = Logbook.find()
+    try:
+        if a.day == "orgs":
+            if a.name is not None:
+                raise orgs.OrgError("takes no name; one org is `show org NAME`")
+            shelf = orgs.shelf(lb, money=a.money, year=a.year)
+            if a.json:
+                print(json.dumps(shelf.to_json(), indent=2, ensure_ascii=False))
+                return
+            for text in orgs.shelf_rows(shelf):
+                print(text)
+            return
+        if a.name is None:
+            raise orgs.OrgError("say which org: `show org NAME`, a word of its name, a domain or its id")
+        page = orgs.page(lb, orgs.find(lb, a.name).id, money=a.money)
+    except (orgs.OrgError, entities.EntityError, stays.SettingsError) as e:
+        print(f"show {a.day}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(page.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in orgs.page_rows(page):
+        print(text)
+
+
 def cmd_show(a: argparse.Namespace) -> None:
     """One local day (the owner's timezone), located through the index, read from the files,
     in time order (then chain order for the same instant). Senders, organizers and attendees
@@ -188,12 +233,17 @@ def cmd_show(a: argparse.Namespace) -> None:
     if a.day in READERS:
         _show_reader(a)
         return
+    if a.day in ORGS:
+        _show_orgs(a)
+        return
     lb = Logbook.find()
     if a.day in pages.PAGES:
         _show_page(lb, a)
         return
     if a.name is not None:
-        print(f"show: {a.day!r} takes no name; a page is `show person|asset|place <name>`", file=sys.stderr)
+        print(
+            f"show: {a.day!r} takes no name; a page is `show person|asset|place|org <name>`", file=sys.stderr
+        )
         sys.exit(2)
     days = day_start.of(lb.meta)  # RFC 0036: a boundary this reader cannot parse is refused, here
     day = days.today(gaps.now()).isoformat() if a.day in (None, "today") else a.day

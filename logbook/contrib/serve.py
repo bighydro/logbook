@@ -14,39 +14,45 @@ shelves: `/journeys?year=` the journeys that began in a year, the latest first (
 and `/journeys/FIRST/LAST` one journey (`journeys.read`): its days linking their Days, its stays as
 dots on a plain canvas drawn here, the promises made on it; `/people?year=` the canonical people of
 a year by days together (`person_page.ranked`) and the review queue of `people review`, and
-`/people/ID` one person (`person_page.read`). Every derived row on them carries its evidence folded:
+`/people/ID` one person (`person_page.read`); `/manifest` the orgs the owner named under what they
+decided about them (`orgs.shelf_of`, RFC 0037 §11) and the review queue of `review org`, `/org/ID`
+one org (`orgs.page_of`) and `/manifest/people` the people with more than one org, the money only
+when asked and the gate reads tier 3. Every derived row on them carries its evidence folded:
 what it rests on, the day, the ids of the lines. Every page is built from the index and the
 readers, so a Day renders in the time `logbook day` takes whatever the record's length, and nothing
 is written by a GET: every page is answered from the record at its head.
 
-Four pages write, on a POST. `/places` carries the review queue of `setup places review`
+Six pages write, on a POST. `/places` carries the review queue of `setup places review`
 (`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
 `/places/review` (`Site.write`), which names a cluster or rejects it through the engine's own
 `accept` and `reject`, so `places.json`, the naming note and `state/places-review.json` are what the
 CLI writes. A journey's page posts its name to `/journeys/name` (`journeys.name`, what `logbook add
 --trip` runs); the People page's queue posts to `/people/review`, Merge through
 `people_review.accept` and Not the same person through `people_review.reject` (`people review
---accept`, `--reject`). The Day carries the owner's two acts on it, Reflect and Sign (`Site._reflect`,
-`Site._sign`): the reflection posts to `/day/YYYY-MM-DD/reflect` and is written through `day
-reflect`'s own `reflect.write` (the day's Wispr Flow draft offered prefilled, a recording heard
-through `day reflect --audio`'s path when the command wired one in, `Voice`), and the proposals
-the rules read in it are checkboxes whose form posts to `/day/YYYY-MM-DD/sign`, which signs the
-day through `reflect.close`, the code `day reflect --sign` runs: `signing.sign` with the lines
-confirmed, the accepted dispositions and the reflection, a signed day signed again superseding its
-signature. The Day also carries the owner's two acts on lines already in the record: a star on
-every row that is a line, posting to `/star` (`Site._star`: `stars.star` and `stars.unstar`, the
-lines `logbook star` and `unstar` write), and a "with…" field in the header's `with` row, its names
-completed from the canonical people by a `datalist`, posting to `/with` (`Site._with`:
-`presence.state`, the lines `logbook with` writes). The Library's write acts, allowed because the
-server binds 127.0.0.1 and runs as the record's own user: a POST is answered only when the
-connection comes from this machine (the client address is loopback) and the form was submitted from
-the server's own pages (the browser's `Origin`, when it sends one, names 127.0.0.1); anything else
-is a 403 and nothing is written. Every write is one at a time (`Site._write_lock`) and through the
-CLI's own function, under the record's writer lock and never waiting for it: another command writing
-is a 503 on the Places, Journeys and People forms and a 409 on the Day's (Reflect, Sign, the star
-and the "with…" field), and nothing is written. After a write the head has moved, and the next
-request reads the record again as after a sync. The policy's `write` list (the MCP door, ADR 0022)
-is never read: this is the owner's own page.
+--accept`, `--reject`); the Manifest's queue posts to `/manifest/review` (`entity_review.accept` and
+`reject`, `review org --accept`, `--name`, `--reject`) and an org's page its status to
+`/manifest/status` (`entity_status.write`, `status org`). The Day carries the owner's two acts on
+it, Reflect and Sign (`Site._reflect`, `Site._sign`): the reflection posts to
+`/day/YYYY-MM-DD/reflect` and is written through `day reflect`'s own `reflect.write` (the day's
+Wispr Flow draft offered prefilled, a recording heard through `day reflect --audio`'s path when the
+command wired one in, `Voice`), and the proposals the rules read in it are checkboxes whose form
+posts to `/day/YYYY-MM-DD/sign`, which signs the day through `reflect.close`, the code `day reflect
+--sign` runs: `signing.sign` with the lines confirmed, the accepted dispositions and the reflection,
+a signed day signed again superseding its signature. The Day also carries the owner's two acts on
+lines already in the record: a star on every row that is a line, posting to `/star` (`Site._star`:
+`stars.star` and `stars.unstar`, the lines `logbook star` and `unstar` write), and a "with…" field
+in the header's `with` row, its names completed from the canonical people by a `datalist`, posting
+to `/with` (`Site._with`: `presence.state`, the lines `logbook with` writes). The Library's write
+acts, allowed because the server binds 127.0.0.1 and runs as the record's own user: a POST is
+answered only when the connection comes from this machine (the client address is loopback) and the
+form was submitted from the server's own pages (the browser's `Origin`, when it sends one, names
+127.0.0.1); anything else is a 403 and nothing is written. Every write is one at a time
+(`Site._write_lock`) and through the CLI's own function, under the record's writer lock and never
+waiting for it: another command writing is a 503 on the Places, Journeys and People forms and a 409
+on the Manifest's and the Day's (Reflect, Sign, the star and the "with…" field), and nothing is
+written. After a write the head has moved, and the next request reads the record again as after a
+sync. The policy's `write` list (the MCP door, ADR 0022) is never read: this is the owner's own
+page.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -115,6 +121,7 @@ from ..core import (
     keepers,
     people,
     places,
+    policy,
     presence,
     reading,
     share,
@@ -130,7 +137,21 @@ from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, retractions
-from . import asset_status, dream, gaps, journeys, person_page, places_review, reflect, trip_page, world
+from . import (
+    asset_status,
+    dream,
+    entities,
+    entity_review,
+    entity_status,
+    gaps,
+    journeys,
+    orgs,
+    person_page,
+    places_review,
+    reflect,
+    trip_page,
+    world,
+)
 
 if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
     from . import people_review
@@ -142,23 +163,31 @@ HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
-# the record's pages, not the clock's (and every Day, journey and person)
-RECORD_PAGES = frozenset({"/", "/days", "/trips", "/places", "/world", "/journeys", "/people"})
+# the record's pages, not the clock's (and every Day, journey, person and org)
+RECORD_PAGES = frozenset(
+    {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
+)
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
+ORG_PATH = re.compile(r"^/org/([^/]+)$")  # a named org, by entity id (RFC 0037 §11)
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
 PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review --accept`, `--reject`
-WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH)  # the Library's forms, under the writer lock
+MANIFEST_REVIEW = "/manifest/review"  # the Manifest's queue: `review org --accept`, `--name`, `--reject`
+MANIFEST_STATUS = "/manifest/status"  # an org's page: `status org ORG DISPOSITION`
+MANIFEST_PATHS = (MANIFEST_REVIEW, MANIFEST_STATUS)  # under the writer lock, never waiting for it: a 409
+WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH, *MANIFEST_PATHS)  # the Library's forms
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
 STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
 WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
 LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
-CLOCK_PAGES = ("/people",)  # pages the record's today moves too (this year, anniversaries, drift): in the tag
+# pages the record's today moves too (this year, anniversaries, drift, the stale orgs): in the tag
+CLOCK_PAGES = ("/people", "/manifest", "/org/")
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
+SHOWN = 30  # an org's timeline rows shown before the rest fold
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
 STATE_FILES = (places_review.STATE_FILE,)  # record-relative bookkeeping the pages read, in the tag
@@ -345,11 +374,26 @@ svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
 svg.stays line{stroke:var(--mute)}
 li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
 """
+MANIFEST_STYLE = """
+.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
+border:1px solid var(--line);border-radius:3px}
+.badge.passed{color:#c0652a}.badge.hold,.badge.add,.badge.sell{color:#2e8b57}
+.badge.exited,.badge.let-go{color:var(--mute)}
+.stale-flag{color:#c43b3b}
+ol.shelf>li.stale{border-left:3px solid #c43b3b;padding-left:.5rem}
+p.reason{margin:.2rem 0 0;font-style:italic}
+form.act{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.4rem 0}
+form.act input[type=text]{flex:1 1 10rem;min-width:0}
+form.act select,form.act input[type=date]{max-width:100%}
+section.acts{border:1px solid var(--line);border-radius:4px;padding:.2rem .6rem;margin:.6rem 0}
+s.retracted{color:var(--mute)}
+"""  # the Manifest's pages only: every other page, and an exported site, keep STYLE as it was
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
-    '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/places">places</a>'
-    '<a href="/assets">assets</a><a href="/gaps">gaps</a><a href="/world">world</a>'
+    '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
+    '<a href="/places">places</a><a href="/assets">assets</a><a href="/gaps">gaps</a>'
+    '<a href="/world">world</a>'
 )
 
 
@@ -528,6 +572,10 @@ class Site:
             return self._error(500, str(e))
         except people.PersonError as e:  # nobody the record names, several, or the owner
             return self._error(404, f"no page at {path}: {e}")
+        except orgs.OrgError as e:  # an org the record does not name
+            return self._error(404, f"no page at {path}: {e}")
+        except entities.EntityError as e:  # policy/entities.json not what it should be
+            return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
 
@@ -543,15 +591,16 @@ class Site:
         runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
         Places page's (`_write_place`), the Journeys page's name (`_write_name`) and the People
         page's review (`_write_review`); another command writing the record is a 503 and nothing
-        written, try again. A Day's: Reflect and Sign (`_reflect`, `_sign`), through `day
-        reflect`'s own functions, and the star and the "with…" field (`_star`, `_with`), through
-        `logbook star`, `unstar` and `with`'s; another command writing the record is a 409 on
-        these, nothing written. Refused (403, nothing written) unless `client`, the connection's
-        address, is loopback and `origin`, the browser's Origin header when it sent one, names
-        127.0.0.1: this machine, the server's own pages. A field sent more than once (the Sign
-        form's boxes) arrives as its values joined with commas, as `--accept N,N` takes them;
-        `upload` is the file a form carried, the Day's recording. One write at a time
-        (`_write_lock`)."""
+        written, try again. The Manifest's queue and an org's status (`_write_manifest`), the same
+        way but a 409 (the owner's word of 14 October 2026 for a Library act). A Day's: Reflect and
+        Sign (`_reflect`, `_sign`), through `day reflect`'s own functions, and the star and the
+        "with…" field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s; another
+        command writing the record is a 409 on these, nothing written. Refused (403, nothing
+        written) unless `client`, the connection's address, is loopback and `origin`, the browser's
+        Origin header when it sent one, names 127.0.0.1: this machine, the server's own pages. A
+        field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
+        as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
+        write at a time (`_write_lock`)."""
         day_act = DAY_ACT.match(path)
         if path not in WRITE_PATHS and path not in LINE_ACTS and day_act is None:
             posts = ", ".join(WRITE_PATHS)
@@ -573,6 +622,10 @@ class Site:
                 " `logbook star` and `logbook unstar`",
                 WITH_PATH: "company is stated from this machine only, through the server's own pages or"
                 " `logbook with`",
+                MANIFEST_REVIEW: "an org is named or told apart from this machine only, through the server's"
+                " own pages or `logbook review org`",
+                MANIFEST_STATUS: "an org's status is set from this machine only, through the server's own"
+                " pages or `logbook status org`",
             }.get(
                 path,
                 "a day is reflected on and signed from this machine only, through the server's own"
@@ -586,6 +639,8 @@ class Site:
             return self._star(form)
         if path == WITH_PATH:
             return self._with(form)
+        if path in MANIFEST_PATHS:
+            return self._write_manifest(path, form)
         acts = {
             REVIEW_PATH: self._write_place,
             NAME_PATH: self._write_name,
@@ -923,6 +978,7 @@ class Site:
             and DAY_PATH.match(path) is None
             and JOURNEY_PATH.match(path) is None
             and PERSON_PATH.match(path) is None
+            and ORG_PATH.match(path) is None
         ):
             return None
         root = self.lb.root
@@ -983,6 +1039,12 @@ class Site:
             return self.page_people(params.get("year") or None)
         if (m := PERSON_PATH.match(path)) is not None:
             return self.page_person(unquote(m.group(1)))
+        if path == "/manifest":
+            return self.page_manifest(params.get("page") or "1")
+        if path == "/manifest/people":
+            return self.page_manifest_people()
+        if (m := ORG_PATH.match(path)) is not None:
+            return self.page_org(unquote(m.group(1)), money=params.get("money") == "1")
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
@@ -995,10 +1057,13 @@ class Site:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
         return Response(status, self.document(str(status), body).encode("utf-8"))
 
-    def document(self, title: str, body: str, script: str | None = None, footnote: str | None = None) -> str:
+    def document(
+        self, title: str, body: str, script: str | None = None, footnote: str | None = None, style: str = ""
+    ) -> str:
         """One HTML document: the head, the navigation, `body`, the footer and `footnote` under it;
         `script` is the one inline script a page may carry (the Places page's keys, the Day's record
-        button), named by hash in that page's policy."""
+        button), named by hash in that page's policy; `style` what a page adds to the one inline
+        stylesheet (the Manifest's, so every other page keeps its bytes)."""
         meta = self.lb.meta
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
@@ -1014,7 +1079,7 @@ class Site:
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             f"<title>{escape(title)} · Logbook</title>\n"
-            f"<style>{STYLE}</style>\n</head>\n<body>\n"
+            f"<style>{STYLE}{style}</style>\n</head>\n<body>\n"
             f"<header><nav>{self.nav}</nav></header>\n<main>\n{body}</main>\n"
             f"<footer>{footer}</footer>\n{'' if script is None else f'<script>{script}</script>' + chr(10)}"
             "</body>\n</html>\n"
@@ -1041,6 +1106,12 @@ class Site:
         )
         a, b = _last_window(whole)
         year = whole[1][:4]
+        manifest = (  # the owner's own shelf: never in an exported site
+            ""
+            if self.static
+            else f"<li>{self.link('The Manifest', '/manifest')}: the orgs you named, under what you decided"
+            " about them; the review of the ones the sources saw.</li>\n"
+        )
         parts.append(
             '<ul class="plain">\n'
             f"<li>{self.link('The last day', f'/day/{whole[1]}')}, {whole[1]}: the Day as a timeline.</li>\n"
@@ -1050,6 +1121,7 @@ class Site:
             " stays, photos and promises.</li>\n"
             f"<li>{self.link('People', '/people')}: the people the record names, by days together;"
             " the review of who it has not placed.</li>\n"
+            f"{manifest}"
             f"<li>{self.link('Places', '/places')}: the named places of the record.</li>\n"
             f"<li>{self.link('Assets', '/assets')}: the assets tracked and the last fix of each.</li>\n"
             f"<li>{self.link('Gaps', '/gaps')}: where each source went quiet.</li>\n"
@@ -2072,6 +2144,418 @@ class Site:
             f"<summary>{escape(label)}{DOT}{count}</summary>\n{_folded(rows)}</details>\n"
         )
 
+    # -- /manifest, /org/<id>, /manifest/people (RFC 0037 §7, §11) -----------------------------------------
+
+    def _acts(self) -> bool:
+        """Whether the Manifest offers and takes its acts: a page the owner can write from (not an
+        exported one) that reads tier 3, since an org's status is tier 3, a no on a merchant may be,
+        and the queue's merchants rest on ledger lines. `logbook serve` reads every tier."""
+        return not self.static and (self.tiers is None or orgs.MONEY_TIER in self.tiers)
+
+    def _org_record(self, money: bool = False) -> orgs.Record:
+        """The orgs as these pages read them: through the site's gate, money only when asked."""
+        return orgs.read(self.lb, orgs.gate(self.tiers, money), self._today_of())
+
+    def _today_of(self) -> str:
+        """The day the owner is in (the record's zone and `day_start`): what the stale flag counts to."""
+        return day_start.of(self.lb.meta).today(self.now()).isoformat()
+
+    def page_manifest(self, page: str = "1") -> str:
+        """The orgs the owner named, under what they decided about them (RFC 0037 §11: holding,
+        exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most
+        recent touch first, each a link to its page with its evidence folded; then the review queue
+        of `review org`, its order, `PAGE_SIZE` a page, with its acts. One column, no table."""
+        if not page.isdigit() or int(page) < 1:
+            raise ValueError(f"page must be a number from 1, not {page!r}")
+        with self._review_lock:  # the observed table is built once, as the other queues' are
+            shelf = orgs.shelf_of(self.lb, self._org_record())
+            report = entity_review.read(self.lb, entities.ORG) if self._acts() else None
+        head = f"{_plural(len(shelf.rows), 'org')}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
+        parts = [f"<h1>The Manifest <small>{escape(head)}</small></h1>\n"]
+        if shelf.withheld:
+            parts.append(
+                f'<p class="mute">{_plural(shelf.withheld, "status line")} not shown: an org\'s status is'
+                " tier 3, and this page reads no tier 3.</p>\n"
+            )
+        if not shelf.rows:
+            parts.append(
+                "<p>no orgs named yet: name them below, from what the sources already saw, or with"
+                " <code>logbook review org</code></p>\n"
+            )
+        else:
+            parts.append(
+                '<p class="mute">The orgs you named, under what you decided about them, the most recent'
+                " touch first. A touch is a line that reaches the org through one of its refs: a mail at its"
+                " domain, a meeting with its people, its group, its code, its merchant.</p>\n"
+            )
+        for name, rows in shelf.grouped():
+            small = " <small>the anti-portfolio</small>" if name == "passed" else ""
+            parts.append(f'<h2>{escape(name)}{small}</h2>\n<ol class="shelf">\n')
+            parts.extend(self._org_row(r, [x.org for x in shelf.rows]) for r in rows)
+            parts.append("</ol>\n")
+        parts.append(
+            f"<p>{self.link('People across orgs', '/manifest/people')}: who appears with more than one.</p>\n"
+        )
+        if report is not None:
+            parts.append(self._org_queue_html(report, int(page)))
+        return self.document("manifest", "".join(parts), style=MANIFEST_STYLE)
+
+    def _org_row(self, r: orgs.Row, among: Sequence[entities.Entity]) -> str:
+        cls = ' class="stale"' if r.stale else ""
+        link = self.link(f"<b>{escape(orgs.shown_name(r.org, among))}</b>", _org_path(r.org.id))
+        head = [link, self._status_html(r.status, r.since)]
+        if r.stale:
+            head.append(f'<span class="stale-flag">stale: nothing since {escape(r.stale_since or "")}</span>')
+        last = "no touch" if r.last is None else f"last touch {r.last.day} {r.last_text or r.last.kind}"
+        facts = [last]
+        if r.people:
+            first = ", ".join(p.name for p in r.people[:2])
+            facts.append(f"{orgs.plural(len(r.people), 'person', 'people')} ({first})")
+        if r.documents:
+            facts.append(_plural(r.documents, "document"))
+        out = [
+            f'<li id="{escape(r.org.id)}"{cls}><p class="head">{" ".join(head)}</p>\n',
+            f'<p class="facts">{escape(DOT.join(facts))}</p>\n',
+        ]
+        if r.status is not None and r.status.status in orgs.WITH_REASON and r.status.reason:
+            out.append(f'<p class="reason">{escape(r.status.reason)}</p>\n')
+        items: list[Evidence] = []
+        if r.last is not None:
+            kind = orgs.THE_LEDGER if r.last_text == orgs.THE_LEDGER else r.last.kind
+            items.append((f"last touch, {kind} by its {r.last.via}", [r.last.line], r.last.day))
+        if r.status is not None:
+            items.append((f"{r.status.status}, the status line", [r.status.line], r.since))
+        items.append((f"{_plural(r.touches, 'touch')} in all, tier {r.tier} at most", [], None))
+        out.append(f"{self._evidence(items)}</li>\n")
+        return "".join(out)
+
+    def _status_html(self, status: entities.Status | None, since: str | None) -> str:
+        if status is None:
+            return '<span class="mute">no status</span>'
+        who = status.proposed_by or "owner"
+        return (
+            f'<span class="badge {escape(status.status)}">{escape(status.status)}</span>'
+            f' <span class="mute">since {escape(since or "")} ({escape(who)})</span>'
+        )
+
+    def _org_queue_html(self, report: entity_review.Report, page: int, into: str | None = None) -> str:
+        """The review queue of `review org`, or the part of it that would place something with the org
+        `into`: each proposal with its evidence folded and its acts, through the functions `review
+        org --accept`, `--name` and `--reject` call."""
+        proposals = [p for p in report.proposals if into is None or (p.canonical and p.canonical.id == into)]
+        if into is not None and not proposals:
+            return ""
+        title = "Proposed for this org" if into is not None else "Name these orgs"
+        counts = f"{_plural(len(proposals), 'proposal')}{DOT}{len(report.unplaced)} seen, not placed"
+        out = [f'<h2 id="review">{title} <small>{escape(counts)}{DOT}{report.placed} placed</small></h2>\n']
+        if not proposals:
+            out.append(
+                '<p class="mute">nothing to review: every org the sources saw is placed or answered</p>\n'
+            )
+            return "".join(out)
+        if into is None:
+            out.append(
+                '<p class="mute">What the sources saw that is no org of yours yet, proposed against the orgs'
+                " you named or as a new one, as <code>review org</code> ranks them. Accept writes what"
+                " <code>--accept</code> writes, Name what <code>--name</code> writes, No what"
+                " <code>--reject</code> writes, so the pair is never proposed again. The hint (company,"
+                " community, brand, personal) ranks it and decides nothing.</p>\n"
+            )
+        size = PAGE_SIZE if into is None else max(1, len(proposals))  # an org's own: one page, all
+        pages = max(1, math.ceil(len(proposals) / size))
+        n = min(page, pages)
+        first = (n - 1) * size
+        shown = proposals[first : first + size]
+        back = _org_path(into) if into is not None else f"/manifest?page={n}"
+        out.append(f'<ol class="shelf queue" start="{first + 1}">\n')
+        out.extend(self._org_proposal(p, back) for p in shown)
+        out.append("</ol>\n")
+        if pages > 1:
+            pager = [f"{first + 1}{EN_DASH}{first + len(shown)} of {len(proposals)}"]
+            if n > 1:
+                pager.insert(0, f'<a href="/manifest?page={n - 1}#review">← earlier</a>')
+            if n < pages:
+                pager.append(f'<a href="/manifest?page={n + 1}#review">more →</a>')
+            out.append(f'<p class="pager">{DOT.join(pager)}</p>\n')
+        return "".join(out)
+
+    def _org_proposal(self, p: entity_review.Proposal, back: str) -> str:
+        o = p.observed
+        shown = f'group "{o.key[1]}"' if o.key[0] == "group" else o.key[1]
+        into = self.link(escape(p.canonical.label), _org_path(p.canonical.id)) if p.canonical else "a new org"
+        score = "new" if p.score is None else f"score {p.score}"
+        seen = ", ".join(f"{kind} {count}" for kind, count in sorted(o.kinds.items()))
+        items: list[Evidence] = [(why, [], None) for why in p.evidence if why != "new"]
+        items.append((f"seen on {seen}, {o.first} {EN_DASH} {o.last}", [i for i, _t in o.samples], None))
+        items.extend((f"named {label} ({count})", [], None) for label, count in o.labels.most_common())
+        items.append((f"hint {o.hint or '-'}: ranks it, decides nothing", [], None))
+        form = [
+            f'<form class="act" method="post" action="{MANIFEST_REVIEW}">',
+            f'<input type="hidden" name="id" value="{escape(p.id)}">',
+            f'<input type="hidden" name="back" value="{escape(back)}">',
+        ]
+        if p.canonical is None:
+            form.append(
+                f'<input type="text" name="name" value="{escape(o.name)}" aria-label="the org\'s name"'
+                ' autocomplete="off"><button name="act" value="name">Name</button>'
+                '<button name="act" value="reject">No, not an org</button>'
+            )
+        else:
+            form.append(
+                f'<button name="act" value="accept">Accept: {escape(p.canonical.label)}</button>'
+                '<button name="act" value="reject">No, not this org</button>'
+            )
+        form.append("</form>\n")
+        return (
+            f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b> {escape(shown)}'
+            f' {ARROW} {into} <span class="mute">{escape(score)}{DOT}{escape(o.hint or "-")}</span></p>\n'
+            f"{self._evidence(items)}{''.join(form)}</li>\n"
+        )
+
+    def page_org(self, org_id: str, money: bool = False) -> str:
+        """One org (RFC 0037 §7): its refs, its status and reason (or how many status lines this page may
+        not show), the status form, money when asked and the gate reads tier 3, every touch newest
+        first (the newest `SHOWN`, the rest folded), its people, who introduced whom, its documents as
+        references, every status line, and the proposals that would place something with it."""
+        with self._review_lock:
+            rec = self._org_record(money and not self.static)
+            page = orgs.page_of(self.lb, rec, org_id)
+            report = entity_review.read(self.lb, entities.ORG) if self._acts() else None
+        org = page.org
+        parts = [f"<h1>{escape(org.label)} <small>org{DOT}tier {page.tier}</small></h1>\n"]
+        refs = ", ".join(v for _k, v in org.refs)
+        if refs:
+            parts.append(f'<p class="mute">{escape(refs)}</p>\n')
+        if page.status is not None:
+            parts.append(f'<p class="head">{self._status_html(page.status, page.since)}</p>\n')
+            if page.status.reason:
+                parts.append(f'<p class="reason">{escape(page.status.reason)}</p>\n')
+        elif page.hidden:
+            parts.append(f'<p class="mute">{escape(orgs.HIDDEN)}.</p>\n')
+        else:
+            parts.append('<p class="mute">no status yet</p>\n')
+        if page.stale:
+            parts.append(f'<p class="stale-flag">stale: nothing since {escape(page.stale_since or "")}</p>\n')
+        if self._acts():
+            parts.append(self._org_acts(org, page.status))
+        if page.money is not None:
+            parts.append(
+                '<h2>Money <small>tier 3, derived from the ledger now</small></h2>\n<ul class="plain">\n'
+            )
+            for year, currencies in page.money.items():
+                for currency, cell in currencies.items():
+                    parts.append(f"<li>{escape(year)} {escape(orgs.money_text(currency, cell))}</li>\n")
+            if not page.money:
+                parts.append('<li class="mute">no ledger line reaches it</li>\n')
+            parts.append("</ul>\n")
+        elif rec.gate.reads(orgs.MONEY_TIER) and not self.static:
+            parts.append(f'<p class="mute"><a href="{escape(_org_path(org.id))}?money=1">show the money</a>'
+                         " (tier 3, the ledger read now)</p>\n")  # fmt: skip
+        parts.append(f"<h2>Timeline <small>{_plural(len(page.timeline), 'line')}</small></h2>\n")
+        if not page.timeline:
+            parts.append('<p class="mute">no line reaches it yet</p>\n')
+        else:
+            rows = [self._org_item(i) for i in page.timeline]
+            parts.append('<ol class="shelf">\n' + "".join(rows[:SHOWN]) + "</ol>\n")
+            if rows[SHOWN:]:
+                parts.append(
+                    f"<details><summary>{EN_DASH} and {len(rows) - SHOWN} earlier</summary>\n"
+                    f'<ol class="shelf">\n{"".join(rows[SHOWN:])}</ol>\n</details>\n'
+                )
+        parts.append("<h2>People</h2>\n")
+        if page.people:
+            parts.append('<ul class="plain">\n')
+            for person in page.people:
+                when = f"{_plural(person.days, 'day')}, the last {person.last}"
+                parts.append(
+                    f"<li>{self.link(escape(person.name), _person_path(person.person))}"
+                    f' <span class="mute">{escape(when)}</span></li>\n'
+                )
+            parts.append("</ul>\n")
+        else:
+            parts.append('<p class="mute">nobody the record names</p>\n')
+        if page.unplaced:
+            parts.append(f'<p class="mute">and {page.unplaced} not yet placed</p>\n')
+        if page.introductions:
+            parts.append('<h2>Introductions</h2>\n<ul class="plain">\n')
+            for intro in page.introductions:
+                parts.append(
+                    f'<li title="line {escape(intro.line)}">{escape(intro.by)} introduced'
+                    f" {escape(', '.join(intro.introduced))}"
+                    f' <span class="mute">{escape(intro.day)}, “{escape(intro.subject)}”</span></li>\n'
+                )
+            parts.append("</ul>\n")
+        parts.append("<h2>Documents <small>references, never copies</small></h2>\n")
+        if page.documents:
+            parts.append('<ol class="shelf">\n')
+            for d in page.documents:
+                parts.append(
+                    f'<li title="line {escape(d.line)}"><span class="mute">{escape(d.day)}</span>'
+                    f' <span class="badge">{escape(d.kind)}</span> {escape(d.name)}</li>\n'
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none</p>\n')
+        parts.append("<h2>Status lines</h2>\n")
+        if page.history:
+            parts.append('<ol class="shelf">\n')
+            for s in page.history:
+                text = escape(
+                    f"{s.status} ({s.proposed_by or 'owner'})" + (f": {s.reason}" if s.reason else "")
+                )
+                if not s.standing:
+                    text = f'<s class="retracted">{text}</s> <span class="mute">retracted</span>'
+                elif s.current:
+                    text += ' <span class="mute">current</span>'
+                day = f'<span class="mute">{escape(s.day)}</span>'
+                parts.append(f'<li title="line {escape(s.line)}">{day} {text}</li>\n')
+            parts.append("</ol>\n")
+        else:
+            parts.append(
+                '<p class="mute">none this page may show</p>\n'
+                if page.hidden
+                else '<p class="mute">none yet</p>\n'
+            )
+        if report is not None:
+            parts.append(self._org_queue_html(report, 1, into=org.id))
+        parts.append(f"<p>{self.link('The Manifest', '/manifest')}</p>\n")
+        return self.document(org.label, "".join(parts), style=MANIFEST_STYLE)
+
+    def _org_item(self, item: orgs.Item) -> str:
+        day = self.link(escape(item.day), f"/day/{item.day}")
+        return (
+            f'<li title="line {escape(item.line)}{DOT}{escape(item.source)}{DOT}by its {escape(item.via)}">'
+            f'{day} <span class="badge">{escape(item.kind)}</span> {escape(item.what)}</li>\n'
+        )
+
+    def _org_acts(self, org: entities.Entity, status: entities.Status | None) -> str:
+        """The status form: what `logbook status org ORG DISPOSITION [--reason …] [--at DAY]` writes."""
+        current = None if status is None else status.status
+        choices = "".join(
+            f'<option value="{s}"{" selected" if s == current else ""}>{s}</option>'
+            for s in entities.DISPOSITIONS[entities.ORG]
+        )
+        return (
+            '<section class="acts">\n'
+            f'<form class="act" method="post" action="{MANIFEST_STATUS}">'
+            f'<input type="hidden" name="org" value="{escape(org.id)}">'
+            f'<input type="hidden" name="back" value="{escape(_org_path(org.id))}">'
+            f'<select name="status" aria-label="status">{choices}</select>'
+            '<input type="text" name="reason" placeholder="why (passed and let-go need one)"'
+            ' aria-label="reason" autocomplete="off">'
+            '<input type="date" name="at" aria-label="the day you decided">'
+            '<button name="act" value="status">Set status</button></form>\n'
+            '<p class="mute">One <code>status/v1</code> line, tier 3, your reason on it and nowhere'
+            " else.</p>\n</section>\n"
+        )
+
+    def page_manifest_people(self) -> str:
+        """The co-investor graph: everyone who appears with more than one org, the most orgs first,
+        with the orgs they share and the tier of the lines that say so; then the anti-portfolio."""
+        with self._review_lock:
+            shelf = orgs.shelf_of(self.lb, self._org_record())
+        graph = shelf.graph
+        parts = [
+            f"<h1>People across orgs <small>{orgs.plural(len(graph), 'person', 'people')}</small></h1>\n"
+        ]
+        if not graph:
+            parts.append("<p>nobody appears with more than one org yet</p>\n")
+        else:
+            parts.append('<ol class="shelf">\n')
+            for shared in graph:
+                links = ", ".join(self.link(escape(o.label), _org_path(o.id)) for o in shared.orgs)
+                name = self.link(f"<b>{escape(shared.name)}</b>", _person_path(shared.person))
+                parts.append(
+                    f'<li class="person"><p class="head">{name}'
+                    f' <span class="mute">tier {shared.tier}</span></p>\n<p class="facts">{links}</p></li>\n'
+                )
+            parts.append("</ol>\n")
+        passed = shelf.passed
+        if passed:
+            parts.append('<h2>passed <small>the anti-portfolio</small></h2>\n<ol class="shelf">\n')
+            parts.extend(self._org_row(r, [x.org for x in shelf.rows]) for r in passed)
+            parts.append("</ol>\n")
+        parts.append(f"<p>{self.link('The Manifest', '/manifest')}</p>\n")
+        return self.document("people across orgs", "".join(parts), style=MANIFEST_STYLE)
+
+    def _write_manifest(self, path: str, form: Mapping[str, str]) -> Response:
+        """A Manifest form, under the record's writer lock and never waiting for it: another command
+        writing is a 409, one sentence, and nothing is written (so is a head that moved under the
+        act). The review acts on the proposal `id` (`act` `accept`, `name` with the field `name`,
+        `reject`) through `entity_review.accept` and `reject`, what `review org --accept`, `--name`
+        and `--reject` call; an org's status (`status`, `reason`, `at`) through
+        `entity_status.write`, what `status org ORG DISPOSITION` calls. A proposal no longer in the
+        queue, or an org the record does not name, is a 409; an answer the record refuses a 400.
+        Done, a 303 to `back` when it is one of the Manifest's own pages."""
+        if not self._acts():
+            return self._error(
+                403,
+                "this page reads no tier 3, and an org's status, a no on a merchant and the queue's"
+                " merchants are tier 3: it writes nothing; `logbook serve` reads every tier",
+            )
+        with self._write_lock, self._review_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    if path == MANIFEST_REVIEW:
+                        return self._org_review(form)
+                    return self._org_status(form)
+            except Locked as e:
+                return self._error(409, _not_waiting(e))
+            except HeadMoved as e:
+                return self._error(409, str(e))
+            except (
+                entities.EntityError,
+                stays.SettingsError,
+                policy.PolicyError,
+            ) as e:  # a setting, not the form
+                return self._error(500, str(e))
+
+    def _org_review(self, form: Mapping[str, str]) -> Response:
+        act, proposal_id = form.get("act", ""), form.get("id", "")
+        if act not in ("accept", "name", "reject") or not proposal_id:
+            return self._error(400, "the form names a proposal (id) and an act: accept, name or reject")
+        report = entity_review.read(self.lb, entities.ORG)
+        found = [p for p in report.proposals if p.id == proposal_id]
+        if not found:
+            return self._error(
+                409,
+                f"{proposal_id} is not in the queue: answered already, or the page was older than the"
+                " record; /manifest is the queue as it stands",
+            )
+        p = found[0]
+        try:
+            if act == "accept":
+                entity_review.accept(self.lb, report, [(p, None)])
+            elif act == "name":
+                entity_review.accept(self.lb, report, [(p, form.get("name", ""))])
+            else:
+                entity_review.reject(self.lb, report, [p])
+        except (entity_review.ReviewError, entities.EntityError, assets.AssetError) as e:
+            return self._error(400, str(e))
+        return Response(303, b"", location=_back(form.get("back"), "/manifest"))
+
+    def _org_status(self, form: Mapping[str, str]) -> Response:
+        org_id = form.get("org", "")
+        if org_id not in orgs.named(self.lb):
+            return self._error(
+                409, "the form names no org of this record: the page was older than the record"
+            )
+        reason = form.get("reason", "")
+        at = form.get("at", "").strip()
+        try:
+            entity_status.write(
+                self.lb,
+                entities.ORG,
+                org_id,
+                form.get("status", ""),
+                reason if reason.strip() else None,
+                at or None,
+            )
+        except (entity_status.StatusError, entities.EntityError) as e:
+            return self._error(400, str(e))
+        return Response(303, b"", location=_back(form.get("back"), _org_path(org_id)))
+
     def page_assets(self) -> str:
         registry = assets.read(self.lb.root)
         body = "<h1>Assets</h1>\n"
@@ -2717,6 +3201,25 @@ def _folded(rows: Sequence[str]) -> str:
         out.extend(f"<li>{row}</li>\n" for row in rest)
         out.append("</ul>\n</details>\n")
     return "".join(out)
+
+
+def _org_path(entity: str) -> str:
+    return f"/org/{quote(entity, safe='')}"
+
+
+def _back(back: str | None, default: str) -> str:
+    """Where a Manifest form returns: `back` when it is one of the Manifest's own pages (a path from
+    `/manifest` or `/org/`, with nothing that could make it another host's), else `default`."""
+    if (
+        back
+        and back.startswith(("/manifest", "/org/"))
+        and not back.startswith("//")
+        and "\\" not in back
+        and ":" not in back.split("#")[0].split("?")[0]
+        and all(c.isprintable() and not c.isspace() for c in back)
+    ):
+        return back
+    return default
 
 
 def _person_path(entity: str) -> str:

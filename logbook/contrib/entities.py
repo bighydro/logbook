@@ -994,11 +994,22 @@ def muted(
     return current if start <= on < start + timedelta(days=days) else None
 
 
-def stale(current: Status, on: date, local: Any, limits: Mapping[str, int] = STALE_DAYS) -> bool:
+def stale(
+    current: Status,
+    on: date,
+    local: Any,
+    limits: Mapping[str, int] = STALE_DAYS,
+    last_touch: str | None = None,
+) -> bool:
     """Whether the current status has aged past the reader's limit for it (decision 9: a `hold`
-    over three years, an `exploring` over two, `policy/entities.json` `stale_days`)."""
+    over three years, an `exploring` over two, `policy/entities.json` `stale_days`): neither the
+    status nor, when the reader knows it, the entity's last touch (`last_touch`, a local day) falls
+    within that many days of `on` (RFC 0037 §10.6)."""
     limit = limits.get(current.status)
-    return limit is not None and (on - date.fromisoformat(current.day(local))).days > limit
+    if limit is None:
+        return False
+    latest = max(current.day(local), last_touch or "")
+    return (on - date.fromisoformat(latest)).days > limit
 
 
 def _text(value: object) -> str | None:

@@ -35,6 +35,8 @@ PAGES = (
     "/trips?year=2026",
     "/places",
     "/places?page=2",
+    "/manifest",
+    "/manifest/people",
     "/assets",
     "/gaps",
     "/world",

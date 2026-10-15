@@ -173,6 +173,82 @@ def test_an_entity_line_never_cites_a_tier_three_line(lb: Logbook) -> None:
     assert int(Logbook(lb.root).meta["seq"]) == seq, "nothing written"
 
 
+def _mail_from(at: str, name: str, email: str, subject: str) -> dict[str, Any]:
+    return {"at": at, "source": "mail", "kind": "mail", "tier": 2,
+            "payload": {"schema": "mail/v1", "raw_id": f"mail:{at}", "message_id": f"{at}.{email}",
+                        "from": {"email": email, "name": name}, "to": [{"email": "ines@example.org"}],
+                        "subject": subject, "direction": "received", "size": 900}}  # fmt: skip
+
+
+def _event(at: str, source: str, calendar: dict[str, str], **fields: Any) -> dict[str, Any]:
+    return {"at": at, "source": source, "kind": "event", "tier": 1,
+            "payload": {"schema": "event/v1", "raw_id": f"{source}:{at}", "calendar": calendar,
+                        "all_day": False, **fields}}  # fmt: skip
+
+
+def test_an_org_is_seen_on_a_transcript_and_a_github_act_never_at_a_service_host_or_the_owner_s_account(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The sources #293 read that RFC 0037 §4.2 names the identifiers of: a transcript participant's
+    address is a domain as an attendee's is; an act `sync github` wrote is its repository's code-host
+    org, by the act's own link, else `extra.repo` on github.com. A calendar's service host (a room)
+    names no company, the owner's own code-host account is the owner's, and a person's is
+    `personal`, as the RFC's hint table says."""
+    (lb.root / "policy" / "entities.json").write_text(
+        json.dumps({"code_hosts": ["git.example.org", "github.com"]}) + "\n", encoding="utf-8"
+    )
+    owner = json.loads((lb.root / "policy" / "owner.json").read_text(encoding="utf-8"))
+    owner["handles"] = ["github:ines-nordmann-example"]
+    (lb.root / "policy" / "owner.json").write_text(json.dumps(owner) + "\n", encoding="utf-8")
+    github = {"id": "github", "name": "GitHub"}
+    lb.append_many(
+        [
+            {"at": "2026-09-20T09:00:00Z", "end": "2026-09-20T10:00:00Z", "source": "granola",
+             "kind": "transcript", "tier": 2,
+             "payload": {"schema": "transcript/v1", "raw_id": "granola:tidevann", "title": "Tidevann demo",
+                         "participants": [{"name": "Liv Berg", "email": "liv.berg@tidevann.example.org"},
+                                          {"name": "me"}]}},
+            _event("2026-09-21T12:00:00Z", "github", github, title="Merged pull request #12",
+                   extra={"action": "merged", "repo": "tidevann/tide-clock",
+                          "pull": {"number": 12, "url": "https://git.example.org/tidevann/tide-clock/pull/12"}}),
+            _event("2026-09-22T12:00:00Z", "github", github, title="Add the tide table",
+                   extra={"action": "committed", "repo": "nordmann-tidevann-example/tide-table"}),
+            _event("2026-09-23T12:00:00Z", "github", github, title="dotfiles",
+                   extra={"action": "committed", "repo": "ines-nordmann-example/dotfiles"}),
+            _event("2026-09-24T12:00:00Z", "google-calendar", {"id": "work-1", "name": "Work"},
+                   title="Board room", organizer={"kind": "email", "value": "ines@example.org"},
+                   attendees=[{"ref": {"kind": "email", "value": "c_0123@resource.calendar.google.com"},
+                               "response": "accepted"}]),
+            _mail_from("2026-09-25T08:00:00Z", "GitHub", "ola@users.noreply.github.com", "PR"),
+            {"at": "2026-09-26T20:00:00Z", "source": "chrome", "kind": "browse", "tier": 2,
+             "payload": {"schema": "browse/v1", "raw_id": "chrome:2:def", "url": "https://github.com/trending",
+                         "action": "visit", "browser": "chrome"}},
+            _mail_from("2026-09-27T08:00:00Z", "Nordmann Nytt", "news@nytt.example.org", "Weekly"),
+            {"at": "2026-08-01T08:00:00Z", "source": "manual", "kind": "resolution", "tier": 2,
+             "payload": {"schema": "resolution/v1",
+                         "ref": {"kind": "handle", "value": "github:per-hansen-example"},
+                         "entity": {"type": "person", "id": "019cadd3-6bc0-7dcd-9133-000000000113",
+                                    "registry": "logbook"}, "label": "Per Hansen", "method": "owner"}},
+            {"at": "2026-09-28T20:00:00Z", "source": "chrome", "kind": "browse", "tier": 2,
+             "payload": {"schema": "browse/v1", "raw_id": "chrome:3:ghi",
+                         "url": "https://github.com/per-hansen-example/sketches", "action": "visit",
+                         "browser": "chrome"}},
+        ]
+    )  # fmt: skip
+    rows = {o["key"]["value"]: o for o in _json(capsys, "review", "org")["observed"]["unplaced"]}
+    assert rows["tidevann.example.org"]["kinds"] == {"transcript": 1}, "a participant's address"
+    assert rows["git.example.org/tidevann"]["kinds"] == {"event": 1}, "the act's own link, any code host"
+    assert rows["github.com/nordmann-tidevann-example"]["kinds"] == {"event": 1}, "extra.repo on github.com"
+    assert rows["github.com/nordmann-tidevann-example"]["hint"] == "community"
+    assert "github.com/ines-nordmann-example" not in rows, "the owner's own account"
+    assert rows["github.com/per-hansen-example"]["hint"] == "personal", "a person's own account"
+    assert not {"google.com", "github.com", "noreply.github.com", "github.com/trending"} & set(rows), (
+        "a service host and a code host's own pages name nobody's org"
+    )
+    assert rows["nytt.example.org"]["hint"] == "company", "a newsletter in its own name is no family"
+    assert rows["nordmann.example.org"]["hint"] == "personal", "Kari and Per Nordmann, kari@ and per@"
+
+
 # -- idea -----------------------------------------------------------------------------------------------
 
 
