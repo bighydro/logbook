@@ -27,6 +27,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "apps",
         "assets",
         "attachments",
+        "attribution",
         "chain",
         "chapter",
         "countries",
@@ -123,6 +124,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "serve",
         "service",
         "site",
+        "speakers_review",
         "stream",
         "synthesis",
         "taskdone",
@@ -152,7 +154,9 @@ COMMANDS = "commands"  # every module under logbook/commands/
 # 0.5 import path -> where it lives now; a package covers everything under it
 NEW_IN_0_6: frozenset[str] = frozenset(
     {
+        "attribution",
         "home",
+        "speakers_review",
         "chapter",
         "chapters",
         "chart_fit",

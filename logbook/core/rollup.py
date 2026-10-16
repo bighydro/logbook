@@ -541,14 +541,21 @@ def people(reading: Reading) -> dict[str, Any]:
     contact (the last such day), the places shared (named places, `aboard <asset>`, else the
     unnamed place's label), the confirmed evidence count and the lines. A confirmed name the
     record resolves to no person (an attendee with a display name and no resolution line) is
-    listed apart, under `unresolved`."""
+    listed apart, under `unresolved`. The people the owner bound a voice to and would not name are
+    never a row: a year that had any says how many, `unnamed` (RFC 0038 §3.4)."""
     years: dict[str, dict[str, Any]] = {}
     evidence = present.Evidence(reading.lines, reading.tz)
     days_of = _days_of_lines(reading)
     at_stay: dict[str, dict[tuple[str, str], set[str]]] = {}  # stay id → (year, key) → evidence days
+    unnamed: dict[str, set[str]] = {}  # year → the unnamed people heard at a stay of it
     for stay in reading.owner_stays:
         stay_day, _end_day = _local_days(stay, reading)
-        found = present.present(stay, evidence.near(stay), reading.identities, reading.places, reading.owner)
+        near = evidence.near(stay)
+        heard = present.unnamed_people(stay, near, reading.identities)
+        if heard:
+            unnamed.setdefault(_year_of(stay_day), set()).update(heard)
+            years.setdefault(_year_of(stay_day), {"year": _year_of(stay_day), "people": {}, "unresolved": {}})
+        found = present.present(stay, near, reading.identities, reading.places, reading.owner)
         for c in found:
             if c.status != present.CONFIRMED:
                 continue
@@ -594,15 +601,16 @@ def people(reading: Reading) -> dict[str, Any]:
     out["years"] = []
     for key in sorted(years):
         entry = years[key]
-        out["years"].append(
-            {
-                "year": key,
-                "people": [_finish_person(p) for p in sorted(entry["people"].values(), key=_person_order)],
-                "unresolved": [
-                    _finish_person(p) for p in sorted(entry["unresolved"].values(), key=_person_order)
-                ],
-            }
-        )
+        found_year: dict[str, Any] = {
+            "year": key,
+            "people": [_finish_person(p) for p in sorted(entry["people"].values(), key=_person_order)],
+            "unresolved": [
+                _finish_person(p) for p in sorted(entry["unresolved"].values(), key=_person_order)
+            ],
+        }
+        if unnamed.get(key):  # only a year that had one: a record without voices reads as it did
+            found_year["unnamed"] = len(unnamed[key])
+        out["years"].append(found_year)
     return out
 
 
@@ -967,7 +975,7 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
         for v in year["unnamed"]:
             yield _visit_row(v["label"], v, width, nights=v["nights"] or None) + f"   {v['id']}"
     else:
-        yield f"  {year['year']}"
+        yield f"  {year['year']}" + (f" · and {year['unnamed']} unnamed" if year.get("unnamed") else "")
         for p in [*year["people"], *year["unresolved"]]:
             parts = [
                 _plural(p["days"], "day"),

@@ -1,6 +1,6 @@
 # RFC 0006 — payload profile `resolution/v1`
 
-Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks
+Status: frozen for v1.0 · 2026-10-05 (RFC 0031; fixture `conformance/profiles/`) · drafted 2026-09-16 · comment period: two weeks · amended 2026-10-15 (the `speaker` ref; `basis`, `consent`, `unnamed`, `spans`; RFC 0038 §3, additive under RFC 0031 rule 1)
 
 One statement that a source-native identifier refers to a known entity. Raw lines carry what their source gave — an email address, a phone number, a provider's participant name, a lat/lon. Turning those into an entity ("this is the same person as in that other line") is a *derived* judgement, and it belongs in its own line, never inside the raw one.
 
@@ -67,3 +67,37 @@ An alias (synthetic): a WhatsApp linked-device id paired with the phone number t
 - **Places.** A place is resolved from a derived stay, not from a raw fix: the ref is `{ "kind": "line", "value": "<stay line id>" }`, and the entity is a `wikidata` or `osm` id. A single raw location point is never a ref.
 - **Crossing.** In a crossing package (RFC 0005) resolution may be shipped as an overlay or left to the consumer; that is a deployment choice, and this profile is the same in both cases.
 - **Privacy.** A resolution line is often more identifying than the raw line it resolves — it is the thing that turns an address into a name. Tier it by its evidence, and expect tier 2 in practice.
+
+## Amendment 2026-10-15: a voice as a ref (RFC 0038 §3)
+
+One ref kind and four payload fields, additive under RFC 0031 rule 1: no field is removed, renamed or
+retyped, no value withdrawn, no MUST changes for a line with any other ref. The fixture under
+`conformance/profiles/resolution/` carries none of them and is unchanged. The JSON Schema of a payload
+with this ref is [`schema/resolution-v1-speaker.schema.json`](../schema/resolution-v1-speaker.schema.json).
+
+| `ref.kind` | `ref.value` | Example |
+|---|---|---|
+| `speaker` | `<the id of the transcript line that carries the label>#<label>` | `019cadd3-6bc0-7dcd-9133-0000000004a1#S2` |
+
+A label means something only in the line that carries it (RFC 0004, amended 2026-10-14): a transcript
+heard again is a new line with new labels and new refs. A reader that does not know `speaker` resolves
+nothing through it and loses nothing it read before: no raw line carries a `speaker` ref in its own
+fields.
+
+| Field | Type | Req (on a `speaker` ref) | Meaning |
+|---|---|---|---|
+| `basis` | string | MUST | `channel` (the recording's channel and the call it was), `voice` (the audio was in the store and heard), `text` (the words alone) |
+| `consent` | string | MAY | `yes`, `no` or `unknown`: what the owner stated at review time about whether the person agreed to be recorded. Absent reads as `unknown` |
+| `unnamed` | `true` | MAY | the owner declined to name the person: `entity` is a person minted for the voice (or one minted earlier for a voice the owner said is the same), with no `label` |
+| `spans` | object | MUST when `basis` is `text` and the label is a text label (`T1`, …) | `{ content, ranges }`: the content file's digest and the voice's byte ranges, half-open |
+
+A writer MUST NOT put these fields on a line with any other ref. On a `speaker` ref, `source` is
+`manual` and `method` is `owner`: the model proposes, the owner binds, and no adapter, engine or tool
+writes one. `confidence` is absent for basis `channel` and `voice` (asserted) and present for `text`.
+`label` is absent on an `unnamed` line and on a line naming the owner (`owner_id` of `logbook.json`).
+The rules above hold as they are: one standing line per voice (rule 4), a correction a new line that
+`supersedes` (SPEC §3), a retracted line binding nothing (RFC 0003), `alias_of` a `speaker` ref
+resolving to whatever that one does (rule 6). A voice the source puts on the owner's own microphone
+(`from_me`) is the owner's without a line, and a standing line for it is the only thing that wins over
+it. An attribution whose transcript is retracted or superseded is read by nothing. The tier is the
+transcript's, never lower. Who writes them and how readers join them is [docs/speakers.md](../docs/speakers.md#who-they-are).

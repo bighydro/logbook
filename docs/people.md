@@ -71,7 +71,11 @@ lines that name them included, so it is 2 in practice and 3 when a transcript wa
     - `calendar`: an `event/v1` (RFC 0009) they attend and did not decline, timed or all-day,
       wherever it was held.
     - `transcripts`: a `transcript/v1` (RFC 0004) they are a participant of, by email, phone or
-      provider id, else by the spoken name when the record labels exactly one person by it.
+      provider id, else by the spoken name when the record labels exactly one person by it; or one
+      in which a voice you named is theirs, the far end of a call included, adding `spoke_s`, the
+      seconds they spoke ([who they are](speakers.md#who-they-are)). A person you bound a voice to
+      and would not name is never a row: the head says `and 1 unnamed`, and how many voices are not
+      yet named, `review speakers`; `--json` carries `unnamed` and `not_yet_named`.
     - `faces`: a `photo/v1` (RFC 0002) with their face tagged, through the library's person id
       (`provider_id`, `<library>:<id>`).
 - **First and last contact**: the earliest and latest day over every channel and every day

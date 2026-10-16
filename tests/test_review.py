@@ -343,9 +343,17 @@ def test_review_with_no_kind_lists_every_queue_and_writes_nothing(
 ) -> None:
     seq = int(lb.meta["seq"])
     out = _run(capsys, "review").splitlines()
-    assert [line for line in out if not line.startswith(" ")] == ["person", "org", "idea", "asset", "place"]
+    assert [line for line in out if not line.startswith(" ")] == [
+        "person",
+        "org",
+        "idea",
+        "asset",
+        "place",
+        "speakers",  # RFC 0038 §4: the voices not yet named, in the same shape
+    ]
     assert "  4 proposals · 5 observed orgs not yet placed, 1 placed · tier 2" in out
-    assert set(_json(capsys, "review")) == {"person", "org", "idea", "asset", "place"}
+    assert "  no voice waits to be named · 0 named" in out
+    assert set(_json(capsys, "review")) == {"person", "org", "idea", "asset", "place", "speakers"}
     assert int(Logbook(lb.root).meta["seq"]) == seq, "nothing written"
 
 

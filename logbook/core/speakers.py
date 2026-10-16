@@ -335,6 +335,14 @@ def segment_count(data: bytes, media_type: str) -> int | None:
     `text/plain` (one segment a line, as `derive transcripts` writes it) unless the text is SRT, the
     cues of WebVTT and SRT, the elements of a JSON segments array, the turns of Markdown as RFC
     0004's readers parse them. None for a file that is none of these."""
+    found = segment_texts(data, media_type)
+    return None if found is None else len(found)
+
+
+def segment_texts(data: bytes, media_type: str) -> list[str] | None:
+    """The words of each segment of a content file, in its order, as `segment_count` counts them: a
+    spans file's `segments[i]` labels `segment_texts(...)[i]`. A JSON element with no text is a
+    segment with none (`""`), so the two still number alike. None for a file that is none of these."""
     try:
         text = data.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     except UnicodeDecodeError:
@@ -347,18 +355,31 @@ def segment_count(data: bytes, media_type: str) -> int | None:
             return None
         if isinstance(found, dict):
             found = found.get("segments") or found.get("turns")  # as `transcripts.turns_of` finds it
-        return len(found) if isinstance(found, list) else None
+        if not isinstance(found, list):
+            return None
+        return [_said(element) for element in found]
     if media == "text/vtt":
-        return len(transcripts.parse_text(text, "vtt").turns)
+        return [t.text for t in transcripts.parse_text(text, "vtt").turns]
     if media in ("application/x-subrip", "text/srt") or (media == "text/plain" and _SRT.match(text)):
-        return len(transcripts.parse_text(text, "srt").turns)
+        return [t.text for t in transcripts.parse_text(text, "srt").turns]
     if media == "text/markdown":
-        return len(transcripts.parse_text(text, "markdown").turns)
+        return [t.text for t in transcripts.parse_text(text, "markdown").turns]
     if media == "text/plain":
-        return sum(1 for line in text.split("\n") if line.strip())
+        return [line.strip() for line in text.split("\n") if line.strip()]
     return None
 
 
+def _said(element: object) -> str:
+    said = element.get("text") if isinstance(element, dict) else None
+    return said if isinstance(said, str) else ""
+
+
+def is_digest(value: object) -> bool:
+    """A SHA-256 as the attachment store names its files: 64 lowercase hex."""
+    return isinstance(value, str) and _DIGEST.fullmatch(value) is not None
+
+
+_DIGEST = re.compile(r"[0-9a-f]{64}")
 _SRT = re.compile(r"^\s*\d+\s*\n\d\d:\d\d:\d\d,\d{3}\s*-->")
 
 
@@ -432,9 +453,10 @@ def row_text(payload: Mapping[str, Any]) -> str:
 
 
 def to_json(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The voices as a reader's JSON gives them, in the shape RFC 0038 §3.4 names, ahead of the
-    attributions that will fill it: `person`, `basis` and `consent` are null until a line binds the
-    voice (build 2); `owner` is true only from `from_me`, whose basis is the channel."""
+    """The voices as a reader's JSON gives them, in the shape RFC 0038 §3.4 names, before any
+    attribution is joined: `person`, `basis` and `consent` null, `owner` true only from `from_me`,
+    whose basis is the channel. A reader with the record's identities joins through
+    `attribution.Voices` instead, which fills them."""
     return [
         {
             "label": v.label,
@@ -450,12 +472,33 @@ def to_json(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def json_text(entries: Iterable[Mapping[str, Any]]) -> str:
-    """The voices of a reader's JSON (`to_json`) in one run, as `row_text` gives them."""
+    """The voices of a reader's JSON (`to_json`, `attribution.Heard.to_json`) in one run: `you`, a
+    person's name, else the name the source displayed or the label, each with its minutes; the
+    voices bound unnamed counted, `1 unnamed`, never named; then `recorded with consent: unknown`
+    (or `no`) when a voice bound to someone not the owner was not stated as consenting (RFC 0038
+    §3.4, §7). `Middag · you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown`."""
     out: list[str] = []
+    unnamed = 0
+    stated: set[str] = set()
     for entry in entries:
-        shown = OWNER if entry.get("owner") is True else str(entry.get("name") or entry.get("label") or "")
+        owner = entry.get("owner") is True
+        # a guest's attribution always states a consent (absent reads as `unknown`); a voice not yet
+        # named states neither consent nor basis
+        bound = owner or entry.get("basis") is not None or entry.get("consent") is not None
+        if bound and not owner:
+            consent = entry.get("consent")
+            stated.add(consent if isinstance(consent, str) else "unknown")
+        if bound and not owner and entry.get("person") is None:
+            unnamed += 1
+            continue
+        shown = OWNER if owner else str(entry.get("name") or entry.get("label") or "")
         spoken = entry.get("seconds")
         out.append(f"{shown} {duration_text(spoken)}" if isinstance(spoken, int | float) else shown)
+    if unnamed:
+        out.append(f"{unnamed} unnamed")
+    worst = next((c for c in ("no", "unknown") if c in stated), None)
+    if worst is not None:
+        out.append(f"recorded with consent: {worst}")
     return " · ".join(out)
 
 

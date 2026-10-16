@@ -17,7 +17,9 @@ logbook review asset --all-above 50  # accept every proposal at or above the sco
 
 `review person` is [`people review`](people.md#review) and `review place` is
 [`setup places review`](places.md#review): the same sitting, the same numbers, the same output byte
-for byte, under one name.
+for byte, under one name. `review speakers` is the voices of your recordings not yet named (RFC 0038
+§4), in the same shape with answers of its own (`--unnamed`, `--same-as`, `--consent`, `--play`,
+`--named`): [who they are](speakers.md#who-they-are). `review` alone lists its queue after the five.
 
 ## The five queues
 

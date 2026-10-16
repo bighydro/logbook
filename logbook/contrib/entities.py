@@ -64,7 +64,7 @@ ADDED_REFS = ("repo", "page", "title", "group", "merchant", "mmsi", "icao24", "r
 REF_KINDS = RESOLUTION_REFS + ADDED_REFS
 # an observed thing's strongest identifier (an entity-review/v1 `ref`) may also be a person's folded
 # `name` (RFC 0035), a spot's `centre` (`lat,lon`) or an asset's `subject` id
-OBSERVED_REFS = (*REF_KINDS, "name", "centre", "subject")
+OBSERVED_REFS = (*REF_KINDS, "name", "centre", "subject", "speaker")  # speaker: a voice (RFC 0038 §4.4)
 DIFFERENT = "different"
 DISPOSITIONS: dict[str, tuple[str, ...]] = {
     ORG: ("hold", "add", "sell", "let-go", "exited", "passed"),

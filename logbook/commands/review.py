@@ -21,7 +21,7 @@ from typing import Any, NoReturn
 from ..core.store import Logbook
 from .common import Subparsers
 
-KINDS = ("person", "org", "idea", "asset", "place")
+KINDS = ("person", "org", "idea", "asset", "place", "speakers")  # speakers: RFC 0038 §4, `commands.speakers`
 PLACE_FLAGS = (
     ("--top", "top"),
     ("--near", "near"),
@@ -239,7 +239,8 @@ def review_arguments(sub: Subparsers) -> None:
         description="One sitting for the five kinds of thing the record names (RFC 0037): the observed"
         " people, orgs, ideas, assets and places not yet placed, each proposed against the canonical"
         " ones with the evidence, numbered, or as a new one; nothing is written unless told, and nothing"
-        " is looked up. `review person` is `people review`, `review place` is `setup places review`."
+        " is looked up. `review person` is `people review`, `review place` is `setup places review`;"
+        " `review speakers` the voices of your recordings not yet named (RFC 0038)."
         " With no KIND, every queue, one block each.",
     )
     s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
@@ -272,6 +273,9 @@ def review_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="write the noes state/places-review.json holds from before 0.7 as lines, once",
     )
+    from .speakers import speakers_arguments
+
+    speakers_arguments(s)
     s.set_defaults(fn=cmd_review)
 
 
@@ -290,6 +294,22 @@ def cmd_review(a: argparse.Namespace) -> None:
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review place`",
             )
+    from . import speakers
+
+    if a.kind == "speakers":
+        from ..contrib.speakers_review import ReviewError
+
+        try:
+            speakers.sitting(lb, a)
+        except (ReviewError, ValueError) as e:
+            _refuse("review speakers", str(e))
+        return
+    given = speakers.refuse_flags(a.kind, a)
+    if given:
+        _refuse(
+            f"review {a.kind}",
+            f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review speakers`",
+        )
     queue = queue_of(a.kind)
     try:
         sitting(queue, lb, a)
@@ -307,11 +327,21 @@ def queue_of(kind: str) -> Queue:
         from .places import PlaceQueue
 
         return PlaceQueue()
+    if kind == "speakers":
+        from .speakers import SpeakerQueue
+
+        return SpeakerQueue()
     return EntityQueue(kind)
 
 
 def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
-    told = [flag for flag, dest in (*TELLS, *PLACE_FLAGS) if getattr(a, dest) not in (None, False)]
+    from .speakers import FLAGS as SPEAKER_FLAGS
+
+    told = [
+        flag
+        for flag, dest in (*TELLS, *PLACE_FLAGS, *SPEAKER_FLAGS)
+        if getattr(a, dest, None) not in (None, False)
+    ]
     if told:
         _refuse("review", f"say which kind {' '.join(told)} is for: `review {'|'.join(KINDS)} …`")
     found: dict[str, Any] = {}

@@ -6,10 +6,11 @@ gives each voice an anonymous label in the `transcript/v1` line: `S1`, `S2`, …
 room, `mic` and `system` for the two sides of a call. Nothing leaves the machine, and nothing names
 anyone: a label says *a voice*, never *who*.
 
-This page is build 1 of [RFC 0038](rfcs/0038-speakers.md), its §2: the labels at ingest. Saying whose
-voice a label is (one `resolution/v1` line per voice, written by you alone), `review speakers`, the
-voiceprints that propose a name, and the text-only road for recordings whose audio is gone are later
-builds. No `resolution/v1` line is written here, and no reader binds a label to a person.
+This page covers builds 1 and 2 of [RFC 0038](rfcs/0038-speakers.md): the labels at ingest (§2), and
+saying whose voice a label is, one `resolution/v1` line per voice, written by you alone through `review
+speakers`, which the readers then join ([Who they are](#who-they-are), §3–§4). The voiceprints that
+propose a name by how a voice sounds, the browser's *Who spoke?*, and the text-only road for
+recordings whose audio is gone are later builds.
 
 ```bash
 uv tool install "openlogbook[transcribe,speakers]"   # the Whisper engine and the diarizer (or pipx install --force)
@@ -190,12 +191,169 @@ writer's `0 turns` beside them, and marks a transcript heard again `superseded b
   09:15  transcript transcription  Samtale · you 3 min · Ola Nordmann 3 min
 ```
 
-A voice reads as the name its source displayed, else its label; the owner reads as `you` only from
-`from_me`, the source's statement, never from a guess. `day --json` gives a transcript's entry
-`speakers`, only when the line has voices: `{label, person, name, seconds, basis, consent, owner}`,
-`person`, `basis` and `consent` null until a later build lets you say whose a voice is (`basis`
-`channel` for the `from_me` voice). A transcript that another standing transcript of the day
-supersedes is not listed beside it. A transcript without `speakers` reads exactly as before.
+A voice not yet named reads as the name its source displayed, else its label; the owner reads as `you`
+from `from_me`, the source's statement, or from your own answer, never from a guess. `day --json` gives
+a transcript's entry `speakers`, only when the line has voices: `{label, person, name, seconds, basis,
+consent, owner}` (what each holds once a voice is named: [Who they are](#who-they-are)). A transcript
+that another standing transcript of the day supersedes is not listed beside it. A transcript without
+`speakers` reads exactly as before.
+
+## Who they are
+
+A label says *a voice*. Who that voice is, is yours to say, and nothing says it for you: no adapter,
+no model, no `dream` and no tool binds a voice. Each answer is one `resolution/v1` line beside the
+transcript (RFC 0006, amended for RFC 0038 §3), and the transcript itself never changes.
+
+```bash
+logbook review speakers                          # the queue: voices not yet named, numbered, with the evidence
+logbook review speakers --json                   # the same, with each row's stable id and the counts
+logbook review speakers --accept 4 --name 1 me   # row 4 is whom it proposes; row 1 is you
+logbook review speakers --name 2 "Kari Nordmann" --consent 2=yes
+logbook review speakers --name 3 "Per Hansen"    # a name nobody has: a person is minted under it
+logbook review speakers --unnamed 3              # a person, not you, whom you will not name
+logbook review speakers --unnamed 5 --same-as 3  # the same unnamed person as voice 3
+logbook review speakers --reject 4               # not that person; never proposed again
+logbook review speakers --all-above 40           # every row whose one best candidate scores 40 or more
+logbook review speakers --play 2                 # the voice's first twenty seconds alone, here; nothing written
+logbook review speakers --named --recording ID   # the voices of a recording already named, to correct one
+logbook review speakers --named --day 2026-10-03
+```
+
+### The queue
+
+A row is an *observed voice*, keyed by the strongest thing the voice carries, never by its label
+across recordings: the far end of a call (the one voice on the `system` channel of a recording that
+overlaps a `call/v1` line whose counterparty is an address or a number) is keyed by that address or
+number, so every call with one number is one row; else the name the source displayed, its words
+folded and sorted; else the label alone, one row per voice. A row with several recordings numbers
+them `N.1`, `N.2`, …, and `--accept 4.2` answers that recording's voice alone, which is how a row
+that joined two people is split. Your own microphone's voice (`from_me`) is yours without a question
+and never in the queue.
+
+```
+4 voices not yet named in 2 recordings, 4 rows · 0 named · tier 2
+   1  [20]  Sat 2026-10-03 19:40 · Home · "Middag" · S1 · 31 min · "Har du sett hvor høyt vannet står?"
+            → Kari Nordmann: on the entry "Middag med Kari" · seen that day (message 18:02) (as good for S2, S3 of the recording: not taken by --all-above)
+            that day: Kari Nordmann (message, calendar)
+   2  [20]  same recording · S2 · 14 min · "Beklager, ferja var sen."
+            → Kari Nordmann: on the entry "Middag med Kari" · seen that day (message 18:02) (as good for S1, S3 of the recording: not taken by --all-above)
+            that day: Kari Nordmann (message, calendar)
+   3  [20]  same recording · S3 · 42 s · "Hei, jeg skal bare levere en pakke."
+            → Kari Nordmann: on the entry "Middag med Kari" · seen that day (message 18:02) (as good for S1, S2 of the recording: not taken by --all-above)
+            that day: Kari Nordmann (message, calendar)
+   4  [40]  Tue 2026-10-06 09:15 · Home · "Samtale" · system · 3 min · "I'll call the yard tomorrow."
+            → Ola Nordmann: the far end of the call 09:15
+            that day: Ola Nordmann (call)
+nothing written: `review speakers --accept N[,N]`, `--name N "…"`, `--unnamed N`, `--reject N[,N]`, `--consent N=yes|no|unknown`, or `--all-above SCORE`
+```
+
+Each row says the day, the place (the stay the recording overlaps, as `people` names it), the
+recording's title, the voice's label and how long it spoke, its first words, the candidate and what
+speaks for it, and who else the record saw that day. The rows run in the order the recordings were
+made, and within a recording by how long each voice spoke. On a terminal the command asks row by row: `y` accepts, `n` rejects, `u` is unnamed, `p`
+plays, anything else is a name, Enter skips, `q` stops; after a name or `unnamed` for a voice that is
+not yours it asks `recorded with their consent? y / n / Enter for unknown`. Each answer is written at
+once.
+
+### The score
+
+A plain sum per candidate and voice, a row's the lowest of its voices':
+
+| Evidence | Points |
+|---|---|
+| the far end of a call: the voice is alone on `system` and the recording overlaps a call whose counterparty is the person | 40 |
+| on the entry: the person attends a timed calendar entry the recording overlaps, held at the same stay | 15 |
+| a participant: the transcript's `participants` name the person by address, number or provider id; by a name alone | 15; 5 |
+| the source's name: the name the source displayed for the voice is the person's, or a word of it nobody else's has | 10 |
+| seen that day: another line of the recording's day is the person's (a message, a call, a tagged face, their voice in another recording), one not already counted above | 5 |
+
+Context never stands in for a voice: without the far end of a call a candidate scores 40 at most, so
+`--all-above` over 40 never names a guest from context alone. Two candidates within 5 points are both
+shown and neither is taken; context belongs to the recording, not to one voice of it, so a person who
+is the best for two voices of one recording at the same score is shown for each and taken by
+`--all-above` for neither. A person already named for one voice of a recording is not proposed for its
+others. A pair you said no to, and a person under `forget` in `policy/speakers.json`, are never
+proposed. RFC 0038's `same voice`, up to 70 points against a voiceprint, is a later build's; until
+then you are proposed by nothing, and you answer `me`.
+
+### What each answer writes
+
+Every number of one command is checked before the first line is written; a number the queue does not
+have, a voice answered twice (`--accept 2 --reject 2`, or `2` and `2.1`), a consent for a row the
+command does not answer, a consent for your own voice, a score that is not a whole number, or a name
+several people have exits 2 and writes nothing.
+
+| Answer | Writes, per voice of the row |
+|---|---|
+| `--accept N` | one `resolution/v1`: `ref` `{kind: speaker, value: "<transcript id>#<label>"}`, `entity` the candidate, `label` the person's, `method` `owner`, `basis`, `consent` when stated, `evidence` the transcript and the lines the score rested on, `logbook_head`, and under `extra` the row's id, the score and what matched |
+| `--name N "…"` | the same, to `me` (your `owner_id`, no `label`, no consent), the one person the record labels so (case aside), a person by id or by a ref the record resolves (`email:…`, `phone:…`); a name nobody has mints a person with that label, once per name in a command |
+| `--unnamed N` | the same, `entity` a person minted with no `label`, and `unnamed: true`; one person for the row; with `--same-as M`, the person voice M is bound to unnamed (or the one minted for M in the same command) |
+| `--reject N` | one `entity-review/v1` line of type person (RFC 0035 amendment 1: `people-review/v1` is read and no longer written): `ref` the row's first voice, `refs` every voice, `entity` the candidate |
+| `--consent N=…` | nothing of its own: the `consent` of the line N's answer writes (`yes`, `no` or `unknown`; absent reads as `unknown`) |
+
+`basis` is `channel` when the person is the far end of the call the recording overlaps, `voice` when
+the recording's audio is in the store, and `text` otherwise, which then carries `confidence`: the
+score the record gives that person for that voice, over 100 and at most `text_confidence_cap` (0.6)
+of `policy/speakers.json`, whichever flag named them; a person the record scored nothing for (a name
+only you knew, `--unnamed`, `me`) the cap itself, your word being the most a voice named without its
+audio may say. So a voice named without its audio never reads as surer than one heard.
+A line is tier 2, or the transcript's when that is higher. The same person, basis and consent as the
+voice's standing line (a consent left out reading as `unknown`), a no the record already holds, and
+`--unnamed` on a voice already unnamed write nothing and say so; an answer that names the same
+person again keeps the consent stated before unless it states another. Two labels may be one person
+(a voice the diarizer split): naming one person for a second voice of a recording is allowed, and
+said (`Kari Nordmann is also S2 of the recording`); the queue does not propose a person for a
+recording's other voices once one is theirs. A ref given to `--name`
+(`email:…`, `phone:…`) that no person of the record has is refused, never minted as a name.
+
+The line RFC 0038 §11 writes for the call's far end:
+
+```json
+{"schema":"resolution/v1","ref":{"kind":"speaker","value":"019cadd3-6bc0-7dcd-9133-0000000004a2#system"},
+ "entity":{"type":"person","id":"019cadd3-6bc0-7dcd-9133-043f5aabf2a9","registry":"logbook"},"label":"Ola Nordmann",
+ "method":"owner","basis":"channel","evidence":["019cadd3-6bc0-7dcd-9133-0000000004a2","019cadd3-6bc0-7dcd-9133-0000000004e3"],
+ "logbook_head":"8f1c…","extra":{"proposal":"3c9a51d0e2f4b7a6","score":40,"matched":["the far end of the call 09:15"]}}
+```
+
+Its JSON Schema is [`schema/resolution-v1-speaker.schema.json`](https://github.com/bighydro/logbook/blob/main/schema/resolution-v1-speaker.schema.json).
+
+### A wrong answer
+
+The record keeps the mistake and the correction. `--named --recording ID` (its id or seq) or `--named
+--day DAY` lists the voices already named, numbered as the queue is, each with its standing line; any
+answer to one (`--name`, `--unnamed`, or `--accept N --consent N=…` to state the consent again) writes
+a new line for the same voice that `supersedes` the standing one, and the wrong line stays in the
+record. A wrong no is undone by retracting its line, and the pair is proposed again; a wrong yes by
+`logbook repair retract SEQ`, which returns the voice to the queue. A transcript heard again (`derive
+speakers`) is a new line with new labels: its voices are new refs, back in the queue, and the old
+line's answers name nothing on it. `people merge` moves a person's addresses and numbers, never a
+voice: a voice bound to the person merged away stays bound to them, and so they stay a row of
+`people`, until you name it again here; the merge says how many (`1 voice stays bound to Kari`).
+
+### How the readers read it
+
+Each voice of a standing transcript is then yours (bound to you, or `from_me` with no line; a line
+binding your microphone's voice to someone else wins over `from_me`: someone else spoke into your
+phone), a person's, unnamed, or not yet named.
+
+- **The Day** names who spoke and says the consent you stated for the guests, when it is not `yes`:
+  `Middag · you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown`. In `day
+  --json` each voice is `{label, person, name, seconds, basis, consent, owner}`: `person` your id for
+  your voice and the person's for theirs, null for an unnamed voice and one not yet named; `name` the
+  person's label (for a voice not yet named, the name its source displayed); `consent` as stated,
+  `unknown` when a guest's line states none.
+- **With** (who was there): a voice bound to a person, in a recording that overlaps the stay, is
+  confirmed company, `spoke in Middag`, ahead of the participants, at the line's `confidence` (a `text`
+  attribution's 0.2 reads as 0.2), else 1.0, your own assertion. The far end of a call (the `system`
+  channel) spoke and was not there: never company, not even through that recording's participants. An
+  unnamed voice is counted, `with.unnamed`, and never named; a voice not yet named is nobody's company.
+- **People** count a voice bound to someone on their `transcripts` channel, the far end of a call
+  included, with `spoke_s`, the seconds; the person page says `spoke 14 min`. A person you would not
+  name is never a row: the head says `and 1 unnamed`, the JSON `unnamed`, and how many voices are not
+  yet named, `review speakers`. `rollup people` counts a year's unnamed the same way.
+- **Promises** take a sentence's speaker from the voice of its segment, through the spans file: your
+  voice's sentences are yours, a guest's are owed to you, a voice not yet named stays as spoken (`S2`).
+- **The digest** says who spoke that day and, once, how many voices wait, with the command.
 
 ## Four assumptions that stand
 
@@ -203,12 +361,14 @@ RFC 0038 leaves fifteen questions open for its comment period. Four of them were
 start, and this build stands on the RFC's present answer to each until the comment period settles it:
 
 1. **Two guests with the same voice score.** A label is a voice as the diarizer heard it, not a person:
-   two people it could not tell apart are one label, and two labels may be one person. This build
-   names nobody, so nothing is merged or split here; the review (a later build) shows two close
-   candidates and takes neither, and a later diarization with `--speakers N` may split a label.
+   two people it could not tell apart are one label, and two labels may be one person. The review
+   shows two close candidates and takes neither, a row's `N.2` answers one recording alone, and a
+   later diarization with `--speakers N` may split a label; a label two people share is left not yet
+   named, or named `--unnamed`.
 2. **A guest who asks to be forgotten.** The transcript and the audio are your record and are never
-   rewritten. What a later build can do is retract the lines that name them and keep their words
-   home; this build writes nothing that names anyone, so there is nothing of theirs to retract.
+   rewritten. What the record can do is retract the attribution lines that name them (their voices
+   return to *not yet named*) and list them under `forget` in `policy/speakers.json`, so no voice is
+   ever proposed as theirs; keeping their words home is the crossing's keys, a later build.
 3. **Group calls with more than two channels.** A recording is one room, or two channels, `mic` and
    `system`. A conference that arrives mixed on the far end's channel is diarized inside it
    (`system.1`, `system.2`); a recorder that writes one track per participant is not read as such yet.
@@ -216,11 +376,17 @@ start, and this build stands on the RFC's present answer to each until the comme
    tier 2 and 3, invisible to a reader that does not want them: no spec version bump, no regenerated
    conformance fixture, no new ADR. A stolen disk shows nothing of who spoke.
 
-## Not in this build
+## Not in these builds
 
-- naming a voice, `review speakers`, voiceprints, the text-only road and the crossing's keys (RFC 0038
-  §3–§9);
+- voiceprints and the registry, `voiceprints.age` (§5), and with them the review's `same voice` score
+  and its grouping of one unknown voice heard at several dinners into one row (§4.1 rule 2);
+- the browser's *Who spoke?* (§4.6), the text-only road (§6), and the crossing's keys (§9);
 - the `channels` engine of §2.5 (two channels labelled with no model on the machine): §2.1 has the run
   transcribe exactly as before without the model, and this build follows §2.1;
 - SPEC §3.2.10 rule 2's change that RFC 0038 asks for (a promise's id from the first line of a
-  supersedes chain): the SPEC is unchanged, which is why `derive speakers` says what it reopens.
+  supersedes chain): the SPEC is unchanged, which is why `derive speakers` says what it reopens;
+- the SPEC's own words for the readers RFC 0038 §12 changes (§3.2.5 rule 2, voices by attribution
+  and the far end of a call out of company; §3.2.10 rule 3, a sentence's speaker from its voice): the
+  readers do it, as [Who they are](#who-they-are) says, and the SPEC text follows when the RFC is
+  adopted; the demo record has no voices, so every reader compared under §6.1 compares as before;
+- `people review --speakers`, the RFC's stand-in until `review` existed: `review speakers` is it.

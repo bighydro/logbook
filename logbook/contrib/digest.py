@@ -132,13 +132,40 @@ def _shape(data: Mapping[str, Any]) -> dict[str, Any]:
     for key in confirmed:
         proposed.pop(key, None)  # proposed at one stay, confirmed at another: confirmed
     night = data["nights"]["after"]
-    return {
+    out: dict[str, Any] = {
         "where": where,
         "night": {k: night[k] for k in ("where", "home", "aboard", "in_transit")},
         "with": {"confirmed": list(confirmed.values()), "proposed": list(proposed.values())},
         "attached": [{"count": n, "noun": noun} for noun, n in counts.items()],
         "unplaced": len(data["unplaced"]),
     }
+    spoke, waiting = _voices(data)
+    if spoke:
+        out["spoke"] = spoke
+    if waiting:
+        out["not_yet_named"] = waiting
+    return out
+
+
+def _voices(data: Mapping[str, Any]) -> tuple[list[str], int]:
+    """(the people who spoke in the day's transcripts, by the name the Day gives them, each once and
+    in order; how many of the day's voices are not yet named), from the Day's `speakers` entries
+    (RFC 0038 §3.4). The owner and the unnamed are neither."""
+    entries: list[Mapping[str, Any]] = [*data["unplaced"]]
+    for e in data["timeline"]:
+        for inner in [e, *(e.get("inside") or [])]:
+            entries.extend((inner.get("attached") or {}).get("transcripts") or [])
+    spoke: dict[str, str] = {}
+    waiting = 0
+    for entry in entries:
+        for voice in entry.get("speakers") or []:
+            if voice.get("owner") is True:
+                continue
+            if voice.get("person") is not None:
+                spoke.setdefault(str(voice["person"]), str(voice.get("name") or voice["person"]))
+            elif voice.get("basis") is None and voice.get("consent") is None:
+                waiting += 1  # bound states a basis or a consent; a voice not yet named neither
+    return list(spoke.values()), waiting
 
 
 def due_promises(report: promises.Report, day: str, within: int = DUE_DAYS) -> list[promises.Proposal]:
@@ -298,6 +325,8 @@ def _rows(data: Mapping[str, Any]) -> Iterator[str]:
     yield f"{data['day']}  {data['weekday']}"
     yield _row("where", _where_text(shape, bool(data["sources"])))
     yield _row("with", _with_text(shape["with"]))
+    if shape.get("spoke") or shape.get("not_yet_named"):
+        yield _row("spoke", _spoke_text(shape))
     yield _row("attached", _attached_text(shape))
     flights = data["flights"]
     for f in flights[:FLIGHTS_SHOWN]:
@@ -342,6 +371,16 @@ def _with_text(with_: Mapping[str, Any]) -> str:
     if proposed:
         text += f" ({len(proposed)} proposed)"
     return text
+
+
+def _spoke_text(shape: Mapping[str, Any]) -> str:
+    """`Kari Nordmann · 2 voices not yet named · logbook review speakers`: who spoke in the day's
+    recordings, and once how many voices wait to be named, with the command."""
+    parts = [", ".join(shape.get("spoke") or [])] if shape.get("spoke") else []
+    waiting = int(shape.get("not_yet_named") or 0)
+    if waiting:
+        parts.append(f"{_plural(waiting, 'voice')} not yet named{DOT}logbook review speakers")
+    return DOT.join(parts)
 
 
 def _attached_text(shape: Mapping[str, Any]) -> str:

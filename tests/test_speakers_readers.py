@@ -97,7 +97,9 @@ def test_the_day_shows_the_voices_of_an_unplaced_transcript_and_its_json_shaped_
     assert call["speakers"] == [
         {
             "label": "mic",
-            "person": None,
+            "person": lb.meta[
+                "owner_id"
+            ],  # the owner's microphone is the owner, without a line (RFC 0038 §3.4)
             "name": None,
             "seconds": 201.7,
             "basis": "channel",

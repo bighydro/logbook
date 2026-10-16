@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, NamedTuple
 
+from . import attribution
 from .chain import Line
 from .store import RETRACTION, retractions
 
@@ -51,11 +52,18 @@ def labels_from(lines: Iterable[Line]) -> dict[Ref, str]:
 
 class Identity(NamedTuple):
     """What a ref resolves to: the entity the deciding line names (its id and type, `person`,
-    `place` or `company`), when it names one, and the label it carries."""
+    `place` or `company`), when it names one, and the label it carries. A `speaker` ref (RFC 0038
+    §3.2) also carries `unnamed`, from the deciding line, and the `basis`, `consent` and `confidence`
+    of the voice's own standing line (`attribution.speaker_fields`); every other ref keeps the
+    defaults."""
 
     entity: str | None
     type: str | None
     label: str | None
+    unnamed: bool = False
+    basis: str | None = None
+    consent: str | None = None
+    confidence: float | None = None
 
 
 def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
@@ -74,6 +82,11 @@ def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
             entity_id if isinstance(entity_id, str) and entity_id else None,
             entity_type if isinstance(entity_type, str) and entity_type else None,
             label if isinstance(label, str) and label else None,
+            **(
+                attribution.speaker_fields(last[ref].get("payload") or {}, payload)
+                if ref[0] == attribution.SPEAKER
+                else {}
+            ),
         )
     return found
 

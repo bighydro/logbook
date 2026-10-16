@@ -42,7 +42,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import day_start, machine, policy, present, reading, resolve, stays, trips
+from . import attribution, day_start, machine, policy, present, reading, resolve, speakers, stays, trips
 from . import places as named_places
 from .chain import Line
 from .day_start import DayStart
@@ -89,6 +89,7 @@ class Channel:
     tier: int = 0
     last_line: str | None = None
     ids: list[str] = field(default_factory=list)
+    spoke_s: float | None = None  # transcripts: the seconds of the voices bound to them (RFC 0038 §3.4)
     _last_at: str = ""
 
     def add(self, day: str, at: str, line_id: str, tier: int) -> None:
@@ -101,13 +102,16 @@ class Channel:
             self._last_at, self.last_line = at, line_id
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "lines": self.lines,
             "first": self.first,
             "last": self.last,
             "tier": self.tier,
             "last_line": self.last_line,
         }
+        if self.spoke_s is not None:  # only once a voice is bound to them: the channel otherwise as it was
+            out["spoke_s"] = round(self.spoke_s, 2)
+        return out
 
 
 @dataclass
@@ -227,6 +231,8 @@ class Report:
     owner: present.Owner
     identities: dict[Ref, Identity]
     day_start: DayStart | None = None  # where the record's day begins (RFC 0036); None is midnight in `tz`
+    unnamed: int = 0  # the people the owner bound a voice to and would not name, who spoke in the window
+    not_yet_named: int = 0  # the voices of the window's transcripts nobody has said whose they are
 
     @property
     def days(self) -> DayStart:
@@ -237,11 +243,15 @@ class Report:
         return max((p.tier for p in self.people), default=None)
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "window": {"since": self.first, "until": self.last},
             "tier": self.tier,
             "people": [p.to_json() for p in self.people],
         }
+        if self.unnamed or self.not_yet_named:  # RFC 0038 §3.4: counted, never rows
+            out["unnamed"] = self.unnamed
+            out["not_yet_named"] = self.not_yet_named
+        return out
 
 
 def empty() -> dict[str, Any]:
@@ -293,7 +303,18 @@ def read(
         (p for p in known.values() if p.heard),
         key=lambda p: (-len(p.days), _desc(p.last_contact), p.name.casefold()),
     )
-    return Report(first, last, tz, heard, known, owner, identities, days)
+    return Report(
+        first,
+        last,
+        tz,
+        heard,
+        known,
+        owner,
+        identities,
+        days,
+        unnamed=len(gather.unnamed),
+        not_yet_named=gather.not_yet_named,
+    )
 
 
 def directory(lb: Logbook) -> Report:
@@ -348,14 +369,20 @@ def _people_of(
     for ref, who in identities.items():
         if not who.entity or who.type not in present.PERSON_TYPES or who.entity in owner.entities:
             continue
+        if who.unnamed:
+            continue  # a person the owner would not name is never a row (RFC 0038 §3.4)
+        voice = ref[0] == attribution.SPEAKER  # a voice is evidence of a person, not one of their refs
         person = people.get(who.entity)
         line = standing.get(ref)
         tier = int(line.get("tier", 0)) if line is not None else 0
         birthday = _birthday(line)
         if person is None:
-            people[who.entity] = Person(who.entity, who.label or who.entity, (ref,), birthday, tier)
+            people[who.entity] = Person(
+                who.entity, who.label or who.entity, () if voice else (ref,), birthday, tier
+            )
             continue
-        person.refs = (*person.refs, ref)
+        if not voice:
+            person.refs = (*person.refs, ref)
         person.tier = max(person.tier, tier)
         if person.birthday is None:
             person.birthday = birthday
@@ -393,6 +420,9 @@ class _Gather:
         self.days = days
         self.first, self.last = first, last
         self.chats: dict[str, _Chat] = {}
+        self.voices = attribution.Voices(identities, owner.entities, owner.id)
+        self.unnamed: set[str] = set()  # the unnamed people who spoke in the window
+        self.not_yet_named = 0  # the window's voices no line binds
 
     def stream(self, channel: str, lines: Iterable[Line]) -> list[Line]:
         kept: list[Line] = []
@@ -448,6 +478,15 @@ class _Gather:
             return [(e, None) for e in dict.fromkeys(found) if e is not None]
         if channel == "transcripts":
             found = []
+            for heard in self.voices.of({"id": id_, "payload": payload}):
+                if heard.state == attribution.NOT_YET_NAMED:
+                    self.not_yet_named += 1
+                elif heard.state == attribution.UNNAMED and heard.entity:
+                    self.unnamed.add(heard.entity)
+                elif heard.state == attribution.PERSON and heard.entity in self.people:
+                    found.append(heard.entity)  # the far end of a call too: they spoke in it
+                    channel_of = self.people[heard.entity].channel("transcripts")
+                    channel_of.spoke_s = (channel_of.spoke_s or 0.0) + (heard.voice.seconds or 0.0)
             participants = payload.get("participants")
             for participant in participants if isinstance(participants, list) else []:
                 if isinstance(participant, dict) and not machine.is_machine_participant(participant):
@@ -548,7 +587,7 @@ def _names_someone(line: Line) -> bool:
         return bool(payload.get("attendees"))
     if kind == "transcript":
         participants = payload.get("participants")
-        return any(
+        return bool(speakers.voices(payload)) or any(
             not machine.is_machine_participant(p)
             for p in (participants if isinstance(participants, list) else [])
         )
@@ -716,7 +755,13 @@ def page(report: Report, person: Person) -> dict[str, Any]:
 def rows(report: Report) -> Iterator[str]:
     """One row per person, most days together first."""
     head = f"{_plural(len(report.people), 'person', 'people')} · {report.first} {EN_DASH} {report.last}"
-    yield head if report.tier is None else f"{head} · tier {report.tier}"
+    if report.tier is not None:
+        head += f" · tier {report.tier}"
+    if report.not_yet_named:
+        head += f" · {_plural(report.not_yet_named, 'voice')} not yet named · review speakers"
+    if report.unnamed:
+        head += f" · and {report.unnamed} unnamed"
+    yield head
     width = max((len(p.name) for p in report.people), default=0)
     for p in report.people:
         yield f"  {p.name:<{width}}  {' · '.join(_summary(p))}"
@@ -757,7 +802,9 @@ def person_rows(data: Mapping[str, Any]) -> Iterator[str]:
         contact += f" · last real contact {real['day']} ({real['via']})"
     yield contact
     channels = [
-        f"{name} {c['lines']} ({_span(c['first'], c['last'])})" for name, c in data["channels"].items()
+        f"{name} {c['lines']} ({_span(c['first'], c['last'])}"
+        + (f", spoke {speakers.duration_text(c['spoke_s'])})" if c.get("spoke_s") else ")")
+        for name, c in data["channels"].items()
     ]
     if channels:
         yield f"  channels  {' · '.join(channels)}"
