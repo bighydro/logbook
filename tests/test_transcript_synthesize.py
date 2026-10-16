@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -481,9 +482,16 @@ def test_a_head_that_moved_under_the_reading_writes_nothing(
 
 
 def _either(material: dict[str, Any]) -> dict[str, Any]:
-    """The answer to whichever the model is asked: a call (it has utterances) or a day."""
+    """The answer to whichever the model is asked: a call (it has utterances), a week (the close dreams
+    the week whose seven days it looks at, `dream_week`) or a day."""
     if "utterances" in material:
         return _answer(material)
+    if "week" in material:
+        return {
+            "time": [
+                {"text": "A week with a call.", "evidence": re.findall(r'"(L\d+)"', json.dumps(material))[:1]}
+            ]
+        }
     return {"day": [{"text": "A call about the yard.", "evidence": material["unplaced"][0]["ref"]}]}
 
 
@@ -939,7 +947,7 @@ def test_the_catch_up_synthesizes_the_last_week_of_calls_and_names_the_older_one
     assert _calls_sent(seen) == ["2026-06-14", "2026-06-18"] and _synthesized(lb) == [six["id"], two["id"]]
     assert old["id"] not in _synthesized(lb) and no_network == []
     rows = out.splitlines()
-    assert rows[-2] == "2 dreamed · 12 empty · 2 synthesized"
+    assert rows[-2] == "3 dreamed · 12 empty · 2 synthesized", "the days, then the week of 8 June"
     assert rows[-1] == BEFORE_THE_WEEK
 
 
@@ -953,7 +961,7 @@ def test_a_call_the_catch_up_synthesized_is_never_sent_again(
     sent = len(seen["calls"])
     code, out, _err = _cli("dream", "--catch-up")
     assert code == 0 and len(seen["calls"]) == sent
-    assert out.splitlines()[-2:] == ["2 unchanged · 12 empty", BEFORE_THE_WEEK]
+    assert out.splitlines()[-2:] == ["3 unchanged · 12 empty", BEFORE_THE_WEEK]
 
 
 def test_since_reaches_back_to_an_older_call_and_resends_none(
@@ -977,10 +985,10 @@ def test_since_reaches_back_to_an_older_call_and_resends_none(
     assert _calls_sent(seen) == ["2026-06-14", "2026-06-18", OLD_DAY]
     assert _synthesized(lb) == [six["id"], two["id"], old["id"]]
     rows = out.splitlines()
-    assert rows[-1] == "2 unchanged · 12 empty · 1 synthesized"
+    assert rows[-1] == "3 unchanged · 12 empty · 1 synthesized"
     assert rows[-2].startswith(f"{OLD_DAY}  synthesized #") and "“Spring fitting-out”" in rows[-2]
     code, out, _err = _cli("dream", "--catch-up", "--since", OLD_DAY)
-    assert code == 0 and len(_calls_sent(seen)) == 3 and out.splitlines()[-1] == "2 unchanged · 12 empty"
+    assert code == 0 and len(_calls_sent(seen)) == 3 and out.splitlines()[-1] == "3 unchanged · 12 empty"
 
 
 def test_a_call_synthesized_by_hand_is_not_sent_by_the_catch_up_nor_named(

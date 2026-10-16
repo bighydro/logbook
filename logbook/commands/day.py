@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from ..contrib import digest as digest_reader
 from ..contrib import (
     dream_events,
+    dream_week,
     gaps,
     people_drift,
     print_layout,
@@ -468,6 +469,8 @@ def cmd_day(a: argparse.Namespace) -> None:
             data.pop("draft_withheld", None)
             data.pop("syntheses", None)
             data.pop("syntheses_withheld", None)
+        else:
+            data.update(_week_of(lb, day))
         if not a.no_anniversaries:
             found = people_drift.anniversaries(lb, day, airports)
             if found:
@@ -480,6 +483,27 @@ def cmd_day(a: argparse.Namespace) -> None:
         return
     for text in day_reader.rows(data):
         print(text)
+    if data.get("week"):  # a Sunday: the week it closes, after the day (`dream week`)
+        print()
+        for text in drafts.unit_rows(
+            f"week {data['week']}", data.get("week_draft"), data.get("week_draft_withheld")
+        ):
+            print(text)
+
+
+def _week_of(lb: Logbook, day: str) -> dict[str, Any]:
+    """On a Sunday whose week has a draft, the week (`week`) and its standing draft (`week_draft`), or
+    the row that says the `dream` entry withholds it (`week_draft_withheld`), as `dream_week.on_sunday`
+    reads them; nothing on any other day, so the Day's object is otherwise what it was."""
+    week, draft, withheld = dream_week.on_sunday(lb, day)
+    out: dict[str, Any] = {}
+    if draft is not None or withheld is not None:
+        out["week"] = week
+    if draft is not None:
+        out["week_draft"] = draft
+    if withheld is not None:
+        out["week_draft_withheld"] = withheld
+    return out
 
 
 signing_verb = "sign"

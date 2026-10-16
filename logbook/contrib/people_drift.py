@@ -387,22 +387,34 @@ def open_promises(lb: Logbook, who: Iterable[people.Person]) -> dict[str, tuple[
 def promises_with(
     lb: Logbook,
     who: Iterable[people.Person],
+    *,
     admit: Callable[[Line], bool] | None = None,
     since: str | None = None,
     until: str | None = None,
+    proposals: Iterable[promise_reader.Proposal] | None = None,
 ) -> dict[str, list[tuple[promise_reader.Proposal, bool]]]:
     """The open proposals of `promises` with each person, in day order, each with whether the
     owner owes it: the owner's own and what was asked of the owner are owed by the owner; theirs
     are owed to the owner. A proposal is theirs when its speaker resolves to them, else when its
-    counterpart is their name, a name only one of them carries. `admit`, `since` and `until` are
-    `promises.extract`'s: a gate on the lines it reads and the local days it reads them on."""
+    counterpart is their name, a name only one of them carries. Read one of two ways, each named:
+    `proposals`, the ones a caller found open already (the week's dream reads them as its Sunday
+    stood), read as given; else every proposal of `promises` open today, `admit`, `since` and
+    `until` being `promises.extract`'s: a gate on the lines it reads and the local days it reads
+    them on (`export notion`). Proposals with a gate or a window are a mistake: `ValueError`."""
+    if proposals is not None and (admit is not None or since is not None or until is not None):
+        raise ValueError("promises_with: proposals found already take no admit, since or until")
     wanted = list(who)
     by_entity = {p.entity for p in wanted}
     names = Counter(p.name.casefold() for p in wanted)
     by_name = {p.name.casefold(): p.entity for p in wanted if names[p.name.casefold()] == 1}
     out: dict[str, list[tuple[promise_reader.Proposal, bool]]] = {}
-    for proposal in promise_reader.extract(lb, since, until=until, admit=admit).proposals:
-        if proposal.status != "open" or not proposal.shows or proposal.role is None:
+    found = (
+        promise_reader.extract(lb, since, until=until, admit=admit).proposals
+        if proposals is None
+        else proposals
+    )
+    for proposal in found:
+        if (proposals is None and proposal.status != "open") or not proposal.shows or proposal.role is None:
             continue
         entity = None
         if proposal.speaker is not None and proposal.speaker.person in by_entity:

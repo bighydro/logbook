@@ -9,9 +9,14 @@ and the Day shows it above your note, labelled as a draft.
 ```
 logbook dream day 2026-06-13            # one day, one line
 logbook dream day 2026-06-13 --dry-run  # ask the model, check the answer, write nothing
-logbook dream --catch-up --days 14      # every day of the last fortnight that needs it, and the week's calls
+logbook dream journey trip:2026-06-15:2026-06-17   # a journey that has come home, or any day of it
+logbook dream week 2026-W25             # a week whose Sunday is over; no week: the last one over
+logbook dream --catch-up --days 14      # every day of the last fortnight that needs it, its weeks, the calls, the journeys
 logbook dream --catch-up --since 2026-05-01   # the same, and every call since 1 May that has no synthesis
 ```
+
+A journey and a week are dreamed by the same engine under the same entry and the same evidence rule
+([Journeys and weeks](#journeys-and-weeks)).
 
 ## What the dream is, and is not
 
@@ -261,6 +266,111 @@ The whole dream, reading the day, the model's turn and the write, runs inside th
 ([the commands](commands.md), one writer at a time), and the head is read again before the line is
 appended: a head that moved under the reading is the record's `HeadMoved`, one sentence, and nothing
 is written; dream the day again.
+
+## Journeys and weeks
+
+Two more units for the same engine, under the same `dream` entry, the same endpoint and the same
+evidence rule, each one `draft/v1` line ([the profile](https://github.com/bighydro/logbook/blob/main/rfcs/0036-draft-v1.md)):
+a **journey**, unit `journey`, and an ISO **week**, unit `week`. Neither is ever a fact: you star a
+photo, name a journey (`logbook add --trip ID "NAME"`) and review a goal (`goal review`) yourself.
+
+**A journey** is a trip as `show trips` derives it ([ADR 0019](adr/0019-trips-are-derived.md)): a run of
+nights away from home, its id `trip:<first day>:<last day>`, its return day the day after its last
+night. It is dreamed once it has **closed**: its return day is before today and the night after it was
+spent at home. A journey still away, or whose last night the record does not yet place, is refused
+(`has not closed`), so a half trip is never sent. The model reads the journey whole through the entry's
+ceiling: every line of its days, first day to return day; each day's timeline with the hours of each
+stay; the hours at each place; the flights; the canonical people confirmed on it; the messages counted
+by counterpart, never their text; the notes; the decisions of its calls as their standing syntheses
+have them, read through the same rule as the Day reads them; the promises made on its days; its
+photos, the ones already starred apart; and your name for it, when you gave one. It writes the trip as
+a whole, the days that stood out, the places, who was on it, what was decided and promised, the photos
+it would star (`extra.star`, never one starred already) and one name it proposes (`extra.name`; a
+second is dropped and counted). `subject` is the journey's id, then the ids of the lines the trip rests
+on (each night's stay, its flights, its companions'), so the Journeys reader finds it by its id.
+
+**A week** is an ISO week, Monday to Sunday, `2026-W25`. It is dreamed from its seven days once they
+are over: `dream week` refuses a week whose Sunday is today or later, and with no week named dreams the
+last one whose Sunday is over. It reads the week's lines under the ceiling and **the seven days'
+drafts** the entry allows today (their supported sentences, given as a model's words, with the lines
+they rest on); a day that has lines and no such draft refuses the week until it is dreamed. It writes:
+
+- `time`: where the week went, by place, person and thread;
+- `energy`: sleep and training, when the health lines cross the ceiling (they are tier 3), else
+  nothing: the material says `no data`;
+- `people`: who moved against the week before (each canonical person's contacts this week and the
+  week before, the largest changes either way) and the promises open both ways;
+- `goals`: for each goal open on the Sunday, a review it proposes, one of the five dispositions, with
+  the lines of the week that show it (`extra.goals`); a goal item without such lines, of no goal, of
+  no disposition, or of a goal named twice is dropped and counted;
+- `next_week`: one proposal for next week, never more (a second is dropped and counted);
+- `personal`: the one place for anything personal.
+
+The prompt says it in so many words: never moralise. No praise, no blame, no lesson.
+
+**Numbers are the code's.** Every figure the model is given is computed from the lines and carries
+their references: the hours at a place from the stays' first and last lines, clipped to each day (the
+Day's stays); the counts of messages in a direct chat, calendar entries attended, calls and recordings
+spoken in (the people reader's channels: a person's `contacts`, the same count for a mover), and the
+days together the with module confirms (a day, never hours: it puts someone at a stay, not beside you
+for all of it); the threads (each chat, mail subject, calendar title and recording title, their time
+clipped to the week); the nights that ended on the week's days as the Day counts them (Monday's began
+the Sunday before, whose evening's sleep lines are read for it), their mean asleep hours, and the
+workouts. The week keeps them under `extra.numbers`, each with its line ids. A sentence that writes a
+figure no item it cites gives (rounded, added up, estimated, or a number a day's draft wrote) is
+**marked unsupported** before anything is written and counted under `extra.marked`, so it counts
+against the 30 %. A figure is digits, glued to a unit or not (`45min`, `7,5t`), or a number written
+in words in English or Norwegian (`three`, `tre`); dates (`2026-06-16`, `16.06.2026`, `16/6`, `16
+June`), clock times (`19:30`, `kl. 19`, `9am`), ISO weeks and the unit's own years are not numbers.
+What the rule checks is that the figure is one the cited lines give, not that it is the right one of
+them: `3 calls` passes when the person's item gives `contacts: 3`, and a small number is lent by many
+items. The words around a figure are the model's; the figure is the code's.
+
+The journey's and the week's segments are held strictly to the evidence rule: a sentence that cites
+one reference the material did not give is unsupported, whatever else it cites.
+
+**The readers.** `show trips` and `show trip ID` carry each journey's standing draft after its rows,
+`draft` or `draft_withheld` under `--json` (keys there only on a journey that has one); `day` of a Sunday carries the week it closes, after the
+Day, `week`, `week_draft` and `week_draft_withheld` under `--json` (keys there only on a Sunday whose
+week has a draft; `--no-dream` leaves them out). Both follow the entry as the day's draft does ([When
+the entry changes](#when-the-entry-changes)): above it, one row, `superseded by policy`, and nothing of
+the text. The Library's Journeys page already reads a journey's draft through the same Journeys
+reader (`journeys.draft_of`), its parts named and, under `proposed`, the name and the photos it
+proposes; the Day page shows the week's in a later change.
+
+`read_count` is the unit's own lines the model read, under the ceiling (the journey's days', the
+week's seven days'), as for a day (RFC 0036 rule 5). What it read beside them (a call's synthesis for a
+journey; for a week, the seven days' drafts, the goals and reviews it gives, the lines of the promises
+open on its Sunday, the week before's contacts of the people it names as movers, and Monday's night's
+sleep lines from the Sunday evening) counts toward the tier and the digest, and how many under
+`extra.read_beside`; none of it is ever cited.
+
+**The re-dream rule is the day's.** `dream --catch-up` dreams, after the days, each week whose seven
+days are all among the days it looks at, then, after the calls, each journey whose return day is one of
+them and that has closed. So the close of a Sunday (the 06:00 run on the Monday) dreams the week that
+Sunday ended, and the first 06:00 run after a journey comes home dreams the journey. After that a run
+leaves each alone while it is unchanged, and dreams it again, superseding the standing draft, when what
+it would read under the ceiling today is not what it read (another count, another set of ids: a day of
+the week dreamed again is one), when the standing draft is above the entry's `max_tier` today, or when
+it was dreamed under another version of the entry. `dream journey ID` and `dream week` dream it again on
+demand; the same model at the same head under the same entry writes nothing. `doctor`'s `drafts` line
+still names days only.
+
+A week is read as its Sunday stood: the goals and their reviews dated up to it, and the promises open
+on it (one marked done or signed off later was open then), so what you do in a later week never
+changes it. Three things to know. A journey's id is its first and last night, so a late sync that
+moves one makes it another journey: it is dreamed under the new id and the draft of the old one is no
+longer shown. A catch-up of one or two days may not see a journey whole enough to find it (a last
+night in transit on an overnight flight); `dream journey` finds it on demand, and the default fortnight
+always does. And "today" is this machine's date, as for the days: a run between midnight and a
+`day_start` of 06:00 counts the day before as over.
+
+```
+$ logbook dream --catch-up
+2026-06-21  dreamed   #5502 · no draft yet · 4 segments
+2026-W25  dreamed   #5503 · its Sunday is over, no draft yet · 7 segments
+trip:2026-06-15:2026-06-17  unchanged unchanged since #5480
+```
 
 ## What a morning looks like
 

@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from ..contrib import print_page, trip_page
-from ..core import reading, stays, trips
-from ..core.store import Logbook
+from ..core import drafts, reading, stays, trips
+from ..core.export import day_range
+from ..core.store import Logbook, retractions
 from .common import _airports, _print_target
 from .rollup import _rollup_days
 
@@ -31,7 +32,9 @@ def cmd_trip(a: argparse.Namespace) -> None:
             out.write_bytes(print_page.html(data).encode("utf-8"))
             print(f"trip {data['id']}: wrote {out}")
             return
-        data = trip_page.read(lb, a.ref, _airports(a.airports))
+        airports = _airports(a.airports)
+        rd, trip = trip_page.locate(lb, trip_page.parse_ref(a.ref), airports)
+        data = trip_page.compose(lb, rd, trip)
     except (ValueError, stays.SettingsError) as e:
         print(f"trip: {e}", file=sys.stderr)
         sys.exit(2)
@@ -41,17 +44,59 @@ def cmd_trip(a: argparse.Namespace) -> None:
         out.write_bytes(trip_page.html(data).encode("utf-8"))
         print(f"trip {data['id']}: wrote {out}")
         return
+    drafted = journey_drafts(lb, [trip])[trip.id]
     if a.json:
+        data.update(draft_keys(*drafted))
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return
     for text in trip_page.rows(data):
         print(text)
+    for text in drafts.unit_rows(trip.id, *drafted):
+        print(text)
+
+
+def draft_keys(draft: dict[str, Any] | None, withheld: dict[str, Any] | None) -> dict[str, Any]:
+    """A journey's `draft` and its `draft_withheld` row, each key there only when it has one (RFC 0036,
+    as the Day carries its own), so a trip nobody dreamed is the object it always was."""
+    out: dict[str, Any] = {}
+    if draft is not None:
+        out["draft"] = draft
+    if withheld is not None:
+        out["draft_withheld"] = withheld
+    return out
+
+
+def journey_drafts(
+    lb: Logbook, found: list[trips.Trip]
+) -> dict[str, tuple[dict[str, Any] | None, dict[str, Any] | None]]:
+    """Each trip's standing draft (`dream journey`) and its withheld row, by the Journeys reader's
+    rule (`drafts.for_unit`: the `dream` entry today), the evidence checked against the lines of its
+    days, first day to return day, as the index holds them: a trip at the edge of the window read is
+    checked against its whole days, never only the part of them the window holds."""
+    out: dict[str, tuple[dict[str, Any] | None, dict[str, Any] | None]] = {}
+    allowed = drafts.allowed(lb.root)
+    with lb.index() as idx:
+        retracted = frozenset(retractions(idx.retractions()))
+        drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
+        for t in found:
+            if t.id not in drafted:
+                out[t.id] = (None, None)
+                continue
+            on = {
+                str(line["id"])
+                for day in day_range(t.start, t.until)
+                for line in idx.day(day)
+                if str(line["id"]) not in retracted
+            }
+            out[t.id] = drafts.for_unit(drafted[t.id], on, None, allowed, drafts.NOT_ON_JOURNEY)
+    return out
 
 
 def cmd_trips(a: argparse.Namespace) -> None:
     """`trips [--year YYYY | --since DAY --until DAY] [--json]`: runs of consecutive days whose
     overnight stay is outside every home region, derived from one reading of the window and
-    never written (ADR 0019)."""
+    never written (ADR 0019); each with its standing draft (`dream journey`) after the rows, `draft`
+    or `draft_withheld` under `--json` when it has one."""
     lb = Logbook.find()
     try:
         window = _rollup_days(lb, a)
@@ -67,11 +112,16 @@ def cmd_trips(a: argparse.Namespace) -> None:
         print(f"trips: {e}", file=sys.stderr)
         sys.exit(2)
     found, warning = trips.trips(read)
+    drafted = journey_drafts(lb, found)
     if a.json:
-        out: dict[str, Any] = {"window": reading.window_json(read), "trips": [t.to_json() for t in found]}
+        listed = [{**t.to_json(), **draft_keys(*drafted[t.id])} for t in found]
+        out: dict[str, Any] = {"window": reading.window_json(read), "trips": listed}
         if warning:
             out["warning"] = warning
         print(json.dumps(out, indent=2))
         return
     for text in trips.rows(read, found, warning):
         print(text)
+    for t in found:
+        for text in drafts.unit_rows(t.id, *drafted[t.id]):
+            print(text)
