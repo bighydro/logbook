@@ -552,7 +552,9 @@ def test_review_video_is_one_more_queue_of_the_one_sitting(
     assert _review() == 0
     assert _review("--accept", "1") == 0
     assert driven == ["video", "video"]
-    assert review.KINDS[-1] == "video" and isinstance(review.queue_of("video"), review.Queue)
+    # after the place's, and before main's speakers, which `review` lists last (tests/test_review_speakers.py)
+    assert review.KINDS.index("video") == review.KINDS.index("place") + 1
+    assert review.KINDS[-1] == "speakers" and isinstance(review.queue_of("video"), review.Queue)
 
 
 @pytest.mark.parametrize(
@@ -618,8 +620,9 @@ def test_review_alone_lists_the_video_queue_with_the_others(
         "asset",
         "place",
         "video",
+        "speakers",
     ]
-    block = out[out.index("video") + 1 :]
+    block = out[out.index("video") + 1 : out.index("speakers")]
     assert block[0] == "  " + video_review.head_text(video_review.read(lb))
     assert any("Home 01 · scene 2 of 4" in line and "→ Vollen Brygge (place)" in line for line in block)
     cli.main(["review", "--json"])
@@ -895,8 +898,8 @@ def test_rfc_0040_says_scene_review_v1_as_the_writer_writes_it(lb: Logbook) -> N
 # -- the independent check of the queue: every option, every number, the terminal, the identity ------
 
 
-KINDS = ("person", "org", "idea", "asset", "place", "video")
-EVERY = "`review person|org|idea|asset|place|video …`"
+KINDS = ("person", "org", "idea", "asset", "place", "video", "speakers")
+EVERY = "`review person|org|idea|asset|place|video|speakers …`"
 PLACE_ARGS: dict[str, tuple[str, ...]] = {
     "--near": ("--near", "Hjem"),
     "--radius": ("--radius", "5"),
@@ -913,6 +916,15 @@ VIDEO_ARGS: dict[str, tuple[str, ...]] = {
     "--ask": ("--ask", "1"),
     "--asked": ("--asked",),
     "--answered": ("--answered",),
+}
+SPEAKER_ARGS: dict[str, tuple[str, ...]] = {  # main's `review speakers` (RFC 0038 §4)
+    "--unnamed": ("--unnamed", "1"),
+    "--same-as": ("--same-as", "2"),
+    "--consent": ("--consent", "1=yes"),
+    "--play": ("--play", "1"),
+    "--named": ("--named",),
+    "--recording": ("--recording", "1"),
+    "--day": ("--day", "2026-06-08"),
 }
 TELL_ARGS: dict[str, tuple[str, ...]] = {
     "--accept": ("--accept", "1"),
@@ -959,6 +971,9 @@ def _refusals() -> list[tuple[str | None, tuple[str, ...], str]]:
                     f"review {kind}: --place, --date, --ask go with `review video`",
                 )
             )
+        if kind != "speakers":
+            for flag, argv in SPEAKER_ARGS.items():
+                found.append((kind, argv, f"review {kind}: {flag} goes with `review speakers`"))
         if kind not in ("place", "video"):
             found.append((kind, TOP, f"review {kind}: --top goes with `review place` or `review video`"))
     # combinations: main's order, a place's option first, then a video's, then --top
@@ -986,7 +1001,7 @@ def _refusals() -> list[tuple[str | None, tuple[str, ...], str]]:
             " --all-above goes with person, org, idea and asset",
         ),
     ]
-    for flag, argv in {**TELL_ARGS, "--top": TOP, **PLACE_ARGS, **VIDEO_ARGS}.items():
+    for flag, argv in {**TELL_ARGS, "--top": TOP, **PLACE_ARGS, **VIDEO_ARGS, **SPEAKER_ARGS}.items():
         found.append((None, argv, f"review: say which kind {flag} is for: {EVERY}"))
     found.append((None, (*VIDEO_ARGS["--ask"], *TOP), f"review: say which kind --top --ask is for: {EVERY}"))
     found.append(
@@ -1015,6 +1030,47 @@ def test_an_option_of_another_kind_is_one_sentence_in_mains_form_and_writes_noth
     code, err = _said(capsys, "review", *([kind] if kind else []), *argv)
     assert code == 2, (kind, argv, err)
     assert err.splitlines() == [sentence], (kind, argv, err)
+    assert _seq(lb) == seq, "refused before the first line"
+
+
+CROSSED: list[tuple[tuple[str, ...], str]] = [
+    *(
+        (("speakers", *argv), f"review speakers: {flag} goes with `review video`")
+        for flag, argv in VIDEO_ARGS.items()
+    ),
+    (
+        ("speakers", *VIDEO_ARGS["--place"], *VIDEO_ARGS["--date"], *VIDEO_ARGS["--asked"]),
+        "review speakers: --place, --date, --asked go with `review video`",
+    ),
+    (
+        ("speakers", *VIDEO_ARGS["--ask"], *SPEAKER_ARGS["--unnamed"]),
+        "review speakers: --ask goes with `review video`",
+    ),
+    *(
+        (("video", *argv), f"review video: {flag} goes with `review speakers`")
+        for flag, argv in SPEAKER_ARGS.items()
+    ),
+    (
+        ("video", *SPEAKER_ARGS["--unnamed"], *SPEAKER_ARGS["--consent"], *SPEAKER_ARGS["--named"]),
+        "review video: --unnamed, --consent, --named go with `review speakers`",
+    ),
+    (
+        ("video", *SPEAKER_ARGS["--play"], *VIDEO_ARGS["--ask"]),
+        "review video: --play goes with `review speakers`",
+    ),
+]
+
+
+@pytest.mark.parametrize(("argv", "sentence"), CROSSED, ids=[" ".join(argv) for argv, _ in CROSSED])
+def test_review_speakers_refuses_a_scenes_options_and_review_video_a_voices(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], argv: tuple[str, ...], sentence: str
+) -> None:
+    """Main's speakers and this branch's video are two queues of one `review`, each with options of its
+    own: each refuses the other's in main's one sentence, before anything is read or written."""
+    seq = _seq(lb)
+    code, err = _said(capsys, "review", *argv)
+    assert code == 2, (argv, err)
+    assert err.splitlines() == [sentence], (argv, err)
     assert _seq(lb) == seq, "refused before the first line"
 
 
@@ -1148,7 +1204,7 @@ def test_review_alone_on_a_record_with_no_videos(
     seq = _seq(empty)
     out = _out(capsys, "review").splitlines()
     assert [line for line in out if not line.startswith(" ")] == list(KINDS)
-    assert out[out.index("video") + 1 :] == [
+    assert out[out.index("video") + 1 : out.index("speakers")] == [
         "  0 scenes proposed, 0 with nothing to go on · 0 confirmed, 0 refused, 0 kept to ask the family"
         " · tier 2",
         "  nothing to review: `videos infer` proposes the scenes of the files in the cache",

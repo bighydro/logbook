@@ -208,7 +208,6 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("videos", "infer", "--dry-run"),
     ("review", "video"),  # the queue reads the record and the registries alone
     ("review", "video", "--json"),
-    ("review",),  # every queue of the one sitting, the video's among them
 )
 
 

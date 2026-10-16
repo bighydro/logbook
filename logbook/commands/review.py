@@ -27,8 +27,8 @@ from typing import Any, NoReturn
 from ..core.store import Logbook
 from .common import Subparsers
 
-# speakers: RFC 0038 §4, `commands.speakers`; video: RFC 0040, `commands.videos`
-KINDS = ("person", "org", "idea", "asset", "place", "speakers", "video")
+# video: RFC 0040, `commands.videos`; speakers: RFC 0038 §4, `commands.speakers`, listed last
+KINDS = ("person", "org", "idea", "asset", "place", "video", "speakers")
 PLACE_FLAGS = (
     ("--near", "near"),
     ("--radius", "radius"),
@@ -388,14 +388,14 @@ def queue_of(kind: str) -> Queue:
         from .places import PlaceQueue
 
         return PlaceQueue()
-    if kind == "speakers":
-        from .speakers import SpeakerQueue
-
-        return SpeakerQueue()
     if kind == "video":
         from .videos import VideoQueue
 
         return VideoQueue()
+    if kind == "speakers":
+        from .speakers import SpeakerQueue
+
+        return SpeakerQueue()
     return EntityQueue(kind)
 
 
