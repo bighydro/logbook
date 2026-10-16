@@ -1,5 +1,5 @@
 """`logbook videos infer`: the family's videos read on this machine, one scene at a time, and one draft
-per scene proposing where and when it was filmed (RFC 0039). A proposal, never a fact: the owner
+per scene proposing where and when it was filmed (RFC 0040). A proposal, never a fact: the owner
 confirms it with `review videos`, and only that writes where or when.
 
 It works on the files `videos fetch` left in the cache (`logbook.contrib.videos`) and nothing else, and

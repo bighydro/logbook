@@ -1,5 +1,5 @@
 """`logbook review videos`: the owner's say over what `videos infer` proposed, one scene at a time, in
-RFC 0037's `review KIND` shape (RFC 0039). It reads the record and the registries and opens no
+RFC 0037's `review KIND` shape (RFC 0040). It reads the record and the registries and opens no
 connection; it writes only through `Logbook.append`, `source` `manual`, and only what the owner answers.
 
 **The queue** is every scene of the family's videos whose draft (`draft/v1`, unit `event`, subject the
@@ -14,7 +14,7 @@ owner (the Day's stays) and where the owner's assets were reported, or the neare
 
 **The answers**, every number checked before the first line is written:
 
-- `--accept N`: one `attribution/v1` line (RFC 0039): the scene (`ref` `{kind: scene, value: <video line
+- `--accept N`: one `attribution/v1` line (RFC 0040): the scene (`ref` `{kind: scene, value: <video line
   id>#t=<start>,<end>}`, and `scene` `{video, start_s, end_s}`) bound to the place and/or the date or
   date range proposed, `method` `owner`, `draft` and `evidence` the draft, the video line and the
   transcript, `logbook_head`, tier 2. The video's line is never touched: the attribution sits beside it,

@@ -1,4 +1,4 @@
-"""The family's home videos in Google Drive → `video/v1` (RFC 0039), from Drive's metadata alone.
+"""The family's home videos in Google Drive → `video/v1` (RFC 0040), from Drive's metadata alone.
 
 `logbook sync drive --videos` lists one Drive folder, the one `LOGBOOK_DRIVE_VIDEOS_FOLDER` names (a
 folder id, a setting of the machine the record lives on, never in a repository), and every subfolder
@@ -16,7 +16,7 @@ and no walk goes deeper than `MAX_DEPTH`.
 **The line.** `at` is when this run listed the folder: the moment the record learned of the file. A
 digitised tape's Drive times say when it was digitised or uploaded, never when anything on it was
 filmed, so they are kept as what they are, under `extra` (`drive_created`, `drive_modified`), and
-never as the line's time; when a scene was filmed is only ever the owner's attribution (RFC 0039), a
+never as the line's time; when a scene was filmed is only ever the owner's attribution (RFC 0040), a
 line of its own. `end` is null. Tier 2: a family's video holds other people's faces and voices, and its
 title and description may name them. The payload:
 

@@ -1,4 +1,4 @@
-"""`logbook videos`: the family's videos after `sync drive --videos` has named them (RFC 0039).
+"""`logbook videos`: the family's videos after `sync drive --videos` has named them (RFC 0040).
 
 `videos fetch` is the one command of the videos that touches the network: a file's bytes into the
 bounded cache under `state/videos/`, one at a time, verified against the md5 Drive reported, resumable

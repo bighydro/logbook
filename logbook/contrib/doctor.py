@@ -58,7 +58,7 @@ The checks, in the order they print:
   which it leaves, with the `dream --catch-up --since DAY` that reaches the oldest; and those above
   the entry's ceiling, which stay home. A pass; a record whose every call has a synthesis has no line.
   Read as the `drafts` line reads.
-- `videos`: when the record names the family's videos (`sync drive --videos`, RFC 0039) or the cache
+- `videos`: when the record names the family's videos (`sync drive --videos`, RFC 0040) or the cache
   under `state/videos/` exists, how many video files the record holds and their size, how many `videos
   fetch` has fetched and `videos infer` has inferred and how many wait in the cache, how many scenes
   the latest inference of each file found, how many it proposed a place or a date for and how many the
@@ -613,7 +613,7 @@ def synthesis_check(lb: Logbook, state: str, now: datetime) -> Check | None:
 
 
 def videos_check(lb: Logbook, state: str) -> Check | None:
-    """The family's videos (RFC 0039): the files, what was fetched and inferred, the scenes proposed
+    """The family's videos (RFC 0040): the files, what was fetched and inferred, the scenes proposed
     and confirmed, the cache against its cap. None when the record names no video and there is no
     cache; a warn when the cache is over its cap or its state file is not the shape."""
     lines = kind_lines(lb, state, (videos.KIND, videos.DRAFT_KIND, videos.ATTRIBUTION_KIND, RETRACTION))

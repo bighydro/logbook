@@ -1,4 +1,4 @@
-"""The family's videos once the record names them (RFC 0039): the scene a draft and an attribution are
+"""The family's videos once the record names them (RFC 0040): the scene a draft and an attribution are
 about, the record's lines read back, the bounded cache `videos fetch` fills and `videos infer` empties,
 and what `doctor` counts. No model here and no network but `fetch`'s, through `drive_videos.media`.
 

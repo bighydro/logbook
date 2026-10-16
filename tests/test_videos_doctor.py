@@ -1,4 +1,4 @@
-"""`doctor`'s `videos` line (RFC 0039): how many video files the record holds, how many were fetched
+"""`doctor`'s `videos` line (RFC 0040): how many video files the record holds, how many were fetched
 and inferred and wait in the cache, how many scenes were proposed and confirmed, and the cache against
 its cap; read from this machine alone. A record with no video has no such line. The synthetic tape of
 `tests/test_videos_infer.py` (an invented family of Oslo, who does not exist)."""

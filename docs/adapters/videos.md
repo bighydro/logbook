@@ -18,7 +18,7 @@ logbook doctor                              # the videos line: files, fetched, i
 ```
 
 Every line this writes is tier 2: a family's video holds other people's faces and voices, and its title
-may name them. The line formats are [RFC 0039](https://github.com/bighydro/logbook/blob/main/rfcs/0039-videos.md).
+may name them. The line formats are [RFC 0040](https://github.com/bighydro/logbook/blob/main/rfcs/0040-videos.md).
 
 ## The folder: a setting, never in the repository
 

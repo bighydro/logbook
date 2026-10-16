@@ -40,7 +40,7 @@ PLACE_FLAGS = (
 )
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
-VIDEO_KINDS = ("videos",)  # RFC 0039: the scenes `videos infer` proposed (`_review_videos`)
+VIDEO_KINDS = ("videos",)  # RFC 0040: the scenes `videos infer` proposed (`_review_videos`)
 
 
 class Queue:
@@ -288,7 +288,7 @@ def review_arguments(sub: Subparsers) -> None:
     from .speakers import speakers_arguments
 
     speakers_arguments(s)
-    v = s.add_argument_group("videos", "with `review videos` (RFC 0039); --top counts scenes")
+    v = s.add_argument_group("videos", "with `review videos` (RFC 0040); --top counts scenes")
     v.add_argument(
         "--place",
         nargs=2,
@@ -411,7 +411,7 @@ def _refuse(prog: str, reason: str) -> NoReturn:
     sys.exit(2)
 
 
-# -- videos (RFC 0039) ---------------------------------------------------------------------------------
+# -- videos (RFC 0040) ---------------------------------------------------------------------------------
 
 
 def _review_videos(a: argparse.Namespace) -> None:

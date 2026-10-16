@@ -316,7 +316,7 @@ def _place_name(place: object) -> str:
 
 
 def _video_text(p: dict[str, Any]) -> str:
-    """A family's video file (RFC 0039) as `Home 01 · 1 h 07 min · 3.2 GB`: its name, its length, its
+    """A family's video file (RFC 0040) as `Home 01 · 1 h 07 min · 3.2 GB`: its name, its length, its
     size; nothing it shows, which only an attribution says."""
     parts = [str(p.get("title") or "a video file")]
     seconds = p.get("duration_s")
@@ -335,7 +335,7 @@ def _video_text(p: dict[str, Any]) -> str:
 
 
 def _attribution_text(p: dict[str, Any]) -> str:
-    """The owner's word on a scene (RFC 0039): the stretch of the file (`scene 0:40` en dash `1:30`),
+    """The owner's word on a scene (RFC 0040): the stretch of the file (`scene 0:40` en dash `1:30`),
     an arrow, then the place and the date or range."""
     found = p.get("scene")
     scene: dict[str, Any] = found if isinstance(found, dict) else {}

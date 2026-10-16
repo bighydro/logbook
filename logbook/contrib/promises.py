@@ -71,7 +71,7 @@ DEADLINE_WORDS = 8  # a sentence this short that is only a date phrase ("by Frid
 OWNER_LABELS = frozenset({"me", "i", "ich", "owner", "self"})  # a diarizer's word for the owner
 AGENT_MESSAGES = "messages_by_an_agent"  # skipped: a message an agent wrote (`logbook.core.machine`)
 FORWARDED = "forwarded_messages"  # skipped: words the owner forwarded, someone else's
-SOUNDTRACKS = "video_soundtracks"  # skipped: a home video's speech (RFC 0039), nobody's word to anyone now
+SOUNDTRACKS = "video_soundtracks"  # skipped: a home video's speech (RFC 0040), nobody's word to anyone now
 DIARIZER = re.compile(
     r"^(?:speaker|sprecher|spk)\s*[A-Z0-9]{1,2}$", re.IGNORECASE
 )  # `Speaker A`, `Speaker 2`
