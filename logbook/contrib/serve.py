@@ -351,7 +351,8 @@ ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
 ul.signed{color:var(--mute);margin:.4rem 0}
 code.sha{overflow-wrap:anywhere}
 footer .footnote{display:inline-block;margin-top:.3rem}
-@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}}
+@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
+table{display:block;overflow-x:auto}}
 ol.shelf{list-style:none;padding:0;margin:0}
 ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
 ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
@@ -1140,17 +1141,22 @@ class Site:
         d = date.fromisoformat(day)
         before, after = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=1)).isoformat()
         a, b = (d - timedelta(days=6)).isoformat(), (d + timedelta(days=7)).isoformat()
-        toggle = (
-            self.link("collapse all", f"/day/{day}")
-            if expanded
-            else self.link("expand all", f"/day/{day}?open=1")
+        toggle = (  # a static page has no other state to toggle to
+            ""
+            if self.static
+            else (
+                self.link("collapse all", f"/day/{day}")
+                if expanded
+                else self.link("expand all", f"/day/{day}?open=1")
+            )
+            + DOT
         )
         held = f"{DOT}{chapter.header_text(data['chapter'])}" if data.get("chapter") else ""  # RFC 0036
         close = "" if self.static else f'<a href="/day/{day}#{CLOSE}">reflect and sign</a>{DOT}'
         parts = [
             f"<h1>{day} <small>{escape(data['weekday'] + held)}</small></h1>\n",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
-            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{DOT}{close}"
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             '<dl class="header">\n',
             *(

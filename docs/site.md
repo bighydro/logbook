@@ -1,13 +1,13 @@
 # The site
 
 `logbook export site <folder> [--tier 1|1,2]` renders the readers as a folder of static HTML: one Year
-page per year, every Trip page, a Days index per year, the places and the people, written as plain files
-with relative links, one inline stylesheet each, no script, no image, nothing fetched. It is
-[`logbook serve`](serve.md) written down — the same renderers, the same text — so the folder reads the
-same from a file manager, under any prefix on any web server, or in twenty years. It is an export, not a
-reader: it is tier-gated exactly like the vault (tier 1 by default, the shape of the record and no text of
-any note or message), and every run appends one `crossing/v1` line to the chain so the record shows it
-left. Re-running rewrites only the files whose content changed.
+page per year, a Day page for each of its twelve picks, every Trip page, a Days index per year, the places
+and the people, written as plain files with relative links, one inline stylesheet each, no script, no
+image, nothing fetched. It is [`logbook serve`](serve.md) written down — the same renderers, the same
+text — so the folder reads the same from a file manager, under any prefix on any web server, or in twenty
+years. It is an export, not a reader: it is tier-gated exactly like the vault (tier 1 by default, the
+shape of the record and no text of any note or message), and every run appends one `crossing/v1` line to
+the chain so the record shows it left. Re-running rewrites only the files whose content changed.
 
 ```bash
 logbook export site ~/Site                 # every year the record has a line in, tier 1
@@ -17,8 +17,13 @@ open ~/Site/index.html                     # or serve the folder with anything t
 
 The demo persona's forty years are published this way, by the docs workflow on every push to `main`:
 [bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/) is
-`logbook demo --years 40 --seed 1` exported at tier 1, so a stranger can browse a life that never happened
-without installing anything ([demo.md](demo.md)).
+`logbook demo --years 40 --seed 1` exported with `--tier 1,2`, so a stranger can browse a life that never
+happened without installing anything ([demo.md](demo.md)). The demo site is exported at tier 2, her notes and
+messages shown, because the person does not exist: the workflow writes the `site` entry into that throwaway
+record's `policy/crossing.json`, and her health and money, tier 3, stay off it as they stay off every site.
+One of her days is the way in, at the same path on every build since the seed is fixed: the June pick of
+2025, a night at the cabin with Ola,
+[days/2025-06-14.html](https://bighydro.github.io/logbook/ines/days/2025-06-14.html).
 
 ## The folder
 
@@ -27,6 +32,7 @@ without installing anything ([demo.md](demo.md)).
   index.html                    the root: the years with their days, trips, nights away and people
   years/2026.html               the Year, as `logbook year 2026 --html` writes it, with the site's navigation
   days/2026.html                the Days index: `serve`'s /days table over the year's days the record covers
+  days/2026-06-13.html          a Day the Year picks, as `serve`'s /day/2026-06-13 renders it
   trips.html                    every trip of the record, one row each, linked to its page
   trips/trip-2026-06-15-2026-06-17.html   the Trip, as `logbook trip --html` writes it, the map inside
   places.html                   `serve`'s /places table
@@ -37,12 +43,13 @@ without installing anything ([demo.md](demo.md)).
 A person's file stem is their name as a slug — lower-case ASCII letters and digits, anything else a dash,
 accents dropped (`Zürich café` is `zurich-cafe`, `Bjørn` is `bjorn`) — so it is a URL on any server and a file name on any
 platform with nothing to percent-encode; two names that fold to one slug are two pages, the second `-2`.
-A trip's is its id with dashes, `trip-<first day>-<last day>`; a year's is the year.
+A trip's is its id with dashes, `trip-<first day>-<last day>`; a year's is the year; a Day's is the day.
 
 Every link is relative (`../trips/trip-2026-06-15-2026-06-17.html`) and every link resolves to a file in
-the folder; the test suite follows each one. There are no Day pages — forty years would be fifteen
-thousand of them — so a row of the Days index is an anchor (`days/2026.html#2026-06-13`), not a link, and
-the Year's twelve picks render their Days in full as the Year page always has.
+the folder; the test suite follows each one. A Day page is written for the Year's twelve picks alone, the
+days it renders in full — a page for every day would be fifteen thousand over forty years — so a pick's
+row in the Days index links its page, and any other day's row is an anchor (`days/2026.html#2026-06-12`),
+not a link.
 
 ## The pages
 
@@ -51,6 +58,14 @@ the trips (each linked to its page), the flights, the places by nights, the peop
 (each linked to their page), health and keepers by month, and twelve picks, one day a month, the Day
 rendered in full. Above it, the site's navigation: the root, the trips, the places, the people, the
 year's Days index, and the years either side.
+
+**The Day** of each pick is `serve`'s Day page ([serve.md](serve.md)): the nights before and after, the
+country, the timeline with what attached to each stay and who was confirmed there — a note's own words
+when tier 2 crosses — the health line and the sources. Every toggle is open and there is nothing to
+submit: no *Reflect and sign*, no expand or collapse. Above it, the site's navigation, its year and its
+Days index; the days either side link their rows, and *the fortnight around* links the Days index at the
+fortnight's first day. Like the root and the tables, it needs no sideways scroll on a phone; a table wider
+than the column scrolls inside itself.
 
 **The Trip** is the page `logbook trip --html` writes ([trips-shared.md](trips-shared.md) for what it
 holds): the route as an inline SVG map, the stays with their nights, the legs, the days from the leaving
@@ -61,7 +76,7 @@ day, though each Year lists its own part of it.
 **The Days index** is `serve`'s `/days` table: one row per day the record covers in the year, the night
 after, the kilometres moved, the flights, the stays and what attached to them, the people confirmed, the
 health line and the usual sources that went quiet. The form and the pager a server offers are not on a
-static page; the row's date is its anchor.
+static page; the row's date is its anchor, and a pick's date links its Day.
 
 **Places** is `serve`'s `/places` table of `places.json`. **People** is a table of everyone a crossing line
 confirms present — days, nights, the years, the last contact, the trips — and each person's page lists
@@ -119,9 +134,10 @@ page the record no longer produces stays until you remove it, and a file beside 
 The folder is static: copy it anywhere that serves files. The project publishes the demo persona under
 its own docs site, and the way it does so is the template:
 
-- `.github/workflows/docs.yml` runs on every push to `main`: `logbook demo --years 40 --seed 1`, then
-  `logbook export site docs/ines`, then the docs build, which copies the folder as it is to `/ines/` on
-  GitHub Pages. No new infrastructure: the same `gh-pages` branch, the same deploy.
+- `.github/workflows/docs.yml` runs on every push to `main`: `logbook demo --years 40 --seed 1`, the
+  `site` entry in that record's policy, then `logbook export site docs/ines --tier 1,2`, then the docs
+  build, which copies the folder as it is to `/ines/` on GitHub Pages. No new infrastructure: the same
+  `gh-pages` branch, the same deploy.
 - Before the build, `scripts/check_synthetic.py docs/ines` fails the workflow if any page carries an
   identifier outside CONTRIBUTING.md's synthetic allowlist — an email at a domain other than
   `example.org`, a phone number outside `07700 900xxx` and `+47 9000 000x`, a nine-digit number in an

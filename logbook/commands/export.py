@@ -447,10 +447,10 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
     """site FOLDER [--tier 1|1,2]: the readers as a folder of static HTML (`logbook/contrib/site.py`): a
-    Year page per year, every Trip page, a Days index per year, the places and the people, with relative
-    links, no script and nothing fetched; tier-gated under the `site` ceiling in policy/crossing.json
-    (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1 line (RFC 0011).
-    Only the files whose content changed are rewritten."""
+    Year page per year, a Day page per pick, every Trip page, a Days index per year, the places and the
+    people, with relative links, no script and nothing fetched; tier-gated under the `site` ceiling in
+    policy/crossing.json (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1
+    line (RFC 0011). Only the files whose content changed are rewritten."""
     generated_at = now_utc()
     try:
         if not a.target:

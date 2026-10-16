@@ -1,14 +1,18 @@
 """`logbook export site <folder> [--tier 1|1,2]`: the readers as a folder of static HTML.
 
 The record read back as a site a browser opens from a folder or a web server: one Year page per year
-(the page `logbook year --html` writes), every Trip page (`logbook trip --html`, the map inside), a
-Days index per year (`logbook serve`'s `/days` table, one row per day the record covers), the places
-(`/places`) and the people — an index, and a page per person confirmed present with the years
-together and the trips — and a root page that lists the years. Every page is one file with one
+(the page `logbook year --html` writes), a Day page for each of the Year's twelve picks (`logbook
+serve`'s `/day`, every toggle open), every Trip page (`logbook trip --html`, the map inside), a Days
+index per year (`serve`'s `/days` table, one row per day the record covers, a pick's row linking its
+Day), the places (`/places`) and the people — an index, and a page per person confirmed present with
+the years together and the trips — and a root page that lists the years. Every page is one file with one
 inline stylesheet: no script, no image, no font, no stylesheet link, nothing fetched, and every link a
 relative path to another file in the folder, so the site reads the same from a file manager, under
 any prefix on any web server, or in twenty years. It is `serve` written down: the same renderers
 (`serve.Site` with `href`, `year.html`, `trip_page.html`), with the site's navigation above each page.
+A Day page is written for the picks alone: forty years of days would be fifteen thousand pages, and
+the picks are the days the Year already reads in full; any other day is its row in the Days index,
+the anchor a Day page's neighbours link to.
 
 It is an export, and it is tier-gated exactly like the vault (ADR 0016): the readers read the record
 through `reading.read(..., tiers)`, so a line whose tier is not in `--tier` (`1` by default, `1,2`
@@ -40,6 +44,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from html import escape
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from ..core import crossing, policy, reading, stays
@@ -55,11 +60,13 @@ __all__ = ["digest", "write"]  # the folder is written and digested as a vault i
 DESTINATION = policy.SITE_DESTINATION
 TIER_SETS = {"1": (1,), "1,2": (1, 2)}  # tier 3 never goes to a site
 YEARS, DAYS, TRIPS, PLACES, PEOPLE = "years", "days", "trips", "places", "people"
+DAY_PAGES = "day_pages"  # a kind of page, in the console and the crossing line; the files are under days/
 INDEX = "index.html"
 TRIPS_PAGE, PLACES_PAGE, PEOPLE_PAGE = "trips.html", "places.html", "people.html"
 PAGE_NOUNS = {  # a kind of page, singular and plural, for the console
     YEARS: ("year", "years"),
     DAYS: ("days index", "days indexes"),
+    DAY_PAGES: ("day page", "day pages"),
     TRIPS: ("trip", "trips"),
     PLACES: ("places page", "places page"),
     PEOPLE: ("person", "people"),
@@ -251,6 +258,8 @@ class _Builder:
         self.airports = airports or Airports.load()
         self.tz = ZoneInfo(str(lb.meta["timezone"]))
         self.years: dict[str, dict[str, Any]] = {}  # year → `year.read`
+        self.day_pages: set[str] = set()  # the Years' picks: the days with a page of their own
+        self.here = INDEX  # the page being rendered, which the view's links are relative to
         self.days_logged: dict[str, int] = {}  # year → days with a line that crosses
         self.trips: dict[str, dict[str, Any]] = {}  # trip id → `trip_page.read`
         self.trip_of: dict[str, str] = {}  # the id a Year listed (clipped at New Year) → the page's id
@@ -266,7 +275,7 @@ class _Builder:
             f"exported from the record{DOT}tier {','.join(map(str, req.tiers))}{DOT}{escape(str(self.tz))}"
             f"{DOT}nothing here is fetched"
         )
-        self.view = serve.Site(lb, self.airports, tiers=req.tiers, href=lambda _path: None, footer=footer)
+        self.view = serve.Site(lb, self.airports, tiers=req.tiers, href=self._href, footer=footer)
 
     # -- reading --
 
@@ -277,6 +286,7 @@ class _Builder:
             data = year_reader.read(self.lb, year, self.airports, self.req.tiers)
             data["head"] = ""  # the page is a function of the lines, never of the head
             self.years[year] = data
+            self.day_pages.update(str(p["day"]) for p in data["picks"] if p["day"])
             for listed in data["trips"]:
                 self._trip(listed)
             for p in data["people"]:
@@ -343,6 +353,29 @@ class _Builder:
     def person_path(self, page: PersonPage) -> str:
         return f"{PEOPLE}/{self.slugs.claim(page.name)}.html"
 
+    def day_path(self, day: str) -> str:
+        return f"{DAYS}/{day}.html"
+
+    def _href(self, path: str) -> str | None:
+        """A link `serve` makes, as the page being rendered writes it: a day to its Day page when it
+        has one, else to its row in its year's Days index (plain text on that index itself, or for a
+        day outside the record); the fortnight around a day to the Days index at the fortnight's
+        first day the record covers. Anything else has no page here and is plain text."""
+        found = serve.DAY_PATH.match(path)
+        if found:
+            day = found.group(1)
+            if day in self.day_pages:
+                return relative(self.here, self.day_path(day))
+            if not self.req.since <= day <= self.req.until or self.here == self.days_path(day[:4]):
+                return None
+            return f"{relative(self.here, self.days_path(day[:4]))}#{day}"
+        parts = urlsplit(path)
+        if parts.path == "/days":
+            first = max(parse_qs(parts.query).get("from", [""])[0], self.req.since)
+            if first[:4] in self.years and first <= self.req.until:
+                return f"{relative(self.here, self.days_path(first[:4]))}#{first}"
+        return None
+
     def _a(self, here: str, path: str, text: str) -> str:
         """A link from page `here` to page `path`, `text` escaped here."""
         return f'<a href="{escape(relative(here, path))}">{escape(text)}</a>'
@@ -382,6 +415,8 @@ class _Builder:
                 pager.append(self._a(here, self.year_path(years[n + 1]), f"{years[n + 1]} →"))
             out[here] = year_reader.html(self.years[year], self.nav(here, *pager), self.links(here))
             out[self.days_path(year)] = self._days_index(year)
+        for day in sorted(self.day_pages):
+            out[self.day_path(day)] = self._day(day)
         for trip_id, data in self.trips.items():
             here = self.trip_path(trip_id)
             year = str(data["start"])[:4]
@@ -396,17 +431,30 @@ class _Builder:
         return {path: text.encode("utf-8") for path, text in out.items()}
 
     def _document(self, here: str, title: str, body: str) -> str:
-        self.view.nav = self.nav(here)
+        self.here, self.view.nav = here, self.nav(here)
         return self.view.document(title, body)
 
     def _days_index(self, year: str) -> str:
         here = self.days_path(year)
         first, last = self.req.window(year)
+        self.here = here
         self.view.nav = self.nav(here, f'<a href="{escape(relative(here, self.year_path(year)))}">{year}</a>')
         return self.view.page_days(first, last)
 
+    def _day(self, day: str) -> str:
+        """The Day of a pick, as `serve` renders it with every toggle open, so the page reads and
+        prints whole; a static page has no other state to toggle to."""
+        here, year = self.day_path(day), day[:4]
+        self.here = here
+        self.view.nav = self.nav(
+            here,
+            self._a(here, self.year_path(year), year),
+            self._a(here, self.days_path(year), f"days of {year}"),
+        )
+        return self.view.page_day(day, expanded=True)
+
     def _places(self) -> str:
-        self.view.nav = self.nav(PLACES_PAGE)
+        self.here, self.view.nav = PLACES_PAGE, self.nav(PLACES_PAGE)
         return self.view.page_places()
 
     def _trips_index(self) -> str:
@@ -579,6 +627,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Build:
     pages = {
         YEARS: len(builder.years),
         DAYS: len(builder.years),
+        DAY_PAGES: len(builder.day_pages),
         TRIPS: len(builder.trips),
         PLACES: 1,
         PEOPLE: len(builder.people),

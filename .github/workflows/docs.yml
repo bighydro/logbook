@@ -20,13 +20,24 @@ jobs:
       - run: uv sync
       - name: Ines Nordmann's forty years, who does not exist, exported as a site
         # The demo is a function of --years and --seed; the record lives in the runner's temp dir and
-        # is thrown away with it. The site is the readers at tier 1, written into docs/ines/, which
+        # is thrown away with it. The site is the readers at tier 1,2, written into docs/ines/, which
         # mkdocs copies to /ines/ as it is (the folder is git-ignored; nothing is committed here).
+        # Her notes and messages (tier 2) cross because she does not exist: the step gives this
+        # record's policy/crossing.json a site entry, never `logbook demo`'s defaults. Health and
+        # money (tier 3) never go to a site; `export site` refuses them.
         env:
           LOGBOOK_HOME: ${{ runner.temp }}/ines
         run: |
           uv run logbook demo --years 40 --seed 1 --out "$LOGBOOK_HOME"
-          uv run logbook export site docs/ines
+          uv run python - "$LOGBOOK_HOME/policy/crossing.json" <<'EOF'
+          import json, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          policy = json.loads(path.read_text(encoding="utf-8"))
+          policy["site"] = {"max_tier": 2}
+          path.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
+          EOF
+          uv run logbook export site docs/ines --tier 1,2
       - name: Nothing outside the synthetic allowlist leaves (CONTRIBUTING.md, the scrub rule)
         run: uv run python scripts/check_synthetic.py docs/ines
       - name: Commit to gh-pages as github-actions[bot], never the runner identity
