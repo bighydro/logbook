@@ -36,8 +36,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
 | `/people?year=` | the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
 | `/people/ID` | one person: days together by year, the last real contact and what it was, drift and why, the promises open both ways, the anniversaries of the coming month, the places you have been with them | `logbook people NAME`, `people drift` |
-| `/manifest` | the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each row's evidence folded; below, the review queue of `review org` with its acts ([the Manifest](#the-manifest)) | `logbook show orgs`, `review org` |
-| `/org/ID` | one org: its refs, its status and reason, the status form, every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (`?money=1`) | `logbook show org NAME`, `status org` |
+| `/manifest?portfolio=` | the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each with its portfolio, each row's evidence folded; a filter by portfolio; below, the review queue of `review org` with its acts ([the Manifest](#the-manifest)) | `logbook show orgs [--portfolio TEXT]`, `review org` |
+| `/org/ID` | one org: its refs, its status, reason and portfolio, the status form (with its portfolio), every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (`?money=1`) | `logbook show org NAME`, `status org` |
 | `/manifest/people` | the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio | `logbook show orgs` |
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
@@ -449,11 +449,13 @@ decided about it (`logbook status org`): **holding** (`hold`, `add`, `sell`), **
 the most recent touch first. A **touch** is a line that reaches the org through one of its refs: a
 mail or a meeting with an address at its domain, a transcript one of its people spoke in, a page or
 an act on its code-host org, its group chat, its merchant. Each row is the org (a link to its page),
-the status and since when, `stale` when the status is one `stale_days` names in
+the status and since when, its portfolio, `stale` when the status is one `stale_days` names in
 `policy/entities.json` and nothing has touched it or restated it for that long (a `hold`, three
 years), the last touch and what it was, the people on its lines and the documents, with the
 evidence folded: the last touch's line and the status line. It is the text of `logbook show orgs`
-([orgs read back](entities.md#the-orgs-read-back)).
+([orgs read back](entities.md#the-orgs-read-back)). Above the shelf, the portfolios your orgs are in
+(RFC 0037 §10.2): each a link to `/manifest?portfolio=…`, the shelf of the orgs that portfolio holds
+and the people across them, as `show orgs --portfolio` prints it, case and spaces aside.
 
 **Review.** Below the shelf is the review queue of `logbook review org` ([review](review.md)), in its
 order, twenty a page: each observed org proposed against one you named, or as a new one, with its
@@ -464,25 +466,34 @@ what `--reject N` writes, one `entity-review/v1` line, so the pair is never prop
 post to `/manifest/review` and go through `entity_review.accept` and `reject`, the functions the
 command calls, so the lines are the command's byte for byte.
 
-`/org/ID` is one org (RFC 0037 §7): its refs, its status and reason, the **status form**, which posts
-to `/manifest/status` and writes what `logbook status org ORG DISPOSITION [--reason "…"] [--at DAY]`
-writes through `entity_status.write` (one `status/v1` line, tier 3, your reason on it and never a
-note), every touch newest first (thirty, the rest folded), the people, who introduced whom where a
-mail's subject says so (`Intro: Ines <> Liv`), the documents as references, every status line (a
-retracted one struck), and the proposals that would place something with it. The ledger is read
-only when you ask (*show the money*, `?money=1`): its in, out and net per year and its lines on the
-timeline, derived at read time from the transactions the org's `merchant` refs match.
+`/org/ID` is one org (RFC 0037 §7): its refs, its status, reason and portfolio, the **status form**,
+which posts to `/manifest/status` and writes what `logbook status org ORG DISPOSITION [--reason "…"]
+[--at DAY] [--portfolio "…"]` writes through `entity_status.write` (one `status/v1` line, tier 3,
+your reason and your portfolio on it and never a note), every touch newest first (thirty, the rest
+folded), the people, who introduced whom where a mail's subject says so (`Intro: Ines <> Liv`), the
+documents as references, every status line with the portfolio it carried (a retracted one struck),
+and the proposals that would place something with it. The ledger is read only when you ask (*show
+the money*, `?money=1`): its in, out and net per year and its lines on the timeline, derived at read
+time from the transactions the org's `merchant` refs match.
+
+The status form's **portfolio** box shows the portfolio that holds the org. Left as it is, the line
+carries no portfolio, as the command without `--portfolio`; typed, it carries what you typed, as
+`--portfolio "…"`; emptied, it clears the portfolio, as `--portfolio ""`. The form also sends what
+the box showed, so a page older than the record never puts back a portfolio that has moved since: a
+box left alone moves nothing.
 
 `/manifest/people` is the co-investor graph: everyone who appears with more than one org, the most
 orgs first, with the orgs and the tier of the lines that put them there; then the anti-portfolio.
 
-**Tier 3 stays tier 3.** An org's status, its reason and the money are tier 3. The pages read the
-record through the server's gate; `logbook serve` reads every tier, on this machine. Through a gate
-without tier 3 there is no status, no reason and no money on any of them, every org is under no
-status, and the shelf says how many status lines it may not show; a person who is with an org only
-on a tier-3 line is no edge of the graph. Such a page offers no act either, neither the queue nor the
-status form, and refuses both (`403`): a status is tier 3, and so may a no be. `logbook export site` has no Manifest: its pages are the
-Day, the days, the trips, the places, and none of them names an org's status.
+**Tier 3 stays tier 3.** An org's status, its reason, its portfolio and the money are tier 3. The
+pages read the record through the server's gate; `logbook serve` reads every tier, on this machine.
+Through a gate without tier 3 there is no status, no reason, no portfolio and no money on any of
+them, every org is under no status, and the shelf says how many status lines it may not show; no
+filter by portfolio is offered, and one asked for lists no org, the same page for every portfolio; a
+person who is with an org only on a tier-3 line is no edge of the graph. Such a page offers no act
+either, neither the queue nor the status form, and refuses both (`403`): a status is tier 3, and so
+may a no be. `logbook export site` has no Manifest: its pages are the Day, the days, the trips, the
+places, and none of them names an org's status.
 
 **Writing, never waiting.** The acts are POSTs from this machine only (a loopback client, an
 `Origin` of 127.0.0.1 when the browser sends one, else `403`), one at a time, under the record's

@@ -495,6 +495,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["people", "--json"],
     ["review", "speakers"],
     ["review", "speakers", "--json"],
+    ["show", "orgs", "--portfolio", "Fund I"],
+    ["status", "list", "org", "--json"],
     ["goal", "list"],
     ["goal", "list", "--open", "--json"],
     ["chapter", "list"],

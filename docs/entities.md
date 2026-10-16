@@ -141,6 +141,7 @@ RFC 0036's `review/v1`. `at` is when the owner disposed; `end` is null.
 | `evidence` | array of string | MAY | ids of the lines the proposal rested on |
 | `supersedes` | string | MAY | the standing status line this replaces |
 | `logbook_head` | hex sha256 | MAY | the head the proposal was read against |
+| `portfolio` | string | MAY for an org, never another kind | which portfolio holds the company, free text (`Fund I`); empty clears it |
 
 **Rules.** The current status is the last standing line's; any status may follow any. A status
 equal to the standing one on the same local day is refused; on a later day it is written only with a
@@ -157,6 +158,22 @@ the reason from the status line, and `status list --json` names its note (`note`
 A place let go and an asset sold or let go close their registry
 entry with `until`, the line's local day: the entry in `places.json` or `assets.json` is never
 deleted (ADR 0018, rule 4).
+
+**The portfolio** (RFC 0037 §10.2, amended 15 October 2026). `status org ORG DISPOSITION --portfolio
+"Fund I"` names which portfolio holds a company, free text, its words collapsed, in the line's
+`portfolio` field; `--portfolio ""` writes it empty, which clears it. An org's portfolio is the field
+of its latest status line that carries it: a status without `--portfolio` leaves it as it stood, a
+retracted line counts for nothing, and an empty field clears it. Which portfolio holds a company is
+a position in money, so it rides on the org's tier-3 status line and never on its `entity/v1` line,
+which is tier 2 and never cites tier 3; only an org's status takes one, and a portfolio given for an
+idea, a place or an asset is refused in one sentence with nothing written. A status equal to the
+standing one is written when it moves the portfolio (to another one, case and spaces aside, or to
+none), on the same day too; giving the portfolio that stands, however spelled, moves nothing and is
+refused as before, the refusal naming it. A line that repeats the standing status only to move the
+portfolio, with no new reason, is no reaffirmation: it carries `since`, the day the standing status
+took effect, so "hold since" and the stale flag stay where they were; it carries no reason of its
+own, so a mute ends with it. Give a new reason and it reaffirms, and both restart. `status list org`
+says each org's portfolio.
 
 **Readers' rules**, never lines (`policy/entities.json`):
 
@@ -195,10 +212,12 @@ just before it, holds the reason):
 **let go**, then **no status**; within a heading the most recent touch first. A **touch** is a line
 that resolves to the org through one of its refs: a mail or a meeting with an address at its
 domain, a transcript one of its people spoke in, a page or an act on its code-host org, its group
-chat, its merchant. A row says the status and since when, the last touch and what it was, the people
-on its lines (the first two by days), how many documents (mails and repositories, as references) and
-`stale` when the status is one `stale_days` names and neither it nor a touch falls within that many
-days of today. Then the people who appear with more than one org: the co-investor graph.
+chat, its merchant. A row says the status and since when, its portfolio, the last touch and what it
+was, the people on its lines (the first two by days), how many documents (mails and repositories, as
+references) and `stale` when the status is one `stale_days` names and neither it nor a touch falls
+within that many days of today. Then the people who appear with more than one org: the co-investor
+graph. `show orgs --portfolio "Fund I"` keeps the orgs that portfolio holds, case and spaces aside,
+and the people across them; a portfolio that holds none says so and names the ones that hold some.
 
 ```
 $ logbook show orgs
@@ -217,11 +236,12 @@ people with more than one org
 ```
 
 `logbook show org NAME` is one org's page (RFC 0037 §7), the org named as `status` names one (a
-domain, a word of its name, its id): its refs, its status and its reason, every touch newest first,
-the people, who introduced whom where a mail's subject says so (`Intro: Ines <> Liv`), the documents
-and every status line, the one in force marked and a retracted one said so. An org whose naming line
-was retracted stays while a status line names it, under that line's label (RFC 0037 §3.4 rule 3);
-two orgs of one label are told apart by their key. Both take `--json`; nothing is written.
+domain, a word of its name, its id): its refs, its status, its reason and its portfolio, every touch
+newest first, the people, who introduced whom where a mail's subject says so (`Intro: Ines <> Liv`),
+the documents and every status line with the portfolio it carried, the one in force marked and a
+retracted one said so. An org whose naming line was retracted stays while a status line names it,
+under that line's label (RFC 0037 §3.4 rule 3); two orgs of one label are told apart by their key.
+Both take `--json`; nothing is written.
 
 **Money only with `--money`.** A ledger line the org's `merchant` refs match is a touch like any
 other, so the last touch, the order and the stale flag are the same with `--money` or without; without
@@ -230,13 +250,14 @@ ledger row. With `--money` the page adds the ledger's lines and its in, out and 
 shelf each row's for `--year` (this year by default), derived at read time. No line of the org cites
 them.
 
-**Tier 3 stays tier 3.** An org's status line is tier 3 and its reason is on it; the page and the
-shelf read every line through a gate (the owner's terminal and `logbook serve` read every tier; a
-crossing, an exported site and the door read their policy's). Through a gate without tier 3 there
-is no status and no reason: every org is under no status, and the shelf says how many status lines
-it may not show; an org's page says only that it shows none, never how many it has, which would tell
-which orgs carry a decision. A person who is with an org only on a tier-3 line (a split payment) is no edge of
-the graph there; an edge is as high a tier as the lines it rests on.
+**Tier 3 stays tier 3.** An org's status line is tier 3, and its reason and its portfolio are on it;
+the page and the shelf read every line through a gate (the owner's terminal and `logbook serve` read
+every tier; a crossing, an exported site and the door read their policy's). Through a gate without
+tier 3 there is no status, no reason and no portfolio: every org is under no status, the shelf says
+how many status lines it may not show, and a portfolio asked for lists no org, the same for every
+portfolio; an org's page says only that it shows none, never how many it has, which would tell which
+orgs carry a decision. A person who is with an org only on a tier-3 line (a split payment) is no
+edge of the graph there; an edge is as high a tier as the lines it rests on.
 
 ## The dedupe keys
 

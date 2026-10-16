@@ -26,6 +26,19 @@ one hold of the writer lock, and the head is read again before the first line: a
 `--at DATE` is the local day the owner disposed: today is now, a day before is its last minute,
 a day ahead is refused. No money is ever on the line; the ledger holds it.
 
+**The portfolio** (RFC 0037 §10.2, amended 15 October 2026). `--portfolio TEXT` names which portfolio
+holds an org (`Fund I`), free text, its words collapsed, in the status line's `portfolio` field;
+`--portfolio ""` writes the field empty, which clears it; a status without it leaves the portfolio
+as it stood (`entities.portfolios` reads the latest line that carries the field). Only an org's
+status takes one: a portfolio given for an idea, a place or an asset is refused in one sentence
+before anything is read or written. It rides on the org's tier-3 line, never on an `entity/v1` line,
+which is tier 2. A status equal to the standing one that moves the portfolio (to another one, case
+and spaces aside, or to none) says something new and is written, on its day too; one that moves
+nothing is refused as above, and "one status a day" reads the standing line's own day. A line that
+repeats the standing status only to move the portfolio, with no new reason, is no reaffirmation:
+it carries `since`, the day the standing status took effect, so the status's day and its stale
+flag do not move; one with a new reason reaffirms, and restarts both.
+
 **The list.** `status list KIND` is every canonical entity of the kind with its current status, the
 day it took effect, who proposed it and why, the registry's `until`, whether it is stale (a reader's
 rule: `policy/entities.json` `stale_days`, a `hold` over three years and an `exploring` over two) and
@@ -69,6 +82,11 @@ class Written:
     note: Line | None
     until: str | None  # the day the registry entry was closed with, when it was
 
+    @property
+    def portfolio(self) -> str | None:
+        """The `portfolio` the line carries: None when none, the empty string when it clears one."""
+        return entities.portfolio_field(self.status["payload"])
+
     def to_json(self) -> dict[str, Any]:
         return {
             "kind": self.entity.kind,
@@ -78,6 +96,7 @@ class Written:
             "line": str(self.status["id"]),
             "note": None if self.note is None else str(self.note["id"]),
             "until": self.until,
+            "portfolio": self.portfolio,
         }
 
 
@@ -89,11 +108,29 @@ def check_kind(kind: str) -> None:
         raise StatusError(f"a status is for an {', '.join(DISPOSITIONS)}; not for {kind!r}")
 
 
+def check_portfolio(kind: str, portfolio: str | None) -> str | None:
+    """The portfolio as it would be written, its words collapsed (empty: it clears one), or None for
+    none given; refused, one sentence, when the kind is not an org (RFC 0037 §10.2, amended 15
+    October 2026: it rides on an org's tier-3 status line and on no other kind's)."""
+    if portfolio is None:
+        return None
+    if kind != entities.ORG:
+        article = "an" if kind[:1] in ("a", "e", "i", "o", "u") else "a"
+        raise StatusError(
+            f"a portfolio is an org's, on its tier-3 status line; {article} {kind}'s status takes none"
+        )
+    return " ".join(portfolio.split())
+
+
 def _read(
     lb: Logbook,
-) -> tuple[dict[tuple[str, str], entities.Entity], dict[tuple[str, str], list[entities.Status]]]:
-    """The canonical entities and the standing status lines of each, every status joined to its
-    reason note (`entities.statuses`). A line names its note (`note`, RFC 0037 §10.5); an idea's, a
+) -> tuple[
+    dict[tuple[str, str], entities.Entity], dict[tuple[str, str], list[entities.Status]], dict[str, str]
+]:
+    """The canonical entities, the standing status lines of each, every status joined to its reason
+    note (`entities.statuses`), and each org's portfolio, read from every status line not retracted
+    (`entities.portfolios`: a line a later one supersedes still counts). A line names its note
+    (`note`, RFC 0037 §10.5); an idea's, a
     place's or an asset's standing line with a reason and no `note`, written before the note came
     first, is named by its note instead, so only then are notes read: the `manual` notes labelled
     `status` of the days of those lines, where the writer put each note, at its line's `at`."""
@@ -117,7 +154,8 @@ def _read(
                 if notes.labelled(n, NOTE_LABEL)
             ]
         found = entities.statuses([*marks, *said, *reasons])
-    return entities.known(lines, lb.root), found
+        held = entities.portfolios([*marks, *said])
+    return entities.known(lines, lb.root), found, held
 
 
 def _older(payload: Mapping[str, Any]) -> bool:
@@ -161,6 +199,7 @@ def write(
     proposal: Mapping[str, Any] | None = None,
     today: str | None = None,
     evidence: Sequence[str] = (),
+    portfolio: str | None = None,
 ) -> Written:
     """One `status/v1` line for the entity of `kind` that `name` names, at the kind's tier
     (`entities.status_tier`), the `reason` on it; with the reason also as a tier-2 note when the
@@ -172,8 +211,10 @@ def write(
     the lines it rested on: a status about an idea, a place or an asset that cites a tier-3 line is
     refused (`entities.tier_problems`); one about an org may. `StatusError` or
     `entities.EntityError` says why a status is refused; `HeadMoved` when another writer moved the
-    record."""
+    record. `portfolio`, an org's only (`check_portfolio`), is written in the line's `portfolio`
+    field, empty to clear it; a status equal to the standing one is written when it moves it."""
     check_kind(kind)
+    portfolio = check_portfolio(kind, portfolio)
     if disposition not in DISPOSITIONS[kind]:
         raise StatusError(
             f"{disposition!r} is not an {kind}'s status; one of {', '.join(DISPOSITIONS[kind])}"
@@ -188,26 +229,34 @@ def write(
         stamp = moment(lb, at, today)
         local = day_start.of(meta)
         day = local.day(_instant(stamp)).isoformat()
-        known, found = _read(lb)
+        known, found, held = _read(lb)
         cited = _cited(lb, evidence)
         entity = entities.lookup(known, kind, name)
         history = found.get((kind, entity.id), [])
         current = history[-1] if history else None
-        if current is not None and current.status == disposition:
+        standing_in = held.get(entity.id)
+        moves = portfolio is not None and entities.fold(portfolio) != entities.fold(standing_in or "")
+        same = current is not None and current.status == disposition
+        if current is not None and same and not moves:
             since = current.day(_local(local))
-            if since == day:
-                raise StatusError(f"{entity.label} is {disposition} since {day} already; one status a day")
+            already = f"{entity.label} is {disposition} since {since}"
+            if portfolio is not None:  # given, and moving nothing: the portfolio that stands, respelled
+                already += f" in {standing_in}" if standing_in else " in no portfolio"
+            if _local(local)(current.at) == day:  # the line's own day (RFC 0037 §9)
+                raise StatusError(f"{already} already; one status a day")
             if reason is None or reason == current.reason:
-                raise StatusError(
-                    f"{entity.label} is {disposition} since {since} already;"
-                    ' to reaffirm it, say why: --reason "…"'
-                )
+                raise StatusError(f'{already} already; to reaffirm it, say why: --reason "…"')
+        # a line that repeats the standing status only to move the portfolio says when the status
+        # took effect, as the standing line does: it is no reaffirmation (RFC 0037 §9, 15 October)
+        carried = current is not None and same and (reason is None or reason == current.reason)
         fields: dict[str, Any] = {
             "proposed_by": "dream" if proposal is not None else entities.METHOD,
             "proposal": proposal,
             "evidence": evidence,
             "supersedes": None if current is None else current.line,
             "head": str(meta["head"]),
+            "portfolio": portfolio,
+            "since": current.day(_local(local)) if carried and current is not None else None,
         }
         payload = entities.status_payload(kind, entity.id, entity.label, disposition, reason, **fields)
         tier = entities.status_tier(kind)
@@ -285,6 +334,7 @@ class Row:
     stale: bool
     muted: tuple[tuple[str, str], ...]  # (disposition, the last day it is muted)
     until: str | None
+    portfolio: str | None = None  # an org's, from the latest status line that carries one
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -300,6 +350,7 @@ class Row:
             "stale": self.stale,
             "muted": [{"status": s, "until": d} for s, d in self.muted],
             "until": self.until,
+            "portfolio": self.portfolio,
         }
 
 
@@ -321,7 +372,7 @@ def listing(lb: Logbook, kind: str, today: str | None = None) -> Listing:
     days = day_start.of(lb.meta)
     on = date.fromisoformat(today if today is not None else notes.today_in(days))
     local = _local(days)
-    known, found = _read(lb)
+    known, found, held = _read(lb)
     rows = []
     for (k, entity_id), entity in sorted(known.items()):
         if k != kind:
@@ -348,6 +399,7 @@ def listing(lb: Logbook, kind: str, today: str | None = None) -> Listing:
                 current is not None and entities.stale(current, on, local, settings.stale_days),
                 tuple(muted),
                 until,
+                held.get(entity_id) if kind == entities.ORG else None,
             )
         )
     rows.sort(
@@ -375,6 +427,8 @@ def rows(found: Listing) -> Iterator[str]:
         if r.current.proposal is not None and who == "dream":
             who = f"dream proposed {r.current.proposal}"
         parts = [f"{r.current.status} since {r.since} ({who})"]
+        if r.portfolio is not None:
+            parts.append(f"portfolio {r.portfolio}")
         if r.until is not None:
             parts.append(f"until {r.until}")
         if r.stale:
@@ -393,6 +447,9 @@ def written_rows(w: Written) -> Iterator[str]:
         yield f"  the reason as a note (#{w.note['seq']})"
     elif w.status["payload"].get("reason") is not None:
         yield f"  the reason on the line, tier {w.status['tier']}, no note: {w.status['payload']['reason']}"
+    if w.portfolio is not None:
+        said = f"portfolio {w.portfolio}" if w.portfolio else "no portfolio from now on"
+        yield f"  {said}, on the line, tier {w.status['tier']}"
     if w.until is not None:
         registry = places.PLACES_FILE if w.entity.kind == PLACE else assets.ASSETS_FILE
         yield f"  closed in {registry} with until {w.until}"

@@ -152,6 +152,11 @@ def show_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="org, orgs: the ledger's lines and its in, out and net too (tier 3)",
     )
+    s.add_argument(
+        "--portfolio",
+        metavar="TEXT",
+        help="orgs: only the orgs in this portfolio, case and spaces aside (tier 3, on their status lines)",
+    )
     s.set_defaults(fn=cmd_show)
 
 
@@ -194,10 +199,11 @@ def instant_of(stamp: str) -> datetime:
 
 
 def _show_orgs(a: argparse.Namespace) -> None:
-    """`show orgs [--money [--year YYYY]] [--json]`: the orgs the owner named under their status,
-    the most recent touch first, then the people with more than one org; `show org NAME [--money]
-    [--json]`: one org's page (`logbook.contrib.orgs`). Every tier is read, as the owner's own
-    terminal reads it; the ledger only with `--money`. Nothing is written."""
+    """`show orgs [--portfolio TEXT] [--money [--year YYYY]] [--json]`: the orgs the owner named
+    under their status, the most recent touch first, then the people with more than one org; with
+    `--portfolio`, only the orgs in that portfolio; `show org NAME [--money] [--json]`: one org's page
+    (`logbook.contrib.orgs`). Every tier is read, as the owner's own terminal reads it; the ledger
+    only with `--money`. Nothing is written."""
     from ..contrib import entities, orgs
 
     lb = Logbook.find()
@@ -205,7 +211,7 @@ def _show_orgs(a: argparse.Namespace) -> None:
         if a.day == "orgs":
             if a.name is not None:
                 raise orgs.OrgError("takes no name; one org is `show org NAME`")
-            shelf = orgs.shelf(lb, money=a.money, year=a.year)
+            shelf = orgs.shelf(lb, money=a.money, year=a.year, portfolio=a.portfolio)
             if a.json:
                 print(json.dumps(shelf.to_json(), indent=2, ensure_ascii=False))
                 return
@@ -214,6 +220,8 @@ def _show_orgs(a: argparse.Namespace) -> None:
             return
         if a.name is None:
             raise orgs.OrgError("say which org: `show org NAME`, a word of its name, a domain or its id")
+        if a.portfolio is not None:
+            raise orgs.OrgError("--portfolio goes with `show orgs`; one org's page says its portfolio")
         page = orgs.page(lb, orgs.find(lb, a.name).id, money=a.money)
     except (orgs.OrgError, entities.EntityError, stays.SettingsError) as e:
         print(f"show {a.day}: {e}", file=sys.stderr)
