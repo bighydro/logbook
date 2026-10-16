@@ -482,9 +482,12 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
             {"method": "owner", "draft": str(row.draft["id"]), "evidence": evidence, "logbook_head": head}
         )
         standing = queue.answered.get(row.ref)
+        ask = queue.asks.get(row.ref)
         if standing is not None:
             if (standing.get("payload") or {}).get("raw_id") == payload["raw_id"]:
                 yield Written(row, "accept", None, "already confirmed so; nothing written")
+                if ask is not None:  # the family was asked about a scene already confirmed: answered
+                    yield _close_ask(lb, row, ask, now, tz)
                 return
             payload["supersedes"] = str(standing["id"])
         proposal = row.proposal or None
@@ -495,7 +498,6 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
         }
         line = lb.append(now, "manual", videos.ATTRIBUTION_KIND, tier, payload, tz=tz)
         yield Written(row, "accept", line, f"confirmed {_bound_text(answer.place, answer.when)}")
-        ask = queue.asks.get(row.ref)
         if ask is not None:
             yield _close_ask(lb, row, ask, now, tz)
     elif answer.verb == "reject":

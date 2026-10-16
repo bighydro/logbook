@@ -314,11 +314,10 @@ def review_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--ask", action="append", metavar="N[,N]", help="ask the family: an open task, list videos"
     )
-    listed = v.add_mutually_exclusive_group()
-    listed.add_argument(
+    v.add_argument(
         "--asked", action="store_true", help="the scenes kept to ask the family, to answer them now"
     )
-    listed.add_argument(
+    v.add_argument(
         "--answered",
         action="store_true",
         help="the scenes already confirmed, to correct one: a new answer supersedes the standing line",

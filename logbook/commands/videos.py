@@ -284,8 +284,10 @@ class VideoQueue(Queue):
     def check(self, a: argparse.Namespace) -> None:
         if a.top is not None and a.top < 0:
             raise self.error(f"--top takes a number from 0, not {a.top}")
-        self.places = {self._number(n): name for n, name in a.place or []}
-        self.dates = {self._number(n): text for n, text in a.date or []}
+        if a.asked and a.answered:
+            raise self.error("--asked and --answered are two lists; say one")
+        self.places = self._parts("--place", a.place)
+        self.dates = self._parts("--date", a.date)
         self.asks = set(self.numbers(a.ask))
         accepted = set(self.numbers(a.accept))
         rejected = set(self.numbers(a.reject))
@@ -308,12 +310,28 @@ class VideoQueue(Queue):
         own = sorted((set(self.places) | set(self.dates) | self.asks) - accepted)
         a.accept = [*(a.accept or []), *map(str, own)]
 
+    def _parts(self, flag: str, given: Sequence[Sequence[str]] | None) -> dict[int, str]:
+        """`--place N NAME` or `--date N WHEN`, by scene number; a scene given the same part twice is
+        refused, as the sitting refuses `--name` twice."""
+        found: dict[int, str] = {}
+        for n, text in given or []:
+            number = self._number(n)
+            if number in found:
+                raise self.error(f"scene {number} is given {flag} twice; say one")
+            found[number] = text
+        return found
+
     def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
+        from ..core import sealing
+
         self.lb = lb
         mode = (
             "asked" if getattr(a, "asked", False) else "answered" if getattr(a, "answered", False) else "open"
         )
-        return self.module.read(lb, mode)
+        try:
+            return self.module.read(lb, mode)
+        except sealing.IdentityRequired as e:  # said as this queue's refusal, in `review` alone too
+            raise self.error(str(e)) from e
 
     def numbers(self, text: Sequence[str] | None) -> list[int]:
         return [self._number(part) for given in text or [] for part in str(given).split(",") if part.strip()]
@@ -407,33 +425,39 @@ class VideoQueue(Queue):
         for n, row in enumerate(shown, 1):
             for text in self.module.row_lines(lb, n, row):
                 print(text)
-            try:
-                said = input("  y confirm / n not so / a ask the family / Enter skip / q stop: ")
-            except EOFError:
-                print()
-                return True
-            verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said.strip().casefold())
-            if said.strip().casefold() == "q":
-                return True
-            if verb is None:
-                continue
-            try:
-                known, owned, today = self._registries(lb)
-                answers = self.module.plan(
-                    report,
-                    [n] if verb == "accept" else [],
-                    [n] if verb == "reject" else [],
-                    [n] if verb == "ask" else [],
-                    {},
-                    {},
-                    known,
-                    owned,
-                    today,
-                )
-                written = self.module.write(lb, report, answers)
-            except (self.error, ValueError) as e:
-                print(f"  {e}")
-                continue
-            for text in self.written_rows(written):
-                print(f"  {text}")
+            while True:  # the same scene until it is answered, skipped or the sitting stopped
+                try:
+                    said = input("  y confirm / n not so / a ask the family / Enter skip / q stop: ")
+                except EOFError:
+                    print()
+                    return True
+                said = said.strip().casefold()
+                if said == "q":
+                    return True
+                if not said:
+                    break
+                verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said)
+                if verb is None:
+                    print("  y, n, a, Enter or q")
+                    continue
+                try:
+                    known, owned, today = self._registries(lb)
+                    answers = self.module.plan(
+                        report,
+                        [n] if verb == "accept" else [],
+                        [n] if verb == "reject" else [],
+                        [n] if verb == "ask" else [],
+                        {},
+                        {},
+                        known,
+                        owned,
+                        today,
+                    )
+                    written = self.module.write(lb, report, answers)
+                except (self.error, ValueError) as e:
+                    print(f"  {e}")
+                    continue
+                for text in self.written_rows(written):
+                    print(f"  {text}")
+                break
         return True
