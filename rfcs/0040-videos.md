@@ -1,6 +1,6 @@
 # RFC 0040 — Videos: a recording file, its scenes, and the owner's attribution
 
-Status: draft · 2026-10-14 · comment period: two weeks · implemented with `sync drive --videos`, `videos fetch`, `videos infer` and `review videos` ([docs/adapters/videos.md](../docs/adapters/videos.md))
+Status: draft · 2026-10-14 · comment period: two weeks · implemented with `sync drive --videos`, `videos fetch`, `videos infer` and `review videos` ([docs/adapters/videos.md](https://github.com/bighydro/logbook/blob/main/docs/adapters/videos.md))
 
 A family's home videos are digitised tapes: one file of two to four gigabytes holds many recordings from different years and places, and nothing about the file says where or when any of them was made. Its storage's dates are when it was digitised or uploaded. The record needs four things to hold them honestly: a line that names the file without claiming a time it does not know (`video/v1`, §2); a way to name one stretch of it, a **scene**, that every other line can point at (§1); a model's proposal per scene that is a proposal and never a fact (`draft/v1`, RFC 0036, §3); and the owner's statement of where and when a scene was filmed, in a line of its own beside the file's, never inside it (`attribution/v1`, §4), with the review's no (§5) and "ask the family" (§6) for the answers that are not a yes.
 
