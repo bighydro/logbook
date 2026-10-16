@@ -10,8 +10,6 @@
 
 **What never happens.** No feed, no followers, no account. No model writes your day. A model's draft is marked as a draft. Nothing leaves without your say. A page leaves only on a command you type, for a person you name, and your record keeps a line that says it left.
 
-<p align="center"><img src="docs/the-day.png" width="360" alt="The Day of 17 June for Ines Nordmann, who does not exist: a week aboard"></p>
-
 [Why I built it](docs/letters/2026-10-12-why-i-built-it.md) · [The manifesto](MANIFESTO.md) · [First questions](docs/faq.md)
 
 ## Try it
