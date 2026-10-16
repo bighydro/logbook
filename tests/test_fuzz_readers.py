@@ -495,6 +495,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["people", "--json"],
     ["review", "speakers"],
     ["review", "speakers", "--json"],
+    ["review", "video"],  # RFC 0040: the scenes proposed, read over whatever the record holds
+    ["review", "video", "--json"],
     ["show", "orgs", "--portfolio", "Fund I"],
     ["status", "list", "org", "--json"],
     ["goal", "list"],
