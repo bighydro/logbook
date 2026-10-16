@@ -334,6 +334,14 @@ def cmd_review(a: argparse.Namespace) -> None:
     if a.kind is None:
         _every_queue(lb, a)
         return
+    if a.kind not in ("place", "video") and a.top is not None:  # --top first, as when it was a place's alone
+        given = [flag for flag, dest in (*TOP_FLAGS, *PLACE_FLAGS) if getattr(a, dest) not in (None, False)]
+        _refuse(
+            f"review {a.kind}",
+            f"{', '.join(given)} go with `review place`"
+            if len(given) > 1
+            else "--top goes with `review place` or `review video`",
+        )
     if a.kind != "place":
         given = [flag for flag, dest in PLACE_FLAGS if getattr(a, dest) not in (None, False)]
         if given:
@@ -348,8 +356,6 @@ def cmd_review(a: argparse.Namespace) -> None:
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review video`",
             )
-    if a.kind not in ("place", "video") and a.top is not None:
-        _refuse(f"review {a.kind}", "--top goes with `review place` or `review video`")
     from . import speakers
 
     if a.kind == "speakers":

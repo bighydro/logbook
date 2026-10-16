@@ -561,6 +561,15 @@ def test_review_video_is_one_more_queue_of_the_one_sitting(
         (("review", "person", "--asked"), "review person: --asked goes with `review video`"),
         (("review", "asset", "--answered"), "review asset: --answered goes with `review video`"),
         (("review", "idea", "--top", "2"), "review idea: --top goes with `review place` or `review video`"),
+        (
+            ("review", "idea", "--top", "2", "--near", "Hjem"),
+            "review idea: --top, --near go with `review place`",
+        ),
+        (
+            ("review", "person", "--top", "1", "--verbose"),
+            "review person: --top, --verbose go with `review place`",
+        ),
+        (("review", "asset", "--top", "1", "--ask", "2"), "review asset: --top goes with `review place` or"),
         (("review", "video", "--near", "Hjem"), "review video: --near goes with `review place`"),
         (
             ("review", "video", "--migrate-rejects"),
