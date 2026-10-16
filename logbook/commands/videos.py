@@ -5,17 +5,25 @@ bounded cache under `state/videos/`, one at a time, verified against the md5 Dri
 (`logbook.contrib.videos`); with `--models`, the speech and vision models `videos infer` uses, once,
 and nothing else. `videos infer` reads only what the cache holds, on this machine, with no socket: the
 scenes of each file, what is said and shown in each, and one draft per scene proposing where and when
-(`logbook.labs.scenes`)."""
+(`logbook.labs.scenes`).
+
+`VideoQueue` is the video's queue as `review` drives it (RFC 0040, RFC 0037 §5): the sixth queue of the
+one sitting, `review video`, declared here beside the commands whose drafts it answers."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+from collections.abc import Iterable, Sequence
+from datetime import date, datetime
+from typing import Any
+from zoneinfo import ZoneInfo
 
 from ..core.store import Logbook
 from .common import Subparsers
 from .derive import DESCRIBE_DEFAULT_MODEL, TRANSCRIBE_DEFAULT_MODEL
+from .review import Queue
 
 DEFAULT_CAP_GB = 8  # a copy of `contrib.videos.DEFAULT_CAP_BYTES` in gigabytes, for the help text
 GB = 1_000_000_000
@@ -30,7 +38,7 @@ def videos_arguments(sub: Subparsers) -> None:
         " downloads files one at a time into a bounded cache under state/videos/ (the only command here"
         " that uses the network); `infer` finds the scenes of each cached file on this machine, hears and"
         " looks at each, and writes one draft per scene proposing where and when it was filmed, for you"
-        " to confirm with `review videos`. No video is ever copied into the record.",
+        " to confirm with `review video`. No video is ever copied into the record.",
     )
     verbs = s.add_subparsers(dest="verb", required=True, metavar="<verb>")
     v = verbs.add_parser(
@@ -245,3 +253,187 @@ def _fetch_models(a: argparse.Namespace) -> None:
         else:
             engine.fetch()
             print(f"{engine.name} {engine.model}: fetched")
+
+
+# -- the review's queue --------------------------------------------------------------------------------
+
+
+class VideoQueue(Queue):
+    """The video's queue as `review` drives it (`logbook.commands.review.sitting`): the scenes `videos
+    infer` proposed a place or a date for, `logbook.contrib.video_review`'s reading and writing.
+
+    `--accept` takes what a scene's draft proposes and `--reject` writes the scene's no, as for every
+    kind. A scene's own answers ride on the sitting's: `--place N NAME` and `--date N WHEN` accept scene
+    N with the owner's own place or date, and `--ask N` keeps it to ask the family; `check` adds their
+    numbers to `--accept`, so the sitting checks every number before the first line is written, and
+    `write` tells them apart again. `--asked` and `--answered` list the scenes kept to ask and the ones
+    confirmed, to answer or correct them; `--top N` the first N scenes."""
+
+    kind = "video"
+
+    def __init__(self) -> None:
+        from ..contrib import video_review
+
+        self.module = video_review
+        self.error = video_review.ReviewError
+        self.places: dict[int, str] = {}
+        self.dates: dict[int, str] = {}
+        self.asks: set[int] = set()
+        self.lb: Logbook | None = None
+
+    def check(self, a: argparse.Namespace) -> None:
+        if a.top is not None and a.top < 0:
+            raise self.error(f"--top takes a number from 0, not {a.top}")
+        self.places = {self._number(n): name for n, name in a.place or []}
+        self.dates = {self._number(n): text for n, text in a.date or []}
+        self.asks = set(self.numbers(a.ask))
+        accepted = set(self.numbers(a.accept))
+        rejected = set(self.numbers(a.reject))
+        for n in sorted(self.asks):
+            other = next(
+                (
+                    flag
+                    for flag, numbers in (
+                        ("--accept", accepted),
+                        ("--place", self.places),
+                        ("--date", self.dates),
+                        ("--reject", rejected),
+                    )
+                    if n in numbers
+                ),
+                None,
+            )
+            if other is not None:
+                raise self.error(f"scene {n} is given {other} and --ask; say one")
+        own = sorted((set(self.places) | set(self.dates) | self.asks) - accepted)
+        a.accept = [*(a.accept or []), *map(str, own)]
+
+    def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
+        self.lb = lb
+        mode = (
+            "asked" if getattr(a, "asked", False) else "answered" if getattr(a, "answered", False) else "open"
+        )
+        return self.module.read(lb, mode)
+
+    def numbers(self, text: Sequence[str] | None) -> list[int]:
+        return [self._number(part) for given in text or [] for part in str(given).split(",") if part.strip()]
+
+    def _number(self, text: str) -> int:
+        try:
+            return int(str(text).strip())
+        except ValueError:
+            raise self.error(f"{text!r} is not a scene's number") from None
+
+    def pick(self, report: Any, wanted: Sequence[int]) -> list[Any]:
+        for n in wanted:
+            if n < 1 or n > len(report.rows):
+                raise self.error(f"scene {n} is not in the queue (1 to {len(report.rows)})")
+        return [(n, report.rows[n - 1]) for n in wanted]
+
+    def above(self, report: Any, score: str) -> list[Any]:
+        raise self.error("a scene's proposal has no score; --all-above goes with person, org, idea and asset")
+
+    def named(self, a: argparse.Namespace) -> list[tuple[str, str]]:
+        if super().named(a):
+            raise self.error(
+                "--name goes with a new org, idea, asset or place;"
+                " a scene takes --place N NAME or --date N WHEN"
+            )
+        return []
+
+    def write(
+        self, lb: Logbook, report: Any, chosen: Sequence[tuple[Any, str | None]], rejected: Sequence[Any]
+    ) -> list[Any]:
+        told = [n for (n, _row), _name in chosen]
+        known, owned, today = self._registries(lb)
+        answers = self.module.plan(
+            report,
+            [n for n in told if n not in self.asks],
+            [n for n, _row in rejected],
+            [n for n in told if n in self.asks],
+            self.places,
+            self.dates,
+            known,
+            owned,
+            today,
+        )
+        return self.module.write(lb, report, answers)
+
+    def _registries(self, lb: Logbook) -> tuple[list[Any], list[Any], date]:
+        """places.json, assets.json and today, for the owner's own place and date."""
+        from ..core import assets, places
+
+        try:
+            known, owned = places.read(lb.root), assets.read(lb.root)
+        except (places.PlaceError, assets.AssetError) as e:
+            raise self.error(str(e)) from e
+        return known, owned, datetime.now(ZoneInfo(str(lb.meta["timezone"]))).date()
+
+    def shown(self, lb: Logbook, report: Any, a: argparse.Namespace) -> tuple[Any, list[Any], dict[str, Any]]:
+        rows = list(report.rows if a.top is None else report.rows[: a.top])
+        return report, rows, {}
+
+    def report_json(self, report: Any, shown: Sequence[Any], extra: dict[str, Any]) -> dict[str, Any]:
+        data: dict[str, Any] = self.module.to_json(report)
+        data["rows"] = data["rows"][: len(shown)]
+        return {**data, **extra}
+
+    def rows(self, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> Iterable[str]:
+        yield self.module.head_text(report)
+        for n, row in enumerate(shown, 1):
+            yield from self.module.row_lines(self.lb, n, row)
+        if len(shown) < len(report.rows):
+            yield f"  and {len(report.rows) - len(shown)} more; --top shows more"
+        if report.rows:
+            yield (
+                "nothing written: `review video --accept N[,N]`, `--place N NAME`, `--date N WHEN`,"
+                " `--reject N[,N]` or `--ask N[,N]`"
+            )
+        else:
+            yield "nothing to review: `videos infer` proposes the scenes of the files in the cache"
+
+    def written_rows(self, written: Sequence[Any]) -> Iterable[str]:
+        for w in written:
+            seq = f" (#{w.line['seq']})" if w.line is not None else ""
+            yield f"{w.row.video.name} · {w.row.ref.split('#', 1)[1]}: {w.text}{seq}"
+
+    def ask_on_a_tty(self, lb: Logbook, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> bool:
+        """One scene at a time, as every queue asks on a terminal: y confirms what it proposes, n is the
+        scene's no, a keeps it to ask the family, Enter skips, q or the end of input stops. The owner is
+        asked with no lock held; each answer is written at once."""
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            return False
+        print(self.module.head_text(report))
+        for n, row in enumerate(shown, 1):
+            for text in self.module.row_lines(lb, n, row):
+                print(text)
+            try:
+                said = input("  y confirm / n not so / a ask the family / Enter skip / q stop: ")
+            except EOFError:
+                print()
+                return True
+            verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said.strip().casefold())
+            if said.strip().casefold() == "q":
+                return True
+            if verb is None:
+                continue
+            try:
+                known, owned, today = self._registries(lb)
+                answers = self.module.plan(
+                    report,
+                    [n] if verb == "accept" else [],
+                    [n] if verb == "reject" else [],
+                    [n] if verb == "ask" else [],
+                    {},
+                    {},
+                    known,
+                    owned,
+                    today,
+                )
+                written = self.module.write(lb, report, answers)
+            except (self.error, ValueError) as e:
+                print(f"  {e}")
+                continue
+            for text in self.written_rows(written):
+                print(f"  {text}")
+        return True

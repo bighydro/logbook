@@ -1,6 +1,7 @@
-"""`logbook review videos`: the owner's say over what `videos infer` proposed, one scene at a time, in
-RFC 0037's `review KIND` shape (RFC 0040). It reads the record and the registries and opens no
-connection; it writes only through `Logbook.append`, `source` `manual`, and only what the owner answers.
+"""`logbook review video`: the owner's say over what `videos infer` proposed, one scene at a time, the
+sixth queue of RFC 0037's one review sitting (`logbook.commands.videos.VideoQueue`, RFC 0040). It
+reads the record and the registries and opens no connection; it writes only through `Logbook.append`,
+`source` `manual`, and only what the owner answers.
 
 **The queue** is every scene of the family's videos whose draft (`draft/v1`, unit `event`, subject the
 scene) nobody has answered yet, the drafts of each file's latest inference only: a scene with a
@@ -32,8 +33,9 @@ owner (the Day's stays) and where the owner's assets were reported, or the neare
   a later shared page can put the scene before the family; the scene leaves the queue until it is
   answered. Accepting it later also writes the task done.
 
-The writer holds the record's writer lock from its read of the queue to its last append, and reads the
-head again before it writes: another writer in between is `HeadMoved`, one sentence, nothing written."""
+The lock is the review's, one rule for every queue: the sitting reads the queue and asks the owner with
+no lock held; `write` appends each answer's lines under the record's writer lock, one hold for a batch,
+as places review's no does."""
 
 from __future__ import annotations
 
@@ -49,7 +51,7 @@ from typing import Any
 from ..core import assets as asset_registry
 from ..core import places, sealing
 from ..core.chain import Line, canonical_json, is_sealed
-from ..core.store import HEAD_MOVED, HeadMoved, Logbook, now_utc, retractions
+from ..core.store import Logbook, now_utc, retractions
 from . import videos
 
 CONFIDENCE = ("high", "medium", "low")
@@ -382,6 +384,14 @@ class Written:
     line: Line | None  # None: the same answer already stood, nothing written
     text: str
 
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "scene": self.row.ref,
+            "answer": self.verb,
+            "line": None if self.line is None else str(self.line["id"]),
+            "text": self.text,
+        }
+
 
 def plan(
     queue: Queue,
@@ -433,13 +443,10 @@ def plan(
 
 
 def write(lb: Logbook, queue: Queue, answers: Sequence[Answer]) -> list[Written]:
-    """The answers' lines, through `Logbook.append`, under the writer lock, the head read again first:
-    HeadMoved, and nothing written, when another writer moved it since the queue was read."""
+    """The answers' lines, through `Logbook.append`, under one hold of the writer lock: every answer was
+    checked by `plan` before this writes the first."""
     written: list[Written] = []
     with lb.writer():
-        current = lb.meta
-        if str(current["head"]) != queue.head:
-            raise HeadMoved(HEAD_MOVED.format(was=queue.head[:8], now=str(current["head"])[:8]))
         for answer in answers:
             written.extend(_write(lb, queue, answer))
     return written

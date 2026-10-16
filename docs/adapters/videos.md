@@ -11,9 +11,9 @@ logbook sync drive --videos                 # one video/v1 line per file, from D
 logbook videos fetch --models               # once: the speech and vision models videos infer uses
 logbook videos fetch                        # the next files into a bounded cache (8 GB), one at a time, md5 verified
 logbook videos infer                        # on this machine, no network: the scenes, a draft per scene
-logbook review videos                       # the proposals, one scene at a time; nothing written unless told
-logbook review videos --accept 1,2 --reject 3 --ask 4
-logbook review videos --place 5 "Vollen Brygge" --date 5 "summer 1994"
+logbook review video                        # the proposals, one scene at a time; nothing written unless told
+logbook review video --accept 1,2 --reject 3 --ask 4
+logbook review video --place 5 "Vollen Brygge" --date 5 "summer 1994"
 logbook doctor                              # the videos line: files, fetched, inferred, proposed, confirmed, the cache
 ```
 
@@ -171,15 +171,20 @@ imported, and ffmpeg opens files only.
 The file is deleted from the cache once inferred, unless `--keep`; a run that stops keeps what it wrote
 and the next carries on. `--dry-run` says which cached files would be inferred and needs no engine.
 
-## `review videos`: one scene at a time
+## `review video`: one scene at a time
 
-The queue is every scene of each file's latest inference that you have not answered, the surest
+`review video` is one more queue of the one review sitting ([Review](../review.md), RFC 0037): `review`
+alone lists it after the person's, the org's, the idea's, the asset's and the place's, `--accept`,
+`--reject` and `--json` mean what they mean for every kind, and the options below are its own: any
+other kind refuses them, as it refuses a place's. The queue is every scene of each file's latest inference that you have not answered, the surest
 proposals first, then the scenes with nothing to go on. Each row shows the file, the scene and its
 offsets, the proposal, the sentences with the frames and speech they cite, what the frames showed, and,
 when the proposal is one day the rules trust (its date not `low`), where the record had you and your assets that day (the Day's stays, the
 assets' positions), or the nearest day within three that has any. On a terminal it asks for each scene:
-`y` confirms, `n` refuses, `a` keeps it to ask the family, Enter skips, `q` stops. With flags, every
-number is checked before the first line is written:
+`y` confirms, `n` refuses, `a` keeps it to ask the family, Enter skips, `q` stops; you are asked with
+no lock held, so a scheduled sync never waits on you, and each answer is written at once under the
+record's writer lock, as every queue's is. With flags, every number is checked before the first line
+is written:
 
 | Answer | Writes |
 |---|---|
@@ -188,6 +193,7 @@ number is checked before the first line is written:
 | `--reject N[,N]` | the review's no: one `entity-review/v1` line (RFC 0037), `type` `scene`, `verdict` `different`; that proposal is never offered for that scene again, unless you retract the line |
 | `--ask N[,N]` | one open `task/v1` line in the list `videos`, so a later shared page can put the scene before the family; the scene leaves the queue, `--asked` brings it back, and answering it closes the task |
 | `--answered` | the scenes you confirmed, to correct one: a new answer supersedes the standing line; the same answer twice writes nothing |
+| `--top N` | only the first N scenes of the queue (a place's option too, where it counts places) |
 
 Nothing else writes: no place is added to `places.json`, no line is rewritten, and the review reads the
 record and the registries alone, with no connection.

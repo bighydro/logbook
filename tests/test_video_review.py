@@ -1,9 +1,9 @@
-"""`logbook review videos`: the owner's say over the scenes `videos infer` proposed, one scene at a time,
-in RFC 0037's review shape. Accepting a scene writes exactly one `attribution/v1` line carrying the
-scene's offsets and touches no other line, the video's least of all; the no is RFC 0037's
-`entity-review/v1` and the proposal never returns for that scene; "ask the family" is an open task the
-scene leaves the queue with, and answering it later closes the task; every line is tier 2 and none of
-them crosses a tier-1 entry; nothing opens a connection.
+"""`logbook review video`: the owner's say over the scenes `videos infer` proposed, one scene at a time,
+the sixth queue of RFC 0037's one review sitting. Accepting a scene writes exactly one `attribution/v1`
+line carrying the scene's offsets and touches no other line, the video's least of all; the no is
+RFC 0037's `entity-review/v1` and the proposal never returns for that scene; "ask the family" is an open
+task the scene leaves the queue with, and answering it later closes the task; every line is tier 2 and
+none of them crosses a tier-1 entry; nothing opens a connection.
 
 The synthetic tape of `tests/test_videos_infer.py` (an invented family of Oslo, who does not exist),
 inferred with the same fakes, is the queue."""
@@ -54,12 +54,12 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]) -
     _cache(lb, HOME_01)
     assert _infer() == 0
     yield lb
-    assert no_network == [], f"review videos tried to connect: {no_network}"
+    assert no_network == [], f"review video tried to connect: {no_network}"
 
 
 def _review(*args: str) -> int:
     try:
-        cli.main(["review", "videos", *args])
+        cli.main(["review", "video", *args])
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 1
     return 0
@@ -509,3 +509,160 @@ def test_without_the_identity_the_review_names_it_and_writes_nothing(
     assert "identity" in capsys.readouterr().err
     assert _review("--accept", "1") == 2
     assert "identity" in capsys.readouterr().err and _seq(sealed) == seq
+
+
+# -- one more queue of the one sitting (RFC 0037 §5; the owner's decision 1 of 15 October) ---------------
+
+
+def _said(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str]:
+    capsys.readouterr()
+    try:
+        cli.main([*args])
+    except SystemExit as e:
+        return (e.code if isinstance(e.code, int) else 1), capsys.readouterr().err
+    return 0, capsys.readouterr().err
+
+
+def test_review_video_is_one_more_queue_of_the_one_sitting(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from logbook.commands import review
+
+    driven: list[str] = []
+    real = review.sitting
+
+    def spy(queue: review.Queue, book: Logbook, a: Any) -> None:
+        driven.append(queue.kind)
+        real(queue, book, a)
+
+    monkeypatch.setattr(review, "sitting", spy)
+    assert _review() == 0
+    assert _review("--accept", "1") == 0
+    assert driven == ["video", "video"]
+    assert review.KINDS[-1] == "video" and isinstance(review.queue_of("video"), review.Queue)
+
+
+@pytest.mark.parametrize(
+    ("args", "said"),
+    [
+        (("review", "place", "--ask", "1"), "review place: --ask goes with `review video`"),
+        (
+            ("review", "org", "--place", "1", "Hjem", "--date", "1", "1994"),
+            "review org: --place, --date go with `review video`",
+        ),
+        (("review", "person", "--asked"), "review person: --asked goes with `review video`"),
+        (("review", "asset", "--answered"), "review asset: --answered goes with `review video`"),
+        (("review", "idea", "--top", "2"), "review idea: --top goes with `review place` or `review video`"),
+        (("review", "video", "--near", "Hjem"), "review video: --near goes with `review place`"),
+        (
+            ("review", "video", "--migrate-rejects"),
+            "review video: --migrate-rejects goes with `review place`",
+        ),
+        (("review", "--ask", "1"), "review: say which kind --ask is for"),
+        (("review", "--top", "1"), "review: say which kind --top is for"),
+        (("review", "video", "--name", "1", "Hjem"), "review video: --name goes with a new org, idea, asset"),
+        (("review", "video", "--all-above", "50"), "review video: a scene's proposal has no score"),
+        (("review", "video", "--ask", "1", "--reject", "1"), "scene 1 is given --reject and --ask; say one"),
+        (("review", "video", "--place", "1", "Hjem", "--ask", "1"), "scene 1 is given --place and --ask"),
+        (
+            ("review", "video", "--date", "2", "1994", "--reject", "2"),
+            "proposal 2 is both accepted and rejected",
+        ),
+        (("review", "video", "--ask", "9"), "review video: scene 9 is not in the queue (1 to 4)"),
+        (("review", "video", "--top", "-1"), "review video: --top takes a number from 0, not -1"),
+        (("review", "video", "--asked", "--answered"), "not allowed with argument"),
+    ],
+)
+def test_a_scenes_own_options_go_with_review_video_and_nothing_else(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], args: tuple[str, ...], said: str
+) -> None:
+    seq = _seq(lb)
+    code, err = _said(capsys, *args)
+    assert code == 2 and said in err, (args, err)
+    assert _seq(lb) == seq, "refused before the first line"
+
+
+def test_review_alone_lists_the_video_queue_with_the_others(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seq = _seq(lb)
+    capsys.readouterr()
+    cli.main(["review"])
+    out = capsys.readouterr().out.splitlines()
+    assert [line for line in out if not line.startswith(" ")] == [
+        "person",
+        "org",
+        "idea",
+        "asset",
+        "place",
+        "video",
+    ]
+    block = out[out.index("video") + 1 :]
+    assert block[0] == "  " + video_review.head_text(video_review.read(lb))
+    assert any("Home 01 · scene 2 of 4" in line and "→ Vollen Brygge (place)" in line for line in block)
+    cli.main(["review", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert [row["scene"] for row in data["video"]["rows"]][:2] == [_ref(lb, *PIER), _ref(lb, *GARDEN)]
+    assert _seq(lb) == seq, "nothing written"
+
+
+def test_top_counts_scenes(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    capsys.readouterr()
+    assert _review("--top", "1") == 0
+    out = capsys.readouterr().out
+    (row,) = [line for line in out.splitlines() if line[:4].strip().isdigit()]
+    assert row.startswith("   1  [high]")
+    assert "and 3 more; --top shows more" in out
+    assert _review("--top", "2", "--json") == 0
+    assert len(json.loads(capsys.readouterr().out)["rows"]) == 2
+
+
+def test_what_was_written_is_said_as_the_sitting_says_it(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    assert _review("--accept", "1", "--json") == 0
+    data = json.loads(capsys.readouterr().out)
+    line = _new(lb, 0)[-1]
+    assert data == {
+        "written": [
+            {
+                "scene": _ref(lb, *PIER),
+                "answer": "accept",
+                "line": line["id"],
+                "text": "confirmed Vollen Brygge (place)",
+            }
+        ]
+    }
+    assert _review("--ask", "1") == 0
+    assert "Home 01 · t=90.00,130.00: kept to ask the family" in capsys.readouterr().out
+
+
+def test_the_queue_is_read_with_no_lock_held_and_written_under_it(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Main's rule, one for every queue: the sitting reads the queue with no lock held, and the lines
+    of the answers are appended under the writer lock."""
+    from logbook.core import store
+
+    held: list[bool] = []
+    real_read, real_append = video_review.read, Logbook.append
+
+    def read(book: Logbook, mode: str = "open") -> video_review.Queue:
+        held.append(bool(store._held))
+        return real_read(book, mode)
+
+    def append(self: Logbook, *args: Any, **kwargs: Any) -> Any:
+        held.append(bool(store._held))
+        return real_append(self, *args, **kwargs)
+
+    monkeypatch.setattr(video_review, "read", read)
+    monkeypatch.setattr(Logbook, "append", append)
+    assert _review("--accept", "1", "--reject", "2") == 0
+    assert held == [False, True, True], "read with no lock; both answers under one hold"
+
+
+def test_one_review_command_and_one_review_row() -> None:
+    page = (Path(__file__).resolve().parents[1] / "docs" / "commands.md").read_text(encoding="utf-8")
+    (row,) = [line for line in page.splitlines() if line.startswith("| `review` |")]
+    assert "`review video`" in row and "`review videos`" not in row

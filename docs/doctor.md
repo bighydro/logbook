@@ -62,7 +62,7 @@ When the record names the family's videos (`sync drive --videos`) or the cache u
 exists, one `videos` line says how many video files the record holds and their size, how many `videos
 fetch` has fetched and `videos infer` has inferred, how many wait in the cache, how many scenes the
 latest inference of each file found, how many it proposed a place or a date for and how many you
-confirmed with `review videos`, and the cache against its cap:
+confirmed with `review video`, and the cache against its cap:
 
 ```
 pass  videos  25 video files in the record (78.4 GB); 6 fetched, 5 inferred, 1 waiting in the cache; 212 scenes, 61 proposed, 14 confirmed; cache 3.1 GB of 8.0 GB

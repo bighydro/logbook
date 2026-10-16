@@ -46,7 +46,7 @@ def test_the_line_counts_files_inference_scenes_and_the_cache(lb: Logbook) -> No
         json.dumps({"cap_bytes": 8_000_000_000, "fetched": {HOME_01: {"bytes": 12}}}), encoding="utf-8"
     )
     assert _infer("--keep") == 0
-    cli.main(["review", "videos", "--accept", "1"])
+    cli.main(["review", "video", "--accept", "1"])
     found = _check(lb)
     assert found is not None and found.status == "pass"
     assert found.detail == (

@@ -1,6 +1,6 @@
 """`logbook videos infer`: the family's videos read on this machine, one scene at a time, and one draft
 per scene proposing where and when it was filmed (RFC 0040). A proposal, never a fact: the owner
-confirms it with `review videos`, and only that writes where or when.
+confirms it with `review video`, and only that writes where or when.
 
 It works on the files `videos fetch` left in the cache (`logbook.contrib.videos`) and nothing else, and
 it never opens a socket: ffmpeg is told to open nothing but files (`logbook.contrib.media`), the speech
@@ -567,7 +567,7 @@ class Proposal:
     when: When | None
     confidence: str | None  # the weaker of the place's and the date's
     segments: list[Segment] = field(default_factory=list)
-    when_confidence: str | None = None  # the date's own: `review videos` sets the record beside a trusted day
+    when_confidence: str | None = None  # the date's own: `review video` sets the record beside a trusted day
 
     def to_json(self) -> dict[str, Any] | None:
         if self.where is None and self.when is None:
@@ -1347,7 +1347,7 @@ def summary(report: Report) -> str:
     lines = [
         f"inferred {_plural(len(report.done), 'file')}: {_plural(scenes, 'scene')},"
         f" {proposed} with a proposal,"
-        f" {_plural(report.written, 'draft')} written{already}; `review videos` to confirm them"
+        f" {_plural(report.written, 'draft')} written{already}; `review video` to confirm them"
     ]
     removed = sum(d.removed for d in report.done)
     if removed:

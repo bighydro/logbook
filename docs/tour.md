@@ -815,7 +815,8 @@ the project's daily quota stops on one line instead of waiting it out.
 
 The family's videos, the digitised tapes in one Drive folder, are a source of their own on the same key:
 `sync drive --videos` with `LOGBOOK_DRIVE_VIDEOS_FOLDER` set to the folder's id, then `videos fetch`,
-`videos infer` and `review videos` ([Videos](adapters/videos.md)).
+`videos infer` and `review video`, one more queue of the one review sitting, listed with the others
+by `review` alone ([Videos](adapters/videos.md), [Review](review.md)).
 
 **What a line holds.** One `event/v1` line per file, per hour and per kind of activity, so an afternoon
 of editing is a handful of lines with a count, `Edited Budget 2027 ×14`, not hundreds. It holds the

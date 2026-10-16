@@ -8,7 +8,13 @@ org's, the idea's and the asset's are `logbook.contrib.entity_review`'s (`Entity
 `people review` and `setup places review` run the same sitting, so the numbers, the checks, what is
 written and what is printed are one implementation for all five. Nothing is written unless told;
 every number is checked before the first line is written. `review` with no kind lists every queue,
-one block each, and writes nothing."""
+one block each, and writes nothing.
+
+A sixth queue is no kind of thing the record names: `video`, the scenes `videos infer` proposed a place
+or a date for (RFC 0040), `logbook.contrib.video_review`'s (`VideoQueue`, declared beside `videos` in
+`videos.py`). The same sitting drives it: `--accept` takes what a scene's draft proposes, `--reject`
+writes the scene's no (`scene-review/v1`, never an `entity-review/v1` line), and its own answers
+(`VIDEO_FLAGS`) are refused for every other kind as a place's options are."""
 
 from __future__ import annotations
 
@@ -16,19 +22,14 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable, Sequence
-from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, NoReturn
-from zoneinfo import ZoneInfo
+from typing import Any, NoReturn
 
-from ..core.store import HeadMoved, Logbook
+from ..core.store import Logbook
 from .common import Subparsers
 
-if TYPE_CHECKING:
-    from ..core import assets, places
-
-KINDS = ("person", "org", "idea", "asset", "place", "speakers")  # speakers: RFC 0038 §4, `commands.speakers`
+# speakers: RFC 0038 §4, `commands.speakers`; video: RFC 0040, `commands.videos`
+KINDS = ("person", "org", "idea", "asset", "place", "speakers", "video")
 PLACE_FLAGS = (
-    ("--top", "top"),
     ("--near", "near"),
     ("--radius", "radius"),
     ("--verbose", "verbose"),
@@ -38,9 +39,16 @@ PLACE_FLAGS = (
     ("--photos-library", "photos_library"),
     ("--migrate-rejects", "migrate_rejects"),
 )
+TOP_FLAGS = (("--top", "top"),)  # a place's and a video's: the first N proposals, or scenes
+VIDEO_FLAGS = (
+    ("--place", "place"),
+    ("--date", "date"),
+    ("--ask", "ask"),
+    ("--asked", "asked"),
+    ("--answered", "answered"),
+)
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
-VIDEO_KINDS = ("videos",)  # RFC 0040: the scenes `videos infer` proposed (`_review_videos`)
 
 
 class Queue:
@@ -247,18 +255,16 @@ def review_arguments(sub: Subparsers) -> None:
         " ones with the evidence, numbered, or as a new one; nothing is written unless told, and nothing"
         " is looked up. `review person` is `people review`, `review place` is `setup places review`;"
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
-        " With no KIND, every queue, one block each.",
+        " With no KIND, every queue, one block each."
+        " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040).",
     )
-    s.add_argument(
-        "kind",
-        nargs="?",
-        choices=(*KINDS, *VIDEO_KINDS),
-        metavar="KIND",
-        help=f"one of {', '.join((*KINDS, *VIDEO_KINDS))}",
-    )
+    s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
     s.add_argument(
-        "--reject", action="append", metavar="N[,N]", help="reject these: one entity-review/v1 line each"
+        "--reject",
+        action="append",
+        metavar="N[,N]",
+        help="reject these: one entity-review/v1 line each (a scene's: scene-review/v1)",
     )
     s.add_argument(
         "--name",
@@ -288,7 +294,7 @@ def review_arguments(sub: Subparsers) -> None:
     from .speakers import speakers_arguments
 
     speakers_arguments(s)
-    v = s.add_argument_group("videos", "with `review videos` (RFC 0040); --top counts scenes")
+    v = s.add_argument_group("video", "with `review video` (RFC 0040); --top above counts its scenes")
     v.add_argument(
         "--place",
         nargs=2,
@@ -308,11 +314,11 @@ def review_arguments(sub: Subparsers) -> None:
     v.add_argument(
         "--ask", action="append", metavar="N[,N]", help="ask the family: an open task, list videos"
     )
-    shown = v.add_mutually_exclusive_group()
-    shown.add_argument(
+    listed = v.add_mutually_exclusive_group()
+    listed.add_argument(
         "--asked", action="store_true", help="the scenes kept to ask the family, to answer them now"
     )
-    shown.add_argument(
+    listed.add_argument(
         "--answered",
         action="store_true",
         help="the scenes already confirmed, to correct one: a new answer supersedes the standing line",
@@ -324,9 +330,6 @@ def cmd_review(a: argparse.Namespace) -> None:
     """`review [KIND] [--accept N[,N]] [--reject N[,N]] [--name N NAME] [--all-above SCORE] [--json]`
     (and, for a place, `setup places review`'s options): one sitting (`sitting`). With no KIND,
     every queue in turn, nothing written."""
-    if a.kind in VIDEO_KINDS:
-        _review_videos(a)
-        return
     lb = Logbook.find()
     if a.kind is None:
         _every_queue(lb, a)
@@ -338,6 +341,15 @@ def cmd_review(a: argparse.Namespace) -> None:
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review place`",
             )
+    if a.kind != "video":
+        given = [flag for flag, dest in VIDEO_FLAGS if getattr(a, dest) not in (None, False)]
+        if given:
+            _refuse(
+                f"review {a.kind}",
+                f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review video`",
+            )
+    if a.kind not in ("place", "video") and a.top is not None:
+        _refuse(f"review {a.kind}", "--top goes with `review place` or `review video`")
     from . import speakers
 
     if a.kind == "speakers":
@@ -375,6 +387,10 @@ def queue_of(kind: str) -> Queue:
         from .speakers import SpeakerQueue
 
         return SpeakerQueue()
+    if kind == "video":
+        from .videos import VideoQueue
+
+        return VideoQueue()
     return EntityQueue(kind)
 
 
@@ -383,7 +399,7 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 
     told = [
         flag
-        for flag, dest in (*TELLS, *PLACE_FLAGS, *SPEAKER_FLAGS)
+        for flag, dest in (*TELLS, *TOP_FLAGS, *PLACE_FLAGS, *VIDEO_FLAGS, *SPEAKER_FLAGS)
         if getattr(a, dest, None) not in (None, False)
     ]
     if told:
@@ -409,180 +425,6 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 def _refuse(prog: str, reason: str) -> NoReturn:
     print(f"{prog}: {reason}", file=sys.stderr)
     sys.exit(2)
-
-
-# -- videos (RFC 0040) ---------------------------------------------------------------------------------
-
-
-def _review_videos(a: argparse.Namespace) -> None:
-    """`review videos [--accept N[,N]] [--place N NAME] [--date N WHEN] [--reject N[,N]] [--ask N[,N]]
-    [--top N] [--json]`: the queue (`video_review.read`), or the answers written (`video_review.plan`,
-    `write`); on a terminal with no answer given, one scene at a time. Exit 2, nothing written, for an
-    answer the queue cannot take or a head another writer moved."""
-    from ..contrib import video_review
-    from ..core import assets, places
-
-    lb = Logbook.find()
-    try:
-        accept = _numbers(a.accept)
-        reject = _numbers(a.reject)
-        ask = _numbers(a.ask)
-        place = {_number(n): name for n, name in a.place or []}
-        when = {_number(n): text for n, text in a.date or []}
-    except ValueError as e:
-        print(f"review: {e}", file=sys.stderr)
-        sys.exit(2)
-    if a.top is not None and a.top < 1:
-        print("review: --top is a number of scenes, 1 or more", file=sys.stderr)
-        sys.exit(2)
-    today = datetime.now(ZoneInfo(str(lb.meta["timezone"]))).date()
-    try:
-        known, owned = places.read(lb.root), assets.read(lb.root)
-    except (places.PlaceError, assets.AssetError) as e:
-        print(f"review: {e}", file=sys.stderr)
-        sys.exit(2)
-    told = bool(accept or reject or ask or place or when)
-    with lb.writer() if told else _nothing():
-        queue = video_review.read(lb, _mode(a))
-        if told:
-            try:
-                answers = video_review.plan(queue, accept, reject, ask, place, when, known, owned, today)
-                written = video_review.write(lb, queue, answers)
-            except (video_review.ReviewError, HeadMoved) as e:
-                print(f"review: {e}", file=sys.stderr)
-                sys.exit(2)
-            _say_written(written, a.json)
-            return
-    if not a.json and sys.stdin.isatty() and sys.stdout.isatty() and queue.rows:
-        _sitting(lb, _mode(a), a.top, known, owned, today)
-        return
-    rows = queue.rows[: a.top] if a.top is not None else queue.rows
-    if a.json:
-        data = video_review.to_json(queue)
-        data["rows"] = data["rows"][: len(rows)]
-        print(json.dumps(data, indent=2, ensure_ascii=False))
-        return
-    print(video_review.head_text(queue))
-    for n, row in enumerate(rows, 1):
-        for text in video_review.row_lines(lb, n, row):
-            print(text)
-    if len(rows) < len(queue.rows):
-        print(f"  and {len(queue.rows) - len(rows)} more; --top shows more")
-    if queue.rows:
-        print(
-            "nothing written: `review videos --accept N[,N]`, `--place N NAME`, `--date N WHEN`,"
-            " `--reject N[,N]` or `--ask N[,N]`"
-        )
-    else:
-        print("nothing to review: `videos infer` proposes the scenes of the files in the cache")
-
-
-def _sitting(
-    lb: Logbook,
-    mode: str,
-    top: int | None,
-    known: list[places.Place],
-    owned: list[assets.Asset],
-    today: date,
-) -> None:
-    """One scene at a time on a terminal: y confirms, n refuses, a keeps it to ask the family, Enter
-    skips, q stops. The queue is read and the owner asked without the writer lock, so a scheduled sync
-    never waits on a person; each answer is written at once under it, the head read again first (a
-    head another writer moved is said, and the queue read again)."""
-    from ..contrib import video_review
-
-    shown = 0
-    skipped: set[str] = set()
-    while True:
-        current = video_review.read(lb, mode)
-        pending = [(n, row) for n, row in enumerate(current.rows, 1) if row.id not in skipped]
-        if not pending or (top is not None and shown >= top):
-            print("done")
-            return
-        n, row = pending[0]
-        for text in video_review.row_lines(lb, n, row):
-            print(text)
-        shown += 1
-        try:
-            said = (
-                input("  y confirm / n not so / a ask the family / Enter skip / q stop: ").strip().casefold()
-            )
-        except EOFError:
-            said = "q"
-        if said == "q":
-            return
-        verb = {"y": "accept", "n": "reject", "a": "ask"}.get(said)
-        if verb is None:
-            skipped.add(row.id)
-            continue
-        try:
-            answers = video_review.plan(
-                current,
-                [n] if verb == "accept" else [],
-                [n] if verb == "reject" else [],
-                [n] if verb == "ask" else [],
-                {},
-                {},
-                known,
-                owned,
-                today,
-            )
-            _say_written(video_review.write(lb, current, answers), False)
-        except video_review.ReviewError as e:
-            print(f"  {e}")
-            skipped.add(row.id)
-        except HeadMoved:
-            print("  the record moved while you answered (another writer); this scene is asked again")
-            shown -= 1
-
-
-def _say_written(written: list, as_json: bool) -> None:  # type: ignore[type-arg]
-    if as_json:
-        print(
-            json.dumps(
-                [
-                    {
-                        "scene": w.row.ref,
-                        "answer": w.verb,
-                        "line": None if w.line is None else w.line["id"],
-                        "text": w.text,
-                    }
-                    for w in written
-                ],
-                indent=2,
-                ensure_ascii=False,
-            )
-        )
-        return
-    for w in written:
-        seq = f" (#{w.line['seq']})" if w.line is not None else ""
-        print(f"{w.row.video.name} · {w.row.ref.split('#', 1)[1]}: {w.text}{seq}")
-
-
-def _mode(a: argparse.Namespace) -> str:
-    return "asked" if getattr(a, "asked", False) else "answered" if getattr(a, "answered", False) else "open"
-
-
-class _nothing:
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
-
-def _numbers(given: list[str] | None) -> list[int]:
-    found: list[int] = []
-    for text in given or []:
-        found += [_number(part) for part in text.split(",") if part.strip()]
-    return found
-
-
-def _number(text: str) -> int:
-    try:
-        return int(str(text).strip())
-    except ValueError:
-        raise ValueError(f"{text!r} is not a scene's number") from None
 
 
 # -- status ----------------------------------------------------------------------------------------------
