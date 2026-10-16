@@ -93,6 +93,28 @@ this shape is a fail naming it. Nothing is deleted, hidden or rewritten: the lin
 and in every reader as they were written. `logbook doctor --implausible` lists them, one row each:
 the line id, the source, the kind, the timestamp and the range it missed, then the count.
 
+## The extras
+
+One `extra:` line per optional extra the doctor knows, `ais`, `crypto`, `sealed`, `speakers` and
+`transcribe`, in that order after `dates`: a pass naming the package that makes it, or a **warn** with
+its install line ([optional extras](install.md#optional-extras)). They are this machine's, so a
+`doctor` that finds no record prints them too, after its failed `record` line.
+
+```
+pass  extra:ais         websockets is installed
+pass  extra:crypto      cryptography is installed
+pass  extra:sealed      pyrage is installed
+warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
+pass  extra:transcribe  faster-whisper is installed
+```
+
+`transcribe` passes on either Whisper engine, `mlx-whisper` or `faster-whisper`. `speakers` is its own
+extra, apart from `transcribe` since it brings torch, so a machine that transcribes voice memos without
+telling the voices apart has that one warn. Nothing is imported to find out, since an engine loads its
+model on import: a module is looked for on the path, and pyannote.audio by its installed distribution,
+as `derive speakers` asks for it. A pass says the package is here, not that its models are: `logbook
+setup speakers --fetch-model` fetches those.
+
 ## Sending a diagnostic
 
 When something fails — the dream's model endpoint answers 500, a sync adapter stops, the service will

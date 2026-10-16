@@ -97,16 +97,17 @@ exit                 # then log in as records again, so ~/.local/bin is on the p
 
 ```bash
 # as records, on server.example
-uv tool install "openlogbook[ais,crypto,sealed,transcribe]"
+uv tool install "openlogbook[ais,crypto,sealed,speakers,transcribe]"
 # until the release after 0.6.1:
-# uv tool install "openlogbook[ais,crypto,sealed,transcribe] @ git+https://github.com/bighydro/logbook"
+# uv tool install "openlogbook[ais,crypto,sealed,speakers,transcribe] @ git+https://github.com/bighydro/logbook"
 logbook --version
 ```
 
-The four extras are the ones `doctor` checks (`extra:ais`, `extra:crypto`, `extra:sealed`,
-`extra:transcribe`); one missing is a standing warn, which makes no scheduled run clean and, with the
-message set up (step 4), is a message every run until it is fixed. On Linux, `transcribe` is
-`faster-whisper`; `describe` and `judge` are Apple silicon only and install nothing here
+The five extras are the ones `doctor` checks (`extra:ais`, `extra:crypto`, `extra:sealed`,
+`extra:speakers`, `extra:transcribe`); one missing is a standing warn, which makes no scheduled run clean
+and, with the message set up (step 4), is a message every run until it is fixed. On Linux, `transcribe`
+is `faster-whisper` and `speakers` is pyannote.audio on the CPU (it brings torch); `describe` and
+`judge` are Apple silicon only and install nothing here
 ([install](install.md#optional-extras)).
 
 The server runs a released package, installed for `records`, not a checkout of the repository. The
@@ -589,17 +590,18 @@ pass  dates             every line is dated inside its source's plausible range 
 pass  extra:ais         websockets is installed
 pass  extra:crypto      cryptography is installed
 pass  extra:sealed      pyrage is installed
+pass  extra:speakers    pyannote.audio is installed
 pass  extra:transcribe  faster-whisper is installed
 pass  sync:immich       configured (LOGBOOK_IMMICH_URL, LOGBOOK_IMMICH_KEY)
 pass  sync:dawarich     configured (LOGBOOK_DAWARICH_URL, LOGBOOK_DAWARICH_KEY)
 pass  crossing          hermes 2, mcp 1, dream 2 until 2027-03-31 model qwen2.5-7b-instruct
 pass  home              this machine (server) is the record's home since 2026-10-13
-pass  last-run          2026-10-14 06:00 (2 h ago): immich 12, dawarich 214 lines; doctor 20 pass, 0 warn, 0 fail
+pass  last-run          2026-10-14 06:00 (2 h ago): immich 12, dawarich 214 lines; doctor 21 pass, 0 warn, 0 fail
 pass  restore-test      passed 2026-10-04 (2026-10-03T010000Z, 48,190 lines)
 pass  serve             systemd system service (/etc/systemd/system/logbook-serve.service) answering at http://127.0.0.1:8765/
 pass  disk              412.6 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client
-20 checks: 20 pass, 0 warn, 0 fail
+21 checks: 21 pass, 0 warn, 0 fail
 ```
 
 The lines that say this page worked: `day-start` names your boundary; `crossing` lists the `dream` entry

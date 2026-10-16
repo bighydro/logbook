@@ -275,9 +275,9 @@ Some features need an extra library: reading an encrypted iPhone backup and shar
 (both `crypto`), serving the record to an AI assistant (`mcp`), listening to ships (`ais`),
 transcribing voice memos (`transcribe`), telling the voices of a recording apart (`speakers`, beside
 `transcribe`; it brings torch), and the two local models on Apple silicon (`judge`, `describe`).
-Logbook tells you when a command needs one; `logbook doctor` lists four of them (`ais`, `crypto`,
-`sealed`, `transcribe`) with a `pass` or `warn` each. You add one by installing the package with the
-extra's name in brackets:
+Logbook tells you when a command needs one; `logbook doctor` lists five of them (`ais`, `crypto`,
+`sealed`, `speakers`, `transcribe`) with a `pass` or `warn` each ([the doctor](doctor.md#the-extras)).
+You add one by installing the package with the extra's name in brackets:
 
 ```bash
 pipx install --force "openlogbook[crypto]"

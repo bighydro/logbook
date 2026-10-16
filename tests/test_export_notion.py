@@ -225,10 +225,11 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 
 
 def _entry(lb: Logbook, **fields: Any) -> Path:
-    """The policy with the owner's `notion` entry (max_tier 2, write list empty), plus `fields`."""
+    """The policy with the owner's `notion` entry (max_tier 2, no `write`: the list stays empty), plus
+    `fields`."""
     path = lb.root / "policy" / "crossing.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["notion"] = {"max_tier": 2, "write": [], **fields}
+    data["notion"] = {"max_tier": 2, **fields}
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -270,6 +271,19 @@ def test_without_the_notion_entry_the_command_refuses_in_one_sentence(lb: Logboo
     assert "notion" in err and str(path) in err
     assert not (tmp_path / "out").exists()
     assert lb.meta["seq"] == seq, "nothing appended"
+
+
+def test_an_entry_without_write_is_read_as_one_with_the_empty_write_list(lb: Logbook):
+    """`write` defaults to the empty list, and this destination writes nothing back, so the owner's entry
+    leaves it out (docs/export-notion.md, `policy.notion_entry`'s own message): spelled out empty, the
+    entry is read the same."""
+    path = lb.root / "policy" / "crossing.json"
+    assert json.loads(path.read_text(encoding="utf-8"))["notion"] == {"max_tier": 2}
+    left_out = policy.notion_entry(lb.root)
+    _entry(lb, write=[])
+    spelled_out = policy.notion_entry(lb.root)
+    assert left_out == spelled_out
+    assert left_out.write == () and left_out.writes == () and left_out.max_tier == 2
 
 
 def test_an_expired_entry_lets_nothing_leave(lb: Logbook, tmp_path: Path, capsys):

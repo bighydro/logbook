@@ -26,8 +26,10 @@ The checks, in the order they print:
   them per source with the earliest and the latest; they are never deleted or hidden, and
   `logbook doctor --implausible` lists their ids. Read from the index when it is current, else
   from the month files. A settings file that is not the shape is a fail naming it.
-- `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed, with its
-  install line when not (a warn).
+- `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `speakers`, `transcribe`) is installed,
+  with its install line when not (a warn). Nothing is imported to find out: a module's spec is looked
+  for, and pyannote.audio (`speakers`) is asked by its installed distribution, as `diarize.installed`
+  asks it, since its spec alone would import the `pyannote` package around it.
 - `google`: when either variable of the one Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
   `LOGBOOK_DRIVE_USER`), whether the key file is there and is a service-account key, whether the user
   is an address, which of the sources on the key (gmail, gcal, drive, gtasks, meet, gaudit) are
@@ -83,6 +85,7 @@ The checks, in the order they print:
 from __future__ import annotations
 
 import contextlib
+import importlib.metadata
 import importlib.util
 import shutil
 import sqlite3
@@ -108,13 +111,19 @@ GIB = 1024**3
 DISK_WARN_BYTES = 5 * GIB
 DISK_FAIL_BYTES = GIB // 2
 PIP = 'pip install "openlogbook[{extra}]"'
-#: each extra with the modules that satisfy it, any one of them; `transcribe` has an engine per platform
+#: each extra with the modules that satisfy it, any one of them; `transcribe` has an engine per platform,
+#: and `speakers` (pyannote.audio, which brings torch) is apart from it
 EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ais", ("websockets",)),
     ("crypto", ("cryptography",)),
     ("sealed", ("pyrage",)),
+    ("speakers", ("pyannote.audio",)),
     ("transcribe", ("mlx_whisper", "faster_whisper")),
 )
+#: a module asked by its installed distribution, not its spec: finding the spec of `pyannote.audio`
+#: imports the `pyannote` package around it, so it is asked as `diarize.installed` asks (labs, which
+#: contrib never imports)
+DISTRIBUTIONS: Mapping[str, str] = {"pyannote.audio": "pyannote.audio"}
 #: a path part that begins with one of these, case-folded, names the service: `Dropbox (Personal)`,
 #: `OneDrive - Example Org`, `~/Library/Mobile Documents/com~apple~CloudDocs`
 CLOUD_FOLDERS: tuple[tuple[str, str], ...] = (
@@ -341,7 +350,19 @@ def dates_check(lb: Logbook, state: str, now: datetime) -> Check:
 
 
 def module_installed(module: str) -> bool:
-    """Whether `module` could be imported, without importing it (an engine loads a model on import)."""
+    """Whether `module` could be imported, without importing it: an engine loads a model on import.
+    A module `DISTRIBUTIONS` names is asked as `diarize.installed` asks: it is here when it is already
+    in the process (None there blocks the import, so it is not), else when its distribution is
+    installed. Any other module is looked for by its spec."""
+    distribution = DISTRIBUTIONS.get(module)
+    if distribution is not None:
+        if module in sys.modules:
+            return sys.modules[module] is not None
+        try:
+            importlib.metadata.distribution(distribution)
+        except importlib.metadata.PackageNotFoundError:
+            return False
+        return True
     try:
         return importlib.util.find_spec(module) is not None
     except (ImportError, ValueError):  # a missing parent package, or a name find_spec refuses

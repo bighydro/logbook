@@ -112,6 +112,7 @@ def test_no_record_is_one_failure_and_the_extras(tmp_path: Path) -> None:
         "extra:ais",
         "extra:crypto",
         "extra:sealed",
+        "extra:speakers",
         "extra:transcribe",
     }
 
@@ -230,6 +231,10 @@ def test_a_missing_extra_names_its_install_line(lb: Logbook) -> None:
     assert 'pip install "openlogbook[ais]"' in checks["extra:ais"].detail
     assert checks["extra:transcribe"].status == "warn"
     assert 'pip install "openlogbook[transcribe]"' in checks["extra:transcribe"].detail
+    assert checks["extra:speakers"].status == "warn"
+    assert checks["extra:speakers"].detail == (
+        'pyannote.audio not installed: pip install "openlogbook[speakers]"'
+    )
 
 
 def test_transcribe_is_satisfied_by_either_engine() -> None:
@@ -237,6 +242,19 @@ def test_transcribe_is_satisfied_by_either_engine() -> None:
         checks = {c.name: c for c in doctor.run(None, {}, installed=lambda m, e=engine: m == e)}
         assert checks["extra:transcribe"].status == "pass", engine
         assert engine.replace("_", "-") in checks["extra:transcribe"].detail
+
+
+def test_speakers_is_pyannote_audio_and_apart_from_transcribe() -> None:
+    """`openlogbook[speakers]` (#307) is its own line, after `sealed` and before `transcribe`:
+    pyannote.audio satisfies it and nothing else does, and it satisfies nothing else."""
+    checks = {c.name: c for c in doctor.run(None, {}, installed=lambda m: m == "pyannote.audio")}
+    assert checks["extra:speakers"] == doctor.Check("extra:speakers", "pass", "pyannote.audio is installed")
+    assert checks["extra:transcribe"].status == "warn"
+    names = [n for n in checks if n.startswith("extra:")]
+    assert names == ["extra:ais", "extra:crypto", "extra:sealed", "extra:speakers", "extra:transcribe"]
+    for engine in ("mlx_whisper", "faster_whisper"):
+        checks = {c.name: c for c in doctor.run(None, {}, installed=lambda m, e=engine: m == e)}
+        assert checks["extra:speakers"].status == "warn", engine
 
 
 def test_installed_never_raises_on_an_odd_name() -> None:

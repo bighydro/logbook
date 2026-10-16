@@ -34,20 +34,21 @@ id, an idea with no Notion page, an org with no domain.
 Nothing leaves without the `notion` entry in `policy/crossing.json`:
 
 ```json
-{"notion": {"max_tier": 2, "write": []}}
+{"notion": {"max_tier": 2}}
 ```
 
 A record whose file has no such entry is refused in one sentence that says what to add. The entry works
 as every entry does: `max_tier` is the highest tier that may leave (tier 3 never leaves for Notion,
 whatever it says), and an `until` date ends it: from the day after, nothing leaves until you write a new
-date. `write` stays empty; this destination writes nothing back.
+date. The entry has no `write`: left out, it is the empty list, and it stays empty, since this
+destination writes nothing back.
 
 Only the lines of days you have signed (`logbook day sign`, [the signed day](signed-day.md)) inform a fact,
 as in every crossing. To let the facts of unsigned days leave too, the entry must allow it and you must
 ask for it, both:
 
 ```json
-{"notion": {"max_tier": 2, "write": [], "include_unsigned": true}}
+{"notion": {"max_tier": 2, "include_unsigned": true}}
 ```
 
 ```bash
