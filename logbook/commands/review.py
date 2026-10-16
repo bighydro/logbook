@@ -379,9 +379,9 @@ def status_arguments(sub: Subparsers) -> None:
         " idea's spark, exploring, build, built or killed; a place let go; an asset sold or let go. Tier 3"
         " for an org, 2 for the rest, no money on it; --reason puts your words on the line, and for an idea,"
         " a place or an asset also as a tier-2 note beside it (an org's stay on its line); a place or an"
-        " asset it closes keeps its registry entry, closed with `until`. `status list KIND`: every one of a"
-        " kind, its current status, stale ones and muted proposals said. A person has no status; a goal is"
-        " reviewed.",
+        " asset it closes keeps its registry entry, closed with `until`; --portfolio names which portfolio"
+        " holds an org, on its tier-3 line. `status list KIND`: every one of a kind, its current status,"
+        " stale ones and muted proposals said. A person has no status; a goal is reviewed.",
     )
     s.add_argument(
         "words",
@@ -391,12 +391,19 @@ def status_arguments(sub: Subparsers) -> None:
     )
     s.add_argument("--reason", metavar="TEXT", help="why, in your words; required for passed, let-go, killed")
     s.add_argument("--at", metavar="YYYY-MM-DD", help="the day you decided (default today)")
+    s.add_argument(
+        "--portfolio",
+        metavar="TEXT",
+        help='org only: which portfolio holds it, free text, on its tier-3 status line; "" clears it;'
+        " left out, it stays as it stood",
+    )
     s.add_argument("--json", action="store_true", help="the line written, or the list, as one JSON object")
     s.set_defaults(fn=cmd_status)
 
 
 def cmd_status(a: argparse.Namespace) -> None:
-    """`status KIND ENTITY DISPOSITION [--reason "…"] [--at DATE] [--json]`: one status line through
+    """`status KIND ENTITY DISPOSITION [--reason "…"] [--at DATE] [--portfolio TEXT] [--json]`: one
+    status line through
     the writer (`logbook.contrib.entity_status.write`); `status list KIND [--json]`: the list. A
     refusal is one sentence on stderr, exit 2, nothing written."""
     from ..contrib import entities, entity_status
@@ -405,7 +412,7 @@ def cmd_status(a: argparse.Namespace) -> None:
     words = list(a.words)
     try:
         if words[0] == "list":
-            if len(words) != 2 or a.reason is not None or a.at is not None:
+            if len(words) != 2 or a.reason is not None or a.at is not None or a.portfolio is not None:
                 raise entity_status.StatusError("`status list KIND` takes a kind and nothing else")
             found = entity_status.listing(lb, words[1])
             if a.json:
@@ -419,7 +426,7 @@ def cmd_status(a: argparse.Namespace) -> None:
             raise entity_status.StatusError(
                 'say KIND ENTITY DISPOSITION: `status org "Nordmann Verft AS" hold`'
             )
-        written = entity_status.write(lb, words[0], words[1], words[2], a.reason, a.at)
+        written = entity_status.write(lb, words[0], words[1], words[2], a.reason, a.at, portfolio=a.portfolio)
     except (entity_status.StatusError, entities.EntityError) as e:
         _refuse("status", str(e))
     if a.json:

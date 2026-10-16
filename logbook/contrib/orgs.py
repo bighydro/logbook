@@ -28,7 +28,14 @@ terminal and `serve` read every tier; `export site` its policy's), and money onl
 tier 3 is among them. An org's status is tier 3 (RFC 0037 §8), its reason on that line and nowhere
 else, so a gate without 3 shows no status and no reason, lists every org under no status and says
 how many status lines it may not show. The ledger's lines are tier 3: without money they are no
-touch at all, so no row, edge, last touch or figure rests on one."""
+touch at all, so no row, edge, last touch or figure rests on one.
+
+**The portfolio** (RFC 0037 §10.2, amended 15 October 2026) is the field of an org's latest status
+line that carries it (`entities.portfolios`), read from the status lines the gate shows and only
+when it reads tier 3: the shelf and the page say it, `show orgs --portfolio TEXT` and the Manifest's
+filter list the orgs in one (case and spaces aside), and the filter offers the portfolios the record
+holds. Through a gate without 3 no row carries one, none is offered, and a filter asked for lists no
+org at all, the same for every portfolio, so nothing tells which orgs one holds."""
 
 from __future__ import annotations
 
@@ -61,6 +68,7 @@ HEADINGS: tuple[tuple[str, tuple[str, ...]], ...] = (  # RFC 0037 §11, in order
 )
 NO_STATUS = "no status"
 HIDDEN = "status not shown: an org's status is tier 3, and this reads no tier 3"
+PORTFOLIO_HIDDEN = "a portfolio is tier 3, on an org's status line, and this reads no tier 3"
 THE_LEDGER = "the ledger"  # a ledger line as a last touch, without money: no merchant, no figure
 WITH_REASON = ("passed", "let-go")  # the rows whose reason the shelf says in full
 INTRO = re.compile(r"^(?:(?:re|fwd?|sv|vs|aw)\s*:\s*)*(?:intro(?:duction|ducing)?\b|.+\s<>\s.+)", re.I)
@@ -136,10 +144,15 @@ class Record:
     settings: entities.Settings
     on: date
     local: Any = field(repr=False)
+    portfolios: dict[str, str] = field(default_factory=dict)  # org → its portfolio; empty without tier 3
 
     def current(self, org: str) -> entities.Status | None:
         history = self.statuses.get(org, [])
         return history[-1] if history else None
+
+    def portfolio(self, org: str) -> str | None:
+        """The portfolio that holds `org`, as the gate may show it: None without tier 3."""
+        return self.portfolios.get(org) if self.statuses_read else None
 
     def touches_of(self, org: str) -> list[Touch]:
         return [t for t in self.touches if t.entity == org]
@@ -192,6 +205,7 @@ def _read(lb: Logbook, idx: Index, g: Gate, today: str | None) -> Record:
         ctx.settings,
         on,
         _local(days),
+        entities.portfolios([*marks, *shown]) if g.reads(MONEY_TIER) else {},
     )
 
 
@@ -332,6 +346,7 @@ class Row:
     documents: int
     money: dict[str, dict[str, float]] | None  # currency → in, out, net, for the shelf's year
     tier: int
+    portfolio: str | None = None  # the portfolio that holds it, only through a gate that reads tier 3
 
     @property
     def heading(self) -> str:
@@ -347,6 +362,7 @@ class Row:
             "since": self.since,
             "reason": None if self.status is None else self.status.reason,
             "proposed_by": None if self.status is None else self.status.proposed_by,
+            "portfolio": self.portfolio,
             "stale": self.stale,
             "stale_since": self.stale_since,
             "last_touch": None
@@ -394,6 +410,9 @@ class Shelf:
     money: bool
     withheld: int
     tier: int | None
+    portfolio: str | None = None  # the portfolio asked for, as asked; None for every org
+    portfolios: list[str] = field(default_factory=list)  # the record's, to filter by; none without tier 3
+    portfolios_read: bool = True  # whether the gate reads tier 3, where a portfolio is
 
     @property
     def passed(self) -> list[Row]:
@@ -412,6 +431,8 @@ class Shelf:
             "money": self.money,
             "year": self.year if self.money else None,
             "withheld": self.withheld,
+            "portfolio": self.portfolio,
+            "portfolios": self.portfolios,
             "orgs": [r.to_json() for r in self.rows],
             "passed": [
                 {"id": r.org.id, "name": r.org.label, "reason": r.status.reason}
@@ -437,17 +458,24 @@ def shelf(
     money: bool = False,
     year: str | None = None,
     today: str | None = None,
+    portfolio: str | None = None,
 ) -> Shelf:
     """Every named org under its heading, the most recent touch first (none last, by name), the
-    co-investor graph after; through the gate of `tiers` and `money`. Writes nothing."""
+    co-investor graph after; through the gate of `tiers` and `money`; with `portfolio`, only the
+    orgs in that one (`shelf_of`). Writes nothing."""
     g = gate(tiers, money)
     rec = read(lb, g, today)
-    return shelf_of(lb, rec, year)
+    return shelf_of(lb, rec, year, portfolio)
 
 
-def shelf_of(lb: Logbook, rec: Record, year: str | None = None) -> Shelf:
+def shelf_of(lb: Logbook, rec: Record, year: str | None = None, portfolio: str | None = None) -> Shelf:
+    """The shelf of `rec`; with `portfolio`, only the orgs that portfolio holds (`entities.fold`:
+    case and spaces aside), the graph and the passed among them. Through a gate without tier 3 a
+    portfolio asked for lists no org, whichever it is: the portfolio is on a tier-3 line."""
     if year is not None and not re.fullmatch(r"\d{4}", year.strip()):
         raise OrgError(f"--year {year!r} is not a year, YYYY")
+    if portfolio is not None and not portfolio.strip():
+        raise OrgError('--portfolio names a portfolio: --portfolio "Fund I"')
     wanted = year.strip() if year is not None else str(rec.on.year)
     by_org: dict[str, list[Touch]] = {}
     for t in rec.touches:
@@ -485,15 +513,39 @@ def shelf_of(lb: Logbook, rec: Record, year: str | None = None) -> Shelf:
                         *(_status_tier(s) for s in rec.statuses.get(org.id, [])),
                     ]
                 ),
+                rec.portfolio(org.id),
             )
         )
+    if portfolio is not None:
+        asked = entities.fold(portfolio)
+        rows = [r for r in rows if rec.statuses_read and entities.fold(r.portfolio or "") == asked]
     rows.sort(key=lambda r: r.org.label.casefold())
     rows.sort(key=lambda r: ("", 0) if r.last is None else (r.last.day, r.last.seq), reverse=True)
     graph = _graph(rows, {org: [t for t in found if rec.shown(t)] for org, found in by_org.items()}, rec)
     tiers = [r.tier for r in rows]
     return Shelf(
-        rows, graph, rec.on.isoformat(), wanted, rec.gate.money, rec.withheld, max(tiers, default=None)
+        rows,
+        graph,
+        rec.on.isoformat(),
+        wanted,
+        rec.gate.money,
+        rec.withheld,
+        max(tiers, default=None),
+        portfolio,
+        held(rec),
+        rec.statuses_read,
     )
+
+
+def held(rec: Record) -> list[str]:
+    """The portfolios the record's orgs are in, each once, case and spaces aside, under the first of
+    its spellings in sort order, by name; none through a gate without tier 3."""
+    if not rec.statuses_read:
+        return []
+    found: dict[str, str] = {}
+    for name in sorted({p for org in rec.orgs if (p := rec.portfolio(org)) is not None}):
+        found.setdefault(entities.fold(name), name)
+    return sorted(found.values(), key=lambda name: (name.casefold(), name))
 
 
 def _last_text(line: Line | None, g: Gate) -> str | None:
@@ -678,6 +730,7 @@ class StatusLine:
     tier: int
     standing: bool
     current: bool
+    portfolio: str | None = None  # the field the line carries: None when none, empty when it clears one
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -685,6 +738,7 @@ class StatusLine:
             "status": self.status,
             "proposed_by": self.proposed_by,
             "reason": self.reason,
+            "portfolio": self.portfolio,
             "line": self.line,
             "tier": self.tier,
             "standing": self.standing,
@@ -709,6 +763,7 @@ class Page:
     on: str
     hidden: bool  # the gate reads no tier 3: no status here, whether the org has one or not
     tier: int
+    portfolio: str | None = None  # the portfolio that holds it, only through a gate that reads tier 3
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -722,6 +777,7 @@ class Page:
                 "proposed_by": self.status.proposed_by,
                 "line": self.status.line,
             },
+            "portfolio": self.portfolio,
             "stale": self.stale,
             "stale_since": self.stale_since,
             "history": [s.to_json() for s in self.history],
@@ -795,6 +851,7 @@ def page_of(lb: Logbook, rec: Record, org_id: str) -> Page:
             _tier(line),
             str(line["id"]) not in rec.retracted,
             str(line["id"]) == in_force,
+            entities.portfolio_field(line.get("payload") or {}),
         )
         for line in rec.lines.get(org_id, [])
     ]
@@ -814,6 +871,7 @@ def page_of(lb: Logbook, rec: Record, org_id: str) -> Page:
         rec.on.isoformat(),
         not rec.statuses_read,
         max([entities.TIER, *(t.tier for t in mine), *(s.tier for s in history)]),
+        rec.portfolio(org_id),
     )
 
 
@@ -945,10 +1003,18 @@ def money_of(lines: Sequence[Line], by_seq: Mapping[int, Touch]) -> dict[str, di
 def shelf_rows(s: Shelf) -> Iterator[str]:
     """`show orgs`: the headings of RFC 0037 §11, one line per org, the reason of a passed or let-go
     row in full on the next; then the people with more than one org."""
+    if s.portfolio is not None and not s.portfolios_read:
+        yield f"no org shown by portfolio: {PORTFOLIO_HIDDEN}"
+        return
+    if s.portfolio is not None and not s.rows:
+        known = ", ".join(s.portfolios) or "none yet"
+        yield f"no org is in {s.portfolio} (the portfolios: {known})"
+        return
     if not s.rows:
         yield "no orgs: `logbook review org` names them from what the record already saw"
         return
-    head = f"orgs · {len(s.rows)} · {s.on} · tier {s.tier}"
+    count = f"{len(s.rows)}" if s.portfolio is None else f"{len(s.rows)} in {s.portfolio}"
+    head = f"orgs · {count} · {s.on} · tier {s.tier}"
     head += f" · money {s.year}" if s.money else " · money not shown"
     yield head
     if s.withheld:
@@ -982,6 +1048,8 @@ def row_text(r: Row) -> str:
         if r.status.proposal is not None and who == "dream":
             who = f"dream proposed {r.status.proposal}"
         parts.append(f"{r.status.status} since {r.since} ({who})")
+    if r.portfolio is not None:
+        parts.append(f"portfolio {r.portfolio}")
     if r.stale:
         parts.append(f"stale: nothing since {r.stale_since}")
     parts.append("no touch" if r.last is None else f"last touch {r.last.day} {r.last_text or r.last.kind}")
@@ -1006,6 +1074,8 @@ def page_rows(p: Page) -> Iterator[str]:
         yield f"  {HIDDEN}"
     else:
         yield "  —"
+    if p.portfolio is not None:
+        yield f"  portfolio {p.portfolio}"
     if p.stale:
         yield f"  stale: nothing since {p.stale_since}, no touch and no status"
     if p.money:
@@ -1033,7 +1103,15 @@ def page_rows(p: Page) -> Iterator[str]:
         for s in p.history:
             mark = " (current)" if s.current else "" if s.standing else " (retracted)"
             reason = f": {s.reason}" if s.reason else ""
-            yield f"  {s.day}  {s.status} ({s.proposed_by or 'owner'}){reason}{mark}"
+            portfolio = portfolio_text(s.portfolio)
+            yield f"  {s.day}  {s.status} ({s.proposed_by or 'owner'}){reason}{portfolio}{mark}"
+
+
+def portfolio_text(field: str | None) -> str:
+    """What a status line's `portfolio` field says, after the line: nothing when it carries none."""
+    if field is None:
+        return ""
+    return f" · portfolio {field}" if field else " · portfolio cleared"
 
 
 def money_text(currency: str, cell: Mapping[str, float]) -> str:

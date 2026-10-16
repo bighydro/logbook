@@ -24,6 +24,13 @@ A person has no status, and a goal is reviewed by RFC 0036's `review/v1`. The cu
 standing; any may follow any. A status that closes a registry entry (a place let go, an asset sold or
 let go) closes it with `until`, the line's local day (`entity_status`); the entry is never deleted.
 
+**A portfolio** (RFC 0037 §10.2, amended 15 October 2026) is free text naming which portfolio holds
+a company (`Fund I`): the optional `portfolio` field of an org's status line, and of no other kind's.
+Which portfolio holds a company is a position in money, so it rides on the org's tier-3 status line
+and never on an `entity/v1` line, which is tier 2. An org's portfolio is the field of its latest
+status line that carries it (`portfolios`): a status without the field leaves it as it stood, and
+an empty one clears it.
+
 **Readers' rules** (`policy/entities.json`, `Settings`): a status line with a reason that answers a
 proposal of another disposition (`proposal.status`) mutes proposals of that disposition for that
 entity for `mute_days` (365) while it is the current status (`muted`); a `hold` older than three
@@ -73,6 +80,7 @@ DISPOSITIONS: dict[str, tuple[str, ...]] = {
     ASSET: ("sold", "let-go"),
 }
 REASON_REQUIRED = frozenset({"passed", "let-go", "killed"})
+PORTFOLIO = "portfolio"  # an org's status line's field: which portfolio holds the company (§10.2)
 CLOSING: dict[str, tuple[str, ...]] = {PLACE: ("let-go",), ASSET: ("sold", "let-go")}  # close with `until`
 PROPOSED_BY = ("dream", "owner")
 NO_STATUS = {
@@ -329,6 +337,14 @@ def validate_status(payload: Mapping[str, Any]) -> list[str]:
     elif "note" in payload and "reason" not in payload:
         problems.append("note names the note that carries the reason; a status without a reason has none")
     problems += _maybe_string(payload, "label", "the entity's label at the time")
+    if PORTFOLIO in payload:
+        if not isinstance(payload[PORTFOLIO], str):
+            problems.append("portfolio must be the portfolio's name, free text, or empty to clear it")
+        if kind != ORG:
+            problems.append(
+                "portfolio: only an org's status line carries one (RFC 0037 §10.2): which portfolio holds"
+                " a company is a position in money, on the org's tier-3 line"
+            )
     if payload.get("proposed_by") not in PROPOSED_BY:
         problems.append(f"proposed_by must be one of {', '.join(PROPOSED_BY)}")
     proposal = payload.get("proposal")
@@ -513,13 +529,17 @@ def status_payload(
     supersedes: str | None = None,
     head: str | None = None,
     note: str | None = None,
+    portfolio: str | None = None,
 ) -> dict[str, Any]:
     """A `status/v1` payload: the owner's disposition of one entity, with the reason when given and
-    `note`, the id of the `note/v1` line written before it with the same words (RFC 0037 §10.5)."""
+    `note`, the id of the `note/v1` line written before it with the same words (RFC 0037 §10.5); for
+    an org, `portfolio` when given, an empty one clearing it (§10.2, amended 15 October 2026)."""
     payload: dict[str, Any] = {"schema": STATUS_SCHEMA, "entity": entity_ref(kind, entity_id)}
     if label is not None:
         payload["label"] = label
     payload["status"] = status
+    if portfolio is not None:
+        payload[PORTFOLIO] = portfolio
     if reason is not None:
         payload["reason"] = reason
     if note is not None:
@@ -976,6 +996,41 @@ def statuses(lines: Iterable[Line]) -> dict[tuple[str, str], list[Status]]:
                 note,
             )
         )
+    return found
+
+
+def portfolio_field(payload: Mapping[str, Any]) -> str | None:
+    """The `portfolio` a status payload carries, its words collapsed: None when it carries none, the
+    empty string when it clears one."""
+    value = payload.get(PORTFOLIO)
+    return " ".join(value.split()) if isinstance(value, str) else None
+
+
+def portfolios(lines: Iterable[Line]) -> dict[str, str]:
+    """Org id → the portfolio that holds it (RFC 0037 §10.2, amended 15 October 2026): the field of
+    the org's latest status line that carries it. A retracted line counts for nothing; a line a later
+    one supersedes still counts, because a status line without the field leaves the portfolio as it
+    stood. An empty field clears it: an org cleared, or never given one, is not in the map. Only an
+    org's line with one of an org's dispositions is read. `lines` are the status lines and the
+    retractions, in any order."""
+    ordered = sorted(lines, key=lambda line: int(line["seq"]))
+    retracted = retractions(line for line in ordered if line.get("kind") == RETRACTION)
+    found: dict[str, str] = {}
+    for line in ordered:
+        if line.get("kind") != STATUS or str(line["id"]) in retracted:
+            continue
+        payload = line.get("payload") or {}
+        entity = payload.get("entity")
+        text = portfolio_field(payload)
+        if payload.get("schema") != STATUS_SCHEMA or kind_of(entity) != ORG or text is None:
+            continue
+        entity_id = entity.get("id") if isinstance(entity, dict) else None
+        if not isinstance(entity_id, str) or not entity_id or payload.get("status") not in DISPOSITIONS[ORG]:
+            continue
+        if text:
+            found[entity_id] = text
+        else:
+            found.pop(entity_id, None)
     return found
 
 

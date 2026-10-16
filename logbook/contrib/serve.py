@@ -14,10 +14,11 @@ shelves: `/journeys?year=` the journeys that began in a year, the latest first (
 and `/journeys/FIRST/LAST` one journey (`journeys.read`): its days linking their Days, its stays as
 dots on a plain canvas drawn here, the promises made on it; `/people?year=` the canonical people of
 a year by days together (`person_page.ranked`) and the review queue of `people review`, and
-`/people/ID` one person (`person_page.read`); `/manifest` the orgs the owner named under what they
-decided about them (`orgs.shelf_of`, RFC 0037 §11) and the review queue of `review org`, `/org/ID`
-one org (`orgs.page_of`) and `/manifest/people` the people with more than one org, the money only
-when asked and the gate reads tier 3. Every derived row on them carries its evidence folded:
+`/people/ID` one person (`person_page.read`); `/manifest?portfolio=` the orgs the owner named under
+what they decided about them (`orgs.shelf_of`, RFC 0037 §11), or only those one portfolio holds, and
+the review queue of `review org`, `/org/ID` one org (`orgs.page_of`) and `/manifest/people` the
+people with more than one org, the money only when asked and the gate reads tier 3, and a portfolio
+only when the gate reads tier 3. Every derived row on them carries its evidence folded:
 what it rests on, the day, the ids of the lines. Every page is built from the index and the
 readers, so a Day renders in the time `logbook day` takes whatever the record's length, and nothing
 is written by a GET: every page is answered from the record at its head.
@@ -30,9 +31,9 @@ CLI writes. A journey's page posts its name to `/journeys/name` (`journeys.name`
 --trip` runs); the People page's queue posts to `/people/review`, Merge through
 `people_review.accept` and Not the same person through `people_review.reject` (`people review
 --accept`, `--reject`); the Manifest's queue posts to `/manifest/review` (`entity_review.accept` and
-`reject`, `review org --accept`, `--name`, `--reject`) and an org's page its status to
-`/manifest/status` (`entity_status.write`, `status org`). The Day carries the owner's two acts on
-it, Reflect and Sign (`Site._reflect`, `Site._sign`): the reflection posts to
+`reject`, `review org --accept`, `--name`, `--reject`) and an org's page its status and its
+portfolio to `/manifest/status` (`entity_status.write`, `status org … --portfolio`). The Day
+carries the owner's two acts on it, Reflect and Sign (`Site._reflect`, `Site._sign`): the reflection posts to
 `/day/YYYY-MM-DD/reflect` and is written through `day reflect`'s own `reflect.write` (the day's
 Wispr Flow draft offered prefilled, a recording heard through `day reflect --audio`'s path when the
 command wired one in, `Voice`), and the proposals the rules read in it are checkboxes whose form
@@ -1075,7 +1076,8 @@ class Site:
         if (m := PERSON_PATH.match(path)) is not None:
             return self.page_person(unquote(m.group(1)))
         if path == "/manifest":
-            return self.page_manifest(params.get("page") or "1")
+            asked = params.get("portfolio") or ""
+            return self.page_manifest(params.get("page") or "1", asked if asked.strip() else None)
         if path == "/manifest/people":
             return self.page_manifest_people()
         if (m := ORG_PATH.match(path)) is not None:
@@ -2204,24 +2206,45 @@ class Site:
         """The day the owner is in (the record's zone and `day_start`): what the stale flag counts to."""
         return day_start.of(self.lb.meta).today(self.now()).isoformat()
 
-    def page_manifest(self, page: str = "1") -> str:
+    def page_manifest(self, page: str = "1", portfolio: str | None = None) -> str:
         """The orgs the owner named, under what they decided about them (RFC 0037 §11: holding,
         exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most
-        recent touch first, each a link to its page with its evidence folded; then the review queue
-        of `review org`, its order, `PAGE_SIZE` a page, with its acts. One column, no table."""
+        recent touch first, each a link to its page with its evidence folded; a filter by the
+        portfolios the record holds, when the page reads tier 3, and with `portfolio` only the orgs
+        that one holds; then the review queue of `review org`, its order, `PAGE_SIZE` a page, with
+        its acts. One column, no table. Through a gate without tier 3 no filter is offered and one
+        asked for lists no org, the same page whichever portfolio is asked."""
         if not page.isdigit() or int(page) < 1:
             raise ValueError(f"page must be a number from 1, not {page!r}")
         with self._review_lock:  # the observed table is built once, as the other queues' are
-            shelf = orgs.shelf_of(self.lb, self._org_record())
+            shelf = orgs.shelf_of(self.lb, self._org_record(), portfolio=portfolio)
             report = entity_review.read(self.lb, entities.ORG) if self._acts() else None
-        head = f"{_plural(len(shelf.rows), 'org')}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
+        filtered = portfolio is not None and shelf.portfolios_read
+        count = _plural(len(shelf.rows), "org") + (f" in {portfolio}" if filtered else "")
+        head = f"{count}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
         parts = [f"<h1>The Manifest <small>{escape(head)}</small></h1>\n"]
+        if shelf.portfolios:
+            here = None if portfolio is None else entities.fold(portfolio)
+            links = ["<b>every org</b>" if here is None else self.link("every org", "/manifest")]
+            for name in shelf.portfolios:
+                if entities.fold(name) == here:
+                    links.append(f"<b>{escape(name)}</b>")
+                else:
+                    links.append(self.link(escape(name), f"/manifest?portfolio={quote(name, safe='')}"))
+            parts.append(f'<p class="pager">portfolio: {DOT.join(links)}</p>\n')
         if shelf.withheld:
             parts.append(
                 f'<p class="mute">{_plural(shelf.withheld, "status line")} not shown: an org\'s status is'
                 " tier 3, and this page reads no tier 3.</p>\n"
             )
-        if not shelf.rows:
+        if portfolio is not None and not shelf.portfolios_read:
+            parts.append(
+                '<p class="mute">no org shown by portfolio: a portfolio is tier 3, on an org\'s status'
+                " line, and this page reads no tier 3.</p>\n"
+            )
+        elif portfolio is not None and not shelf.rows:
+            parts.append(f"<p>no org is in {escape(portfolio)}; {self.link('every org', '/manifest')}</p>\n")
+        elif not shelf.rows:
             parts.append(
                 "<p>no orgs named yet: name them below, from what the sources already saw, or with"
                 " <code>logbook review org</code></p>\n"
@@ -2241,13 +2264,16 @@ class Site:
             f"<p>{self.link('People across orgs', '/manifest/people')}: who appears with more than one.</p>\n"
         )
         if report is not None:
-            parts.append(self._org_queue_html(report, int(page)))
+            kept = f"&portfolio={quote(portfolio, safe='')}" if filtered and portfolio is not None else ""
+            parts.append(self._org_queue_html(report, int(page), kept=kept))
         return self.document("manifest", "".join(parts), style=MANIFEST_STYLE)
 
     def _org_row(self, r: orgs.Row, among: Sequence[entities.Entity]) -> str:
         cls = ' class="stale"' if r.stale else ""
         link = self.link(f"<b>{escape(orgs.shown_name(r.org, among))}</b>", _org_path(r.org.id))
         head = [link, self._status_html(r.status, r.since)]
+        if r.portfolio is not None:
+            head.append(f'<span class="mute">portfolio {escape(r.portfolio)}</span>')
         if r.stale:
             head.append(f'<span class="stale-flag">stale: nothing since {escape(r.stale_since or "")}</span>')
         last = "no touch" if r.last is None else f"last touch {r.last.day} {r.last_text or r.last.kind}"
@@ -2282,10 +2308,13 @@ class Site:
             f' <span class="mute">since {escape(since or "")} ({escape(who)})</span>'
         )
 
-    def _org_queue_html(self, report: entity_review.Report, page: int, into: str | None = None) -> str:
+    def _org_queue_html(
+        self, report: entity_review.Report, page: int, into: str | None = None, kept: str = ""
+    ) -> str:
         """The review queue of `review org`, or the part of it that would place something with the org
         `into`: each proposal with its evidence folded and its acts, through the functions `review
-        org --accept`, `--name` and `--reject` call."""
+        org --accept`, `--name` and `--reject` call. `kept` is the shelf's filter as a query
+        (`&portfolio=…`), kept on the pager and on the way back from an act."""
         proposals = [p for p in report.proposals if into is None or (p.canonical and p.canonical.id == into)]
         if into is not None and not proposals:
             return ""
@@ -2310,16 +2339,16 @@ class Site:
         n = min(page, pages)
         first = (n - 1) * size
         shown = proposals[first : first + size]
-        back = _org_path(into) if into is not None else f"/manifest?page={n}"
+        back = _org_path(into) if into is not None else f"/manifest?page={n}{kept}"
         out.append(f'<ol class="shelf queue" start="{first + 1}">\n')
         out.extend(self._org_proposal(p, back) for p in shown)
         out.append("</ol>\n")
         if pages > 1:
             pager = [f"{first + 1}{EN_DASH}{first + len(shown)} of {len(proposals)}"]
             if n > 1:
-                pager.insert(0, f'<a href="/manifest?page={n - 1}#review">← earlier</a>')
+                pager.insert(0, f'<a href="/manifest?page={n - 1}{escape(kept)}#review">← earlier</a>')
             if n < pages:
-                pager.append(f'<a href="/manifest?page={n + 1}#review">more →</a>')
+                pager.append(f'<a href="/manifest?page={n + 1}{escape(kept)}#review">more →</a>')
             out.append(f'<p class="pager">{DOT.join(pager)}</p>\n')
         return "".join(out)
 
@@ -2374,6 +2403,8 @@ class Site:
             parts.append(f'<p class="head">{self._status_html(page.status, page.since)}</p>\n')
             if page.status.reason:
                 parts.append(f'<p class="reason">{escape(page.status.reason)}</p>\n')
+            if page.portfolio is not None:
+                parts.append(f'<p class="mute">portfolio {escape(page.portfolio)}</p>\n')
         elif page.hidden:
             parts.append(f'<p class="mute">{escape(orgs.HIDDEN)}.</p>\n')
         else:
@@ -2381,7 +2412,7 @@ class Site:
         if page.stale:
             parts.append(f'<p class="stale-flag">stale: nothing since {escape(page.stale_since or "")}</p>\n')
         if self._acts():
-            parts.append(self._org_acts(org, page.status))
+            parts.append(self._org_acts(org, page.status, page.portfolio, orgs.held(rec)))
         if page.money is not None:
             parts.append(
                 '<h2>Money <small>tier 3, derived from the ledger now</small></h2>\n<ul class="plain">\n'
@@ -2445,7 +2476,9 @@ class Site:
             parts.append('<ol class="shelf">\n')
             for s in page.history:
                 text = escape(
-                    f"{s.status} ({s.proposed_by or 'owner'})" + (f": {s.reason}" if s.reason else "")
+                    f"{s.status} ({s.proposed_by or 'owner'})"
+                    + (f": {s.reason}" if s.reason else "")
+                    + orgs.portfolio_text(s.portfolio)
                 )
                 if not s.standing:
                     text = f'<s class="retracted">{text}</s> <span class="mute">retracted</span>'
@@ -2472,13 +2505,24 @@ class Site:
             f'{day} <span class="badge">{escape(item.kind)}</span> {escape(item.what)}</li>\n'
         )
 
-    def _org_acts(self, org: entities.Entity, status: entities.Status | None) -> str:
-        """The status form: what `logbook status org ORG DISPOSITION [--reason …] [--at DAY]` writes."""
+    def _org_acts(
+        self,
+        org: entities.Entity,
+        status: entities.Status | None,
+        portfolio: str | None,
+        portfolios: Sequence[str],
+    ) -> str:
+        """The status form: what `logbook status org ORG DISPOSITION [--reason …] [--at DAY]
+        [--portfolio …]` writes. The portfolio box shows the portfolio that holds the org, and a
+        hidden field the same, so that a box left as it was writes no portfolio at all and an
+        emptied one clears it (`_org_status`)."""
         current = None if status is None else status.status
         choices = "".join(
             f'<option value="{s}"{" selected" if s == current else ""}>{s}</option>'
             for s in entities.DISPOSITIONS[entities.ORG]
         )
+        known = "".join(f'<option value="{escape(name)}">' for name in portfolios)
+        shown = escape(portfolio or "")
         return (
             '<section class="acts">\n'
             f'<form class="act" method="post" action="{MANIFEST_STATUS}">'
@@ -2488,9 +2532,13 @@ class Site:
             '<input type="text" name="reason" placeholder="why (passed and let-go need one)"'
             ' aria-label="reason" autocomplete="off">'
             '<input type="date" name="at" aria-label="the day you decided">'
+            f'<input type="text" name="portfolio" value="{shown}" placeholder="portfolio (empty: none)"'
+            ' aria-label="portfolio" list="portfolios" autocomplete="off">'
+            f'<input type="hidden" name="portfolio_was" value="{shown}">'
+            f'<datalist id="portfolios">{known}</datalist>'
             '<button name="act" value="status">Set status</button></form>\n'
             '<p class="mute">One <code>status/v1</code> line, tier 3, your reason on it and nowhere'
-            " else.</p>\n</section>\n"
+            " else, and the portfolio when you change it.</p>\n</section>\n"
         )
 
     def page_manifest_people(self) -> str:
@@ -2527,7 +2575,8 @@ class Site:
         writing is the Library's one answer (`_busy`), and nothing is written (a head that moved
         under the act is a 409 too). The review acts on the proposal `id` (`act` `accept`, `name`
         with the field `name`, `reject`) through `entity_review.accept` and `reject`, what `review
-        org --accept`, `--name` and `--reject` call; an org's status (`status`, `reason`, `at`) through
+        org --accept`, `--name` and `--reject` call; an org's status (`status`, `reason`, `at`,
+        `portfolio`) through
         `entity_status.write`, what `status org ORG DISPOSITION` calls. A proposal no longer in the
         queue, or an org the record does not name, is a 409; an answer the record refuses a 400.
         Done, a 303 to `back` when it is one of the Manifest's own pages."""
@@ -2593,6 +2642,7 @@ class Site:
                 form.get("status", ""),
                 reason if reason.strip() else None,
                 at or None,
+                portfolio=_portfolio_asked(form),
             )
         except (entity_status.StatusError, entities.EntityError) as e:
             return self._error(400, str(e))
@@ -3240,6 +3290,20 @@ def _folded(rows: Sequence[str]) -> str:
 
 def _org_path(entity: str) -> str:
     return f"/org/{quote(entity, safe='')}"
+
+
+def _portfolio_asked(form: Mapping[str, str]) -> str | None:
+    """The portfolio a status form asks for, as `status org … --portfolio` takes it: the box as typed
+    when it differs from what the page showed (`portfolio_was`), its spaces aside, an emptied box
+    asking to clear it and a respelled one asking for the new spelling; None, no portfolio at all,
+    when the box is as the page showed it or the form carries none, so a box left alone moves
+    nothing, however the record moved since."""
+    if "portfolio" not in form:
+        return None
+    typed = form["portfolio"]
+    if typed.split() == form.get("portfolio_was", "").split():
+        return None
+    return typed
 
 
 def _back(back: str | None, default: str) -> str:
