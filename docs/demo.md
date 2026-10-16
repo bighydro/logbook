@@ -21,8 +21,9 @@ birthday and every year of her life is whole. `--days` and `--years` are one or 
 
 You can browse these forty years without installing anything:
 [bighydro.github.io/logbook/ines/](https://bighydro.github.io/logbook/ines/) is this record, seed 1,
-rendered by `logbook export site` at tier 1 ([site.md](site.md)) — a Year page per year, every trip, a Days
-index per year, the places and the people — and published with the docs on every push to `main`.
+rendered by `logbook export site` at tier 2 ([site.md](site.md)) — a Year page per year, a Day page for each
+of its picks, every trip, a Days index per year, the places and the people — and published with the docs on
+every push to `main`.
 
 ## The phases
 

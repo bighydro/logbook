@@ -1,7 +1,8 @@
 """`logbook export site <folder> [--tier 1|1,2]`: the readers as a folder of static HTML — a Year page
-per year, every Trip page, a Days index per year, the places, the people — rendered as `serve` renders
-them, written as plain files with relative links, no script, nothing fetched; tier-gated like a crossing
-(tier 1 by default) and recorded as a crossing/v1 line. The Oslo persona's fortnight; nobody in it is real."""
+per year, a Day page for each of its picks, every Trip page, a Days index per year, the places, the
+people — rendered as `serve` renders them, written as plain files with relative links, no script,
+nothing fetched; tier-gated like a crossing (tier 1 by default) and recorded as a crossing/v1 line. The
+Oslo persona's fortnight; nobody in it is real."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import phone_width
 import pytest
 from persona import persona_record
 
@@ -23,6 +25,9 @@ from logbook.core.store import Logbook
 SATURDAY_TRIP = "trip-2026-06-13-2026-06-13"  # the night aboard Solvind: Ola is there by a tier-2 note only
 ZURICH_TRIP = "trip-2026-06-15-2026-06-17"  # Ola at the dinner, a tier-1 calendar entry
 NOTE_TEXT = "Anchored in the bay with Ola Nordmann"
+TIER_1_PICK = "2026-06-10"  # the June pick of the Year at tier 1: a Wednesday
+TIER_2_PICK = "2026-06-13"  # and at tier 1,2: the Saturday aboard, the note naming Ola now crossing
+README_DAY = "2025-06-14"  # the demo's day the README links: the June pick of 2025, at the cabin with Ola
 TRANSCRIPT_TITLE = "Boat plans"
 REFERENCE = re.compile(
     r"""(?:href|src|action|formaction|poster|data|srcset|cite)\s*=\s*["']([^"']*)["']""", re.I
@@ -82,6 +87,7 @@ def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_peop
         "index.html",
         "years/2026.html",
         "days/2026.html",
+        f"days/{TIER_1_PICK}.html",
         "trips.html",
         f"trips/{SATURDAY_TRIP}.html",
         f"trips/{ZURICH_TRIP}.html",
@@ -156,6 +162,58 @@ def test_every_page_is_self_contained_and_every_link_is_relative_and_resolves(
             assert folder.resolve() in target.parents, (rel, ref)
 
 
+def test_each_pick_of_a_year_is_a_day_page_and_its_row_in_the_days_index_links_it(
+    lb: Logbook, tmp_path: Path
+) -> None:
+    """The Year renders twelve picks in full, one day a month; each is also a page of its own,
+    `days/<day>.html`, `serve`'s Day page written down with every toggle open: the nights either
+    side, the timeline with what attached and who was there, the sources. Nothing to toggle or
+    submit on a static page. Its row in the Days index links it; every other day stays a row, the
+    anchor its neighbours link to, and no other Day page is written."""
+    folder = tmp_path / "Site"
+    _run(str(folder))
+    day = _read(folder, "days", f"{TIER_1_PICK}.html")
+    assert f"<h1>{TIER_1_PICK} <small>Wednesday</small></h1>" in day
+    assert "night before" in day and "night after" in day and "<h2>Timeline</h2>" in day
+    assert "<h2>Sources</h2>" in day
+    assert "<details" not in day or "<details open" in day, "every toggle open"
+    assert "<form" not in day and "<script" not in day
+    assert "expand all" not in day and "collapse all" not in day and "reflect and sign" not in day
+    assert 'href="../index.html"' in day and 'href="../years/2026.html"' in day, "the site's navigation"
+    assert 'href="2026.html"' in day, "and its year's Days index"
+    assert '<a href="2026.html#2026-06-08">the fortnight around</a>' in day, "from the record's first day"
+    assert '<a href="2026.html#2026-06-09">← 2026-06-09</a>' in day, "a neighbour is its row"
+    assert '<a href="2026.html#2026-06-11">2026-06-11 →</a>' in day
+
+    days = _read(folder, "days", "2026.html")
+    assert f'<td class="day"><a href="{TIER_1_PICK}.html">{TIER_1_PICK}</a></td>' in days
+    assert '<td class="day">2026-06-11</td>' in days, "a day with no page of its own is a row, unlinked"
+    assert {p.name for p in (folder / "days").iterdir()} == {"2026.html", f"{TIER_1_PICK}.html"}
+
+
+def test_a_day_page_the_root_and_the_tables_hold_a_phone_s_column(lb: Logbook, tmp_path: Path) -> None:
+    """The README sends a stranger straight to one of the demo's Day pages, as often as not on a
+    phone: the Day page, the root, the Days index that links it and the other pages in `serve`'s
+    stylesheet need no sideways scroll 400 px wide, read from their own HTML and stylesheet
+    (`phone_width`, no browser), as the Library's pages are held. A table wider than the column
+    scrolls inside itself."""
+    _policy(lb, 2)
+    folder = tmp_path / "Site"
+    _run(str(folder), "--tier", "1,2")
+    for parts in (
+        ("days", f"{TIER_2_PICK}.html"),
+        ("index.html",),
+        ("days", "2026.html"),
+        ("trips.html",),
+        ("places.html",),
+        ("people.html",),
+        ("people", "ola-nordmann.html"),
+    ):
+        text = _read(folder, *parts)
+        assert phone_width.problems(text) == [], parts
+        assert phone_width.phone_breakpoints(phone_width.parse(text)[1]), parts
+
+
 # -- the gate (ADR 0016) -----------------------------------------------------------------------------------
 
 
@@ -172,6 +230,7 @@ def test_tier_1_is_the_shape_of_the_record_and_names_nobody_a_tier_2_line_places
     assert "Nobody confirmed" in saturday
     zurich = _read(folder, "trips", f"{ZURICH_TRIP}.html")
     assert "Ola Nordmann" in _text(zurich), "the dinner is a tier-1 calendar entry"
+    assert not (folder / "days" / f"{TIER_2_PICK}.html").exists(), "the Saturday is a pick at tier 2 alone"
     index = _read(folder, "index.html")
     assert re.search(r"held back: [\d,]+ lines above tier 1", _text(index)), index
 
@@ -193,6 +252,9 @@ def test_tier_2_crosses_when_the_policy_names_the_site_and_is_refused_otherwise(
     whole = "\n".join(raw.decode("utf-8") for raw in _tree(folder).values())
     assert "tier 1,2" in _text(_read(folder, "index.html"))
     assert TRANSCRIPT_TITLE in whole or NOTE_TEXT in whole, "tier-2 text is on some page now"
+    saturday_page = _read(folder, "days", f"{TIER_2_PICK}.html")
+    assert NOTE_TEXT in saturday_page, "her note, in her words, on the day it was written"
+    assert "Ola Nordmann" in _text(saturday_page)
 
     assert _fails(str(folder), "--tier", "1,2,3") == 2
     assert "never" in capsys.readouterr().err
@@ -240,7 +302,7 @@ def test_every_run_appends_one_crossing_line_naming_the_site_and_the_folder_dige
         whole.update(f"{hashlib.sha256(files[rel]).hexdigest()}  {rel}\n".encode())
     assert p["package_sha256"] == whole.hexdigest()
     pages = p["extra"]["site"]["pages"]
-    assert pages == {"years": 1, "days": 1, "trips": 2, "places": 1, "people": 2}
+    assert pages == {"years": 1, "days": 1, "day_pages": 1, "trips": 2, "places": 1, "people": 2}
     assert p["extra"]["site"]["files"] == {"written": len(files), "unchanged": 0, "total": len(files)}
     assert lb.meta["seq"] == before + 1, "one line, nothing else"
 
@@ -298,32 +360,48 @@ def test_slugs_and_relative_paths() -> None:
 def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_synthetic_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """What the docs workflow publishes: `logbook demo --years 40 --seed 1` exported at tier 1 — a Year
-    page and a Days index for each calendar year of the forty (41, July to June), the childhood ones
-    included (lines, no track), every trip, the people; every link a file in the folder; and
-    `scripts/check_synthetic.py` passes."""
+    """What the docs workflow publishes: `logbook demo --years 40 --seed 1`, the `site` entry its step
+    writes into the record's policy, and `export site --tier 1,2` — a Year page and a Days index for
+    each calendar year of the forty (41, July to June), the childhood ones included (lines, no
+    track), a Day page per pick, every trip, the people; every link a file in the folder; and
+    `scripts/check_synthetic.py` passes. At tier 1 too, the default a real record exports at. The Day
+    the README links is a page at the same path on every build, since the seed is fixed: the June
+    pick of 2025, at the cabin with Ola, her note on it, held to a phone's column."""
     root = tmp_path / "Life"
     cli.main(["demo", "--years", "40", "--seed", "1", "--out", str(root)])
     monkeypatch.setenv("LOGBOOK_HOME", str(root))
-    folder = tmp_path / "ines"
-    _run(str(folder))
-    out = capsys.readouterr().out
-    assert "41 years 1986-07-01 \u2013 2026-06-30, tier 1" in out
-    pages = {p.as_posix() for p in _tree(folder)}
-    assert {f"years/{y}.html" for y in range(1986, 2027)} <= pages
-    assert {f"days/{y}.html" for y in range(1986, 2027)} <= pages
-    assert len([p for p in pages if p.startswith("trips/")]) > 100
-    assert "people/kari-nordmann.html" in pages and "people/ola-nordmann.html" in pages
-    for rel, raw in _tree(folder).items():
-        text = raw.decode("utf-8")
-        assert "<script" not in text.lower(), rel
-        for ref in REFERENCE.findall(text):
-            assert not ref.startswith(("/", "http:", "https:", "//")), (rel, ref)
-            target = (folder / rel).parent.joinpath(*ref.split("#")[0].split("/")).resolve()
-            assert target.is_file(), f"{rel} links {ref}, which is not a file in the site"
     script = Path(__file__).resolve().parents[1] / "scripts" / "check_synthetic.py"
     env = {**os.environ, "LOGBOOK_PII_PATTERNS": str(tmp_path / "no-patterns")}
-    r = subprocess.run(
-        [sys.executable, str(script), str(folder)], capture_output=True, encoding="utf-8", env=env
-    )
-    assert r.returncode == 0, r.stdout + r.stderr
+    for tiers in ("1", "1,2"):
+        if tiers == "1,2":
+            _policy(Logbook(root), 2)
+        folder = tmp_path / f"ines-{tiers.replace(',', '-')}"
+        _run(str(folder), "--tier", tiers)
+        out = capsys.readouterr().out
+        assert f"41 years 1986-07-01 \u2013 2026-06-30, tier {tiers}" in out
+        pages = {p.as_posix() for p in _tree(folder)}
+        assert {f"years/{y}.html" for y in range(1986, 2027)} <= pages
+        assert {f"days/{y}.html" for y in range(1986, 2027)} <= pages
+        day_pages = [p for p in pages if re.fullmatch(r"days/\d{4}-\d{2}-\d{2}\.html", p)]
+        assert 0 < len(day_pages) <= 12 * 41
+        assert len([p for p in pages if p.startswith("trips/")]) > 100
+        assert "people/kari-nordmann.html" in pages and "people/ola-nordmann.html" in pages
+        for rel, raw in _tree(folder).items():
+            text = raw.decode("utf-8")
+            assert "<script" not in text.lower(), rel
+            for ref in REFERENCE.findall(text):
+                assert not ref.startswith(("/", "http:", "https:", "//")), (rel, ref)
+                target = (folder / rel).parent.joinpath(*ref.split("#")[0].split("/")).resolve()
+                assert target.is_file(), f"{rel} links {ref}, which is not a file in the site"
+        r = subprocess.run(
+            [sys.executable, str(script), str(folder)], capture_output=True, encoding="utf-8", env=env
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+
+    readme_day = _read(folder, "days", f"{README_DAY}.html")
+    assert f"<h1>{README_DAY} <small>Saturday</small></h1>" in readme_day
+    assert "At the cabin with Ola Nordmann" in readme_day, "her note, at tier 2"
+    assert "Ola Nordmann (calendar, note, photo)" in readme_day, "confirmed present"
+    assert "2 photos" in readme_day and "Cabin" in readme_day
+    assert phone_width.problems(readme_day) == []
+    assert phone_width.problems(_read(folder, "index.html")) == []
