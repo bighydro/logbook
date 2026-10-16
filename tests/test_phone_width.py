@@ -65,6 +65,24 @@ def test_the_same_pages_without_the_fault_pass() -> None:
     assert phone_width.problems(_page(PHONE + held, body)) == []
 
 
+def test_a_flex_column_is_as_wide_as_its_widest_item() -> None:
+    """A flex container whose direction is a column lays its items one under another (the World
+    page's body: its header, the globe, the scrubber): its width is its widest item's, never their
+    sum; as a row the same items are side by side, and a column with one item past the column fails;
+    a column that wraps may lay its columns side by side, so it is read as their sum, erring wide."""
+    items = "<div><a>a</a><a>b</a></div>"
+    item = "a{display:block;min-width:15rem}"
+    for direction in ("column", "column-reverse"):
+        column = PHONE + f"div{{display:flex;flex-direction:{direction}}}" + item
+        assert phone_width.problems(_page(column, items)) == [], direction
+    row = phone_width.problems(_page(PHONE + "div{display:flex;flex-direction:row}" + item, items))
+    assert any("2 items side by side" in p for p in row), row
+    wide = PHONE + "div{display:flex;flex-direction:column}a{display:block;min-width:30rem}"
+    assert any("480 px, past the column" in p for p in phone_width.problems(_page(wide, items)))
+    wraps = PHONE + "div{display:flex;flex-direction:column;flex-wrap:wrap}" + item  # columns side by side
+    assert any("2 items side by side" in p for p in phone_width.problems(_page(wraps, items)))
+
+
 def test_the_phone_breakpoint_is_what_holds_a_nested_disclosure_in() -> None:
     with_it = WIDE_DETAILS + "@media (max-width:40rem){details{margin-left:1rem}}"
     assert phone_width.phone_breakpoints(with_it) == ["(max-width:40rem)"]

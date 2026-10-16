@@ -1,0 +1,478 @@
+"""The whole Library walked, two ways. Every act `logbook serve` answers, under another command's
+writer lock: one answer for all of them, the owner's of 14 October 2026 (a 409, one sentence, the
+form's input kept to send again) and nothing written. Every page it serves, from `/` through every
+link on every page, read as a phone 400 px wide reads it (`phone_width.py`, no browser). On the four
+synthetic years (`library_record.py`), the Oslo persona's fortnight (`persona.py`) and the orgs
+record (`orgs_record.py`); nobody and nothing here exists."""
+
+from __future__ import annotations
+
+import html
+import inspect
+import json
+import re
+import shutil
+import subprocess
+import sys
+from collections import Counter, deque
+from collections.abc import Iterator, Sequence
+from datetime import UTC, datetime
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import NamedTuple
+
+import phone_width
+import pytest
+from four_years import ASTRID
+from library_record import BERGEN_WINTER, library_record
+from orgs_record import TODAY, evidence_record, settle
+from persona import persona_record
+
+from logbook.contrib import entity_review, orgs, people_review, places_review, reflect, serve
+from logbook.core import store
+from logbook.core.store import Logbook
+
+LOOPBACK = "127.0.0.1"
+OCTOBER = datetime(2025, 10, 1, 12, 0, tzinfo=UTC)
+DAY = "2022-01-10"  # a day of the Bergen winter, with the promise on it
+SAID = "Another command is writing to the record; nothing was written. Try again in a moment."
+HEARD = "Heard on this machine: the harbour office, then the ferry home."
+JUNE = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)  # after the persona's fortnight
+WEDNESDAY = "2026-06-10"  # a day of it, with rows to star
+HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
+DETAILS = (
+    ("/day/D", serve.DAY_PATH),
+    ("/journeys/A/B", serve.JOURNEY_PATH),
+    ("/people/ID", serve.PERSON_PATH),
+    ("/org/ID", serve.ORG_PATH),
+)  # the pages one of many: a route each
+ROUTES = frozenset(
+    {
+        "/",
+        "/day/D",
+        "/days",
+        "/trips",
+        "/places",
+        "/assets",
+        "/gaps",
+        "/world",
+        "/journeys",
+        "/journeys/A/B",
+        "/people",
+        "/people/ID",
+        "/manifest",
+        "/manifest/people",
+        "/org/ID",
+    }
+)  # every page `Site._page` answers
+EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
+ANSWERS = "an error or a redirect"  # the walk's pages that are not a 200
+
+
+class Page(NamedTuple):
+    target: str
+    status: int
+    text: str
+
+
+@pytest.fixture(scope="module")
+def years(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    root = tmp_path_factory.mktemp("walk-years") / "lb"
+    library_record(root)
+    return root
+
+
+@pytest.fixture(scope="module")
+def fortnight(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    with pytest.MonkeyPatch.context() as mp:
+        return persona_record(tmp_path_factory.mktemp("walk-fortnight"), mp).root
+
+
+@pytest.fixture(scope="module")
+def manifest(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("LOGBOOK_DIAL_PREFIX", "44")
+        lb = evidence_record(tmp_path_factory.mktemp("walk-orgs"))
+        settle(lb)
+        return lb.root
+
+
+def _copy(source: Path, to: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    shutil.copytree(source, to)
+    monkeypatch.setenv("LOGBOOK_HOME", str(to))
+    monkeypatch.setenv("LOGBOOK_DIAL_PREFIX", "44")
+    return Logbook(to)
+
+
+def _hear(path: Path) -> reflect.Reflection:
+    """A Day's recording, heard as `day reflect --audio` hears one, without a model."""
+    assert path.read_bytes()
+    return reflect.Reflection(HEARD, reflect.HEARD, extra={"heard_by": "fake-whisper"})
+
+
+def _years_site(lb: Logbook) -> serve.Site:
+    return serve.Site(lb, now=lambda: OCTOBER, voice=serve.Voice(_hear))
+
+
+def _manifest_site(lb: Logbook) -> serve.Site:
+    return serve.Site(lb, now=lambda: datetime.fromisoformat(f"{TODAY}T12:00:00").replace(tzinfo=UTC))
+
+
+def _files(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+# -- forms, read as a browser reads them -------------------------------------------------------------------
+
+
+class Form(NamedTuple):
+    action: str
+    method: str
+    enctype: str
+    fields: dict[str, str]  # what the form sends as it stands: every named field but the buttons' and a file
+    files: list[str]  # the names of its file fields
+    buttons: list[tuple[str, str]]  # (name, value) of each named button
+
+
+class _Forms(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found: list[tuple[dict[str, str], Form]] = []
+        self.area: str | None = None  # the textarea being read
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = {k: v or "" for k, v in attrs}
+        if tag == "form":
+            form = Form(a.get("action", ""), a.get("method", "get"), a.get("enctype", ""), {}, [], [])
+            self.found.append((a, form))
+        elif not self.found:
+            return
+        fields = self.found[-1][1]
+        if tag == "input" and a.get("name"):
+            kind = a.get("type", "text")
+            if kind == "file":
+                fields.files.append(a["name"])
+            elif kind == "checkbox":
+                fields.fields[a["name"]] = ",".join(
+                    filter(None, (fields.fields.get(a["name"]), a.get("value")))
+                )
+            elif kind not in ("submit", "button", "reset"):
+                fields.fields[a["name"]] = a.get("value", "")
+        elif tag == "textarea" and a.get("name"):
+            self.area = a["name"]
+            fields.fields[self.area] = ""
+        elif tag == "select" and a.get("name"):
+            self.area = None
+            fields.fields.setdefault(a["name"], "")
+            self._select = a["name"]
+        elif tag == "option" and getattr(self, "_select", None) and not fields.fields[self._select]:
+            fields.fields[self._select] = a.get("value", "")
+        elif tag == "button" and a.get("name"):
+            fields.buttons.append((a["name"], a.get("value", "")))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "textarea":
+            self.area = None
+        elif tag == "select":
+            self._select = None
+
+    def handle_data(self, data: str) -> None:
+        if self.area is not None and self.found:
+            self.found[-1][1].fields[self.area] += data
+
+
+def _forms(page: str, cls: str | None = None) -> list[Form]:
+    """The page's forms that post, in order; with `cls`, only those of that class."""
+    parser = _Forms()
+    parser.feed(page)
+    parser.close()
+    return [
+        f
+        for attrs, f in parser.found
+        if f.method == "post" and (cls is None or cls in attrs.get("class", "").split())
+    ]
+
+
+def _paragraphs(page: str, cls: str) -> list[str]:
+    start, found = f'<p class="{cls}">', []
+    for part in page.split(start)[1:]:
+        found.append(part.partition("</p>")[0])
+    return found
+
+
+# -- every act, under another command's lock ---------------------------------------------------------------
+
+
+class Act(NamedTuple):
+    site: serve.Site
+    path: str
+    form: dict[str, str]
+    upload: serve.Upload | None = None
+
+
+def _acts(years: Logbook, manifest: Logbook) -> list[Act]:
+    """Every act the Library serves, each with a form as its page sends it: the shelves' (Places, a
+    journey's name, the People queue), the Manifest's (its queue, an org's status) and the Day's
+    (Reflect in words and by a recording, Sign, a star and an unstar, the "with…" field). Before the
+    lock: a reflection on the day, so the Day carries its Sign form, and a star, to unstar."""
+    site = _years_site(years)
+    assert (
+        site.write(
+            f"/day/{DAY}/reflect",
+            {"act": "reflect", "text": "I'll send Astrid the harbour map by Friday."},
+            LOOPBACK,
+            None,
+        ).status
+        == 303
+    )
+    day = site.respond(f"/day/{DAY}", "").body.decode("utf-8")
+    stars = [f.fields["line"] for f in _forms(day, "star")]
+    assert len(stars) >= 2, "the day carries rows to star"
+    assert (
+        site.write(serve.STAR_PATH, {"act": "star", "line": stars[0], "day": DAY}, LOOPBACK, None).status
+        == 303
+    )
+    (sign,) = _forms(site.respond(f"/day/{DAY}", "").body.decode("utf-8"), "sign")
+    clusters = [p.id for p in places_review.read(years).proposals]
+    (person,) = people_review.read(years).proposals
+    queue = entity_review.read(manifest, "org").proposals
+    named = {o.label: o.id for o in orgs.named(manifest).values()}
+    org = next(iter(named.values()))
+    shelf = _manifest_site(manifest)
+    return [
+        Act(
+            site,
+            serve.REVIEW_PATH,
+            {"id": clusters[0], "page": "1", "name": "The harbour office", "act": "name"},
+        ),
+        Act(site, serve.REVIEW_PATH, {"id": clusters[1], "page": "1", "name": "", "act": "reject"}),
+        Act(site, serve.NAME_PATH, {"id": BERGEN_WINTER, "name": "The Bergen winter"}),
+        Act(site, serve.PEOPLE_REVIEW_PATH, {"id": person.id, "year": "2025", "act": "merge"}),
+        Act(site, serve.PEOPLE_REVIEW_PATH, {"id": person.id, "year": "2025", "act": "reject"}),
+        Act(
+            shelf,
+            serve.MANIFEST_REVIEW,
+            {"id": queue[0].id, "back": "/manifest", "name": "Robåt AS", "act": "name"},
+        ),
+        Act(shelf, serve.MANIFEST_REVIEW, {"id": queue[1].id, "back": "/manifest", "act": "accept"}),
+        Act(shelf, serve.MANIFEST_REVIEW, {"id": queue[2].id, "back": "/manifest", "act": "reject"}),
+        Act(
+            shelf,
+            serve.MANIFEST_STATUS,
+            {
+                "org": org,
+                "back": f"/org/{org}",
+                "status": "hold",
+                "reason": "came back to it",
+                "at": "",
+                "act": "status",
+            },
+        ),
+        Act(site, f"/day/{DAY}/sign", {**sign.fields, "act": "sign"}),  # every box ticked
+        Act(
+            site,
+            f"/day/{DAY}/reflect",
+            {"text": "Other words.\nOn two lines, the harbour and the ferry.", "act": "reflect"},
+        ),
+        Act(
+            site,
+            f"/day/{DAY}/reflect",
+            {"act": "hear"},
+            serve.Upload("reflection.webm", "audio/webm", b"\x1aE\xdf\xa3"),
+        ),
+        Act(site, serve.STAR_PATH, {"day": DAY, "line": stars[1], "act": "star"}),
+        Act(site, serve.STAR_PATH, {"day": DAY, "line": stars[0], "act": "unstar"}),
+        Act(site, serve.WITH_PATH, {"day": DAY, "names": f"{ASTRID['name']}, Bjørn Lie", "at": "13:30"}),
+    ]
+
+
+def _path(act: Act) -> str:
+    """The act's path, a Day's with the day left out."""
+    found = serve.DAY_ACT.match(act.path)
+    return f"/day/D/{found.group(2)}" if found is not None else act.path
+
+
+def _kind(act: Act) -> str:
+    """The act as the Library names it: its path and its `act`."""
+    return f"{_path(act)} {act.form.get('act', '')}".strip()
+
+
+@pytest.fixture
+def holder() -> Iterator[dict[str, object]]:
+    """Another command's writer lock as the store writes it, held by a process that is alive."""
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        yield {"pid": other.pid, "command": "logbook sync", "since": "2025-10-01T06:00:00Z"}
+    finally:
+        other.kill()
+        other.wait()
+
+
+def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
+    years: Path, manifest: Path, holder: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """While another command holds the record's writer lock, every act of the Library, the shelves',
+    the Manifest's and the Day's alike, answers the same: a 409 whose page says the one sentence (and
+    who holds the lock, in the store's words), and keeps the form's input in a form that posts it
+    again; and nothing is written, not a line, not a file. Once the lock is free, the kept form sent
+    again is the act."""
+    mine = _copy(years, tmp_path / "years", monkeypatch)
+    theirs = _copy(manifest, tmp_path / "orgs", monkeypatch)
+    acts = _acts(mine, theirs)
+    found = re.search(r"/\(([a-z|]+)\)\$$", serve.DAY_ACT.pattern)  # the Day's acts, from its route
+    assert found is not None, serve.DAY_ACT.pattern
+    day_acts = {f"/day/D/{act}" for act in found.group(1).split("|")}
+    assert day_acts == {"/day/D/reflect", "/day/D/sign"}
+    assert {_path(a) for a in acts} == {*serve.WRITE_PATHS, *serve.LINE_ACTS, *day_acts}, "every act's path"
+    assert {_kind(a) for a in acts} >= {
+        f"{serve.REVIEW_PATH} name",
+        f"{serve.REVIEW_PATH} reject",
+        f"{serve.PEOPLE_REVIEW_PATH} merge",
+        f"{serve.PEOPLE_REVIEW_PATH} reject",
+        f"{serve.MANIFEST_REVIEW} accept",
+        f"{serve.MANIFEST_REVIEW} name",
+        f"{serve.MANIFEST_REVIEW} reject",
+        f"/day/D/reflect {serve.REFLECT}",
+        f"/day/D/reflect {serve.HEAR}",
+        f"{serve.STAR_PATH} star",
+        f"{serve.STAR_PATH} unstar",
+    }
+    locks = [lb.root.joinpath(*store.LOCK_FILE.parts) for lb in (mine, theirs)]
+    for lock in locks:
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        lock.write_text(json.dumps(holder), encoding="utf-8")
+    before = {lb.root: (_files(lb.root), lb.meta["head"]) for lb in (mine, theirs)}
+    answers: dict[str, str] = {}
+    kept: list[Form] = []
+    for act in acts:
+        response = act.site.write(act.path, act.form, LOOPBACK, f"http://{LOOPBACK}:8765", act.upload)
+        page = response.body.decode("utf-8")
+        assert response.status == 409, (_kind(act), response.status, page[:400])
+        assert _paragraphs(page, "busy") == [SAID], _kind(act)
+        assert "another logbook command is writing to this record (logbook sync" in page, _kind(act)
+        assert "--no-wait" not in page and "503" not in page
+        (again,) = _forms(page, "again")
+        assert again.action == act.path and again.buttons == [], _kind(act)
+        assert again.fields == act.form, (_kind(act), again.fields)
+        assert again.files == (["audio"] if act.upload is not None else []), _kind(act)
+        assert again.enctype == ("multipart/form-data" if act.upload is not None else ""), _kind(act)
+        assert phone_width.problems(page) == [], _kind(act)
+        main = page[page.index("<main>") : page.index("</main>")]
+        answers[_kind(act)] = main[: main.index('<form class="again"')]
+        kept.append(again)
+    assert len(set(answers.values())) == 1, "one answer, word for word, for every act"
+    for lb in (mine, theirs):
+        assert (_files(lb.root), Logbook(lb.root).meta["head"]) == before[lb.root], "nothing written"
+    for lock in locks:
+        assert json.loads(lock.read_text(encoding="utf-8")) == holder
+        lock.unlink()
+    for act, again in zip(acts, kept, strict=True):  # the lock free: the kept form is the act
+        response = act.site.write(again.action, again.fields, LOOPBACK, None, act.upload)
+        assert SAID not in response.body.decode("utf-8"), _kind(act)
+        if _kind(act) == f"{serve.PEOPLE_REVIEW_PATH} reject":  # merged a moment ago: out of the queue
+            assert response.status == 409 and "not in the queue" in response.body.decode("utf-8")
+        else:
+            assert response.status == 303, (_kind(act), response.status, response.body[:400])
+    assert Logbook(mine.root).meta["head"] != before[mine.root][1]
+
+
+def test_the_owner_s_sentence_is_the_library_s_one_busy_answer() -> None:
+    assert serve.BUSY == SAID
+
+
+# -- every page, on a phone ----------------------------------------------------------------------------------
+
+
+def _route(path: str) -> str:
+    return next((name for name, pattern in DETAILS if pattern.match(path)), path)
+
+
+def _sort(target: str) -> str:
+    """A page's kind: its route and the names in its query."""
+    path, _, query = target.partition("?")
+    names = sorted({part.partition("=")[0] for part in query.split("&") if part})
+    return _route(path) + ("?" + "&".join(names) if names else "")
+
+
+def _walk(site: serve.Site, seeds: Sequence[str]) -> dict[str, tuple[int, str]]:
+    """Every page the Library serves from `seeds` on, through every link on every page it reads (a
+    redirect's target among them), up to `EACH` of a kind: (status, text) by the page's target."""
+    queue, seen, kinds = deque(seeds), set(seeds), Counter(_sort(seed) for seed in seeds)
+    read: dict[str, tuple[int, str]] = {}
+    while queue:
+        target = queue.popleft()
+        path, _, query = target.partition("?")
+        response = site.respond(path, query)
+        text = response.body.decode("utf-8")
+        read[target] = (response.status, text)
+        links = [response.location] if response.location else [html.unescape(t) for t in HREF.findall(text)]
+        for link in links:
+            link = link.partition("#")[0]
+            if (
+                not link.startswith("/")
+                or link.startswith("//")
+                or link in seen
+                or kinds[_sort(link)] >= EACH
+            ):
+                continue
+            kinds[_sort(link)] += 1
+            seen.add(link)
+            queue.append(link)
+    return read
+
+
+@pytest.fixture(scope="module")
+def walked(
+    fortnight: Path, manifest: Path, tmp_path_factory: pytest.TempPathFactory
+) -> dict[str, list[Page]]:
+    """Every page the Library serves, walked once (`_walk`) from `/` on the persona's fortnight, whose
+    Day carries every form it can (Reflect and Sign, a reflection standing on it; the recording; the
+    stars; the "with…" field), and on the orgs record, for the Manifest; with an error of each kind
+    and a redirect. By route, a page that is not a 200 under `ANSWERS`."""
+    folder = tmp_path_factory.mktemp("walk")
+    with pytest.MonkeyPatch.context() as mp:
+        mine = _copy(fortnight, folder / "fortnight", mp)
+        site = serve.Site(mine, now=lambda: JUNE, voice=serve.Voice(_hear))
+        said = {"act": "reflect", "text": "I'll send Ola the harbour map by Friday. Ola will book the ferry."}
+        assert site.write(f"/day/{WEDNESDAY}/reflect", said, LOOPBACK, None).status == 303
+        day = site.respond(f"/day/{WEDNESDAY}", "").body.decode("utf-8")
+        assert all(_forms(day, cls) for cls in ("reflect", "audio", "sign", "star", "with")), "every form"
+        sites = (
+            (
+                site,
+                ["/", f"/day/{WEDNESDAY}", f"/day/{WEDNESDAY}?open=1", "/nowhere", "/days?from=2026-13-01"],
+            ),
+            (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
+        )
+        found: dict[str, list[Page]] = {}
+        for one, seeds in sites:
+            for target, (status, text) in _walk(one, seeds).items():
+                key = _route(target.partition("?")[0]) if status == 200 else ANSWERS
+                found.setdefault(key, []).append(Page(target, status, text))
+        return found
+
+
+def test_the_walk_knows_every_page_the_server_answers(walked: dict[str, list[Page]]) -> None:
+    """`ROUTES` is what `Site._page` answers, read from it: a page added there and not here fails
+    this; and the walk reaches every one of them, an error and a redirect besides, so the test below
+    holds each to the column."""
+    source = inspect.getsource(serve.Site._page)
+    literal = set(re.findall(r'path == "(/[^"]*)"', source))
+    patterns = {getattr(serve, name) for name in re.findall(r"\b([A-Z_]+_PATH)\.match\(path\)", source)}
+    assert literal | {name for name, pattern in DETAILS if pattern in patterns} == ROUTES
+    assert patterns == {pattern for _, pattern in DETAILS}
+    assert set(walked) == {*ROUTES, ANSWERS}, {*ROUTES, ANSWERS} ^ set(walked)
+    assert {p.status for p in walked[ANSWERS]} >= {302, 400, 404}
+
+
+@pytest.mark.parametrize("route", [*sorted(ROUTES), ANSWERS])
+def test_every_page_the_library_serves_fits_a_phone(walked: dict[str, list[Page]], route: str) -> None:
+    """Read as a phone 400 px wide reads them, every disclosure open, from the HTML and the page's own
+    stylesheet (`phone_width`, no browser): every page `logbook serve` serves (`walked`: the Day,
+    every shelf, the Manifest, each detail page, an error, a redirect), by route: no element passes
+    the column with the frames around it, every image and pre is held inside it, and every stylesheet
+    has its phone breakpoint. The four years' widest shelves are held to it in `test_library_pages.py`
+    besides."""
+    for page in walked[route]:
+        assert phone_width.problems(page.text) == [], page.target
+        assert phone_width.phone_breakpoints(phone_width.parse(page.text)[1]), page.target

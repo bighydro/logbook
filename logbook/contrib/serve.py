@@ -48,11 +48,11 @@ answered only when the connection comes from this machine (the client address is
 form was submitted from the server's own pages (the browser's `Origin`, when it sends one, names
 127.0.0.1); anything else is a 403 and nothing is written. Every write is one at a time
 (`Site._write_lock`) and through the CLI's own function, under the record's writer lock and never
-waiting for it: another command writing is a 503 on the Places, Journeys and People forms and a 409
-on the Manifest's and the Day's (Reflect, Sign, the star and the "with…" field), and nothing is
-written. After a write the head has moved, and the next request reads the record again as after a
-sync. The policy's `write` list (the MCP door, ADR 0022) is never read: this is the owner's own
-page.
+waiting for it: another command writing is one answer for every act, the shelves', the Manifest's
+and the Day's alike (`Site._busy`): a 409, one sentence (`BUSY`), the form's input kept in a form
+that sends it again, and nothing written. After a write the head has moved, and the next request
+reads the record again as after a sync. The policy's `write` list (the MCP door, ADR 0022) is never
+read: this is the owner's own page.
 
 The server keeps nothing between requests but the head it last saw. When a sync moves the head
 while it runs, the next request brings the index to the new head first (`Site.current`: once,
@@ -189,6 +189,10 @@ ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
+# another command holds the writer lock: every act's one answer, a 409 (the owner's word of 14 Oct 2026)
+BUSY = "Another command is writing to the record; nothing was written. Try again in a moment."
+# the fields of the forms the owner types in, shown again in the busy answer's form; the rest kept hidden
+TYPED = {"text": "your reflection", "name": "the name", "names": "who was there", "reason": "the reason"}
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
 STATE_FILES = (places_review.STATE_FILE,)  # record-relative bookkeeping the pages read, in the tag
 NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
@@ -388,7 +392,13 @@ form.act input[type=text]{flex:1 1 10rem;min-width:0}
 form.act select,form.act input[type=date]{max-width:100%}
 section.acts{border:1px solid var(--line);border-radius:4px;padding:.2rem .6rem;margin:.6rem 0}
 s.retracted{color:var(--mute)}
-"""  # the Manifest's pages only: every other page, and an exported site, keep STYLE as it was
+"""  # the Manifest's pages only (an exported site has none): every other page keeps STYLE as it was
+TABLES_STYLE = """
+@media (max-width:40rem){table{display:block;overflow-x:auto}}
+li.cluster svg{max-width:100%}
+"""  # the pages of tables, Days, Trips, Places, Assets and Gaps, served or exported (`export site`), on a
+# phone: a table scrolls inside its own box (STYLE's phone rule says so too, for every page, the Day's
+# Sources among them) and a cluster's canvas keeps to the column
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
@@ -590,13 +600,12 @@ class Site:
     ) -> Response:
         """A POST: one of the forms of the server's own pages, each through the function the CLI
         runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
-        Places page's (`_write_place`), the Journeys page's name (`_write_name`) and the People
-        page's review (`_write_review`); another command writing the record is a 503 and nothing
-        written, try again. The Manifest's queue and an org's status (`_write_manifest`), the same
-        way but a 409 (the owner's word of 14 October 2026 for a Library act). A Day's: Reflect and
-        Sign (`_reflect`, `_sign`), through `day reflect`'s own functions, and the star and the
-        "with…" field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s; another
-        command writing the record is a 409 on these, nothing written. Refused (403, nothing
+        Places page's (`_write_place`), the Journeys page's name (`_write_name`), the People page's
+        review (`_write_review`), the Manifest's queue and an org's status (`_write_manifest`). A
+        Day's: Reflect and Sign (`_reflect`, `_sign`), through `day reflect`'s own functions, and the
+        star and the "with…" field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s.
+        Another command writing the record is the same answer on every one of them, caught here
+        once (`_busy`: a 409, the form kept), and nothing is written. Refused (403, nothing
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
         Origin header when it sent one, names 127.0.0.1: this machine, the server's own pages. A
         field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
@@ -633,26 +642,59 @@ class Site:
                 " pages or `logbook day reflect`",
             )
             return self._error(403, f"refused {where}: {what}; nothing was written")
-        if day_act is not None:
-            day, act = day_act.group(1), day_act.group(2)
-            return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
-        if path == STAR_PATH:
-            return self._star(form)
-        if path == WITH_PATH:
-            return self._with(form)
-        if path in MANIFEST_PATHS:
-            return self._write_manifest(path, form)
-        acts = {
-            REVIEW_PATH: self._write_place,
-            NAME_PATH: self._write_name,
-            PEOPLE_REVIEW_PATH: self._write_review,
-        }
-        with self._write_lock, self._review_lock:
-            try:
-                with self.lb.writer(command="logbook serve", wait=False):
-                    return acts[path](form)
-            except Locked as e:
-                return self._error(503, _not_waiting(e))
+        try:
+            if day_act is not None:
+                day, act = day_act.group(1), day_act.group(2)
+                return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
+            if path == STAR_PATH:
+                return self._star(form)
+            if path == WITH_PATH:
+                return self._with(form)
+            if path in MANIFEST_PATHS:
+                return self._write_manifest(path, form)
+            acts = {
+                REVIEW_PATH: self._write_place,
+                NAME_PATH: self._write_name,
+                PEOPLE_REVIEW_PATH: self._write_review,
+            }
+            with self._write_lock, self._review_lock, self.lb.writer(command="logbook serve", wait=False):
+                return acts[path](form)
+        except Locked as e:  # every act's one answer, whichever took the lock
+            return self._busy(path, form, e, upload)
+
+    def _busy(self, path: str, form: Mapping[str, str], e: Locked, upload: Upload | None) -> Response:
+        """Another command holds the record's writer lock: the one answer of every act (the owner's
+        word of 14 October 2026), raised before anything is written. A 409; the one sentence (`BUSY`),
+        who holds the lock in the store's words, and the form as it was sent, in a form that posts it
+        to `path` again: the words the owner typed (`TYPED`) in plain fields (the page's completion
+        of names and its language are not carried), the rest hidden. A recording cannot be put back
+        by a page: its form asks for the file again."""
+        held = escape(str(e).replace(NOT_WAITING, ""))
+        out = [
+            f'<h1>409</h1>\n<p class="busy">{escape(BUSY)}</p>\n<p class="mute">The lock: {held}.</p>\n'
+            f'<form class="again" method="post" action="{escape(path)}"'
+            + (' enctype="multipart/form-data"' if upload is not None else "")
+            + ">\n"
+        ]
+        for name, value in form.items():
+            if name == "text":
+                out.append(
+                    f'<textarea name="text" rows="6" aria-label="{TYPED[name]}">{escape(value, quote=False)}'
+                    "</textarea>\n"
+                )
+            elif name in TYPED:
+                out.append(
+                    f'<input type="text" name="{name}" value="{escape(value)}" aria-label="{TYPED[name]}"'
+                    ' autocomplete="off">\n'
+                )
+            else:
+                out.append(f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">\n')
+        if upload is not None:
+            out.append(
+                '<label>the recording, again <input type="file" name="audio" accept="audio/*"></label>\n'
+            )
+        out.append("<button>Try again</button>\n</form>\n")
+        return Response(409, self.document("409", "".join(out)).encode("utf-8"))
 
     def _write_place(self, form: Mapping[str, str]) -> Response:
         """The Places page's form: `act` `name` (the field `name`, else the name proposed) or
@@ -738,8 +780,6 @@ class Site:
                     standing = reflect.reflections(lines, retracted)
                     if reflect.same(r.text, standing, r.dictation) is None:  # never written twice
                         reflect.write(self.lb, day, r, None, today)
-            except Locked as e:
-                return self._error(409, _not_waiting(e))
             except (HeadMoved, Stale) as e:
                 return self._error(409, str(e))
             except ValueError as e:  # ReflectError, NoteError, SignError (the note's moment)
@@ -798,8 +838,6 @@ class Site:
                         )
                     accepted = reflect.chosen(found.proposals, wanted)
                     reflect.close(self.lb, day, today, r, accepted)
-            except Locked as e:
-                return self._error(409, _not_waiting(e))
             except (HeadMoved, Stale) as e:
                 return self._error(409, str(e))
             except ValueError as e:  # ReflectError, SignError, NoteError
@@ -840,8 +878,8 @@ class Site:
         `stars.star` and `stars.unstar`, the functions `logbook star` and `logbook unstar` run, so
         the line written is theirs. A star on a line starred already writes nothing; an unstar of a
         line no longer starred (the page was older than the record) is a 409, a line that takes no
-        star a 400; another command writing the record a 409, the Day's answer, and nothing
-        written. Done, a 303 to the Day at the row (`open` keeps an expanded page expanded)."""
+        star a 400; another command writing the record the Library's one answer (`_busy`), and
+        nothing written. Done, a 303 to the Day at the row (`open` keeps an expanded page expanded)."""
         act, line, day = form.get("act", ""), form.get("line", "").strip(), form.get("day", "")
         if act not in ("star", "unstar") or not line:
             return self._error(400, "the form names a line and an act: star or unstar")
@@ -857,8 +895,6 @@ class Site:
                         stars.star(self.lb, line)
                     else:
                         stars.unstar(self.lb, line)
-            except Locked as e:
-                return self._error(409, _not_waiting(e))
             except stars.NotStarred as e:
                 return self._error(409, f"{e}; /day/{day} is the day as it stands")
             except stars.StarError as e:
@@ -872,8 +908,8 @@ class Site:
         """The Day page's "with…" field: the `names` given (one, or several split at commas) on
         `day`, at `at` (`HH:MM`) when the clock was filled in, through `presence.state`, the function
         `logbook with` runs, so the lines written are its. A name the record does not place is a
-        400 with the people-review hint; another command writing the record a 409, the Day's
-        answer; nothing is written either way. Done, a 303 to the Day."""
+        400 with the people-review hint; another command writing the record the Library's one
+        answer (`_busy`); nothing is written either way. Done, a 303 to the Day."""
         day, at = form.get("day", ""), form.get("at", "").strip() or None
         names = [name for name in form.get("names", "").split(",") if name.strip()]
         try:
@@ -887,8 +923,6 @@ class Site:
                 with self.lb.writer(command="logbook serve", wait=False):
                     self.current()
                     presence.state(self.lb, day, names, at, now=self.now())
-            except Locked as e:
-                return self._error(409, _not_waiting(e))
             except presence.WithError as e:
                 return self._error(400, str(e))
             except HeadMoved as e:
@@ -1064,7 +1098,7 @@ class Site:
         """One HTML document: the head, the navigation, `body`, the footer and `footnote` under it;
         `script` is the one inline script a page may carry (the Places page's keys, the Day's record
         button), named by hash in that page's policy; `style` what a page adds to the one inline
-        stylesheet (the Manifest's, so every other page keeps its bytes)."""
+        stylesheet (the Manifest's, the table pages', so every other page keeps its bytes)."""
         meta = self.lb.meta
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
@@ -1457,7 +1491,9 @@ class Site:
     def page_days(self, first: str | None, last: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self.document("days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n")
+            return self.document(
+                "days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n", style=TABLES_STYLE
+            )
         if last is None:
             last = whole[1] if first is None else _clip(first, WINDOW_DAYS - 1, whole)
         else:
@@ -1507,7 +1543,7 @@ class Site:
             ids if self.static else None,
         )
         body += self._starred(first, last)
-        return self.document(f"days {first} {EN_DASH} {last}", body)
+        return self.document(f"days {first} {EN_DASH} {last}", body, style=TABLES_STYLE)
 
     def _starred(self, first: str, last: str) -> str:
         """The window's stars (RFC 0041), a photo's among them, in the order of the lines they mark:
@@ -1532,7 +1568,9 @@ class Site:
     def page_trips(self, year: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self.document("trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n")
+            return self.document(
+                "trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n", style=TABLES_STYLE
+            )
         year = year or whole[1][:4]
         if not YEAR.fullmatch(year):
             raise ValueError(f"not a year (YYYY): {year!r}")
@@ -1544,7 +1582,7 @@ class Site:
         first, last = max(f"{year}-01-01", whole[0]), min(f"{year}-12-31", whole[1])
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
-            return self.document(f"trips {year}", "".join(parts))
+            return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
         rd = reading.read(self.lb, first, last, self.airports, self.tiers)
         found, warning = trips.trips(rd)
         if warning:
@@ -1558,7 +1596,7 @@ class Site:
                     [self.trip_row(t, rd) for t in found],
                 )
             )
-        return self.document(f"trips {year}", "".join(parts))
+        return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
 
     def trip_row(self, trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
         """One row of the trips table; the dates link the trip's days (`/days?from=&to=`, which a
@@ -1597,7 +1635,7 @@ class Site:
             body += f'<p class="mute">{escape(note)}</p>\n'
         body += self._named_places(report)
         if self.static:
-            return self.document("places", body)
+            return self.document("places", body, style=TABLES_STYLE)
         total = len(report.proposals)
         pages = max(1, math.ceil(total / PAGE_SIZE))
         n = min(int(page), pages)
@@ -1606,10 +1644,10 @@ class Site:
         body += f"<h2>Name this place <small>{escape(places_review.head(report))}</small></h2>\n"
         if not report.observed:
             body += "<p>no places observed: the record has no stays yet</p>\n"
-            return self.document("places", body)
+            return self.document("places", body, style=TABLES_STYLE)
         if not shown:
             body += "<p>nothing to review: every place you return to is named</p>\n"
-            return self.document("places", body)
+            return self.document("places", body, style=TABLES_STYLE)
         body += (
             '<p class="mute">The places you return to that have no name yet, by nights then hours, each'
             " with what the record already says about it. Name writes the field into places.json and the"
@@ -1633,7 +1671,7 @@ class Site:
         if n < pages:
             pager.append(f'<a href="/places?page={n + 1}">more →</a>')
         body += f'<p class="pager">{DOT.join(pager)}</p>\n'
-        return self.document("places", body, PLACES_SCRIPT)
+        return self.document("places", body, PLACES_SCRIPT, style=TABLES_STYLE)
 
     def _named_places(self, report: places_review.Report) -> str:
         found = report.places
@@ -2486,10 +2524,10 @@ class Site:
 
     def _write_manifest(self, path: str, form: Mapping[str, str]) -> Response:
         """A Manifest form, under the record's writer lock and never waiting for it: another command
-        writing is a 409, one sentence, and nothing is written (so is a head that moved under the
-        act). The review acts on the proposal `id` (`act` `accept`, `name` with the field `name`,
-        `reject`) through `entity_review.accept` and `reject`, what `review org --accept`, `--name`
-        and `--reject` call; an org's status (`status`, `reason`, `at`) through
+        writing is the Library's one answer (`_busy`), and nothing is written (a head that moved
+        under the act is a 409 too). The review acts on the proposal `id` (`act` `accept`, `name`
+        with the field `name`, `reject`) through `entity_review.accept` and `reject`, what `review
+        org --accept`, `--name` and `--reject` call; an org's status (`status`, `reason`, `at`) through
         `entity_status.write`, what `status org ORG DISPOSITION` calls. A proposal no longer in the
         queue, or an org the record does not name, is a 409; an answer the record refuses a 400.
         Done, a 303 to `back` when it is one of the Manifest's own pages."""
@@ -2506,8 +2544,6 @@ class Site:
                     if path == MANIFEST_REVIEW:
                         return self._org_review(form)
                     return self._org_status(form)
-            except Locked as e:
-                return self._error(409, _not_waiting(e))
             except HeadMoved as e:
                 return self._error(409, str(e))
             except (
@@ -2567,7 +2603,7 @@ class Site:
         body = "<h1>Assets</h1>\n"
         if not registry:
             body += f"<p>no assets registered ({escape(assets.ASSETS_FILE)}); `logbook assets add`</p>\n"
-            return self.document("assets", body)
+            return self.document("assets", body, style=TABLES_STYLE)
         named = places.read(self.lb.root)
         statuses = asset_status.read(self.lb, registry, named, self.now())
         tz = self.tz
@@ -2602,7 +2638,7 @@ class Site:
             ],
             rows,
         )
-        return self.document("assets", body)
+        return self.document("assets", body, style=TABLES_STYLE)
 
     def page_world(self, first: str | None, last: str | None) -> str:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
@@ -2626,7 +2662,7 @@ class Site:
         )
         if not data["sources"]:
             body += "<p>no lines</p>\n"
-            return self.document("gaps", body)
+            return self.document("gaps", body, style=TABLES_STYLE)
         rows: list[list[Cell]] = []
         for s in data["sources"]:
             if s["lines"] == 0:
@@ -2659,7 +2695,7 @@ class Site:
             f'<p class="mute">{escape(span)}, today {escape(data["today"])} ({escape(data["timezone"])});'
             " counted through the index, every line, retracted or not</p>\n"
         )
-        return self.document("gaps", body)
+        return self.document("gaps", body, style=TABLES_STYLE)
 
 
 # -- the Day's rows ---------------------------------------------------------------------------------------
@@ -3114,13 +3150,6 @@ def _loopback_origin(origin: str) -> bool:
     if parts.scheme != "http" or parts.hostname is None:
         return False
     return _loopback(parts.hostname)
-
-
-def _not_waiting(e: Locked) -> str:
-    """Another writer holds the record: the store's sentence, said for a page, which never waits."""
-    return str(e).replace(
-        NOT_WAITING, "; the page does not wait for another writer, so nothing was written: try again shortly"
-    )
 
 
 def _suffix(upload: Upload) -> str:

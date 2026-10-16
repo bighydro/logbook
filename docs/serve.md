@@ -83,12 +83,16 @@ page and checks each attribute that can hold a URL, the inline style, each scrip
 through the readers, and the readers never write, not even `policy/stays.json`. The test takes the
 head and every file before and after serving every page and finds them the same. The writes are the
 Places page's form ([below](#places--name-this-place)), a journey's name ([below](#journeys)), the
-People page's review ([below](#people)), the Manifest's review and an org's status ([below](#the-manifest))
-and the Day's Reflect and Sign ([below](#reflect-and-sign)), each a POST from this machine only, each
+People page's review ([below](#people)), the Manifest's review and an org's status ([below](#the-manifest)),
+the Day's Reflect and Sign ([below](#reflect-and-sign)) and its star and *with…* ([below](#the-day--star-and-with)),
+each a POST from this machine only, each
 through the command's own function, one at a time, and none waits for another writer: while another
-command holds the record's writer lock (a sync running), the Places, Journeys and People forms are
-answered `503`, the Manifest's and the Day's `409`, one sentence, and nothing is written, rather than
-leaving the browser waiting. The server keeps nothing
+command holds the record's writer lock (a sync running), every one of them answers the same way
+rather than leaving the browser waiting: `409`, the sentence *Another command is writing to the
+record; nothing was written. Try again in a moment.*, the command that holds the lock, and the form
+you sent kept in a form that sends it again (*Try again*): the words you typed in their fields, the
+rest as they were. Nothing is written. A recording is the one input a page cannot put back: its form
+asks you to choose the file again. The server keeps nothing
 but the head it last saw: when a sync, or a form, moves the head while it runs, the next request
 brings the index to the new head first and every page reads the new lines, with no restart. That
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
@@ -307,8 +311,8 @@ reflection is no longer the latest or whose proposals changed since the page was
 is no longer on the day. Sign with no reflection on the day is refused with the two ways on (reflect
 first, or `logbook day sign DAY` without one), a day ahead of today has no forms, and a word the
 command refuses (an empty reflection, a number no proposal has) is a `400` with its reason. The page
-never waits for another writer: while a sync holds the record it says so (`409`) and you click
-again. Every write in the server is one at a time.
+never waits for another writer: while a sync holds the record it says so (`409`, the one answer
+[above](#three-rules)), keeps your words, and you click *Try again*. Every write in the server is one at a time.
 
 **Not the door.** The page never reads `policy/crossing.json`: this is not the MCP door (ADR 0022),
 and its `write` list may stay empty. The Library is your own Sign path, on your own machine. The
@@ -351,8 +355,8 @@ The Day carries the two acts on lines the record already holds ([the acts](acts.
 client address is loopback and, when the browser sends an `Origin`, it names `127.0.0.1` or
 `[::1]`; anything else is a `403` and nothing is written. `GET /star` and `GET /with` are `405`.
 Writes are taken one at a time, and the page never waits for another writer: while a sync holds
-the record, a star, an unstar or a name says so (`409`, as Reflect and Sign do), nothing is
-written, and you click again. A static site (`logbook export site`) shows the stars, ★ beside the
+the record, a star, an unstar or a name says so (`409`, as every act does), nothing is
+written, and you click *Try again*. A static site (`logbook export site`) shows the stars, ★ beside the
 starred lines, and carries no form and no list of names.
 
 ## Journeys
@@ -482,8 +486,9 @@ Day, the days, the trips, the places, and none of them names an org's status.
 
 **Writing, never waiting.** The acts are POSTs from this machine only (a loopback client, an
 `Origin` of 127.0.0.1 when the browser sends one, else `403`), one at a time, under the record's
-writer lock. While another command holds it the act is answered `409` with one sentence naming that
-command, and nothing is written (the owner's word for every act of the Library, 14 October 2026); a
+writer lock. While another command holds it the act is answered as every act of the Library is
+(`409`, the one sentence, the command that holds the lock, the form kept; [above](#three-rules)),
+and nothing is written (the owner's word for every act of the Library, 14 October 2026); a
 proposal no longer in the queue, or an org the record no longer names, is a `409` too; an answer the
 record refuses (a `passed` with no reason, a day ahead) a `400`. Done, a `303` back to the page the
 form came from.
@@ -492,14 +497,21 @@ form came from.
 
 Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
 facts with the evidence folded under it, a day never breaks inside its hyphens, the canvas scales to
-the column. `tests/test_library_pages.py` holds the Journeys, a journey, the People page and a person,
-and `tests/test_manifest_page.py` the Manifest, an org and the people across orgs, to that column
-without a browser: `tests/phone_width.py` parses each page with every disclosure
-open, applies the page's own stylesheet as a 400 px phone would (its phone breakpoint included), and
-fails when an element's fixed width, min-width or row of columns, with the margins, borders and
-padding around it, passes the column, when an image or a `pre` has no `max-width` to keep it inside,
-or when the stylesheet has no phone breakpoint. Its estimates err wide, and a stylesheet it cannot
-read fails the test rather than passing it.
+the column, and on every page (the Day's Sources, the days, the trips, the places, the assets, the
+gaps; in the server and in an exported site) a table wider than the column scrolls inside its own
+box rather than the page sideways.
+`tests/test_library_walk.py` walks the pages the server serves, from `/` through the links on every
+page it reads, one page of each kind (the Day, every shelf, the Manifest, each detail page, an
+error, a redirect), and holds each to that column without a browser; the list of pages it must reach is read from the server's own
+routes, so a page added there and not walked fails it. `tests/test_library_pages.py` and
+`tests/test_manifest_page.py` hold the four years' widest shelves and the Manifest's pages besides.
+`tests/phone_width.py` parses each page with every disclosure open, applies the page's own
+stylesheet as a 400 px phone would (its phone breakpoint included), and fails when an element's
+fixed width, min-width or row of columns, with the margins, borders and padding around it, passes
+the column, when an image or a `pre` has no `max-width` to keep it inside, or when the stylesheet has
+no phone breakpoint. Its estimates err wide, and a stylesheet it cannot read fails the test rather
+than passing it. The Day is held to the column like every other page: its Sources table, wider
+than the column on some days, scrolls inside its own box.
 
 ## What it is not
 
