@@ -228,6 +228,56 @@ def test_audio_is_heard_locally_and_written_as_the_reflection(
     assert "  9  Ola soll den Anhänger zurückbringen." in out
 
 
+def test_no_socket_is_opened_while_a_reflection_is_heard(
+    lb: Logbook,
+    tmp_path: Path,
+    engine: FakeEngine,
+    no_network: list[str],
+    capsys: pytest.CaptureFixture[str],
+):
+    """`day reflect --audio` hears the recording on this machine, and the Day page of `serve` hears
+    one sent with its form through the same path (`day_command.voice`, what `serve` asks when it
+    starts): with every way out of the process refused and recorded (`no_network`), the reflection is
+    heard and written, and nothing asked for a connection."""
+    audio = _audio(tmp_path)
+    _run(capsys, "day", "reflect", DAY, "--audio", str(audio), "--at", AT)
+    assert _by_seq(lb)[6]["payload"]["text"] == REFLECTION
+    site = serve_module.Site(lb, voice=day_command.voice())
+    upload = serve_module.Upload("evening.m4a", "audio/mp4", audio.read_bytes())
+    response = site.write(f"/day/{DAY}/reflect", {"act": "hear"}, "127.0.0.1", None, upload)
+    assert response.status == 303, response.body[:300]
+    assert len(engine.loaded) == 2 and lb.meta["seq"] == 6, (
+        "heard again; the same words are not written twice"
+    )
+    assert engine.offline == ["1", "1"]  # the hub is told so too, for the real engines' sake
+    assert os.environ.get("HF_HUB_OFFLINE") != "1"  # and only while hearing
+    assert no_network == [], f"hearing the reflection tried to connect: {no_network}"
+
+
+def test_no_connection_is_opened_while_a_spoken_reflection_is_heard(
+    lb: Logbook,
+    tmp_path: Path,
+    engine: FakeEngine,
+    no_network: list[str],
+    capsys: pytest.CaptureFixture[str],
+):
+    """`day reflect DAY --audio FILE` under the guard of `tests/test_no_network.py`, as
+    `tests/test_transcribe.py` puts transcription under one: heard by the engine and written, and no
+    way out of the process asked for. The Day page's recording form takes the same path
+    (`day.voice`, then `Site.write` with the recording), so it is heard under the same guard."""
+    audio = _audio(tmp_path)
+    _run(capsys, "day", "reflect", DAY, "--audio", str(audio), "--at", AT)
+    assert _by_seq(lb)[6]["payload"]["text"] == REFLECTION and engine.loaded == [audio]
+    site = serve_module.Site(lb, voice=day_command.voice())
+    upload = serve_module.Upload("evening.m4a", "audio/mp4", audio.read_bytes())
+    response = site.write("/day/2026-03-04/reflect", {"act": "hear"}, "127.0.0.1", None, upload)
+    assert response.status == 303, response.body[:300]
+    line = _by_seq(lb)[7]
+    assert (line["payload"]["text"], line["source"]) == (REFLECTION, "reflect")
+    assert len(engine.loaded) == 2, "the page's recording heard by the same engine"
+    assert no_network == [], f"a spoken reflection tried to connect: {no_network}"
+
+
 def test_audio_without_the_extra_refuses_with_the_install_hint(
     lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
