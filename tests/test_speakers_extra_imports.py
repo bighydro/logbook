@@ -24,6 +24,7 @@ from test_setup_speakers import FakeHub
 from test_transcribe import TZ, FakeEngine, _memo, _wav
 
 from logbook import cli
+from logbook.contrib import doctor
 from logbook.core.store import Logbook
 from logbook.labs import diarize, transcribe
 
@@ -142,6 +143,21 @@ def test_installed_finds_the_extra_on_disk_without_importing_it(installed_extra,
     _nothing_imported(installed_extra)
     monkeypatch.setitem(sys.modules, "pyannote.audio", None)  # the distribution here, its import failed
     assert diarize.installed() is False and diarize.missing() == NOT_INSTALLED  # install it again
+
+
+def test_doctor_names_the_extra_on_disk_without_importing_it(installed_extra, monkeypatch):
+    """`logbook doctor`'s `extra:speakers` line asks as `installed` asks, by the distribution: the
+    module's spec alone would import the `pyannote` package around it. Both say the same, both ways."""
+    assert doctor.module_installed(diarize.MODULE) is diarize.installed() is True
+    checks = {c.name: c for c in doctor.run(None, {})}
+    assert checks["extra:speakers"] == doctor.Check("extra:speakers", "pass", "pyannote.audio is installed")
+    _nothing_imported(installed_extra)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", None)  # the distribution here, its import failed
+    assert doctor.module_installed(diarize.MODULE) is diarize.installed() is False
+    checks = {c.name: c for c in doctor.run(None, {})}
+    assert checks["extra:speakers"].status == "warn"
+    assert 'pip install "openlogbook[speakers]"' in checks["extra:speakers"].detail
+    assert installed_extra.imports == []
 
 
 def test_detect_with_every_model_in_the_cache_imports_the_engine_and_the_record_of_imports_shows_it(

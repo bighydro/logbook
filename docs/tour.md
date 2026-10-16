@@ -86,12 +86,12 @@ logbook backup restore /Volumes/Backup/Logbook/<owner_id>/2026-06-02T071500Z ~/R
 `logbook doctor` checks that this machine is set up to keep the record, one line per check, `pass`, `warn` or
 `fail`, and exits 1 when anything fails: the record is found and `verify` is green with `logbook.json` at
 the head; `index.sqlite` is current; `policy/owner.json` names at least one alias; `places.json` has a
-home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `sealed`, `transcribe`) is installed,
-with its install line when not; the variables of every live source the record uses are set, by name only,
-never a value; the volume has room; and the folder is not one iCloud Drive, Dropbox, OneDrive or Google
-Drive syncs, which is a fail with the reason; the last scheduled run was recent and clean, and a restore
-test of the backup passed within 35 days ([the schedule](schedule.md)). It reads and never writes, so
-it is safe to run any time.
+home; `assets.json` is a registry; each optional extra (`ais`, `crypto`, `sealed`, `speakers`,
+`transcribe`) is installed, with its install line when not; the variables of every live source the record
+uses are set, by name only, never a value; the volume has room; and the folder is not one iCloud Drive,
+Dropbox, OneDrive or Google Drive syncs, which is a fail with the reason; the last scheduled run was
+recent and clean, and a restore test of the backup passed within 35 days ([the schedule](schedule.md)). It
+reads and never writes, so it is safe to run any time.
 
 ```bash
 logbook doctor
@@ -103,11 +103,12 @@ pass  assets             1 asset(s): nordlys
 pass  extra:ais          websockets is installed
 pass  extra:crypto       cryptography is installed
 pass  extra:sealed       pyrage is installed
+warn  extra:speakers     pyannote.audio not installed: pip install "openlogbook[speakers]"
 warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
 warn  sync:dawarich      set LOGBOOK_DAWARICH_KEY
 pass  disk               184.2 GiB free on the record's volume
 pass  folder             a plain local folder, no sync client
-12 checks: 9 pass, 3 warn, 0 fail
+13 checks: 9 pass, 4 warn, 0 fail
 ```
 
 ## Sealing tiers 2 and 3

@@ -289,10 +289,11 @@ pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
 pass  extra:ais         websockets is installed
 pass  extra:crypto      cryptography is installed
+warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
 warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
 pass  disk              29.0 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client
-10 checks: 9 pass, 1 warn, 0 fail
+11 checks: 9 pass, 2 warn, 0 fail
 
 Setup is complete. Your record is at ~/Logbook.
 Next:
@@ -302,7 +303,8 @@ Next:
 docs/first-hour.md walks through the first hour.
 ```
 
-`warn` is advice, not a problem: here, an optional extra for transcribing voice memos is not installed.
+`warn` is advice, not a problem: here, the optional extras for transcribing voice memos and telling the
+voices of a recording apart are not installed.
 `fail` names what to fix. `logbook doctor` runs these checks any time, and changes nothing.
 
 ## Stopping, skipping, and coming back
