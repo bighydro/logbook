@@ -64,7 +64,7 @@ import json
 import os
 import re
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -77,6 +77,7 @@ from ..core import day_start, drafts, machine, policy, present, reading, resolve
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
+from ..core.reading import Reading
 from ..core.resolve import Ref
 from ..core.store import HeadMoved, Logbook, now_utc, retractions
 from . import model_client
@@ -94,8 +95,8 @@ EXCLUDED_KINDS = frozenset({"retraction", "signed-day", drafts.KIND, "crossing"}
 DEFAULT_LANGUAGE = "en"
 DOT = " \u00b7 "
 HEAD_MOVED = (
-    "the record's head moved from {was} to {now} while the model read the day, so the draft would not"
-    " say what it read; nothing was written, dream the day again"
+    "the record's head moved from {was} to {now} while the model read the {unit}, so the draft would not"
+    " say what it read; nothing was written, dream the {unit} again"
 )
 EVENTS = "events"  # the key of the answer that holds the proposed events
 LONGEST_EVENT = timedelta(hours=24)  # a proposed event lasts less than a day and a night
@@ -124,6 +125,39 @@ STOPWORDS: dict[str, frozenset[str]] = {
     | frozenset({"tú", "en", "una", "un", "del", "al", "que"}),
 }
 WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
+# -- the number rule (`hold_numbers`): a figure a sentence writes is one the code computed from lines --
+UNBACKED = "a number the lines do not give"  # the key of `extra.marked`: a segment marked for a figure
+# a figure: digits, a decimal point or comma and more digits, glued to a unit or not (`45min`, `7,5t`),
+# never a piece of an id (`L12`, `6bc0`)
+NUMBER = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)?(?![.,]?\d)(?!\w*\d)")
+MONTHS = (
+    "january|february|march|april|june|july|august|september|october|november|december"
+    "|januar|februar|mars|mai|juni|juli|oktober|desember"
+    "|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|okt|nov|dec|des|(?-i:May)"  # `may`, lower-case, is a verb
+)
+# what a figure in a sentence may be without being a number: a date (ISO, `16.06.2026`, `16/6`), a
+# clock (`19:30`, `kl. 19`, `9am`), an ISO week, a day of the month beside its month's name, an ordinal
+CALENDAR = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:T[\d:]+(?:Z|[+-]\d{2}:\d{2})?)?"
+    r"|\b\d{4}-W\d{2}\b|\bW\d{1,2}\b|\b(?:week|uke|woche|semaine|semana)\s+\d{1,2}\b"
+    r"|\b\d{1,2}\.\d{1,2}\.\d{2,4}\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b"
+    r"|\b\d{1,2}:\d{2}\b|\b(?:kl\.?|klokka|klokken)\s*\d{1,2}(?:[:.]\d{2})?\b|\b\d{1,2}\s?(?:am|pm)\b"
+    rf"|\b\d{{1,2}}(?:\.|st|nd|rd|th)?\s+(?:{MONTHS})\b|\b(?:{MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?\b"
+    r"|\b\d{1,2}(?:st|nd|rd|th)\b",
+    re.IGNORECASE,
+)
+YEAR = re.compile(r"\b(?:19|20)\d{2}\b")  # a year, when it is one of the unit's (`figures`)
+# numbers written in words, in the languages a draft is most often in: a word is a figure too
+NUMBER_WORDS: dict[str, dict[str, int]] = {
+    "en": {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9}
+    | {"ten": 10, "eleven": 11, "twelve": 12},
+    "nb": {"to": 2, "tre": 3, "fire": 4, "fem": 5, "seks": 6, "sju": 7, "syv": 7, "åtte": 8, "ni": 9}
+    | {"ti": 10, "elleve": 11, "tolv": 12},
+}
+# the keys whose words are the record's own, whose figures an item gives (a model's are under `drafted`)
+SCANNED = frozenset(
+    {"title", "flight", "where", "place", "subject", "quote", "text", "name", "chat", "thread", "counterpart"}
+)
 
 
 class DreamError(ValueError):
@@ -140,7 +174,7 @@ class AnswerError(DreamError):
 class Material:
     """What the model is given about one day, and what the record keeps about that reading."""
 
-    day: str
+    day: str  # the unit's subject in words: the day, a journey's id, a week
     tier: int  # the highest tier among the lines read: the draft's tier
     read_count: int
     read_head: str
@@ -155,6 +189,7 @@ class Material:
     canonical: dict[str, str] = field(default_factory=dict)  # every canonical person: id -> name
     people: dict[str, str] = field(default_factory=dict)  # the canonical people the material names
     identities: dict[Ref, resolve.Identity] = field(default_factory=dict)
+    unit: str = drafts.UNIT_DAY  # what the material is of: a day, a journey, a week
     _by_id: dict[str, str] = field(default_factory=dict)  # line id -> `L1`
 
     def ref_of(self, line_id: str | None) -> str | None:
@@ -253,7 +288,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
     with its reference. The lines read are the day's lines under the ceiling, the kinds that are
     about the record rather than the day left out (`EXCLUDED_KINDS`)."""
     day = parse_day(day).isoformat()
-    tiers = tuple(range(1, found.max_tier + 1))
+    tiers = tiers_of(found)
     data = day_reader.read(lb, day, airports, tiers)
     days = day_start.of(lb.meta)
     with lb.index() as idx:
@@ -267,7 +302,6 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
     on_day.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
     ids = {str(line["id"]) for line in on_day}
-    digest = hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()
     tier = max((int(line.get("tier", 1)) for line in on_day), default=1)
     texts = _texts(on_day)
     made = Material(
@@ -275,7 +309,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         tier=tier,
         read_count=len(on_day),
         read_head=str(lb.meta["head"]),
-        read_ids_sha256=digest,
+        read_ids_sha256=digest(ids),
         language=language_of(texts),
         data={},
         ids=ids,
@@ -603,6 +637,94 @@ def _clip(text: str, chars: int) -> str:
     return text if len(text) <= chars else text[: chars - 1] + "…"
 
 
+# -- the material of a span of days: a journey's, a week's -----------------------------------------------
+
+
+def tiers_of(found: policy.Ceiling) -> tuple[int, ...]:
+    """The gate the entry's ceiling is: every tier from 1 to its `max_tier`."""
+    return tuple(range(1, found.max_tier + 1))
+
+
+def lines_of_days(rd: Reading, first: str, last: str) -> list[Line]:
+    """The lines a reading holds on the local days `first` to `last`, the kinds about the record
+    rather than the days left out (`EXCLUDED_KINDS`), in `at` then `seq` order. A gated reading's:
+    nothing above its gate is among them, and nothing retracted."""
+    found = [
+        line
+        for line in rd.lines
+        if first <= rd.day_of(line) <= last and line.get("kind") not in EXCLUDED_KINDS
+    ]
+    return sorted(found, key=lambda line: (str(line["at"]), int(line["seq"])))
+
+
+def days_of(
+    rd: Reading, days: Sequence[str], made: Material
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Each day of a span as the model is given it, from the Day reader over the reading (`day.
+    of_reading`): the weekday, the night after it, and its timeline as a day's material has it
+    (`_entry`), each stay and stop with the `hours` of it that fell on the day; and the places of
+    the span, each with the hours spent there over all its days, how many days, and the references
+    of the stays. Hours are computed here, from the stays' first and last lines, to one decimal."""
+    by_day: dict[str, list[Line]] = {}
+    for line in rd.lines:
+        by_day.setdefault(rd.day_of(line), []).append(line)
+    out: list[dict[str, Any]] = []
+    places: dict[str, dict[str, Any]] = {}
+    for day in days:
+        page = day_reader.of_reading(rd, day, None, by_day.get(day, []))
+        start, end = rd.day_start.span(day)
+        timeline = []
+        for entry in page["timeline"]:
+            item = _entry(entry, made)
+            hours = _hours_on(entry, start, end)
+            if hours is not None:
+                item["hours"] = hours
+                label = str(entry.get("place") or entry.get("where") or "")
+                if label:
+                    kept = places.setdefault(
+                        label, {"place": label, "seconds": 0.0, "days": set(), "ref": []}
+                    )
+                    kept["seconds"] += _seconds_on(entry, start, end)
+                    kept["days"].add(day)
+                    kept["ref"] += [r for r in item["ref"] if r not in kept["ref"]]
+            timeline.append(item)
+        out.append(
+            {
+                "day": day,
+                "weekday": page["weekday"],
+                "night_after": _night(page["nights"]["after"], made),
+                "timeline": timeline,
+            }
+        )
+    ranked = sorted(places.values(), key=lambda p: (-p["seconds"], p["place"]))
+    totals = [
+        {
+            "place": p["place"],
+            "hours": round(p["seconds"] / 3600, 1),
+            "days": len(p["days"]),
+            "ref": p["ref"][:12],
+        }
+        for p in ranked
+    ]
+    return out, totals
+
+
+def _seconds_on(entry: Mapping[str, Any], start: datetime, end: datetime) -> float:
+    begun = datetime.fromisoformat(str(entry["start_local"]))
+    ended = datetime.fromisoformat(str(entry["end_local"]))
+    return max((min(ended, end) - max(begun, start)).total_seconds(), 0.0)
+
+
+def _hours_on(entry: Mapping[str, Any], start: datetime, end: datetime) -> float | None:
+    """The hours of a stay or a stop that fell between `start` and `end`, to one decimal; None for
+    a move, a flight, a gap or a stay aboard."""
+    if entry.get("gap") or entry.get("kind") not in (stays.STAY, stays.STOP) or entry.get("aboard"):
+        return None
+    if not entry.get("start_local") or not entry.get("end_local"):
+        return None
+    return round(_seconds_on(entry, start, end) / 3600, 1)
+
+
 # -- the prompt and the answer ---------------------------------------------------------------------------
 
 
@@ -640,32 +762,43 @@ def parse(answer: str) -> dict[str, Any]:
     raise AnswerError("the model's answer is not one JSON object; nothing was written")
 
 
-def segments_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, Any]], list[str]]:
-    """The answer's segments in the parts' order, each `{text, evidence: [ids]}` when every
-    reference is one the material gave (a full line id of the day is taken too), else `{text,
-    unsupported: true}`; and the part of each. A segment without text is dropped. More than
-    `UNSUPPORTED_SHARE` unsupported, or no segment at all, is `DreamError`."""
+def segments_of(
+    found: Mapping[str, Any], made: Material, parts: Sequence[str] = drafts.PARTS, strict: bool = False
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """The answer's segments in the order of `parts` (the day's by default; a journey and a week
+    name their own), each `{text, evidence: [ids]}` with the references the material gave (a full
+    line id of the unit is taken too), else `{text, unsupported: true}`; and the part of each. A
+    day's segment keeps the references that hold when some do not; with `strict` (a journey's, a
+    week's) one reference the material did not give marks the segment, as RFC 0036 rule 6 reads.
+    A segment without text is dropped. More than `UNSUPPORTED_SHARE` unsupported, or no segment at
+    all, is `DreamError` (`share_of`)."""
     segments: list[dict[str, Any]] = []
-    parts: list[str] = []
-    for part in drafts.PARTS:
+    named: list[str] = []
+    for part in parts:
         items = found.get(part)
         if not isinstance(items, list):
             continue
         for item in items:
-            segment = _segment(item, made)
+            segment = _segment(item, made, strict)
             if segment is None:
                 continue
             segments.append(segment)
-            parts.append(part)
+            named.append(part)
+    share_of(segments, made.unit)
+    return segments, named
+
+
+def share_of(segments: Sequence[Mapping[str, Any]], unit: str = drafts.UNIT_DAY) -> None:
+    """The evidence rule's last word on an answer: no segment at all, or more than
+    `UNSUPPORTED_SHARE` of them unsupported, is `AnswerError` and nothing is written."""
     if not segments:
         raise AnswerError("the model's answer holds no segment with text; nothing was written")
     unsupported = sum(1 for s in segments if s.get("unsupported"))
     if unsupported / len(segments) > UNSUPPORTED_SHARE:
         raise AnswerError(
-            f"{unsupported} of {len(segments)} segments rest on no line of the day, more than"
+            f"{unsupported} of {len(segments)} segments rest on no line of the {unit}, more than"
             f" {round(UNSUPPORTED_SHARE * 100)} %; the answer is refused and nothing was written"
         )
-    return segments, parts
 
 
 def proposals_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -757,7 +890,7 @@ def _utc(when: datetime) -> str:
     return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _segment(item: object, made: Material) -> dict[str, Any] | None:
+def _segment(item: object, made: Material, strict: bool = False) -> dict[str, Any] | None:
     if isinstance(item, str):
         item = {"text": item}
     if not isinstance(item, dict):
@@ -768,13 +901,16 @@ def _segment(item: object, made: Material) -> dict[str, Any] | None:
     text = " ".join(text.split())
     evidence = item.get("evidence")
     ids: list[str] = []
+    foreign = False
     if isinstance(evidence, list):
         for ref in evidence:
             key = str(ref).strip()
             line_id = made.refs.get(key) or (key if key in made.ids else None)
-            if line_id is not None and line_id not in ids:
+            if line_id is None:
+                foreign = True
+            elif line_id not in ids:
                 ids.append(line_id)
-    if ids and item.get("unsupported") is not True:
+    if ids and item.get("unsupported") is not True and not (strict and foreign):
         return {"text": text, "evidence": ids}
     return {"text": text, "unsupported": True}
 
@@ -808,27 +944,13 @@ def dream(
         latest = drafts.standing(earlier)
         source = drafts.SOURCE_PREFIX + ep.model
         version = policy.version(found)
-        if latest is not None and not dry_run:
-            payload_before = latest.get("payload") or {}
-            kept = _policy_version(payload_before)
-            if (
-                latest.get("source") == source
-                and payload_before.get("read_head") == made.read_head
-                and (kept is None or kept == version)  # a draft that names no entry: the head decides
-            ):
-                raise DreamError(
-                    f"{made.day} was dreamed by {source} at this head already (#{latest['seq']}); the record"
-                    " has not moved, so there is nothing new to dream"
-                )
+        if not dry_run:
+            refuse_same(latest, source, made, version)
         messages = prompt(made)
         if say is not None:
             say(messages[0]["content"])
             say(messages[1]["content"])
-        try:
-            answer = model_client.complete(ep, messages, transport=transport)
-        except model_client.ModelError as e:
-            raise AnswerError(str(e)) from e
-        found_answer = parse(answer)
+        answer, found_answer = ask(ep, messages, transport)
         segments, parts = segments_of(found_answer, made)
         proposals, dropped = proposals_of(found_answer, made)
         payload: dict[str, Any] = {
@@ -852,17 +974,95 @@ def dream(
             payload["extra"]["dropped"] = dropped
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
-        problems = drafts.validate(payload)
-        if problems:
-            raise AnswerError(f"the draft would not be a {drafts.SCHEMA}: {problems[0]}; nothing was written")
+        valid(payload)
         shown = drafts.proposals_json(payload, made.ids, made.zone, made.people, {})
         if dry_run:
             return Dream(made.day, None, payload, made.tier, messages, answer, shown, dropped)
-        current = lb.meta
-        if str(current.get("head")) != made.read_head:
-            raise HeadMoved(HEAD_MOVED.format(was=made.read_head[:8], now=str(current.get("head"))[:8]))
-        line = lb.append(at=now_utc(), source=source, kind=drafts.KIND, tier=made.tier, payload=payload)
+        line = append(lb, made, source, payload)
     return Dream(made.day, line, payload, made.tier, messages, answer, shown, dropped)
+
+
+# -- the steps every unit's dream takes ------------------------------------------------------------------
+
+
+def same_draft(latest: Line | None, source: str, read_head: str, version: str) -> bool:
+    """RFC 0036 rule 1: whether the standing draft is this model's, at this head, under this
+    version of the entry (a draft that names no entry: the head decides)."""
+    if latest is None:
+        return False
+    payload = latest.get("payload") or {}
+    kept = _policy_version(payload)
+    return (
+        latest.get("source") == source
+        and payload.get("read_head") == read_head
+        and (kept is None or kept == version)
+    )
+
+
+def refuse_same(latest: Line | None, source: str, made: Material, version: str) -> None:
+    """`DreamError` when the unit was dreamed by this model at this head under this entry already
+    (`same_draft`): nothing new to dream, nothing is sent."""
+    if latest is not None and same_draft(latest, source, made.read_head, version):
+        raise DreamError(
+            f"{made.day} was dreamed by {source} at this head already (#{latest['seq']}); the record"
+            " has not moved, so there is nothing new to dream"
+        )
+
+
+def ask(
+    ep: Endpoint, messages: list[dict[str, str]], transport: Transport | None
+) -> tuple[str, dict[str, Any]]:
+    """The model's turn: its raw answer and the JSON object in it; `AnswerError` when the endpoint
+    fails or the answer is not one object."""
+    try:
+        answer = model_client.complete(ep, messages, transport=transport)
+    except model_client.ModelError as e:
+        raise AnswerError(str(e)) from e
+    return answer, parse(answer)
+
+
+def valid(payload: Mapping[str, Any]) -> None:
+    """`AnswerError` when the payload is not a `draft/v1` (`drafts.validate`): nothing is written."""
+    problems = drafts.validate(payload)
+    if problems:
+        raise AnswerError(f"the draft would not be a {drafts.SCHEMA}: {problems[0]}; nothing was written")
+
+
+def append(lb: Logbook, made: Material, source: str, payload: Mapping[str, Any]) -> Line:
+    """The one write of a dream, inside the caller's hold of the writer lock: the head read again
+    first, `HeadMoved` when it moved under the reading, then one `draft` line at the material's tier."""
+    current = lb.meta
+    if str(current.get("head")) != made.read_head:
+        raise HeadMoved(
+            HEAD_MOVED.format(was=made.read_head[:8], now=str(current.get("head"))[:8], unit=made.unit)
+        )
+    return lb.append(at=now_utc(), source=source, kind=drafts.KIND, tier=made.tier, payload=dict(payload))
+
+
+def digest(ids: Iterable[str]) -> str:
+    """The digest of the ids a dream read, `extra.read_ids_sha256`, which `--catch-up` compares."""
+    return hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()
+
+
+def why_again(latest: Line, found: policy.Ceiling, read_count: int, read_digest: str) -> str | None:
+    """Why a unit with a standing draft is dreamed again, in words; None when it is unchanged. Its
+    tier above the entry's `max_tier` today, or dreamed under another version of the entry (a draft
+    follows the policy, not the head); or what it would read today is not what it read: another
+    count, or another set of ids when it kept their digest."""
+    payload = latest.get("payload") or {}
+    tier = int(latest.get("tier") or 0)
+    if tier > found.max_tier:
+        return f"dreamed at tier {tier}, above max_tier {found.max_tier} now"
+    version = _policy_version(payload)
+    if version is not None and version != policy.version(found):
+        return f"dreamed under another {policy.DREAM_DESTINATION} entry"
+    extra = payload.get("extra")
+    kept = extra.get("read_ids_sha256") if isinstance(extra, dict) else None
+    if payload.get("read_count") != read_count:
+        return f"{read_count} lines now, {payload.get('read_count')} when last dreamed"
+    if isinstance(kept, str) and kept != read_digest:
+        return f"the {payload.get('unit') or 'unit'}'s lines are not the ones last dreamed"
+    return None
 
 
 # -- catch-up ----------------------------------------------------------------------------------------------
@@ -899,19 +1099,9 @@ def changed_since(lb: Logbook, day: str, found: policy.Ceiling) -> tuple[bool, s
     latest = drafts.standing(earlier)
     if latest is None:
         return True, "no draft yet", made
-    payload = latest.get("payload") or {}
-    tier = int(latest.get("tier") or 0)
-    if tier > found.max_tier:
-        return True, f"dreamed at tier {tier}, above max_tier {found.max_tier} now", made
-    version = _policy_version(payload)
-    if version is not None and version != policy.version(found):
-        return True, f"dreamed under another {policy.DREAM_DESTINATION} entry", made
-    extra = payload.get("extra")
-    kept = extra.get("read_ids_sha256") if isinstance(extra, dict) else None
-    if payload.get("read_count") != made.read_count:
-        return True, f"{made.read_count} lines now, {payload.get('read_count')} when last dreamed", made
-    if isinstance(kept, str) and kept != made.read_ids_sha256:
-        return True, "the day's lines are not the ones last dreamed", made
+    why = why_again(latest, found, made.read_count, made.read_ids_sha256)
+    if why is not None:
+        return True, why, made
     return False, f"unchanged since #{latest['seq']}", made
 
 
@@ -943,15 +1133,109 @@ def _catch_up_day(
         if not needed:
             return Outcome(day, "unchanged", why)
         dreamed = dream(lb, day, env, transport=transport, made=made)
-        line = dreamed.line
-        n = len(dreamed.payload["segments"])
-        unsupported = sum(1 for s in dreamed.payload["segments"] if s.get("unsupported"))
-        detail = f"#{line['seq'] if line else '?'}{DOT}{why}{DOT}{n} segments" + (
-            f", {unsupported} unsupported" if unsupported else ""
-        )
-        if dreamed.proposals:
-            k = len(dreamed.proposals)
-            detail += f"{DOT}{k} proposed event{'s' if k != 1 else ''}"
-        return Outcome(day, "dreamed", detail)
+        return Outcome(day, "dreamed", detail_of(dreamed, why))
     except (DreamError, HeadMoved, ValueError) as e:
         return Outcome(day, "refused", str(e))
+
+
+def detail_of(dreamed: Dream, why: str) -> str:
+    """`#5440 · no draft yet · 6 segments, 1 unsupported`: one dream in a catch-up's row, with its
+    proposed events when it has any."""
+    line = dreamed.line
+    n = len(dreamed.payload["segments"])
+    unsupported = sum(1 for s in dreamed.payload["segments"] if s.get("unsupported"))
+    detail = f"#{line['seq'] if line else '?'}{DOT}{why}{DOT}{n} segments" + (
+        f", {unsupported} unsupported" if unsupported else ""
+    )
+    if dreamed.proposals:
+        k = len(dreamed.proposals)
+        detail += f"{DOT}{k} proposed event{'s' if k != 1 else ''}"
+    return detail
+
+
+# -- the number rule ---------------------------------------------------------------------------------------
+
+
+def numbers_by_id(data: Any, made: Material) -> dict[str, set[float]]:
+    """line id -> the numbers the material gives for the items that cite it: an item is an object
+    with `ref` (a list of references), and its numbers are its number values and the figures in
+    the record's own words it carries (`SCANNED`: a title, a note's text, a promise's quote, a
+    flight's number; its dates and clocks are not numbers), never a model's (a day's draft is given
+    under `drafted`, which is not read for numbers). An object without `ref` lends its numbers to the
+    refs of the item that holds it, none at the top."""
+    found: dict[str, set[float]] = {}
+
+    def walk(node: Any, scope: Sequence[str]) -> None:
+        if isinstance(node, list):
+            for item in node:
+                walk(item, scope)
+            return
+        if not isinstance(node, dict):
+            return
+        refs = node.get("ref")
+        own = [r for r in refs if isinstance(r, str)] if isinstance(refs, list) else []
+        here = own or scope
+        if here:
+            values: set[float] = set()
+            for key, value in node.items():
+                if isinstance(value, bool):
+                    continue
+                if isinstance(value, int | float):
+                    values.add(float(value))
+                elif isinstance(value, str) and key in SCANNED:
+                    values |= figures(value)
+            for ref in here:
+                line_id = made.refs.get(ref)
+                if line_id is not None:
+                    found.setdefault(line_id, set()).update(values)
+        for key, value in node.items():
+            if isinstance(value, dict | list) and key != "ref":
+                walk(value, here)
+
+    walk(data, ())
+    return found
+
+
+def figures(
+    text: str, calendar: bool = True, years: Collection[str] | None = None, language: str | None = None
+) -> set[float]:
+    """The numbers written in `text`: in figures, a decimal comma read as a point and a thousands
+    comma dropped (`1,250`), and, in `language`, in words (`NUMBER_WORDS`). With `calendar`, dates,
+    clocks, ISO weeks and days of the month beside their month are not numbers (`CALENDAR`), nor is a
+    year: any (`YEAR`), or only one of `years` when they are given, so `2000 kroner` is a number."""
+    if calendar:
+        text = CALENDAR.sub(" ", text)
+        text = YEAR.sub(lambda m: " " if years is None or m.group(0) in years else m.group(0), text)
+    out: set[float] = set()
+    for token in NUMBER.findall(text):
+        if re.fullmatch(r"\d{1,3}(,\d{3})+", token):
+            token = token.replace(",", "")
+        try:
+            out.add(float(token.replace(",", ".")))
+        except ValueError:
+            continue
+    words = NUMBER_WORDS.get(language or "", {})
+    if words:
+        out |= {float(words[w]) for w in WORD.findall(text.lower()) if w in words}
+    return out
+
+
+def hold_numbers(segments: list[dict[str, Any]], data: Any, made: Material) -> int:
+    """The number rule, in place: a supported segment that writes a figure the material does not
+    give for one of the lines it cites (`numbers_by_id`) is marked unsupported, since its number
+    rests on no line; returns how many were marked. A number is computed from the lines by the code
+    that built the material, never estimated by the model: rounded, added up or guessed, it is not
+    one of the given numbers and the sentence says so."""
+    given = numbers_by_id(data, made)
+    years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
+    marked = 0
+    for i, segment in enumerate(segments):
+        evidence = segment.get("evidence")
+        if not isinstance(evidence, list):
+            continue
+        allowed = set().union(*(given.get(str(e), set()) for e in evidence))
+        written = figures(str(segment["text"]), years=years, language=made.language)
+        if any(not any(abs(n - a) < 1e-9 for a in allowed) for n in written):
+            segments[i] = {"text": segment["text"], "unsupported": True}
+            marked += 1
+    return marked

@@ -68,3 +68,19 @@ So that the words a model is given are versioned with the code that checks its a
 without running anything, and the same on every machine: an orchestrator that rebuilds a Day from the
 record and a second implementation that writes drafts can read the same prompt and know what a
 `dream-day/3` draft was asked for.
+
+## The journey's and the week's
+
+A journey and a week have prompts of their own beside it,
+[`dream-journey-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-journey-prompt.md)
+(`dream-journey/1`) and
+[`dream-week-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-week-prompt.md)
+(`dream-week/1`), with the same first rule, evidence or `unsupported`, and one more: numbers are given,
+never made. A figure is written only as an item it cites gives it, never added up, rounded or
+estimated, and a day's or a call's `drafted` text, a model's words, never lends one; the code marks a
+sentence that breaks it ([Journeys and weeks](dream.md#journeys-and-weeks)). The journey's asks for
+eight lists: `journey`, `days`, `places`, `people`, `decisions`, `promises`, `photos` (the ones to star,
+at most six) and `name` (one). The week's asks for six: `time`, `energy` (empty when the material says
+`no data`), `people`, `goals` (`{goal, disposition, text, evidence}`, one per goal the week holds
+anything for), `next_week` (exactly one) and `personal`, and says, as a rule of its own, never moralise.
+`--show-prompt` prints either as it goes.

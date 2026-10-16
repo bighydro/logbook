@@ -90,12 +90,27 @@ UNITS = ("day", "journey", "event", "week", "month", "year", "chapter")
 SOURCE_PREFIX = "model:"  # `source` names the model as its runner names it; never `manual`
 SUPPORTED, UNSUPPORTED, MALFORMED = "supported", "unsupported", "malformed"
 PARTS = ("day", "threads", "questions", "people", "promises")  # the parts of a dream, in order
+# the parts of a journey's dream and of a week's (`dream journey`, `dream week`), in order
+JOURNEY_PARTS = ("journey", "days", "places", "people", "decisions", "promises", "photos", "name")
+WEEK_PARTS = ("time", "energy", "people", "goals", "next_week", "personal")
+UNIT_PARTS = {"day": PARTS, "journey": JOURNEY_PARTS, "week": WEEK_PARTS}  # by `unit`
 PART_LABELS = {
     "day": "day",
     "threads": "thread",
     "questions": "question",
     "people": "people",
     "promises": "promise",
+    "journey": "journey",
+    "days": "days",
+    "places": "place",
+    "decisions": "decision",
+    "photos": "star",
+    "name": "name",
+    "time": "time",
+    "energy": "energy",
+    "goals": "goal",
+    "next_week": "next week",
+    "personal": "personal",
 }
 # the parts of a transcript's synthesis, in order: actions on top (`logbook transcript synthesize`)
 SYNTHESIS_PARTS = ("actions", "topics", "decisions", "open_threads", "personal")
@@ -114,6 +129,7 @@ SYNTHESIS_NOUNS = {
     "personal": ("personal", "personal"),
 }
 HEAD_SHORT = 8  # `read at bb97e90d`: the first 8 hex of the head
+SUBJECT_SHOWN = 3  # `show` names a subject of more entries by its first and how many lines follow
 ID_SHORT = 8  # an evidence id shortened to its last 8 characters in text
 LANGUAGE = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\Z")  # a BCP 47 tag, loosely
 SHA256_HEX = 64
@@ -121,7 +137,10 @@ NOT_ON_DAY = "evidence names a line that is not on the day"
 NOT_THE_TRANSCRIPT = "evidence names a line that is not the transcript"
 WHOLE = "the transcript"  # a segment that rests on the transcript line and on no utterance of it
 NOT_ON_JOURNEY = "evidence names a line that is not of the journey"
+NOT_ON_WEEK = "evidence names a line that is not of the week"
 UNIT_JOURNEY = "journey"
+UNIT_WEEK = "week"
+ISO_WEEK = re.compile(r"\d{4}-W(0[1-9]|[1-4]\d|5[0-3])\Z")  # a week's subject, `2026-W25`
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
 DOT = " · "
@@ -180,6 +199,9 @@ def validate(payload: Mapping[str, Any]) -> list[str]:
             datetime.strptime(str(subject), "%Y-%m-%d")
         except ValueError:
             problems.append(f"subject {subject!r} is not a local day, YYYY-MM-DD")
+    elif payload.get("unit") == UNIT_WEEK:
+        if not isinstance(subject, str) or not ISO_WEEK.match(subject):
+            problems.append(f"subject {subject!r} is not an ISO week, YYYY-Www")
     elif not isinstance(subject, str) and not (
         isinstance(subject, list) and subject and all(isinstance(s, str) for s in subject)
     ):
@@ -264,6 +286,8 @@ class Allowed:
         found = f"tier {tier}, above max_tier {self.max_tier} of the {policy.DREAM_DESTINATION!r} entry"
         if unit == UNIT_EVENT:
             return f"{found}; the call stays home until the entry allows its tier"
+        if unit in (UNIT_JOURNEY, UNIT_WEEK):
+            return f"{found}; `dream {unit}` dreams it again under it"
         return f"{found}; `dream --catch-up` dreams the day again under it"
 
 
@@ -398,7 +422,28 @@ def for_unit(
     latest = standing(shown)
     if latest is None:
         return None, withheld
-    return day_json(latest, shown, on_unit, not_on=not_on), withheld
+    block = day_json(latest, shown, on_unit, not_on=not_on)
+    block.update(unit_json(latest.get("payload") or {}))
+    return block, withheld
+
+
+def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """What a journey's or a week's draft keeps beside its segments, as a reader carries it: under
+    `proposed` the name and the photos to star a journey's draft proposes (`name`, `star`) and the
+    review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`); under
+    `numbers` what the code computed from the lines for a week (each figure with its line ids); and
+    `dropped` and `marked`, by why. Only the keys the draft has."""
+    extra = payload.get("extra")
+    if not isinstance(extra, dict):
+        return {}
+    out: dict[str, Any] = {}
+    proposed = {key: extra[key] for key in ("name", "star", "goals") if extra.get(key)}
+    if proposed:
+        out["proposed"] = proposed
+    for key in ("numbers", "dropped", "marked"):
+        if isinstance(extra.get(key), dict) and extra[key]:
+            out[key] = extra[key]
+    return out
 
 
 def through(
@@ -500,9 +545,10 @@ def day_json(
         segment_json(s, on_day, not_on) for s in (payload.get("segments") or []) if isinstance(s, dict)
     ]
     parts = (payload.get("extra") or {}).get("parts") if isinstance(payload.get("extra"), dict) else None
+    known = UNIT_PARTS.get(str(payload.get("unit")), PARTS)  # each unit's parts, a day's for any other
     if isinstance(parts, list) and len(parts) == len(segments):
         for segment, part in zip(segments, parts, strict=True):
-            segment["part"] = str(part) if part in PARTS else None
+            segment["part"] = str(part) if part in known else None
     else:
         for segment in segments:
             segment["part"] = None
@@ -848,6 +894,76 @@ def rows(draft: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
     yield from proposal_rows(draft.get("proposals") or [], indent)
 
 
+def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
+    """The rows after a journey's or a week's segments (`unit_json`, or a payload's `extra` as a
+    writer has it): the name and the photos it proposes, the reviews it proposes for the goals, the
+    week's numbers, and what was dropped or marked; nothing for a block without them."""
+    found = block.get("proposed")
+    proposed: Mapping[str, Any] = found if isinstance(found, dict) else {}
+    extra = block.get("extra")
+    if isinstance(extra, dict):  # a payload as the writer has it
+        proposed = {key: extra[key] for key in ("name", "star", "goals") if extra.get(key)}
+        block = {key: extra[key] for key in ("numbers", "dropped", "marked") if extra.get(key)}
+    if proposed.get("name"):
+        yield f"{indent}? {'name':<9} {proposed['name']}  proposed"
+    star = proposed.get("star") or []
+    if star:
+        n = len(star)
+        yield (
+            f"{indent}? {'star':<9} {n} photo{'s' if n != 1 else ''}  proposed  ["
+            + ", ".join(short_id(i) for i in star)
+            + "]"
+        )
+    for review in proposed.get("goals") or []:
+        yield f"{indent}? {'review':<9} {review['disposition']} for “{review['text']}”  proposed"
+    numbers = block.get("numbers")
+    if isinstance(numbers, dict):
+        yield from number_rows(numbers, indent)
+    for key in ("dropped", "marked"):
+        counted = block.get(key)
+        if isinstance(counted, dict) and counted:
+            k = sum(int(n) for n in counted.values())
+            why = ", ".join(f"{reason} {n}" for reason, n in counted.items())
+            yield f"{indent}  {k} {'dropped' if key == 'dropped' else 'marked unsupported'}: {why}"
+
+
+def number_rows(numbers: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
+    """A week's numbers, one row each: the hours by place, the contacts by person, the threads, and
+    the energy (`no data` when the health lines under the ceiling hold none)."""
+    places = numbers.get("places") or []
+    if places:
+        yield f"{indent}  {'hours':<9} " + DOT.join(f"{p['place']} {p['hours']} h" for p in places)
+    people = numbers.get("people") or []
+    if people:
+        yield f"{indent}  {'contacts':<9} " + DOT.join(f"{p['name']} {p['contacts']}" for p in people)
+    threads = numbers.get("threads") or []
+    if threads:
+        yield f"{indent}  {'threads':<9} " + DOT.join(f"{t['thread']} {t['count']}" for t in threads)
+    energy = numbers.get("energy")
+    if isinstance(energy, dict):
+        said = []
+        sleep, training = energy.get("sleep"), energy.get("training")
+        if sleep:
+            said.append(f"sleep {sleep['nights']} nights, {sleep['hours']} h")
+        if training:
+            said.append(f"training {training['sessions']} sessions, {training['minutes']} min")
+        yield f"{indent}  {'energy':<9} " + (DOT.join(said) or "no data")
+
+
+def unit_rows(
+    label: str, draft: Mapping[str, Any] | None, withheld: Mapping[str, Any] | None
+) -> Iterator[str]:
+    """A journey's or a week's draft under its row: the head (`head_text`) and its segments, the
+    proposals and numbers after them (`extra_rows`); or, withheld by the `dream` entry, the one row
+    that says so and nothing of its text; nothing when it has neither."""
+    if draft is not None:
+        yield f"  {label}{DOT}{head_text(draft)}"
+        yield from rows(draft)
+        yield from extra_rows(draft)
+    elif withheld is not None:
+        yield f"  {label}{DOT}draft{DOT}{withheld_text(withheld)}"
+
+
 def proposal_rows(proposals: Iterable[Mapping[str, Any]], indent: str = "    ") -> Iterator[str]:
     """One row per proposed event, after the segments: `event N`, the span, the title, the place and
     the people; then `proposed` and the evidence, set apart with a leading `?` (greyed on the page),
@@ -890,6 +1006,8 @@ def row_text(payload: Mapping[str, Any]) -> str:
     head = str(payload.get("read_head") or "")[:HEAD_SHORT]
     subject = payload.get("subject")
     subject_text = ", ".join(subject) if isinstance(subject, list) else str(subject)
+    if isinstance(subject, list) and len(subject) > SUBJECT_SHOWN:  # a journey's id and its lines
+        subject_text = f"{', '.join(subject[:1])} and {len(subject) - 1} lines"
     n = payload.get("read_count")
     parts = [
         f"draft of {payload.get('unit')} {subject_text}",
