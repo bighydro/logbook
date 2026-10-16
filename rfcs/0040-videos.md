@@ -2,9 +2,9 @@
 
 Status: draft · 2026-10-14 · comment period: two weeks · implemented with `sync drive --videos`, `videos fetch`, `videos infer` and `review video` ([docs/adapters/videos.md](https://github.com/bighydro/logbook/blob/main/docs/adapters/videos.md))
 
-A family's home videos are digitised tapes: one file of two to four gigabytes holds many recordings from different years and places, and nothing about the file says where or when any of them was made. Its storage's dates are when it was digitised or uploaded. The record needs four things to hold them honestly: a line that names the file without claiming a time it does not know (`video/v1`, §2); a way to name one stretch of it, a **scene**, that every other line can point at (§1); a model's proposal per scene that is a proposal and never a fact (`draft/v1`, RFC 0036, §3); and the owner's statement of where and when a scene was filmed, in a line of its own beside the file's, never inside it (`attribution/v1`, §4), with the review's no (§5) and "ask the family" (§6) for the answers that are not a yes.
+A family's home videos are digitised tapes: one file of two to four gigabytes holds many recordings from different years and places, and nothing about the file says where or when any of them was made. Its storage's dates are when it was digitised or uploaded. The record needs four things to hold them honestly: a line that names the file without claiming a time it does not know (`video/v1`, §2); a way to name one stretch of it, a **scene**, that every other line can point at (§1); a model's proposal per scene that is a proposal and never a fact (`draft/v1`, RFC 0036, §3); and the owner's statement of where and when a scene was filmed, in a line of its own beside the file's, never inside it (`attribution/v1`, §4), with the scene's no, a line of its own (`scene-review/v1`, §5), and "ask the family" (§6) for the answers that are not a yes.
 
-`video/v1` and `attribution/v1` are new profiles, not among RFC 0031's freezes: their schemas may change while this RFC is a draft. The envelope (SPEC §2–3) does not change: no spec version bump, no conformance fixture, no ADR. Two drafts are amended additively: RFC 0036's `draft/v1` (a scene as the subject of unit `event`) and RFC 0037's `entity-review/v1` (the type `scene`).
+`video/v1`, `attribution/v1` and `scene-review/v1` are new profiles, not among RFC 0031's freezes: their schemas may change while this RFC is a draft. The envelope (SPEC §2–3) does not change: no spec version bump, no conformance fixture, no ADR. One draft is amended additively: RFC 0036's `draft/v1` (a scene as the subject of unit `event`). RFC 0037 is not amended: its `entity-review/v1` stays the no of the five kinds of thing the record names, and a scene is none of them.
 
 ## 1. Words
 
@@ -101,9 +101,47 @@ A line carries `place`, `when`, or both, never neither.
  "anyOf":[{"required":["place"]},{"required":["when"]}]}
 ```
 
-## 5. The no: `entity-review/v1`, type `scene`
+## 5. The scene's no: `scene-review/v1`
 
-RFC 0037 §6's line, amended with one more `type`, `scene`: `verdict` `different`, `ref` the scene ref (`{kind: "scene", value}`), `entity` the place or asset the proposal named (absent for a date alone), and the whole proposal under `extra.proposal` with the draft's id under `extra.draft`. A review never offers that proposal for that scene again, from any later draft; retracting the line brings it back (rule 5). On a scene with nothing proposed it says there is nothing to name. Tier 2.
+The owner's statement that a scene was **not** filmed where or when its draft proposed, or, for a scene with nothing proposed, that there is nothing to name. It is a line of its own, never RFC 0037's `entity-review/v1`: a scene is not an observed thing of RFC 0037's five kinds, and a no that named a place or an asset under that profile would be read by every reader of `entity-review` lines (`logbook.contrib.entities.reviews`, the person's, the org's, the idea's, the asset's and the place's queues) as a no about that place or asset. No such reader reads this kind.
+
+`kind` MUST be `scene-review`. `source` MUST be `manual` and `method` `owner`: no adapter, model or tool writes one. `tier` MUST be the highest tier of the lines it answers (the draft, the video line, the transcript), and never under 2 (§7). `at` is when the owner said it; `end` is null.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `schema` | `"scene-review/v1"` | MUST | |
+| `raw_id` | string | SHOULD | `scene-review:<scene ref>@<first 12 hex of the SHA-256 of {proposal}>`: the same no on the same proposal of the same scene is one line |
+| `ref` | object | MUST | the scene's id: `{ kind: "scene", value: <scene ref> }` (§1), as an attribution names it |
+| `scene` | object | SHOULD | `{ video, start_s, end_s }`: the ref's video line id and offsets, so a reader needs no parser; when present, equal to the ref's |
+| `verdict` | `"different"` | MUST | the scene was not filmed at the place or on the date or in the range `proposal` names; with `proposal` null, nothing the review offered names it. No other verdict is defined: a yes is an attribution (§4) |
+| `proposal` | object or null | MUST | the proposal it answers, exactly as the draft carried it under `extra.proposal` (§3): `{place, when, confidence, when_confidence?}`, or null for a scene with nothing to go on |
+| `draft` | string | MUST | the id of the scene draft whose proposal it answers |
+| `supersedes` | string | MAY | the scene's standing no this one follows: a later inference proposed something else for the same scene, and the owner refused that too |
+| `method` | `"owner"` | MUST | |
+| `evidence` | array of string | SHOULD | the draft, the video line, the transcript |
+| `logbook_head` | hex sha256 | SHOULD | the head the owner answered against |
+| `extra` | object | MAY | |
+
+**Rules.** 1. A `scene-review` line binds nothing and changes no line: the scene's draft and the video line stand as they were. 2. A review never offers a scene a proposal a standing `scene-review` line of that scene answered, from any later draft; a proposal of null is answered by a no whose `proposal` is null. 3. **One standing no per scene**: the last one not retracted and not named in a later no's `supersedes`; a reader that shows the scene's no shows that one. A superseded no is still the owner's word on the proposal it answered and keeps it out of the queue (rule 2): only retraction withdraws a no. 4. Retraction (RFC 0003) applies: a retracted no counts for nothing, and the proposal it answered returns. 5. A no on a scene with a standing attribution is refused: an attribution is corrected by a new one that supersedes it (§4 rule 3), or retracted. 6. No reader of `entity-review/v1` lines reads a `scene-review/v1` line, and no reader of this RFC reads an `entity-review/v1` line as a scene's no.
+
+```json
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"scene-review/v1","type":"object",
+ "required":["schema","ref","verdict","proposal","draft","method"],
+ "properties":{
+  "schema":{"const":"scene-review/v1"},
+  "raw_id":{"type":"string"},
+  "ref":{"type":"object","required":["kind","value"],"properties":{"kind":{"const":"scene"},
+   "value":{"type":"string","pattern":"^[^#\\s]+#t=\\d+(\\.\\d+)?,\\d+(\\.\\d+)?$"}}},
+  "scene":{"type":"object","required":["video","start_s","end_s"]},
+  "verdict":{"const":"different"},
+  "proposal":{"type":["object","null"]},
+  "draft":{"type":"string","minLength":1},
+  "supersedes":{"type":"string"},
+  "method":{"const":"owner"},
+  "evidence":{"type":"array","items":{"type":"string"}},
+  "logbook_head":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+  "extra":{"type":"object"}}}
+```
 
 ## 6. Ask the family: an open `task/v1`
 
@@ -117,7 +155,7 @@ RFC 0037 §6's line, amended with one more `type`, `scene`: `verdict` `different
 | `transcript/v1` of a video, and its WebVTT | 2 (RFC 0004) | spoken personal content |
 | `draft/v1` of a scene, and its frame descriptions | 2: the highest of what it read | derived data inherits its evidence's tier |
 | `attribution/v1` | 2 | its evidence is the draft, the video, the transcript |
-| `entity-review/v1`, type `scene` | 2 | the same evidence |
+| `scene-review/v1` | 2: the highest of the lines it answers, never under 2 | its evidence is the draft, the video, the transcript |
 | `task/v1`, list `videos` | 2 (RFC 0016) | the owner's words |
 
 Nothing derived from a family's video is written below 2, so none of it crosses a destination whose ceiling is 1.
@@ -147,6 +185,20 @@ Its second scene shows a sign on a pier; she confirms the place the draft propos
  "evidence":["019cadd3-6bc0-7dcd-9133-0000000005b2","019cadd3-6bc0-7dcd-9133-0000000005a0","019cadd3-6bc0-7dcd-9133-0000000005a1"],
  "logbook_head":"34cb1808a3e7cf1e88351f1dedff1cfbc4ab0a3b1846d04150b8b707cc1d0f2c",
  "extra":{"proposal":{"place":{"type":"place","id":"Vollen Brygge","registry":"logbook","label":"Vollen Brygge"},"when":null,"confidence":"high"},"changed":false}}}
+```
+
+Its fourth scene, a snowy road, the draft placed at home; she says it was not, and the scene leaves the queue with its proposal, which no later draft brings back:
+
+```json
+{"at":"2026-10-15T18:04:40Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"scene-review","tier":2,
+ "payload":{"schema":"scene-review/v1","raw_id":"scene-review:019cadd3-6bc0-7dcd-9133-0000000005a0#t=130.00,170.00@a508e5d324d3",
+ "ref":{"kind":"scene","value":"019cadd3-6bc0-7dcd-9133-0000000005a0#t=130.00,170.00"},
+ "scene":{"video":"019cadd3-6bc0-7dcd-9133-0000000005a0","start_s":130.0,"end_s":170.0},
+ "verdict":"different",
+ "proposal":{"place":{"type":"place","id":"Hjem","registry":"logbook","label":"Hjem"},"when":null,"confidence":"medium"},
+ "draft":"019cadd3-6bc0-7dcd-9133-0000000005b4","method":"owner",
+ "evidence":["019cadd3-6bc0-7dcd-9133-0000000005b4","019cadd3-6bc0-7dcd-9133-0000000005a0","019cadd3-6bc0-7dcd-9133-0000000005a1"],
+ "logbook_head":"4d0f6a2e9b18c3757e0a1d2c6b5f8e9a7c3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e"}}
 ```
 
 ## 9. Open questions

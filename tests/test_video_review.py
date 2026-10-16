@@ -1,7 +1,7 @@
 """`logbook review video`: the owner's say over the scenes `videos infer` proposed, one scene at a time,
 the sixth queue of RFC 0037's one review sitting. Accepting a scene writes exactly one `attribution/v1`
 line carrying the scene's offsets and touches no other line, the video's least of all; the no is
-RFC 0037's `entity-review/v1` and the proposal never returns for that scene; "ask the family" is an open
+RFC 0040's `scene-review/v1` and the proposal never returns for that scene; "ask the family" is an open
 task the scene leaves the queue with, and answering it later closes the task; every line is tier 2 and
 none of them crosses a tier-1 entry; nothing opens a connection.
 
@@ -18,8 +18,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from test_videos_infer import (
+    BOAT,
     HOME_01,
     TAPE,
+    TAPE_02,
     VOLLEN,
     FakeMedia,
     FakeSpeech,
@@ -30,7 +32,7 @@ from test_videos_infer import (
 from test_videos_infer import _run as _infer
 
 from logbook import cli
-from logbook.contrib import video_review
+from logbook.contrib import entities, video_review
 from logbook.core import crossing
 from logbook.core.store import Logbook
 from logbook.labs import scenes
@@ -175,11 +177,17 @@ def test_reject_writes_the_reviews_no_and_the_proposal_never_returns(
     seq = _seq(lb)
     assert _review("--reject", "1") == 0
     (no,) = _new(lb, seq)
-    assert (no["kind"], no["tier"], no["source"]) == ("entity-review", 2, "manual")
-    assert no["payload"]["schema"] == "entity-review/v1"
-    assert no["payload"]["type"] == "scene" and no["payload"]["verdict"] == "different"
+    assert (no["kind"], no["tier"], no["source"]) == ("scene-review", 2, "manual")
+    assert no["payload"]["schema"] == "scene-review/v1" and no["payload"]["verdict"] == "different"
     assert no["payload"]["ref"] == {"kind": "scene", "value": _ref(lb, *PIER)}
-    assert no["payload"]["entity"] == {"type": "place", "id": "Vollen Brygge", "registry": "logbook"}
+    assert no["payload"]["proposal"]["place"] == {
+        "type": "place",
+        "id": "Vollen Brygge",
+        "registry": "logbook",
+        "label": "Vollen Brygge",
+    }
+    assert "entity" not in no["payload"] and "type" not in no["payload"], "never an entity-review/v1 line"
+    assert video_review.validate_scene_review(no["payload"]) == []
     assert _ref(lb, *PIER) not in [row.ref for row in video_review.read(lb).rows]
     vision = FakeVision()
     vision.model = "another-vision-model"  # another model: the file is inferred again, the same proposal
@@ -308,7 +316,7 @@ def test_every_line_of_a_family_video_is_tier_2_and_none_crosses_a_tier_1_entry(
         "transcript",
         "draft",
         "attribution",
-        "entity-review",
+        "scene-review",
         "task",
     }
     window = ("2026-01-01T00:00:00Z", "2100-01-01T00:00:00Z")
@@ -487,7 +495,7 @@ def test_every_line_and_the_vtt_are_sealed_and_the_review_reads_them_with_the_id
         "transcript",
         "draft",
         "attribution",
-        "entity-review",
+        "scene-review",
         "task",
     }
     assert all(is_sealed(line) for line in mine)
@@ -666,3 +674,201 @@ def test_one_review_command_and_one_review_row() -> None:
     page = (Path(__file__).resolve().parents[1] / "docs" / "commands.md").read_text(encoding="utf-8")
     (row,) = [line for line in page.splitlines() if line.startswith("| `review` |")]
     assert "`review video`" in row and "`review videos`" not in row
+
+
+# -- the scene's no is a line of its own (RFC 0040 §5; the owner's decision 2 of 15 October) --------------
+
+
+def _place_and_asset_queues(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> list[str]:
+    """What `review place` and `review asset` print, as text and as JSON, byte for byte, but for the
+    place's JSON's `head`, which is the record's head and moves with any line written (as main's own
+    `--migrate-rejects` test sets it aside)."""
+    head = str(Logbook(lb.root).meta["head"])
+    found = []
+    for kind in ("place", "asset"):
+        for extra in ((), ("--json",)):
+            capsys.readouterr()
+            cli.main(["review", kind, *extra])
+            found.append(capsys.readouterr().out.replace(f'"head": "{head}"', '"head": "<the head>"'))
+    return found
+
+
+def _sightings(lb: Logbook) -> None:
+    """Something for the place's and the asset's queues to propose: an afternoon at a spot nobody
+    named, and a hull the registry does not hold (a synthetic MMSI)."""
+    start = datetime(2026, 9, 12, 12, 0, tzinfo=UTC)
+    for minutes in range(0, 180, 15):
+        at = (start + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lb.append(at, "synthetic", "location", 1, {"schema": "location/v1", "lat": 59.9211, "lon": 10.7302})
+        lb.append(
+            at,
+            "synthetic",
+            "location",
+            1,
+            {"schema": "location/v1", "lat": 59.82, "lon": 10.52, "subject": "970654321"},
+        )
+
+
+def test_a_scene_no_naming_a_place_or_an_asset_leaves_their_queues_byte_identical(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    found = (FakeMedia({HOME_01: TAPE, TAPE_02: BOAT}), FakeSpeech(), FakeVision())
+    monkeypatch.setattr(scenes, "detect", lambda *_a: found)
+    _video(lb, TAPE_02, "02")
+    _cache(lb, TAPE_02)
+    assert _infer() == 0
+    _sightings(lb)
+    queue = video_review.read(lb)
+    named: dict[str, int] = {}
+    for n, row in enumerate(queue.rows, 1):
+        kind = ((row.proposal or {}).get("place") or {}).get("type")
+        if kind is not None:
+            named.setdefault(kind, n)
+    assert set(named) >= {"place", "asset"}, named
+    before = _place_and_asset_queues(lb, capsys)
+    assert "[new]" in before[2] and "970654321" in before[2], "the asset's queue has something to show"
+    assert json.loads(before[1])["proposals"], "and so has the place's"
+    assert '"head": "<the head>"' in before[1] and "<the head>" not in before[3]
+    seq = _seq(lb)
+    assert _review("--reject", f"{named['place']},{named['asset']}") == 0
+    noes = _new(lb, seq)
+    assert [line["kind"] for line in noes] == ["scene-review", "scene-review"]
+    assert {line["payload"]["proposal"]["place"]["id"] for line in noes} == {"Vollen Brygge", "solvind"}
+    assert _place_and_asset_queues(lb, capsys) == before, (
+        "a scene's no reached the place's or the asset's queue"
+    )
+    # the control: the line this PR wrote before (RFC 0037's entity-review/v1, type scene) is read as an
+    # asset's no by every entity-review reader, so the asset's queue would not have stayed the same
+    (asset_no,) = [line for line in noes if line["payload"]["proposal"]["place"]["type"] == "asset"]
+    Logbook(lb.root).append(
+        asset_no["at"],
+        "manual",
+        "entity-review",
+        2,
+        {
+            "schema": "entity-review/v1",
+            "type": "scene",
+            "verdict": "different",
+            "ref": asset_no["payload"]["ref"],
+            "entity": {"type": "asset", "id": "solvind", "registry": "logbook"},
+        },
+    )
+    after = _place_and_asset_queues(lb, capsys)
+    assert json.loads(after[3])["rejected"] == json.loads(before[3])["rejected"] + 1
+
+
+def test_entities_reviews_never_sees_a_scene_no(lb: Logbook) -> None:
+    assert _review("--reject", "1") == 0
+    every = list(Logbook(lb.root).lines())
+    (no,) = [line for line in every if line["kind"] == "scene-review"]
+    assert all(review.line != no["id"] for review in entities.reviews(every))
+    assert entities.reviews(every) == entities.reviews([line for line in every if line is not no])
+    assert entities.validate_entity_review(no["payload"]), "not an entity-review/v1 payload either"
+
+
+def test_a_scene_does_not_come_back_in_review_video_after_its_no(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    assert _review("--json") == 0
+    scenes_before = [row["scene"] for row in json.loads(capsys.readouterr().out)["rows"]]
+    assert _review("--reject", "1,4") == 0
+    capsys.readouterr()
+    assert _review("--json") == 0
+    data = json.loads(capsys.readouterr().out)
+    assert [row["scene"] for row in data["rows"]] == [scenes_before[1], scenes_before[2]]
+    assert data["rejected"] == 2
+    capsys.readouterr()
+    cli.main(["review"])
+    block = capsys.readouterr().out.split("\nvideo\n", 1)[1]
+    assert _ref(lb, *PIER).split("#")[1] not in block and "2 refused" in block
+
+
+def test_a_second_no_supersedes_the_first_and_neither_proposal_returns(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from test_videos_infer import Recording, look
+
+    assert _review("--reject", "1") == 0  # the pier: not Vollen Brygge
+    first = _new(lb, 0)[-1]
+
+    def infer_again(model: str, tape: Any) -> None:
+        vision = FakeVision()
+        vision.model = model  # another model: the file is inferred again, the scenes cut the same way
+        monkeypatch.setattr(scenes, "detect", lambda *_a: (FakeMedia({HOME_01: tape}), FakeSpeech(), vision))
+        _cache(lb, HOME_01)
+        assert _infer() == 0
+
+    pier = TAPE[1]
+    home = Recording(
+        pier.length, pier.level_db, pier.cut_in, look("A pier.", "outdoors, a harbour", "summer", ["HJEM"])
+    )
+    infer_again("second-vision-model", (TAPE[0], home, TAPE[2], TAPE[3]))
+    rows = video_review.read(lb).rows
+    (n,) = [n for n, row in enumerate(rows, 1) if row.ref == _ref(lb, *PIER)]
+    assert rows[n - 1].proposal["place"]["id"] == "Hjem"  # type: ignore[index]
+    seq = _seq(lb)
+    assert _review("--reject", str(n)) == 0
+    (second,) = _new(lb, seq)
+    assert second["payload"]["supersedes"] == first["id"]
+    assert second["payload"]["proposal"]["place"]["id"] == "Hjem"
+    queue = video_review.read(lb)
+    assert queue.noes[_ref(lb, *PIER)]["id"] == second["id"], "one standing no for the scene"
+    assert queue.rejected == 1, "one scene refused"
+    infer_again("third-vision-model", TAPE)  # Vollen Brygge proposed again: the superseded no still holds it
+    assert _ref(lb, *PIER) not in [row.ref for row in video_review.read(lb).rows]
+    capsys.readouterr()
+    day = (
+        datetime.fromisoformat(second["at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Oslo")).date()
+    )
+    cli.main(["show", day.isoformat()])
+    out = capsys.readouterr().out
+    assert (
+        f"scene 0:40{EN_DASH}1:30 \u2260 Vollen Brygge" in out
+        and f"scene 0:40{EN_DASH}1:30 \u2260 Hjem" in out
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        ({"schema": "entity-review/v1"}, "schema"),
+        ({"verdict": "same"}, "verdict"),
+        ({"ref": {"kind": "point", "value": "59.9,10.7"}}, "ref"),
+        ({"scene": {"video": "another", "start_s": 40.0, "end_s": 90.0}}, "scene"),
+        ({"proposal": "Vollen Brygge"}, "proposal"),
+        ({"draft": ""}, "draft"),
+        ({"method": "model"}, "method"),
+        ({"supersedes": 7}, "supersedes"),
+        ({"logbook_head": "abc"}, "logbook_head"),
+    ],
+)
+def test_the_profile_refuses_what_is_not_a_scene_review(
+    lb: Logbook, change: dict[str, Any], problem: str
+) -> None:
+    assert _review("--reject", "1") == 0
+    (no,) = [line for line in Logbook(lb.root).lines() if line["kind"] == "scene-review"]
+    assert video_review.validate_scene_review(no["payload"]) == []
+    problems = video_review.validate_scene_review({**no["payload"], **change})
+    assert problems and problems[0].startswith(problem), problems
+
+
+def test_rfc_0040_says_scene_review_v1_as_the_writer_writes_it(lb: Logbook) -> None:
+    """The profile's JSON Schema in RFC 0040 §5 holds its own example (§8) and a line the writer wrote,
+    and `validate_scene_review` agrees with it on both."""
+    import re
+
+    from jsonschema import Draft202012Validator
+
+    page = (Path(__file__).resolve().parents[1] / "rfcs" / "0040-videos.md").read_text(encoding="utf-8")
+    blocks = [json.loads(b) for b in re.findall(r"```json\n(.*?)\n```", page, re.S)]
+    (schema,) = [b for b in blocks if b.get("title") == "scene-review/v1"]
+    (example,) = [b for b in blocks if b.get("kind") == "scene-review"]
+    assert _review("--reject", "1") == 0
+    (written,) = [line for line in Logbook(lb.root).lines() if line["kind"] == "scene-review"]
+    validator = Draft202012Validator(schema)
+    for line in (example, written):
+        validator.validate(line["payload"])
+        assert video_review.validate_scene_review(line["payload"]) == []
+        assert (line["kind"], line["source"], line["tier"]) == ("scene-review", "manual", 2)
+    assert set(written["payload"]) == set(example["payload"])

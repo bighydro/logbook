@@ -155,6 +155,8 @@ def _line_text(
         text = _video_text(p)
     elif line["kind"] == "attribution" and p.get("schema") == "attribution/v1":
         text = _attribution_text(p)
+    elif line["kind"] == "scene-review" and p.get("schema") == "scene-review/v1":
+        text = _scene_review_text(p)
     elif line["kind"] in ("trip", "journey") and p.get("schema") in (
         "trip/v1",
         "journey/v1",
@@ -337,10 +339,21 @@ def _video_text(p: dict[str, Any]) -> str:
 def _attribution_text(p: dict[str, Any]) -> str:
     """The owner's word on a scene (RFC 0040): the stretch of the file (`scene 0:40` en dash `1:30`),
     an arrow, then the place and the date or range."""
+    return f"{_scene_text(p)} \u2192 {_bound_text(p) or 'nothing'}"
+
+
+def _scene_review_text(p: dict[str, Any]) -> str:
+    """The owner's no on a scene (RFC 0040 §5): the stretch of the file, not equal to what was
+    proposed (`scene 0:40` en dash `1:30 ≠ Vollen Brygge`), or nothing to name when nothing was."""
+    proposal = p.get("proposal")
+    bound = _bound_text(proposal) if isinstance(proposal, dict) else ""
+    return f"{_scene_text(p)} \u2260 {bound}" if bound else f"{_scene_text(p)}: nothing to name"
+
+
+def _scene_text(p: dict[str, Any]) -> str:
     found = p.get("scene")
     scene: dict[str, Any] = found if isinstance(found, dict) else {}
     start, end = scene.get("start_s"), scene.get("end_s")
-    where = "scene"
     if (
         isinstance(start, int | float)
         and isinstance(end, int | float)
@@ -348,7 +361,12 @@ def _attribution_text(p: dict[str, Any]) -> str:
         and not isinstance(end, bool)
         and 0 <= start < end
     ):
-        where = f"scene {_offset(float(start))}\u2013{_offset(float(end))}"
+        return f"scene {_offset(float(start))}\u2013{_offset(float(end))}"
+    return "scene"
+
+
+def _bound_text(p: dict[str, Any]) -> str:
+    """The place and the date or range an attribution binds, or a proposal names."""
     bound = []
     place = p.get("place")
     if isinstance(place, dict):
@@ -357,7 +375,7 @@ def _attribution_text(p: dict[str, Any]) -> str:
     if isinstance(when, dict):
         first, last = str(when.get("from") or "?"), str(when.get("to") or "?")
         bound.append(first if first == last else f"{first}..{last}")
-    return f"{where} \u2192 {', '.join(bound) or 'nothing'}"
+    return ", ".join(bound)
 
 
 def _offset(seconds: float) -> str:

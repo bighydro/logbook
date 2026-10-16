@@ -24,11 +24,14 @@ owner (the Day's stays) and where the owner's assets were reported, or the neare
   (`1994`, `1994-07`, `1994-07-14`, `summer 1994`, `1994-06..1994-08`), or `none` to leave that part
   out. A second answer for the same scene supersedes the standing one; the same answer twice writes
   nothing (`raw_id` `<ref>@<12 hex of the answer>`).
-- `--reject N`: the review's no, RFC 0037's `entity-review/v1` with `type` `scene`: `verdict`
-  `different`, the scene's `ref`, the place or asset proposed as `entity` when there was one, and the
-  whole proposal under `extra`. That proposal is never offered for that scene again (a later inference
-  that proposes the same is held back); retract the line and it returns. On a scene with nothing
-  proposed it says there is nothing to name, and the scene leaves the queue.
+- `--reject N`: the scene's no, RFC 0040's own `scene-review/v1` line, never RFC 0037's
+  `entity-review/v1` (`validate_scene_review`): the scene's `ref`, `verdict` `different`, the proposal it
+  answers exactly as the draft carried it (null for a scene with nothing proposed: nothing to name),
+  the draft, `supersedes` the scene's standing no when it has one, at the highest tier of the lines it
+  answers and never under 2. That proposal is never offered for that scene again (a later inference that
+  proposes the same is held back), a superseded no's included; retract the line and it returns. No
+  reader of `entity-review` lines (`logbook.contrib.entities.reviews`, the person's, the org's, the
+  idea's, the asset's and the place's queues) ever reads one.
 - `--ask N`: "ask the family": one open `task/v1` line (RFC 0016), list `videos`, saying which scene, so
   a later shared page can put the scene before the family; the scene leaves the queue until it is
   answered. Accepting it later also writes the task done.
@@ -125,6 +128,7 @@ class Queue:
     answered: dict[str, Line] = field(default_factory=dict)  # scene ref -> its standing attribution
     asks: dict[str, Line] = field(default_factory=dict)  # scene ref -> its open ask
     refused: dict[str, list[Any]] = field(default_factory=dict)  # scene ref -> the proposals refused
+    noes: dict[str, Line] = field(default_factory=dict)  # scene ref -> its standing no
 
 
 def _opened(lb: Logbook, lines: Iterable[Line]) -> list[Line]:
@@ -184,14 +188,18 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
         if (ref := _ref(line)) is not None
         and (line.get("payload") or {}).get("schema") == videos.ATTRIBUTION_SCHEMA
     }
+    noes = [
+        line
+        for line in noes
+        if (line.get("payload") or {}).get("schema") == videos.NO_SCHEMA
+        and _ref(line) is not None
+        and "proposal" in (line.get("payload") or {})
+    ]
     refused: dict[str, list[Any]] = {}
-    for line in noes:
-        payload = line.get("payload") or {}
-        ref = _ref(line)
-        if str(line["id"]) in gone or payload.get("type") != videos.SCENE or ref is None:
-            continue
-        extra = payload.get("extra")
-        refused.setdefault(ref, []).append(extra.get("proposal") if isinstance(extra, dict) else None)
+    for line in noes:  # every no not retracted holds its proposal, a superseded one's too
+        if str(line["id"]) not in gone:
+            refused.setdefault(str(_ref(line)), []).append((line.get("payload") or {}).get("proposal"))
+    standing_noes = {str(_ref(line)): line for line in _standing(noes, gone)}
     asks = open_asks(tasks, gone)
     by_video = {v.id: v for v in listed}
     latest: dict[str, str] = {}  # video id -> the key of its latest inference
@@ -248,7 +256,7 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
         )
     rows.sort(key=Row.rank)
     rejected = sum(1 for ref, found in refused.items() if found)
-    return Queue(rows, head, len(answered), rejected, len(asks), tier, answered, asks, refused)
+    return Queue(rows, head, len(answered), rejected, len(asks), tier, answered, asks, refused, standing_noes)
 
 
 def _overlapping(answered: Mapping[str, Line], ref: str, scene: tuple[str, float, float]) -> tuple[Line, ...]:
@@ -495,15 +503,11 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
         if row.refused or (proposal is not None and proposal in queue.refused.get(row.ref, [])):
             yield Written(row, "reject", None, "already refused; nothing written")
             return
-        payload = {"schema": videos.NO_SCHEMA, "type": videos.SCENE, "verdict": "different"}
-        payload["ref"] = {"kind": videos.SCENE, "value": row.ref}
-        payload["refs"] = [dict(payload["ref"])]
-        place = proposal.get("place") if proposal else None
-        if isinstance(place, dict):
-            payload["entity"] = {"type": place.get("type"), "id": place.get("id"), "registry": "logbook"}
-            payload["label"] = place.get("label")
-        payload.update({"method": "owner", "evidence": evidence, "logbook_head": head})
-        payload["extra"] = {"draft": str(row.draft["id"]), "proposal": proposal}
+        payload = no_payload(row, proposal, evidence, head, queue.noes.get(row.ref))
+        problems = validate_scene_review(payload)
+        if problems:
+            raise ReviewError(f"scene {row.ref}: {problems[0]}")
+        tier = answered_tier(lb, evidence)
         line = lb.append(now, "manual", videos.NO_KIND, tier, payload, tz=tz)
         said = (
             "nothing to name: the scene leaves the queue"
@@ -543,6 +547,84 @@ def _close_ask(lb: Logbook, row: Row, ask: Line, now: str, tz: str) -> Written:
     }
     line = lb.append(now, "manual", videos.ASK_KIND, int(ask.get("tier") or videos.TIER), payload, tz=tz)
     return Written(row, "ask", line, "the family's question closed")
+
+
+# -- the scene's no: scene-review/v1 (RFC 0040 §5) ----------------------------------------------------------
+
+
+def no_payload(
+    row: Row, proposal: Mapping[str, Any] | None, evidence: Sequence[str], head: str, standing: Line | None
+) -> dict[str, Any]:
+    """One `scene-review/v1` payload: the scene, the verdict, the proposal it answers as the draft
+    carried it, the draft, and the scene's standing no it supersedes, if any."""
+    digest = hashlib.sha256(canonical_json({"proposal": proposal}).encode("utf-8")).hexdigest()[:12]
+    payload: dict[str, Any] = {
+        "schema": videos.NO_SCHEMA,
+        "raw_id": f"{videos.NO_KIND}:{row.ref}@{digest}",
+        "ref": {"kind": videos.SCENE, "value": row.ref},
+        "scene": {"video": row.video.id, "start_s": row.start, "end_s": row.end},
+        "verdict": videos.NO_VERDICT,
+        "proposal": dict(proposal) if proposal is not None else None,
+        "draft": str(row.draft["id"]),
+        "method": "owner",
+        "evidence": list(evidence),
+        "logbook_head": head,
+    }
+    if standing is not None:
+        payload["supersedes"] = str(standing["id"])
+    return payload
+
+
+HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def validate_scene_review(payload: Mapping[str, Any]) -> list[str]:
+    """What is wrong with a `scene-review/v1` payload (RFC 0040 §5), first problem first; [] when
+    nothing is. RFC 0037's `entity-review/v1` and its checks are another profile, untouched."""
+    problems = []
+    if payload.get("schema") != videos.NO_SCHEMA:
+        problems.append(f"schema is not {videos.NO_SCHEMA}")
+    ref = payload.get("ref")
+    scene = videos.parse_scene(ref.get("value")) if isinstance(ref, dict) else None
+    if not isinstance(ref, dict) or ref.get("kind") != videos.SCENE or scene is None:
+        problems.append("ref is not {kind: scene, value: <video line id>#t=<start>,<end>}")
+    bound = payload.get("scene")
+    if bound is not None and (
+        not isinstance(bound, dict)
+        or scene is None
+        or (bound.get("video"), bound.get("start_s"), bound.get("end_s")) != scene
+    ):
+        problems.append("scene is not the ref's video and offsets")
+    if payload.get("verdict") != videos.NO_VERDICT:
+        problems.append(f"verdict is not {videos.NO_VERDICT}")
+    if "proposal" not in payload or not (
+        payload["proposal"] is None or isinstance(payload["proposal"], dict)
+    ):
+        problems.append("proposal is not the draft's proposal, an object or null")
+    if not isinstance(payload.get("draft"), str) or not payload.get("draft"):
+        problems.append("draft is not a line id")
+    if payload.get("method") != "owner":
+        problems.append("method is not owner")
+    for key in ("raw_id", "supersedes"):
+        if key in payload and not (isinstance(payload[key], str) and payload[key]):
+            problems.append(f"{key} is not a string")
+    evidence = payload.get("evidence")
+    if evidence is not None and not (
+        isinstance(evidence, list) and all(isinstance(e, str) for e in evidence)
+    ):
+        problems.append("evidence is not a list of line ids")
+    head = payload.get("logbook_head")
+    if head is not None and not (isinstance(head, str) and HEX64.match(head)):
+        problems.append("logbook_head is not a hex sha256")
+    return problems
+
+
+def answered_tier(lb: Logbook, ids: Iterable[str]) -> int:
+    """The tier of a scene's no: the highest of the lines it answers (the draft, the video, the
+    transcript), as the index has them, and never under 2."""
+    with lb.index() as idx:
+        found = idx.by_ids(list(ids))
+    return max([videos.TIER, *(int(line.get("tier") or 0) for line in found.values())])
 
 
 # -- what the record holds that day ------------------------------------------------------------------------
