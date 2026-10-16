@@ -6,10 +6,10 @@ origin, importance, specificity and order. Each element's narrowest width is the
 the bottom up, as a browser's min-content width is: what it fixes of its own (a `width`, `min-width`
 or flex basis, a `width` attribute, a form control's or an image's default width), the fixed and
 content-sized columns of a grid and its gaps, the cells of a table's widest row, the items of a flex
-row that does not wrap, side by side, and the longest run of text that may not break (`white-space:
-nowrap`, or a word that no `overflow-wrap` breaks) at `CHAR_EM` a character; plus its horizontal
-margins, borders and padding. A percentage is of the column its container leaves. Every estimate
-errs wide.
+row that does not wrap, side by side (a flex column's that does not wrap, one under another), and
+the longest run of text that may not break (`white-space: nowrap`, or a word that no `overflow-wrap`
+breaks) at `CHAR_EM` a character; plus its horizontal margins, borders and padding. A percentage is
+of the column its container leaves. Every estimate errs wide.
 
 `problems` names every element that, with the frames around it, needs more than the column, every
 image and `pre` without a `max-width` that keeps it inside, and a stylesheet without a phone
@@ -476,7 +476,8 @@ class Layout:
 
     def content(self, node: Node, s: Style, taken: float, inner: float) -> tuple[float, str]:
         """The narrowest its content can be laid out in: a grid's columns, a table's widest row, a
-        flex row's items side by side, else the widest child or run of text."""
+        flex row's items side by side, else (a flex column's among them) the widest child or run of
+        text."""
         kids = [k for k in node.elements() if self.style(k).get("display") != "none"]
         display = s.get("display")
         if display in ("grid", "inline-grid"):
@@ -498,7 +499,9 @@ class Layout:
         ):
             whole = self.text(node.text(), s)
         needs = [self.need(k, taken) for k in kids]
-        if display in ("flex", "inline-flex") and s.get("flex-wrap", "nowrap") == "nowrap":
+        column = s.get("flex-direction", "row").startswith("column")  # one under another
+        wraps = s.get("flex-wrap", "nowrap") != "nowrap"  # a column that wraps may lay columns side by side
+        if display in ("flex", "inline-flex") and column == wraps:
             items = len(needs) + len(runs)
             line = sum(px for px, _ in [*needs, *runs]) + s.px("column-gap", inner) * max(items - 1, 0)
             return max((line, f"{items} items side by side"), whole)

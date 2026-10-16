@@ -459,7 +459,7 @@ def test_an_act_while_another_command_writes_is_refused_and_writes_nothing(lb: L
         lock.write_text(json.dumps(holder), encoding="utf-8")
         seq = int(lb.meta["seq"])
         response = _site(lb).write(serve.NAME_PATH, {"id": BERGEN_WINTER, "name": "Bergen"}, LOOPBACK, None)
-        assert response.status == 503 and "sync immich" in response.body.decode("utf-8")
+        assert response.status == 409 and "sync immich" in response.body.decode("utf-8")
         assert int(Logbook(lb.root).meta["seq"]) == seq
     finally:
         other.kill()

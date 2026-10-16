@@ -16,7 +16,7 @@
   **Merge** writes what `--accept N` writes and **Not the same person** what `--reject N` writes,
   through the same functions. Like the Places page's form, both acts and the naming are answered from
   this machine only (a loopback client, an `Origin` of 127.0.0.1), one at a time, under the record's
-  writer lock without waiting for it: another command writing is a `503`, nothing written.
+  writer lock without waiting for it: another command writing is a `409`, nothing written.
 
 ### Changed
 - `serve`'s navigation wraps on a narrow screen and names *journeys* and *people* (`/trips` stays, from

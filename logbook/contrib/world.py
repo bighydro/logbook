@@ -1040,12 +1040,16 @@ noscript table{border-collapse:collapse;margin:1rem}
 noscript th,noscript td{text-align:left;padding:.2rem .6rem;border-bottom:1px solid var(--line)}
 @media (max-width:40rem){#list{display:none}#clock{min-width:0}}
 """
+LIBRARY_STYLE = """
+#globe,#bands{max-width:100%}
+"""  # the Library's `/world` only, its canvases held to a phone's column; the exported file keeps STYLE
 
 
 def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
     """The page around the record's JSON: the canvas, the scrubber, the land table, the script.
     `standalone` (the exported file) carries the Content-Security-Policy in a meta element, since a
-    file has no headers; the Library sends it as one and passes its navigation as `nav`."""
+    file has no headers; the Library sends it as one, passes its navigation as `nav` and adds
+    `LIBRARY_STYLE`."""
     bundle = json.loads(json_text)
     window = bundle["window"]
     head = _head(bundle)
@@ -1056,7 +1060,7 @@ def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"{policy_meta}"
         "<title>The world · Logbook</title>\n"
-        f"<style>{STYLE}</style>\n</head>\n<body>\n"
+        f"<style>{STYLE}{'' if standalone else LIBRARY_STYLE}</style>\n</head>\n<body>\n"
         f"<header>{f'<nav>{nav}</nav>' if nav else ''}"
         f"<h1>The world <small>{escape(head)}</small></h1>"
         '<p id="readout" aria-live="polite"></p></header>\n'
