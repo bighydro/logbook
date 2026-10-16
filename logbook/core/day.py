@@ -277,7 +277,7 @@ def of_reading(
         "all_day": all_day,
         "timeline": timeline,
         "flights": flights,
-        "unplaced": _unplaced(folded, stands_for, entries, tz),
+        "unplaced": _unplaced(folded, stands_for, entries, tz, rd),
         "stories": [story.summary(line, rd.names) for line in story.about(stories or (), day)],
         "health": health_row,
         "spend": ledger.spend(lines, day),
@@ -564,6 +564,9 @@ def _finish(
         "confirmed": [c.to_json() for c in companions if c.status == present.CONFIRMED],
         "proposed": [c.to_json() for c in companions if c.status == present.PROPOSED],
     }
+    unnamed = 0 if entry["kind"] == stays.MOVE else present.unnamed_at(span, lines, rd.identities)
+    if unnamed:  # RFC 0038 §3.4: counted, never named; the key only on a stay that has them
+        entry["with"]["unnamed"] = unnamed
     if entry["kind"] == stays.MOVE:
         entry["flights"] = [
             f["id"] for f in flights if _instant(f["start"]) < end and (_instant(f["end"]) or start) > start
@@ -680,7 +683,7 @@ def _attached(
                 }
             )
         elif kind == "transcript":
-            transcripts.append({"title": _title(line), "line": id_, **_voices(payload)})
+            transcripts.append({"title": _title(line), "line": id_, **_voices(line, rd)})
         elif kind == "note":
             notes.append({"text": _note_text(payload), "line": id_})
         elif kind == "mail":
@@ -762,6 +765,7 @@ def _unplaced(
     stands_for: Mapping[str, events.Folded],
     entries: Sequence[dict[str, Any]],
     tz: ZoneInfo,
+    rd: Reading,
 ) -> list[dict[str, Any]]:
     """The day's placeable lines inside no entry: planned where the track has nothing."""
     spans = [(_instant(e["start"]), _instant(e["end"])) for e in entries if not e["gap"]]
@@ -785,16 +789,17 @@ def _unplaced(
         if kind == "event":
             item.update(_stands_for(line, stands_for))
         if kind == "transcript":
-            item.update(_voices(payload))
+            item.update(_voices(line, rd))
         out.append(item)
     return out
 
 
-def _voices(payload: Mapping[str, Any]) -> dict[str, Any]:
+def _voices(line: Line, rd: Reading) -> dict[str, Any]:
     """`speakers` for a transcript's entry, only when the line has voices (RFC 0038 §2): the Day's
-    object is otherwise unchanged. Shaped for the attributions to come (`speakers.to_json`)."""
-    found = speakers.to_json(payload)
-    return {"speakers": found} if found else {}
+    object is otherwise unchanged. Each voice joined to who it is (§3.4, `attribution.Voices`):
+    `{label, person, name, seconds, basis, consent, owner}`."""
+    found = rd.voices.of(line)
+    return {"speakers": [h.to_json() for h in found]} if found else {}
 
 
 def voices_text(item: Mapping[str, Any]) -> str:
@@ -1249,10 +1254,12 @@ def _entry_rows(
         for k in attached["keepers"]:
             yield f"{inner}{'keeper':<12} {_mark(marks, k['line'])}{k['name']} ({k['lane']})"
     company = entry.get("with")
-    if company and (company["confirmed"] or company["proposed"]):
+    if company and (company["confirmed"] or company["proposed"] or company.get("unnamed")):
         confirmed = ", ".join(companion_text(c) for c in company["confirmed"])
         proposed = ", ".join(companion_text(c) for c in company["proposed"])
         text = confirmed
+        if company.get("unnamed"):
+            text = f"{text}{DOT}{company['unnamed']} unnamed" if text else f"{company['unnamed']} unnamed"
         if proposed:
             text = f"{text}{DOT}proposed {proposed}" if text else f"proposed {proposed}"
         yield f"{inner}{'with':<12} {text}"

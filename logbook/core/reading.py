@@ -37,7 +37,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import assets, day_start, places, policy, present, resolve, stays
+from . import assets, attribution, day_start, places, policy, present, resolve, stays
 from .chain import Line
 from .day_start import DayStart
 from .export import day_range
@@ -102,6 +102,12 @@ class Reading:
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
+
+    @functools.cached_property
+    def voices(self) -> attribution.Voices:
+        """The transcripts' voices joined to who they are (RFC 0038 §3.4), one join for the reading:
+        a Day asks per transcript, and the people's labels are taken once."""
+        return attribution.Voices(self.identities, self.owner.entities, self.owner.id)
 
     @functools.cached_property
     def by_kind(self) -> Mapping[str, tuple[Line, ...]]:

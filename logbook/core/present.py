@@ -9,6 +9,7 @@ them per person. The sources, in the order a Day lists them:
 | `circle`     | a page another member of the circle shared (not built yet)      | confirmed | —          |
 | `calendar`   | an attendee of a timed `event/v1` held at the stay **            | confirmed | 0.8, 0.6 * |
 | `calendar`   | an attendee of an all-day `event/v1` located at the stay **     | proposed  | 0.3        |
+| `transcript` | a voice the owner bound to a person, recorded at the stay *****  | confirmed | the line's |
 | `transcript` | a participant of a `transcript/v1` recorded inside the stay *** | confirmed | 0.9        |
 | `note`       | a `note/v1` written inside the stay that says "with <name>" *** | confirmed | 1.0        |
 | `photo`      | a face the library tagged in a `photo/v1` taken inside the stay | proposed  | 0.5        |
@@ -41,6 +42,14 @@ agent, `logbook.core.machine`), whatever name it was given. A note's name follow
 "with Ola" names Ola Nordmann when a resolution line gives a person that label (`_by_name`); "with
 US", "with XYZ", a country, an acronym or a name the record does not know names nobody.
 
+***** A voice of a recording that overlaps the stay, bound to a person by the owner's `resolution/v1`
+line (RFC 0038 §3, `attribution`), ahead of the participants: `spoke in <title>`, at the line's
+`confidence` (a text attribution's 0.4 reads as 0.4), else 1.0, the owner's own assertion. A voice
+of the `system` channel is the far end of a call: never company, and the person it is bound to is
+not company through that recording's participants either, since they were not there. A voice bound
+to the owner, or the owner's by `from_me`, is the owner; one bound unnamed is a person counted
+(`unnamed_at`) and never named; one not yet named is nobody's company.
+
 Confirmed is what the calendar, a recording or the owner's own words say; a face is a library's
 guess, by id or by name, and stays proposed until the owner says otherwise, and so are the
 attendees of an all-day entry located at the stay: it names no hour. Names resolve through the
@@ -61,7 +70,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import machine, policy
+from . import attribution, machine, policy
 from .chain import Line
 from .places import Place, distance_m
 from .resolve import Identity, Ref
@@ -143,6 +152,7 @@ class Owner:
     entities: frozenset[str]
     refs: frozenset[Ref]
     names: frozenset[str]
+    id: str | None = None  # `owner_id` of logbook.json: whom a `from_me` voice is (RFC 0038 §3.3 rule 4)
 
     def holds(self, p: Presence) -> bool:
         return (
@@ -181,7 +191,7 @@ def owner_of(
         resolved = identities.get(ref)
         if resolved is not None and resolved.label:
             names.add(_normal(resolved.label))
-    return Owner(frozenset(entities), frozenset(refs), frozenset(names))
+    return Owner(frozenset(entities), frozenset(refs), frozenset(names), owner_id or None)
 
 
 def _normal(name: str) -> str:
@@ -237,11 +247,41 @@ def from_transcript(
     stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
 ) -> list[Presence]:
     found = []
+    voices = attribution.Voices(identities)
+    lines = list(lines)
+    heard_again = _superseded_transcripts(lines)
     for line in lines:
-        if line.get("kind") != "transcript" or not _overlaps(stay, line):
-            continue
+        if (
+            line.get("kind") != "transcript"
+            or not _overlaps(stay, line)
+            or str(line.get("id")) in heard_again
+        ):
+            continue  # a transcript heard again stands no more, nor do its voices (RFC 0038 §3.3 rule 5)
         payload = line.get("payload") or {}
         title = str(payload.get("title") or "a recording")
+        far: set[str] = set()  # who was the far end of this call: not there, whatever else names them
+        spoke: set[str] = set()  # who a voice of the line is: read from the voice, ahead of rule 2
+        for heard in voices.of(line):
+            if heard.state != attribution.PERSON or heard.entity is None:
+                continue  # the owner, the unnamed (`unnamed_at`), a voice not yet named
+            if heard.far_end:
+                far.add(heard.entity)
+                continue
+            if not heard.name:
+                continue  # a person no line gives a label: nobody a reader can name
+            spoke.add(heard.entity)
+            found.append(
+                Presence(
+                    heard.entity,
+                    heard.name,
+                    (attribution.SPEAKER, heard.ref),
+                    heard.reads_as(),
+                    CONFIRMED,
+                    "transcript",
+                    f"spoke in {title}",
+                    str(line["id"]),
+                )
+            )
         participants = payload.get("participants")
         for participant in participants if isinstance(participants, list) else []:
             if not isinstance(participant, dict) or machine.is_machine_participant(participant):
@@ -260,6 +300,8 @@ def from_transcript(
                 person, label = _by_name(spoken, identities)
             if person is None or not label:
                 continue  # Speaker A, me, them, Unknown, a name the record has no person for
+            if person in far or person in spoke:
+                continue  # the far end of this call: not there; a voice of theirs: read from the voice
             found.append(
                 Presence(
                     person,
@@ -411,6 +453,42 @@ def company(
     order = {CONFIRMED: 0, PROPOSED: 1}
     companions.sort(key=lambda c: (order[c.status], -c.confidence))
     return companions
+
+
+def unnamed_people(stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity]) -> set[str]:
+    """The people the owner bound unnamed who spoke in a recording that overlaps the stay, the far
+    end of a call left out (RFC 0038 §3.4: an unnamed voice confirms an unnamed person, counted and
+    never named): their ids, for a reader to count and never to show."""
+    voices = attribution.Voices(identities)
+    lines = list(lines)
+    heard_again = _superseded_transcripts(lines)
+    return {
+        heard.entity
+        for line in lines
+        if line.get("kind") == "transcript"
+        and _overlaps(stay, line)
+        and str(line.get("id")) not in heard_again
+        for heard in voices.of(line)
+        if heard.state == attribution.UNNAMED and heard.entity and not heard.far_end
+    }
+
+
+def _superseded_transcripts(lines: Iterable[Line]) -> set[str]:
+    """The ids of the transcripts another transcript among `lines` supersedes (`derive speakers`
+    writes the new line at the old one's instant, so the two are read together): SPEC §3, a
+    superseded line does not stand."""
+    return {
+        str(supersedes)
+        for line in lines
+        if line.get("kind") == "transcript"
+        and isinstance(supersedes := (line.get("payload") or {}).get("supersedes"), str)
+    }
+
+
+def unnamed_at(stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity]) -> int:
+    """How many unnamed people were at the stay (`unnamed_people`). A move has no company and is not
+    asked."""
+    return len(unnamed_people(stay, lines, identities))
 
 
 # -- the evidence of a window, by day ---------------------------------------------------------------------

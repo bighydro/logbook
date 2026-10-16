@@ -264,8 +264,84 @@ def owner_acts(drafts: list[Draft], rng: random.Random) -> None:
         drafts.append({"at": d["at"], "source": "manual", "kind": "note", "tier": 2, "payload": said})
 
 
+def voices(drafts: list[Draft], rng: random.Random) -> None:
+    """RFC 0038: the demo's transcripts carry voices (a room's, a call's two channels, and payloads a
+    reader cannot interpret), and the owner's answers bind some of them: to a person the record names,
+    to a person minted for a name, unnamed, to another voice (`alias_of`), corrected by a line that
+    supersedes, with a consent the profile does not allow, and to a voice of no transcript."""
+    people = [
+        d["payload"]["entity"]["id"]
+        for d in drafts
+        if d.get("kind") == "resolution"
+        and isinstance(d["payload"].get("entity"), dict)
+        and d["payload"]["entity"].get("type") == "person"
+    ]
+    refs: list[str] = []
+    for i, d in enumerate(d for d in drafts if d.get("kind") == "transcript"):
+        d.setdefault("id", str(uuid.UUID(int=rng.getrandbits(128))))
+        payload, shape = d["payload"], i % 4
+        if shape == 0:
+            payload["speakers"] = [
+                {"label": f"S{n}", "seconds": rng.uniform(1, 900), "turns": n} for n in (1, 2, 3)
+            ]
+            payload["diarization"] = {"engine": "pyannote", "channels": 1}
+        elif shape == 1:
+            payload["speakers"] = [
+                {"label": "mic", "seconds": 60.0, "turns": 2, "channel": "mic", "from_me": True},
+                {"label": "system", "seconds": 50.0, "turns": 2, "channel": "system", "name": "Ola Nordmann"},
+            ]
+            payload["diarization"] = {"engine": "granola", "channels": 2}
+        elif shape == 2:
+            payload["speakers"] = rng.choice([{"S1": 3}, [{"label": "a#b", "turns": -1}, "S2", {"turns": 1}]])
+        refs += [
+            f"{d['id']}#{v['label']}"
+            for v in payload.get("speakers") or []
+            if isinstance(v, dict) and isinstance(v.get("label"), str) and "#" not in v["label"]
+        ]
+    if not refs:
+        return
+    at = max(d["at"] for d in drafts)
+
+    def said(ref: str, **payload: Any) -> Draft:
+        line = {
+            "schema": "resolution/v1",
+            "ref": {"kind": "speaker", "value": ref},
+            "method": "owner",
+            "basis": "voice",
+            **payload,
+        }
+        return {
+            "id": str(uuid.UUID(int=rng.getrandbits(128))),
+            "at": at,
+            "source": "manual",
+            "kind": "resolution",
+            "tier": 2,
+            "payload": line,
+        }
+
+    def person(entity: str, label: str | None = None) -> dict[str, Any]:
+        found: dict[str, Any] = {"entity": {"type": "person", "id": entity, "registry": "logbook"}}
+        return {**found, "label": label} if label else found
+
+    minted = str(uuid.UUID(int=rng.getrandbits(128)))
+    first = said(rng.choice(refs), **person(rng.choice(people) if people else minted, "Per Hansen"))
+    drafts.extend(
+        [
+            first,
+            said(first["payload"]["ref"]["value"], **person(minted, "Per Hansen"), supersedes=first["id"]),
+            said(rng.choice(refs), **person(str(uuid.UUID(int=rng.getrandbits(128)))), unnamed=True,
+                 consent="unknown"),
+            said(rng.choice(refs), alias_of={"kind": "speaker", "value": rng.choice(refs)}, consent="maybe"),
+            said(rng.choice(refs), **person(minted), basis="text", confidence=0.4),
+            said(f"{uuid.UUID(int=rng.getrandbits(128))}#S9", **person(minted, "Per Hansen")),
+            said(rng.choice(refs), entity={"type": "company", "id": minted, "registry": "logbook"}),
+        ]
+    )  # fmt: skip
+
+
 MUTATIONS: dict[str, Mutation | None] = {
     "goals-and-chapters": goals_and_chapters,
+    "voices": voices,
     "optional-fields": drop_optional_fields,
     "owner-acts": owner_acts,
     "string-chat": string_chat,
@@ -372,6 +448,8 @@ def windowed_readers(
         ["doctor", "sources", "--gaps", "--since", since, "--json"],
         ["promises", "--all", "--since", since],
         ["promises", "--all", "--since", since, "--json"],
+        ["review", "speakers", "--named", "--day", day],
+        ["review", "speakers", "--named", "--day", day, "--json"],
         ["people", "nearby", "--days", since, until],
         ["people", "nearby", "--days", since, until, "--json"],
         ["setup", "assets", "status"],
@@ -413,6 +491,10 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["review", "org", "--json"],
     ["show", "orgs"],
     ["show", "orgs", "--json", "--money"],
+    ["people"],
+    ["people", "--json"],
+    ["review", "speakers"],
+    ["review", "speakers", "--json"],
     ["goal", "list"],
     ["goal", "list", "--open", "--json"],
     ["chapter", "list"],

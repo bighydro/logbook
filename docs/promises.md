@@ -92,6 +92,10 @@ mailbox), that counts too. A message is yours when the adapter stored `from_me`.
 is yours when its speaker resolves to you: the source's label (`Ola Nordmann:` in Markdown, `<v
 Ola Nordmann>` in WebVTT, Granola's `speaker.name`) matched to the line's `participants` and their
 email, phone or provider id to a person, `me` and your own names from `policy/owner.json` as you.
+A transcript whose voices were separated is read voice by voice first, through its spans file: a
+sentence is the voice's that spoke it, yours when the voice is yours (your microphone, or a voice you
+named as you), a guest's (owed to you) when you named it someone else, as spoken (`S2`) while it is
+not yet named ([who they are](speakers.md#who-they-are)).
 A note is yours, except for text that carries its own labels (`Speaker 2:`, or a name the record
 knows), which belongs to that speaker. A request from a diarizer's `Speaker A`, who is not you, is
 counted as asked of you; a commitment from one is nobody's and shows under `--all`.

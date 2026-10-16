@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://logbook.dev/schema/resolution-v1-speaker.json",
+  "title": "resolution/v1 payload with a `speaker` ref (RFC 0006, with the amendment of 2026-10-15: RFC 0038 §3)",
+  "description": "The payload of a line of kind `resolution` whose `ref` is a voice: `<the transcript line's id>#<label>`. The fields RFC 0038 §3.2 adds (`basis`, `consent`, `unnamed`, `spans`) mean something only on such a line, and a writer MUST NOT put them on a line with any other ref. `method` is `owner`: the model proposes, the owner binds. `confidence` is absent for basis `channel` and `voice` (asserted) and present for basis `text`. `label` is absent on an `unnamed` line and on a line naming the owner. A field this schema does not name is allowed, as RFC 0006 allows it.",
+  "type": "object",
+  "required": ["schema", "ref", "basis", "method"],
+  "properties": {
+    "schema": {"const": "resolution/v1"},
+    "ref": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {"const": "speaker"},
+        "value": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}#[^#\\n]{1,64}$"}
+      }
+    },
+    "entity": {
+      "type": "object",
+      "required": ["type", "id", "registry"],
+      "properties": {"type": {"const": "person"}, "id": {"type": "string", "minLength": 1}, "registry": {"const": "logbook"}}
+    },
+    "alias_of": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {"kind": {"type": "string"}, "value": {"type": "string"}}
+    },
+    "label": {"type": "string", "minLength": 1},
+    "method": {"const": "owner"},
+    "basis": {"enum": ["channel", "voice", "text"]},
+    "consent": {"enum": ["yes", "no", "unknown"]},
+    "unnamed": {"const": true},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "spans": {
+      "type": "object",
+      "required": ["content", "ranges"],
+      "properties": {
+        "content": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ranges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "logbook_head": {"type": "string"},
+    "supersedes": {"type": "string"},
+    "extra": {"type": "object"}
+  },
+  "oneOf": [{"required": ["entity"]}, {"required": ["alias_of"]}],
+  "allOf": [
+    {"if": {"required": ["unnamed"]}, "then": {"not": {"required": ["label"]}}},
+    {"if": {"properties": {"basis": {"const": "text"}}}, "then": {"required": ["confidence"]}, "else": {"not": {"required": ["confidence"]}}}
+  ]
+}

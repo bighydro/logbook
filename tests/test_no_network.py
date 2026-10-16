@@ -147,6 +147,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "nearby", "Marina"),
     ("people", "nearby", "Cabin"),
     ("people", "nearby", "--days", "2026-06-08", "2026-06-10"),
+    ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
+    ("review", "speakers", "--json"),
     ("setup", "assets", "status"),
     ("setup", "assets", "status", "--json"),
     ("setup", "assets", "list"),

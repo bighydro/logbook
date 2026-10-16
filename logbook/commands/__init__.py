@@ -21,6 +21,7 @@
 | `people.py`    | `people`, `people --priority`, `people NAME`, `people merge`, `people review`    |
 | `review.py`    | `review KIND` (the one sitting `people review` and `setup places review` run),   |
 |                | `status KIND ENTITY DISPOSITION`, `status list KIND`                             |
+| `speakers.py`  | `review speakers`, its options and its sitting (RFC 0038 §4)                     |
 | `places.py`    | `setup places`                                                                   |
 | `promises.py`  | `promises`, with `promises tasks`                                                |
 | `export.py`    | `export` (with `export share day`), `import` (with `import trip-bundle`,         |

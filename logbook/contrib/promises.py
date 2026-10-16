@@ -42,7 +42,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import day_start, machine, policy, present, signing
+from ..core import attribution, day_start, machine, policy, present, signing
 from ..core.chain import Line
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
@@ -721,6 +721,7 @@ def extract(
         identities,
     )
     owner_label = _owner_label(owner, identities)
+    voices = attribution.Voices(identities, owner.entities, owner.id)
     skipped: dict[str, int] = {}
     proposals: list[Proposal] = []
     seen: set[str] = set()
@@ -749,11 +750,25 @@ def extract(
         if kind == MESSAGE and _forwarded(payload):
             skipped[FORWARDED] = skipped.get(FORWARDED, 0) + 1  # someone else's words the owner passed on
             continue
-        if kind == TRANSCRIPT:
-            turns = turns_of(lb, line)
-            if turns is None:
+        voiced = (  # an agent's turns are dropped by its label: such a transcript is read as before
+            attribution.voiced_turns(lb, line)
+            if kind == TRANSCRIPT and not any(machine.is_machine_participant(p) for p in participants)
+            else None
+        )
+        if voiced is not None:
+            # RFC 0038 §3.4: a sentence is its voice's, bound, before every rule of today's
+            heard = {h.label: h for h in voices.of(line)}
+            turns = voiced
+            spoken_by = {
+                turn.speaker: _voice(heard.get(turn.speaker or ""), humans, identities, owner, owner_label)
+                for turn in turns
+            }
+        elif kind == TRANSCRIPT:
+            read = turns_of(lb, line)
+            if read is None:
                 skipped["transcripts_without_text"] = skipped.get("transcripts_without_text", 0) + 1
                 continue
+            turns = read
             # an agent's turn is nobody's words, nor is a line of the owner's that its text gives the agent
             turns = machine.human_turns(
                 relabel(machine.human_turns(turns, participants), known), participants
@@ -843,6 +858,32 @@ def extract(
             at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
     return Report(proposals, skipped, describe(extractor), since, owner_label, kinds)
+
+
+def _voice(
+    heard: attribution.Heard | None,
+    participants: Sequence[Any],
+    identities: Mapping[Ref, Identity],
+    owner: present.Owner,
+    owner_label: str | None,
+) -> Speaker:
+    """The speaker of a segment by its voice (RFC 0038 §3.4): the owner's voice is the owner; a
+    person's, that person; an unnamed one, a person nobody names (a guest, so what they promise is
+    owed to the owner); a voice not yet named, as today's rule reads the name its source displayed,
+    else its label, which names nobody (`S2` stays as spoken). A segment no voice spoke is nobody's."""
+    if heard is None:
+        return Speaker(None, None, None, False)
+    label = heard.label
+    if heard.state == attribution.OWNER:
+        return Speaker(owner_label, label, next(iter(sorted(owner.entities)), None) or heard.entity, True)
+    if heard.state in (attribution.PERSON, attribution.UNNAMED):
+        return Speaker(heard.name, label, heard.entity, False)
+    if heard.voice.name:
+        found = speaker_of(heard.voice.name, participants, identities, owner, owner_label)
+        return (
+            replace(found, spoken=label) if found.person or found.owner else Speaker(None, label, None, False)
+        )
+    return Speaker(None, label, None, False)
 
 
 def _role(match: Match, speaker: Speaker, kind: str) -> tuple[bool, str | None]:

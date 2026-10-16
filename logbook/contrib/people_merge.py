@@ -239,12 +239,14 @@ def candidates_from(
     channels: Mapping[str, Mapping[str, int]] | None = None,
 ) -> dict[str, Candidate]:
     """Every person entity the resolution lines name, never the owner's, with its refs in the
-    order their standing lines were written and the label of the line that minted it."""
+    order their standing lines were written and the label of the line that minted it. A voice
+    (`speaker`, RFC 0038) is no ref of a person's: only the owner binds one, through `review
+    speakers`, so a merge never writes one."""
     found: dict[str, Candidate] = {}
     channels = channels or {}
     by_seq = sorted(identities.items(), key=lambda item: int(standing[item[0]]["seq"]))
     for ref, who in by_seq:
-        if not who.entity or who.type != "person" or who.entity in owner:
+        if not who.entity or who.type != "person" or who.entity in owner or ref[0] == "speaker":
             continue
         line = standing[ref]
         candidate = found.get(who.entity)
@@ -398,6 +400,7 @@ class Applied:
     into: Candidate
     merged: list[Candidate]
     lines: list[Line]
+    voices: int = 0  # voices bound to a person merged away: a merge never binds one (RFC 0038 §3)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -405,6 +408,7 @@ class Applied:
             "into": {"id": self.into.entity, "name": self.into.label},
             "from": [{"id": c.entity, "name": c.label} for c in self.merged],
             "lines": [str(line["id"]) for line in self.lines],
+            **({"voices": self.voices} if self.voices else {}),
         }
 
 
@@ -423,8 +427,19 @@ def apply(lb: Logbook, report: Report, ids: Sequence[str]) -> list[Applied]:
         lines = []
         for secondary in proposal.secondary:
             lines.extend(merge(lb, report, proposal.primary, secondary, id_, proposal.matched(secondary)))
-        applied.append(Applied(id_, proposal.primary, list(proposal.secondary), lines))
+        applied.append(
+            Applied(
+                id_, proposal.primary, list(proposal.secondary), lines, _voices(report, proposal.secondary)
+            )
+        )
     return applied
+
+
+def _voices(report: Report, merged: Sequence[Candidate]) -> int:
+    """How many voices (`speaker` refs) are bound to the people merged away: the owner binds a voice,
+    in `review speakers`, and a merge leaves it where it is."""
+    gone = {c.entity for c in merged}
+    return sum(1 for ref, who in report.identities.items() if ref[0] == "speaker" and who.entity in gone)
 
 
 def merge(
@@ -584,7 +599,7 @@ def apply_review(lb: Logbook, report: Report, rows: Sequence[Row]) -> tuple[list
         matched = proposal.matched(secondary) if proposal is not None and proposal.primary is primary else []
         id_ = row.proposal or proposal_id((primary.entity, secondary.entity))
         lines = merge(lb, report, primary, secondary, id_, matched)
-        applied.append(Applied(id_, primary, [secondary], lines))
+        applied.append(Applied(id_, primary, [secondary], lines, _voices(report, [secondary])))
     return applied, done
 
 
@@ -649,6 +664,10 @@ def applied_rows(applied: Iterable[Applied]) -> Iterator[str]:
         )
         merged = ", ".join(c.label for c in a.merged)
         yield f"merged {merged} → {a.into.label}: {_plural(len(seqs), 'line')}{span}"
+        if a.voices:
+            stays = "stays" if a.voices == 1 else "stay"
+            yield f"  {_plural(a.voices, 'voice')} {stays} bound to {merged}: `review speakers --named` names"
+            yield "  them again; a merge never binds a voice"
 
 
 def _plural(n: int, noun: str) -> str:
