@@ -7,7 +7,8 @@ what the sources observed and the record has not placed, proposed against what y
 evidence, numbered. Nothing is written unless you say so, and nothing is looked up: no register of
 companies, no code host, no Notion, no geocoder. A sixth queue is no kind of thing the record names but
 the same sitting: `review video`, the scenes of the family's videos that `videos infer` proposed a place
-or a date for ([the video queue](#the-video-queue)).
+or a date for ([the video queue](#the-video-queue)), listed after the five and before the speakers'
+below.
 
 ```bash
 logbook review                       # every kind with its queue, one block each; nothing written

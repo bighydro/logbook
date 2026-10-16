@@ -255,8 +255,8 @@ def review_arguments(sub: Subparsers) -> None:
         " ones with the evidence, numbered, or as a new one; nothing is written unless told, and nothing"
         " is looked up. `review person` is `people review`, `review place` is `setup places review`;"
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
-        " With no KIND, every queue, one block each."
-        " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040).",
+        " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040)."
+        " With no KIND, every queue, one block each.",
     )
     s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
