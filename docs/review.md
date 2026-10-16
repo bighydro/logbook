@@ -93,7 +93,8 @@ Every number is checked before the first line is written: a number the queue doe
 number both accepted and rejected, a score that is not a whole number, or an option of another kind
 exits 2 and writes nothing. On a terminal, an org's, an idea's, an asset's and a place's queue asks
 for each proposal: `y`, `n`, a name for a new one, Enter to skip, `q` to stop; each answer is written
-at once. The video's asks the same for each scene, with `a` to ask the family for a name.
+at once. The video's asks the same for each scene: `y`, `n`, `a` to keep it to ask the family where and when
+it was filmed, Enter to skip, `q` to stop.
 
 ## The video queue
 

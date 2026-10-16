@@ -215,7 +215,7 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
         newest[str((line.get("payload") or {})["subject"][0])] = line
         kept.append(line)
     rows: list[Row] = []
-    tier = 1
+    tier = videos.TIER  # every line of a family's video is tier 2 at least (RFC 0040 §7)
     for line in kept:
         scene = videos.scene_of(line)
         assert scene is not None
@@ -427,10 +427,13 @@ def plan(
     answers = []
     for n, verb in sorted(told.items()):
         row = queue.rows[n - 1]
-        if verb == "reject" and row.standing is not None:
+        confirmed = row.standing if row.standing is not None else queue.answered.get(row.ref)
+        if (
+            verb == "reject" and confirmed is not None
+        ):  # from any list, the asked one too (RFC 0040 §5 rule 5)
             raise ReviewError(
-                f"scene {n} is confirmed (#{row.standing['seq']}); a no does not undo it: --place {n} NAME or"
-                f" --date {n} WHEN corrects it, `logbook repair retract {row.standing['seq']}` withdraws it"
+                f"scene {n} is confirmed (#{confirmed['seq']}); a no does not undo it: --place {n} NAME or"
+                f" --date {n} WHEN corrects it, `logbook repair retract {confirmed['seq']}` withdraws it"
             )
         answer = Answer(row, verb)
         if verb == "accept":

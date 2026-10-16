@@ -1150,7 +1150,7 @@ def test_review_alone_on_a_record_with_no_videos(
     assert [line for line in out if not line.startswith(" ")] == list(KINDS)
     assert out[out.index("video") + 1 :] == [
         "  0 scenes proposed, 0 with nothing to go on · 0 confirmed, 0 refused, 0 kept to ask the family"
-        " · tier 1",
+        " · tier 2",
         "  nothing to review: `videos infer` proposes the scenes of the files in the cache",
     ]
     data = json.loads(_out(capsys, "review", "--json"))
@@ -1537,3 +1537,17 @@ def test_show_marks_a_corrected_attribution_superseded(
     out = capsys.readouterr().out
     assert f"superseded by #{second['seq']}" in out
     assert f"scene 0:40{EN_DASH}1:30 → Vollen Brygge, 1994-06-01..1994-08-31" in out
+
+
+def test_a_no_on_a_confirmed_scene_is_refused_from_the_asked_list_too(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """RFC 0040 §5 rule 5, whatever list the scene is shown in: confirmed, then kept to ask the family,
+    then refused from `--asked`, the scene would stand both confirmed and refused."""
+    assert _review("--accept", "1") == 0
+    assert _review("--answered", "--ask", "1") == 0
+    seq = _seq(lb)
+    code, err = _said(capsys, "review", "video", "--asked", "--reject", "1")
+    assert code == 2 and "a no does not undo it" in err, err
+    assert _seq(lb) == seq, "nothing written"
+    assert video_review.read(lb).confirmed == 1 and video_review.read(lb).noes == {}
