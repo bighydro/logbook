@@ -112,17 +112,17 @@ The owner's statement that a scene was **not** filmed where or when its draft pr
 | `schema` | `"scene-review/v1"` | MUST | |
 | `raw_id` | string | SHOULD | `scene-review:<scene ref>@<first 12 hex of the SHA-256 of {proposal}>`: the same no on the same proposal of the same scene is one line |
 | `ref` | object | MUST | the scene's id: `{ kind: "scene", value: <scene ref> }` (§1), as an attribution names it |
-| `scene` | object | SHOULD | `{ video, start_s, end_s }`: the ref's video line id and offsets, so a reader needs no parser; when present, equal to the ref's |
+| `scene` | object | SHOULD | `{ video, start_s, end_s }`: the ref's video line id and offsets in seconds, so a reader needs no parser; when present, equal to the ref's, and `end_s` after `start_s` (the schema below cannot say either) |
 | `verdict` | `"different"` | MUST | the scene was not filmed at the place or on the date or in the range `proposal` names; with `proposal` null, nothing the review offered names it. No other verdict is defined: a yes is an attribution (§4) |
 | `proposal` | object or null | MUST | the proposal it answers, exactly as the draft carried it under `extra.proposal` (§3): `{place, when, confidence, when_confidence?}`, or null for a scene with nothing to go on |
 | `draft` | string | MUST | the id of the scene draft whose proposal it answers |
-| `supersedes` | string | MAY | the scene's standing no this one follows: a later inference proposed something else for the same scene, and the owner refused that too |
+| `supersedes` | string | MAY | the scene's standing no this one replaces: a later inference proposed something else for the same scene, and the owner refused that too |
 | `method` | `"owner"` | MUST | |
 | `evidence` | array of string | SHOULD | the draft, the video line, the transcript |
 | `logbook_head` | hex sha256 | SHOULD | the head the owner answered against |
 | `extra` | object | MAY | |
 
-**Rules.** 1. A `scene-review` line binds nothing and changes no line: the scene's draft and the video line stand as they were. 2. A review never offers a scene a proposal a standing `scene-review` line of that scene answered, from any later draft; a proposal of null is answered by a no whose `proposal` is null. 3. **One standing no per scene**: the last one not retracted and not named in a later no's `supersedes`; a reader that shows the scene's no shows that one. A superseded no is still the owner's word on the proposal it answered and keeps it out of the queue (rule 2): only retraction withdraws a no. 4. Retraction (RFC 0003) applies: a retracted no counts for nothing, and the proposal it answered returns. 5. A no on a scene with a standing attribution is refused: an attribution is corrected by a new one that supersedes it (§4 rule 3), or retracted. 6. No reader of `entity-review/v1` lines reads a `scene-review/v1` line, and no reader of this RFC reads an `entity-review/v1` line as a scene's no.
+**Rules.** 1. A `scene-review` line binds nothing and changes no line: the scene's draft and the video line stand as they were. 2. While a no stands, a review never offers its scene the proposal it answered, from any later draft; a no whose `proposal` is null holds back a later draft with nothing to propose. 3. **One standing no per scene**, as SPEC §3 has every derived reader read a kind: the no not retracted and not named in a later no's `supersedes`. A no on a scene that has a standing no supersedes it: the scene's no is the new one, and the proposal the superseded one answered is held back no longer, so a later inference that proposes it again asks again; `show` lists the superseded no with a mark. 4. Retraction (RFC 0003) applies: a retracted no counts for nothing, the proposal it answered returns, and a no it superseded stands again. 5. A no on a scene with a standing attribution is refused: an attribution is corrected by a new one that supersedes it (§4 rule 3), or retracted. 6. No reader of `entity-review/v1` lines reads a `scene-review/v1` line, and no reader of this RFC reads an `entity-review/v1` line as a scene's no.
 
 ```json
 {"$schema":"https://json-schema.org/draft/2020-12/schema","title":"scene-review/v1","type":"object",
@@ -132,7 +132,8 @@ The owner's statement that a scene was **not** filmed where or when its draft pr
   "raw_id":{"type":"string"},
   "ref":{"type":"object","required":["kind","value"],"properties":{"kind":{"const":"scene"},
    "value":{"type":"string","pattern":"^[^#\\s]+#t=\\d+(\\.\\d+)?,\\d+(\\.\\d+)?$"}}},
-  "scene":{"type":"object","required":["video","start_s","end_s"]},
+  "scene":{"type":"object","required":["video","start_s","end_s"],"properties":{
+   "video":{"type":"string"},"start_s":{"type":"number","minimum":0},"end_s":{"type":"number","minimum":0}}},
   "verdict":{"const":"different"},
   "proposal":{"type":["object","null"]},
   "draft":{"type":"string","minLength":1},
@@ -187,7 +188,7 @@ Its second scene shows a sign on a pier; she confirms the place the draft propos
  "extra":{"proposal":{"place":{"type":"place","id":"Vollen Brygge","registry":"logbook","label":"Vollen Brygge"},"when":null,"confidence":"high"},"changed":false}}}
 ```
 
-Its fourth scene, a snowy road, the draft placed at home; she says it was not, and the scene leaves the queue with its proposal, which no later draft brings back:
+Its fourth scene, a snowy road, the draft placed at home; she says it was not, and the scene leaves the queue with its proposal, which no later draft brings back while the no stands:
 
 ```json
 {"at":"2026-10-15T18:04:40Z","end":null,"tz":"Europe/Oslo","source":"manual","kind":"scene-review","tier":2,

@@ -28,8 +28,9 @@ owner (the Day's stays) and where the owner's assets were reported, or the neare
   `entity-review/v1` (`validate_scene_review`): the scene's `ref`, `verdict` `different`, the proposal it
   answers exactly as the draft carried it (null for a scene with nothing proposed: nothing to name),
   the draft, `supersedes` the scene's standing no when it has one, at the highest tier of the lines it
-  answers and never under 2. That proposal is never offered for that scene again (a later inference that
-  proposes the same is held back), a superseded no's included; retract the line and it returns. No
+  answers and never under 2. While the no stands, that proposal is not offered for that scene again (a
+  later inference that proposes the same is held back); retract the line, or say no to what a later
+  inference proposes instead, which supersedes it (SPEC §3), and it may be asked again. No
   reader of `entity-review` lines (`logbook.contrib.entities.reviews`, the person's, the org's, the
   idea's, the asset's and the place's queues) ever reads one.
 - `--ask N`: "ask the family": one open `task/v1` line (RFC 0016), list `videos`, saying which scene, so
@@ -196,10 +197,10 @@ def read(lb: Logbook, mode: str = "open") -> Queue:
         and "proposal" in (line.get("payload") or {})
     ]
     refused: dict[str, list[Any]] = {}
-    for line in noes:  # every no not retracted holds its proposal, a superseded one's too
-        if str(line["id"]) not in gone:
-            refused.setdefault(str(_ref(line)), []).append((line.get("payload") or {}).get("proposal"))
-    standing_noes = {str(_ref(line)): line for line in _standing(noes, gone)}
+    standing_noes: dict[str, Line] = {}
+    for line in _standing(noes, gone):  # SPEC §3: the standing noes only, a superseded one is out
+        refused.setdefault(str(_ref(line)), []).append((line.get("payload") or {}).get("proposal"))
+        standing_noes[str(_ref(line))] = line
     asks = open_asks(tasks, gone)
     by_video = {v.id: v for v in listed}
     latest: dict[str, str] = {}  # video id -> the key of its latest inference
@@ -464,7 +465,7 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
     row = answer.row
     head = str(lb.meta["head"])
     evidence = list(dict.fromkeys(e for e in (str(row.draft["id"]), row.video.id, row.transcript) if e))
-    tier = max(videos.TIER, int(row.draft.get("tier") or 1), int(row.video.line.get("tier") or 1))
+    tier = answered_tier(lb, evidence)  # the draft, the video, the transcript: the highest, never under 2
     now = now_utc()
     tz = str(row.video.line.get("tz") or lb.meta["timezone"])
     if answer.verb == "accept":
@@ -509,7 +510,6 @@ def _write(lb: Logbook, queue: Queue, answer: Answer) -> Iterator[Written]:
         problems = validate_scene_review(payload)
         if problems:
             raise ReviewError(f"scene {row.ref}: {problems[0]}")
-        tier = answered_tier(lb, evidence)
         line = lb.append(now, "manual", videos.NO_KIND, tier, payload, tz=tz)
         said = (
             "nothing to name: the scene leaves the queue"

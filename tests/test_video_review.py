@@ -11,6 +11,7 @@ inferred with the same fakes, is the queue."""
 from __future__ import annotations
 
 import builtins
+import copy
 import json
 import sys
 from datetime import UTC, datetime, timedelta
@@ -28,13 +29,15 @@ from test_videos_infer import (
     FakeMedia,
     FakeSpeech,
     FakeVision,
+    Recording,
     _cache,
     _video,
+    look,
 )
 from test_videos_infer import _run as _infer
 
 from logbook import cli
-from logbook.contrib import entities, places_review, video_review
+from logbook.contrib import entities, places_review, video_review, videos
 from logbook.core import crossing
 from logbook.core.store import Logbook
 from logbook.labs import scenes
@@ -795,9 +798,12 @@ def test_a_scene_does_not_come_back_in_review_video_after_its_no(
     assert _ref(lb, *PIER).split("#")[1] not in block and "2 refused" in block
 
 
-def test_a_second_no_supersedes_the_first_and_neither_proposal_returns(
+def test_a_second_no_supersedes_the_first_and_is_the_scenes_no_now(
     lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """SPEC §3: a derived reader reads the standing lines of a kind. The second no on the pier (a later
+    inference proposed Hjem) supersedes the first (Vollen Brygge): it is the scene's no now, and the
+    proposal the first answered is held back no longer; `show` marks the first superseded."""
     from test_videos_infer import Recording, look
 
     assert _review("--reject", "1") == 0  # the pier: not Vollen Brygge
@@ -826,18 +832,19 @@ def test_a_second_no_supersedes_the_first_and_neither_proposal_returns(
     queue = video_review.read(lb)
     assert queue.noes[_ref(lb, *PIER)]["id"] == second["id"], "one standing no for the scene"
     assert queue.rejected == 1, "one scene refused"
-    infer_again("third-vision-model", TAPE)  # Vollen Brygge proposed again: the superseded no still holds it
-    assert _ref(lb, *PIER) not in [row.ref for row in video_review.read(lb).rows]
+    with lb.index() as idx:
+        assert idx.superseded("scene-review") == {first["id"]: int(second["seq"])}
+    infer_again("third-vision-model", TAPE)  # Vollen Brygge proposed again: the superseded no is out
+    (row,) = [row for row in video_review.read(lb).rows if row.ref == _ref(lb, *PIER)]
+    assert row.proposal["place"]["id"] == "Vollen Brygge"  # type: ignore[index]
     capsys.readouterr()
     day = (
         datetime.fromisoformat(second["at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Oslo")).date()
     )
     cli.main(["show", day.isoformat()])
     out = capsys.readouterr().out
-    assert (
-        f"scene 0:40{EN_DASH}1:30 \u2260 Vollen Brygge" in out
-        and f"scene 0:40{EN_DASH}1:30 \u2260 Hjem" in out
-    )
+    assert f"scene-review manual         superseded by #{second['seq']}" in out
+    assert f"scene 0:40{EN_DASH}1:30 \u2260 Hjem" in out and "\u2260 Vollen Brygge" not in out
 
 
 @pytest.mark.parametrize(
@@ -1279,3 +1286,254 @@ def test_the_other_queues_and_verify_read_a_record_with_every_scene_answer(
     assert json.loads(_out(capsys, "review", "place", "--json"))["proposals"] == []
     assert places_review.rejections(lb) == [], "a scene's no is no place's no"
     cli.main(["verify"])
+
+
+# -- the independent check of scene-review/v1: tier, the chain under retraction, the other queues -----
+
+
+A_PIER_AT_HOME = (
+    TAPE[0],
+    Recording(
+        TAPE[1].length,
+        TAPE[1].level_db,
+        TAPE[1].cut_in,
+        look("A pier.", "outdoors, a harbour", "summer", ["HJEM"]),
+    ),
+    TAPE[2],
+    TAPE[3],
+)
+
+
+def _infer_again(lb: Logbook, monkeypatch: pytest.MonkeyPatch, model: str, tape: Any) -> None:
+    """The file inferred again under another vision model: the scenes cut the same way, the proposals
+    whatever `tape` says."""
+    vision = FakeVision()
+    vision.model = model
+    monkeypatch.setattr(scenes, "detect", lambda *_a: (FakeMedia({HOME_01: tape}), FakeSpeech(), vision))
+    _cache(lb, HOME_01)
+    assert _infer() == 0
+
+
+def _pier_row(lb: Logbook) -> video_review.Row | None:
+    return next((row for row in video_review.read(lb).rows if row.ref == _ref(lb, *PIER)), None)
+
+
+def _pier_number(lb: Logbook) -> str:
+    (n,) = [n for n, row in enumerate(video_review.read(lb).rows, 1) if row.ref == _ref(lb, *PIER)]
+    return str(n)
+
+
+def _two_noes(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The pier refused as Vollen Brygge, inferred again as Hjem and refused again: two noes, the
+    second superseding the first."""
+    assert _review("--reject", "1") == 0
+    first = _new(lb, 0)[-1]
+    assert first["payload"]["proposal"]["place"]["id"] == "Vollen Brygge"
+    _infer_again(lb, monkeypatch, "second-vision-model", A_PIER_AT_HOME)
+    seq = _seq(lb)
+    assert _review("--reject", _pier_number(lb)) == 0
+    (second,) = _new(lb, seq)
+    assert second["payload"]["supersedes"] == first["id"]
+    assert second["payload"]["proposal"]["place"]["id"] == "Hjem"
+    return first, second
+
+
+def test_answered_tier_is_the_highest_of_the_lines_answered_and_never_under_2(lb: Logbook) -> None:
+    three = Logbook(lb.root).append(
+        "2026-10-14T18:00:00Z", "synthetic", "note", 3, {"schema": "note/v1", "text": "a tier-3 note"}
+    )
+    assert video_review.answered_tier(lb, []) == 2
+    assert video_review.answered_tier(lb, ["no-such-line"]) == 2
+    assert video_review.answered_tier(lb, [lb.video["id"]]) == 2  # type: ignore[attr-defined]
+    assert video_review.answered_tier(lb, [lb.video["id"], str(three["id"])]) == 3  # type: ignore[attr-defined]
+
+
+def test_a_no_on_a_scene_whose_draft_cites_a_tier_3_line_is_tier_3(lb: Logbook) -> None:
+    """A draft of the latest inference, forged at tier 3 with a tier-3 line among its evidence, for a
+    stretch of the file no other draft names: its no takes the highest tier of what it answers."""
+    book = Logbook(lb.root)
+    three = book.append(
+        "2026-10-14T18:00:00Z", "synthetic", "note", 3, {"schema": "note/v1", "text": "a tier-3 note"}
+    )
+    (pier,) = [
+        line
+        for line in book.lines()
+        if line["kind"] == "draft" and line["payload"]["subject"] == [_ref(lb, *PIER)]
+    ]
+    payload = copy.deepcopy(pier["payload"])
+    ref = _ref(lb, "170.00", "200.00")
+    payload["subject"] = [ref]
+    payload["raw_id"] = f"{payload.get('raw_id', 'draft')}:forged"
+    payload["extra"]["scene"].update({"start_s": 170.0, "end_s": 200.0, "n": 5, "of": 5})
+    payload["segments"][0]["evidence"] = [lb.video["id"], str(three["id"])]  # type: ignore[attr-defined]
+    book.append(pier["at"], pier["source"], "draft", 3, payload, tz=pier["tz"])
+    queue = video_review.read(lb)
+    assert queue.tier == 3
+    (n,) = [n for n, row in enumerate(queue.rows, 1) if row.ref == ref]
+    seq = _seq(lb)
+    assert _review("--reject", str(n)) == 0
+    (no,) = _new(lb, seq)
+    assert no["kind"] == "scene-review" and no["tier"] == 3, no["tier"]
+    assert str(three["id"]) in no["payload"]["evidence"]
+
+
+def test_a_sealed_record_reads_the_tier_of_what_the_no_answers(sealed: Logbook) -> None:
+    three = Logbook(sealed.root).append(
+        "2026-10-14T18:00:00Z", "synthetic", "note", 3, {"schema": "note/v1", "text": "sealed tier three"}
+    )
+    assert video_review.answered_tier(sealed, [str(three["id"])]) == 3
+    seq = _seq(sealed)
+    assert _review("--reject", "1") == 0
+    (no,) = _new(sealed, seq)
+    assert no["kind"] == "scene-review" and no["tier"] == 2
+
+
+def test_retracting_the_superseding_no_makes_the_first_the_standing_one_and_the_second_proposal_returns(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = _two_noes(lb, monkeypatch)
+    Logbook(lb.root).retract(int(second["seq"]), "wrong")
+    queue = video_review.read(lb)
+    assert queue.noes[_ref(lb, *PIER)]["id"] == first["id"]
+    assert queue.rejected == 1
+    row = _pier_row(lb)
+    assert row is not None, "the retracted no's proposal returns"
+    assert row.proposal["place"]["id"] == "Hjem"  # type: ignore[index]
+    seq = _seq(lb)
+    assert _review("--reject", _pier_number(lb)) == 0
+    (third,) = _new(lb, seq)
+    assert third["payload"]["supersedes"] == first["id"], (
+        "the third no supersedes the standing one, the first"
+    )
+    assert video_review.read(lb).noes[_ref(lb, *PIER)]["id"] == third["id"]
+
+
+def test_retracting_the_superseded_no_brings_its_proposal_back_and_the_second_stands(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = _two_noes(lb, monkeypatch)
+    Logbook(lb.root).retract(int(first["seq"]), "wrong")
+    queue = video_review.read(lb)
+    assert queue.noes[_ref(lb, *PIER)]["id"] == second["id"]
+    assert _pier_row(lb) is None, "Hjem, the latest draft's proposal, is still refused"
+    _infer_again(lb, monkeypatch, "third-vision-model", TAPE)  # Vollen Brygge proposed again
+    row = _pier_row(lb)
+    assert row is not None and row.proposal["place"]["id"] == "Vollen Brygge"  # type: ignore[index]
+
+
+def test_a_superseded_no_is_out_as_spec_3_says(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    """SPEC §3: a line is standing when not retracted and no later line of its kind names it in
+    `supersedes`, and a derived reader takes the standing lines of a kind. The index says the first no
+    is superseded; the queue reads it as out, so Vollen Brygge is asked again when proposed again."""
+    first, second = _two_noes(lb, monkeypatch)
+    with lb.index() as idx:
+        assert idx.superseded(videos.NO_KIND) == {first["id"]: int(second["seq"])}
+    _infer_again(lb, monkeypatch, "third-vision-model", TAPE)  # Vollen Brygge proposed again
+    row = _pier_row(lb)
+    assert row is not None and row.proposal["place"]["id"] == "Vollen Brygge", (  # type: ignore[index]
+        "a superseded no holds nothing back"
+    )
+
+
+def test_the_same_no_again_after_its_retraction_is_written_and_supersedes_nothing(lb: Logbook) -> None:
+    assert _review("--reject", "1") == 0
+    first = _new(lb, 0)[-1]
+    Logbook(lb.root).retract(int(first["seq"]), "wrong")
+    assert _pier_row(lb) is not None
+    seq = _seq(lb)
+    assert _review("--reject", "1") == 0
+    (again,) = _new(lb, seq)
+    assert again["payload"]["raw_id"] == first["payload"]["raw_id"]
+    assert "supersedes" not in again["payload"], "a retracted no is nothing to supersede"
+    assert _pier_row(lb) is None
+    assert video_review.read(lb).rejected == 1
+
+
+def test_a_no_on_an_asked_scene_keeps_the_ask_open_and_offers_no_proposal(lb: Logbook) -> None:
+    assert _review("--ask", "1") == 0
+    seq = _seq(lb)
+    assert _review("--asked", "--reject", "1") == 0
+    (no,) = _new(lb, seq)
+    assert no["kind"] == "scene-review" and no["payload"]["proposal"]["place"]["id"] == "Vollen Brygge"
+    asked = video_review.read(lb, "asked")
+    (row,) = asked.rows
+    assert row.refused and row.proposal is None and asked.asked == 1 and asked.rejected == 1
+    assert _ref(lb, *PIER) not in [r.ref for r in video_review.read(lb).rows]
+    assert _review("--asked", "--accept", "1") == 2, "nothing left to confirm without --place or --date"
+    seq = _seq(lb)
+    assert _review("--asked", "--place", "1", "Hjem") == 0
+    attribution, closed = _new(lb, seq)
+    assert attribution["kind"] == "attribution" and closed["payload"]["status"] == "done"
+
+
+def test_the_sitting_and_every_other_queue_print_the_same_after_a_scene_no(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def others() -> list[str]:
+        found = []
+        for args in (
+            ["review"],
+            *[["review", kind, "--json"] for kind in ("person", "org", "idea", "asset", "place")],
+        ):
+            capsys.readouterr()
+            cli.main(args)
+            out = capsys.readouterr().out
+            if args == ["review"]:
+                out = out.split("\nvideo\n", 1)[0]
+            else:
+                data = json.loads(out)
+                data.pop("head", None)
+                out = json.dumps(data, sort_keys=True)
+            found.append(out)
+        return found
+
+    before = others()
+    assert _review("--reject", "1,2") == 0
+    assert others() == before
+
+
+def test_the_rfc_schema_and_the_validator_agree_and_the_validator_says_what_the_schema_cannot(
+    lb: Logbook,
+) -> None:
+    """Both texts say the profile: the schema types the scene's offsets as numbers, as the validator
+    does; that they are the ref's, and the ref's end after its start, the schema cannot say and the
+    validator does."""
+    import re
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator
+
+    page = (Path(__file__).resolve().parents[1] / "rfcs" / "0040-videos.md").read_text(encoding="utf-8")
+    blocks = [json.loads(b) for b in re.findall(r"```json\n(.*?)\n```", page, re.S)]
+    (schema,) = [b for b in blocks if b.get("title") == "scene-review/v1"]
+    assert _review("--reject", "1") == 0
+    (no,) = [line for line in Logbook(lb.root).lines() if line["kind"] == "scene-review"]
+    validator = Draft202012Validator(schema)
+    text_offsets = {
+        **no["payload"],
+        "scene": {**no["payload"]["scene"], "start_s": "40.00", "end_s": "90.00"},
+    }
+    assert not validator.is_valid(text_offsets) and video_review.validate_scene_review(text_offsets)
+    video = lb.video["id"]  # type: ignore[attr-defined]
+    backwards = {**no["payload"], "ref": {"kind": "scene", "value": f"{video}#t=90.00,40.00"}}
+    backwards.pop("scene")
+    assert validator.is_valid(backwards) and video_review.validate_scene_review(backwards)
+
+
+def test_show_marks_a_corrected_attribution_superseded(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """SPEC §3: `show` lists a superseded line with a mark; a scene's answer corrected is one."""
+    assert _review("--accept", "1") == 0
+    first = _new(lb, 0)[-1]
+    assert _review("--answered", "--date", "1", "summer 1994") == 0
+    second = _new(lb, 0)[-1]
+    assert second["payload"]["supersedes"] == first["id"]
+    day = (
+        datetime.fromisoformat(second["at"].replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Oslo")).date()
+    )
+    capsys.readouterr()
+    cli.main(["show", day.isoformat()])
+    out = capsys.readouterr().out
+    assert f"superseded by #{second['seq']}" in out
+    assert f"scene 0:40{EN_DASH}1:30 → Vollen Brygge, 1994-06-01..1994-08-31" in out
