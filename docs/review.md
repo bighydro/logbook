@@ -27,7 +27,7 @@ source gives one observation; keyed the other way, one company explodes into a r
 | Kind | Observed by, strongest first | Proposed against |
 |---|---|---|
 | person | an email address, a phone number, the name's words folded ([people](people.md#review)) | the people the resolutions name |
-| org | the **registered domain** of a mail or calendar address (a public mail provider and your own domains name nobody's org); a code-host org of a url or a task's link; a group chat's name; a ledger merchant seen on 3 lines or more | the orgs: `entity/v1` lines, and `resolution/v1` lines of type `company` read as orgs |
+| org | the **registered domain** of a mail, calendar or transcript address (a public mail provider, your own domains and a service's own hosts, a calendar's rooms among them, name nobody's org); a code-host org of a url, a task's link or an act `sync github` wrote (your own account is yours, never an org); a group chat's name; a ledger merchant seen on 3 lines or more | the orgs: `entity/v1` lines, and `resolution/v1` lines of type `company` read as orgs |
 | idea | a Notion page's root (a page under it is the root's idea); a code-host repository; a task's or a transcript's title on 2 lines of 2 sources or more | the ideas the `entity/v1` lines name |
 | asset | a track's subject the registry does not name (its MMSI or icao24 when the instrument said); an aircraft registration on 3 flights or more | the assets of `assets.json` |
 | place | a cluster of your stays within 75 m ([places](places.md#review)) | the names the sources gave it |
@@ -44,8 +44,10 @@ Days, weeks and people alone never propose. A domain, a code-host org, a page, a
 title that matches nothing, and an asset the registry does not know, is proposed as a **new** one,
 after the matches; a group chat and a merchant are only ever proposed against an org you have. Among
 equal scores an org's **hint** decides — `company` (a domain), `community` (a code-host org, a group),
-`brand` (a merchant), `personal` (a family's domain: every name on it shares the surname the domain
-spells) — for ranking only; the hint is never written to a line.
+`brand` (a merchant), `personal` (a family's domain: every name on it is a given name and a surname,
+the given name the address's own, `kari@` "Kari Nordmann", and they share the surname the domain
+spells; or a person's own code-host account, a `github:` handle a resolution names) — for ranking
+only; the hint is never written to a line.
 
 ```
 $ logbook review org

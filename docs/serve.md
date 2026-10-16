@@ -36,6 +36,9 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
 | `/people?year=` | the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
 | `/people/ID` | one person: days together by year, the last real contact and what it was, drift and why, the promises open both ways, the anniversaries of the coming month, the places you have been with them | `logbook people NAME`, `people drift` |
+| `/manifest` | the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each row's evidence folded; below, the review queue of `review org` with its acts ([the Manifest](#the-manifest)) | `logbook show orgs`, `review org` |
+| `/org/ID` | one org: its refs, its status and reason, the status form, every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (`?money=1`) | `logbook show org NAME`, `status org` |
+| `/manifest/people` | the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio | `logbook show orgs` |
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
@@ -80,10 +83,11 @@ page and checks each attribute that can hold a URL, the inline style, each scrip
 through the readers, and the readers never write, not even `policy/stays.json`. The test takes the
 head and every file before and after serving every page and finds them the same. The writes are the
 Places page's form ([below](#places--name-this-place)), a journey's name ([below](#journeys)), the
-People page's review ([below](#people)) and the Day's Reflect and Sign ([below](#reflect-and-sign)),
-each a POST from this machine only, each through the command's own function, one at a time, and none
-waits for another writer: while another command holds the record's writer lock (a sync running),
-the Library's three forms are answered `503` and the Day's `409`, and nothing is written, rather than
+People page's review ([below](#people)), the Manifest's review and an org's status ([below](#the-manifest))
+and the Day's Reflect and Sign ([below](#reflect-and-sign)), each a POST from this machine only, each
+through the command's own function, one at a time, and none waits for another writer: while another
+command holds the record's writer lock (a sync running), the Places, Journeys and People forms are
+answered `503`, the Manifest's and the Day's `409`, one sentence, and nothing is written, rather than
 leaving the browser waiting. The server keeps nothing
 but the head it last saw: when a sync, or a form, moves the head while it runs, the next request
 brings the index to the new head first and every page reads the new lines, with no restart. That
@@ -433,12 +437,64 @@ Both acts post to `/people/review`, from this machine only; a proposal no longer
   one of the next thirty days, the Day's rule;
 - the **places** you have been with them, by days there, with the days and the lines.
 
+## The Manifest
+
+`/manifest` is the shelf of RFC 0037 §11, the orgs you named (`review org`), each under what you
+decided about it (`logbook status org`): **holding** (`hold`, `add`, `sell`), **exited**, **passed**
+(the anti-portfolio, each with your reason in full), **let go**, then **no status**; within a heading
+the most recent touch first. A **touch** is a line that reaches the org through one of its refs: a
+mail or a meeting with an address at its domain, a transcript one of its people spoke in, a page or
+an act on its code-host org, its group chat, its merchant. Each row is the org (a link to its page),
+the status and since when, `stale` when the status is one `stale_days` names in
+`policy/entities.json` and nothing has touched it or restated it for that long (a `hold`, three
+years), the last touch and what it was, the people on its lines and the documents, with the
+evidence folded: the last touch's line and the status line. It is the text of `logbook show orgs`
+([orgs read back](entities.md#the-orgs-read-back)).
+
+**Review.** Below the shelf is the review queue of `logbook review org` ([review](review.md)), in its
+order, twenty a page: each observed org proposed against one you named, or as a new one, with its
+score, its hint and its evidence folded. **Accept** writes what `review org --accept N` writes, one
+`entity/v1` line binding what the sources saw to the org; **Name**, for a new one, what `--name N
+"…"` writes, the org minted (its dedupe key looked up first) under the name in the field; **No**
+what `--reject N` writes, one `entity-review/v1` line, so the pair is never proposed again. They
+post to `/manifest/review` and go through `entity_review.accept` and `reject`, the functions the
+command calls, so the lines are the command's byte for byte.
+
+`/org/ID` is one org (RFC 0037 §7): its refs, its status and reason, the **status form**, which posts
+to `/manifest/status` and writes what `logbook status org ORG DISPOSITION [--reason "…"] [--at DAY]`
+writes through `entity_status.write` (one `status/v1` line, tier 3, your reason on it and never a
+note), every touch newest first (thirty, the rest folded), the people, who introduced whom where a
+mail's subject says so (`Intro: Ines <> Liv`), the documents as references, every status line (a
+retracted one struck), and the proposals that would place something with it. The ledger is read
+only when you ask (*show the money*, `?money=1`): its in, out and net per year and its lines on the
+timeline, derived at read time from the transactions the org's `merchant` refs match.
+
+`/manifest/people` is the co-investor graph: everyone who appears with more than one org, the most
+orgs first, with the orgs and the tier of the lines that put them there; then the anti-portfolio.
+
+**Tier 3 stays tier 3.** An org's status, its reason and the money are tier 3. The pages read the
+record through the server's gate; `logbook serve` reads every tier, on this machine. Through a gate
+without tier 3 there is no status, no reason and no money on any of them, every org is under no
+status, and the shelf says how many status lines it may not show; a person who is with an org only
+on a tier-3 line is no edge of the graph. Such a page offers no act either, neither the queue nor the
+status form, and refuses both (`403`): a status is tier 3, and so may a no be. `logbook export site` has no Manifest: its pages are the
+Day, the days, the trips, the places, and none of them names an org's status.
+
+**Writing, never waiting.** The acts are POSTs from this machine only (a loopback client, an
+`Origin` of 127.0.0.1 when the browser sends one, else `403`), one at a time, under the record's
+writer lock. While another command holds it the act is answered `409` with one sentence naming that
+command, and nothing is written (the owner's word for every act of the Library, 14 October 2026); a
+proposal no longer in the queue, or an org the record no longer names, is a `409` too; an answer the
+record refuses (a `passed` with no reason, a day ahead) a `400`. Done, a `303` back to the page the
+form came from.
+
 ## Phone first
 
 Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
 facts with the evidence folded under it, a day never breaks inside its hyphens, the canvas scales to
-the column. `tests/test_library_pages.py` holds the Journeys, a journey, the People page and a person
-to that column without a browser: `tests/phone_width.py` parses each page with every disclosure
+the column. `tests/test_library_pages.py` holds the Journeys, a journey, the People page and a person,
+and `tests/test_manifest_page.py` the Manifest, an org and the people across orgs, to that column
+without a browser: `tests/phone_width.py` parses each page with every disclosure
 open, applies the page's own stylesheet as a 400 px phone would (its phone breakpoint included), and
 fails when an element's fixed width, min-width or row of columns, with the margins, borders and
 padding around it, passes the column, when an image or a `pre` has no `max-width` to keep it inside,
@@ -447,9 +503,10 @@ read fails the test rather than passing it.
 
 ## What it is not
 
-Not an editor: the pages write nothing but the namings, the review, the reflection and the signature,
-the stars and the company said above, and the captain's other words — a note, a confirmation of a
-line — go through the CLI as lines in the record, which the next page reads. Not a web application: no framework, no build step, no
+Not an editor: the pages write nothing but the namings, the reviews, an org's status, the reflection
+and the signature, the stars and the company said above, and the captain's other words — a note, a
+confirmation of a line — go through the CLI as lines in the record, which the next page reads. Not a
+web application: no framework, no build step, no
 state but the record, and two inline scripts, a dozen lines for three keys and a score for one
 button. Not the circle (ADR 0009): a page
 here is for the owner's eyes on the owner's machine; a shared page is a signed bundle, and that is

@@ -188,6 +188,56 @@ just before it, holds the reason):
  "note":"019cadd3-6bc0-7dcd-9133-0000000001d3"}}
 ```
 
+## The orgs read back
+
+`logbook show orgs` is every org you named (RFC 0037 §11), under its current status: **holding**
+(`hold`, `add`, `sell`), **exited**, **passed** (the anti-portfolio, each with its reason in full),
+**let go**, then **no status**; within a heading the most recent touch first. A **touch** is a line
+that resolves to the org through one of its refs: a mail or a meeting with an address at its
+domain, a transcript one of its people spoke in, a page or an act on its code-host org, its group
+chat, its merchant. A row says the status and since when, the last touch and what it was, the people
+on its lines (the first two by days), how many documents (mails and repositories, as references) and
+`stale` when the status is one `stale_days` names and neither it nor a touch falls within that many
+days of today. Then the people who appear with more than one org: the co-investor graph.
+
+```
+$ logbook show orgs
+orgs · 4 · 2026-10-12 · tier 3 · money not shown
+holding
+  Nordmann Verft AS     hold since 2026-04-02 (owner) · last touch 2026-10-09 group "Nordmann Verft": message from Ola · 3 people (Ola Nordmann, Per Hansen) · 3 documents
+  Nordmann Tidevann AS  add since 2026-10-02 (owner) · last touch 2026-10-01 mail from Liv Berg "Follow-on round" · 3 people (Liv Berg, Per Hansen) · 4 documents
+  Nordmann Havbris AS   hold since 2023-06-15 (owner) · stale: nothing since 2023-07-01 · last touch 2023-07-01 the ledger · 1 person (Anders Vik) · 2 documents
+passed
+  Fjordkiosk AS         passed since 2026-06-14 (owner) · last touch 2026-04-20 mail from Kari Nordmann "Follow-up" · 2 people (Kari Nordmann, Per Hansen) · 2 documents
+                        reason: good team, but a kiosk is a place and I do not want to own places
+people with more than one org
+  Per Hansen: Fjordkiosk AS, Nordmann Tidevann AS, Nordmann Verft AS
+  Liv Berg: Nordmann Tidevann AS, Nordmann Verft AS
+  Ola Nordmann: Nordmann Tidevann AS, Nordmann Verft AS
+```
+
+`logbook show org NAME` is one org's page (RFC 0037 §7), the org named as `status` names one (a
+domain, a word of its name, its id): its refs, its status and its reason, every touch newest first,
+the people, who introduced whom where a mail's subject says so (`Intro: Ines <> Liv`), the documents
+and every status line, the one in force marked and a retracted one said so. An org whose naming line
+was retracted stays while a status line names it, under that line's label (RFC 0037 §3.4 rule 3);
+two orgs of one label are told apart by their key. Both take `--json`; nothing is written.
+
+**Money only with `--money`.** A ledger line the org's `merchant` refs match is a touch like any
+other, so the last touch, the order and the stale flag are the same with `--money` or without; without
+it the shelf says only `the ledger` for it, with no merchant and no figure, and the page shows no
+ledger row. With `--money` the page adds the ledger's lines and its in, out and net per year, and the
+shelf each row's for `--year` (this year by default), derived at read time. No line of the org cites
+them.
+
+**Tier 3 stays tier 3.** An org's status line is tier 3 and its reason is on it; the page and the
+shelf read every line through a gate (the owner's terminal and `logbook serve` read every tier; a
+crossing, an exported site and the door read their policy's). Through a gate without tier 3 there
+is no status and no reason: every org is under no status, and the shelf says how many status lines
+it may not show; an org's page says only that it shows none, never how many it has, which would tell
+which orgs carry a decision. A person who is with an org only on a tier-3 line (a split payment) is no edge of
+the graph there; an edge is as high a tier as the lines it rests on.
+
 ## The dedupe keys
 
 A key is what a writer looks up before minting, so a second sitting, a second machine or a re-run

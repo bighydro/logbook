@@ -5,14 +5,19 @@ sitting, `logbook review KIND`, is one loop over all five (`logbook.commands.rev
 **The strongest-identifier rule.** An observed thing's identity is the strongest identifier its
 observation carries, never the id a source gives one observation:
 
-- **org**: the registered domain of a `mail/v1` address or a calendar attendee's address (a public
-  mail provider, `policy/entities.json`, and the owner's own domains name nobody's org), else the
-  code-host org of a `browse/v1` url or a task's link (`github.com/nordmann-verft`), else a group
-  chat's name folded (`message/v1`, `chat.type` group), else a `transaction/v1` merchant folded when
-  it recurs on `merchant_min_lines` (3) lines or more. The row's `hint` is the guess at what it is —
-  `company` for a domain, `personal` for a family's domain (every name seen on it shares the
-  surname its first label spells), `community` for a code-host org or a group, `brand` for a
-  merchant — for ranking only, never written to a line.
+- **org**: the registered domain of a `mail/v1` address, a calendar attendee's address or a
+  transcript participant's (a public mail provider, `policy/entities.json`, the owner's own domains
+  and a service's own hosts, a calendar's rooms among them, name nobody's org), else the code-host
+  org of a `browse/v1` url, a task's link or an act `sync github` wrote (its own link, else its
+  `extra.repo` on github.com: `github.com/nordmann-verft`; the owner's own account is the owner's),
+  else a group chat's name folded (`message/v1`, `chat.type` group), else a `transaction/v1` merchant
+  folded when it recurs on `merchant_min_lines` (3) lines or more. The row's `hint` is the guess at
+  what it is — `company` for a domain, `personal` for a family's domain (every name seen on it is a
+  given name and a surname whose given name is the address's own, `kari@` "Kari Nordmann", and
+  they share the surname its first label spells) or a person's own code-host account (a `handle`
+  ref `github:<login>` a resolution names), `community` for a code-host org or a group, `brand` for
+  a merchant — for ranking only, never written to a line. `org_sightings` is one line's orgs, the
+  walk the orgs reader (`logbook.contrib.orgs`) shares to find what touches a named org.
 - **idea**: a `sync notion` page's root (the topmost page above it the record has a line for), as
   `page` `notion:<id>`, else a code-host repository (`host/owner/name`) of a url or a task's link,
   else a task's or a transcript's title, its words folded and sorted, when it recurs on
@@ -56,7 +61,7 @@ from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..core import assets, day_start, flights, policy, present, resolve, stays
+from ..core import assets, day_start, flights, machine, policy, present, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.store import Logbook, now_utc, retractions, uuid7
@@ -64,7 +69,7 @@ from . import entities
 from .entities import ASSET, IDEA, ORG, Ref
 
 KINDS = (ORG, IDEA, ASSET)
-TABLE_VERSION = "1"
+TABLE_VERSION = "2"  # 2: transcripts, `sync github` acts, service hosts, the family's given name
 SAMPLES = 3  # line ids kept per observed thing, as evidence
 NOTION = "notion"  # the source `sync notion` writes
 INSTRUMENTS = {"ais": "yacht", "adsb": "aircraft"}  # a subject's source → the kind it is
@@ -77,8 +82,15 @@ LONG_WORD = 6
 HINT_ORDER = {"company": 0, "community": 1, "brand": 2, "personal": 3, None: 4}
 NOT_ORGS = frozenset(  # first path segments of a code host that are its own pages, not an org
     {"settings", "notifications", "explore", "marketplace", "login", "search", "topics", "features",
-     "pulls", "issues", "new", "about", "pricing", "sponsors", "orgs", "users", "apps", "site"}
+     "pulls", "issues", "new", "about", "pricing", "sponsors", "orgs", "users", "apps", "site",
+     "logout", "join", "enterprise", "collections", "trending", "codespaces", "account", "dashboard"}
 )  # fmt: skip
+# the hosts a service sends from or books with, a calendar's rooms and a code host's relay among them:
+# an address there names the service, never a company the owner deals with
+SERVICE_HOSTS = ("resource.calendar.google.com", "group.calendar.google.com", "users.noreply.github.com")
+GITHUB, GITHUB_HOST = "github", "github.com"  # the source `sync github` writes, and the host it reads
+GITHUB_ACTS = ("commit", "pull", "issue", "review", "comment")  # what an act's `extra` links to
+ORG_KINDS = ("mail", "event", "transcript", "browse", "task", "message", "transaction")  # an org's lines
 BLANK = "____"
 EN_DASH = "\u2013"
 NOT_EQUAL = "\u2260"
@@ -247,7 +259,7 @@ def _stamp(lb: Logbook, kind: str) -> dict[str, str]:
 
 
 @dataclass
-class _Context:
+class Context:
     """What every builder needs: the day of a line, the people the record resolves, the owner."""
 
     days: day_start.DayStart
@@ -257,6 +269,7 @@ class _Context:
     settings: entities.Settings
     retracted: frozenset[str]
     labels: Mapping[str, str]  # a person's label folded → their entity, for a name a source shows
+    owner_logins: frozenset[str] = frozenset()  # the owner's code-host accounts (`github:<login>` handles)
 
     def day(self, line: Line) -> str | None:
         at = stays.instant(line.get("at"))
@@ -276,9 +289,8 @@ class _Context:
                 yield line
 
 
-def build(lb: Logbook, idx: Index, kind: str) -> list[Observed]:
-    """The pure read: every observed thing of `kind` from the standing lines, keyed by the strongest
-    identifier, the owner's own left out, each placed when the record binds one of its identifiers."""
+def context(lb: Logbook, idx: Index) -> Context:
+    """What reading the record's observations needs: its day, its people, its owner, its settings."""
     meta = lb.meta
     marks, resolutions = idx.retractions(), idx.resolutions()
     identities = resolve.identities_from([*marks, *resolutions])
@@ -299,7 +311,7 @@ def build(lb: Logbook, idx: Index, kind: str) -> list[Observed]:
     for who in identities.values():
         if who.entity and who.label and who.type in present.PERSON_TYPES and who.entity not in owner.entities:
             people_labels.setdefault(entities.fold(who.label), who.entity)
-    ctx = _Context(
+    return Context(
         day_start.of(meta),
         identities,
         owner,
@@ -307,8 +319,20 @@ def build(lb: Logbook, idx: Index, kind: str) -> list[Observed]:
         settings,
         frozenset(retractions(marks)),
         people_labels,
+        frozenset(
+            value.removeprefix(f"{GITHUB}:")
+            for kind, value in owner.refs
+            if kind == "handle" and (value.startswith(f"{GITHUB}:") or ":" not in value)
+        ),
     )
+
+
+def build(lb: Logbook, idx: Index, kind: str) -> list[Observed]:
+    """The pure read: every observed thing of `kind` from the standing lines, keyed by the strongest
+    identifier, the owner's own left out, each placed when the record binds one of its identifiers."""
+    ctx = context(lb, idx)
     found = {ORG: _orgs, IDEA: _ideas, ASSET: _assets}[kind](lb, idx, ctx)
+    marks, resolutions = idx.retractions(), idx.resolutions()
     bound = entities.bindings([*marks, *resolutions, *idx.by_kind(entities.ENTITY)])
     for o in found:
         o.entity = next(
@@ -330,92 +354,97 @@ def build(lb: Logbook, idx: Index, kind: str) -> list[Observed]:
     return sorted(found, key=lambda o: o.key)
 
 
-def _orgs(lb: Logbook, idx: Index, ctx: _Context) -> list[Observed]:
-    found: dict[Ref, Observed] = {}
+@dataclass(frozen=True)
+class Sighting:
+    """One org on one line: its strongest identifier, the hint that goes with it, the name the line
+    gives it (a sender's display name, a group's, a code-host org's segment, a merchant string), the
+    canonical person the line shows at it, and for a domain the local part of the address the name
+    came with (for the family's hint)."""
 
-    def observe(key: Ref, line: Line, day: str, label: str | None, hint: str) -> Observed:
-        o = found.setdefault(key, Observed(ORG, key, hint))
-        o.add(
-            str(line.get("source") or ""),
-            str(line.get("kind")),
-            day,
-            str(line["id"]),
-            int(line.get("tier", 0)),
-            label,
-        )
-        o.saw(key)
-        return o
+    key: Ref
+    hint: str
+    label: str | None = None
+    person: str | None = None
+    local: str | None = None
 
-    for kind in ("mail", "event"):
-        for line in ctx.standing(idx, kind):
-            day = ctx.day(line)
-            if day is None:
+
+def org_sightings(kind: str, line: Line, ctx: Context) -> list[Sighting]:
+    """The orgs one standing line names, source-native, one per address or link as the line holds
+    them (a mail to two people at one domain names it twice): the domains of its addresses (`mail`,
+    `event`, `transcript`), the code-host orgs of its links (`browse`, `task`, an act `sync github`
+    wrote), a group chat (`message`), a merchant (`transaction`, every time: the threshold is the
+    queue's). The owner's own are left out; nothing is looked up."""
+    payload = line.get("payload") or {}
+    found: list[Sighting] = []
+    if kind in ("mail", "event", "transcript"):
+        for address, name, person in _addresses(kind, payload, ctx):
+            domain = _domain_of(address, ctx)
+            if domain is not None:
+                local = address.rsplit("@", 1)[0].split(".")[0] if name else None
+                found.append(Sighting(("domain", domain), "company", name, person, local))
+    if kind in ("browse", "task") or (kind == "event" and github_act(line)):
+        urls = _github_urls(payload, ctx.settings) if kind == "event" else _urls(kind, payload)
+        for url in urls:
+            org = _code_org(url, ctx.settings)
+            if org is None:
                 continue
-            payload = line.get("payload") or {}
-            for address, name, person in _addresses(kind, payload, ctx):
-                domain = _domain_of(address, ctx)
-                if domain is None:
-                    continue
-                o = observe(("domain", domain), line, day, name, "company")
-                if person is not None:
-                    o.people.add(person)
-    for kind in ("browse", "task"):
-        for line in ctx.standing(idx, kind):
-            day = ctx.day(line)
-            if day is None:
-                continue
-            for url in _urls(kind, line.get("payload") or {}):
-                org = _code_org(url, ctx.settings)
-                if org is not None:
-                    observe(("repo", org), line, day, org.split("/", 1)[1], "community")
-    for line in ctx.standing(idx, "message"):
-        payload = line.get("payload") or {}
+            host, login = org.split("/", 1)
+            if login in ctx.owner_logins:
+                continue  # the owner's own account: the owner, never an org
+            personal = host == GITHUB_HOST and ctx.person(("handle", f"{GITHUB}:{login}")) is not None
+            found.append(Sighting(("repo", org), "personal" if personal else "community", login))
+    if kind == "message":
         chat = payload.get("chat")
-        if not isinstance(chat, dict) or chat.get("type") != "group" or not _text(chat.get("name")):
-            continue
-        day = ctx.day(line)
-        if day is None:
-            continue
-        o = observe(
-            ("group", entities.fold(str(chat["name"]))),
-            line,
-            day,
-            " ".join(str(chat["name"]).split()),
-            "community",
-        )
-        if payload.get("from_me") is not True:
-            person = ctx.person(_ref(payload.get("sender")))
-            if person is not None:
-                o.people.add(person)
+        if isinstance(chat, dict) and chat.get("type") == "group" and _text(chat.get("name")):
+            person = None if payload.get("from_me") is True else ctx.person(_ref(payload.get("sender")))
+            name = " ".join(str(chat["name"]).split())
+            found.append(Sighting(("group", entities.fold(name)), "community", name, person))
+    if kind == "transaction":
+        merchant = payload.get("merchant")
+        if _text(merchant):
+            name = " ".join(str(merchant).split())
+            found.append(Sighting(("merchant", entities.fold(name)), "brand", name))
+    return found
+
+
+def _orgs(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
+    found: dict[Ref, Observed] = {}
     merchants: dict[Ref, Observed] = {}
-    for line in ctx.standing(idx, "transaction"):
-        merchant = (line.get("payload") or {}).get("merchant")
-        day = ctx.day(line)
-        if not _text(merchant) or day is None:
-            continue
-        key = ("merchant", entities.fold(str(merchant)))
-        o = merchants.setdefault(key, Observed(ORG, key, "brand"))
-        o.add(
-            str(line.get("source") or ""),
-            "transaction",
-            day,
-            str(line["id"]),
-            int(line.get("tier", 0)),
-            " ".join(str(merchant).split()),
-        )
-        o.saw(key)
+    names: dict[Ref, list[tuple[str, str]]] = {}  # a domain's display names, each with its address's own
+    for kind in ORG_KINDS:
+        for line in ctx.standing(idx, kind):
+            day = ctx.day(line)
+            if day is None:
+                continue
+            for s in org_sightings(kind, line, ctx):
+                into = merchants if s.key[0] == "merchant" else found
+                o = into.setdefault(s.key, Observed(ORG, s.key, s.hint))
+                o.add(
+                    str(line.get("source") or ""),
+                    str(line.get("kind")),
+                    day,
+                    str(line["id"]),
+                    int(line.get("tier", 0)),
+                    s.label,
+                )
+                o.saw(s.key)
+                if s.person is not None:
+                    o.people.add(s.person)
+                if s.label is not None and s.local is not None:
+                    names.setdefault(s.key, []).append((s.label, s.local))
     found.update({k: o for k, o in merchants.items() if o.lines >= ctx.settings.merchant_min_lines})
     for o in found.values():
-        if o.key[0] == "domain" and _family(o):
+        if o.key[0] == "domain" and _family(o, names.get(o.key, [])):
             o.hint = "personal"
     return list(found.values())
 
 
 def _addresses(
-    kind: str, payload: Mapping[str, Any], ctx: _Context
+    kind: str, payload: Mapping[str, Any], ctx: Context
 ) -> Iterator[tuple[str, str | None, str | None]]:
     """(address, the display name when it is the sender's, the person it resolves to) of a mail's
-    headers or a calendar entry's attendees who did not decline and its organizer."""
+    headers, a calendar entry's attendees who did not decline and its organizer, or a transcript's
+    participants (an agent taking notes is nobody's: `machine.is_machine_participant`)."""
     if kind == "mail":
         for header in ("from", "to", "cc", "bcc"):
             value = payload.get(header)
@@ -429,6 +458,15 @@ def _addresses(
                     )
                     yield email, name, ctx.person(("email", email))
         return
+    if kind == "transcript":
+        participants = payload.get("participants")
+        for participant in participants if isinstance(participants, list) else []:
+            if not isinstance(participant, dict) or machine.is_machine_participant(participant):
+                continue
+            if _text(participant.get("email")):
+                email = str(participant["email"]).strip().casefold()
+                yield email, None, ctx.person(("email", email))
+        return
     attendees = payload.get("attendees")
     for attendee in attendees if isinstance(attendees, list) else []:
         if not isinstance(attendee, dict) or attendee.get("response") == "declined":
@@ -441,23 +479,49 @@ def _addresses(
         yield organizer[1].casefold(), None, ctx.person(organizer)
 
 
-def _domain_of(address: str, ctx: _Context) -> str | None:
+def _domain_of(address: str, ctx: Context) -> str | None:
     if "@" not in address or ("email", address) in ctx.owner.refs:
         return None
-    domain = entities.registered_domain(address.rsplit("@", 1)[1], ctx.settings.public_suffixes)
+    host = address.rsplit("@", 1)[1].strip().strip(".").lower()
+    if any(host == service or host.endswith("." + service) for service in SERVICE_HOSTS):
+        return None  # a room, a list, a code host's relay: the service's, nobody's org
+    domain = entities.registered_domain(host, ctx.settings.public_suffixes)
     if domain is None or domain in ctx.settings.public_mail_providers or domain in ctx.owner_domains:
         return None
     return domain
 
 
-def _family(o: Observed) -> bool:
-    """A family's domain: every name seen on it is a person's, a given name and a surname, they
-    share the surname, and the domain's first label spells it (`nordmann.example.org`)."""
-    names = [entities.words(label) for label in o.labels]
-    if not names or any(len(found) < 2 for found in names):
+def _family(o: Observed, names: Sequence[tuple[str, str]]) -> bool:
+    """A family's domain: every name seen on it is a person's, a given name and a surname, the given
+    name the address's own (`kari@` "Kari Nordmann"; a newsletter `news@` "Nordmann Nytt" is not),
+    they share the surname, and the domain's first label spells it (`nordmann.example.org`)."""
+    seen = [(entities.words(label), local) for label, local in names]
+    if not seen or any(len(found) < 2 or found[0] != entities.fold(local) for found, local in seen):
         return False
-    surnames = {found[-1] for found in names}
+    surnames = {found[-1] for found, _local in seen}
     return len(surnames) == 1 and next(iter(surnames)) == o.key[1].split(".")[0].replace("-", "")
+
+
+def github_act(line: Line) -> bool:
+    """A line `sync github` (or `add github-export`) wrote: an act on a repository."""
+    calendar = (line.get("payload") or {}).get("calendar")
+    return line.get("source") == GITHUB or (isinstance(calendar, dict) and calendar.get("id") == GITHUB)
+
+
+def _github_urls(payload: Mapping[str, Any], settings: entities.Settings) -> list[str]:
+    """Where an act of `sync github` was: its own link (a commit's, a pull request's, an issue's, a
+    review's, a comment's: the host it was read from), else its `extra.repo` on github.com."""
+    extra = payload.get("extra")
+    if not isinstance(extra, dict):
+        return []
+    for name in GITHUB_ACTS:
+        act = extra.get(name)
+        if isinstance(act, dict) and _text(act.get("url")):
+            return [str(act["url"])]
+    repo = extra.get("repo")
+    if _text(repo) and GITHUB_HOST in settings.code_hosts:
+        return [f"https://{GITHUB_HOST}/{str(repo).strip().strip('/')}"]
+    return []
 
 
 def _urls(kind: str, payload: Mapping[str, Any]) -> list[str]:
@@ -500,7 +564,7 @@ def _code_repo(url: str, settings: entities.Settings) -> str | None:
     return None if path is None or len(path) < 3 else "/".join(path[:3]).removesuffix(".git")
 
 
-def _ideas(lb: Logbook, idx: Index, ctx: _Context) -> list[Observed]:
+def _ideas(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
     found: dict[Ref, Observed] = {}
     pages: dict[str, tuple[str | None, str | None]] = {}  # page id → (parent page id, title)
     notion = [line for line in ctx.standing(idx, "event") if line.get("source") == NOTION]
@@ -605,7 +669,7 @@ def _ideas(lb: Logbook, idx: Index, ctx: _Context) -> list[Observed]:
     return list(found.values())
 
 
-def _assets(lb: Logbook, idx: Index, ctx: _Context) -> list[Observed]:
+def _assets(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
     registered = entities.registry(lb.root)
     ids = {entity_id for (kind, entity_id) in registered if kind == ASSET}
     regs = {  # as the registry spells them: another spelling is proposed against the asset (+50)
