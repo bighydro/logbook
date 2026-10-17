@@ -148,6 +148,18 @@ def test_the_parsers_read_what_ffmpeg_prints() -> None:
         media.parse_probe('{"format": {}}')
 
 
+def test_a_cover_picture_is_not_the_video_stream() -> None:
+    """An attached picture (a cover) is a video stream to ffprobe; ffmpeg decodes the recording, so the
+    size the cuts pass scales to is the recording's, and a file with only a cover has no picture."""
+    cover = '{"codec_type": "video", "width": 320, "height": 240, "disposition": {"attached_pic": 1}}'
+    tape = '{"codec_type": "video", "width": 720, "height": 576, "disposition": {"attached_pic": 0}}'
+    sound = '{"codec_type": "audio", "disposition": {"attached_pic": 0}}'
+    found = media.parse_probe(f'{{"streams": [{cover}, {tape}, {sound}], "format": {{"duration": "60.0"}}}}')
+    assert found == media.Probe(60.0, 720, 576, True, True)
+    found = media.parse_probe(f'{{"streams": [{cover}, {sound}], "format": {{"duration": "60.0"}}}}')
+    assert found == media.Probe(60.0, None, None, False, True)
+
+
 def test_ffmpeg_is_asked_to_open_nothing_but_files(tmp_path: Path) -> None:
     asked: list[list[str]] = []
 
@@ -186,6 +198,7 @@ def test_the_cuts_pass_keeps_one_graph_and_compares_every_frame_at_the_first_one
     args = asked[-1]
     assert args[0] == "ffmpeg" and args.index("-reinit_filter") < args.index("-i")
     assert args[args.index("-reinit_filter") + 1] == "0"
+    assert args.index("-noautorotate") < args.index("-i")  # a phone's rotation changes no difference
     assert args[args.index("-vf") + 1].startswith("scale=720:576,select='gte(scene,0.100)'")
 
 

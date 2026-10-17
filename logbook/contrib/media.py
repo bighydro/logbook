@@ -11,7 +11,8 @@ there. The two signals `videos infer` cuts scenes by (`logbook.labs.scenes`) are
   printed with `metadata=print`), a number from 0 (the same picture) to 1 (another picture entirely).
   A score compares a frame with the one before, so the pass keeps one filter graph for the whole file
   (`-reinit_filter 0`) and brings every frame to the first one's size and pixel format (`scale=W:H`,
-  which passes a file whose frames all match it through untouched). Without that, ffmpeg builds the
+  which passes a file whose frames all match it through untouched), as stored (`-noautorotate`: a
+  phone's rotation changes no difference between two frames). Without that, ffmpeg builds the
   graph again when a frame's size or pixel format changes, and from 7.1 its colour range or space; the
   graph built again has no frame before, and the join between two clips stitched without re-encoding,
   where exactly such a change falls, would score nothing;
@@ -37,6 +38,7 @@ FFMPEG, FFPROBE = "ffmpeg", "ffprobe"
 QUIET = ("-nostdin", "-hide_banner", "-loglevel", "error")
 LOCAL = ("-protocol_whitelist", "file,pipe")  # an input option: nothing but a file is opened
 ONE_GRAPH = ("-reinit_filter", "0")  # an input option: the cuts pass never builds its graph again
+AS_STORED = ("-noautorotate",)  # an input option: frames as stored, the size ffprobe reads
 RATE = 16_000  # the soundtrack is measured, and cut for the speech model, at this rate
 SILENT_DB = -120.0  # a window of digital silence (`-inf`)
 INSTALL = (
@@ -112,7 +114,7 @@ class Ffmpeg:
                 "error",
                 *LOCAL,
                 "-show_entries",
-                "format=duration:stream=codec_type,width,height",
+                "format=duration:stream=codec_type,width,height:stream_disposition=attached_pic",
                 "-of",
                 "json",
                 str(path),
@@ -128,6 +130,7 @@ class Ffmpeg:
                 *QUIET,
                 *LOCAL,
                 *ONE_GRAPH,
+                *AS_STORED,
                 "-i",
                 str(path),
                 "-an",
@@ -221,13 +224,14 @@ def cut_graph(floor: float, width: int | None, height: int | None) -> str:
 
 
 def parse_probe(text: str) -> Probe:
-    """ffprobe's JSON: the length, the picture's size, and which streams there are."""
+    """ffprobe's JSON: the length, the picture's size, and which streams there are. An attached
+    picture (a cover) is no video: ffmpeg decodes the recording, not the cover."""
     try:
         data = json.loads(text)
     except ValueError:
         raise MediaError("ffprobe's answer is not JSON") from None
     streams = [s for s in data.get("streams") or [] if isinstance(s, dict)]
-    video = next((s for s in streams if s.get("codec_type") == "video"), None)
+    video = next((s for s in streams if s.get("codec_type") == "video" and not _cover(s)), None)
     try:
         duration = float(str((data.get("format") or {}).get("duration")))
     except (TypeError, ValueError):
@@ -241,6 +245,11 @@ def parse_probe(text: str) -> Probe:
         video is not None,
         any(s.get("codec_type") == "audio" for s in streams),
     )
+
+
+def _cover(stream: dict[str, Any]) -> bool:
+    disposition = stream.get("disposition")
+    return isinstance(disposition, dict) and bool(disposition.get("attached_pic"))
 
 
 def parse_cuts(text: str) -> list[tuple[float, float]]:
