@@ -9,7 +9,9 @@ It runs on the dream's engine (`logbook.contrib.dream`): the same `dream` entry 
 `policy/crossing.json` (its `max_tier` the ceiling, its `until`, its optional `model`), the same
 endpoint (`LOGBOOK_DREAM_ENDPOINT`, `LOGBOOK_DREAM_MODEL`, `LOGBOOK_DREAM_KEY`), the same reading of
 the answer and the same refusal when more than 30 % of it rests on nothing. A transcript whose tier is
-above the ceiling stays on this machine: nothing of it is read or sent (`HeldBack`).
+above the ceiling stays on this machine: nothing of it is read or sent (`HeldBack`). A transcript that
+is no call, a home video's soundtrack (`transcripts.NOT_CALLS`, RFC 0040), is never read or sent either,
+however it is named (`NotACall`): the catch-up and `--day` leave it out, and `synthesize` refuses it.
 
 What the model sees (`material`) is the call and nothing else: a header (reference `T`: the title,
 the provider, the day, the start and end, the participants by name, never an address) and every
@@ -94,6 +96,20 @@ class NoText(DreamError):
     """The transcript's text is not in the attachment store, or holds no utterance."""
 
 
+class NotACall(DreamError):
+    """The transcript is no call (`NOT_CALLS`: a home video's soundtrack): nothing of it is sent."""
+
+
+def not_a_call(line: Line, name: str | None = None) -> None:
+    """`NotACall` when the transcript's source is one of `NOT_CALLS`, in one sentence; by the envelope's
+    `source`, which reads without a key, so a sealed soundtrack is refused as surely."""
+    if line.get("source") in NOT_CALLS:
+        raise NotACall(
+            f"{name or '#' + str(line.get('seq'))} is a home video's soundtrack, not a call, and a"
+            " soundtrack is never sent to a model; nothing was sent"
+        )
+
+
 @dataclass
 class Material:
     """What the model is given about one transcript, and what the record keeps about that reading."""
@@ -138,7 +154,7 @@ class Tried:
 def find(lb: Logbook, name: str) -> Line:
     """The transcript line `name` names: its id, `#seq`, or the last eight or more characters of its id
     as the Day and `show` shorten it (`…a1b2c3d4`). `DreamError` when it names no line, a line that is
-    not a transcript, or more than one transcript."""
+    not a transcript, or more than one transcript; `NotACall` when it names a home video's soundtrack."""
     text = name.strip().lstrip("…")
     with lb.index() as idx:
         if text.startswith("#") and text[1:].isdigit():
@@ -157,6 +173,7 @@ def find(lb: Logbook, name: str) -> Line:
         )
     if line.get("kind") != KIND:
         raise DreamError(f"line {name} is a {line.get('kind')} line, not a transcript")
+    not_a_call(line, name)
     return line
 
 
@@ -461,8 +478,12 @@ def synthesize(
     """Synthesize one transcript: the policy (`found` when the caller checked it already), the
     endpoint, the gate, the material, the model's turn, the check, and one `draft/v1` line appended
     under the writer lock unless `dry_run`. A transcript the same model synthesized under this prompt
-    is `unchanged` and nothing is sent, unless `again`. `DreamError` (`HeldBack`, `NoText`,
-    `AnswerError`) says why nothing was written; `HeadMoved` when the record moved under the reading."""
+    is `unchanged` and nothing is sent, unless `again`. `DreamError` (`NotACall`, `HeldBack`, `NoText`,
+    `AnswerError`) says why nothing was written; `HeadMoved` when the record moved under the reading.
+    A home video's soundtrack is refused first, as the record holds the line, before the policy is
+    read: every path to the model passes here."""
+    with lb.index() as idx:
+        not_a_call(idx.by_id(str(line["id"])) or line)
     found = found or dream.ceiling(lb)
     ep = dream.endpoint(found, env)
     source = drafts.SOURCE_PREFIX + ep.model

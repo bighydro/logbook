@@ -23,9 +23,11 @@ from persona import HOME, dwell, utc
 from logbook import cli
 from logbook.contrib import doctor, dream, mcp_server, model_client, serve, synthesis
 from logbook.contrib.adapters import granola
+from logbook.contrib.adapters import transcript as transcript_adapter
+from logbook.core import attachments, drafts, policy
 from logbook.core import day as day_reader
-from logbook.core import drafts, policy
 from logbook.core.store import Logbook
+from logbook.labs import scenes
 
 DAY = "2026-06-10"  # a Wednesday; the call runs 10:00 to 10:48 in Oslo
 MODEL = "qwen2.5-7b-instruct"
@@ -428,6 +430,95 @@ def test_a_transcript_whose_text_is_not_in_the_store_is_said(
     seen = _fake(monkeypatch)
     code, _out, err = _cli("transcript", "synthesize", call["id"])
     assert code == 2 and "not in the attachment store" in err and seen["calls"] == []
+
+
+# -- a home video's soundtrack is no call -----------------------------------------------------------------
+
+SOUNDTRACK = (
+    "WEBVTT\n\n00:00:05.000 --> 00:00:09.000\nCan you send me the photos by Friday? I'll call you tomorrow.\n"
+)
+
+
+def _soundtrack(lb: Logbook) -> dict[str, Any]:
+    """A home video's transcript as `videos infer` writes it (RFC 0040): source `video-transcription`,
+    `at` the video line's, `end` null, the WebVTT in the attachment store, tier 2."""
+    data = SOUNDTRACK.encode("utf-8")
+    lb.attach(data)
+    line = transcript_adapter.draft(
+        source=scenes.TRANSCRIPT_SOURCE,
+        at=f"{DAY}T16:00:00Z",
+        end=None,
+        raw_id="video:1HomeTape01SyntheticVideoId01@000000000000",
+        content=attachments.reference(data, scenes.TRANSCRIPT_MEDIA),
+        turns=[],
+        tier=2,
+        title="Home 01",
+        participants=[],
+        extra={"format": "vtt", "time_unknown": True},
+    )
+    return lb.append(line["at"], line["source"], line["kind"], line["tier"], line["payload"], end=None)
+
+
+def _never(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`model_client.send` replaced by one that fails the test: nothing of a soundtrack is ever sent."""
+
+    def send(*_a: Any, **_k: Any) -> dict[str, Any]:
+        pytest.fail("a home video's soundtrack reached the model endpoint")
+
+    monkeypatch.setattr(model_client, "send", send)
+
+
+def test_a_home_videos_soundtrack_named_by_id_is_refused_before_any_request(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The catch-up and `--day` leave a soundtrack out (`NOT_CALLS`); naming it by its id, its #seq or
+    the end of its id refuses it the same way, in one sentence, exit 2, nothing sent, nothing written,
+    with `--dry-run` and `--again` as without, and with no `dream` entry at all."""
+    video = _soundtrack(lb)
+    _never(monkeypatch)
+    seq = lb.meta["seq"]
+    for name in (video["id"], f"#{video['seq']}", video["id"][-8:], f"…{video['id'][-8:]}"):
+        for extra in ((), ("--dry-run",), ("--again",)):
+            code, out, err = _cli("transcript", "synthesize", name, *extra)
+            assert code == 2, (name, extra, err)
+            assert out == "" and len(err.strip().splitlines()) == 1, err
+            assert "home video's soundtrack, not a call" in err and "nothing was sent" in err
+    _policy(lb, None)
+    code, _out, err = _cli("transcript", "synthesize", video["id"])
+    assert code == 2 and "home video's soundtrack, not a call" in err
+    assert lb.meta["seq"] == seq and _drafts(lb) == [] and no_network == []
+
+
+def test_synthesize_itself_refuses_a_soundtrack_whatever_line_it_is_handed(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The guard is in `synthesize`, the one path to the model every caller passes, not only in `find`:
+    the line as the record holds it, or the bare id of one, is refused before the policy is read."""
+    video = _soundtrack(lb)
+    _never(monkeypatch)
+    seq = lb.meta["seq"]
+    for line in (video, {"id": video["id"]}):
+        with pytest.raises(synthesis.NotACall, match="home video's soundtrack, not a call"):
+            synthesis.synthesize(lb, line, env=ENV)
+        with pytest.raises(synthesis.NotACall):
+            synthesis.synthesize(lb, line, env=ENV, dry_run=True, again=True)
+    assert issubclass(synthesis.NotACall, dream.DreamError)
+    assert lb.meta["seq"] == seq and _drafts(lb) == [] and no_network == []
+
+
+def test_a_call_beside_a_soundtrack_is_still_synthesized_by_id(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    video = _soundtrack(lb)
+    call = _transcript(lb)
+    seen = _fake(monkeypatch)
+    code, _out, err = _cli("transcript", "synthesize", call["id"])
+    assert code == 0, err
+    assert len(seen["calls"]) == 1 and _drafts(lb)[-1]["payload"]["subject"] == [call["id"]]
+    assert "Can you send me the photos" not in json.dumps(seen["calls"])
+    tried = synthesis.synthesize_day(lb, DAY, env=ENV, again=True)
+    assert [row.transcript["id"] for row in tried] == [call["id"]]
+    assert video["id"] not in json.dumps(seen["calls"]) and no_network == []
 
 
 # -- a day ---------------------------------------------------------------------------------------------------

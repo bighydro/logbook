@@ -56,7 +56,7 @@ RFC 0036's `draft/v1`, amended additively: for unit `event` the `subject` MAY be
 
 The draft is a proposal (rule 4): no reader derives a place or a date from it. Nothing crossed to make it (the models run on the record's machine), so no `policy/crossing.json` entry governs it as the `dream` entry governs a dream's draft; a crossing carries it by its tier like any line.
 
-The file's speech is one `transcript/v1` line (RFC 0004), source `video-transcription`, its content WebVTT whose cues carry their times in the file, `provenance.source` the video line's id, `at` the video line's, `end` null. It is no call: the synthesis of calls (`transcript synthesize`, the 06:00 close) leaves its source out, so a home video's words reach no model endpoint.
+The file's speech is one `transcript/v1` line (RFC 0004), source `video-transcription`, its content WebVTT whose cues carry their times in the file, `provenance.source` the video line's id, `at` the video line's, `end` null. It is no call: the synthesis of calls (`transcript synthesize`, the 06:00 close) leaves its source out, and refuses it when it is named by its id, so a home video's words reach no model endpoint.
 
 ## 4. `attribution/v1`: where and when a scene was filmed, by the owner
 
