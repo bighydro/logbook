@@ -88,7 +88,8 @@ backup. Nothing downloads the folder, and no video is ever copied into the recor
   next `videos fetch` hashes it and carries on. A file Drive no longer has is said and skipped; a full
   disk stops the run.
 - **Once inferred, not again.** A file with scene drafts is not fetched again; `--again` fetches the
-  inferred files too, for `videos infer` under other models or settings.
+  inferred files too, for `videos infer` under other models or settings, or after a release reads the
+  picture another way (the key carries how: a file cut by an earlier reading is inferred again).
 - `--limit N` fetches at most N files; `--models` instead fetches the speech and vision models `videos
   infer` uses, once (the only other network use of the videos).
 

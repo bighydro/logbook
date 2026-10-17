@@ -33,7 +33,8 @@ light inside a recording (a camera's flash, a lamp switched on) can split it in 
 more draft to answer, while a join they missed would mix two recordings' evidence in one proposal. A
 fade or a dissolve between two recordings changes the picture too slowly to score a cut and is found
 only when the soundtrack breaks with it. These numbers are hypotheses,
-as `policy/stays.json`'s are, and the key carries them: other settings infer the file again.
+as `policy/stays.json`'s are, and the key carries them: other settings infer the file again, as does
+another way of reading the picture (`media.CUTS`).
 
 **What is read of a scene.** Its sound, cut out at 16 kHz and heard by the transcribe extra through its
 public function (`transcribe.hear`), every segment shifted by the scene's start, so the speech of a
@@ -888,8 +889,9 @@ def _quote(text: str, limit: int = QUOTE_CHARS) -> str:
 
 
 def key(speech: transcribe.Engine, vision: describe.Engine, settings: Settings = SETTINGS) -> str:
-    """What a file is inferred under: the rules, the prompt, the two models and the scene settings. A
-    file whose drafts carry this key is not inferred again."""
+    """What a file is inferred under: the rules, the prompt, the two models, the scene settings and how
+    ffmpeg's picture pass reads the file (`media.CUTS`). A file whose drafts carry this key is not
+    inferred again."""
     what = {
         "rules": RULES,
         "prompt": PROMPT_NAME,
@@ -897,6 +899,7 @@ def key(speech: transcribe.Engine, vision: describe.Engine, settings: Settings =
         "speech": {"engine": speech.name, "model": speech.model},
         "vision": {"engine": vision.name, "model": vision.model},
         "settings": settings.to_json(),
+        "cuts": media_module.CUTS,
     }
     text = json.dumps(what, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]

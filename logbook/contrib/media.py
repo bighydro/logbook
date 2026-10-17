@@ -37,6 +37,7 @@ from typing import Any, Protocol
 FFMPEG, FFPROBE = "ffmpeg", "ffprobe"
 QUIET = ("-nostdin", "-hide_banner", "-loglevel", "error")
 LOCAL = ("-protocol_whitelist", "file,pipe")  # an input option: nothing but a file is opened
+CUTS = "one-graph/1"  # how the picture pass reads a file; `videos infer`'s key carries it
 ONE_GRAPH = ("-reinit_filter", "0")  # an input option: the cuts pass never builds its graph again
 AS_STORED = ("-noautorotate",)  # an input option: frames as stored, the size ffprobe reads
 RATE = 16_000  # the soundtrack is measured, and cut for the speech model, at this rate

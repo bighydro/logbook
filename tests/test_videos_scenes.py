@@ -202,6 +202,20 @@ def test_the_cuts_pass_keeps_one_graph_and_compares_every_frame_at_the_first_one
     assert args[args.index("-vf") + 1].startswith("scale=720:576,select='gte(scene,0.100)'")
 
 
+def test_the_key_names_how_the_picture_was_cut(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file cut into scenes by an earlier cuts pass is inferred again (`videos fetch --again`, then
+    `videos infer`): one whose recordings change size, pixel format or colour tags at a join may hold
+    two recordings in one scene."""
+    from types import SimpleNamespace
+
+    speech = SimpleNamespace(name="speech-engine", model="speech-model")
+    vision = SimpleNamespace(name="vision-engine", model="vision-model")
+    now = infer.key(speech, vision)  # type: ignore[arg-type]
+    assert media.CUTS == "one-graph/1"
+    monkeypatch.setattr(media, "CUTS", "earlier/0")
+    assert infer.key(speech, vision) != now  # type: ignore[arg-type]
+
+
 def test_without_ffmpeg_it_says_how_to_install_it() -> None:
     with pytest.raises(media.MediaMissing, match="install ffmpeg"):
         media.detect(which=lambda _name: None)
