@@ -17,12 +17,19 @@ The line kept is the richest of the set: a timed entry before an all-day one, th
 payload fills the most fields (location, attendees, notes, organizer, status), then the earliest
 in the order given. The others are named in its evidence: `Folded.sources`, its own source first,
 then the others in evidence order (`ics (Work)` when one source brings the entry from two of its
-calendars), and `Folded.lines`, every line's id, the kept one's first. Nothing here reads a file."""
+calendars), and `Folded.lines`, every line's id, the kept one's first. Nothing here reads a file.
+
+`backfilled` is the Day's own, after `fold`: a Notion row seen live and then again by `sync notion
+--relations-backfill` is one row. The backfill's `relations` line adds a row's relations to an edit
+the record holds already, at that edit, so it is no happening of its own: it folds into the last
+other line of its page among the day's lines, whose `Folded.lines` then name it, and whose sources
+stay one. A page with no other line on the day keeps it as a row. `show` keeps both lines as rows
+(SPEC §3.2.1: one calendar holding an entry twice is two), so `fold` does not do this."""
 
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Container, Sequence
+from collections.abc import Container, Mapping, Sequence
 from datetime import datetime
 from typing import Any, NamedTuple
 
@@ -32,6 +39,7 @@ from .stays import instant
 
 SAME_START_S = 60  # two starts less than this apart are one start
 IGNORED = frozenset({"schema", "raw_id", "modified_at", "extra", "title", "all_day", "calendar"})
+BACKFILL = ("notion", "relations")  # the source and `extra.action` of `sync notion --relations-backfill`
 
 
 class Folded(NamedTuple):
@@ -82,6 +90,50 @@ def fold(
         folded[str(kept["id"])] = Folded(_sources(ordered), [str(line["id"]) for line in ordered])
         dropped.update(str(line["id"]) for line in cluster if line is not kept)
     return [line for line in lines if str(line["id"]) not in dropped], folded
+
+
+def backfilled(
+    lines: Sequence[Line], stands_for: Mapping[str, Folded], retracted: Container[str] = ()
+) -> tuple[list[Line], dict[str, Folded]]:
+    """`fold`'s result (one day's lines and what each kept line stands for) with every Notion
+    `relations` line (`BACKFILL`) dropped into the last other line of its page among them: that
+    line then stands for it too, its own lines first and the sources unchanged. A retracted line is
+    never folded and folds nothing; a `relations` line whose page has no other line here stays."""
+    live = [line for line in lines if _notion_page(line) is not None and str(line["id"]) not in retracted]
+    last = {_notion_page(line): line for line in live if _action(line) != BACKFILL[1]}  # the page's last
+    out = dict(stands_for)
+    dropped: set[str] = set()
+    for line in live:
+        kept = last.get(_notion_page(line)) if _action(line) == BACKFILL[1] else None
+        if kept is None:
+            continue
+        id_, into = str(line["id"]), str(kept["id"])
+        mine = out.pop(id_, None)
+        theirs = out.get(into) or Folded([str(kept.get("source"))], [into])
+        also = mine.lines if mine is not None else [id_]
+        sources = [*theirs.sources, *(s for s in (mine.sources if mine else []) if s not in theirs.sources)]
+        out[into] = Folded(sources, [*theirs.lines, *also])
+        dropped.add(id_)
+    return [line for line in lines if str(line["id"]) not in dropped], out
+
+
+def _notion_page(line: Line) -> str | None:
+    """The Notion page id of an event line the Notion adapter wrote, else None."""
+    if line.get("kind") != "event" or line.get("source") != BACKFILL[0]:
+        return None
+    page = _extra(line).get("page")
+    id_ = page.get("id") if isinstance(page, dict) else None
+    return str(id_) if id_ else None
+
+
+def _action(line: Line) -> str | None:
+    action = _extra(line).get("action")
+    return str(action) if action is not None else None
+
+
+def _extra(line: Line) -> dict[str, Any]:
+    extra = _payload(line).get("extra")
+    return extra if isinstance(extra, dict) else {}
 
 
 def _same_event(a: Line, b: Line, airlines: Airlines) -> bool:
