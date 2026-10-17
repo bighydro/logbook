@@ -89,7 +89,8 @@ description, as the host lists it, says in one sentence what the ceiling does to
 - **`line(id)`** is one line in full: the fields `day_lines` gives, the row `show` prints as `row`, the
   whole `payload`, and `text`, the line's full text where it has one — a note's, a mail's body, a
   message's, and a transcript's turns read from the attachment store as `promises` and the search index
-  read them, one `Speaker: text` per turn (`null` when the store does not hold the file). A retracted line
+  read them, one `Speaker: text` per turn (`null` when the store does not hold the file, and for a home
+  video's soundtrack, which is no call: [its words go to no model](adapters/videos.md)). A retracted line
   is the marker `show` prints, `retracted #seq: reason`, and nothing of the line. *A line above the ceiling
   is refused naming its tier and the ceiling, and nothing else of it*: the index is asked the line's tier
   first, by a query that reads nothing else, and the refusal is `line '…' is tier 3, above the mcp ceiling

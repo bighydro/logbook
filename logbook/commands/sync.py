@@ -213,6 +213,14 @@ def sync_arguments(sub: Subparsers) -> None:
         help="show what would be appended; write nothing; a quota or rate-limit answer stops it at once",
     )
     s.add_argument(
+        "--videos",
+        action="store_true",
+        help="drive: the family's video files instead of the activity: one video/v1 line per video file in"
+        " the folder LOGBOOK_DRIVE_VIDEOS_FOLDER names and its subfolders, from Drive's metadata alone"
+        " (size, length, frame size, md5); no byte is downloaded (that is `videos fetch`), the photos"
+        " beside them are never listed, Drive's times are kept as the upload's, never the filming's",
+    )
+    s.add_argument(
         "--restart",
         action="store_true",
         help="immich: walk the whole library from the beginning, whatever the watermark and the checkpoint"
@@ -296,6 +304,7 @@ def _run_all(
         ("--until", a.until),
         ("--restart", a.restart or None),
         ("--networks", getattr(a, "networks", None)),
+        ("--videos", getattr(a, "videos", False) or None),
     ):
         if value is not None:
             print(f"sync: --all takes no {flag}: each source starts from its own watermark", file=sys.stderr)
@@ -370,7 +379,16 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     changes the run's exit status: a draft is a proposal, and a day it refused is in its own lines."""
     from ..contrib import backup, doctor, notify
 
-    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
+    others = (
+        a.name,
+        a.all or None,
+        a.dry_run or None,
+        a.since,
+        a.listen,
+        a.until,
+        a.restart or None,
+        getattr(a, "videos", False) or None,
+    )
     if any(x is not None for x in others):
         print("sync: --scheduled takes no source and no other option", file=sys.stderr)
         sys.exit(2)
@@ -539,7 +557,16 @@ def _sync_schedule(a: argparse.Namespace) -> None:
         print("sync: --install-schedule or --uninstall-schedule, not both", file=sys.stderr)
         sys.exit(2)
     flag = "--install-schedule" if a.install_schedule else "--uninstall-schedule"
-    others = (a.name, a.all or None, a.dry_run or None, a.since, a.listen, a.until, a.restart or None)
+    others = (
+        a.name,
+        a.all or None,
+        a.dry_run or None,
+        a.since,
+        a.listen,
+        a.until,
+        a.restart or None,
+        getattr(a, "videos", False) or None,
+    )
     if any(x is not None for x in others) or getattr(a, "scheduled", False) or getattr(a, "close", False):
         print(f"sync: {flag} takes no source and no other option", file=sys.stderr)
         sys.exit(2)
@@ -636,7 +663,7 @@ def _sync_one(a: argparse.Namespace) -> None:
     from ..contrib.adapters import ais
     from ..contrib.adapters import weather as weather_adapter
 
-    adapter = adapters.live(a.name)
+    adapter = _videos_adapter(a) if getattr(a, "videos", False) else adapters.live(a.name)
     if adapter is None:
         known = ", ".join(x.NAME for x in adapters.live_adapters()) or "none"
         print(f"sync: no live source named {a.name!r} (known: {known})", file=sys.stderr)
@@ -659,6 +686,8 @@ def _sync_one(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if _say_disabled(lb, adapter.NAME):  # before the variables: a switched-off source needs none
         return
+    if getattr(a, "videos", False):  # its own name from here on: its lines, its watermark, its summary
+        a = argparse.Namespace(**{**vars(a), "name": adapter.NAME})
     try:
         config = adapter.configure(os.environ)
     except ValueError as e:
@@ -995,6 +1024,22 @@ def _sync_relations_backfill(a: argparse.Namespace, adapter: adapters.LiveAdapte
             + "; the watermark untouched"
         )
     _report_skipped(counts)
+
+
+def _videos_adapter(a: argparse.Namespace) -> adapters.LiveAdapter:
+    """`sync drive --videos`: the family's video folder (`logbook.contrib.adapters.drive_videos`), a
+    source of its own (`drive-videos`) that `sync --all` does not run; refused, exit 2, for any other
+    source."""
+    from ..contrib.adapters import drive_videos
+
+    if a.name != "drive":
+        print(
+            f"sync: --videos is drive's: `logbook sync drive --videos` lists the family's video folder,"
+            f" not {a.name}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return drive_videos  # type: ignore[return-value]
 
 
 WEATHER_LOOKBACK_DAYS = 7  # a run without --since starts this far before the last day it covered

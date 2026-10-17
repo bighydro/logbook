@@ -8,7 +8,13 @@ org's, the idea's and the asset's are `logbook.contrib.entity_review`'s (`Entity
 `people review` and `setup places review` run the same sitting, so the numbers, the checks, what is
 written and what is printed are one implementation for all five. Nothing is written unless told;
 every number is checked before the first line is written. `review` with no kind lists every queue,
-one block each, and writes nothing."""
+one block each, and writes nothing.
+
+A sixth queue is no kind of thing the record names: `video`, the scenes `videos infer` proposed a place
+or a date for (RFC 0040), `logbook.contrib.video_review`'s (`VideoQueue`, declared beside `videos` in
+`videos.py`). The same sitting drives it: `--accept` takes what a scene's draft proposes, `--reject`
+writes the scene's no (`scene-review/v1`, never an `entity-review/v1` line), and its own answers
+(`VIDEO_FLAGS`) are refused for every other kind as a place's options are."""
 
 from __future__ import annotations
 
@@ -21,9 +27,9 @@ from typing import Any, NoReturn
 from ..core.store import Logbook
 from .common import Subparsers
 
-KINDS = ("person", "org", "idea", "asset", "place", "speakers")  # speakers: RFC 0038 §4, `commands.speakers`
+# video: RFC 0040, `commands.videos`; speakers: RFC 0038 §4, `commands.speakers`, listed last
+KINDS = ("person", "org", "idea", "asset", "place", "video", "speakers")
 PLACE_FLAGS = (
-    ("--top", "top"),
     ("--near", "near"),
     ("--radius", "radius"),
     ("--verbose", "verbose"),
@@ -32,6 +38,14 @@ PLACE_FLAGS = (
     ("--limit", "limit"),
     ("--photos-library", "photos_library"),
     ("--migrate-rejects", "migrate_rejects"),
+)
+TOP_FLAGS = (("--top", "top"),)  # a place's and a video's: the first N proposals, or scenes
+VIDEO_FLAGS = (
+    ("--place", "place"),
+    ("--date", "date"),
+    ("--ask", "ask"),
+    ("--asked", "asked"),
+    ("--answered", "answered"),
 )
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
@@ -241,12 +255,16 @@ def review_arguments(sub: Subparsers) -> None:
         " ones with the evidence, numbered, or as a new one; nothing is written unless told, and nothing"
         " is looked up. `review person` is `people review`, `review place` is `setup places review`;"
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
+        " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040)."
         " With no KIND, every queue, one block each.",
     )
     s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
     s.add_argument(
-        "--reject", action="append", metavar="N[,N]", help="reject these: one entity-review/v1 line each"
+        "--reject",
+        action="append",
+        metavar="N[,N]",
+        help="reject these: one entity-review/v1 line each (a scene's: scene-review/v1)",
     )
     s.add_argument(
         "--name",
@@ -276,6 +294,34 @@ def review_arguments(sub: Subparsers) -> None:
     from .speakers import speakers_arguments
 
     speakers_arguments(s)
+    v = s.add_argument_group("video", "with `review video` (RFC 0040); --top above counts its scenes")
+    v.add_argument(
+        "--place",
+        nargs=2,
+        action="append",
+        metavar=("N", "NAME"),
+        help="confirm scene N at your own place: a name of places.json or an asset of assets.json; none for"
+        " no place",
+    )
+    v.add_argument(
+        "--date",
+        nargs=2,
+        action="append",
+        metavar=("N", "WHEN"),
+        help="confirm scene N on your own date: 1994, 1994-07, 1994-07-14, 'summer 1994', 1994-06..1994-08;"
+        " none for no date",
+    )
+    v.add_argument(
+        "--ask", action="append", metavar="N[,N]", help="ask the family: an open task, list videos"
+    )
+    v.add_argument(
+        "--asked", action="store_true", help="the scenes kept to ask the family, to answer them now"
+    )
+    v.add_argument(
+        "--answered",
+        action="store_true",
+        help="the scenes already confirmed, to correct one: a new answer supersedes the standing line",
+    )
     s.set_defaults(fn=cmd_review)
 
 
@@ -287,12 +333,27 @@ def cmd_review(a: argparse.Namespace) -> None:
     if a.kind is None:
         _every_queue(lb, a)
         return
+    if a.kind not in ("place", "video") and a.top is not None:  # --top first, as when it was a place's alone
+        given = [flag for flag, dest in (*TOP_FLAGS, *PLACE_FLAGS) if getattr(a, dest) not in (None, False)]
+        _refuse(
+            f"review {a.kind}",
+            f"{', '.join(given)} go with `review place`"
+            if len(given) > 1
+            else "--top goes with `review place` or `review video`",
+        )
     if a.kind != "place":
         given = [flag for flag, dest in PLACE_FLAGS if getattr(a, dest) not in (None, False)]
         if given:
             _refuse(
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review place`",
+            )
+    if a.kind != "video":
+        given = [flag for flag, dest in VIDEO_FLAGS if getattr(a, dest) not in (None, False)]
+        if given:
+            _refuse(
+                f"review {a.kind}",
+                f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review video`",
             )
     from . import speakers
 
@@ -327,6 +388,10 @@ def queue_of(kind: str) -> Queue:
         from .places import PlaceQueue
 
         return PlaceQueue()
+    if kind == "video":
+        from .videos import VideoQueue
+
+        return VideoQueue()
     if kind == "speakers":
         from .speakers import SpeakerQueue
 
@@ -339,7 +404,7 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 
     told = [
         flag
-        for flag, dest in (*TELLS, *PLACE_FLAGS, *SPEAKER_FLAGS)
+        for flag, dest in (*TELLS, *TOP_FLAGS, *PLACE_FLAGS, *VIDEO_FLAGS, *SPEAKER_FLAGS)
         if getattr(a, dest, None) not in (None, False)
     ]
     if told:
