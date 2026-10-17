@@ -160,14 +160,33 @@ def test_ffmpeg_is_asked_to_open_nothing_but_files(tmp_path: Path) -> None:
 
     tool = media.Ffmpeg("ffmpeg", "ffprobe", run)
     tool.probe(tmp_path / "a.mp4")
+    tool.cuts(tmp_path / "a.mp4", 0.1)  # its own probe first, for the frame size
     Done.stdout = ""
-    tool.cuts(tmp_path / "a.mp4", 0.1)
     tool.levels(tmp_path / "a.mp4", 0.25)
     tool.audio(tmp_path / "a.mp4", 1.0, 2.0, tmp_path / "a.wav")
     for args in asked:
         i = args.index("-protocol_whitelist")
         assert args[i + 1] == "file,pipe"
         assert i < args.index("-i") if "-i" in args else True
+
+
+def test_the_cuts_pass_keeps_one_graph_and_compares_every_frame_at_the_first_ones_size(
+    tmp_path: Path,
+) -> None:
+    asked: list[list[str]] = []
+
+    class Done:
+        returncode, stdout, stderr = 0, PROBE_OUTPUT, ""
+
+    def run(args: list[str], **_kw: object) -> Done:
+        asked.append(args)
+        return Done()
+
+    media.Ffmpeg("ffmpeg", "ffprobe", run).cuts(tmp_path / "a.mp4", 0.1)
+    args = asked[-1]
+    assert args[0] == "ffmpeg" and args.index("-reinit_filter") < args.index("-i")
+    assert args[args.index("-reinit_filter") + 1] == "0"
+    assert args[args.index("-vf") + 1].startswith("scale=720:576,select='gte(scene,0.100)'")
 
 
 def test_without_ffmpeg_it_says_how_to_install_it() -> None:
@@ -219,14 +238,34 @@ RECORDINGS = (  # picture, the text drawn on it, the sound's source and its filt
     ),
     ("rgbtestsrc=size=160x120:rate=10", None, "sine=frequency=880:sample_rate=16000", "volume=0.25"),
 )
+RESHAPED = (  # three recordings whose streams differ at the joins, as clips stitched without re-encoding do
+    ("testsrc2=size=160x120:rate=10", None, "sine=frequency=220:sample_rate=16000", "volume=0.05"),
+    (
+        "smptebars=size=176x144:rate=10",
+        None,
+        "sine=frequency=440:sample_rate=16000",
+        "volume=0.6",
+    ),  # its size
+    (  # its pixel format
+        "rgbtestsrc=size=176x144:rate=10",
+        None,
+        "sine=frequency=880:sample_rate=16000",
+        "volume=0.25",
+        "yuv444p",
+    ),
+)
 
 
-def make_tape(folder: Path, name: str = "tape.mp4") -> Path:
-    """A tiny synthetic tape: the four recordings, stitched. A sign and a date stamp are drawn when
-    this ffmpeg can draw text, and left out when it cannot: the scenes do not depend on them."""
+def make_tape(
+    folder: Path, name: str = "tape.mp4", recordings: tuple[tuple[str | None, ...], ...] = RECORDINGS
+) -> Path:
+    """A tiny synthetic tape: the four recordings, stitched without re-encoding. A sign and a date stamp
+    are drawn when this ffmpeg can draw text, and left out when it cannot: the scenes do not depend on
+    them. A recording's fifth value, when it has one, is its pixel format (yuv420p otherwise)."""
     folder.mkdir(parents=True, exist_ok=True)
     parts = []
-    for n, (picture, text, sound, level) in enumerate(RECORDINGS, 1):
+    for n, (picture, text, sound, level, *rest) in enumerate(recordings, 1):
+        pixels = rest[0] if rest else "yuv420p"
         part = folder / f"rec{n}.mp4"
         for overlay in ([text] if text else []) + [None]:
             draw = f"drawtext=text='{overlay}':fontsize=16:fontcolor=white:x=8:y=8" if overlay else "null"
@@ -236,7 +275,7 @@ def make_tape(folder: Path, name: str = "tape.mp4") -> Path:
                 "-f", "lavfi", "-i", f"{sound}:duration=6",
                 "-filter_complex", f"[0:v]{draw}[v];[1:a]{level}[a]",
                 "-map", "[v]", "-map", "[a]",
-                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", str(pixels),
                 "-c:a", "aac", "-shortest", str(part),
             ]  # fmt: skip
             if subprocess.run(args, capture_output=True, check=False).returncode == 0:
@@ -300,6 +339,26 @@ def test_on_a_generated_tape_the_scenes_are_found_where_the_recordings_join(tmp_
     sound = tmp_path / "sound.wav"
     tool.audio(tape, 6.0, 12.0, sound)
     assert sound.read_bytes()[:4] == b"RIFF" and 180_000 < sound.stat().st_size < 200_000  # 6 s, 16 kHz
+
+
+@pytest.mark.skipif(not FFMPEG, reason="ffmpeg is not installed")
+def test_a_join_where_the_streams_size_or_pixel_format_changes_is_found(tmp_path: Path) -> None:
+    """ffmpeg builds its filter graph again when a frame's size or pixel format changes (and, from 7.1,
+    its colour range or space), and a graph built again has no frame before to compare with: the first
+    frame of the next recording would score nothing, and the join between two clips stitched without
+    re-encoding would be missed. The cuts pass keeps its one graph and brings every frame to the first
+    one's size and format, so each join is a cut, on every ffmpeg."""
+    tape = make_tape(tmp_path / "gen", recordings=RESHAPED)
+    tool = media.detect()
+    probe = tool.probe(tape)
+    assert probe.video and 17.5 < probe.duration_s < 18.6
+    cuts = tool.cuts(tape, infer.SETTINGS.soft_cut)
+    levels = tool.levels(tape, infer.SETTINGS.window_s)
+    scenes = infer.find_scenes(probe.duration_s, cuts, levels)
+    assert len(scenes) == 3, read_out(scenes, cuts, levels)
+    for found, join in zip(_edges(scenes), JOINS[:2], strict=True):
+        assert abs(found - join) <= 0.6, (found, join)
+    assert all(scene.opened_by.startswith("cut") for scene in scenes[1:]), scenes
 
 
 # -- the independent check of scenes and dates ------------------------------------------------------

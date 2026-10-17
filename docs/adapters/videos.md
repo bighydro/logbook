@@ -97,8 +97,11 @@ backup. Nothing downloads the folder, and no video is ever copied into the recor
 A scene is one continuous recording. A tape holds many, so where and when are proposed per scene,
 never per file. `videos infer` asks ffmpeg on this machine (it must be on the PATH; it is told to open
 nothing but files) for two signals: the picture's scene score of each frame, from 0 (the same picture)
-to 1 (another picture entirely), and the soundtrack's loudness in windows of a quarter of a second. A
-scene begins at:
+to 1 (another picture entirely), and the soundtrack's loudness in windows of a quarter of a second.
+Every frame is scored against the one before at the file's first frame size and pixel format, so a join
+between clips stitched without re-encoding, where the size, the pixel format or the colour tags change,
+is scored like any other (ffmpeg would otherwise start its filters again there and score that frame
+against nothing). A scene begins at:
 
 - **a cut**: a frame scoring 0.30 or more;
 - **a weak cut with a break in the soundtrack**: a frame scoring 0.10 or more when, within half a second

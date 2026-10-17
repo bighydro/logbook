@@ -8,7 +8,13 @@ ffmpeg`, `apt install ffmpeg`, `winget install ffmpeg`) and says so in one sente
 there. The two signals `videos infer` cuts scenes by (`logbook.labs.scenes`) are read in two passes:
 
 - **the picture**: ffmpeg's scene score of every frame at or above a floor (`select=gte(scene,F)`,
-  printed with `metadata=print`), a number from 0 (the same picture) to 1 (another picture entirely);
+  printed with `metadata=print`), a number from 0 (the same picture) to 1 (another picture entirely).
+  A score compares a frame with the one before, so the pass keeps one filter graph for the whole file
+  (`-reinit_filter 0`) and brings every frame to the first one's size and pixel format (`scale=W:H`,
+  which passes a file whose frames all match it through untouched). Without that, ffmpeg builds the
+  graph again when a frame's size or pixel format changes, and from 7.1 its colour range or space; the
+  graph built again has no frame before, and the join between two clips stitched without re-encoding,
+  where exactly such a change falls, would score nothing;
 - **the soundtrack**: its RMS level in dB over windows of a fixed length, after resampling to 16 kHz
   (`asetnsamples` then `astats`, `ametadata=print`); digital silence reads as `-inf`, kept as `SILENT_DB`.
 
@@ -30,6 +36,7 @@ from typing import Any, Protocol
 FFMPEG, FFPROBE = "ffmpeg", "ffprobe"
 QUIET = ("-nostdin", "-hide_banner", "-loglevel", "error")
 LOCAL = ("-protocol_whitelist", "file,pipe")  # an input option: nothing but a file is opened
+ONE_GRAPH = ("-reinit_filter", "0")  # an input option: the cuts pass never builds its graph again
 RATE = 16_000  # the soundtrack is measured, and cut for the speech model, at this rate
 SILENT_DB = -120.0  # a window of digital silence (`-inf`)
 INSTALL = (
@@ -114,19 +121,20 @@ class Ffmpeg:
         return parse_probe(text)
 
     def cuts(self, path: Path, floor: float) -> list[tuple[float, float]]:
-        graph = f"select='gte(scene,{floor:.3f})',metadata=print:key=lavfi.scene_score:file=-"
+        found = self.probe(path)
         text = self._call(
             [
                 self.ffmpeg,
                 *QUIET,
                 *LOCAL,
+                *ONE_GRAPH,
                 "-i",
                 str(path),
                 "-an",
                 "-sn",
                 "-dn",
                 "-vf",
-                graph,
+                cut_graph(floor, found.width, found.height),
                 "-f",
                 "null",
                 "-",
@@ -203,6 +211,13 @@ class Ffmpeg:
                 str(out),
             ]
         )
+
+
+def cut_graph(floor: float, width: int | None, height: int | None) -> str:
+    """The cuts pass's filters: every frame at the first one's size and pixel format (`width`, `height`,
+    the video stream's as ffprobe reads it), then its scene score, printed when it is `floor` or more."""
+    same = f"scale={width}:{height}," if width and height else ""
+    return f"{same}select='gte(scene,{floor:.3f})',metadata=print:key=lavfi.scene_score:file=-"
 
 
 def parse_probe(text: str) -> Probe:
