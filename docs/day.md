@@ -239,6 +239,13 @@ notes) — with the others named, `Check-in XY 561 07:40–08:00 · ×2 sources 
 under `--json` its `sources` (its own first) and the ids of every line it stands for. The fold is
 at read time only: every line stays in the log as written, and the sources row counts each.
 
+A Notion row seen by `sync notion` and again by `sync notion --relations-backfill` is one event
+too. The backfill's `relations` line adds the row's relations to an edit the record holds already,
+so the Day shows the page's own line on the day, with `notion` its one source and the backfill's
+line among the ids it stands for; the Day page of `logbook serve` shows it once as well. A page with
+no other line on the day keeps the backfill's line as its row. `show` still lists both lines, as it
+lists every line of the day.
+
 ## A synthetic example
 
 The Oslo persona of the test suite, who does not exist, spends a June Saturday aboard the yacht

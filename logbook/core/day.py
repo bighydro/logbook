@@ -42,7 +42,9 @@ What a Day shows, in order:
    (RFC 0024) named. A calendar entry several calendars carry — starts less than a minute apart,
    the same duration or one side all-day, the same flight or the same title, case and accents
    aside (`events.fold`) — is one event, the richest line of the set, `×N sources (ics,
-   ios-calendar)` naming the others; the fold is at read time, the lines stay as they are.
+   ios-calendar)` naming the others; the fold is at read time, the lines stay as they are. A
+   Notion row seen live and again by `sync notion --relations-backfill` is one event too, its
+   page's line standing for the backfill's (`events.backfilled`), where `show` lists both.
    Who was there (`present.company`) is split into confirmed — declared in a
    note, speaking in a transcript, attending a timed calendar entry — and proposed — a face in a
    photo, an attendee of an all-day entry; never the owner.
@@ -245,6 +247,7 @@ def of_reading(
     lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
     placeable = _standing_transcripts(lines)  # a transcript heard again stands for the one it supersedes
     folded, stands_for = events.fold(placeable, flight_lines.Airlines.load())  # one row per calendar entry
+    folded, stands_for = events.backfilled(folded, stands_for)  # and per Notion row a backfill saw again
     owner = rd.owner
     segments = [s for s in rd.derived.folded if s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
