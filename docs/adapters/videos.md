@@ -139,7 +139,8 @@ folder first, `--limit N` at most:
   evidence to the stays reader, SPEC §3.2.3 rule 5, so this one sits at the moment the record learned of
   the file, as an instant, and promotes at most the stop the owner was at then. It is no call:
   `transcript synthesize --day` and the 06:00 close leave it out, and `transcript synthesize` named by
-  its id or `#seq` refuses it in one sentence, exit 2, so its words go to no model endpoint.)
+  its id or `#seq` refuses it in one sentence, exit 2, so its words go to no model endpoint; the MCP
+  server's `line` gives it with `text` null, whatever the ceiling.)
 - **one `draft/v1` per scene** (RFC 0036), unit `event`, its `subject` the scene as a media fragment,
   `<video line id>#t=<start>,<end>`, source `model:video-rules/1`, tier 2. Its sentences say what the
   scene shows and says that places or dates it, each citing the video line (the frames) or the

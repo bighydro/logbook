@@ -729,11 +729,14 @@ def _full_text(lb: Logbook, line: Line) -> str | None:
     """The whole text of a line, where it has one: a note's, a mail's body, a message's, and a
     transcript's turns from the attachment store as `promises` and the search index read them, one
     `Speaker: text` per turn. None for a line without one, a transcript whose text is not in the
-    store, and a line still sealed."""
+    store, a line still sealed, and a home video's soundtrack, which is no call (`NOT_CALLS`, RFC
+    0040): its words go to no model, an MCP client's included, whatever the ceiling."""
     if is_sealed(line):
         return None
     p: Mapping[str, Any] = line["payload"]
     kind = line["kind"]
+    if kind == "transcript" and line.get("source") in transcripts.NOT_CALLS:
+        return None
     if kind == "transcript":
         turns = transcripts.turns_of(lb, line)
         if turns is None:
