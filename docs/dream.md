@@ -44,7 +44,7 @@ needs a `dream` entry:
 
 - `max_tier` is the ceiling the day is read under. The model sees only lines at or under it: with 2,
   the stays, photos, calendar, notes and messages; with 1, no note and no message at all, since those
-  are tier 2; tier 3 (health, money) only when you write 3.
+  are tier 2; tier 3 (health, and any note or message at tier 3) only when you write 3.
 - `until` is the last day the entry holds. From the next day it counts as `max_tier` 0 and the dream
   refuses, as every expired entry does; `logbook doctor` names it.
 - `model`, optional, is the one model the day may go to. When the entry names one, it is the model used,
@@ -383,5 +383,4 @@ $ logbook dream --catch-up
 ```
 
 Then `logbook day 2026-06-14` shows the draft above the timeline; read it, write your own note, and
-sign the day, with `--accept N` for each proposed event that happened. The schedule change that runs this at 06:00 is a separate change; until then, run it by
-hand or from your own schedule.
+sign the day, with `--accept N` for each proposed event that happened. With the schedule installed ([the schedule](schedule.md)), the 06:00 close runs it for you.
