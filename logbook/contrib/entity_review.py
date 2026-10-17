@@ -18,10 +18,15 @@ observation carries, never the id a source gives one observation:
   ref `github:<login>` a resolution names), `community` for a code-host org or a group, `brand` for
   a merchant — for ranking only, never written to a line. `org_sightings` is one line's orgs, the
   walk the orgs reader (`logbook.contrib.orgs`) shares to find what touches a named org.
-- **idea**: a `sync notion` page's root (the topmost page above it the record has a line for), as
-  `page` `notion:<id>`, else a code-host repository (`host/owner/name`) of a url or a task's link,
-  else a task's or a transcript's title, its words folded and sorted, when it recurs on
-  `title_min_lines` (2) lines of two sources or more. A transcript's summary is never read.
+- **idea**: a `sync notion` page's root (the topmost page above it the record has a line for; a database
+  row is its own root, RFC 0037 §4.3 as amended on 16 October 2026), as `page` `notion:<id>`, else a
+  code-host repository (`host/owner/name`) of a url, of a task's own `url` or links, or of an act `sync
+  github` wrote, else a task's or a transcript's title, its words folded and sorted, when it recurs on
+  `title_min_lines` (2) lines of two sources or more. A transcript's summary is never read. A relations
+  line (`sync notion --relations-backfill`) links rows and touches none; a bot's line (its actor a bot)
+  or an agent's (`extra.machine`) is never a touch and shows nobody, and an agent on a call is no
+  participant (`machine_line`). `idea_sightings` is one line's ideas, the walk the ideas reader
+  (`logbook.contrib.ideas`) shares to find what touches a named idea.
 - **asset**: a `location/v1` subject `assets.json` does not name (its MMSI or icao24 from the
   instrument's `extra` when the line has one), else an aircraft registration on
   `registration_min_flights` (3) standing flights or more that the registry does not hold.
@@ -57,7 +62,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -69,9 +74,11 @@ from . import entities
 from .entities import ASSET, IDEA, ORG, Ref
 
 KINDS = (ORG, IDEA, ASSET)
-TABLE_VERSION = "2"  # 2: transcripts, `sync github` acts, service hosts, the family's given name
+TABLE_VERSION = "3"  # 2: transcripts, `sync github` acts, service hosts, the given name; 3: ideas (#292)
 SAMPLES = 3  # line ids kept per observed thing, as evidence
 NOTION = "notion"  # the source `sync notion` writes
+RELATIONS = "relations"  # the action of a `sync notion --relations-backfill` line: it links, never touches
+BOT = "bot"  # an actor `sync notion` types `bot` and `sync github` `Bot`: an integration, an app
 INSTRUMENTS = {"ais": "yacht", "adsb": "aircraft"}  # a subject's source → the kind it is
 DOMAIN, REPO, NAME, PEOPLE, TOGETHER = 60, 50, 20, 10, 2
 PAGE, WEEK = 60, 5
@@ -91,6 +98,7 @@ SERVICE_HOSTS = ("resource.calendar.google.com", "group.calendar.google.com", "u
 GITHUB, GITHUB_HOST = "github", "github.com"  # the source `sync github` writes, and the host it reads
 GITHUB_ACTS = ("commit", "pull", "issue", "review", "comment")  # what an act's `extra` links to
 ORG_KINDS = ("mail", "event", "transcript", "browse", "task", "message", "transaction")  # an org's lines
+IDEA_KINDS = ("event", "browse", "task", "transcript")  # an idea's lines
 BLANK = "____"
 EN_DASH = "\u2013"
 NOT_EQUAL = "\u2260"
@@ -564,105 +572,232 @@ def _code_repo(url: str, settings: entities.Settings) -> str | None:
     return None if path is None or len(path) < 3 else "/".join(path[:3]).removesuffix(".git")
 
 
-def _ideas(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
-    found: dict[Ref, Observed] = {}
-    pages: dict[str, tuple[str | None, str | None]] = {}  # page id → (parent page id, title)
-    notion = [line for line in ctx.standing(idx, "event") if line.get("source") == NOTION]
-    for line in notion:
-        extra = (line.get("payload") or {}).get("extra")
-        page = extra.get("page") if isinstance(extra, dict) else None
-        if not isinstance(page, dict) or not _text(page.get("id")):
-            continue
-        parent = extra.get("parent") if isinstance(extra, dict) else None
-        above = (
-            str(parent["id"])
-            if isinstance(parent, dict) and parent.get("type") == "page" and _text(parent.get("id"))
-            else None
-        )
-        title = (line.get("payload") or {}).get("title")
-        pages[str(page["id"])] = (
-            above,
-            str(title) if _text(title) else pages.get(str(page["id"]), (None, None))[1],
-        )
+@dataclass
+class NotionPage:
+    """One Notion page as the record's lines tell it, the latest line deciding (by its instant, then
+    its seq): the page above it when its parent is a page, the database it is a row of (`extra.database`,
+    which `sync notion` writes on every line of a row, else a parent that is a database or a later
+    API's data source), its title, the titles above it, its private link and a row's properties as its
+    latest line holding them says them. Every standing `sync notion` line shapes it, whoever acted."""
 
-    def root(page_id: str) -> str:
+    id: str
+    above: str | None = None
+    database: str | None = None
+    title: str | None = None
+    path: tuple[str, ...] = ()
+    url: str | None = None
+    properties: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class NotionTree:
+    """The Notion pages the record holds lines of, by id: what an idea's root is, and whether a root
+    may be proposed as one (`rows`, the select and the option that make a row an idea)."""
+
+    pages: Mapping[str, NotionPage]
+    rows: tuple[str, str] = entities.IDEA_ROWS
+
+    def root(self, page_id: str) -> str:
+        """The idea's page of `page_id`: the topmost page above it the record holds, walking up while
+        the parent is a page. A database row is its own root (RFC 0037 §4.3, amended 2026-10-16): the
+        walk stops at a row, so a row is never folded into the page above its database, and a page under
+        a row is the row's. A page the record holds no line of, or a cycle, stops the walk too."""
         seen = {page_id}
+        page = self.pages.get(page_id)
         while (
-            (above := pages.get(page_id, (None, None))[0]) is not None
-            and above in pages
-            and above not in seen
+            page is not None and page.database is None and page.above is not None and page.above in self.pages
         ):
-            seen.add(above)
-            page_id = above
+            if page.above in seen:
+                break
+            seen.add(page.above)
+            page_id = page.above
+            page = self.pages[page_id]
         return page_id
 
-    for line in notion:
-        extra = (line.get("payload") or {}).get("extra") or {}
-        page_id = str((extra.get("page") or {}).get("id") or "")
-        day = ctx.day(line)
-        if not page_id or day is None:
+    def candidate(self, root: str) -> bool:
+        """Whether the root `root` may be proposed as an idea: a page that is no row, as always; a
+        database row only when its select `rows` names (`Type`) says the option (`Idea`), case
+        aside, as the latest line holding the row's properties says it (the owner's decision of 14
+        October 2026). A row whose lines say no such value is no idea's."""
+        page = self.pages.get(root)
+        if page is None or page.database is None:
+            return True
+        name, option = (entities.fold(word) for word in self.rows)
+        value = next((v for k, v in (page.properties or {}).items() if entities.fold(str(k)) == name), None)
+        return isinstance(value, str) and entities.fold(value) == option
+
+    def title(self, page_id: str) -> str | None:
+        page = self.pages.get(page_id)
+        return None if page is None else page.title
+
+
+def notion_tree(idx: Index, ctx: Context) -> NotionTree:
+    """Every page the standing `sync notion` lines name, as its latest line says it."""
+    lines = [line for line in ctx.standing(idx, "event") if line.get("source") == NOTION]
+    lines.sort(key=lambda line: (_instant(line), int(line.get("seq") or 0)))
+    pages: dict[str, NotionPage] = {}
+    for line in lines:
+        payload = line.get("payload") or {}
+        extra = payload.get("extra")
+        page = extra.get("page") if isinstance(extra, dict) else None
+        if not isinstance(extra, dict) or not isinstance(page, dict) or not _text(page.get("id")):
             continue
-        top = root(page_id)
-        key = ("page", f"notion:{top}")
-        o = found.setdefault(key, Observed(IDEA, key))
-        o.add(
-            NOTION, "event", day, str(line["id"]), int(line.get("tier", 0)), pages.get(top, (None, None))[1]
+        found = pages.setdefault(str(page["id"]), NotionPage(str(page["id"])))
+        parent = extra.get("parent")
+        parent = parent if isinstance(parent, dict) and _text(parent.get("id")) else {}
+        database = extra.get("database")
+        found.database = (
+            str(database["id"])
+            if isinstance(database, dict) and _text(database.get("id"))
+            else str(parent["id"])
+            if parent.get("type") in ("database", "data_source")
+            else None
         )
-        o.saw(("page", f"notion:{page_id}"))
-        actor = extra.get("actor")
+        found.above = str(parent["id"]) if parent.get("type") == "page" else None
+        if _text(payload.get("title")):
+            found.title = str(payload["title"])
+        path = extra.get("path")
+        if isinstance(path, list):
+            found.path = tuple(str(p) for p in path if isinstance(p, str))
+        if _text(page.get("url")):
+            found.url = str(page["url"])
+        if isinstance(extra.get("properties"), dict):
+            found.properties = extra["properties"]
+    return NotionTree(pages, ctx.settings.idea_rows)
+
+
+def _instant(line: Line) -> datetime:
+    return stays.instant(line.get("at")) or datetime.min.replace(tzinfo=UTC)
+
+
+@dataclass(frozen=True)
+class IdeaSighting:
+    """One idea on one line: its strongest identifier (`key`: a Notion root page, a repository, a
+    title's words), the identifier as the line wrote it (`seen`: the page itself, the repository,
+    the title), and the name the line gives it."""
+
+    key: Ref
+    seen: Ref
+    label: str | None
+    candidate: bool = True  # whether the queue may propose it: a Notion row that is no idea's may not
+
+
+def machine_line(line: Line) -> bool:
+    """Whether a line is a bot's or an agent's: its actor is a bot (`extra.actor.type`, `bot` as `sync
+    notion` writes it, `Bot` as `sync github` does) or its words an agent's (`extra.machine`,
+    `logbook.core.machine`). Such a line is never a touch of an idea, never shows a person on one and
+    adds no words to one (the owner's decision of 14 October 2026). An act the owner made through a
+    coding agent under their own account (`sync github`'s `extra.agent`) is the owner's, and is one."""
+    payload = line.get("payload") or {}
+    extra = payload.get("extra")
+    actor = extra.get("actor") if isinstance(extra, dict) else None
+    kind = actor.get("type") if isinstance(actor, dict) else None
+    return (isinstance(kind, str) and kind.strip().casefold() == BOT) or machine.is_machine(payload)
+
+
+def idea_sightings(kind: str, line: Line, ctx: Context, tree: NotionTree) -> list[IdeaSighting]:
+    """The ideas one standing line names, source-native, one per page, repository link or title as
+    the line holds them: a `sync notion` line's page under its root, the repository of an act `sync
+    github` wrote (its own link, else its `extra.repo` on github.com), the code-host repositories of
+    a url or of a task's own `url` and links, a task's or a transcript's title (when no repository
+    names its task; the threshold is the queue's). A relations line names none, nor does a bot's or an
+    agent's line (`machine_line`). Nothing is looked up; the walk `review idea` observes and the ideas
+    reader (`logbook.contrib.ideas`) finds touches by."""
+    payload = line.get("payload") or {}
+    found: list[IdeaSighting] = []
+    if machine_line(line):
+        return found  # a bot's or an agent's line touches no idea
+    if kind == "event" and github_act(line):
+        for url in _github_urls(payload, ctx.settings):
+            repo = _code_repo(url, ctx.settings)
+            if repo is not None:
+                found.append(IdeaSighting(("repo", repo), ("repo", repo), repo.split("/", 1)[1]))
+        return found
+    if kind == "event":
+        extra = payload.get("extra")
+        extra = extra if isinstance(extra, dict) else {}
+        page = extra.get("page")
+        if line.get("source") != NOTION or not isinstance(page, dict) or not _text(page.get("id")):
+            return []
+        if extra.get("action") == RELATIONS:
+            return []  # a relations line says which rows a row links to: it touches nothing
+        top = tree.root(str(page["id"]))
+        return [
+            IdeaSighting(
+                ("page", f"notion:{top}"),
+                ("page", f"notion:{page['id']}"),
+                tree.title(top),
+                tree.candidate(top),
+            )
+        ]
+    if kind in ("browse", "task"):
+        for url in _idea_urls(kind, payload):
+            repo = _code_repo(url, ctx.settings)
+            if repo is not None:
+                found.append(IdeaSighting(("repo", repo), ("repo", repo), repo.split("/", 1)[1]))
+    title = payload.get("title")
+    if kind in ("task", "transcript") and not found and _text(title):
+        folded = entities.title_key(str(title))
+        if folded:
+            found.append(IdeaSighting(("title", folded), ("title", folded), " ".join(str(title).split())))
+    return found
+
+
+def _idea_urls(kind: str, payload: Mapping[str, Any]) -> list[str]:
+    """A url's, or a task's links and its own `url` (task/v1: "a link the task carries")."""
+    found = _urls(kind, payload)
+    url = payload.get("url")
+    if kind == "task" and _text(url) and str(url) not in found:
+        found.insert(0, str(url))
+    return found
+
+
+def idea_people(kind: str, line: Line, ctx: Context) -> set[str]:
+    """The canonical people one line shows on an idea, the owner aside: the person a `sync notion`
+    line's actor names, a transcript's participants by their addresses. A bot's or an agent's line
+    shows nobody, and an agent among a call's participants is nobody (`logbook.core.machine`)."""
+    payload = line.get("payload") or {}
+    found: set[str] = set()
+    if machine_line(line):
+        return found
+    if kind == "event" and line.get("source") == NOTION:
+        extra = payload.get("extra")
+        actor = extra.get("actor") if isinstance(extra, dict) else None
         if isinstance(actor, dict) and _text(actor.get("name")):
             person = ctx.labels.get(entities.fold(str(actor["name"])))
             if person is not None:
-                o.people.add(person)
+                found.add(person)
+    if kind == "transcript":
+        for participant in payload.get("participants") or []:
+            if machine.is_machine_participant(participant):
+                continue
+            if isinstance(participant, dict) and _text(participant.get("email")):
+                person = ctx.person(("email", str(participant["email"]).strip().casefold()))
+                if person is not None:
+                    found.add(person)
+    return found
+
+
+def _ideas(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
+    tree = notion_tree(idx, ctx)
+    found: dict[Ref, Observed] = {}
     titles: dict[Ref, Observed] = {}
-    for kind in ("browse", "task", "transcript"):
+    for kind in IDEA_KINDS:
         for line in ctx.standing(idx, kind):
-            payload = line.get("payload") or {}
             day = ctx.day(line)
-            if day is None:
+            sightings = idea_sightings(kind, line, ctx, tree) if day is not None else []
+            if day is None or not sightings:
                 continue
-            repos = (
-                [r for url in _urls(kind, payload) if (r := _code_repo(url, ctx.settings)) is not None]
-                if kind != "transcript"
-                else []
-            )
-            for repo in repos:
-                key = ("repo", repo)
-                o = found.setdefault(key, Observed(IDEA, key))
-                o.add(
-                    str(line.get("source") or ""),
-                    kind,
-                    day,
-                    str(line["id"]),
-                    int(line.get("tier", 0)),
-                    repo.split("/", 1)[1],
-                )
-                o.saw(key)
-            title = payload.get("title")
-            if (
-                repos
-                or kind == "browse"
-                or not _text(title)
-                or not (folded := entities.title_key(str(title)))
-            ):
-                continue
-            key = ("title", folded)
-            o = titles.setdefault(key, Observed(IDEA, key))
-            o.add(
-                str(line.get("source") or ""),
-                kind,
-                day,
-                str(line["id"]),
-                int(line.get("tier", 0)),
-                " ".join(str(title).split()),
-            )
-            o.saw(key)
-            if kind == "transcript":
-                for participant in payload.get("participants") or []:
-                    if isinstance(participant, dict) and _text(participant.get("email")):
-                        person = ctx.person(("email", str(participant["email"]).strip().casefold()))
-                        if person is not None:
-                            o.people.add(person)
+            people = idea_people(kind, line, ctx)
+            source = str(line.get("source") or "")
+            for s in sightings:
+                if not s.candidate:
+                    continue  # a row of a Notion database whose `Type` is not `Idea`, or a page under one
+                into = titles if s.key[0] == "title" else found
+                o = into.setdefault(s.key, Observed(IDEA, s.key))
+                o.add(source, kind, day, str(line["id"]), int(line.get("tier", 0)), s.label)
+                o.saw(s.seen)
+                o.people.update(people)
     found.update(
         {k: o for k, o in titles.items() if o.lines >= ctx.settings.title_min_lines and len(o.sources) >= 2}
     )

@@ -30,7 +30,7 @@ source gives one observation; keyed the other way, one company explodes into a r
 |---|---|---|
 | person | an email address, a phone number, the name's words folded ([people](people.md#review)) | the people the resolutions name |
 | org | the **registered domain** of a mail, calendar or transcript address (a public mail provider, your own domains and a service's own hosts, a calendar's rooms among them, name nobody's org); a code-host org of a url, a task's link or an act `sync github` wrote (your own account is yours, never an org); a group chat's name; a ledger merchant seen on 3 lines or more | the orgs: `entity/v1` lines, and `resolution/v1` lines of type `company` read as orgs |
-| idea | a Notion page's root (a page under it is the root's idea); a code-host repository; a task's or a transcript's title on 2 lines of 2 sources or more | the ideas the `entity/v1` lines name |
+| idea | a Notion page's root (a page under it is the root's idea; a database row is its own root, never the page above its database, and is proposed only when its `Type` says `Idea`, `idea_rows` in `policy/entities.json`); a code-host repository of a url, a task's own url or links, or an act `sync github` wrote; a task's or a transcript's title on 2 lines of 2 sources or more; never a line a bot made or an agent wrote, nor a `relations` line | the ideas the `entity/v1` lines name |
 | asset | a track's subject the registry does not name (its MMSI or icao24 when the instrument said); an aircraft registration on 3 flights or more | the assets of `assets.json` |
 | place | a cluster of your stays within 75 m ([places](places.md#review)) | the names the sources gave it |
 

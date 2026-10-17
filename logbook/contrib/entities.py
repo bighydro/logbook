@@ -133,6 +133,9 @@ PUBLIC_SUFFIXES = frozenset(
 )
 MUTE_DAYS = 365
 STALE_DAYS = {"hold": 3 * 365, "exploring": 2 * 365}
+# the select property of a Notion database row, and its option, that make the row an idea (the owner's
+# decision of 14 October 2026): a row of another type is never proposed as one
+IDEA_ROWS = ("Type", "Idea")
 
 Ref = tuple[str, str]
 
@@ -1084,6 +1087,7 @@ class Settings:
     registration_min_flights: int = 3
     mute_days: int = MUTE_DAYS
     stale_days: Mapping[str, int] = field(default_factory=lambda: dict(STALE_DAYS))
+    idea_rows: tuple[str, str] = IDEA_ROWS  # a Notion row is an idea's only when this select is this option
 
 
 def settings_path(root: Path) -> Path:
@@ -1117,6 +1121,13 @@ def read_settings(root: Path) -> Settings:
     ):
         raise EntityError(f"{path}: stale_days must map a status to a whole number of days")
     hosts = names("code_hosts") if "code_hosts" in data else list(CODE_HOSTS)
+    rows = data.get("idea_rows", {"property": IDEA_ROWS[0], "value": IDEA_ROWS[1]})
+    if not isinstance(rows, dict) or not all(
+        isinstance(rows.get(k), str) and rows[k].strip() for k in ("property", "value")
+    ):
+        raise EntityError(
+            f'{path}: idea_rows must be {{"property": "…", "value": "…"}}, a select and its option'
+        )
     return Settings(
         frozenset(PUBLIC_MAIL_PROVIDERS) | frozenset(names("public_mail_providers")),
         frozenset(names("public_suffixes")),
@@ -1126,4 +1137,5 @@ def read_settings(root: Path) -> Settings:
         number("registration_min_flights", 3),
         number("mute_days", MUTE_DAYS),
         {**STALE_DAYS, **{str(k): int(v) for k, v in stale_days.items()}},
+        (rows["property"].strip(), rows["value"].strip()),
     )

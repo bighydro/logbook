@@ -259,6 +259,51 @@ portfolio; an org's page says only that it shows none, never how many it has, wh
 orgs carry a decision. A person who is with an org only on a tier-3 line (a split payment) is no
 edge of the graph there; an edge is as high a tier as the lines it rests on.
 
+## The ideas read back
+
+`logbook show ideas` is every idea you named (RFC 0037 §11), under its current status in the order
+**build**, **exploring**, **spark**, **built**, **killed**, then **no status**; within a heading the
+most recent touch first. A **touch** is a line that resolves to the idea through one of its refs, as
+`review idea` finds them: a Notion page under its root (a database row is its own root), an act on its
+repository or a link into it, a task or a call of its title. A row says the status and since when, the
+reason (the latest you gave, with its status and day when a later status replaced it: a killed idea
+that sparked again), the last touch, the words written this year (`--year`; the Notion deltas), the
+repositories, how many people it was discussed with and never their names, the days since its spark
+(its first touch), its latest titles, and `stale` when the status is one `stale_days` names (an
+`exploring` over two years) and neither it nor a touch falls within that many days of today.
+
+```
+$ logbook show ideas
+ideas · 3 · 2026-10-16 · tier 2
+exploring
+  the fjord kiosk    exploring since 2026-09-14 (owner) · last touch 2026-09-20 created notion "The fjord kiosk / Pricing" (300 words) · +660 words in 2026 · github.com/nordmann-verft/fjord-kiosk · 1 person · 956 days since spark · titles "Pricing", "Fjord kiosk"
+                     reason: pricing page written; talk to the ferry company first
+  the tide clock     exploring since 2023-05-10 (owner) · stale: nothing since 2023-05-10 · last touch 2023-05-08 task "Tide clock enclosure" · github.com/ines-example/tide-clock · 1,259 days since spark · titles "Tide clock enclosure"
+spark
+  the harbour sauna  spark since 2026-10-10 (owner) · last touch 2026-10-03 transcript "Harbour sauna" · 1 person · 47 days since spark · titles "Harbour sauna"
+                     reason (killed 2026-10-05): the harbour board said no to a sauna on the pier
+```
+
+`logbook show idea NAME` is one idea's page (RFC 0037 §7), the idea named as `status` names one (a
+ref, `notion:<id>` or a repository, its id, its name, a word of it): its refs, its status and its
+reason, first said, every touch newest first, the people it was discussed with by name (an observed
+person not yet placed is counted, never named), its documents as references (its Notion pages with
+the titles above them and their word counts, its repositories with their README's versions), its
+title thread (the titles of its pages, tasks and calls), the words written by month and every status
+line, the one in force marked and a retracted one said so. Both take `--json`; nothing is written.
+
+**What is never a touch.** A line a bot made (`extra.actor.type` `bot` from `sync notion`, `Bot` from
+`sync github`) or an agent wrote (`extra.machine`), and a `relations` line (`sync notion
+--relations-backfill`), touch no idea, show no person and add no words; an agent on a call is no
+participant (the owner's decision of 14 October 2026). An act you made through a coding agent under
+your own account (`sync github`'s `extra.agent`) is yours, and is a touch like any other. A page's body, a commit's message and a call's
+words are never shown: the record holds a page's digest and word count, and the page says only what a
+line already holds (a title, the titles above it, a count, a commit's first line).
+
+**The type keeps a row out of the queue, never out of an idea.** A Notion row whose `Type` is not
+`Idea` is never proposed by `review idea`; when you bound it to an idea yourself (an `entity/v1` line
+with its `page`), its lines are that idea's touches like any other.
+
 ## The dedupe keys
 
 A key is what a writer looks up before minting, so a second sitting, a second machine or a re-run
@@ -284,8 +329,12 @@ One setting, read each run, never a line. Absent is the defaults.
 ```text
 {"public_mail_providers": ["…"], "public_suffixes": ["…"], "code_hosts": ["github.com", "gitlab.com", "codeberg.org"],
  "merchant_min_lines": 3, "title_min_lines": 2, "registration_min_flights": 3,
- "mute_days": 365, "stale_days": {"hold": 1095, "exploring": 730}}
+ "mute_days": 365, "stale_days": {"hold": 1095, "exploring": 730},
+ "idea_rows": {"property": "Type", "value": "Idea"}}
 ```
 
 The provider list extends the default the code carries (RFC 0037 §4.6); the owner's own domains are
-never an org. The thresholds are hypotheses, as `policy/stays.json`'s constants are.
+never an org. The thresholds are hypotheses, as `policy/stays.json`'s constants are. `idea_rows` is
+the select of a Notion database row and the option that make the row an idea for `review idea`
+(case aside; the owner's decision of 14 October 2026): a row of another type, and a page under it,
+is never proposed, and a page that is no row is proposed as before.

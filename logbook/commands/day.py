@@ -57,6 +57,7 @@ if TYPE_CHECKING:
 
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 ORGS = ("org", "orgs")  # RFC 0037: one org's page, and the orgs (the Manifest's text)
+IDEAS = ("idea", "ideas")  # RFC 0037: one idea's page, and the ideas (the Ideas shelf's text)
 
 
 def show_arguments(sub: Subparsers) -> None:
@@ -64,24 +65,26 @@ def show_arguments(sub: Subparsers) -> None:
     until 0.6 (`show year`, `show trip`, `show trips`, `show days`, `show keepers`, `show stats`)."""
     s = sub.add_parser(
         "show",
-        help="one day's lines, a page; year, trip(s), days, keepers, stats, orgs",
-        description="one day's lines (default today), a page (person, asset, place, org), or a reader: year,"
-        " trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most recent"
-        " touch first, stale ones said; the passed with their reasons; the people with more than one org)",
+        help="one day, a page; year, trip(s), days, keepers, stats, orgs, ideas",
+        description="one day's lines (default today), a page (person, asset, place, org, idea), or a reader:"
+        " year, trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most"
+        " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
+        " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
-        help="YYYY-MM-DD or today; person|asset|place|org NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats; orgs",
+        help="YYYY-MM-DD or today; person|asset|place|org|idea NAME; year YYYY; trip ID-OR-DAY; trips; days;"
+        " keepers; stats; orgs; ideas",
     )
     s.add_argument(
         "name",
         nargs="?",
         metavar="NAME",
         help="with person|asset|place: the name, entity id or asset id; with org: its name, a word of it,"
-        " a domain or its id; with year: the calendar year; with trip: a trip id as `show trips` prints it"
+        " a domain or its id; with idea: its name, a word of it, a ref (notion:ID, a repository) or its"
+        " id; with year: the calendar year; with trip: a trip id as `show trips` prints it"
         " (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
     )
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
@@ -94,7 +97,7 @@ def show_arguments(sub: Subparsers) -> None:
         "--year",
         metavar="YYYY",
         help="trips: one calendar year (default: the whole record); orgs --money: the ledger's year (default"
-        " this one)",
+        " this one); ideas: the year of the words written (default this one)",
     )
     s.add_argument(
         "--since",
@@ -234,6 +237,37 @@ def _show_orgs(a: argparse.Namespace) -> None:
         print(text)
 
 
+def _show_ideas(a: argparse.Namespace) -> None:
+    """`show ideas [--year YYYY] [--json]`: the ideas the owner named by stage, the most recent touch
+    first, each with its reason; `show idea NAME [--json]`: one idea's page (`logbook.contrib.ideas`).
+    Every tier is read, as the owner's own terminal reads it. Nothing is written."""
+    from ..contrib import entities, ideas
+
+    lb = Logbook.find()
+    try:
+        if a.day == "ideas":
+            if a.name is not None:
+                raise ideas.IdeaError("takes no name; one idea is `show idea NAME`")
+            shelf = ideas.shelf(lb, year=a.year)
+            if a.json:
+                print(json.dumps(shelf.to_json(), indent=2, ensure_ascii=False))
+                return
+            for text in ideas.shelf_rows(shelf):
+                print(text)
+            return
+        if a.name is None:
+            raise ideas.IdeaError("say which idea: `show idea NAME`, a word of its name, a ref or its id")
+        page = ideas.page(lb, ideas.find(lb, a.name).id)
+    except (ideas.IdeaError, entities.EntityError, stays.SettingsError) as e:
+        print(f"show {a.day}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(page.to_json(), indent=2, ensure_ascii=False))
+        return
+    for text in ideas.page_rows(page):
+        print(text)
+
+
 def cmd_show(a: argparse.Namespace) -> None:
     """One local day (the owner's timezone), located through the index, read from the files,
     in time order (then chain order for the same instant). Senders, organizers and attendees
@@ -245,13 +279,17 @@ def cmd_show(a: argparse.Namespace) -> None:
     if a.day in ORGS:
         _show_orgs(a)
         return
+    if a.day in IDEAS:
+        _show_ideas(a)
+        return
     lb = Logbook.find()
     if a.day in pages.PAGES:
         _show_page(lb, a)
         return
     if a.name is not None:
         print(
-            f"show: {a.day!r} takes no name; a page is `show person|asset|place|org <name>`", file=sys.stderr
+            f"show: {a.day!r} takes no name; a page is `show person|asset|place|org|idea <name>`",
+            file=sys.stderr,
         )
         sys.exit(2)
     days = day_start.of(lb.meta)  # RFC 0036: a boundary this reader cannot parse is refused, here

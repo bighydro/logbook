@@ -18,12 +18,14 @@ a year by days together (`person_page.ranked`) and the review queue of `people r
 what they decided about them (`orgs.shelf_of`, RFC 0037 §11), or only those one portfolio holds, and
 the review queue of `review org`, `/org/ID` one org (`orgs.page_of`) and `/manifest/people` the
 people with more than one org, the money only when asked and the gate reads tier 3, and a portfolio
-only when the gate reads tier 3. Every derived row on them carries its evidence folded:
+only when the gate reads tier 3; `/ideas` the ideas the owner named by stage (`ideas.shelf_of`, RFC
+0037 §11) and the review queue of `review idea`, `/idea/ID` one idea (`ideas.page_of`). Every
+derived row on them carries its evidence folded:
 what it rests on, the day, the ids of the lines. Every page is built from the index and the
 readers, so a Day renders in the time `logbook day` takes whatever the record's length, and nothing
 is written by a GET: every page is answered from the record at its head.
 
-Six pages write, on a POST. `/places` carries the review queue of `setup places review`
+Eight pages write, on a POST. `/places` carries the review queue of `setup places review`
 (`places_review.read`, the same order, `PAGE_SIZE` clusters a page), and its forms post to
 `/places/review` (`Site.write`), which names a cluster or rejects it through the engine's own
 `accept` and `reject`, so `places.json`, the naming note and `state/places-review.json` are what the
@@ -32,7 +34,9 @@ CLI writes. A journey's page posts its name to `/journeys/name` (`journeys.name`
 `people_review.accept` and Not the same person through `people_review.reject` (`people review
 --accept`, `--reject`); the Manifest's queue posts to `/manifest/review` (`entity_review.accept` and
 `reject`, `review org --accept`, `--name`, `--reject`) and an org's page its status and its
-portfolio to `/manifest/status` (`entity_status.write`, `status org … --portfolio`). The Day
+portfolio to `/manifest/status` (`entity_status.write`, `status org … --portfolio`); the Ideas
+shelf's queue posts to `/ideas/review` and an idea's page its status to `/ideas/status`, through the
+same functions as `review idea` and `status idea`. The Day
 carries the owner's two acts on it, Reflect and Sign (`Site._reflect`, `Site._sign`): the reflection posts to
 `/day/YYYY-MM-DD/reflect` and is written through `day reflect`'s own `reflect.write` (the day's
 Wispr Flow draft offered prefilled, a recording heard through `day reflect --audio`'s path when the
@@ -145,6 +149,7 @@ from . import (
     entity_review,
     entity_status,
     gaps,
+    ideas,
     journeys,
     orgs,
     person_page,
@@ -167,25 +172,31 @@ TODAY = "/today"
 # the record's pages, not the clock's (and every Day, journey, person and org)
 RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
+    | {"/ideas"}
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
 ORG_PATH = re.compile(r"^/org/([^/]+)$")  # a named org, by entity id (RFC 0037 §11)
+IDEA_PATH = re.compile(r"^/idea/([^/]+)$")  # a named idea, by entity id (RFC 0037 §11)
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
 PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review --accept`, `--reject`
 MANIFEST_REVIEW = "/manifest/review"  # the Manifest's queue: `review org --accept`, `--name`, `--reject`
 MANIFEST_STATUS = "/manifest/status"  # an org's page: `status org ORG DISPOSITION`
 MANIFEST_PATHS = (MANIFEST_REVIEW, MANIFEST_STATUS)  # under the writer lock, never waiting for it: a 409
-WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH, *MANIFEST_PATHS)  # the Library's forms
+IDEAS_REVIEW = "/ideas/review"  # the Ideas shelf's queue: `review idea --accept`, `--name`, `--reject`
+IDEAS_STATUS = "/ideas/status"  # an idea's page: `status idea IDEA DISPOSITION`
+IDEAS_PATHS = (IDEAS_REVIEW, IDEAS_STATUS)  # likewise: a 409 when another command writes
+# the Library's forms
+WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH, *MANIFEST_PATHS, *IDEAS_PATHS)
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
 STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
 WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
 LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
-# pages the record's today moves too (this year, anniversaries, drift, the stale orgs): in the tag
-CLOCK_PAGES = ("/people", "/manifest", "/org/")
+# pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/")
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
@@ -400,12 +411,13 @@ li.cluster svg{max-width:100%}
 """  # the pages of tables, Days, Trips, Places, Assets and Gaps, served or exported (`export site`), on a
 # phone: a table scrolls inside its own box (STYLE's phone rule says so too, for every page, the Day's
 # Sources among them) and a cluster's canvas keeps to the column
+IDEAS_STYLE = MANIFEST_STYLE + "p.refs{overflow-wrap:anywhere}\n"  # the Ideas pages: a Notion id is long
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
-    '<a href="/places">places</a><a href="/assets">assets</a><a href="/gaps">gaps</a>'
-    '<a href="/world">world</a>'
+    '<a href="/ideas">ideas</a><a href="/places">places</a><a href="/assets">assets</a>'
+    '<a href="/gaps">gaps</a><a href="/world">world</a>'
 )
 
 
@@ -586,6 +598,8 @@ class Site:
             return self._error(404, f"no page at {path}: {e}")
         except orgs.OrgError as e:  # an org the record does not name
             return self._error(404, f"no page at {path}: {e}")
+        except ideas.IdeaError as e:  # an idea the record does not name
+            return self._error(404, f"no page at {path}: {e}")
         except entities.EntityError as e:  # policy/entities.json not what it should be
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
@@ -602,9 +616,10 @@ class Site:
         """A POST: one of the forms of the server's own pages, each through the function the CLI
         runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
         Places page's (`_write_place`), the Journeys page's name (`_write_name`), the People page's
-        review (`_write_review`), the Manifest's queue and an org's status (`_write_manifest`). A
-        Day's: Reflect and Sign (`_reflect`, `_sign`), through `day reflect`'s own functions, and the
-        star and the "with…" field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s.
+        review (`_write_review`), the Manifest's queue and an org's status (`_write_manifest`), the
+        Ideas shelf's queue and an idea's status (`_write_ideas`). A Day's: Reflect and Sign
+        (`_reflect`, `_sign`), through `day reflect`'s own functions, and the star and the "with…"
+        field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s.
         Another command writing the record is the same answer on every one of them, caught here
         once (`_busy`: a 409, the form kept), and nothing is written. Refused (403, nothing
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
@@ -637,6 +652,10 @@ class Site:
                 " own pages or `logbook review org`",
                 MANIFEST_STATUS: "an org's status is set from this machine only, through the server's own"
                 " pages or `logbook status org`",
+                IDEAS_REVIEW: "an idea is named or told apart from this machine only, through the server's"
+                " own pages or `logbook review idea`",
+                IDEAS_STATUS: "an idea's status is set from this machine only, through the server's own"
+                " pages or `logbook status idea`",
             }.get(
                 path,
                 "a day is reflected on and signed from this machine only, through the server's own"
@@ -653,6 +672,8 @@ class Site:
                 return self._with(form)
             if path in MANIFEST_PATHS:
                 return self._write_manifest(path, form)
+            if path in IDEAS_PATHS:
+                return self._write_ideas(path, form)
             acts = {
                 REVIEW_PATH: self._write_place,
                 NAME_PATH: self._write_name,
@@ -1015,6 +1036,7 @@ class Site:
             and JOURNEY_PATH.match(path) is None
             and PERSON_PATH.match(path) is None
             and ORG_PATH.match(path) is None
+            and IDEA_PATH.match(path) is None
         ):
             return None
         root = self.lb.root
@@ -1082,6 +1104,10 @@ class Site:
             return self.page_manifest_people()
         if (m := ORG_PATH.match(path)) is not None:
             return self.page_org(unquote(m.group(1)), money=params.get("money") == "1")
+        if path == "/ideas":
+            return self.page_ideas(params.get("page") or "1")
+        if (m := IDEA_PATH.match(path)) is not None:
+            return self.page_idea(unquote(m.group(1)))
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
@@ -1143,11 +1169,13 @@ class Site:
         )
         a, b = _last_window(whole)
         year = whole[1][:4]
-        manifest = (  # the owner's own shelf: never in an exported site
+        manifest = (  # the owner's own shelves: never in an exported site
             ""
             if self.static
             else f"<li>{self.link('The Manifest', '/manifest')}: the orgs you named, under what you decided"
             " about them; the review of the ones the sources saw.</li>\n"
+            f"<li>{self.link('Ideas', '/ideas')}: the ideas you named, by stage, each with its timeline;"
+            " the review of the ones the sources saw.</li>\n"
         )
         parts.append(
             '<ul class="plain">\n'
@@ -2570,6 +2598,366 @@ class Site:
         parts.append(f"<p>{self.link('The Manifest', '/manifest')}</p>\n")
         return self.document("people across orgs", "".join(parts), style=MANIFEST_STYLE)
 
+    # -- /ideas, /idea/<id> (RFC 0037 §7, §11) -------------------------------------------------------------
+
+    def _idea_acts(self) -> bool:
+        """Whether the Ideas pages offer and take their acts: a page the owner can write from (not an
+        exported one) that reads tier 2, an idea's status's tier. `logbook serve` reads every tier."""
+        return not self.static and (self.tiers is None or entities.TIER in self.tiers)
+
+    def _idea_record(self) -> ideas.Record:
+        """The ideas as these pages read them: through the site's gate, today the owner's day."""
+        return ideas.read(self.lb, self.tiers, self._today_of())
+
+    def page_ideas(self, page: str = "1") -> str:
+        """The ideas the owner named, by stage (RFC 0037 §11: build, exploring, spark, built, killed, no
+        status), the most recent touch first, each a link to its page with its evidence folded and its
+        reason; the people it was discussed with counted, named only on its page. Then the review queue
+        of `review idea`, its order, `PAGE_SIZE` a page, with its acts. One column, no table."""
+        if not page.isdigit() or int(page) < 1:
+            raise ValueError(f"page must be a number from 1, not {page!r}")
+        with self._review_lock:  # the observed table is built once, as the other queues' are
+            shelf = ideas.shelf_of(self._idea_record())
+            report = entity_review.read(self.lb, entities.IDEA) if self._idea_acts() else None
+        head = f"{_plural(len(shelf.rows), 'idea')}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
+        parts = [f"<h1>Ideas <small>{escape(head)}</small></h1>\n"]
+        if not shelf.rows:
+            parts.append(
+                "<p>no ideas named yet: name them below, from what Notion, the repositories, the calls and"
+                " the tasks already hold, or with <code>logbook review idea</code></p>\n"
+            )
+        else:
+            parts.append(
+                '<p class="mute">The ideas you named, by stage, the most recent touch first. A touch is a'
+                " line that reaches the idea through one of its refs: a Notion page under its root, its"
+                " repository, a task or a call of its title; a bot's line never is. Who it was discussed with"
+                " is on its own page.</p>\n"
+            )
+        for name, rows in shelf.grouped():
+            parts.append(f'<h2>{escape(name)}</h2>\n<ol class="shelf">\n')
+            parts.extend(self._idea_row(r, shelf.year) for r in rows)
+            parts.append("</ol>\n")
+        if report is not None:
+            parts.append(self._idea_queue_html(report, int(page)))
+        return self.document("ideas", "".join(parts), style=IDEAS_STYLE)
+
+    def _idea_row(self, r: ideas.Row, year: str) -> str:
+        cls = ' class="stale"' if r.stale else ""
+        link = self.link(f"<b>{escape(r.idea.label)}</b>", _idea_path(r.idea.id))
+        head = [link, self._status_html(r.status, r.since)]
+        if r.stale:
+            head.append(f'<span class="stale-flag">stale: nothing since {escape(r.stale_since or "")}</span>')
+        facts = ["no touch" if r.last is None else f"last touch {r.last.day} {r.last.what}"]
+        if r.words:
+            facts.append(f"{r.words:+,} words in {year}")
+        facts.extend(r.repos)
+        if r.people:
+            facts.append(ideas.plural(r.people, "person", "people"))
+        if r.days is not None:
+            facts.append(f"{ideas.plural(r.days, 'day')} since spark")
+        if r.titles:
+            facts.append("titles " + ", ".join(f"“{t}”" for t in r.titles))
+        out = [
+            f'<li id="{escape(r.idea.id)}"{cls}><p class="head">{" ".join(head)}</p>\n',
+            f'<p class="facts">{escape(DOT.join(facts))}</p>\n',
+        ]
+        reason = r.reason
+        if reason is not None:
+            out.append(f'<p class="reason">{escape(self._reason_text(r.status, reason))}</p>\n')
+        items: list[Evidence] = []
+        if r.last is not None:
+            items.append((f"last touch, {r.last.kind} by its {r.last.via}", [r.last.line], r.last.day))
+        if r.status is not None:
+            items.append((f"{r.status.status}, the status line", [r.status.line], r.since))
+        if reason is not None:
+            items.append(("the reason's note", [reason.note], reason.day) if reason.note else ("", [], None))
+        items.append(
+            (f"{ideas.plural(r.touches, 'touch', 'touches')} in all, tier {r.tier} at most", [], None)
+        )
+        out.append(f"{self._evidence([i for i in items if i[0]])}</li>\n")
+        return "".join(out)
+
+    @staticmethod
+    def _reason_text(status: entities.Status | None, reason: ideas.Reason) -> str:
+        """The owner's words, and when a later status replaced the one they came with, which and when."""
+        if status is not None and reason.line == status.line:
+            return reason.reason
+        return f"{reason.status} {reason.day}: {reason.reason}"
+
+    def _idea_queue_html(self, report: entity_review.Report, page: int, into: str | None = None) -> str:
+        """The review queue of `review idea`, or the part of it that would place something with the idea
+        `into`: each proposal with its evidence folded and its acts, through the functions `review
+        idea --accept`, `--name` and `--reject` call."""
+        proposals = [p for p in report.proposals if into is None or (p.canonical and p.canonical.id == into)]
+        if into is not None and not proposals:
+            return ""
+        title = "Proposed for this idea" if into is not None else "Name these ideas"
+        counts = f"{_plural(len(proposals), 'proposal')}{DOT}{len(report.unplaced)} seen, not placed"
+        out = [f'<h2 id="review">{title} <small>{escape(counts)}{DOT}{report.placed} placed</small></h2>\n']
+        if not proposals:
+            out.append(
+                '<p class="mute">nothing to review: every idea the sources saw is placed or answered</p>\n'
+            )
+            return "".join(out)
+        if into is None:
+            out.append(
+                '<p class="mute">What Notion pages, repositories, calls and tasks keep coming back to that is'
+                " no idea of yours yet, proposed against the ideas you named or as a new one, as <code>review"
+                " idea</code> ranks them. Accept writes what <code>--accept</code> writes, Name what"
+                " <code>--name</code> writes, No what <code>--reject</code> writes, so the pair is never"
+                " proposed again. A Notion row is proposed only when its <code>Type</code> is"
+                " <code>Idea</code>.</p>\n"
+            )
+        size = PAGE_SIZE if into is None else max(1, len(proposals))  # an idea's own: one page, all
+        pages = max(1, math.ceil(len(proposals) / size))
+        n = min(page, pages)
+        first = (n - 1) * size
+        shown = proposals[first : first + size]
+        back = _idea_path(into) if into is not None else f"/ideas?page={n}"
+        out.append(f'<ol class="shelf queue" start="{first + 1}">\n')
+        out.extend(self._idea_proposal(p, back) for p in shown)
+        out.append("</ol>\n")
+        if pages > 1:
+            pager = [f"{first + 1}{EN_DASH}{first + len(shown)} of {len(proposals)}"]
+            if n > 1:
+                pager.insert(0, f'<a href="/ideas?page={n - 1}#review">← earlier</a>')
+            if n < pages:
+                pager.append(f'<a href="/ideas?page={n + 1}#review">more →</a>')
+            out.append(f'<p class="pager">{DOT.join(pager)}</p>\n')
+        return "".join(out)
+
+    def _idea_proposal(self, p: entity_review.Proposal, back: str) -> str:
+        o = p.observed
+        shown = {"page": f"notion “{o.name}”", "title": f"title “{o.key[1]}”"}.get(o.key[0], o.key[1])
+        into = (
+            self.link(escape(p.canonical.label), _idea_path(p.canonical.id)) if p.canonical else "a new idea"
+        )
+        score = "new" if p.score is None else f"score {p.score}"
+        seen = ", ".join(f"{kind} {count}" for kind, count in sorted(o.kinds.items()))
+        items: list[Evidence] = [(why, [], None) for why in p.evidence if why != "new"]
+        items.append((f"seen on {seen}, {o.first} {EN_DASH} {o.last}", [i for i, _t in o.samples], None))
+        items.extend((f"named {label} ({count})", [], None) for label, count in o.labels.most_common())
+        form = [
+            f'<form class="act" method="post" action="{IDEAS_REVIEW}">',
+            f'<input type="hidden" name="id" value="{escape(p.id)}">',
+            f'<input type="hidden" name="back" value="{escape(back)}">',
+        ]
+        if p.canonical is None:
+            form.append(
+                f'<input type="text" name="name" value="{escape(o.name)}" aria-label="the idea\'s name"'
+                ' autocomplete="off"><button name="act" value="name">Name</button>'
+                '<button name="act" value="reject">No, not an idea</button>'
+            )
+        else:
+            form.append(
+                f'<button name="act" value="accept">Accept: {escape(p.canonical.label)}</button>'
+                '<button name="act" value="reject">No, not this idea</button>'
+            )
+        form.append("</form>\n")
+        return (
+            f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b> {escape(shown)}'
+            f' {ARROW} {into} <span class="mute">{escape(score)}</span></p>\n'
+            f"{self._evidence(items)}{''.join(form)}</li>\n"
+        )
+
+    def page_idea(self, idea_id: str) -> str:
+        """One idea (RFC 0037 §7): its refs, its status and reason, the status form, first said, every
+        touch newest first (the newest `SHOWN`, the rest folded), the people it was discussed with by
+        name, its documents as references, its title thread, the words by month, every status line,
+        and the proposals that would place something with it."""
+        with self._review_lock:
+            page = ideas.page_of(self._idea_record(), idea_id)
+            report = entity_review.read(self.lb, entities.IDEA) if self._idea_acts() else None
+        idea = page.idea
+        parts = [f"<h1>{escape(idea.label)} <small>idea{DOT}tier {page.tier}</small></h1>\n"]
+        refs = ", ".join(v for _k, v in idea.refs)
+        if refs:
+            parts.append(f'<p class="mute refs">{escape(refs)}</p>\n')
+        if page.status is not None:
+            parts.append(f'<p class="head">{self._status_html(page.status, page.since)}</p>\n')
+        else:
+            parts.append('<p class="mute">no status yet</p>\n')
+        if page.reason is not None:
+            parts.append(f'<p class="reason">{escape(self._reason_text(page.status, page.reason))}</p>\n')
+        if page.stale:
+            parts.append(f'<p class="stale-flag">stale: nothing since {escape(page.stale_since or "")}</p>\n')
+        if self._idea_acts():
+            parts.append(self._idea_status_form(idea, page.status))
+        if page.first is not None:
+            since = "" if page.days is None else f"{DOT}{ideas.plural(page.days, 'day')} ago"
+            parts.append(
+                f'<p class="facts">first said {self.link(escape(page.first.day), f"/day/{page.first.day}")}'
+                f" {escape(page.first.what)}{escape(since)}</p>\n"
+            )
+        parts.append(f"<h2>Timeline <small>{_plural(len(page.timeline), 'line')}</small></h2>\n")
+        if not page.timeline:
+            parts.append('<p class="mute">no line reaches it yet</p>\n')
+        else:
+            rows = [self._idea_item(i) for i in page.timeline]
+            parts.append('<ol class="shelf">\n' + "".join(rows[:SHOWN]) + "</ol>\n")
+            if rows[SHOWN:]:
+                parts.append(
+                    f"<details><summary>{EN_DASH} and {len(rows) - SHOWN} earlier</summary>\n"
+                    f'<ol class="shelf">\n{"".join(rows[SHOWN:])}</ol>\n</details>\n'
+                )
+        parts.append("<h2>Discussed with</h2>\n")
+        if page.people:
+            parts.append('<ul class="plain">\n')
+            for person in page.people:
+                when = f"{_plural(person.days, 'day')}, the last {person.last}"
+                parts.append(
+                    f"<li>{self.link(escape(person.name), _person_path(person.person))}"
+                    f' <span class="mute">{escape(when)}</span></li>\n'
+                )
+            parts.append("</ul>\n")
+        else:
+            parts.append('<p class="mute">nobody the record names</p>\n')
+        if page.unplaced:
+            parts.append(f'<p class="mute">and {page.unplaced} not yet placed</p>\n')
+        parts.append("<h2>Documents <small>references, never copies</small></h2>\n")
+        if page.documents:
+            parts.append('<ol class="shelf">\n')
+            for d in page.documents:
+                parts.append(
+                    f'<li title="{escape(d.ref)}"><span class="mute">{escape(d.last)}</span>'
+                    f' <span class="badge">{escape(d.kind)}</span> {escape(ideas.document_text(d))}</li>\n'
+                )
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none</p>\n')
+        if page.titles:
+            parts.append('<h2>Title thread</h2>\n<ul class="plain">\n')
+            parts.extend(f"<li>{escape(t)}</li>\n" for t in page.titles)
+            parts.append("</ul>\n")
+        if page.words:
+            parts.append('<h2>Words <small>the Notion deltas, by month</small></h2>\n<ul class="plain">\n')
+            parts.extend(f"<li>{escape(month)} {n:+,}</li>\n" for month, n in page.words.items())
+            parts.append("</ul>\n")
+        parts.append("<h2>Status lines</h2>\n")
+        if page.history:
+            parts.append('<ol class="shelf">\n')
+            for s in page.history:
+                text = escape(
+                    f"{s.status} ({s.proposed_by or 'owner'})" + (f": {s.reason}" if s.reason else "")
+                )
+                if not s.standing:
+                    text = f'<s class="retracted">{text}</s> <span class="mute">retracted</span>'
+                elif s.current:
+                    text += ' <span class="mute">current</span>'
+                day = f'<span class="mute">{escape(s.day)}</span>'
+                parts.append(f'<li title="line {escape(s.line)}">{day} {text}</li>\n')
+            parts.append("</ol>\n")
+        else:
+            parts.append('<p class="mute">none yet</p>\n')
+        if report is not None:
+            parts.append(self._idea_queue_html(report, 1, into=idea.id))
+        parts.append(f"<p>{self.link('Ideas', '/ideas')}</p>\n")
+        return self.document(idea.label, "".join(parts), style=IDEAS_STYLE)
+
+    def _idea_item(self, item: ideas.Item) -> str:
+        day = self.link(escape(item.day), f"/day/{item.day}")
+        return (
+            f'<li title="line {escape(item.line)}{DOT}{escape(item.source)}{DOT}by its {escape(item.via)}">'
+            f'{day} <span class="badge">{escape(item.kind)}</span> {escape(item.what)}</li>\n'
+        )
+
+    def _idea_status_form(self, idea: entities.Entity, status: entities.Status | None) -> str:
+        """The status form: what `logbook status idea IDEA DISPOSITION [--reason …] [--at DAY]` writes."""
+        current = None if status is None else status.status
+        choices = "".join(
+            f'<option value="{s}"{" selected" if s == current else ""}>{s}</option>'
+            for s in entities.DISPOSITIONS[entities.IDEA]
+        )
+        return (
+            '<section class="acts">\n'
+            f'<form class="act" method="post" action="{IDEAS_STATUS}">'
+            f'<input type="hidden" name="idea" value="{escape(idea.id)}">'
+            f'<input type="hidden" name="back" value="{escape(_idea_path(idea.id))}">'
+            f'<select name="status" aria-label="status">{choices}</select>'
+            '<input type="text" name="reason" placeholder="why, in your words (killed needs one)"'
+            ' aria-label="reason" autocomplete="off">'
+            '<input type="date" name="at" aria-label="the day you decided">'
+            '<button name="act" value="status">Set status</button></form>\n'
+            '<p class="mute">One <code>status/v1</code> line, tier 2; with a reason, first a note in your'
+            " words, on the day and in search, as <code>status idea</code> writes them.</p>\n</section>\n"
+        )
+
+    def _write_ideas(self, path: str, form: Mapping[str, str]) -> Response:
+        """An Ideas form, under the record's writer lock and never waiting for it: another command
+        writing is the Library's one answer (`_busy`), and nothing is written (a head that moved under
+        the act is a 409 too). The review acts on the proposal `id` (`act` `accept`, `name` with the
+        field `name`, `reject`) through `entity_review.accept` and `reject`, what `review idea
+        --accept`, `--name` and `--reject` call; an idea's status (`status`,
+        `reason`, `at`) through `entity_status.write`, what `status idea IDEA DISPOSITION` calls. A
+        proposal no longer in the queue, or an idea the record does not name, is a 409; an answer the
+        record refuses a 400. Done, a 303 to `back` when it is one of the Ideas pages."""
+        if not self._idea_acts():
+            return self._error(
+                403,
+                "this page reads no tier 2, an idea's status's tier: it writes nothing; `logbook serve`"
+                " reads every tier",
+            )
+        with self._write_lock, self._review_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    if path == IDEAS_REVIEW:
+                        return self._idea_review(form)
+                    return self._idea_status(form)
+            except HeadMoved as e:
+                return self._error(409, str(e))
+            except (
+                entities.EntityError,
+                stays.SettingsError,
+                policy.PolicyError,
+            ) as e:  # a setting, not the form
+                return self._error(500, str(e))
+
+    def _idea_review(self, form: Mapping[str, str]) -> Response:
+        act, proposal_id = form.get("act", ""), form.get("id", "")
+        if act not in ("accept", "name", "reject") or not proposal_id:
+            return self._error(400, "the form names a proposal (id) and an act: accept, name or reject")
+        report = entity_review.read(self.lb, entities.IDEA)
+        found = [p for p in report.proposals if p.id == proposal_id]
+        if not found:
+            return self._error(
+                409,
+                f"{proposal_id} is not in the queue: answered already, or the page was older than the"
+                " record; /ideas is the queue as it stands",
+            )
+        p = found[0]
+        try:
+            if act == "accept":
+                entity_review.accept(self.lb, report, [(p, None)])
+            elif act == "name":
+                entity_review.accept(self.lb, report, [(p, form.get("name", ""))])
+            else:
+                entity_review.reject(self.lb, report, [p])
+        except (entity_review.ReviewError, entities.EntityError) as e:
+            return self._error(400, str(e))
+        return Response(303, b"", location=_ideas_back(form.get("back"), "/ideas"))
+
+    def _idea_status(self, form: Mapping[str, str]) -> Response:
+        idea_id = form.get("idea", "")
+        if idea_id not in ideas.named(self.lb):
+            return self._error(
+                409, "the form names no idea of this record: the page was older than the record"
+            )
+        reason = form.get("reason", "")
+        at = form.get("at", "").strip()
+        try:
+            entity_status.write(
+                self.lb,
+                entities.IDEA,
+                idea_id,
+                form.get("status", ""),
+                reason if reason.strip() else None,
+                at or None,
+            )
+        except (entity_status.StatusError, entities.EntityError) as e:
+            return self._error(400, str(e))
+        return Response(303, b"", location=_ideas_back(form.get("back"), _idea_path(idea_id)))
+
     def _write_manifest(self, path: str, form: Mapping[str, str]) -> Response:
         """A Manifest form, under the record's writer lock and never waiting for it: another command
         writing is the Library's one answer (`_busy`), and nothing is written (a head that moved
@@ -3306,12 +3694,13 @@ def _portfolio_asked(form: Mapping[str, str]) -> str | None:
     return typed
 
 
-def _back(back: str | None, default: str) -> str:
+def _back(back: str | None, default: str, prefixes: tuple[str, ...] = ("/manifest", "/org/")) -> str:
     """Where a Manifest form returns: `back` when it is one of the Manifest's own pages (a path from
-    `/manifest` or `/org/`, with nothing that could make it another host's), else `default`."""
+    `/manifest` or `/org/`, or another form's `prefixes`, with nothing that could make it another
+    host's), else `default`."""
     if (
         back
-        and back.startswith(("/manifest", "/org/"))
+        and back.startswith(prefixes)
         and not back.startswith("//")
         and "\\" not in back
         and ":" not in back.split("#")[0].split("?")[0]
@@ -3319,6 +3708,15 @@ def _back(back: str | None, default: str) -> str:
     ):
         return back
     return default
+
+
+def _idea_path(entity: str) -> str:
+    return f"/idea/{quote(entity, safe='')}"
+
+
+def _ideas_back(back: str | None, default: str) -> str:
+    """Where an Ideas form returns: `back` when it is one of the Ideas pages, else `default` (`_back`)."""
+    return _back(back, default, ("/ideas", "/idea/"))
 
 
 def _person_path(entity: str) -> str:
