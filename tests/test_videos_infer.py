@@ -735,6 +735,9 @@ def test_the_videos_transcript_is_no_call_for_the_synthesis(inferred: Any, lb: L
     (transcript,) = [line for line in lines if line["kind"] == "transcript"]
     assert transcript["source"] == "video-transcription"
     assert synthesis.between(lb, "2026-10-01", "2026-10-31") == []
+    for name in (str(transcript["id"]), f"#{transcript['seq']}"):  # named, as `transcript synthesize ID` does
+        with pytest.raises(synthesis.NotACall, match="soundtrack, not a call"):
+            synthesis.find(lb, name)
     bounds = day_start.of(lb.meta)
     found = synthesis.waiting(Logbook(lb.root).lines(), bounds.day_of, "2026-10-01", 3)
     assert found.total == 0

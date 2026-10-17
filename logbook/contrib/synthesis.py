@@ -104,9 +104,10 @@ def not_a_call(line: Line, name: str | None = None) -> None:
     """`NotACall` when the transcript's source is one of `NOT_CALLS`, in one sentence; by the envelope's
     `source`, which reads without a key, so a sealed soundtrack is refused as surely."""
     if line.get("source") in NOT_CALLS:
+        named = name or (f"#{line['seq']}" if line.get("seq") is not None else str(line.get("id")))
         raise NotACall(
-            f"{name or '#' + str(line.get('seq'))} is a home video's soundtrack, not a call, and a"
-            " soundtrack is never sent to a model; nothing was sent"
+            f"{named} is a home video's soundtrack, not a call, and a soundtrack is never sent to a"
+            " model; nothing was sent"
         )
 
 
