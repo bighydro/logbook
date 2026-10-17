@@ -697,6 +697,7 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 | `sync gcal` | `https://www.googleapis.com/auth/calendar.readonly` | the calendars you own, as `event/v1` lines |
 | `sync drive` | `https://www.googleapis.com/auth/drive.activity.readonly` | what happened to your files |
 | `sync drive` | `https://www.googleapis.com/auth/drive.metadata.readonly` | the folder path each Drive line names |
+| `sync drive --videos`, `videos fetch` | `https://www.googleapis.com/auth/drive.metadata.readonly`, and for the fetch `https://www.googleapis.com/auth/drive.readonly` | only for the family's videos: the files of one folder, then their bytes into a bounded cache ([Videos](adapters/videos.md)); not in the list below, add it only if you use them |
 | `sync gtasks` | `https://www.googleapis.com/auth/tasks.readonly` | your tasks, each as it stands (`task/v1`) |
 | `sync meet` | `https://www.googleapis.com/auth/meetings.space.readonly` | your Meet calls and their transcripts |
 | `sync gaudit` | `https://www.googleapis.com/auth/admin.reports.audit.readonly` | your own sign-ins, from the login audit log |
@@ -822,6 +823,11 @@ logbook sync drive                                         # then from where it 
 A first run by hand without `--since` reads all the activity Google keeps. The first scheduled run reads
 the last 14 days ([the schedule](schedule.md#a-sources-first-scheduled-run)), and a dry run that meets
 the project's daily quota stops on one line instead of waiting it out.
+
+The family's videos, the digitised tapes in one Drive folder, are a source of their own on the same key:
+`sync drive --videos` with `LOGBOOK_DRIVE_VIDEOS_FOLDER` set to the folder's id, then `videos fetch`,
+`videos infer` and `review video`, one more queue of the one review sitting, listed with the others
+by `review` alone ([Videos](adapters/videos.md), [Review](review.md)).
 
 **What a line holds.** One `event/v1` line per file, per hour and per kind of activity, so an afternoon
 of editing is a handful of lines with a count, `Edited Budget 2027 ×14`, not hundreds. It holds the

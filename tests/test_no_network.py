@@ -1,6 +1,7 @@
 """Reading never opens a connection. The rule (SECURITY.md, CONTRIBUTING.md): network calls happen only
-behind the commands that say so — `sync` for a live source, a `--fetch-model`, `dream` and `transcript
-synthesize` for the model endpoint, `serve` listening on 127.0.0.1 — never in a reader (every command
+behind the commands that say so — `sync` for a live source, `videos fetch` for a video's bytes, a
+`--fetch-model`, `dream` and `transcript synthesize` for the model endpoint, `serve` listening on
+127.0.0.1 — never in a reader (every command
 `logbook --help` names that prints from the record and writes nothing, `READERS` below), a page `serve`
 renders (`PAGES`) or `mcp --inspect`. This module makes that a test, not a promise: the `no_network`
 fixture of `tests/conftest.py` replaces every way out of the process with one that records the attempt
@@ -204,6 +205,10 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("backup", "list", BACKUPS),
     ("verify",),
     ("verify", "--keyless"),
+    ("videos", "infer"),  # RFC 0040: reads the cache on this machine, never the network
+    ("videos", "infer", "--dry-run"),
+    ("review", "video"),  # the queue reads the record and the registries alone
+    ("review", "video", "--json"),
 )
 
 

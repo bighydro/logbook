@@ -108,6 +108,8 @@ have it ready by Friday" is not a promise, and its "can you send me the tide tab
 request of you; your own reply to it is yours, as any message you sent. A line of an agent's turn
 inside your own turn (`assistant: …`, or under the agent's own name, `Claude: …`, pasted back) is
 the agent's and is dropped too, with the lines after it in that turn up to the next speaker's label.
+A home video's soundtrack ([Videos](adapters/videos.md)) is nobody's word to you now, and is counted
+under `video_soundtracks`.
 
 A mail body is read up to the first reply header (`On … wrote:`, `Am … schrieb …:`, `-----Original
 Message-----`, `From:`) or signature delimiter (`-- `), and lines that begin with `>` are left out,

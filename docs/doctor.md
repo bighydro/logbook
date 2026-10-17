@@ -78,6 +78,21 @@ send them all to the model one morning. A record without a `dream` entry, or who
 synthesis, has no such line. A retracted or superseded call is not counted, nor a call whose synthesis
 was made under another version of the entry: it has one.
 
+## The family's videos
+
+When the record names the family's videos (`sync drive --videos`) or the cache under `state/videos/`
+exists, one `videos` line says how many video files the record holds and their size, how many `videos
+fetch` has fetched and `videos infer` has inferred, how many wait in the cache, how many scenes the
+latest inference of each file found, how many it proposed a place or a date for and how many you
+confirmed with `review video`, and the cache against its cap:
+
+```
+pass  videos  25 video files in the record (78.4 GB); 6 fetched, 5 inferred, 1 waiting in the cache; 212 scenes, 61 proposed, 14 confirmed; cache 3.1 GB of 8.0 GB
+```
+
+A cache over its cap (a cap lowered with `--cache-gb` below what it holds) or a `state/videos.json` that
+is not the shape is a warn. Nothing is asked of Drive ([Videos](adapters/videos.md)).
+
 ## The Google key
 
 When either variable of the Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,

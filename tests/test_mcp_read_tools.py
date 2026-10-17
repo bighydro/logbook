@@ -338,6 +338,41 @@ def test_line_of_a_transcript_whose_text_is_not_in_the_store_says_so(
     assert data["text"] is None and data["payload"]["title"] == "Yard call"
 
 
+SOUNDTRACK_WORDS = "Wave to the camera, we are at the jetty in Vollen."
+
+
+def test_line_never_gives_a_home_videos_soundtrack_its_words(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A home video's soundtrack is no call (`NOT_CALLS`, RFC 0040): its words go to no model, an MCP
+    client's included, whatever the ceiling. `line` gives its envelope and payload, `text` null; the
+    payload holds the attachment's reference, never the words, so `search` cannot find them either."""
+    from logbook.labs import scenes
+
+    lb, _lines = _record(tmp_path, monkeypatch)
+    blob = f"WEBVTT\n\n00:00:01.000 --> 00:00:04.000\n{SOUNDTRACK_WORDS}\n".encode()
+    lb.attach(blob)
+    video = lb.append(
+        utc("2026-06-10", "18:00"),
+        scenes.TRANSCRIPT_SOURCE,
+        "transcript",
+        2,
+        {
+            "schema": "transcript/v1",
+            "provider": scenes.TRANSCRIPT_SOURCE,
+            "raw_id": "video:1HomeTape01SyntheticVideoId01@000000000000",
+            "title": "Home 01",
+            "participants": [],
+            "content": attachments.reference(blob, scenes.TRANSCRIPT_MEDIA),
+        },
+    )
+    _policy(lb, 3)
+    out = _call(lb, "line", {"id": video["id"]}, allow_tier_3=True)
+    data = out["data"]
+    assert data["id"] == video["id"] and data["kind"] == "transcript" and data["text"] is None
+    assert "jetty" not in json.dumps(out)
+    found = _call(lb, "search", {"text": "jetty"}, allow_tier_3=True)
+    assert found["data"]["hits"] == []
+
+
 def test_line_of_an_unknown_id_or_a_retracted_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     lb, lines = _record(tmp_path, monkeypatch)
     _policy(lb, 2)

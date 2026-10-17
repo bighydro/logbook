@@ -5,7 +5,10 @@ Notion page grows into a project, the receiver reports a hull the registry no lo
 review` is one sitting for all of it (RFC 0037): for each of the five kinds of thing the record names,
 what the sources observed and the record has not placed, proposed against what you named, with the
 evidence, numbered. Nothing is written unless you say so, and nothing is looked up: no register of
-companies, no code host, no Notion, no geocoder.
+companies, no code host, no Notion, no geocoder. A sixth queue is no kind of thing the record names but
+the same sitting: `review video`, the scenes of the family's videos that `videos infer` proposed a place
+or a date for ([the video queue](#the-video-queue)), listed after the five and before the speakers'
+below.
 
 ```bash
 logbook review                       # every kind with its queue, one block each; nothing written
@@ -13,6 +16,7 @@ logbook review org                   # the queue of one kind: person, org, idea,
 logbook review org --accept 1 --name 3 "Fjordkiosk AS" --reject 4
 logbook review idea --json           # the queue, the unplaced and the placed count, as JSON
 logbook review asset --all-above 50  # accept every proposal at or above the score
+logbook review video --accept 1 --date 2 "summer 1994" --ask 3   # a scene's own answers
 ```
 
 `review person` is [`people review`](people.md#review) and `review place` is
@@ -77,6 +81,7 @@ $ logbook review asset
 | idea | one `entity/v1` line binding the page, the repository or the title | one `entity-review/v1` line, type idea |
 | asset | a new one registered in `assets.json` as `setup assets add` writes it, under the id its lines carry; one `entity/v1` line binding its identifiers | one `entity-review/v1` line, type asset |
 | place | the `places.json` entry with its fitted radius, and the naming as one `note/v1` line | one `entity-review/v1` line, type place, the spot's centre and the name |
+| video | one `attribution/v1` line binding the scene to the place and/or the date its draft proposes, or your own (`--place`, `--date`), beside the video's line and never inside it | one `scene-review/v1` line (RFC 0040 §5), never an `entity-review/v1` line: no other queue reads it |
 
 `--name N "…"` accepts a new one under your own name; on a proposal that matched an entity you
 have, it is refused (accept the match; a rename is an `entity/v1` line that supersedes the standing
@@ -89,7 +94,28 @@ Every number is checked before the first line is written: a number the queue doe
 number both accepted and rejected, a score that is not a whole number, or an option of another kind
 exits 2 and writes nothing. On a terminal, an org's, an idea's, an asset's and a place's queue asks
 for each proposal: `y`, `n`, a name for a new one, Enter to skip, `q` to stop; each answer is written
-at once.
+at once. The video's asks the same for each scene: `y`, `n`, `a` to keep it to ask the family where and when
+it was filmed, Enter to skip, `q` to stop.
+
+## The video queue
+
+`review video` is the scenes of the family's videos ([Videos](adapters/videos.md), RFC 0040): each
+scene of a file's latest inference that you have not answered, the surest proposal first, with the
+sentences, frames and speech it rests on. `--accept` takes the place or the date its draft proposes and
+writes one `attribution/v1` line beside the video's, never inside it; `--reject` writes the scene's no,
+one `scene-review/v1` line of RFC 0040's and never an `entity-review/v1` line, so no other queue reads it; `--json` is
+the queue or what was written. Its own options go with it alone, and every other kind refuses them as
+it refuses a place's:
+
+| Option | |
+|---|---|
+| `--place N NAME`, `--date N WHEN` | accept scene N with your own place (a `places.json` name, an asset's id or name) or date (`1994`, `1994-07`, `1994-07-14`, `summer 1994`, `1994-06..1994-08`), or `none` |
+| `--ask N[,N]` | keep the scene to ask the family: one open `task/v1` line in the list `videos` |
+| `--asked`, `--answered` | the scenes kept to ask, or those you confirmed, to answer or correct them |
+| `--top N` | the first N scenes (a place's option too) |
+
+The lock is the sitting's, the same for every queue: the queue is read and you are asked with no lock
+held, and each answer's lines are appended under the record's writer lock.
 
 ## The table
 

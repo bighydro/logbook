@@ -68,6 +68,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Listening](adapters/listen.md): Spotify, Apple Music and Apple Podcasts as `listen/v1`.
 - [Screen Time](adapters/screentime.md): which app, from when to when.
 - [Voice memos](adapters/voice-memos.md): the recordings, and their transcripts from a local model.
+- [Videos](adapters/videos.md): the family's digitised tapes in a Drive folder; each scene's place and time proposed on this machine, confirmed by you.
 - [Weather](adapters/weather.md): the weather of the places your days were spent at, one line per day.
 - [Passages](adapters/passages.md): a ship's deck log transcribed to CSV as the vessel's own movement.
 

@@ -22,7 +22,9 @@ config's repr shows neither the path, the user nor the account, and no error ech
 
 Each call asks for one scope, read-only, and nothing else (`SCOPES`): `gmail.readonly` for `sync gmail`,
 `calendar.readonly` for `sync gcal`, `drive.activity.readonly` for `sync drive` and
-`drive.metadata.readonly` for the folder paths its lines carry, `tasks.readonly` for `sync gtasks`,
+`drive.metadata.readonly` for the folder paths its lines carry and for the listing of the family's video
+folder (`sync drive --videos`), `drive.readonly` for `videos fetch` alone, the one command that reads a
+file's bytes, `tasks.readonly` for `sync gtasks`,
 `meetings.space.readonly` for `sync meet`, `admin.reports.audit.readonly` for `sync gaudit`, and
 `contacts.readonly` and `contacts.other.readonly` for `people review --from-google`, which reads the
 owner's contacts as names for the review and writes no line of them. A `Session` is one scope's calls, its
@@ -33,7 +35,9 @@ Signing is RS256, PKCS#1 v1.5 over SHA-256, done by `cryptography` (the `crypto`
 encrypted iOS backup and the signed page already use); without it a run says which extra to install.
 
 Every request goes through `send`, the only network call in this module and the sources on it, which
-their `pull` alone reaches (ADR 0012). A 429, a 500, 502, 503 or 504, a 403 whose reason is a rate limit
+their `pull` alone reaches (ADR 0012), save one: a file's bytes, which `videos fetch` reads a piece at a
+time through `open_stream` (`Session.stream`), never into memory whole, and which nothing else asks for.
+A 429, a 500, 502, 503 or 504, a 403 whose reason is a rate limit
 and a lost connection are retried after a wait that doubles from one second (`Retry-After`, when the
 server sends one, is honoured up to `BACKOFF_MAX_S`), `RETRIES` times; then the run stops with the last
 error. A 401 mints the token again, once. Any other answer that is not a success is an `ApiError`
@@ -41,12 +45,13 @@ carrying the status and Google's reasons, so a source can tell a history too old
 start too long ago (410) from a failure. A session told not to wait (`wait_on_limits=False`, a dry run)
 raises `LimitReached` on the first 429, rate-limit or quota 403 (`quotaExceeded`, `dailyLimitExceeded`) or
 `RESOURCE_EXHAUSTED`, with Google's own words, and sleeps not at all. Tests put an in-process fake in place
-of `send` and of `sleep`."""
+of `send`, of `open_stream` and of `sleep`."""
 
 from __future__ import annotations
 
 import base64
 import contextlib
+import http.client
 import json
 import os
 import stat
@@ -79,6 +84,7 @@ __all__ = [
     "Response",
     "ScopeRefused",
     "Session",
+    "Stream",
     "configure",
     "describe",
     "is_address",
@@ -103,6 +109,7 @@ SCOPES = {  # one read-only scope per call; what the Workspace's domain-wide del
     "gcal": f"{AUTH}calendar.readonly",
     "drive": f"{AUTH}drive.activity.readonly",
     "drive paths": f"{AUTH}drive.metadata.readonly",
+    "drive files": f"{AUTH}drive.readonly",  # a file's bytes: `videos fetch`, and nothing else
     "gtasks": f"{AUTH}tasks.readonly",
     "meet": f"{AUTH}meetings.space.readonly",
     "gaudit": f"{AUTH}admin.reports.audit.readonly",
@@ -123,6 +130,7 @@ QUOTA_REASONS = frozenset({"quotaExceeded", "dailyLimitExceeded"})  # a day's qu
 EXTRA = 'pip install "openlogbook[crypto]"'
 NO_CRYPTO = f"signing with the service-account key needs the crypto extra: {EXTRA}"
 USER_AGENT = "logbook"
+ERROR_BODY_MAX = 64 * 1024  # of an answer that is not a file's bytes, what is read for its reasons
 
 
 class GoogleError(OSError):
@@ -165,6 +173,27 @@ class Response:
     status: int
     headers: dict[str, str]  # names lower-cased
     body: bytes
+
+
+@dataclass
+class Stream:
+    """An answer whose body is read a piece at a time (`read(n)`), for a file's bytes; `close` it when
+    done, whatever happened."""
+
+    status: int
+    headers: dict[str, str]  # names lower-cased
+    body: Any  # a file-like object: read(n) -> bytes, close()
+
+    def read(self, n: int) -> bytes:
+        """Up to `n` bytes; an OSError when the connection fails, whatever http.client calls it."""
+        try:
+            return bytes(self.body.read(n))
+        except http.client.HTTPException as e:  # IncompleteRead: a chunked body cut short
+            raise OSError(f"{type(e).__name__}: the answer was cut short") from None
+
+    def close(self) -> None:
+        with contextlib.suppress(OSError):
+            self.body.close()
 
 
 def configure(env: Mapping[str, str]) -> Account | None:
@@ -288,6 +317,22 @@ def send(method: str, url: str, headers: dict[str, str], body: bytes | None, tim
         raise OSError(str(e.reason)) from None
 
 
+def open_stream(method: str, url: str, headers: dict[str, str], timeout: float) -> Stream:
+    """One HTTP request whose body is left to the caller to read, a piece at a time: a file's bytes
+    (`videos fetch`). The other network call of the Google sources, beside `send`. An unreachable host is
+    an OSError."""
+    req = Request(url, headers={"User-Agent": USER_AGENT, **headers}, method=method)
+    try:
+        response = urlopen(req, timeout=timeout)
+    except HTTPError as e:
+        return Stream(e.code, _lower(e.headers.items() if e.headers else ()), e)
+    except URLError as e:
+        raise OSError(str(e.reason)) from None
+    except http.client.HTTPException as e:  # a status line or headers that do not read
+        raise OSError(f"{type(e).__name__}: {e}") from None
+    return Stream(response.status, _lower(response.headers.items()), response)
+
+
 def _lower(items: Any) -> dict[str, str]:
     return {str(k).lower(): str(v) for k, v in items}
 
@@ -313,6 +358,43 @@ class Session:
 
     def post_json(self, url: str, body: Mapping[str, Any]) -> dict[str, Any]:
         return self._call("POST", url, json.dumps(body, separators=(",", ":")).encode("utf-8"))
+
+    def stream(self, url: str, params: Mapping[str, str], headers: Mapping[str, str] | None = None) -> Stream:
+        """A GET whose body is a file's bytes, for the caller to read a piece at a time and close: the
+        token minted as for any call, a 401 minted again once, a rate limit or a server error retried
+        with the same backoff (the body of such an answer read and closed), any other answer that is
+        not a success an `ApiError` (a `Range` past the end is a 416)."""
+        query = urlencode([(k, v) for k, v in params.items() if v is not None])
+        target = f"{url}?{query}" if query else url
+        reminted = False
+        tries = 0
+        while True:
+            asked = {"Authorization": f"Bearer {self._bearer()}", **(headers or {})}
+            try:
+                answer: Stream | None = open_stream("GET", target, asked, TIMEOUT_S)
+                problem = ""
+            except (OSError, TimeoutError) as e:
+                answer, problem = None, f"connection: {e}"
+            tries += 1
+            if answer is not None and answer.status == 401 and not reminted:
+                answer.close()
+                self._token, reminted = None, True
+                tries -= 1
+                continue
+            if answer is not None and 200 <= answer.status < 300:
+                return answer
+            response = None
+            if answer is not None:
+                try:
+                    response = Response(answer.status, answer.headers, answer.read(ERROR_BODY_MAX))
+                finally:
+                    answer.close()
+                if not _retryable(response):
+                    raise ApiError(_api_error(response), response.status, frozenset(_reasons(response)))
+                problem = _api_error(response)
+            if tries > RETRIES:
+                raise GoogleError(f"{problem} (gave up after {tries} tries)")
+            sleep(_wait(response, tries - 1))
 
     def _call(self, method: str, url: str, body: bytes | None) -> dict[str, Any]:
         reminted = False
