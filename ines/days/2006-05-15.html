@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2006-05-15 Monday · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
+li.proposal{padding:.15rem 0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
+details.synthesis p.segment{margin:.15rem 0}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+a.name{font-size:.8rem;margin-left:.5rem}
+form.star{display:inline;margin:0 0 0 .3rem}
+form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
+font-size:1rem;line-height:1}
+form.star button[aria-pressed=true],.star.on{color:#c9a227}
+form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
+form.with input[type=text]{min-width:12rem}
+ul.starred{list-style:none;padding:0;margin:0}
+ul.starred li{padding:.2rem 0}
+ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
+dt#with:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.queue{list-style:none;padding:0;margin:0}
+li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
+border-bottom:1px solid var(--line)}
+li.cluster:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:3px}
+li.cluster svg text{font:11px system-ui,sans-serif;fill:var(--mute)}
+li.cluster svg circle.spot{fill:var(--accent)}
+li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--mute);stroke-dasharray:3 2}
+li.cluster svg line{stroke:var(--mute)}
+li.cluster p.facts{margin:0}
+li.cluster p.facts b{font-variant-numeric:tabular-nums}
+ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem}
+li.cluster details{margin:0;font-size:.9rem}
+form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
+form.name input[type=text]{min-width:16rem;flex:1}
+a.skip{display:inline-block;padding:.2rem .4rem;border:1px solid var(--line);border-radius:3px;
+text-decoration:none}
+@media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
+section.close form{margin:.6rem 0 1rem}
+section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
+padding:.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+section.close button{padding:.35rem .9rem;margin:.4rem .4rem 0 0}
+section.close details{margin:.4rem 0}
+section.close label{overflow-wrap:anywhere}
+section.close input[type=file]{max-width:100%}
+ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
+ol.proposals{list-style:none}
+ol.sentences{padding-left:2rem}
+ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
+ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
+ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
+ul.signed{color:var(--mute);margin:.4rem 0}
+code.sha{overflow-wrap:anywhere}
+footer .footnote{display:inline-block;margin-top:.3rem}
+@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
+table{display:block;overflow-x:auto}}
+ol.shelf{list-style:none;padding:0;margin:0}
+ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.shelf p{margin:.1rem 0}
+p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
+p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
+details.evidence,details.draft{margin:.25rem 0 0}
+details.evidence>summary{color:var(--mute);font-size:.85rem}
+details.evidence ul.evidence{font-size:.85rem;margin:.2rem 0 0 .8rem}
+details.evidence details{margin:0 0 0 .8rem}
+span.id{font:.78rem ui-monospace,monospace;color:var(--mute)}
+details.draft>summary{font-size:.9rem}
+div.draft p.segment{margin:.3rem 0}
+p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
+.dates{white-space:nowrap}
+svg.stays{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.stays circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
+svg.stays line{stroke:var(--mute)}
+li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
+</style>
+</head>
+<body>
+<header><nav><a href="../index.html">Logbook</a><a href="../trips.html">trips</a><a href="../places.html">places</a><a href="../people.html">people</a><a href="../years/2006.html">2006</a><a href="2006.html">days of 2006</a></nav></header>
+<main>
+<h1>2006-05-15 <small>Monday</small></h1>
+<p class="pager"><a href="2006.html#2006-05-14">← 2006-05-14</a> · <a href="2006.html#2006-05-09">the fortnight around</a> · <a href="2006.html#2006-05-16">2006-05-16 →</a></p>
+<dl class="header">
+<dt>night before</dt><dd>the Copenhagen flat · home</dd>
+<dt>night after</dt><dd>the Copenhagen flat · home</dd>
+<dt>country</dt><dd>DK (place the Copenhagen flat)</dd>
+<dt>signature</dt><dd>unsigned</dd>
+</dl>
+<h2>Timeline</h2>
+<ol class="timeline">
+<li class="row gap"><span class="clock">00:00–08:20</span> <span class="kind">gap</span> 8 h 20 min · no points · 2.1 km</li>
+<li class="row stay"><span class="clock">08:20–16:20</span> <span class="kind">stay</span> 55.6640,12.5882 near the Copenhagen office, 1.4 km · 8 h
+<details open><summary>1 event, 1 mail thread, 2 messages</summary>
+<ul class="attached">
+<li id="l-010b370f-0800-73dd-8977-175ee1f9e175" title="1 line: 010b370f-0800-73dd-8977-175ee1f9e175"><span class="kind">event</span> Lecture: hydrology 10:00–12:00</li>
+<li id="l-010b374b-74c0-7ee0-9d06-e8be9a310a48" title="1 line: 010b374b-74c0-7ee0-9d06-e8be9a310a48"><span class="kind">mail</span> Group work (1 message)</li>
+<li title="2 lines: 010b3804-6480-7ae0-9c95-51dc011fab4e 010b381d-1ca0-7caf-a4a0-168c4703bc94"><span class="kind">messages</span> 2 messages</li>
+</ul>
+</details></li>
+<li class="row gap"><span class="clock">16:20–16:50</span> <span class="kind">gap</span> 30 min · no points · 2.1 km</li>
+<li class="row stay"><span class="clock">16:50–24:00</span> <span class="kind">stay</span> the Copenhagen flat · 7 h 10 min</li>
+</ol>
+<h2>Health</h2>
+<p>no lines</p>
+<h2>Sources</h2>
+<table>
+<thead><tr><th>source</th><th class="num">lines</th><th>first</th><th>last</th></tr></thead>
+<tbody>
+<tr><td>dawarich</td><td class="num">4</td><td>2006-05-15 00:00</td><td>2006-05-15 16:50</td></tr>
+<tr><td>whatsapp</td><td class="num">2</td><td>2006-05-15 14:28</td><td>2006-05-15 14:55</td></tr>
+<tr><td>ios-calendar</td><td class="num">1</td><td>2006-05-15 10:00</td><td>2006-05-15 10:00</td></tr>
+<tr><td>mail</td><td class="num">1</td><td>2006-05-15 11:06</td><td>2006-05-15 11:06</td></tr>
+<tr><td>safari</td><td class="num">1</td><td>2006-05-15 20:14</td><td>2006-05-15 20:14</td></tr>
+</tbody>
+</table>
+</main>
+<footer>exported from the record · tier 1,2 · Europe/Oslo · nothing here is fetched<br><span class="footnote">No model touched this page. What a model drafted is marked as a draft.</span></footer>
+</body>
+</html>

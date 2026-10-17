@@ -1,0 +1,4842 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/serve/">
+      
+      
+        <link rel="prev" href="../synthesis-prompt/">
+      
+      
+        <link rel="next" href="../acts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>In a browser - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-record-in-a-browser" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              In a browser
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The record's settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_20" id="__nav_20_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0023-digital-events-do-not-make-a-stay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0023 Digital events do not make a stay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0031-profile-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0036-goals-reviews-drafts-chapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0036 Goals, reviews, drafts, chapters (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0037-entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0037 Entities: orgs, ideas, places and assets (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0038-speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0038 Speakers: who spoke, and who they are (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_22" >
+        
+          
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals, reviews and chapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dream-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream's prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transcript-synthesis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis of a call
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speakers: who spoke
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synthesis-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#three-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#as-a-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        As a service
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="As a service">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reaching-it-from-another-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching it from another device
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#places-name-this-place" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Places — name this place
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reflect-and-sign" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reflect and Sign
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-day-star-and-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Day — Star and With
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#journeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Journeys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#people" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        People
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Manifest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phone-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phone first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The acts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The world (a globe you can scrub)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../crossing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The crossing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-notion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export for Notion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../places/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Entities (the profiles)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On a home server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../doctor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_60" >
+        
+          
+          <label class="md-nav__link" for="__nav_60" id="__nav_60_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_60_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_60">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your own agents: Telegram bots, Claude Code and the Claude apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#three-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#as-a-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        As a service
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="As a service">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reaching-it-from-another-device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching it from another device
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#places-name-this-place" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Places — name this place
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reflect-and-sign" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reflect and Sign
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-day-star-and-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Day — Star and With
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#journeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Journeys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#people" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        People
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Manifest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phone-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phone first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-record-in-a-browser">The record in a browser</h1>
+<p><code>logbook serve</code> reads the record in a browser, on this machine only.</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>serve<span class="w">                     </span><span class="c1"># http://127.0.0.1:8765/</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--port<span class="w"> </span><span class="m">8080</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--install-service<span class="w">   </span><span class="c1"># kept running by launchd or systemd (As a service, below)</span>
+</code></pre></div>
+<p>It is a reader (ADR 0013) with another output: the pages are the commands' own readers rendered as
+HTML instead of text, built from the index and nothing else, and nothing is written by reading. Open
+the address it prints, read, close it. There is no login because there is no one to log in: the server
+answers this machine and no other. Four pages ask you something and write your answer, each
+through the command that writes the same thing: the Places page names the places you return to
+(<a href="#places--name-this-place">Places — name this place</a>), a journey's page names the journey
+(<a href="#journeys">Journeys</a>), the People page merges or tells apart who the sources saw
+(<a href="#people">People</a>), and the Day is where you reflect on the day and sign it
+(<a href="#reflect-and-sign">Reflect and Sign</a>), star a line and say who was there (<a href="#the-day--star-and-with">The Day — Star and
+With</a>). The acts, from a terminal and on the page, are on
+<a href="../acts/">their own page</a>.</p>
+<p><img alt="The Day of 17 June of the demo record, every attachment toggle open" src="../serve.png" /></p>
+<p><em>The demo record (<code>logbook demo --days 30 --seed 1 --out ~/Demo</code>), Wednesday 17 June: a week
+aboard the yacht Nordlys. Nothing in it is real.</em></p>
+<h2 id="the-pages">The pages</h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>What it is</th>
+<th>The command it renders</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/day/YYYY-MM-DD</code></td>
+<td>the Day as a timeline: the nights either side, the country, the signature (or <code>unsigned</code>) with the page digest, the all-day entries, the <code>with</code> row (the day's company, your word marked, and the <em>with…</em> field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them (<a href="../speakers/">speakers</a>), notes, mail threads, calls, keepers named; messages counted; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; at its foot, <em>Reflect and sign</em> (<a href="#reflect-and-sign">below</a>)</td>
+<td><code>logbook day</code>, and <code>logbook day reflect</code>, <code>logbook star</code>, <code>logbook with</code></td>
+</tr>
+<tr>
+<td><code>/days?from=&amp;to=</code></td>
+<td>one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then <em>Starred</em>, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and <em>earlier</em> / <em>later</em> links move it</td>
+<td><code>logbook days</code></td>
+</tr>
+<tr>
+<td><code>/trips?year=</code></td>
+<td>the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link</td>
+<td><code>logbook trips --year</code></td>
+</tr>
+<tr>
+<td><code>/journeys?year=</code></td>
+<td>the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded (<a href="#journeys">Journeys</a>). Without a year, the record's last</td>
+<td><code>logbook show trips --year</code>, grown</td>
+</tr>
+<tr>
+<td><code>/journeys/FIRST/LAST</code></td>
+<td>one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos</td>
+<td><code>logbook show trip ID</code></td>
+</tr>
+<tr>
+<td><code>/people?year=</code></td>
+<td>the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of <code>people review</code>, the only place someone the record has not placed appears (<a href="#people">People</a>)</td>
+<td><code>logbook people --year</code>, <code>people review</code></td>
+</tr>
+<tr>
+<td><code>/people/ID</code></td>
+<td>one person: days together by year, the last real contact and what it was, drift and why, the promises open both ways, the anniversaries of the coming month, the places you have been with them</td>
+<td><code>logbook people NAME</code>, <code>people drift</code></td>
+</tr>
+<tr>
+<td><code>/manifest?portfolio=</code></td>
+<td>the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each with its portfolio, each row's evidence folded; a filter by portfolio; below, the review queue of <code>review org</code> with its acts (<a href="#the-manifest">the Manifest</a>)</td>
+<td><code>logbook show orgs [--portfolio TEXT]</code>, <code>review org</code></td>
+</tr>
+<tr>
+<td><code>/org/ID</code></td>
+<td>one org: its refs, its status, reason and portfolio, the status form (with its portfolio), every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (<code>?money=1</code>)</td>
+<td><code>logbook show org NAME</code>, <code>status org</code></td>
+</tr>
+<tr>
+<td><code>/manifest/people</code></td>
+<td>the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio</td>
+<td><code>logbook show orgs</code></td>
+</tr>
+<tr>
+<td><code>/ideas</code></td>
+<td>the ideas you named by stage (build, exploring, spark, built, killed, no status), the most recent touch first, the stale ones flagged, each with its reason (a killed idea sparked again keeps its old one) and its evidence folded, the people it was discussed with counted and never named; below, the review queue of <code>review idea</code></td>
+<td><code>logbook show ideas</code>, <code>logbook review idea</code></td>
+</tr>
+<tr>
+<td><code>/idea/ID</code></td>
+<td>one idea: its refs, its status and reason, the status form, first said, every touch newest first, the people it was discussed with by name, its documents as references (its Notion pages, its repositories and their README), its title thread, the words by month, every status line</td>
+<td><code>logbook show idea NAME</code></td>
+</tr>
+<tr>
+<td><code>/places</code></td>
+<td>the named places of <code>places.json</code> first (nights, last visit, kind, position), then <em>Name this place</em>: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it</td>
+<td><code>logbook setup places list</code> and <code>setup places review</code></td>
+</tr>
+<tr>
+<td><code>/assets</code></td>
+<td>the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago</td>
+<td><code>logbook assets status</code></td>
+</tr>
+<tr>
+<td><code>/gaps?since=</code></td>
+<td>where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs</td>
+<td><code>logbook sources --gaps</code></td>
+</tr>
+<tr>
+<td><code>/world?from=&amp;to=</code></td>
+<td>the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page <code>export world</code> writes by default (<a href="../world/">the world</a>)</td>
+<td><code>logbook export world</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>/</code> is the front page: how many lines the record holds and the days it covers, and a link to each page.
+<code>/today</code> redirects to the Day of the current date in the record's timezone (<code>logbook.json</code>), the date
+before until the record's <code>day_start</code> when it sets one (at 05:59 under <code>06:00</code>, yesterday's Day), whatever
+the clock of the device that asks: the page to bookmark on a phone.
+<code>/day/YYYY-MM-DD?open=1</code> is the Day with every toggle open, for printing or saving whole; the page's
+<em>expand all</em> link is that.</p>
+<p>Every row reads as the command prints it, because it is the same code: the grammar of a stay, a
+move or a night is <code>logbook/core/day.py</code>'s and <code>logbook/core/days.py</code>'s, a trip's is <code>logbook/core/trips.py</code>'s, a
+silence's is <code>logbook/contrib/gaps.py</code>'s. A number here points at the lines it came from as it does under
+<code>--json</code>: hover an attachment and its line ids are the tooltip.</p>
+<h2 id="three-rules">Three rules</h2>
+<p>Each is enforced in <code>logbook/contrib/serve.py</code> and tested in <code>tests/test_serve.py</code>.</p>
+<p><strong>This machine only.</strong> The server binds <code>127.0.0.1</code> and refuses any other host before a socket is
+opened: <code>--host 0.0.0.0</code>, <code>::</code>, a LAN address, even <code>localhost</code> (a name, and a name may resolve to
+anything) exit 2 naming the one host it takes. It never resolves a name, not even its own, and it
+never binds anywhere else: not as a service either (<a href="#as-a-service">As a service</a>), whose file never
+carries <code>--host</code>. To read the record from another device, see
+<a href="#reaching-it-from-another-device">reaching it from another device</a>.</p>
+<p><strong>One document, nothing fetched.</strong> A page is one HTML document with one inline stylesheet. No
+font, no image, no stylesheet link, no frame, no script fetched; every link, form and tooltip points
+at the server's own paths. A script is inline on three pages, each named by its hash in that page's
+<code>Content-Security-Policy</code> and by nothing else: a dozen lines for the Places page's three keys; on a
+Day when this machine can hear a recording, a score of lines for its <em>Record</em> button, which records
+with the browser's own recorder and sends the recording with the form, never by a fetch (the policy
+has no <code>connect-src</code>); and the World page's canvas, whose data are two JSON blocks a browser never
+runs. Every other page's policy (<code>default-src 'none'</code>) allows no script at all. The header tells the
+browser what the markup already does, so a payload that carried markup could not make a page fetch
+from elsewhere even if the escaping here were wrong (every value is escaped). The test renders every
+page and checks each attribute that can hold a URL, the inline style, each script and the headers.</p>
+<p><strong>Read-only, but for the forms you click.</strong> Every GET is answered from the record at its head
+through the readers, and the readers never write, not even <code>policy/stays.json</code>. The test takes the
+head and every file before and after serving every page and finds them the same. The writes are the
+Places page's form (<a href="#places--name-this-place">below</a>), a journey's name (<a href="#journeys">below</a>), the
+People page's review (<a href="#people">below</a>), the Manifest's review and an org's status (<a href="#the-manifest">below</a>),
+the Ideas shelf's review and an idea's status (<a href="#ideas">below</a>),
+the Day's Reflect and Sign (<a href="#reflect-and-sign">below</a>) and its star and <em>with…</em> (<a href="#the-day--star-and-with">below</a>),
+each a POST from this machine only, each
+through the command's own function, one at a time, and none waits for another writer: while another
+command holds the record's writer lock (a sync running), every one of them answers the same way
+rather than leaving the browser waiting: <code>409</code>, the sentence <em>Another command is writing to the
+record; nothing was written. Try again in a moment.</em>, the command that holds the lock, and the form
+you sent kept in a form that sends it again (<em>Try again</em>): the words you typed in their fields, the
+rest as they were. Nothing is written. A recording is the one input a page cannot put back: its form
+asks you to choose the file again. The server keeps nothing
+but the head it last saw: when a sync, or a form, moves the head while it runs, the next request
+brings the index to the new head first and every page reads the new lines, with no restart. That
+rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
+rather than each starting their own on the same file.</p>
+<h2 id="performance">Performance</h2>
+<p>A Day is one <code>day.read</code>: one reading of the day and the day before through <code>index.sqlite</code>, the
+health lines of the two days by an indexed column, nothing swept. On the demo record a Day answers in
+tens of milliseconds, a month of <code>/days</code> in under half a second; on a record of millions of lines a
+Day still renders in under a second, because the index locates the day's lines and only they are
+read (<a href="../day/">docs/day.md</a>, <em>Performance</em>). <code>/days</code> reads the window in chunks of a month, as the
+command does; a year is a dozen readings. The airports table is loaded once, when the server starts.</p>
+<p>A reload at the same head costs nothing. Every page that is the record's and nothing else (<code>/</code>, a
+Day, <code>/days</code>, <code>/trips</code>, <code>/places</code>, <code>/world</code>, the journeys, the people) carries an <code>ETag</code>: the first
+twelve characters of the head, then a digest of the request and of what else the page reads (the
+rest of <code>logbook.json</code>, <code>places.json</code>, <code>assets.json</code>, <code>policy/</code>, <code>state/places-review.json</code>, the
+pages received from the circle) and of the server's start; a Day's also of the day you are in, since
+its forms are there from that day on, and the People pages' of the record's today, since this year,
+the coming anniversaries and a silence move with it. It is sent with <code>Cache-Control: no-cache</code>, so
+the browser keeps the page and asks every time; when the tag it sends back is the page's, the
+answer is a <code>304</code> with no body and nothing is read or rendered. A sync
+that moves the head, a place renamed or a restart changes the tag, and the next reload is the page
+again. <code>/assets</code> and <code>/gaps</code>, which the clock moves (the age of a fix, a silence that runs to now),
+and every error carry no tag and <code>Cache-Control: no-store</code>, as before.</p>
+<p>A journeys page is one reading of its year and a month either side, and a journey's page one
+reading of its days and a week either side, as <code>show trip</code> reads it; the People page is <code>people</code>
+over the year and the review queue's table, built once per head; a person's page reads the whole
+record's people once. On the four synthetic years of the tests each answers in about a fifth of a
+second.</p>
+<p>The server is the standard library's (<code>http.server</code>, one thread per request); it is meant for one
+reader on one machine, not for a crowd.</p>
+<h2 id="as-a-service">As a service</h2>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>serve<span class="w"> </span>--install-service<span class="w">                </span><span class="c1"># as you: a launchd agent, or a systemd user service</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--install-service<span class="w"> </span>--port<span class="w"> </span><span class="m">8080</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--install-service<span class="w"> </span>--system<span class="w">       </span><span class="c1"># a machine nobody logs in to: prints two sudo commands</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--status<span class="w">                         </span><span class="c1"># installed? answering? (exit 0, 1, 3)</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--uninstall-service<span class="w"> </span><span class="o">[</span>--system<span class="o">]</span>
+</code></pre></div>
+<p><code>--install-service</code> keeps <code>logbook serve</code> running, so the pages are there in the morning without a
+terminal open. The service runs the Python that installed it (<code>sys.executable -m logbook.cli serve
+--port N</code>, no PATH assumed) on the record this command found (<code>LOGBOOK_HOME</code>, and
+<code>LOGBOOK_IDENTITY_FILE</code> when it is set, so a sealed record's pages open as they do by hand: paths,
+never a key). It starts at load, is started again whenever it fails, and its output goes beside the
+sync log. As with the schedule (<a href="../schedule/">docs/schedule.md</a>), the plist or unit is printed
+before it is written and nothing is written outside the one directory; the file comes from the same
+renderer as the schedule's.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>macOS</th>
+<th>Linux</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>without <code>--system</code></td>
+<td>a launchd agent, <code>~/Library/LaunchAgents/org.logbook.serve.plist</code>, loaded now and at every login</td>
+<td>a systemd user service, <code>~/.config/systemd/user/logbook-serve.service</code>, enabled and started now; from boot when you linger (<code>loginctl enable-linger</code>), else with your session</td>
+</tr>
+<tr>
+<td>with <code>--system</code></td>
+<td>a launchd daemon that runs as you (<code>UserName</code>) from boot: <code>/Library/LaunchDaemons/org.logbook.serve.plist</code></td>
+<td>a system service that runs as you (<code>User=</code>) from boot: <code>/etc/systemd/system/logbook-serve.service</code></td>
+</tr>
+<tr>
+<td>its output</td>
+<td><code>~/Library/Logs/logbook-serve.log</code>, beside <code>logbook-sync.log</code></td>
+<td><code>journalctl --user -u logbook-serve.service</code>; with <code>--system</code>, <code>journalctl -u logbook-serve.service</code></td>
+</tr>
+<tr>
+<td>started again</td>
+<td><code>KeepAlive</code> when it exits unsuccessfully</td>
+<td><code>Restart=on-failure</code>, five seconds later</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The record's home.</strong> The machine that keeps the record (ADR 0022) is often run by a dedicated user
+that never has a login session, and an agent cannot load in a session that never starts. That is
+what <code>--system</code> is for: run as that user, it writes the daemon to the home directory and prints the
+two commands that install it, which you run as an administrator. It never runs <code>sudo</code> itself, and it
+refuses to run as root (the daemon would run as root, with root's home):</p>
+<div class="highlight"><pre><span></span><code>$ logbook serve --install-service --system
+writing /Users/ines/org.logbook.serve.plist:
+…
+written: a launchd daemon running `logbook serve --port 8765` as ines from boot, started again when it fails; nothing runs until you install it, as an administrator:
+  sudo cp /Users/ines/org.logbook.serve.plist /Library/LaunchDaemons/org.logbook.serve.plist
+  sudo launchctl bootstrap system /Library/LaunchDaemons/org.logbook.serve.plist
+then http://127.0.0.1:8765/ (/today is today's page); its output: ~/Library/Logs/logbook-serve.log; …
+</code></pre></div>
+<p>Run again over a daemon already installed, it prints <code>sudo launchctl bootout system/org.logbook.serve</code>
+first; on Linux it prints the copy, <code>systemctl daemon-reload</code> and <code>systemctl restart</code> in place of the
+copy and <code>systemctl enable --now</code>. <code>--uninstall-service --system</code> removes the copy in the home
+directory and prints the two commands that stop the service and remove the system's copy.</p>
+<p><strong>Is it up?</strong> <code>logbook serve --status</code> lists the serve services installed here, the user's and the
+system's, the port each runs on, and whether a logbook server answers there: exit 0 when every one
+answers, 1 when one does not (with where its output goes), 3 when none is installed. The question is
+one <code>HEAD /favicon.ico</code> to 127.0.0.1, which reads nothing of the record. <code>logbook doctor</code> asks the
+same in its <code>serve</code> line: a pass when no service is installed or when it answers, a warn when it is
+installed and silent, or when two share one port.</p>
+<p><strong>After a sync</strong> nothing needs restarting: the next page reads the new head (see <em>Read-only</em> above),
+and a phone's reload of a page whose head has not moved is a <code>304</code>.</p>
+<h3 id="reaching-it-from-another-device">Reaching it from another device</h3>
+<p>The server binds 127.0.0.1 and nothing else, as a service as by hand; no flag changes that. Reading
+the pages from a phone or another machine is your business, done on this machine's terms and by a
+tool you choose:</p>
+<ul>
+<li><strong>an SSH tunnel</strong> from the other device: <code>ssh -L 8765:127.0.0.1:8765 &lt;this machine&gt;</code>, then
+  http://127.0.0.1:8765/ there;</li>
+<li><strong>a tailnet's own HTTPS proxy</strong> running on this same machine and forwarding to
+  <code>http://127.0.0.1:8765</code>, so the pages are reachable over the tailnet only, with its certificate and
+  its access rules.</li>
+</ul>
+<p>Either way the pages carry every tier the record holds (SPEC §4): the server reads them all because
+nothing it serves leaves the machine, so whatever you put in front of it decides who else can read
+them. Keep it to your own devices. The server does not know it is there and does not change for it:
+same pages, same headers, the same refusal of any other host.</p>
+<h2 id="places-name-this-place">Places — name this place</h2>
+<p><code>/places</code> is two things. First the named places of <code>places.json</code>, as <code>setup places list</code> prints them,
+each with the nights the record has spent there and the last visit (from the observed places, below).
+Then <strong>Name this place</strong>: the review queue of <code>logbook setup places review</code>
+(<a href="../places/#review">places</a>), the places you return to that have no name yet, in the same order (by
+nights, then hours), twenty a page with <em>more</em> at the foot. Each cluster shows</p>
+<ul>
+<li>a dot on a plain canvas, drawn by the server: the spot, the radius naming it would write, and the
+  nearest named place where it lies or at the edge in its direction, with its name and distance. No
+  tile, no map host, nothing fetched;</li>
+<li>its facts, the line the CLI prints: the coordinates, visits, nights, hours, first and last visit,
+  the asset it was aboard, the nearest named place;</li>
+<li>its evidence, folded as the CLI folds it: the addresses one source wrote along one street are one
+  line (<code>dawarich: "Plattformveien" (38 addresses, 217 stays)</code>), three lines are shown, and <em>… and
+  N more</em> opens the rest;</li>
+<li>a field prefilled with the name the evidence weighs most (blank where no source names the spot),
+  and three acts: <strong>Name</strong> writes the field, <strong>Skip</strong> moves to the next cluster, <strong>Not a place</strong>
+  rejects it.</li>
+</ul>
+<p>Keys, when the cursor is not in the field: Enter names, <code>n</code> is not a place, Space skips; Escape
+leaves the field. The keys act on the cluster at the top of the window. They are the page's one
+script, inline; without it the buttons and links do the same.</p>
+<p><strong>One path.</strong> Name and Not a place post to <code>/places/review</code>, and the server answers through the
+review engine's own <code>accept</code> and <code>reject</code>, the code <code>setup places review --name</code>, <code>--accept</code> and
+<code>--reject</code> run: <code>places.json</code> gets the place at the cluster's centre with its fitted radius, the
+record gets the naming as one <code>note/v1</code> line through <code>Logbook.append</code>, and a rejection is one
+<code>entity-review/v1</code> line, its cache in <code>state/places-review.json</code>, byte for byte what the CLI writes.
+There is no second implementation.
+After a write the head has moved, and the page you come back to is read again: the named place in
+the table, the queue one shorter, the next cluster scrolled to. A form from a page older than the
+record, naming a cluster that is gone, is refused (409) and nothing is written; so is a name the
+engine refuses (400: already a place, no name given), with the reason on the page.</p>
+<p><strong>This machine only.</strong> This is the Library's first write act, and it is allowed because the server
+binds 127.0.0.1 and runs as the record's own user: whoever can reach the form can already run
+<code>setup places review</code> in a terminal here. The server holds it to that: a POST is answered only when
+the connection comes from this machine (the client address is loopback, <code>127.0.0.0/8</code> or <code>::1</code>) and,
+when the browser sends an <code>Origin</code> header, it names <code>127.0.0.1</code> or <code>[::1]</code> (the server's own pages,
+as reached from here; not <code>localhost</code>, a name, and not another scheme or host). Anything else is a
+<code>403</code> and nothing is written. Through an SSH tunnel the browser's origin is <code>127.0.0.1</code> and the form
+works; behind a proxy with its own name it is read-only, as every other page is written, and the
+naming is done here. <code>GET /places/review</code> is a <code>405</code>.</p>
+<p><strong>A Day's stay without a name</strong> carries a small <em>name this place</em> link to the Places page at its
+cluster (<code>/places?at=lat,lon</code>, which redirects to the page the cluster is on and scrolls to it, or
+says there is nothing to name there when the spot is named, rejected, or was never a stay). A stay
+inside a named place prints its name at once, as before.</p>
+<h2 id="reflect-and-sign">Reflect and Sign</h2>
+<p>At the foot of every Day (the pager's <em>reflect and sign</em> goes there; <code>/today</code> is the page to keep on
+a phone) are the two acts that close a day, the two <code>logbook day reflect</code> performs at the command
+line (<a href="../signed-day/#closing-the-day-by-voice">the signed day</a>).</p>
+<p><strong>Reflect.</strong> A field for a few sentences in your words. When the day has a Wispr Flow dictation
+that begins with <em>reflect</em> and no reflection was taken from it yet, the field holds it without that
+word, under a line naming the dictation: a draft, and nothing is written by showing it. Reflect takes
+it as it stands or as you changed it, as <code>day reflect</code>'s <em>y</em> (or <em>e</em>) does: the note keeps the
+dictation's id under <code>extra.dictation</code> and the moment you spoke as its <code>at</code>. Otherwise the field
+holds the reflection on the day, when there is one, so a word misheard is mended in place; the same
+words are never written twice. Reflect writes one <code>note/v1</code> line, label <code>reflection</code>, source
+<code>reflect</code>, tier 2, through <code>reflect.write</code>, the function <code>day reflect --text</code> calls: the command's
+line, byte for byte. The field's <code>lang</code> is the language most of the day's own words are in, by the
+rule the dream uses to say which language to write in (<code>dream.language_of</code>), so a phone's keyboard
+and its spelling follow you.</p>
+<p><strong>Or say it (optional).</strong> Where this machine can hear, a second form takes a recording: a file, or
+on a phone the recorder the browser opens for it. Where the browser can record (it has
+MediaRecorder; the page is on 127.0.0.1, or behind an HTTPS proxy, since a browser lends the
+microphone to a secure origin only), a <em>Record</em> button records from the microphone and sends the
+recording with that form when you press it again; that is the Day's one script. The recording goes
+up as the form's file (<code>multipart/form-data</code>, at most 64 MiB, half an hour of speech even as WAV),
+is written to a temporary folder, heard through the path of <code>day reflect --audio</code> (the local whisper
+engine of <code>openlogbook[transcribe]</code>, the hub offline, never fetching a model), deleted, and its words
+written as the reflection, <code>extra.heard_by</code> naming the engine and model, as the command writes it.
+Whether this machine can hear is asked once, when <code>serve</code> starts: without the extra, or without the
+model (<code>logbook day reflect DAY --audio FILE --fetch-model</code> fetches it once, then restart <code>serve</code>),
+the page says which in place of the form. Typing always works.</p>
+<p><strong>The proposals.</strong> With a reflection on the day, the rules read it as <code>day reflect</code> does
+(commitments, delegations, and what became of the commitments on the page: kept, missed, dropped,
+carried), and each proposal is a box, numbered and worded as the command prints it. None is ticked:
+each is a guess until you tick it. The reflection, a sentence a line, is folded beside them, so
+<em>line 6</em> reads.</p>
+<p><strong>Sign.</strong> Sign signs the day through <code>reflect.close</code>, the code <code>day reflect --sign</code> runs: under one
+hold of the writer lock, the ticked delegations are written as notes, then <code>signing.sign</code> writes the
+<code>signed-day/v1</code> line with the lines confirmed (every line on the page, your reflection and the
+delegations among them), the ticked dispositions, and the moment you clicked. It is byte for byte the
+line <code>logbook day reflect DAY --sign --accept N,N</code> writes for the same reflection and the same
+ticks. Nothing ticked accepts nothing. A day you signed before shows <em>Sign again</em> and what the new
+signature keeps from the standing one (its confirmed lines still on the page, its dispositions, an
+accepted one winning on a line they share, its note); the new line carries <code>supersedes</code>, as RFC 0034
+has it. Afterwards the section opens with the signature as <code>day sign</code> prints it, and the Day's
+<em>signature</em> row says when, which line, how many lines it confirmed of the page's, and the page
+digest whole (<code>page sha256 …</code>), with <code>, the page has changed since</code> once a line is added to the day.</p>
+<p><strong>One path, this machine only.</strong> The forms post to <code>/day/YYYY-MM-DD/reflect</code> and
+<code>/day/YYYY-MM-DD/sign</code>, held to the Places page's rule: a loopback client and, when the browser sends
+one, an <code>Origin</code> of <code>127.0.0.1</code> or <code>[::1]</code>, else <code>403</code> and nothing written; a GET of either is a
+<code>405</code>. Nothing is written without the click: reading the page offers the draft and shows the boxes,
+and writes nothing. A form older than the record is refused, <code>409</code> and nothing written: a Sign whose
+reflection is no longer the latest or whose proposals changed since the page was read, a draft that
+is no longer on the day. Sign with no reflection on the day is refused with the two ways on (reflect
+first, or <code>logbook day sign DAY</code> without one), a day ahead of today has no forms, and a word the
+command refuses (an empty reflection, a number no proposal has) is a <code>400</code> with its reason. The page
+never waits for another writer: while a sync holds the record it says so (<code>409</code>, the one answer
+<a href="#three-rules">above</a>), keeps your words, and you click <em>Try again</em>. Every write in the server is one at a time.</p>
+<p><strong>Not the door.</strong> The page never reads <code>policy/crossing.json</code>: this is not the MCP door (ADR 0022),
+and its <code>write</code> list may stay empty. The Library is your own Sign path, on your own machine. The
+Purser, the orchestrator that builds the Day page elsewhere and carries your verdict back through
+<code>sign_day</code>, remains an alternative front door, open only when you name the tool in that list
+(<a href="../signed-day/#signing-through-the-door">the signed day</a>).</p>
+<p><strong>The footer</strong> of every Day says <em>No model touched this page. What a model drafted is marked as a
+draft.</em> It is true because the rows are computed by the readers and the proposals by rules, and the
+one thing a model writes about a day, the dream's draft, is headed <em>Draft</em> with the model's name and
+every unsupported sentence marked.</p>
+<h2 id="the-day-star-and-with">The Day — Star and With</h2>
+<p>The Day carries the two acts on lines the record already holds (<a href="../acts/">the acts</a>):</p>
+<ul>
+<li><strong>A star on every row that is a line</strong>: an attached event, transcript, note, mail thread or call,
+  a flight, an unplaced item, an all-day entry, each photo a row counts, by name, your goals,
+  reviews and chapters of the day, and a proposed event you confirmed (the star of the event line
+  it became). ☆ stars the line, ★ takes the star back, and the page comes back at the row (expanded,
+  if it was). A keeper's row, and a goal or chapter a later one superseded, carries ★ only while it
+  is a star. A stay, a stop or a move is derived from many lines and is not one, so it has none;
+  messages are counted, not listed; the Night line and the weather are read from many lines. A
+  model's draft is never starred: not the dream's sentences, not a proposal you have not confirmed,
+  not a call's synthesis, and not the row of a draft the policy withholds (<em>superseded by policy</em>);
+  a draft is a proposal, not yours to keep as a memory (<a href="../acts/#star-a-line-worth-keeping">the acts</a>),
+  and a star posted for one is a <code>400</code>. A starred photo is the press's pick
+  (<a href="../print/">On paper</a>). The form posts to <code>/star</code>, which runs <code>stars.star</code> or <code>stars.unstar</code>, the
+  functions of <code>logbook star</code> and <code>logbook unstar</code>: the line is theirs, byte for byte but for the
+  clock. A line starred already is left as it is; an unstar of a line no longer starred (the page
+  was older than the record) is a <code>409</code>; a line that takes no star a <code>400</code>, with the reason.</li>
+<li><strong>The <code>with</code> row and its field</strong>: the day's company, everyone a row confirms and everyone you said
+  was there, your word marked <em>(you said)</em>; then a field, its names completed from the people the
+  record names (a <code>datalist</code> the server fills, so no script), several with commas, and a clock when
+  you know it. It posts to <code>/with</code>, which runs <code>presence.state</code>, the function of <code>logbook with</code>. A
+  name the record does not place is a <code>400</code> with the way to place it (<code>logbook people review</code>), and
+  nothing is written.</li>
+</ul>
+<p><strong>This machine only</strong>, as the Places form: a <code>POST</code> to <code>/star</code> or <code>/with</code> is answered only when the
+client address is loopback and, when the browser sends an <code>Origin</code>, it names <code>127.0.0.1</code> or
+<code>[::1]</code>; anything else is a <code>403</code> and nothing is written. <code>GET /star</code> and <code>GET /with</code> are <code>405</code>.
+Writes are taken one at a time, and the page never waits for another writer: while a sync holds
+the record, a star, an unstar or a name says so (<code>409</code>, as every act does), nothing is
+written, and you click <em>Try again</em>. A static site (<code>logbook export site</code>) shows the stars, ★ beside the
+starred lines, and carries no form and no list of names.</p>
+<h2 id="journeys">Journeys</h2>
+<p>A journey is a trip (<a href="../adr/0019-trips-are-derived/">ADR 0019</a>): a run of nights away from home,
+derived from the nights every time and never written, its id <code>trip:FIRST:LAST</code>. <code>/journeys</code> is the
+trips reader grown, one year at a time (the year's reading takes a month either side, so a journey
+over New Year is read whole and listed once, under the year it began), the latest first. Each row:</p>
+<ul>
+<li>the <strong>name</strong>, when you gave it one, else the dates; a link to the journey's page;</li>
+<li>the <strong>nights away</strong> (and how many in transit), the return day, the <strong>route</strong> as <code>show trips</code>
+  prints it, the <strong>photos</strong> dated on its days (first day to return day), the named <strong>places</strong>;</li>
+<li>the <strong>people</strong> confirmed on it whom the record names, each a link to their page; someone the with
+  module saw that no resolution line names is counted (<em>1 not placed</em>), a link to the People page's
+  review, and never named here;</li>
+<li>the <strong>draft</strong> of the journey (RFC 0036, <code>unit</code> <code>journey</code>, a <code>subject</code> naming its id), folded under
+  its head: a proposal, each sentence with its lines, an unsupported one set apart and marked, a
+  sentence resting on a line from outside the journey's days marked so. It follows the <code>dream</code> entry
+  of the crossing policy as the Day's draft does (<a href="../dream/#when-the-entry-changes">dream</a>): a draft
+  above the entry's <code>max_tier</code> today is not shown, and when the journey's standing draft is one, the
+  row says <code>superseded by policy</code> and why, its line on hover, and nothing of its text;</li>
+<li>the <strong>evidence</strong>, folded: each run of nights at one place with the lines of its stays, the
+  flights, each person with the lines that put them there, the photos, the name.</li>
+</ul>
+<p><code>/journeys/FIRST/LAST</code> is one journey, read as <code>logbook show trip</code> reads it: the name and a field to
+change it, the draft folded, its <strong>stays</strong> as dots on a plain canvas drawn by the server (an
+equirectangular projection about their latitude, a dot per place slept at sized by its nights, the
+stays' numbers beside it, a scale bar; no tile, no map host, nothing fetched) and one row each with
+its lines, its <strong>days</strong> one row each (the night, what <code>show days</code> prints, a link to the Day; the
+evidence is the night's stay and each source's lines that day), the <strong>promises made on it</strong> (every
+proposal of <code>logbook promises</code> dated on its days, open or done, who to whom, the sentence, the due
+day, the line), its people confirmed and the photos.</p>
+<p><strong>Name this journey.</strong> The field posts to <code>/journeys/name</code>, and the server names it through the
+function <code>logbook add --trip</code> runs:</p>
+<div class="highlight"><pre><span></span><code>logbook<span class="w"> </span>add<span class="w"> </span>--trip<span class="w"> </span>trip:2026-06-14:2026-06-20<span class="w"> </span><span class="s2">"Midsummer aboard"</span><span class="w">   </span><span class="c1"># or any day of it: --trip 2026-06-16</span>
+</code></pre></div>
+<p>That is one <code>note/v1</code> line in your words (whitespace folded), label <code>name</code>, the journey's id under
+<code>extra.trip</code>, tier 2, source <code>manual</code>, dated inside the journey (now, if today is one of its days,
+else the last minute of its last day away): the captain's naming ADR 0019 asks for, and the only
+part of a journey that enters the record. The latest standing name wins; a name dated on one of its
+days still names it after a recompute has moved its bounds. A name is never read out of a note's
+prose: only the label and the id make a note a name. A form from a page older than the record,
+naming a journey that is no longer one, is a <code>409</code>; a blank name a <code>400</code>; nothing written either way.</p>
+<h2 id="people">People</h2>
+<p><code>/people</code> ranks the people the record names, never you, heard in the year (default this year, the
+record's last when it ended before): by <strong>days together</strong> that year, then the <strong>last real contact</strong>
+(later first: a day together, a meeting, an answered call, a message in a direct chat; never a mail),
+then the name. Each row says how many days and nights, the last real contact and how, and folds
+its evidence: the last real contact's line, each day together with where and its lines, each
+channel heard through that year with its count and last line. Every name is a link to the person.</p>
+<p><strong>Review.</strong> Below the list is the review queue of <code>logbook people review</code>
+(<a href="../people/">people</a>), in its order: each observed person (what one source saw: an address, a
+number, a spoken name) proposed against someone the record names, with the score and the evidence
+open, and two acts. <strong>Merge</strong> writes what <code>people review --accept N</code> writes: an alias line per
+identifier the observed person was seen as, through <code>people_review.accept</code>. <strong>Not the same person</strong>
+writes what <code>--reject N</code> writes: one <code>people-review/v1</code> line saying the two are not the same, through
+<code>people_review.reject</code>, so the pair is never proposed again (RFC 0035 defines that one verdict, so
+the act is a pair's, not a verdict that someone is no person at all). The observed people that match
+nobody are folded below. This section is the only place an observed person appears on any page.
+Both acts post to <code>/people/review</code>, from this machine only; a proposal no longer in the queue is a
+<code>409</code>.</p>
+<p><code>/people/ID</code> is one person (the id the resolution lines give them):</p>
+<ul>
+<li><strong>days together</strong> (and nights under one roof), counted by year, each year's days folded with
+  where and their lines;</li>
+<li>the <strong>last real contact</strong> and what it was, in the record's words and never a message's: the place
+  of a day together, the entry's title and where it was held, the call's direction and length, the
+  chat a message was in;</li>
+<li><strong>drift</strong>, by <code>people drift</code>'s rule at its defaults (20 days together in the best year, no real
+  contact in over 365 days), and why not when not;</li>
+<li>the <strong>promises</strong> open both ways, as <code>people drift</code> counts them: what you owe them, what they owe
+  you, each with the sentence, the day and the line;</li>
+<li>the <strong>anniversaries</strong> of the coming month: a day together exactly 1, 2, 3, 5 or 10 years before
+  one of the next thirty days, the Day's rule;</li>
+<li>the <strong>places</strong> you have been with them, by days there, with the days and the lines.</li>
+</ul>
+<h2 id="the-manifest">The Manifest</h2>
+<p><code>/manifest</code> is the shelf of RFC 0037 §11, the orgs you named (<code>review org</code>), each under what you
+decided about it (<code>logbook status org</code>): <strong>holding</strong> (<code>hold</code>, <code>add</code>, <code>sell</code>), <strong>exited</strong>, <strong>passed</strong>
+(the anti-portfolio, each with your reason in full), <strong>let go</strong>, then <strong>no status</strong>; within a heading
+the most recent touch first. A <strong>touch</strong> is a line that reaches the org through one of its refs: a
+mail or a meeting with an address at its domain, a transcript one of its people spoke in, a page or
+an act on its code-host org, its group chat, its merchant. Each row is the org (a link to its page),
+the status and since when, its portfolio, <code>stale</code> when the status is one <code>stale_days</code> names in
+<code>policy/entities.json</code> and nothing has touched it or restated it for that long (a <code>hold</code>, three
+years), the last touch and what it was, the people on its lines and the documents, with the
+evidence folded: the last touch's line and the status line. It is the text of <code>logbook show orgs</code>
+(<a href="../entities/#the-orgs-read-back">orgs read back</a>). Above the shelf, the portfolios your orgs are in
+(RFC 0037 §10.2): each a link to <code>/manifest?portfolio=…</code>, the shelf of the orgs that portfolio holds
+and the people across them, as <code>show orgs --portfolio</code> prints it, case and spaces aside.</p>
+<p><strong>Review.</strong> Below the shelf is the review queue of <code>logbook review org</code> (<a href="../review/">review</a>), in its
+order, twenty a page: each observed org proposed against one you named, or as a new one, with its
+score, its hint and its evidence folded. <strong>Accept</strong> writes what <code>review org --accept N</code> writes, one
+<code>entity/v1</code> line binding what the sources saw to the org; <strong>Name</strong>, for a new one, what <code>--name N
+"…"</code> writes, the org minted (its dedupe key looked up first) under the name in the field; <strong>No</strong>
+what <code>--reject N</code> writes, one <code>entity-review/v1</code> line, so the pair is never proposed again. They
+post to <code>/manifest/review</code> and go through <code>entity_review.accept</code> and <code>reject</code>, the functions the
+command calls, so the lines are the command's byte for byte.</p>
+<p><code>/org/ID</code> is one org (RFC 0037 §7): its refs, its status, reason and portfolio, the <strong>status form</strong>,
+which posts to <code>/manifest/status</code> and writes what <code>logbook status org ORG DISPOSITION [--reason "…"]
+[--at DAY] [--portfolio "…"]</code> writes through <code>entity_status.write</code> (one <code>status/v1</code> line, tier 3,
+your reason and your portfolio on it and never a note), every touch newest first (thirty, the rest
+folded), the people, who introduced whom where a mail's subject says so (<code>Intro: Ines &lt;&gt; Liv</code>), the
+documents as references, every status line with the portfolio it carried (a retracted one struck),
+and the proposals that would place something with it. The ledger is read only when you ask (<em>show
+the money</em>, <code>?money=1</code>): its in, out and net per year and its lines on the timeline, derived at read
+time from the transactions the org's <code>merchant</code> refs match.</p>
+<p>The status form's <strong>portfolio</strong> box shows the portfolio that holds the org. Left as it is, the line
+carries no portfolio, as the command without <code>--portfolio</code>; typed, it carries what you typed, as
+<code>--portfolio "…"</code>; emptied, it clears the portfolio, as <code>--portfolio ""</code>. The form also sends what
+the box showed, so a page older than the record never puts back a portfolio that has moved since: a
+box left alone moves nothing.</p>
+<p><code>/manifest/people</code> is the co-investor graph: everyone who appears with more than one org, the most
+orgs first, with the orgs and the tier of the lines that put them there; then the anti-portfolio.</p>
+<p><strong>Tier 3 stays tier 3.</strong> An org's status, its reason, its portfolio and the money are tier 3. The
+pages read the record through the server's gate; <code>logbook serve</code> reads every tier, on this machine.
+Through a gate without tier 3 there is no status, no reason, no portfolio and no money on any of
+them, every org is under no status, and the shelf says how many status lines it may not show; no
+filter by portfolio is offered, and one asked for lists no org, the same page for every portfolio; a
+person who is with an org only on a tier-3 line is no edge of the graph. Such a page offers no act
+either, neither the queue nor the status form, and refuses both (<code>403</code>): a status is tier 3, and so
+may a no be. <code>logbook export site</code> has no Manifest: its pages are the Day, the days, the trips, the
+places, and none of them names an org's status.</p>
+<p><strong>Writing, never waiting.</strong> The acts are POSTs from this machine only (a loopback client, an
+<code>Origin</code> of 127.0.0.1 when the browser sends one, else <code>403</code>), one at a time, under the record's
+writer lock. While another command holds it the act is answered as every act of the Library is
+(<code>409</code>, the one sentence, the command that holds the lock, the form kept; <a href="#three-rules">above</a>),
+and nothing is written (the owner's word for every act of the Library, 14 October 2026); a
+proposal no longer in the queue, or an org the record no longer names, is a <code>409</code> too; an answer the
+record refuses (a <code>passed</code> with no reason, a day ahead) a <code>400</code>. Done, a <code>303</code> back to the page the
+form came from.</p>
+<h2 id="ideas">Ideas</h2>
+<p><code>/ideas</code> is the Ideas shelf of RFC 0037 §11, the ideas you named (<code>review idea</code>), each under what you
+decided about it (<code>logbook status idea</code>): <strong>build</strong>, <strong>exploring</strong>, <strong>spark</strong>, <strong>built</strong>, <strong>killed</strong>,
+then <strong>no status</strong>; within a heading the most recent touch first. A <strong>touch</strong> is a line that reaches
+the idea through one of its refs, as <code>review idea</code> finds them: a Notion page under its root (a
+database row is its own root), an act on its repository or a link into it, a task or a call of its
+title. A line a bot made or an agent wrote (<code>extra.machine</code>), and a <code>relations</code> line, is never one. Each row is the idea
+(a link to its page), the status and since when, your reason (the latest you gave, with its status and
+day when a later status replaced it), <code>stale</code> when the status is one <code>stale_days</code> names and nothing has
+touched it or restated it for that long (an <code>exploring</code>, two years), the last touch and what it was, the
+words written this year, its repositories, how many people it was discussed with and never their names,
+the days since its spark and its latest titles, with the evidence folded: the last touch's line, the
+status line and the reason's note. It is the text of <code>logbook show ideas</code> (<a href="../entities/#the-ideas-read-back">ideas read
+back</a>).</p>
+<p><strong>Review.</strong> Below the shelf is the review queue of <code>logbook review idea</code> (<a href="../review/">review</a>), in its
+order, twenty a page: each observed idea proposed against one you named, or as a new one, with its score
+and its evidence folded. <strong>Accept</strong> writes what <code>review idea --accept N</code> writes; <strong>Name</strong>, for a new one,
+what <code>--name N "…"</code> writes, the idea minted (its dedupe key looked up first) under the name in the field;
+<strong>No</strong> what <code>--reject N</code> writes, one <code>entity-review/v1</code> line. They post to <code>/ideas/review</code> and go through
+<code>entity_review.accept</code> and <code>reject</code>, the functions the command calls, so the lines are the command's
+byte for byte. A Notion row is proposed only when its <code>Type</code> is <code>Idea</code> (<code>idea_rows</code> in
+<code>policy/entities.json</code>).</p>
+<p><code>/idea/ID</code> is one idea (RFC 0037 §7): its refs, its status and reason, the <strong>status form</strong>, which posts to
+<code>/ideas/status</code> and writes what <code>logbook status idea IDEA DISPOSITION [--reason "…"] [--at DAY]</code> writes
+through <code>entity_status.write</code> (with a reason, first one <code>note/v1</code> line in your words, then the
+<code>status/v1</code> line naming it, both tier 2, RFC 0037 §10.5), first said, every touch newest first (thirty,
+the rest folded), the people it was discussed with by name (the only page that names them), its
+documents as references, its title thread, the words by month, every status line (a retracted one
+struck), and the proposals that would place something with it.</p>
+<p><strong>Writing, never waiting.</strong> As on the Manifest: the acts are POSTs from this machine only, one at a time,
+under the record's writer lock; while another command holds it an act is answered as every act of the
+Library is (<code>409</code>, the one sentence, the command that holds the lock, the form kept;
+<a href="#three-rules">above</a>), and nothing is written (the owner's word for every act of the Library,
+14 October 2026); a proposal no longer in the queue, or an idea the record no longer names, is a <code>409</code>;
+an answer the record refuses (a <code>killed</code> with no reason, a day ahead) a <code>400</code>. A page read through a gate
+without tier 2, an idea's status's tier, offers no act and refuses both (<code>403</code>). <code>logbook export site</code>
+has no Ideas.</p>
+<h2 id="phone-first">Phone first</h2>
+<p>Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
+facts with the evidence folded under it, a day never breaks inside its hyphens, the canvas scales to
+the column, and on every page (the Day's Sources, the days, the trips, the places, the assets, the
+gaps; in the server and in an exported site) a table wider than the column scrolls inside its own
+box rather than the page sideways.
+<code>tests/test_library_walk.py</code> walks the pages the server serves, from <code>/</code> through the links on every
+page it reads, one page of each kind (the Day, every shelf, the Manifest, each detail page, an
+error, a redirect), and holds each to that column without a browser; the list of pages it must reach is read from the server's own
+routes, so a page added there and not walked fails it. <code>tests/test_library_pages.py</code> and
+<code>tests/test_manifest_page.py</code> hold the four years' widest shelves and the Manifest's pages besides,
+and <code>tests/test_ideas_page.py</code> the Ideas shelf and an idea.
+<code>tests/phone_width.py</code> parses each page with every disclosure open, applies the page's own
+stylesheet as a 400 px phone would (its phone breakpoint included), and fails when an element's
+fixed width, min-width or row of columns, with the margins, borders and padding around it, passes
+the column, when an image or a <code>pre</code> has no <code>max-width</code> to keep it inside, or when the stylesheet has
+no phone breakpoint. Its estimates err wide, and a stylesheet it cannot read fails the test rather
+than passing it. The Day is held to the column like every other page: its Sources table, wider
+than the column on some days, scrolls inside its own box.</p>
+<h2 id="what-it-is-not">What it is not</h2>
+<p>Not an editor: the pages write nothing but the namings, the reviews, an org's or an idea's status, the reflection
+and the signature, the stars and the company said above, and the captain's other words — a note, a
+confirmation of a line — go through the CLI as lines in the record, which the next page reads. Not a
+web application: no framework, no build step, no
+state but the record, and two inline scripts, a dozen lines for three keys and a score for one
+button. Not the circle (ADR 0009): a page
+here is for the owner's eyes on the owner's machine; a shared page is a signed bundle, and that is
+another layer.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
