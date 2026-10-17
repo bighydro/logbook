@@ -21,6 +21,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
 
+import page_text
 import phone_width
 import pytest
 from four_years import ASTRID
@@ -350,7 +351,7 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         assert response.status == 409, (_kind(act), response.status, page[:400])
         assert _paragraphs(page, "busy") == [SAID], _kind(act)
         assert "another logbook command is writing to this record (logbook sync" in page, _kind(act)
-        assert "--no-wait" not in page and "503" not in page
+        assert page_text.says(page, "409") and _neither_503_nor_no_wait(page), _kind(act)
         (again,) = _forms(page, "again")
         assert again.action == act.path and again.buttons == [], _kind(act)
         assert again.fields == act.form, (_kind(act), again.fields)
@@ -374,6 +375,41 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         else:
             assert response.status == 303, (_kind(act), response.status, response.body[:400])
     assert Logbook(mine.root).meta["head"] != before[mine.root][1]
+
+
+def _neither_503_nor_no_wait(page: str) -> bool:
+    """The busy page's words: a reader never sees 503 on it, the status the Library's acts answered
+    a busy record with before #315 (`page_text.says`: what the page shows, as a word; the line ids
+    of its kept form are random hex and hold "503" now and then, as the head's hash may); and it
+    never mentions the store's `--no-wait` anywhere, attributes and all (no id or hash holds it)."""
+    return "--no-wait" not in page and not page_text.says(page, "503")
+
+
+def test_the_busy_check_reads_what_a_reader_sees(
+    years: Path, holder: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check above that the busy page never says 503 reads the page as a reader does, not its
+    source: a kept form's line id is random hex and holds "503" now and then (one did on CI, in a
+    hidden field, and a whole-page substring failed a right page), as the head's hash in the footer
+    may; a page that says 503 still fails it."""
+    lb = _copy(years, tmp_path / "years", monkeypatch)
+    lock = lb.root.joinpath(*store.LOCK_FILE.parts)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(json.dumps(holder), encoding="utf-8")
+    line = "01a1455c-0d41-7503-b7bc-6e84e26be254"  # a line id as UUIDv7 draws one, with 503 in it
+    form = {"day": DAY, "line": line, "act": "star"}
+    response = _years_site(lb).write(serve.STAR_PATH, form, LOOPBACK, f"http://{LOOPBACK}:8765")
+    page = response.body.decode("utf-8")
+    assert response.status == 409 and _paragraphs(page, "busy") == [SAID], page[:400]
+    (again,) = _forms(page, "again")
+    assert again.fields == form and f'type="hidden" name="line" value="{line}"' in page
+    assert _neither_503_nor_no_wait(page), "a right page, the id in its kept form"
+    head = re.search(r"head <code>([0-9a-f]+)…</code>", page)
+    assert head is not None, page[-400:]
+    assert _neither_503_nor_no_wait(page.replace(head.group(1), "e1e9503a412b")), "the head's hash"
+    for said in ("<h1>503</h1>", '<h1>409</h1>\n<p class="mute">Service unavailable (503).</p>'):
+        assert not _neither_503_nor_no_wait(page.replace("<h1>409</h1>", said)), said
+    assert not _neither_503_nor_no_wait(page.replace("</main>", "<p>logbook sync --no-wait</p>\n</main>"))
 
 
 def test_the_owner_s_sentence_is_the_library_s_one_busy_answer() -> None:

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import page_text
 import phone_width
 import pytest
 from four_years import ASTRID, BJORN, FRODE, HANS, INGRID, KRISTIN, OBSERVED
@@ -120,8 +121,9 @@ def _cli_on(root: Path, monkeypatch: pytest.MonkeyPatch, *args: str) -> None:
 
 
 def _section(text: str, start: str, end: str | None = None) -> str:
+    """From `start` to the next `end` after it (a start that is itself an `<h2>` does not end there)."""
     rest = text[text.index(start) :]
-    return rest if end is None else rest[: rest.index(end)]
+    return rest if end is None else rest[: rest.index(end, len(start))]
 
 
 # -- the pages render, from the record alone ----------------------------------------------------------
@@ -287,7 +289,9 @@ def test_a_machine_participant_is_on_no_shelf_no_page_and_in_no_queue(lb: Logboo
     assert "1 proposal · 2 seen, not placed" in review and named not in review
     assert site.respond(f"/people/{bot}", "").status == 404, "no page of its own"
     hans = _get(site, f"/people/{HANS['id']}")
-    assert "2025" not in _section(hans, "<h2>Days together", "<h2>")
+    together = _section(hans, "<h2>Days together", "<h2>")  # a row's line id may hold "2025": unseen
+    assert page_text.says(together, "2024"), "the section is read: his days together of 2024"
+    assert not page_text.says(together, "2025"), "no day together in 2025, by year or by day"
     assert "spoke in Another" not in hans and "transcript" not in hans.split("<h2>")[0]
 
 
