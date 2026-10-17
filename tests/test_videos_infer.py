@@ -713,7 +713,7 @@ def test_a_generated_tape_is_inferred_scene_by_scene(
     assert _run() == 0
     lines = _new(lb, seq)
     proposals = [d["payload"]["extra"]["proposal"] for d in _drafts(lines)]
-    assert len(proposals) == 4
+    assert len(proposals) == 4, [d["payload"]["extra"]["scene"] for d in _drafts(lines)]
     assert proposals[1] is not None and proposals[1]["place"]["id"] == "Vollen Brygge"
     assert proposals[2] is not None and proposals[2]["when"] == {
         "from": "1994-07-14",

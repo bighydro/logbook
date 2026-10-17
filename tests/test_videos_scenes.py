@@ -273,6 +273,15 @@ def make_tape(folder: Path, name: str = "tape.mp4") -> Path:
     return tape
 
 
+def read_out(scenes: object, cuts: list[tuple[float, float]], levels: list[tuple[float, float]]) -> str:
+    """What this ffmpeg read of the generated tape, for a failure's message: its version, every scene
+    score it printed and the soundtrack's levels a second either side of each join."""
+    version = subprocess.run(["ffmpeg", "-version"], capture_output=True, encoding="utf-8", check=False)
+    near = {join: [(t, round(db, 1)) for t, db in levels if abs(t - join) <= 1.0] for join in JOINS}
+    first = (version.stdout or "").splitlines()[:1]
+    return f"{first} scenes={scenes} cuts={cuts} levels near the joins={near}"
+
+
 @pytest.mark.skipif(not FFMPEG, reason="ffmpeg is not installed")
 def test_on_a_generated_tape_the_scenes_are_found_where_the_recordings_join(tmp_path: Path) -> None:
     tape = make_tape(tmp_path / "gen")
@@ -282,7 +291,7 @@ def test_on_a_generated_tape_the_scenes_are_found_where_the_recordings_join(tmp_
     cuts = tool.cuts(tape, infer.SETTINGS.soft_cut)
     levels = tool.levels(tape, infer.SETTINGS.window_s)
     scenes = infer.find_scenes(probe.duration_s, cuts, levels)
-    assert len(scenes) == 4, scenes
+    assert len(scenes) == 4, read_out(scenes, cuts, levels)
     for found, join in zip(_edges(scenes), JOINS, strict=True):
         assert abs(found - join) <= 0.6, (found, join)
     frame = tmp_path / "frame.jpg"
