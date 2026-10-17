@@ -14,7 +14,8 @@ diagnostic"). Plain text, one section after another:
   (`state/last-run.json`: when, the lines per source, the sources that failed, the doctor's counts and
   the names of the checks that warned or failed), and the serve services with their ports. Whether a
   server answers there is not asked: that is a request, and the packet makes one only.
-- `dream endpoint`: the host and port, the model, the policy's dream entry, and one request, the probe:
+- `dream endpoint`: the host and port, the model, the policy's dream entry, the temperature the request
+  carries (`0.2`, `LOGBOOK_DREAM_TEMPERATURE`'s value or `none`), and one request, the probe:
   the dream's own request (`model_client`; the key as its bearer token when `LOGBOOK_DREAM_KEY` is set)
   with the fixed prompt `PROMPT` where a day would be, and the reply's HTTP status and body as they came
   (up to `BODY_LIMIT` bytes): a model's error is not the record's content. Made only when
@@ -27,10 +28,10 @@ diagnostic"). Plain text, one section after another:
 
 Whatever the packet quotes rather than writes — a log line, the reply, an error, a source's result —
 passes through `Scrub` first, the longest match first: the value of every `LOGBOOK_*` variable but the
-record's folder and the model's name, of every proxy and of every variable named like a key, token or
-password becomes its name in brackets (`[LOGBOOK_IMMICH_KEY]`); the record's folder `[record]`; the home
-directory `~`; the owner's names and each word of them, handles, addresses and numbers from
-`policy/owner.json` and `owner_emails`, and the login name, `[owner]` (a number by its last eight
+record's folder, the model's name and the temperature, of every proxy and of every variable named like a
+key, token or password becomes its name in brackets (`[LOGBOOK_IMMICH_KEY]`); the record's folder
+`[record]`; the home directory `~`; the owner's names and each word of them, handles, addresses and
+numbers from `policy/owner.json` and `owner_emails`, and the login name, `[owner]` (a number by its last eight
 digits, however it is spaced); this machine's name `[host]`; and the names of the places and assets the
 record keeps, `[place]` and `[asset]`. What the packet does not know it cannot replace, so its head says
 to read it before sending it. It writes nothing but the file `--out` names."""
@@ -84,7 +85,9 @@ SETTING_ENV = (
     "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE",
 )  # upper case: Windows spells `OneDrive`, and its environment ignores case
-SHOWN_ENV = frozenset({"LOGBOOK_HOME", model_client.MODEL_ENV})  # the folder as [record], the model as named
+SHOWN_ENV = frozenset(
+    {"LOGBOOK_HOME", model_client.MODEL_ENV, model_client.TEMPERATURE_ENV}
+)  # the folder as [record], the model and the temperature as named
 SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASS|CREDENTIAL|AUTH", re.IGNORECASE)
 SECRET_CHARS = 6  # a shorter value (`1`, `48`, `true`) is a setting, and would match everywhere
 WORD_CHARS = 3  # a name's word, an address, a login or a label shorter than this is not replaced
@@ -505,11 +508,7 @@ def probe(endpoint: model_client.Endpoint, timeout: float = PROBE_TIMEOUT_S) -> 
     """One request, the dream's (`model_client.complete`) with `PROMPT` for its messages, never
     retried: (`HTTP 500 Internal Server Error`, the first `BODY_LIMIT` + 1 bytes of the body), or
     (`none, …` why, None) when no reply came."""
-    body = {
-        "model": endpoint.model,
-        "messages": [{"role": "user", "content": PROMPT}],
-        "temperature": model_client.TEMPERATURE,
-    }
+    body = model_client.request_body(endpoint, [{"role": "user", "content": PROMPT}])
     request = urllib.request.Request(endpoint.url, data=json.dumps(body).encode("utf-8"), method="POST")
     request.add_header("Content-Type", "application/json")
     request.add_header("Accept", "application/json")
@@ -579,9 +578,14 @@ def dream_lines(lb: Logbook | None, env: Mapping[str, str], scrub: Scrub) -> lis
     lines.append(f"model: {scrub(endpoint.model)} ({whose}){disagree}")
     key = f"{model_client.KEY_ENV} set, sent as the bearer token" if endpoint.key else "none"
     lines.append(f"key: {key}")
+    lines.append(f"temperature: {model_client.temperature_said(endpoint, env)}")
     lines.append(f"probe: the dream's request with {PROMPT!r} as its only message, sent once")
     status, body = probe(endpoint)
     lines.append(f"reply: {scrub(status)}")
+    if status.startswith("HTTP 400 ") and model_client.about_temperature(
+        400, status + (body or b"").decode("utf-8", errors="replace")
+    ):
+        lines.append(f"hint: {model_client.TEMPERATURE_HINT}")
     if body is None:
         return lines
     if not body:

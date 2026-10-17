@@ -394,6 +394,10 @@ that names another is refused.
 printf '%s\n' 'LOGBOOK_DREAM_ENDPOINT=http://127.0.0.1:8080' 'LOGBOOK_DREAM_MODEL=qwen2.5-7b-instruct' >> ~/.config/logbook/sync.env
 ```
 
+A hosted model that refuses any temperature (HTTP 400, "temperature is deprecated for this model") needs
+`LOGBOOK_DREAM_TEMPERATURE=none` in the same file; unset, the request carries `0.2`, and a number from 0
+to 2 is sent as given ([the endpoint](dream.md#the-endpoint)).
+
 **Check**, one day, nothing written:
 
 ```bash
