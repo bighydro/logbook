@@ -156,10 +156,12 @@ not stay up — a collaborator needs to see this machine without seeing the reco
   (when, the lines per source, the sources that failed, the doctor's counts and the names of the
   checks that warned or failed), and the serve services with their ports.
 - **dream endpoint**: the host and port of `LOGBOOK_DREAM_ENDPOINT` (never its path), the model, the
-  policy's `dream` entry, and one probe: the dream's own request, the key as its bearer token when
+  policy's `dream` entry, the temperature the request carries (`temperature: 0.2 (the default)`, the
+  value of `LOGBOOK_DREAM_TEMPERATURE`, or `none`, when no temperature field is sent), and one probe: the dream's own request, the key as its bearer token when
   `LOGBOOK_DREAM_KEY` is set, with the fixed prompt `Reply with the single word ready.` where a day
   would be, sent once. The reply's HTTP status and body follow as they came (up to 64 KiB): a model's
-  error is not the record's content.
+  error is not the record's content. A 400 whose body names the temperature adds `hint: set
+  LOGBOOK_DREAM_TEMPERATURE=none for a model that takes no temperature`.
 - **environment**: the names of the variables set that logbook reads — every `LOGBOOK_*`, the proxies,
   the config and cache folders — never a value.
 - **sync log** and **service log**: the last 40 lines of each, from `~/Library/Logs/logbook-sync.log`
@@ -181,7 +183,7 @@ scrubbed first, the longest match first:
 | `[owner]` | the owner's names and each word of them, handles (with and without `@`), addresses and numbers from `policy/owner.json` and `owner_emails`, and the login name unless it is a generic account (`root`, `admin`, `runner`, …); a number is found by its last eight digits however it is spaced, so `+44 7700 900461`, `07700900461` and `(+44) 7700-900-461` are one |
 | `[host]` | this machine's name, in full and before its first dot |
 | `[place]`, `[asset]` | the names of the places in `places.json` and of the assets in `assets.json`, as written |
-| `[NAME]` | the value of the variable `NAME`: every `LOGBOOK_*` but `LOGBOOK_HOME` and `LOGBOOK_DREAM_MODEL`, every proxy, and any variable named like a key, a token or a password |
+| `[NAME]` | the value of the variable `NAME`: every `LOGBOOK_*` but `LOGBOOK_HOME`, `LOGBOOK_DREAM_MODEL` and `LOGBOOK_DREAM_TEMPERATURE`, every proxy, and any variable named like a key, a token or a password |
 
 A `policy/owner.json` that cannot be read is said at the top: the owner's names are then not replaced.
 What the packet does not know it cannot replace — another person's name a sync printed, a calendar's

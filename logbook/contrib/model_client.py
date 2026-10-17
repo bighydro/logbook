@@ -9,9 +9,12 @@ variables and no code change.
 - `LOGBOOK_DREAM_MODEL`: the model's name as the endpoint knows it (`gpt-4o-mini`,
   `qwen2.5-7b-instruct`); the `model` of the policy's `dream` entry wins when the entry names one.
 - `LOGBOOK_DREAM_KEY`: the bearer token, optional; a local server needs none and gets no header.
+- `LOGBOOK_DREAM_TEMPERATURE`: the request's temperature, a number from 0 to 2 sent as given; `none`
+  sends no temperature at all, for a model that refuses one; unset, `TEMPERATURE`.
 
 `complete` sends the messages once and, when the connection fails, times out or the server answers
-5xx or 429, once more after a short pause; a 4xx is the request's fault and is said at once. The
+5xx or 429, once more after a short pause; a 4xx is the request's fault and is said at once, a 400
+about the temperature with what to set (it is never retried without one: the owner sets it). The
 answer is the first choice's content. `send` is the one place a connection is opened; the tests
 replace it with an in-process fake and never open one (`tests/test_dream.py`)."""
 
@@ -30,11 +33,16 @@ from urllib.parse import urlsplit
 ENDPOINT_ENV = "LOGBOOK_DREAM_ENDPOINT"
 MODEL_ENV = "LOGBOOK_DREAM_MODEL"
 KEY_ENV = "LOGBOOK_DREAM_KEY"
+TEMPERATURE_ENV = "LOGBOOK_DREAM_TEMPERATURE"
 COMPLETIONS = "/chat/completions"
 TIMEOUT_S = 120.0  # a local 7B model on a laptop takes a minute on a long day
 RETRIES = 1  # one more try after a failure that is the network's or the server's
 RETRY_PAUSE_S = 2.0
-TEMPERATURE = 0.2
+TEMPERATURE = 0.2  # unset LOGBOOK_DREAM_TEMPERATURE
+MAX_TEMPERATURE = 2
+NO_TEMPERATURE = "none"
+TEMPERATURE_HINT = f"set {TEMPERATURE_ENV}={NO_TEMPERATURE} for a model that takes no temperature"
+ERROR_BODY_LIMIT = 64 * 1024  # what of a refusal's body is read to see whether it is about the temperature
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
@@ -48,6 +56,7 @@ class Endpoint:
     url: str
     model: str
     key: str | None = None
+    temperature: float | None = TEMPERATURE  # None: the request carries no temperature
 
 
 def from_env(env: Mapping[str, str] | None = None, model: str | None = None) -> Endpoint:
@@ -64,7 +73,65 @@ def from_env(env: Mapping[str, str] | None = None, model: str | None = None) -> 
     if not name:
         raise ModelError(f"{MODEL_ENV} is not set and the policy names no model; one of them names the model")
     key = (found.get(KEY_ENV) or "").strip() or None
-    return Endpoint(completions_url(url), name, key)
+    return Endpoint(completions_url(url), name, key, temperature_of(found.get(TEMPERATURE_ENV)))
+
+
+def temperature_of(value: str | None) -> float | None:
+    """`LOGBOOK_DREAM_TEMPERATURE` read: unset or empty is `TEMPERATURE`, `none` is None (no field), a
+    number from 0 to `MAX_TEMPERATURE` is itself (`0` stays an int, so it is sent as written); anything
+    else is a `ModelError` naming the variable."""
+    given = (value or "").strip()
+    if not given:
+        return TEMPERATURE
+    if given.lower() == NO_TEMPERATURE:
+        return None
+    try:
+        number: float = int(given)
+    except ValueError:
+        try:
+            number = float(given)
+        except ValueError:
+            number = float("nan")
+    if not 0 <= number <= MAX_TEMPERATURE:  # nan fails too
+        raise ModelError(
+            f"{TEMPERATURE_ENV} is {given!r}; it is a number from 0 to {MAX_TEMPERATURE}, or"
+            f" {NO_TEMPERATURE!r} for a model that takes no temperature"
+        )
+    return number
+
+
+def temperature_said(endpoint: Endpoint, env: Mapping[str, str]) -> str:
+    """`0.2 (the default)`, `0.7 (LOGBOOK_DREAM_TEMPERATURE)`, or `none (…), the field is not sent`:
+    what the request will carry, for doctor."""
+    if endpoint.temperature is None:
+        return f"{NO_TEMPERATURE} ({TEMPERATURE_ENV}), the field is not sent"
+    whose = TEMPERATURE_ENV if (env.get(TEMPERATURE_ENV) or "").strip() else "the default"
+    return f"{endpoint.temperature} ({whose})"
+
+
+def request_body(endpoint: Endpoint, messages: Sequence[Mapping[str, str]]) -> dict[str, Any]:
+    """The chat completions request: the model, the messages and, unless it is `none`, the
+    temperature."""
+    body: dict[str, Any] = {"model": endpoint.model, "messages": list(messages)}
+    if endpoint.temperature is not None:
+        body["temperature"] = endpoint.temperature
+    return body
+
+
+def about_temperature(status: int, text: str) -> bool:
+    """Whether a refusal is the model's objection to the temperature: a 400 whose message names it."""
+    return status == 400 and "temperature" in text.lower()
+
+
+def refusal_text(error: urllib.error.HTTPError) -> str:
+    """The reason and the start of the body of a refusal, to look into; never said as it is."""
+    try:
+        raw = error.read(ERROR_BODY_LIMIT) if error.fp is not None else b""
+    except (OSError, ValueError):
+        raw = b""
+    finally:
+        error.close()
+    return f"{error.reason} {raw.decode('utf-8', errors='replace')}"
 
 
 def completions_url(url: str) -> str:
@@ -111,7 +178,7 @@ def complete(
 ) -> str:
     """The model's answer to `messages` (`[{role, content}, ...]`), as text. One retry after a
     network failure, a timeout, a 429 or a 5xx; a 4xx is said at once."""
-    body = {"model": endpoint.model, "messages": list(messages), "temperature": TEMPERATURE}
+    body = request_body(endpoint, messages)
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if endpoint.key:
         headers["Authorization"] = f"Bearer {endpoint.key}"
@@ -123,7 +190,8 @@ def complete(
             return content_of(post(endpoint.url, body, headers, timeout))
         except urllib.error.HTTPError as e:
             if e.code not in RETRY_STATUSES:
-                raise ModelError(f"the endpoint refused the request: HTTP {e.code} {e.reason}") from e
+                hint = f"; {TEMPERATURE_HINT}" if about_temperature(e.code, refusal_text(e)) else ""
+                raise ModelError(f"the endpoint refused the request: HTTP {e.code} {e.reason}{hint}") from e
             last = f"HTTP {e.code} {e.reason}"
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
             reason = getattr(e, "reason", None) or e

@@ -101,7 +101,7 @@ what changes is what the readers show.
 
 ## The endpoint
 
-Any OpenAI-compatible chat completions endpoint, through three variables; a cloud model today and a
+Any OpenAI-compatible chat completions endpoint, through four variables; a cloud model today and a
 local one tomorrow is a change of variables, not of code. No SDK is involved: one JSON request over the
 standard library, a timeout of two minutes, and one retry when the connection fails or the server
 answers 429 or 5xx.
@@ -111,6 +111,7 @@ answers 429 or 5xx.
 | `LOGBOOK_DREAM_ENDPOINT` | the URL. `https://api.example.org/v1/chat/completions` in full, or the base a server prints (`http://127.0.0.1:8080` or `http://127.0.0.1:8080/v1`), which gets `/chat/completions` appended |
 | `LOGBOOK_DREAM_MODEL` | the model's name as the endpoint knows it; the policy's `model` wins when the entry names one |
 | `LOGBOOK_DREAM_KEY` | the bearer token, optional; a local `llama-server` needs none and gets no header |
+| `LOGBOOK_DREAM_TEMPERATURE` | the request's temperature, optional: unset sends `0.2`; a number from 0 to 2 is sent as given; `none` sends no temperature at all, for a hosted model that refuses one. Anything else is refused, naming the variable. A model that answers HTTP 400 about the temperature gets the error with `set LOGBOOK_DREAM_TEMPERATURE=none for a model that takes no temperature`; the dream never retries without one on its own |
 
 The schedule's environment file, `~/.config/logbook/sync.env`, is where these live for the morning run
 ([the schedule](schedule.md)); set them in the shell to try by hand.
