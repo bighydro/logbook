@@ -2,8 +2,8 @@
 writer lock: one answer for all of them, the owner's of 14 October 2026 (a 409, one sentence, the
 form's input kept to send again) and nothing written. Every page it serves, from `/` through every
 link on every page, read as a phone 400 px wide reads it (`phone_width.py`, no browser). On the four
-synthetic years (`library_record.py`), the Oslo persona's fortnight (`persona.py`) and the orgs
-record (`orgs_record.py`); nobody and nothing here exists."""
+synthetic years (`library_record.py`), the Oslo persona's fortnight (`persona.py`), the orgs
+record (`orgs_record.py`) and the ideas record (`ideas_record.py`); nobody and nothing here exists."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
 
+import ideas_record
 import page_text
 import phone_width
 import pytest
@@ -29,7 +30,7 @@ from library_record import BERGEN_WINTER, library_record
 from orgs_record import TODAY, evidence_record, settle
 from persona import persona_record
 
-from logbook.contrib import entity_review, orgs, people_review, places_review, reflect, serve
+from logbook.contrib import entity_review, ideas, orgs, people_review, places_review, reflect, serve
 from logbook.core import store
 from logbook.core.store import Logbook
 
@@ -41,11 +42,13 @@ HEARD = "Heard on this machine: the harbour office, then the ferry home."
 JUNE = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)  # after the persona's fortnight
 WEDNESDAY = "2026-06-10"  # a day of it, with rows to star
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
+KIOSK_COPY = "1f2e3d4c-0000-4000-8000-000000000061"  # a page titled like the kiosk: the Ideas queue's match
 DETAILS = (
     ("/day/D", serve.DAY_PATH),
     ("/journeys/A/B", serve.JOURNEY_PATH),
     ("/people/ID", serve.PERSON_PATH),
     ("/org/ID", serve.ORG_PATH),
+    ("/idea/ID", serve.IDEA_PATH),
 )  # the pages one of many: a route each
 ROUTES = frozenset(
     {
@@ -64,6 +67,8 @@ ROUTES = frozenset(
         "/manifest",
         "/manifest/people",
         "/org/ID",
+        "/ideas",
+        "/idea/ID",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
@@ -98,6 +103,21 @@ def manifest(tmp_path_factory: pytest.TempPathFactory) -> Path:
         return lb.root
 
 
+@pytest.fixture(scope="module")
+def shelf_of_ideas(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The ideas record and the owner's sitting on it, with one more page titled like the kiosk, so the
+    queue holds a match to accept beside the new ones to name and to reject."""
+    with pytest.MonkeyPatch.context() as mp:
+        copy = ideas_record.notion(
+            "2026-09-25T10:00:00Z", KIOSK_COPY, "The fjord kiosk", action="created", words=60
+        )
+        lb = ideas_record.record(
+            tmp_path_factory.mktemp("walk-ideas"), mp, [*ideas_record.ideas_drafts(), copy]
+        )
+        ideas_record.settle(lb)
+        return lb.root
+
+
 def _copy(source: Path, to: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     shutil.copytree(source, to)
     monkeypatch.setenv("LOGBOOK_HOME", str(to))
@@ -117,6 +137,11 @@ def _years_site(lb: Logbook) -> serve.Site:
 
 def _manifest_site(lb: Logbook) -> serve.Site:
     return serve.Site(lb, now=lambda: datetime.fromisoformat(f"{TODAY}T12:00:00").replace(tzinfo=UTC))
+
+
+def _ideas_site(lb: Logbook) -> serve.Site:
+    today = ideas_record.TODAY
+    return serve.Site(lb, now=lambda: datetime.fromisoformat(f"{today}T12:00:00").replace(tzinfo=UTC))
 
 
 def _files(root: Path) -> dict[str, bytes]:
@@ -211,11 +236,12 @@ class Act(NamedTuple):
     upload: serve.Upload | None = None
 
 
-def _acts(years: Logbook, manifest: Logbook) -> list[Act]:
+def _acts(years: Logbook, manifest: Logbook, shelf_of_ideas: Logbook) -> list[Act]:
     """Every act the Library serves, each with a form as its page sends it: the shelves' (Places, a
-    journey's name, the People queue), the Manifest's (its queue, an org's status) and the Day's
-    (Reflect in words and by a recording, Sign, a star and an unstar, the "with…" field). Before the
-    lock: a reflection on the day, so the Day carries its Sign form, and a star, to unstar."""
+    journey's name, the People queue), the Manifest's (its queue, an org's status), the Ideas' (its
+    queue, an idea's status) and the Day's (Reflect in words and by a recording, Sign, a star and an
+    unstar, the "with…" field). Before the lock: a reflection on the day, so the Day carries its Sign
+    form, and a star, to unstar."""
     site = _years_site(years)
     assert (
         site.write(
@@ -240,6 +266,12 @@ def _acts(years: Logbook, manifest: Logbook) -> list[Act]:
     named = {o.label: o.id for o in orgs.named(manifest).values()}
     org = next(iter(named.values()))
     shelf = _manifest_site(manifest)
+    proposed = {p.observed.key: p.id for p in entity_review.read(shelf_of_ideas, "idea").proposals}
+    match, new, other = (
+        proposed[("page", f"notion:{page}")] for page in (KIOSK_COPY, ideas_record.GARDEN, ideas_record.HUB)
+    )
+    kiosk = {e.label: e.id for e in ideas.named(shelf_of_ideas).values()}[ideas_record.KIOSK]
+    idea_site = _ideas_site(shelf_of_ideas)
     return [
         Act(
             site,
@@ -265,6 +297,25 @@ def _acts(years: Logbook, manifest: Logbook) -> list[Act]:
                 "back": f"/org/{org}",
                 "status": "hold",
                 "reason": "came back to it",
+                "at": "",
+                "act": "status",
+            },
+        ),
+        Act(idea_site, serve.IDEAS_REVIEW, {"id": match, "back": "/ideas", "act": "accept"}),
+        Act(
+            idea_site,
+            serve.IDEAS_REVIEW,
+            {"id": new, "back": "/ideas", "name": "the garden notes", "act": "name"},
+        ),
+        Act(idea_site, serve.IDEAS_REVIEW, {"id": other, "back": "/ideas", "act": "reject"}),
+        Act(
+            idea_site,
+            serve.IDEAS_STATUS,
+            {
+                "idea": kiosk,
+                "back": f"/idea/{kiosk}",
+                "status": "build",
+                "reason": "the ferry company said yes to a trial",
                 "at": "",
                 "act": "status",
             },
@@ -310,16 +361,22 @@ def holder() -> Iterator[dict[str, object]]:
 
 
 def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
-    years: Path, manifest: Path, holder: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    years: Path,
+    manifest: Path,
+    shelf_of_ideas: Path,
+    holder: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """While another command holds the record's writer lock, every act of the Library, the shelves',
-    the Manifest's and the Day's alike, answers the same: a 409 whose page says the one sentence (and
-    who holds the lock, in the store's words), and keeps the form's input in a form that posts it
-    again; and nothing is written, not a line, not a file. Once the lock is free, the kept form sent
-    again is the act."""
+    the Manifest's, the Ideas' and the Day's alike, answers the same: a 409 whose page says the one
+    sentence (and who holds the lock, in the store's words), and keeps the form's input in a form that
+    posts it again; and nothing is written, not a line, not a file. Once the lock is free, the kept
+    form sent again is the act."""
     mine = _copy(years, tmp_path / "years", monkeypatch)
     theirs = _copy(manifest, tmp_path / "orgs", monkeypatch)
-    acts = _acts(mine, theirs)
+    hers = _copy(shelf_of_ideas, tmp_path / "ideas", monkeypatch)
+    acts = _acts(mine, theirs, hers)
     found = re.search(r"/\(([a-z|]+)\)\$$", serve.DAY_ACT.pattern)  # the Day's acts, from its route
     assert found is not None, serve.DAY_ACT.pattern
     day_acts = {f"/day/D/{act}" for act in found.group(1).split("|")}
@@ -333,16 +390,20 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         f"{serve.MANIFEST_REVIEW} accept",
         f"{serve.MANIFEST_REVIEW} name",
         f"{serve.MANIFEST_REVIEW} reject",
+        f"{serve.IDEAS_REVIEW} accept",
+        f"{serve.IDEAS_REVIEW} name",
+        f"{serve.IDEAS_REVIEW} reject",
+        f"{serve.IDEAS_STATUS} status",
         f"/day/D/reflect {serve.REFLECT}",
         f"/day/D/reflect {serve.HEAR}",
         f"{serve.STAR_PATH} star",
         f"{serve.STAR_PATH} unstar",
     }
-    locks = [lb.root.joinpath(*store.LOCK_FILE.parts) for lb in (mine, theirs)]
+    locks = [lb.root.joinpath(*store.LOCK_FILE.parts) for lb in (mine, theirs, hers)]
     for lock in locks:
         lock.parent.mkdir(parents=True, exist_ok=True)
         lock.write_text(json.dumps(holder), encoding="utf-8")
-    before = {lb.root: (_files(lb.root), lb.meta["head"]) for lb in (mine, theirs)}
+    before = {lb.root: (_files(lb.root), lb.meta["head"]) for lb in (mine, theirs, hers)}
     answers: dict[str, str] = {}
     kept: list[Form] = []
     for act in acts:
@@ -362,7 +423,7 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         answers[_kind(act)] = main[: main.index('<form class="again"')]
         kept.append(again)
     assert len(set(answers.values())) == 1, "one answer, word for word, for every act"
-    for lb in (mine, theirs):
+    for lb in (mine, theirs, hers):
         assert (_files(lb.root), Logbook(lb.root).meta["head"]) == before[lb.root], "nothing written"
     for lock in locks:
         assert json.loads(lock.read_text(encoding="utf-8")) == holder
@@ -375,6 +436,7 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         else:
             assert response.status == 303, (_kind(act), response.status, response.body[:400])
     assert Logbook(mine.root).meta["head"] != before[mine.root][1]
+    assert Logbook(hers.root).meta["head"] != before[hers.root][1]
 
 
 def _neither_503_nor_no_wait(page: str) -> bool:
@@ -459,12 +521,13 @@ def _walk(site: serve.Site, seeds: Sequence[str]) -> dict[str, tuple[int, str]]:
 
 @pytest.fixture(scope="module")
 def walked(
-    fortnight: Path, manifest: Path, tmp_path_factory: pytest.TempPathFactory
+    fortnight: Path, manifest: Path, shelf_of_ideas: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> dict[str, list[Page]]:
     """Every page the Library serves, walked once (`_walk`) from `/` on the persona's fortnight, whose
     Day carries every form it can (Reflect and Sign, a reflection standing on it; the recording; the
-    stars; the "with…" field), and on the orgs record, for the Manifest; with an error of each kind
-    and a redirect. By route, a page that is not a 200 under `ANSWERS`."""
+    stars; the "with…" field), on the orgs record, for the Manifest, and on the ideas record, for the
+    Ideas; with an error of each kind and a redirect. By route, a page that is not a 200 under
+    `ANSWERS`."""
     folder = tmp_path_factory.mktemp("walk")
     with pytest.MonkeyPatch.context() as mp:
         mine = _copy(fortnight, folder / "fortnight", mp)
@@ -479,6 +542,7 @@ def walked(
                 ["/", f"/day/{WEDNESDAY}", f"/day/{WEDNESDAY}?open=1", "/nowhere", "/days?from=2026-13-01"],
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
+            (_ideas_site(_copy(shelf_of_ideas, folder / "ideas", mp)), ["/", "/ideas"]),
         )
         found: dict[str, list[Page]] = {}
         for one, seeds in sites:
@@ -505,7 +569,7 @@ def test_the_walk_knows_every_page_the_server_answers(walked: dict[str, list[Pag
 def test_every_page_the_library_serves_fits_a_phone(walked: dict[str, list[Page]], route: str) -> None:
     """Read as a phone 400 px wide reads them, every disclosure open, from the HTML and the page's own
     stylesheet (`phone_width`, no browser): every page `logbook serve` serves (`walked`: the Day,
-    every shelf, the Manifest, each detail page, an error, a redirect), by route: no element passes
+    every shelf, the Manifest, the Ideas, each detail page, an error, a redirect), by route: no element passes
     the column with the frames around it, every image and pre is held inside it, and every stylesheet
     has its phone breakpoint. The four years' widest shelves are held to it in `test_library_pages.py`
     besides."""

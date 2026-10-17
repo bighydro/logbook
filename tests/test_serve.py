@@ -37,6 +37,7 @@ PAGES = (
     "/places?page=2",
     "/manifest",
     "/manifest/people",
+    "/ideas",
     "/assets",
     "/gaps",
     "/world",

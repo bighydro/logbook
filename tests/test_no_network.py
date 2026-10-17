@@ -149,6 +149,7 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "nearby", "--days", "2026-06-08", "2026-06-10"),
     ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
     ("review", "speakers", "--json"),
+    ("show", "ideas", "--json"),
     ("setup", "assets", "status"),
     ("setup", "assets", "status", "--json"),
     ("setup", "assets", "list"),
@@ -262,6 +263,7 @@ PAGES = (
     "/days?from=2026-06-15&to=2026-06-20",
     "/trips?year=2026",
     "/places",
+    "/ideas",
     "/journeys",
     "/journeys?year=2026",
     JOURNEY,

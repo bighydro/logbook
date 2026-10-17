@@ -1,6 +1,6 @@
 # RFC 0037 — Entities: orgs, ideas, places and assets reviewed like people
 
-Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amended 2026-10-14: an org's status reason stays on its tier-3 line, never a `note/v1` (§8, §10.2, §10.5) · amended 2026-10-15: an org's portfolio is an optional field of its tier-3 status line, never an `entity/v1` line (§8, §9, §10.2, §11) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
+Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amended 2026-10-14: an org's status reason stays on its tier-3 line, never a `note/v1` (§8, §10.2, §10.5) · amended 2026-10-15: an org's portfolio is an optional field of its tier-3 status line, never an `entity/v1` line (§8, §9, §10.2, §11) · amended 2026-10-16: a database row is its own root, and is proposed as an idea only when its `Type` says `Idea` (§4.3, §4.6) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
 
 The record knows five kinds of thing that recur across its lines and that the owner wants a page for: a **person**, an **org** (a company invested in or passed on, a club, a brand), a **place**, an **asset** (a boat, an aircraft, a car) and an **idea** (a thread that starts as a repository README, continues in Notion, is spoken of in transcripts, and is built or killed). People review (RFC 0035, `docs/people.md#review`) settled the mechanism for one of them: observed references resolve to a canonical entity under the owner's control; an unresolved proposal is not an identity; nothing is promoted on its own. This RFC generalises that mechanism to the other four, so that one review sitting (`review KIND`) and one page pattern serve all five, and adds the one thing the other four need that a person does not: a **status**, as lines, proposed by the dream and disposed by the owner. A person has no status. A goal is not an entity and has its own verdict, RFC 0036's `review/v1`; a promise has RFC 0034's dispositions (§12).
 
@@ -148,9 +148,11 @@ A domain alone, matching no canonical org, proposes a **new** org with the domai
 
 Strongest identifier, in this order:
 
-1. the **Notion root page**: the `sync notion` `event/v1` line's page id, or the topmost of "the titles above it" when the integration can see that page, as `page` (`notion:<id>`). A page under a root is the root's idea unless the owner says otherwise; the lineage is the evidence and the sub-pages are the documents (§7);
+1. the **Notion root page**: the `sync notion` `event/v1` line's page id, or the topmost of "the titles above it" when the integration can see that page, as `page` (`notion:<id>`). A page under a root is the root's idea unless the owner says otherwise; the lineage is the evidence and the sub-pages are the documents (§7). A database row is its own root: a page that is a row of a Notion database (its lines carry the row's `database`, or name a database, or a later API's data source, as their `parent`) is its own idea and is never folded into the page above the database, so an Ideas database gives one idea per row and a page under a row is the row's;
 2. else the **repository**: a `browse/v1` url, a `task/v1` link or a `sync drive` file name of the form `owner/name` on a code host, as `repo` (`github.com/nordmann-verft/kiosk`, lower-cased);
 3. else the **title words**: a `task/v1` `title`, a `transcript/v1` `title`, or a Notion page title, folded and sorted, as `title`, when the same folded title recurs on two or more lines of two or more sources. A title seen once in one source is noise. A transcript's `summary` is never read for a topic: it is the provider's words about the owner's, and the owner names the idea.
+
+A database row is proposed only when its `Type` select says `Idea` (`idea_rows`, §4.6, names another select and option), as the row's latest line holding its properties says it: a row of another type, and a page under one, is never proposed, and a page that is no row is proposed as before.
 
 The proposal, scored:
 
@@ -186,10 +188,11 @@ One setting, read each run, never a line:
 {"public_mail_providers": ["gmail.com", "outlook.com", "hotmail.com", "icloud.com", "me.com", "proton.me", "yahoo.com", "example.org"],
  "merchant_min_lines": 3, "title_min_lines": 2, "personal_max_people": 3,
  "code_hosts": ["github.com", "gitlab.com", "codeberg.org"],
- "mute_days": 365, "stale_after_days": {"hold": 1095, "exploring": 730}}
+ "mute_days": 365, "stale_after_days": {"hold": 1095, "exploring": 730},
+ "idea_rows": {"property": "Type", "value": "Idea"}}
 ```
 
-The provider list ships with a default a reader carries in code and the file extends; a domain of the owner's own (`owner_emails` in `logbook.json`, `policy/owner.json`) is never an org. `mute_days` is §10.5's and `stale_after_days` §10.6's; the status rules' thresholds of §10.4 live here too, under their own names, with the defaults the table gives. Every number is a hypothesis, as `policy/stays.json`'s constants are.
+The provider list ships with a default a reader carries in code and the file extends; a domain of the owner's own (`owner_emails` in `logbook.json`, `policy/owner.json`) is never an org. `idea_rows` is §4.3's, `mute_days` §10.5's and `stale_after_days` §10.6's; the status rules' thresholds of §10.4 live here too, under their own names, with the defaults the table gives. Every number is a hypothesis, as `policy/stays.json`'s constants are.
 
 ## 5. `review KIND`
 

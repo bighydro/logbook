@@ -593,6 +593,17 @@ It keeps to the same three requests a second and stops on one line when Notion's
 lift, the lines already written kept: running it again writes only what is still missing. In the Day a
 backfilled row shows once more, at its last edit, as a second Notion entry with its title.
 
+**Ideas from Notion.** `logbook review idea` proposes a page as an idea by its root, the topmost page
+above it the record holds; a database row is its own root (RFC 0037 §4.3, amended 2026-10-16), so an
+Ideas database gives one idea per row and the page that holds the database is never the rows' idea. A
+row is proposed only when its `Type` select says `Idea`, as the row's latest line with
+`extra.properties` has it, and a page under a row of another type is not proposed either; a page that
+is no row is proposed as before. Name another select and option in `policy/entities.json`
+(`"idea_rows": {"property": "Kind", "value": "Spark"}`, case aside). The value is the one the line
+already holds, the property's name and the option's name and nothing else, at the line's tier. A line
+an integration made (`extra.actor.type` `bot`) is never a touch of an idea, a person on it or words
+written on it, and a `relations` line links rows and touches none ([review](review.md)).
+
 **The tier.** Every line is tier 1: SPEC §4 and RFC 0009 give `event/v1` tier 1, and a Notion line is
 an event with a title, a place in a tree and who acted, as a calendar entry is a title, a place and an
 organizer. The tier says where a line may travel (tier 1 crosses by default, ADR 0016), never who wrote

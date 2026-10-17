@@ -39,6 +39,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/manifest?portfolio=` | the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each with its portfolio, each row's evidence folded; a filter by portfolio; below, the review queue of `review org` with its acts ([the Manifest](#the-manifest)) | `logbook show orgs [--portfolio TEXT]`, `review org` |
 | `/org/ID` | one org: its refs, its status, reason and portfolio, the status form (with its portfolio), every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (`?money=1`) | `logbook show org NAME`, `status org` |
 | `/manifest/people` | the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio | `logbook show orgs` |
+| `/ideas` | the ideas you named by stage (build, exploring, spark, built, killed, no status), the most recent touch first, the stale ones flagged, each with its reason (a killed idea sparked again keeps its old one) and its evidence folded, the people it was discussed with counted and never named; below, the review queue of `review idea` | `logbook show ideas`, `logbook review idea` |
+| `/idea/ID` | one idea: its refs, its status and reason, the status form, first said, every touch newest first, the people it was discussed with by name, its documents as references (its Notion pages, its repositories and their README), its title thread, the words by month, every status line | `logbook show idea NAME` |
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
@@ -84,6 +86,7 @@ through the readers, and the readers never write, not even `policy/stays.json`. 
 head and every file before and after serving every page and finds them the same. The writes are the
 Places page's form ([below](#places--name-this-place)), a journey's name ([below](#journeys)), the
 People page's review ([below](#people)), the Manifest's review and an org's status ([below](#the-manifest)),
+the Ideas shelf's review and an idea's status ([below](#ideas)),
 the Day's Reflect and Sign ([below](#reflect-and-sign)) and its star and *with…* ([below](#the-day--star-and-with)),
 each a POST from this machine only, each
 through the command's own function, one at a time, and none waits for another writer: while another
@@ -504,6 +507,48 @@ proposal no longer in the queue, or an org the record no longer names, is a `409
 record refuses (a `passed` with no reason, a day ahead) a `400`. Done, a `303` back to the page the
 form came from.
 
+## Ideas
+
+`/ideas` is the Ideas shelf of RFC 0037 §11, the ideas you named (`review idea`), each under what you
+decided about it (`logbook status idea`): **build**, **exploring**, **spark**, **built**, **killed**,
+then **no status**; within a heading the most recent touch first. A **touch** is a line that reaches
+the idea through one of its refs, as `review idea` finds them: a Notion page under its root (a
+database row is its own root), an act on its repository or a link into it, a task or a call of its
+title. A line a bot made or an agent wrote (`extra.machine`), and a `relations` line, is never one. Each row is the idea
+(a link to its page), the status and since when, your reason (the latest you gave, with its status and
+day when a later status replaced it), `stale` when the status is one `stale_days` names and nothing has
+touched it or restated it for that long (an `exploring`, two years), the last touch and what it was, the
+words written this year, its repositories, how many people it was discussed with and never their names,
+the days since its spark and its latest titles, with the evidence folded: the last touch's line, the
+status line and the reason's note. It is the text of `logbook show ideas` ([ideas read
+back](entities.md#the-ideas-read-back)).
+
+**Review.** Below the shelf is the review queue of `logbook review idea` ([review](review.md)), in its
+order, twenty a page: each observed idea proposed against one you named, or as a new one, with its score
+and its evidence folded. **Accept** writes what `review idea --accept N` writes; **Name**, for a new one,
+what `--name N "…"` writes, the idea minted (its dedupe key looked up first) under the name in the field;
+**No** what `--reject N` writes, one `entity-review/v1` line. They post to `/ideas/review` and go through
+`entity_review.accept` and `reject`, the functions the command calls, so the lines are the command's
+byte for byte. A Notion row is proposed only when its `Type` is `Idea` (`idea_rows` in
+`policy/entities.json`).
+
+`/idea/ID` is one idea (RFC 0037 §7): its refs, its status and reason, the **status form**, which posts to
+`/ideas/status` and writes what `logbook status idea IDEA DISPOSITION [--reason "…"] [--at DAY]` writes
+through `entity_status.write` (with a reason, first one `note/v1` line in your words, then the
+`status/v1` line naming it, both tier 2, RFC 0037 §10.5), first said, every touch newest first (thirty,
+the rest folded), the people it was discussed with by name (the only page that names them), its
+documents as references, its title thread, the words by month, every status line (a retracted one
+struck), and the proposals that would place something with it.
+
+**Writing, never waiting.** As on the Manifest: the acts are POSTs from this machine only, one at a time,
+under the record's writer lock; while another command holds it an act is answered as every act of the
+Library is (`409`, the one sentence, the command that holds the lock, the form kept;
+[above](#three-rules)), and nothing is written (the owner's word for every act of the Library,
+14 October 2026); a proposal no longer in the queue, or an idea the record no longer names, is a `409`;
+an answer the record refuses (a `killed` with no reason, a day ahead) a `400`. A page read through a gate
+without tier 2, an idea's status's tier, offers no act and refuses both (`403`). `logbook export site`
+has no Ideas.
+
 ## Phone first
 
 Every page is one column that works at 400 px: the navigation wraps, a row is a short head and its
@@ -515,7 +560,8 @@ box rather than the page sideways.
 page it reads, one page of each kind (the Day, every shelf, the Manifest, each detail page, an
 error, a redirect), and holds each to that column without a browser; the list of pages it must reach is read from the server's own
 routes, so a page added there and not walked fails it. `tests/test_library_pages.py` and
-`tests/test_manifest_page.py` hold the four years' widest shelves and the Manifest's pages besides.
+`tests/test_manifest_page.py` hold the four years' widest shelves and the Manifest's pages besides,
+and `tests/test_ideas_page.py` the Ideas shelf and an idea.
 `tests/phone_width.py` parses each page with every disclosure open, applies the page's own
 stylesheet as a 400 px phone would (its phone breakpoint included), and fails when an element's
 fixed width, min-width or row of columns, with the margins, borders and padding around it, passes
@@ -526,7 +572,7 @@ than the column on some days, scrolls inside its own box.
 
 ## What it is not
 
-Not an editor: the pages write nothing but the namings, the reviews, an org's status, the reflection
+Not an editor: the pages write nothing but the namings, the reviews, an org's or an idea's status, the reflection
 and the signature, the stars and the company said above, and the captain's other words — a note, a
 confirmation of a line — go through the CLI as lines in the record, which the next page reads. Not a
 web application: no framework, no build step, no
