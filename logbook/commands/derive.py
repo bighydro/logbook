@@ -117,6 +117,8 @@ def cmd_transcribe(a: argparse.Namespace) -> None:
             progress=print,
             diarizer=diarizer,
             separate=not a.no_speakers,
+            # the pipeline's own embedding model, for the voiceprints of a record that keeps them (§5)
+            embedder=diarize.embedder() if diarizer is not None and lb.recipients else None,
         )
     except (transcribe.ModelMissing, diarize.ModelsMissing) as e:
         print(f"transcribe: {e}", file=sys.stderr)
@@ -176,6 +178,7 @@ def cmd_speakers(a: argparse.Namespace) -> None:
             diarizer,
             hint=a.speakers,
             progress=print,
+            embedder=diarize.embedder() if lb.recipients else None,
         )
     except (transcribe.EngineMissing, transcribe.ModelMissing, diarize.ModelsMissing) as e:
         print(f"derive speakers: {e}", file=sys.stderr)
@@ -184,8 +187,9 @@ def cmd_speakers(a: argparse.Namespace) -> None:
 
 
 def speakers_arguments(sub: Subparsers) -> None:
-    """`logbook setup speakers [--fetch-model]` (RFC 0038 §2.9): what separates voices on this
-    machine, and the one command that downloads its models. Declared beside `derive speakers`."""
+    """`logbook setup speakers [--fetch-model] [--rebuild]` (RFC 0038 §2.9, §5.2): what separates
+    voices on this machine, the one command that downloads its models, and the voiceprint registry
+    made again from the record. Declared beside `derive speakers`."""
     s = sub.add_parser(
         "speakers",
         help="the diarizer that separates voices: what is on this machine; --fetch-model, the one download",
@@ -194,7 +198,9 @@ def speakers_arguments(sub: Subparsers) -> None:
         f" models {SPEAKERS_MODEL} reads, each here or not, and what the record holds; opens no"
         " connection. --fetch-model downloads those models into the Hugging Face cache, the one time"
         " anything here uses the network, with your access token read from HF_TOKEN for those requests"
-        " only, never written and never printed",
+        " only, never written and never printed. --rebuild makes the voiceprint registry, voiceprints.age,"
+        " again from the record: the audio the transcripts name and the voices you named, sealed to the"
+        " record's recipients; it opens no connection",
     )
     s.add_argument(
         "--fetch-model",
@@ -202,15 +208,25 @@ def speakers_arguments(sub: Subparsers) -> None:
         help="download the diarization models (gated on Hugging Face: accept their conditions first);"
         " HF_TOKEN is read for these requests only",
     )
+    s.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="make the voiceprint registry, voiceprints.age, again from the record (RFC 0038 §5.2); a"
+        " record that names no recipients keeps none",
+    )
     s.set_defaults(fn=cmd_setup_speakers)
 
 
 def cmd_setup_speakers(a: argparse.Namespace) -> None:
-    """`setup speakers`: the engine and each model, here or not, and what the record holds (no
-    socket). `setup speakers --fetch-model`: the models fetched first (`diarize.fetch`), a refusal
-    naming the page to accept their conditions on (exit 2), then the same. Without the `speakers`
+    """`setup speakers`: the engine and each model, here or not, and what the record holds, the
+    voiceprint registry included (no socket). `setup speakers --fetch-model`: the models fetched
+    first (`diarize.fetch`), a refusal naming the page to accept their conditions on (exit 2), then
+    the same. `setup speakers --rebuild`: the registry made again from the record with the pipeline's
+    own embedding model (`voiceprints.update`, no socket), exit 2 with one sentence for a record that
+    names no recipients (it keeps none) or a machine without the models. Without the `speakers`
     extra, exit 2 with the sentence that names it, before the hub is asked anything: the hub client
     comes with `openlogbook[transcribe]` too, and models nothing here could run are never fetched."""
+    from ..core import voiceprints
     from ..labs import diarize
 
     if not diarize.installed():
@@ -240,12 +256,40 @@ def cmd_setup_speakers(a: argparse.Namespace) -> None:
         except (diarize.Refused, OSError) as e:
             print(f"setup speakers: {e}", file=sys.stderr)
             sys.exit(2)
-    for row in _speakers_rows(diarize.status()):
+    found = diarize.status()
+    if a.rebuild:
+        lb = Logbook.find()
+        if not lb.recipients:
+            print(
+                "setup speakers: this record names no recipients, so it keeps no voiceprint registry on"
+                " disk; the review hears the voices it compares for each run",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        if not found.ready:
+            print(
+                f"setup speakers: the speaker models are not on this machine; {diarize.FETCH}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        print(f"making {voiceprints.FILE} again from the record:")
+        try:
+            summary = voiceprints.update(lb, diarize.embedder(), rebuild=True, progress=print)
+        except voiceprints.PROBLEMS as e:
+            print(f"setup speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+        except diarize.ModelsMissing as e:
+            print(f"setup speakers: {e}", file=sys.stderr)
+            sys.exit(2)
+        said = voiceprints.describe(summary)
+        if said:
+            print(said)
+    for row in _speakers_rows(found):
         print(row)
 
 
 def _speakers_rows(found: Any) -> Iterator[str]:
-    """The engine, each model, what the record holds, and what to do next."""
+    """The engine, each model, what the record holds, the voiceprint registry, and what to do next."""
     from ..core import speakers
     from ..labs import diarize, transcribe
 
@@ -278,10 +322,31 @@ def _speakers_rows(found: Any) -> Iterator[str]:
         if mine:
             minutes, count = speakers.duration_text(sum(mine)), _plural(len(mine), "transcript")
             yield f"record     your own microphone: {minutes} in {count}"
+        yield f"registry   {_registry_row(lb)}"
     if found.ready:
         yield "ready      derive transcripts separates the voices of what it hears"
     else:
         yield f"not ready  {diarize.FETCH} fetches the models (accept their conditions on Hugging Face first)"
+
+
+def _registry_row(lb: Logbook) -> str:
+    """The voiceprint registry (RFC 0038 §5): kept in memory for a record without recipients; none
+    yet; or when, with which model and for how many people it was written, never what is in it."""
+    from ..core import voiceprints
+
+    if not lb.recipients:
+        return (
+            "none on disk: this record names no recipients (the review hears what it compares for each run)"
+        )
+    found = voiceprints.about(lb)
+    if found is None and not lb.identities:  # what the rebuild here answers: nothing written
+        return f"none, and none is written here: {voiceprints.NEEDS_IDENTITY}"
+    if found is None:
+        return f"none yet: logbook setup speakers --rebuild makes {voiceprints.FILE} from the record"
+    said = voiceprints.about_text(found, ZoneInfo(str(lb.meta["timezone"])))
+    if found.error is None and found.model != voiceprints.MODEL:
+        said += f"; not the configured model, {voiceprints.MODEL}: logbook setup speakers --rebuild"
+    return said
 
 
 def _voices(text: str) -> int:

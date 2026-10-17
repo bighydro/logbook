@@ -32,7 +32,7 @@ backup: 2026-06-03T071500Z → /Volumes/Backup/Logbook/019cadd3-6bc0-7dcd-9133-0
 | `policy/` — crossing ceilings, disabled sources, the owner's aliases | `state/` — sync watermarks, bookkeeping; a restored record syncs again from the start and appends nothing twice |
 | `places.json`, `assets.json` | `export/`, `logbook-0.1/`, anything else |
 | `attachments/` — content-addressed, write-once | a file whose name begins with `.` (an attachment still being written) |
-| `notes/` | |
+| `notes/` | `voiceprints.age` — the voiceprint registry, a cache rebuilt from the audio the snapshot carries (`setup speakers --rebuild`); one copy of a biometric is the most there should be ([Speakers](speakers.md#voiceprints)) |
 
 The timestamp is UTC, `2026-06-02T071500Z`, so snapshots sort by name on any filesystem (no colon; Windows
 refuses one). Two snapshots in the same second get `-2`, `-3`. `<owner_id>` is the record's, from

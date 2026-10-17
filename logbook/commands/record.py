@@ -17,9 +17,10 @@ from typing import Any
 
 from .. import FORMAT
 from ..contrib import demo
-from ..core import attachments, day_start, health, repair, sealing
+from ..core import attachments, day_start, health, repair, sealing, voiceprints
 from ..core.index import Index
 from ..core.store import (
+    IDENTITY_NEEDED,
     INDEX_EXTENDED,
     INDEX_NONE,
     INDEX_REBUILT,
@@ -1153,22 +1154,65 @@ def _key_show(lb: Logbook) -> None:
 
 def _key_change(lb: Logbook, a: argparse.Namespace) -> None:
     """add-recipient / remove-recipient: reseal every sealed line and file to the new list (no hash
-    changes), then one rekey/v1 line says so (RFC 0029 §6.4)."""
-    current = lb.recipients
+    changes), then one rekey/v1 line says so (RFC 0029 §6.4). The voiceprints (RFC 0038 §5.1), a
+    cache beside the record, are sealed again in the same hold of the writer lock, which no write
+    of the registry by another thread of this process enters either (`voiceprints.writing`): to
+    the recipients who stay before the record, so no moment leaves them open to one it no longer
+    names, and to those who come after it, so none opens them before the record does. A registry
+    that can be neither sealed again nor removed stops a recipient's removal before the record is
+    touched."""
     given = list(a.recipient or [])
     if not given:
         raise ValueError(f"{a.verb} needs --recipient age1…")
-    if a.verb == "add-recipient":
-        new = [*current, *(r for r in given if r not in current)]
-    else:
-        missing = [r for r in given if r not in current]
-        if missing:
-            raise ValueError(f"not a recipient of this record: {', '.join(missing)}")
-        new = [r for r in current if r not in given]
-    result = lb.reseal(new, progress=_progress)
-    what = _sealed_what(result)
-    head = result["head"][:12]
-    print(f"resealed {what} to {_plural(len(new), 'recipient')}; head {head}… (no hash changed)")
+    with lb.writer(), voiceprints.writing():
+        current = lb.recipients  # read under the lock: two key changes at once do not undo each other
+        if a.verb == "add-recipient":
+            new = [*current, *(r for r in given if r not in current)]
+        else:
+            missing = [r for r in given if r not in current]
+            if missing:
+                raise ValueError(f"not a recipient of this record: {', '.join(missing)}")
+            new = [r for r in current if r not in given]
+        if current:  # what `Logbook.reseal` refuses, refused before the voiceprints are touched
+            lb._check_format(lb.meta)
+            sealing.check_recipients(new)
+            if not lb.identities:
+                raise sealing.IdentityRequired(IDENTITY_NEEDED.format(path=lb.identity_file))
+            if not any(sealing.recipient_of(str(i)) in current for i in lb.identities):
+                raise sealing.IdentityRequired(
+                    f"this machine's identity, {_under_home(lb.identity_file)}, is not one of this record's"
+                    " recipients, so it cannot reseal the record; nothing was changed"
+                )
+        stay = [r for r in current if r in new]
+        said: str | None = None
+        if stay != current:
+            try:
+                said = voiceprints.reseal(lb, stay)
+            except voiceprints.RegistryError as e:
+                raise ValueError(f"{e}; the record was not changed") from None
+            if said is not None:
+                print(said)  # now, so it is said even when the record's reseal then stops
+        try:
+            result = lb.reseal(new, progress=_progress)
+        except BaseException:
+            if said is not None and said.startswith(f"{voiceprints.FILE} sealed again"):
+                print(
+                    f"key {a.verb}: {voiceprints.FILE} was sealed again first, to the recipients who stay,"
+                    " and opens with none the record does not name; the change can be run again",
+                    file=sys.stderr,
+                )
+            raise
+        what = _sealed_what(result)
+        head = result["head"][:12]
+        print(f"resealed {what} to {_plural(len(new), 'recipient')}; head {head}… (no hash changed)")
+        if stay != new:
+            try:
+                after = voiceprints.reseal(lb, new)
+            except voiceprints.RegistryError as e:  # sealed still to those who stay, all of them the record's
+                print(f"key {a.verb}: {e}", file=sys.stderr)
+            else:
+                if after is not None:
+                    print(after)
     if a.verb == "remove-recipient":
         print("an old copy of the record still opens with the removed identity; this one does not")
 

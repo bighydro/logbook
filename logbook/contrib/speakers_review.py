@@ -5,10 +5,14 @@ record names, with the evidence, numbered; the owner's say; and the one writer o
 an *observed voice*, keyed by the strongest identifier the voice carries: the far end of a call (the
 voice alone on the `system` channel of a recording that overlaps a `call/v1` line whose counterparty
 is an email or a phone) is keyed as people review keys that address or number; else the name the
-source displayed, its words folded and sorted; else the label alone, one row per voice. The voice
-itself (a voiceprint cluster, §4.1 rule 2) is build 3's, with the registry of §5: until then a voice
-is never grouped by how it sounds. An answer to a row is an answer for every voice in it; `N.2`
-answers the second recording's voice alone, which is how a row that joined two people is split.
+source displayed, its words folded and sorted; else the label alone, one row per voice. Between the
+first and the second comes the voice itself (§4.1 rule 2): voices not yet named whose embeddings fall
+within `match` of one another's centre are one row, the same guest heard at four dinners one row of
+four recordings. A cluster is seeded by the voice with the most clean speech, joins a voice to the
+closest centre within `match`, and never holds two voices of one recording (two labels the diarizer
+kept apart are not merged by a guess); a voice alone in its cluster is keyed as before. An answer to
+a row is an answer for every voice in it; `N.2` answers the second recording's voice alone, which is
+how a row that joined two people is split.
 
 **The score** (§4.3), a plain sum per candidate and voice, a row's the lowest of its voices':
 
@@ -23,13 +27,19 @@ answers the second recording's voice alone, which is how a row that joined two p
 - **seen that day**, 5: another line of the recording's local day resolves to the person (a message,
   a call, a tagged face, a voice bound in another recording).
 
-`same voice` (up to 70, against a voiceprint) is left out: there is no registry in this build. Context
-never stands in for a voice: a candidate without the far end of a call scores 40 at most, so
-`--all-above` over 40 never takes a guest named by context alone. Two candidates within 5 points are
-both shown and neither is taken. A pair the owner said no to (an `entity-review/v1` or
-`people-review/v1` line naming the voice) and a person `policy/speakers.json` says to `forget` are
-never proposed. The owner is proposed by nothing until the registry exists (a `from_me` voice is the
-owner's without a question); the owner answers `me`.
+and **same voice**, up to 70: the voice's embedding against a voiceprint of the registry (§5,
+`logbook.core.voiceprints`), 70 at a similarity of `match` or more, falling in a straight line to 0
+at `floor`, nothing below it; against the owner's voiceprint as against anyone's, and, with
+`enrol_unnamed`, against an unnamed person's, who is then proposed as that same unnamed person. The
+voiceprints are the registry as the record stands now (a retracted or superseded answer leaves at
+once, whatever the file says), or, for a record that names no recipients, heard for the run in
+memory when the embedding model is on this machine (`hear`); without either, no voice scores.
+Context never stands in for a voice: a candidate with neither the far end of a call nor the same
+voice scores 40 at most, so `--all-above` over 40 never takes a guest named by context alone. Two
+candidates within 5 points are both shown and neither is taken. A pair the owner said no to (an
+`entity-review/v1` or `people-review/v1` line naming the voice) and a person `policy/speakers.json`
+says to `forget` are never proposed. The owner is proposed by the same voice alone; a `from_me`
+voice is the owner's without a question, and the owner answers `me`.
 
 **The owner's say** (§4.4). Nothing is bound on its own. `answer` is the one writer: every answer of
 one command is checked before the first line, then each voice gets one `resolution/v1` line through
@@ -43,6 +53,9 @@ voice's standing line, and under `extra` the row's id, the score and what matche
 basis and consent as the standing line write nothing. A no is one `entity-review/v1` line of type
 person (RFC 0035 amendment 1, by RFC 0037: `people-review/v1` is read forever and no longer written),
 `ref` the row's first voice, `refs` every voice, `entity` the candidate.
+
+Every answer that writes a line brings the registry up to date after it (`voiceprints.update`, no
+model loaded): the person named gains the voice, a voice named away leaves its old voiceprint.
 
 **A wrong answer** (§4.5). `read(..., named=True)` lists the voices already named, of one recording or
 of a day, numbered as the queue is; an answer to one supersedes its standing line. A wrong no is undone
@@ -71,7 +84,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import attribution, day_start, present, reading, resolve, speakers, stays
+from ..core import attribution, day_start, present, reading, resolve, speakers, stays, voiceprints
 from ..core import people as people_reader
 from ..core.chain import Line
 from ..core.flights import Airports
@@ -84,18 +97,12 @@ REGISTRY = "logbook"
 TIER = 2
 FAR_END, ON_THE_ENTRY, PARTICIPANT, PARTICIPANT_BY_NAME, SOURCE_NAME, SEEN = 40, 15, 15, 5, 10, 5
 CONTEXT_CAP = 40  # §4.3: context never stands in for a voice
+SAME_VOICE = "same voice"  # §4.3: the kind of evidence, and how it reads: `same voice 0.86`
 CLOSE = 5  # §4.3: two candidates this close are both shown and neither is taken
 PLAY_S = 20.0  # §4.2: the voice's first twenty seconds alone
 QUOTE_CHARS = 60
-SETTINGS_FILE = ("policy", "speakers.json")
-DEFAULTS: dict[str, Any] = {
-    "match": 0.75,
-    "floor": 0.5,
-    "min_clean_s": 8,
-    "text_confidence_cap": 0.6,
-    "enrol_unnamed": False,
-    "forget": [],
-}
+SETTINGS_FILE = voiceprints.SETTINGS_FILE
+DEFAULTS = voiceprints.DEFAULTS
 ACCEPT, NAME, UNNAMED, REJECT = "accept", "name", "unnamed", "reject"
 ME = frozenset({"me", "you", "i", "myself", "jeg", "meg", "ich"})  # the owner's answer for their own voice
 NUMBER = re.compile(r"^(\d+)(?:\.(\d+))?$")
@@ -114,52 +121,17 @@ class ReviewError(ValueError):
 # -- the settings ------------------------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class Settings:
-    """`policy/speakers.json` (§5.5), read each run. This build uses `text_confidence_cap` and
-    `forget`; `match`, `floor`, `min_clean_s` and `enrol_unnamed` are the registry's (build 3) and are
-    checked, not used."""
-
-    match: float = 0.75
-    floor: float = 0.5
-    min_clean_s: float = 8.0
-    text_confidence_cap: float = 0.6
-    enrol_unnamed: bool = False
-    forget: frozenset[str] = frozenset()
+Settings = voiceprints.Settings
 
 
 def settings(root: Path) -> Settings:
-    """The settings, the defaults for a key the file does not have or a record with no file;
-    ReviewError naming the file for one that is not what it should be."""
-    path = Path(root).joinpath(*SETTINGS_FILE)
-    if not path.is_file():
-        return Settings()
+    """`policy/speakers.json` (§5.5), read each run (`voiceprints.settings`): the defaults for a key
+    the file does not have or a record with no file; ReviewError, one sentence naming the file, for
+    one that is not what it should be."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as e:
-        raise ReviewError(f"{'/'.join(SETTINGS_FILE)} is not JSON: {e}") from e
-    if not isinstance(data, dict):
-        raise ReviewError(f"{'/'.join(SETTINGS_FILE)} must be one object, as {json.dumps(DEFAULTS)}")
-    found = {**DEFAULTS, **data}
-    unit = ("match", "floor", "text_confidence_cap")
-    for key in unit:
-        if not _number(found[key]) or not 0 <= float(found[key]) <= 1:
-            raise ReviewError(f"{'/'.join(SETTINGS_FILE)}: {key} must be a number from 0 to 1")
-    if not _number(found["min_clean_s"]) or float(found["min_clean_s"]) < 0:
-        raise ReviewError(f"{'/'.join(SETTINGS_FILE)}: min_clean_s must be seconds, 0 or more")
-    if not isinstance(found["enrol_unnamed"], bool):
-        raise ReviewError(f"{'/'.join(SETTINGS_FILE)}: enrol_unnamed must be true or false")
-    forget = found["forget"]
-    if not isinstance(forget, list) or not all(isinstance(e, str) and e for e in forget):
-        raise ReviewError(f"{'/'.join(SETTINGS_FILE)}: forget must be a list of entity ids")
-    return Settings(
-        float(found["match"]),
-        float(found["floor"]),
-        float(found["min_clean_s"]),
-        float(found["text_confidence_cap"]),
-        bool(found["enrol_unnamed"]),
-        frozenset(forget),
-    )
+        return voiceprints.settings(root)
+    except voiceprints.SettingsError as e:
+        raise ReviewError(str(e)) from e
 
 
 # -- what the queue holds ----------------------------------------------------------------------------------
@@ -180,6 +152,10 @@ class Seen:
     def far_end(self) -> bool:
         return self.kind == "far end"
 
+    @property
+    def voiced(self) -> bool:
+        return self.kind == SAME_VOICE
+
 
 @dataclass
 class Voice:
@@ -194,6 +170,7 @@ class Voice:
     call: str | None = None  # the call it is the far end of: that line's id
     seen: list[Seen] = field(default_factory=list)  # the evidence, every candidate's
     standing: Line | None = None  # the voice's own standing attribution, when one stands
+    similar: dict[str, float] = field(default_factory=dict)  # entity → its voiceprint's similarity
 
     @property
     def ref(self) -> str:
@@ -213,8 +190,9 @@ class Voice:
 
     def score(self, entity: str) -> tuple[int, list[str], list[str], bool]:
         """(the score of `entity` for this voice, what matched, the lines, whether the far end of
-        the call): the plain sum, each kind of evidence once, capped at 40 without the far end."""
-        points, matched, lines, far = 0, [], [], False
+        the call): the plain sum, each kind of evidence once, capped at 40 with neither the far end
+        nor the same voice."""
+        points, matched, lines, far, voiced = 0, [], [], False, False
         kinds: set[str] = set()
         for s in sorted(self.seen, key=lambda s: -s.points):
             if s.entity != entity or s.kind in kinds:
@@ -224,12 +202,14 @@ class Voice:
             matched.append(s.matched)
             lines += [line for line in s.lines if line not in lines]
             far = far or s.far_end
-        return (points if far else min(points, CONTEXT_CAP)), matched, lines, far
+            voiced = voiced or s.voiced
+        return (points if far or voiced else min(points, CONTEXT_CAP)), matched, lines, far
 
 
 @dataclass(frozen=True)
 class Candidate:
-    """A person proposed for a row: the owner (`owner`), or a person by their label."""
+    """A person proposed for a row: the owner (`owner`), a person by their label, or, with
+    `enrol_unnamed`, a person the owner declined to name whose voice this sounds like (`unnamed`)."""
 
     entity: str
     name: str | None
@@ -237,10 +217,15 @@ class Candidate:
     score: int
     matched: tuple[str, ...]
     lines: tuple[str, ...]
+    unnamed: bool = False
 
     @property
     def shown(self) -> str:
-        return speakers.OWNER if self.owner else self.name or self.entity
+        if self.owner:
+            return speakers.OWNER
+        if self.unnamed:
+            return "the same unnamed person"
+        return self.name or self.entity
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -248,6 +233,7 @@ class Candidate:
             "person": self.entity,
             "name": self.name,
             "owner": self.owner,
+            "unnamed": self.unnamed,
             "score": self.score,
             "matched": list(self.matched),
             "evidence": list(self.lines),
@@ -335,6 +321,11 @@ class Report:
     tiers: dict[str, int] = field(default_factory=dict)  # line id → tier, of the evidence
     bound: dict[str, set[str]] = field(default_factory=dict)  # transcript id → the people its voices are
     voices_bound: dict[tuple[str, str], list[str]] | None = None  # `answer`'s, kept across a sitting
+    unnamed: set[str] = field(default_factory=set)  # the people bound unnamed
+    prints: voiceprints.Registry | None = None  # the voiceprints the queue was scored against (§5)
+
+    def __repr__(self) -> str:
+        return f"Report({len(self.rows)} rows, {self.waiting} voices not yet named, head {self.head[:12]})"
 
     @property
     def tier(self) -> int | None:
@@ -371,11 +362,14 @@ def read(
     recording: str | None = None,
     day: str | None = None,
     airports: Any = None,
+    hear: Callable[[], voiceprints.Embedder | None] | None = None,
 ) -> Report:
     """The queue: every voice of the standing transcripts no line binds (a `from_me` voice is the
     owner's and is not asked), grouped into rows, scored, numbered. With `named`, the voices of one
     recording (`recording`, its id or seq) or of one local day (`day`) that are named already, one row
-    each, for an answer that supersedes. Raises ReviewError; writes nothing."""
+    each, for an answer that supersedes. `hear` gives the embedding model, for a record that names no
+    recipients and so keeps no registry (§5.1); it is asked only when there is a voice to compare.
+    Raises ReviewError; writes nothing."""
     if named and (recording is None) == (day is None):
         raise ReviewError("--named takes --recording ID or --day DAY, one of them")
     if not named and (recording is not None or day is not None):
@@ -440,6 +434,8 @@ def read(
     )
     if context is None:
         return report
+    if not named:
+        report.prints = _prints(lb, all_heard, owner, config, hear)
     texts: dict[str, list[Any] | None] = {}
     observed: list[Voice] = []
     for line, h in chosen:
@@ -455,13 +451,69 @@ def read(
             standing=standing.get((attribution.SPEAKER, h.ref)),
         )
         context.evidence(voice, voices)
+        _same_voice(voice, report)
         observed.append(voice)
     report.tiers = context.tiers
-    for line, h in all_heard:
-        if h.state == attribution.PERSON and h.entity:
+    for line, h in all_heard:  # who a recording's voices are already: never proposed for another of them
+        if h.state in (attribution.PERSON, attribution.UNNAMED) and h.entity:
             report.bound.setdefault(str(line["id"]), set()).add(h.entity)
+        elif h.state == attribution.OWNER and owner.id:
+            report.bound.setdefault(str(line["id"]), set()).add(owner.id)
+    report.unnamed = {who.entity for who in identities.values() if who.unnamed and who.entity}
     report.rows = _rows(observed, report, context) if not named else _named_rows(observed, report)
     return report
+
+
+def _prints(
+    lb: Logbook,
+    heard: Sequence[tuple[Line, attribution.Heard]],
+    owner: present.Owner,
+    config: Settings,
+    hear: Callable[[], voiceprints.Embedder | None] | None,
+) -> voiceprints.Registry | None:
+    """The voiceprints the queue compares with (§5.1): the registry's embeddings regrouped as the
+    record stands now (an answer retracted since the file was written counts for nothing); for a
+    record that names no recipients, heard for this run from the audio when the embedding model is
+    here, and forgotten after; else none. A registry this machine cannot read is none: `doctor` says
+    why."""
+    if lb.recipients:
+        try:
+            found = voiceprints.read(lb)
+        except voiceprints.RegistryError:
+            return None
+        if found is None:
+            return None
+        who = voiceprints.holders(heard, owner.id)
+        return voiceprints.view(
+            found.pool(),
+            who,
+            config,
+            model=found.model,
+            model_sha256=found.model_sha256,
+            dim=found.dim,
+            head=found.head,
+        )
+    if hear is None or not any(_audio(lb, line) for line, _h in heard):
+        return None  # nothing to hear: the model (and torch with it) is not even looked for
+    embedder = hear()
+    if embedder is None:
+        return None
+    return voiceprints.in_memory(lb, embedder, heard, owner.id, config)
+
+
+def _same_voice(voice: Voice, report: Report) -> None:
+    """§4.3's `same voice`: the voice's embedding against every voiceprint, the owner's included;
+    nothing for a voice the voiceprints do not hold (no audio, too little clean speech)."""
+    prints = report.prints
+    mine = prints.voices.get(voice.ref) if prints is not None else None
+    if prints is None or mine is None:
+        return
+    for entity, found in prints.people.items():
+        sim = voiceprints.similarity(mine.embedding, found.voiceprint)
+        points = voiceprints.points(sim, report.settings)
+        if points > 0:
+            voice.similar[entity] = sim
+            voice.seen.append(Seen(entity, SAME_VOICE, points, f"{SAME_VOICE} {sim:.2f}", ()))
 
 
 def _owner_aliases(lb: Logbook) -> dict[str, list[str]]:
@@ -739,8 +791,9 @@ def _rows(observed: Sequence[Voice], report: Report, context: _Context) -> list[
     """The voices grouped by their key (§4.1), each row's candidates scored, the rows numbered: the
     owner's rows first, then by the first recording, within a recording by the seconds spoken."""
     groups: dict[Ref, list[Voice]] = {}
+    clusters = _clusters(observed, report)
     for voice in observed:
-        groups.setdefault(_key(voice, context), []).append(voice)
+        groups.setdefault(_key(voice, context, clusters), []).append(voice)
     rows: list[Row] = []
     for key, members in groups.items():
         members.sort(key=lambda v: (str(v.line["at"]), int(v.line.get("seq") or 0)))
@@ -786,19 +839,22 @@ def _named_rows(observed: Sequence[Voice], report: Report) -> list[Row]:
             0,
             (),
             (),
+            unnamed=heard.state == attribution.UNNAMED,
         )
         rows.append(Row(n, (attribution.SPEAKER, voice.ref), [voice], [bound]))
     return rows
 
 
-def _key(voice: Voice, context: _Context) -> Ref:
+def _key(voice: Voice, context: _Context, clusters: Mapping[str, Ref] | None = None) -> Ref:
     """The observed voice's strongest identifier (§4.1): the far end's address or number, else the
-    source's name folded, else the label alone."""
+    cluster of voices that sound alike, else the source's name folded, else the label alone."""
     if voice.call is not None:
         call = next((c for c in context.calls if str(c["id"]) == voice.call), None)
         ref = _ref(((call or {}).get("payload") or {}).get("counterparty"))
         if ref is not None:
             return (ref[0], ref[1].strip().casefold() if ref[0] == "email" else ref[1].strip())
+    if clusters and voice.ref in clusters:
+        return clusters[voice.ref]
     if voice.heard.voice.name:
         words = sorted(_words(voice.heard.voice.name))
         if words:
@@ -806,13 +862,49 @@ def _key(voice: Voice, context: _Context) -> Ref:
     return (attribution.SPEAKER, voice.ref)
 
 
+def _clusters(observed: Sequence[Voice], report: Report) -> dict[str, Ref]:
+    """§4.1 rule 2: the voices not yet named that sound alike, as `voice` keys, ref → key. Greedy and
+    deterministic: the voices with the most clean speech seed, each joins the closest centre within
+    `match` (the centre moving as it grows), never one that holds a voice of its own recording; a
+    voice alone in its cluster has no key here. The far end of a call is keyed by the call first."""
+    prints = report.prints
+    if prints is None:
+        return {}
+    found = [(v, prints.voices[v.ref]) for v in observed if v.call is None and v.ref in prints.voices]
+    found.sort(key=lambda pair: (-pair[1].clean_s, pair[0].ref))
+    groups: list[tuple[list[tuple[Voice, voiceprints.Embedded]], list[voiceprints.Vector]]] = []
+    for voice, mine in found:
+        best, closest = None, -1.0
+        for i, (members, centre) in enumerate(groups):
+            if any(other.transcript == voice.transcript for other, _e in members):
+                continue
+            sim = voiceprints.similarity(mine.embedding, centre[0])
+            if sim >= report.settings.match and sim > closest:
+                best, closest = i, sim
+        if best is None:
+            groups.append(([(voice, mine)], [mine.embedding]))
+        else:
+            members, centre = groups[best]
+            members.append((voice, mine))
+            centre[0] = voiceprints.centre(e for _v, e in sorted(members, key=lambda pair: pair[0].ref))
+    keys: dict[str, Ref] = {}
+    for members, _centre in groups:
+        if len(members) > 1:
+            seed = members[0][0].ref
+            keys.update({voice.ref: (SAME_VOICE, seed) for voice, _e in members})
+    return keys
+
+
 def _candidates(voices: Sequence[Voice], report: Report) -> list[Candidate]:
     """Every person some evidence puts near every voice of the row, the row's score the lowest of its
-    voices', a pair said no to and a person to forget left out, best first."""
+    voices', a pair said no to and a person to forget left out, best first. The owner and, with
+    `enrol_unnamed`, a person bound unnamed are proposed by the same voice alone."""
     entities_seen = list(dict.fromkeys(s.entity for v in voices for s in v.seen))
     out = []
     for entity in entities_seen:
-        if entity in report.settings.forget or entity not in report.people:
+        owner = entity in report.owner.entities
+        unnamed = entity in report.unnamed and not owner
+        if entity in report.settings.forget or not (owner or unnamed or entity in report.people):
             continue
         if any(v.ref in report.rejected.get(entity, set()) for v in voices):
             continue
@@ -822,9 +914,13 @@ def _candidates(voices: Sequence[Voice], report: Report) -> list[Candidate]:
         score = min(s[0] for s in scored)
         if score <= 0:
             continue
-        matched = tuple(dict.fromkeys(m for s in scored for m in s[1]))
+        matched = tuple(dict.fromkeys(m for s in scored for m in s[1] if not m.startswith(SAME_VOICE)))
+        similar = [v.similar[entity] for v in voices if entity in v.similar]
+        if similar:  # a row of several recordings reads as its least similar voice, as it scores
+            matched = (f"{SAME_VOICE} {min(similar):.2f}", *matched)
         lines = tuple(dict.fromkeys(line for s in scored for line in s[2]))
-        out.append(Candidate(entity, report.people[entity], False, score, matched, lines))
+        name = None if owner or unnamed else report.people[entity]
+        out.append(Candidate(entity, name, owner, score, matched, lines, unnamed=unnamed))
     out.sort(key=lambda c: (-c.score, c.name or "", c.entity))
     return out
 
@@ -1005,7 +1101,18 @@ def answer(lb: Logbook, report: Report, answers: Sequence[Answer]) -> list[Writt
     the listing of named voices. Rereading is the caller's: the numbers are `report`'s."""
     plans = _plans(report, answers)
     with lb.writer():  # one hold for the command's lines, as every review writes (RFC 0037)
-        return _write(lb, report, plans)
+        written = _write(lb, report, plans)
+    if any(w.lines for w in written):
+        _voiceprints(lb)
+    return written
+
+
+def _voiceprints(lb: Logbook) -> None:
+    """The registry brought up to date after the answers (§5.2), without a model: the named gain
+    their voices, a voice named away leaves its old voiceprint. A cache: when it cannot be written,
+    the lines stand and `doctor` and the next write say why."""
+    with contextlib.suppress(*voiceprints.PROBLEMS):
+        voiceprints.update(lb)
 
 
 def _write(lb: Logbook, report: Report, plans: Sequence[_Plan]) -> list[Written]:
@@ -1076,8 +1183,10 @@ def _plans(report: Report, answers: Sequence[Answer]) -> list[_Plan]:
         elif a.verdict == ACCEPT:
             chosen = _single(row, a.number, "accept")
             plan.entity, plan.name, plan.owner = chosen.entity, chosen.name, chosen.owner
-            if report.named and plan.owner is False and voices[0].heard.state == attribution.UNNAMED:
-                plan.unnamed, plan.name = True, None
+            if chosen.unnamed or (
+                report.named and plan.owner is False and voices[0].heard.state == attribution.UNNAMED
+            ):
+                plan.unnamed, plan.name = True, None  # the same unnamed person, by their voice
         elif a.verdict == NAME:
             if not a.name or not a.name.strip():
                 raise ReviewError(f"--name {a.number}: say whose voice it is")
@@ -1198,7 +1307,7 @@ def _payload(report: Report, plan: _Plan, voice: Voice, entity: str) -> dict[str
     """The `resolution/v1` payload for one voice, or None when the voice's standing line says the
     same already (the same entity, basis and consent; an unnamed voice answered unnamed again)."""
     owner = plan.owner
-    score, matched, lines, far = voice.score(entity) if not owner and not plan.unnamed else (0, [], [], False)
+    score, matched, lines, far = voice.score(entity)  # nothing for a person no evidence put near it
     if far:
         basis = "channel"
     elif voice.audio is not None:

@@ -20,6 +20,12 @@ The checks, in the order they print:
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
   (`trips`, `rollup nights`). None is a warn, not a places file is a fail.
 - `assets`: `assets.json` is a registry when it exists (ADR 0018). Absent is fine.
+- `voiceprints`: the voiceprint registry, `voiceprints.age` (RFC 0038 §5), said and never shown: that
+  the file is there, when it was written, and, opened with this machine's identity, with which
+  embedding model and for how many people; a warn when that model is not the configured one (its
+  vectors are not comparable: `setup speakers --rebuild`) or when the file will not open. A record
+  that names no recipients keeps none, and the line says the review hears what it compares for each
+  run. A record with no file and no transcript with voices has no line.
 - `dates`: every line's timestamp lies in its source's plausible range (`plausible`: calendar
   entries 1970 to now plus 5 years, mail 1990 to now plus 1 day, the rest 1970 to now plus 1 day,
   each overridable per source in `policy/plausible.json`). Lines outside it are a warn that counts
@@ -97,7 +103,18 @@ from pathlib import Path
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
-from ..core import assets, attachments, day_start, drafts, index, places, plausible, policy, sealing
+from ..core import (
+    assets,
+    attachments,
+    day_start,
+    drafts,
+    index,
+    places,
+    plausible,
+    policy,
+    sealing,
+    voiceprints,
+)
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
 from . import adapters, first_run, home, last_run, schedule, serve, synthesis
@@ -315,6 +332,48 @@ def assets_check(root: Path) -> Check:
     if not registry:
         return Check("assets", "pass", f"no {assets.ASSETS_FILE}; nothing is tracked as a subject")
     return Check("assets", "pass", f"{len(registry)} asset(s): " + ", ".join(a.id for a in registry))
+
+
+def voiceprints_check(lb: Logbook, state: str) -> Check | None:
+    """The voiceprint registry (RFC 0038 §5): that it is there, when, with which model and for how
+    many people it was written, never a number of it; which of the two a record without it is in."""
+    found = voiceprints.about(lb)
+    if found is None:
+        if not _has_voices(lb, state):
+            return None
+        if not lb.recipients:
+            return Check(
+                "voiceprints",
+                "pass",
+                "none on disk: the record names no recipients, so the review hears the voices it compares"
+                " for each run and keeps nothing",
+            )
+        if not lb.identities:  # what a write here answers: no file, and none made on this machine
+            return Check(
+                "voiceprints", "pass", f"none, and none is written here: {voiceprints.NEEDS_IDENTITY}"
+            )
+        return Check(
+            "voiceprints", "pass", f"none yet: `logbook setup speakers --rebuild` makes {voiceprints.FILE}"
+        )
+    detail = voiceprints.about_text(found, ZoneInfo(str(lb.meta.get("timezone") or "UTC")))
+    if found.error is not None:
+        if not lb.identities:  # sealed, as it must be: this machine cannot say more, and need not
+            return Check("voiceprints", "pass", detail)
+        return Check("voiceprints", "warn", f"{detail}; `logbook setup speakers --rebuild` makes it again")
+    if found.model != voiceprints.MODEL:
+        return Check(
+            "voiceprints",
+            "warn",
+            f"{detail}; written with another model than the configured one, {voiceprints.MODEL}, whose"
+            " voices it cannot compare: `logbook setup speakers --rebuild`",
+        )
+    return Check("voiceprints", "pass", detail)
+
+
+def _has_voices(lb: Logbook, state: str) -> bool:
+    """Whether a transcript of the record carries voices (RFC 0038 §2), as far as this machine can
+    open it."""
+    return any((line.get("payload") or {}).get("speakers") for line in kind_lines(lb, state, ("transcript",)))
 
 
 def implausible(lb: Logbook, state: str, now: datetime) -> list[plausible.Found]:
@@ -836,6 +895,9 @@ def run(
     checks.append(owner_check(lb.root))
     checks.append(places_check(lb.root))
     checks.append(assets_check(lb.root))
+    prints = voiceprints_check(lb, state)
+    if prints is not None:
+        checks.append(prints)
     checks.append(dates_check(lb, state, now or last_run.now()))
     checks.extend(extras_checks(installed))
     google = google_check(lb, env)

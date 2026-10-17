@@ -20,6 +20,28 @@ pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing
 Their bytes are not hashed here, nor a sealed one opened: the doctor runs four times a day, and a store of
 photos is read by `logbook verify` by hand, or by `logbook backup --verify`.
 
+## Voiceprints
+
+A record whose transcripts carry voices, or that keeps a voiceprint registry, gets a `voiceprints`
+line after `assets` ([Voiceprints](speakers.md#voiceprints), RFC 0038 §5). It says that the file is
+there, when it was written and, opened with this machine's identity, with which embedding model and
+for how many people; never what is in it:
+
+```
+pass  voiceprints  voiceprints.age written 2026-10-11 10:12 with pyannote/wespeaker-voxceleb-resnet34-LM, for 3 people, you among them; 2 voices not yet named
+```
+
+A **warn** when the file was written with a model that is not the configured one, whose vectors it
+cannot compare (`logbook setup speakers --rebuild` makes it again), or when it will not open with this
+machine's identity. On a machine without the identity it says only that the file is there and when.
+A record that names no recipients keeps no registry, and the line says so: the review hears the
+voices it compares for each run and keeps nothing. A record with voices and no file yet: `none yet:
+logbook setup speakers --rebuild makes voiceprints.age`; on a machine without the identity, which
+writes no registry, what a write there answers: `none, and none is written here: no identity on this
+machine, and voiceprints.age is sealed to the record's recipients and needs one`. (Such a machine
+sees the voices only of transcripts written before the record had recipients; of sealed ones it sees
+none, and says nothing.) The line opens the file and writes nothing.
+
 ## Where the day begins
 
 A record whose day does not begin at midnight ([`day_start`](settings.md)) gets a `day-start` line
