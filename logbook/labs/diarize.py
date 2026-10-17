@@ -25,6 +25,13 @@ always did and says once why: `speakers: not separated (install openlogbook[spea
 setup speakers --fetch-model)` without the extra, `speakers: not separated (logbook setup speakers
 --fetch-model)` with it and without the models.
 
+**Voiceprints** (§5): `PyannoteEmbedding` is the pipeline's own embedding model, `EMBEDDING`, which
+the registry (`logbook.core.voiceprints`) is built with, so the registry and the diarizer agree on
+what a voice is. It decodes a recording to mono at 16 kHz and embeds each clean piece of a voice
+whole, the voice's vector the pieces' unit vectors weighted by their seconds; the digest it gives is
+the model's own files in the hub's cache, so a model fetched again with other weights rebuilds the
+registry. It loads nothing until it is first asked, and asks the cache with `local_files_only`.
+
 **The one download** is `fetch`, behind `logbook setup speakers --fetch-model` and nothing else: the
 three repositories into the hub's cache, with the owner's own access token read from `HF_TOKEN` for
 those requests only. The token is never written, never printed, never part of a message; when the
@@ -34,8 +41,10 @@ page to accept them on.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.metadata
+import math
 import os
 import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -44,10 +53,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from ..core import voiceprints
+
 ENGINE = "pyannote"  # `diarization.engine`
 MODEL = "pyannote/speaker-diarization-3.1"  # `diarization.model`
 SEGMENTATION = "pyannote/segmentation-3.0"
-EMBEDDING = "pyannote/wespeaker-voxceleb-resnet34-LM"
+EMBEDDING = voiceprints.MODEL  # pyannote/wespeaker-voxceleb-resnet34-LM: the voiceprints' model too
+EMBEDDING_DIM = 256  # the length of its vectors
 MODELS = (MODEL, SEGMENTATION, EMBEDDING)  # what the pipeline reads; all three gated, all three fetched
 MODULE = "pyannote.audio"
 DISTRIBUTION = "pyannote.audio"  # the installed distribution `installed` looks for, by its metadata
@@ -285,3 +297,90 @@ class Pyannote:
             audio = self._import(MODULE).Audio(sample_rate=SAMPLE_RATE, mono=None)
             waveform, rate = audio(str(path))
         return [waveform[i].numpy() for i in range(int(waveform.shape[0]))], int(rate)
+
+
+def embedder(importer: Importer = importlib.import_module) -> PyannoteEmbedding:
+    """The embedding model, for a command that found the models here (`detect`, `status().ready`);
+    nothing is imported until it is first used."""
+    return PyannoteEmbedding(importer)
+
+
+class PyannoteEmbedding:
+    """`voiceprints.Embedder`: pyannote.audio's embedding model, `EMBEDDING`, loaded once from the
+    hub's cache with the hub offline, as the pipeline itself is."""
+
+    model = EMBEDDING
+    dim = EMBEDDING_DIM
+
+    def __init__(self, importer: Importer = importlib.import_module) -> None:
+        self._import = importer
+        self._inference: Any = None
+        self._digest: str | None = None
+
+    @property
+    def digest(self) -> str:
+        """The SHA-256 of the model's files in the hub's cache, by name and content, in name order:
+        what `model_sha256` names. Asked of the cache only (`local_files_only`)."""
+        if self._digest is None:
+            with quiet():
+                try:
+                    folder = Path(self._import(HUB).snapshot_download(EMBEDDING, local_files_only=True))
+                except Exception:  # the hub's own family of errors: the model is not whole here
+                    raise ModelsMissing() from None
+            found = hashlib.sha256()
+            for file in sorted(
+                (f for f in folder.rglob("*") if f.is_file()), key=lambda f: f.relative_to(folder).parts
+            ):
+                found.update("/".join(file.relative_to(folder).parts).encode("utf-8") + b"\0")
+                with file.open("rb") as fh:
+                    while chunk := fh.read(1 << 20):
+                        found.update(chunk)
+            self._digest = found.hexdigest()
+        return self._digest
+
+    def load(self, path: Path) -> tuple[Sequence[float], int]:
+        """The recording as mono samples at 16 kHz, its channels mixed down, as the registry hears
+        every recording, whichever wrote it."""
+        with quiet():
+            audio = self._import(MODULE).Audio(sample_rate=SAMPLE_RATE, mono="downmix")
+            waveform, rate = audio(str(path))
+        return waveform[0].numpy(), int(rate)
+
+    def embed(
+        self, samples: Sequence[float], rate: int, pieces: Sequence[tuple[float, float]]
+    ) -> list[float]:
+        """One vector for the voice speaking alone in `pieces` (seconds from the start): each piece
+        embedded whole, made a unit vector and weighted by its seconds; empty when no piece gives one."""
+        numpy, torch = self._import("numpy"), self._import("torch")
+        total: list[float] = []
+        with quiet():
+            if self._inference is None:
+                module = self._import(MODULE)
+                try:
+                    model = module.Model.from_pretrained(EMBEDDING)
+                except OSError:  # the hub's LocalEntryNotFoundError is a FileNotFoundError
+                    raise ModelsMissing() from None
+                if model is None:
+                    raise ModelsMissing()
+                self._inference = module.Inference(model, window="whole")
+            for start, end in pieces:
+                chunk = samples[int(start * rate) : int(end * rate)]
+                if len(chunk) == 0:
+                    continue
+                waveform = torch.from_numpy(numpy.asarray(chunk, dtype=numpy.float32).reshape(1, -1))
+                vector = _flat(self._inference({"waveform": waveform, "sample_rate": rate}))
+                norm = math.sqrt(math.fsum(v * v for v in vector))
+                if not vector or not all(math.isfinite(v) for v in vector) or norm == 0.0:
+                    continue
+                weighted = [v / norm * (end - start) for v in vector]
+                total = weighted if not total else [a + b for a, b in zip(total, weighted, strict=True)]
+        return total
+
+
+def _flat(found: Any) -> list[float]:
+    """The numbers of what the model answered (an array of one row, or none), in order."""
+    if hasattr(found, "tolist"):
+        found = found.tolist()
+    if isinstance(found, list | tuple):
+        return [v for item in found for v in _flat(item)]
+    return [float(found)]

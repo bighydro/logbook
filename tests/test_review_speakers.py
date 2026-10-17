@@ -112,6 +112,7 @@ def test_the_json_carries_stable_ids_the_evidence_and_the_counts(lb: Logbook, ca
             "person": OLA_ID,
             "name": "Ola Nordmann",
             "owner": False,
+            "unnamed": False,
             "score": 40,
             "matched": ["the far end of the call 09:15"],
             "evidence": [CALL_LINE],
@@ -576,8 +577,9 @@ def test_review_speakers_opens_no_connection(lb: Logbook, capsys, no_network: li
     assert no_network == []
 
 
-def test_the_text_road_and_the_voiceprint_are_not_this_build(lb: Logbook, capsys) -> None:
-    """No row says `same voice`: there is no registry to compare against yet (RFC 0038 §5)."""
+def test_without_recipients_and_without_the_model_no_voice_is_compared(lb: Logbook, capsys) -> None:
+    """No row says `same voice`: a record that names no recipients keeps no registry, and without the
+    `speakers` extra the review hears nothing for the run (RFC 0038 §5.1)."""
     assert "same voice" not in _run(capsys)
     assert not (lb.root / "voiceprints.age").exists()
 

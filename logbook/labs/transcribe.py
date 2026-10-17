@@ -47,6 +47,11 @@ old one, with the old line's `source`, `at`, `end`, `tz` and title and `raw_id` 
 spans, the same key, and the `(source, raw_id)` dedupe writes nothing twice. A line that is retracted
 supersedes nothing. What it costs is said before anything is written (`cost`): the signed days whose
 page changes, and the promises closed on the old lines, which are proposed again from the new ones.
+
+**Voiceprints** (RFC 0038 §5). A run that separated voices with the embedding model here (`embedder`,
+the pipeline's own) ends by bringing the record's registry, `voiceprints.age`, up to date
+(`voiceprints.update`): the new voices heard and the voiceprints recomputed from the attributions
+that stand. A record that names no recipients keeps none, and nothing is done for it.
 """
 
 from __future__ import annotations
@@ -63,7 +68,7 @@ from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from ..contrib.adapters import transcript
-from ..core import attachments, speakers
+from ..core import attachments, speakers, voiceprints
 from ..core.chain import Line
 from ..core.store import Logbook
 from . import diarize
@@ -188,6 +193,8 @@ class Report:
     voiceless: int = 0  # memos heard in which the diarizer found no voice
     rooms: int = 0  # memos whose source named two channels the diarizer could not read apart: one room
     unlabelled: int = 0  # memos whose text's lines could not be numbered as heard: written without voices
+    registry: voiceprints.Summary | None = None  # what the run did to the voiceprints (§5), when it did
+    registry_error: str | None = None  # why it could not
 
 
 @dataclass(frozen=True)
@@ -225,13 +232,15 @@ def run(
     progress: Callable[[str], None] | None = None,
     diarizer: diarize.Diarizer | None = None,
     separate: bool = True,
+    embedder: voiceprints.Embedder | None = None,
 ) -> Report:
     """Transcribe every standing voice memo from local day `since` on whose audio is in the store
     and that has no transcript yet; a line is appended per memo as soon as it is heard, so an
     interrupted run keeps what it did and the next run carries on. `dry_run` lists and writes
     nothing (no engine needed). `progress` gets one line per memo. With `diarizer` (and `separate`,
     the default) each memo's voices are separated in the same run; `separate` False is
-    `--no-speakers`: no diarizer is used and nothing is said of voices."""
+    `--no-speakers`: no diarizer is used and nothing is said of voices. With `embedder` as well, a
+    run that separated voices updates the voiceprint registry at its end (`voiceprints.update`)."""
     counts: dict[str, int] = {}
     memos, already = _standing(lb, since, counts)
     diarizer = diarizer if separate else None
@@ -247,7 +256,24 @@ def run(
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with diarize.quiet():  # the hub offline, and pyannote's usage reporting off, for the whole run
         report.written = lb.append_many(_drafts(lb, engine, memos, chunk_s, report, zone, progress, diarizer))
+        if diarizer is not None and embedder is not None and report.separated:
+            _voiceprints(lb, report, embedder, progress)
     return report
+
+
+def _voiceprints(
+    lb: Logbook,
+    report: Report | Again,
+    embedder: voiceprints.Embedder,
+    progress: Callable[[str], None] | None,
+) -> None:
+    """The registry brought up to date after a run that wrote voices; what it could not do, said."""
+    try:
+        report.registry = voiceprints.update(lb, embedder, progress=progress)
+    except voiceprints.PROBLEMS as e:
+        report.registry_error = str(e)
+    except diarize.ModelsMissing as e:
+        report.registry_error = str(e)
 
 
 def hear(engine: Engine, audio: Path, fetch_model: bool = False, chunk_s: float = CHUNK_S) -> Result:
@@ -298,7 +324,15 @@ def describe(report: Report) -> str:
     said = f"  voices separated in {_plural(report.separated, 'voice memo')}"
     if report.voiceless:
         said += f"; no voice found in {report.voiceless:,}"
-    return f"{text}\n{said}{_heard_text(report.rooms, report.unlabelled)}"
+    return f"{text}\n{said}{_heard_text(report.rooms, report.unlabelled)}{_registry_text(report)}"
+
+
+def _registry_text(report: Report | Again) -> str:
+    """The run's line on the voiceprints, when it touched them: never a number of a vector."""
+    if report.registry_error:
+        return f"\n  voiceprints: not updated: {report.registry_error}"
+    said = voiceprints.describe(report.registry) if report.registry is not None else None
+    return f"\n  {said}" if said else ""
 
 
 def _heard_text(rooms: int, unlabelled: int) -> str:
@@ -576,6 +610,8 @@ class Again:
     voiceless: int = 0  # heard again with no voice found: nothing written
     rooms: int = 0  # two channels named by the source, not read apart: heard as one room
     unlabelled: int = 0  # voices heard but the text's lines not numbered as heard: nothing written
+    registry: voiceprints.Summary | None = None  # what the run did to the voiceprints (§5), when it did
+    registry_error: str | None = None
 
 
 def unseparated(lb: Logbook, since: str | None = None, dry_run: bool = False) -> Again:
@@ -674,11 +710,13 @@ def rehear(
     hint: int | None = None,
     chunk_s: float = CHUNK_S,
     progress: Callable[[str], None] | None = None,
+    embedder: voiceprints.Embedder | None = None,
 ) -> Again:
     """Hear each transcript `unseparated` found again and separate its voices, a new line each that
     supersedes the old one; `engine_for(model)` gives the engine for a Whisper model, and every
     model must be on this machine before anything is heard (ModelMissing). `hint` is the number of
-    voices the owner says a room held. A line is appended as soon as it is heard."""
+    voices the owner says a room held. A line is appended as soon as it is heard. With `embedder`, a
+    run that wrote a line updates the voiceprint registry at its end."""
     engines: dict[str, Engine] = {}
     for item in report.found:
         if item.model not in engines:
@@ -695,6 +733,8 @@ def rehear(
         report.written = lb.append_many(
             _again(lb, report, engines, diarizer, hint, chunk_s, zone, progress), skipped=same
         )
+        if embedder is not None and report.written:
+            _voiceprints(lb, report, embedder, progress)
     return report
 
 
@@ -785,7 +825,7 @@ def describe_again(report: Again) -> str:
             text += f"\n  heard the same as before, nothing written: {report.same:,}"
         if report.voiceless:
             text += f"\n  no voice found, nothing written: {report.voiceless:,}"
-        text += _heard_text(report.rooms, report.unlabelled)
+        text += _heard_text(report.rooms, report.unlabelled) + _registry_text(report)
     skipped = [f"{n:,} {PHRASES.get(key, key)}" for key, n in report.counts.items() if n]
     return text + (f"\n  not heard again: {', '.join(skipped)}" if skipped else "")
 

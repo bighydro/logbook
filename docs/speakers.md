@@ -6,11 +6,12 @@ gives each voice an anonymous label in the `transcript/v1` line: `S1`, `S2`, …
 room, `mic` and `system` for the two sides of a call. Nothing leaves the machine, and nothing names
 anyone: a label says *a voice*, never *who*.
 
-This page covers builds 1 and 2 of [RFC 0038](rfcs/0038-speakers.md): the labels at ingest (§2), and
+This page covers builds 1 to 3 of [RFC 0038](rfcs/0038-speakers.md): the labels at ingest (§2);
 saying whose voice a label is, one `resolution/v1` line per voice, written by you alone through `review
-speakers`, which the readers then join ([Who they are](#who-they-are), §3–§4). The voiceprints that
-propose a name by how a voice sounds, the browser's *Who spoke?*, and the text-only road for
-recordings whose audio is gone are later builds.
+speakers`, which the readers then join ([Who they are](#who-they-are), §3–§4); and the voiceprints that
+let the review propose a name by how a voice sounds, a sealed cache that never leaves the machine
+([Voiceprints](#voiceprints), §5). The browser's *Who spoke?* and the text-only road for recordings
+whose audio is gone are later builds.
 
 ```bash
 uv tool install "openlogbook[transcribe,speakers]"   # the Whisper engine and the diarizer (or pipx install --force)
@@ -20,6 +21,7 @@ logbook derive transcripts voice-memos          # transcribes, and separates the
 logbook derive transcripts voice-memos --no-speakers   # transcribes only
 logbook derive speakers --dry-run               # the transcripts heard before, and what separating them would change
 logbook derive speakers [--since DAY] [--speakers N]   # heard again and separated: a new line supersedes each
+logbook setup speakers --rebuild                # the voiceprint registry made again from the record; no socket
 ```
 
 ## What a transcript gains
@@ -224,11 +226,15 @@ logbook review speakers --named --day 2026-10-03
 A row is an *observed voice*, keyed by the strongest thing the voice carries, never by its label
 across recordings: the far end of a call (the one voice on the `system` channel of a recording that
 overlaps a `call/v1` line whose counterparty is an address or a number) is keyed by that address or
-number, so every call with one number is one row; else the name the source displayed, its words
-folded and sorted; else the label alone, one row per voice. A row with several recordings numbers
-them `N.1`, `N.2`, …, and `--accept 4.2` answers that recording's voice alone, which is how a row
-that joined two people is split. Your own microphone's voice (`from_me`) is yours without a question
-and never in the queue.
+number, so every call with one number is one row; else the voice itself: voices not yet named that
+sound alike, each within `match` of the others' centre in the [voiceprints](#voiceprints), are one row,
+so the same guest heard at four dinners is one row of four recordings (never two voices of one
+recording: two labels the diarizer kept apart are not merged by a guess); else the name the source
+displayed, its words folded and sorted; else the label alone, one row per voice. A row with several
+recordings numbers them `N.1`, `N.2`, …, and `--accept 4.2` answers that recording's voice alone,
+which is how a row that joined two people is split. Your own microphone's voice (`from_me`) is yours
+without a question and never in the queue; a row the voiceprints propose you for comes first, since
+one answer settles most voices.
 
 ```
 4 voices not yet named in 2 recordings, 4 rows · 0 named · tier 2
@@ -261,20 +267,27 @@ A plain sum per candidate and voice, a row's the lowest of its voices':
 
 | Evidence | Points |
 |---|---|
+| the same voice: the voice's embedding against the person's voiceprint, 70 at a similarity of `match` or more, falling in a straight line to 0 at `floor`, nothing below it; against yours as against anyone's | up to 70 |
 | the far end of a call: the voice is alone on `system` and the recording overlaps a call whose counterparty is the person | 40 |
 | on the entry: the person attends a timed calendar entry the recording overlaps, held at the same stay | 15 |
 | a participant: the transcript's `participants` name the person by address, number or provider id; by a name alone | 15; 5 |
 | the source's name: the name the source displayed for the voice is the person's, or a word of it nobody else's has | 10 |
 | seen that day: another line of the recording's day is the person's (a message, a call, a tagged face, their voice in another recording), one not already counted above | 5 |
 
-Context never stands in for a voice: without the far end of a call a candidate scores 40 at most, so
-`--all-above` over 40 never names a guest from context alone. Two candidates within 5 points are both
+Context never stands in for a voice: with neither the same voice nor the far end of a call a candidate
+scores 40 at most, so `--all-above` over 40 never names a guest from context alone. The first time a
+guest is recorded there is no voiceprint of them: context proposes, low, and your answer is what makes
+the voiceprint. Two candidates within 5 points are both
 shown and neither is taken; context belongs to the recording, not to one voice of it, so a person who
 is the best for two voices of one recording at the same score is shown for each and taken by
-`--all-above` for neither. A person already named for one voice of a recording is not proposed for its
-others. A pair you said no to, and a person under `forget` in `policy/speakers.json`, are never
-proposed. RFC 0038's `same voice`, up to 70 points against a voiceprint, is a later build's; until
-then you are proposed by nothing, and you answer `me`.
+`--all-above` for neither. A person already named for one voice of a recording, you included, is not
+proposed for its others. A pair you said no to, and a person under `forget` in `policy/speakers.json`,
+are never proposed. You are proposed by your voice alone (`→ you: same voice 0.86`); until you have a
+call on record or have answered once for yourself there is no voiceprint of you, and you answer `me`.
+With `enrol_unnamed`, a voice that sounds like a person you would not name is proposed as `the same
+unnamed person`, and accepting it writes `--unnamed` for that person, not a new one. `matched` says
+`same voice 0.86`, the similarity, never the vectors; a row of several recordings reads as its least
+similar voice, as it scores.
 
 ### What each answer writes
 
@@ -355,7 +368,123 @@ phone), a person's, unnamed, or not yet named.
   voice's sentences are yours, a guest's are owed to you, a voice not yet named stays as spoken (`S2`).
 - **The digest** says who spoke that day and, once, how many voices wait, with the command.
 
-## Four assumptions that stand
+## Voiceprints
+
+A voiceprint is an embedding of a voice: a short list of numbers the speaker model computes from the
+audio, close to the numbers of the same voice in any other recording. That makes it biometric: it
+recognises a person by their body, in a recording anyone could make, and it could recognise a guest
+who never agreed to be in your record to someone who has never seen it. Everything below follows
+from that (RFC 0038 §5).
+
+### The registry
+
+The voiceprints are one file, `voiceprints.age`, in the record folder beside `places.json`: one JSON
+document, `voiceprints/1`, sealed with age to the record's own recipients ([Encryption at
+rest](https://github.com/bighydro/logbook/blob/main/rfcs/0029-encryption-at-rest.md)), written whole each time to a temporary name beside it and renamed
+over it, so a crash leaves the old file or the new one and never half; the plaintext never touches the
+disk. It holds the embedding model and the digest of its files, the length of its vectors and the
+head it was written at; per person (by entity id, never a name) their voiceprint, the centre of their
+voices' embeddings weighted by clean seconds, the clean seconds it rests on, and the voices it was
+built from, each with its own embedding, so a voiceprint can be recomputed at any write without the
+model; and each voice not yet named with its embedding, so the review compares without loading the
+model. No audio, no words, no names.
+
+A voice is embedded from its **clean speech** only: its turns in the spans file less every moment
+another voice speaks, each piece two seconds or more, so an evening of interruptions does not blur
+two people into one. A voice with less than `min_clean_s` of it (8 seconds) is neither embedded nor
+proposed by voice. The model is the diarization pipeline's own,
+`pyannote/wespeaker-voxceleb-resnet34-LM`, so the registry and the diarizer agree on what a voice is.
+
+A record that names no recipients keeps no registry on disk. The review then hears the voices it
+compares for that run, from the audio, when the `speakers` extra and its models are on this machine,
+and forgets them when it ends; without them it proposes from context and the channels alone. That
+costs a decoding of every recording with voices at each `review speakers`; a record sealed to
+recipients pays it once, in the file.
+
+### A cache, never the record
+
+The registry is made from what the record holds, the audio the transcripts' `diarization.audio`
+names, their spans files and the attributions that stand, and is thrown away without loss, like
+`index.sqlite`:
+
+```bash
+logbook setup speakers                  # registry   voiceprints.age written 2026-10-11 10:12 with pyannote/wespeaker-voxceleb-resnet34-LM, for 3 people, you among them; 2 voices not yet named
+logbook setup speakers --rebuild        # made again from the record, with the model; no socket
+```
+
+- A `derive transcripts` or `derive speakers` that separates a recording adds its voices, and hears
+  any other voice the file should hold and does not; the run says `voiceprints: 4 voices heard; 3
+  people, you among them, 2 voices not yet named`. A run with nothing new to hear does not load the
+  model and leaves the file as it is.
+- Every answer in `review speakers` that writes a line updates it, without the model: the person you
+  named gains the voice; a voice named away, retracted or whose transcript was heard again leaves the
+  voiceprint it was in, because each voiceprint is recomputed from the answers that stand. The queue
+  itself reads the file as the record stands now, so a retracted answer counts for nothing at once.
+- A model change makes it again from the record: two models' vectors cannot be compared.
+- A recording whose audio is not in the store is skipped and counted; the answers already written
+  stand.
+- `verify` ignores the file; `backup` leaves it out, one copy of a biometric being the most there
+  should be. A restored record makes it again: `setup speakers --rebuild`, from the audio the backup
+  carries.
+- `logbook key add-recipient` and `key remove-recipient` seal it again to the new recipients with
+  the record's lines and files, in the same hold of the writer lock: before the record when a
+  recipient goes, so a removed identity opens no copy of it even when the change stops half way,
+  and after it when one comes. A file this machine cannot open or seal again is removed, to be made
+  again, and so is one whose sealing again was interrupted; a link under its name is removed, never
+  read through, and what it pointed at is left as it was, said. One that can be neither sealed again
+  nor removed (another program holds it open) stops a removal before the record is touched.
+
+A voice the file let go (one you answered `--unnamed`, or a person under `forget`) and that later
+returns to being kept (the answer retracted, `forget` emptied) is heard again by the next `derive`
+that separates a recording, or by `setup speakers --rebuild`; until then it is compared as a voice
+without a voiceprint.
+
+### Your voice
+
+Your voice is enrolled without a question and without a line: every voice with `from_me` (your own
+microphone on a call recorder, alone on its channel) whose audio is in the store, and every voice you
+have bound to yourself (`--name N me`, or accepting a row that proposed you), is folded into your
+voiceprint. Every other voiceprint begins with your first answer for that person and grows with each
+later one.
+
+### `policy/speakers.json`
+
+One setting, read each run, never a line, backed up with `policy/`. Without the file, the defaults:
+
+```json
+{"match": 0.75, "floor": 0.5, "min_clean_s": 8, "text_confidence_cap": 0.6, "enrol_unnamed": false, "forget": []}
+```
+
+- `match` and `floor`: the similarities at which a voice scores its full 70 points and none. They are
+  the embedding model's, hypotheses until calibrated, as `policy/stays.json`'s constants are.
+- `min_clean_s`: the clean speech, in seconds, below which a voice is neither embedded nor proposed by
+  voice.
+- `text_confidence_cap`: the most a `text` attribution's `confidence` may say.
+- `enrol_unnamed`, `false`: the voices of a person you would not name are folded into no voiceprint,
+  so a stranger you would not name is not recognised next time either. With `true` they are, and the
+  queue proposes `the same unnamed person`.
+- `forget`: entity ids (as `people --json` gives them) whose voiceprint is never kept and against whom
+  no voice is ever proposed. Their voices leave the file at its next write. An entry that is no
+  one's id (a typo, a name, an id in capitals) matches no one and forgets no one.
+
+A file that is not this shape is refused in one sentence naming the key, and nothing is written: a
+number outside 0 to 1, `floor` not below `match`, seconds below 0, an `enrol_unnamed` that is not
+`true` or `false`, a `forget` that is not a list of non-empty strings, a key that is no setting.
+
+### It never leaves
+
+The registry is part of no crossing, whatever the tier and whatever a policy entry says: not the
+crossing package, a shared page, a trip bundle, the vault, the site, an MCP tool's answer, a dream's
+material, a backup or any export. A tier says what a line may give away, and the registry is not a
+line. Nothing opens it but `review speakers`, the commands that write it (`derive transcripts`, `derive
+speakers`, `setup speakers --rebuild`), `setup speakers` and `doctor`, which say that it is there, when
+and with which model it was written and for how many people, never what is in it ([the
+doctor](doctor.md#voiceprints)). The index holds no embedding, and no reader prints a vector: the
+review says `same voice 0.86`, a similarity. A test builds every crossing and export over a record
+with a registry and looks in each for the file and for every one of its vectors, as text and as
+packed numbers.
+
+## Assumptions that stand
 
 RFC 0038 leaves fifteen questions open for its comment period. Four of them were asked of it from the
 start, and this build stands on the RFC's present answer to each until the comment period settles it:
@@ -367,8 +496,9 @@ start, and this build stands on the RFC's present answer to each until the comme
    named, or named `--unnamed`.
 2. **A guest who asks to be forgotten.** The transcript and the audio are your record and are never
    rewritten. What the record can do is retract the attribution lines that name them (their voices
-   return to *not yet named*) and list them under `forget` in `policy/speakers.json`, so no voice is
-   ever proposed as theirs; keeping their words home is the crossing's keys, a later build.
+   return to *not yet named*) and list them under `forget` in `policy/speakers.json`, so the
+   registry drops their voiceprint at its next write and no voice is ever proposed as theirs; keeping
+   their words home is the crossing's keys, a later build.
 3. **Group calls with more than two channels.** A recording is one room, or two channels, `mic` and
    `system`. A conference that arrives mixed on the far end's channel is diarized inside it
    (`system.1`, `system.2`); a recorder that writes one track per participant is not read as such yet.
@@ -376,10 +506,16 @@ start, and this build stands on the RFC's present answer to each until the comme
    tier 2 and 3, invisible to a reader that does not want them: no spec version bump, no regenerated
    conformance fixture, no new ADR. A stolen disk shows nothing of who spoke.
 
+Build 3 stands on two more:
+
+- **The unnamed** (open question 7). `enrol_unnamed` is `false` by default: a person you would not
+  name is minted for the voice and kept in no voiceprint, so a stranger heard twice is two strangers
+  unless you say `--same-as`.
+- **Calibration** (open question 12). `match` and `floor` are fixed settings, 0.75 and 0.5 by
+  default; the registry does not learn your thresholds from your answers.
+
 ## Not in these builds
 
-- voiceprints and the registry, `voiceprints.age` (§5), and with them the review's `same voice` score
-  and its grouping of one unknown voice heard at several dinners into one row (§4.1 rule 2);
 - the browser's *Who spoke?* (§4.6), the text-only road (§6), and the crossing's keys (§9);
 - the `channels` engine of §2.5 (two channels labelled with no model on the machine): §2.1 has the run
   transcribe exactly as before without the model, and this build follows §2.1;

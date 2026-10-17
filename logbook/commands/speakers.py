@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 from ..core.store import Logbook
@@ -44,7 +44,11 @@ class SpeakerQueue(Queue):
 
     def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
         return self.module.read(
-            lb, bool(getattr(a, "named", False)), getattr(a, "recording", None), getattr(a, "day", None)
+            lb,
+            bool(getattr(a, "named", False)),
+            getattr(a, "recording", None),
+            getattr(a, "day", None),
+            hear=hearing(lb),
         )
 
     def shown(self, lb: Logbook, report: Any, a: argparse.Namespace) -> tuple[Any, list[Any], dict[str, Any]]:
@@ -91,7 +95,7 @@ def sitting(lb: Logbook, a: argparse.Namespace) -> None:
     Raises `speakers_review.ReviewError` for anything the record cannot act on, nothing written."""
     from ..contrib import speakers_review as module
 
-    report = module.read(lb, bool(a.named), a.recording, a.day)
+    report = module.read(lb, bool(a.named), a.recording, a.day, hear=hearing(lb))
     if a.play is not None:
         told = [
             flag
@@ -210,3 +214,47 @@ def _decoder() -> Any:
     except transcribe.EngineMissing as e:
         raise ReviewError(f"--play needs the audio decoded on this machine: {e}") from e
     return engine.load
+
+
+def hearing(lb: Logbook) -> Callable[[], Any] | None:
+    """For a record that names no recipients, which keeps no voiceprint registry (RFC 0038 §5.1): the
+    pipeline's own embedding model, when the `speakers` extra and its models are on this machine,
+    for the review to hear the voices it compares for this run and forget them after. Asked only
+    when there is a voice to compare; never downloads; the labs module is imported only then. A
+    model the cache holds but cannot load is one sentence naming the fetch."""
+    if lb.recipients:
+        return None
+
+    def found() -> Any:
+        from ..contrib.speakers_review import ReviewError
+        from ..labs import diarize
+
+        if not diarize.installed() or not diarize.status().ready:
+            return None
+        return _Guarded(diarize.embedder(), diarize.ModelsMissing, ReviewError)
+
+    return found
+
+
+class _Guarded:
+    """An embedding model whose `ModelsMissing` is the review's own one sentence."""
+
+    def __init__(self, inner: Any, missing: type[Exception], error: type[Exception]) -> None:
+        self._inner, self._missing, self._error = inner, missing, error
+        self.model, self.dim = inner.model, inner.dim
+
+    @property
+    def digest(self) -> str:
+        try:
+            return str(self._inner.digest)
+        except self._missing as e:
+            raise self._error(str(e)) from None
+
+    def load(self, path: Any) -> Any:
+        return self._inner.load(path)
+
+    def embed(self, samples: Any, rate: int, pieces: Any) -> Any:
+        try:
+            return self._inner.embed(samples, rate, pieces)
+        except self._missing as e:
+            raise self._error(str(e)) from None
