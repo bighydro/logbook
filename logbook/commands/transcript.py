@@ -50,10 +50,11 @@ def transcript_arguments(sub: Subparsers) -> None:
 
 
 def cmd_transcript(a: argparse.Namespace) -> None:
-    """`synthesize ID`: one draft line, or nothing and one sentence why; the policy's refusal (no
-    `dream` entry, an expired one), the endpoint's, a transcript above the ceiling or without its text
-    exit 2 before anything is sent; an answer that failed exits 1. `synthesize --day DAY`: one block or
-    row per transcript and a count; exit 1 when any answer was refused."""
+    """`synthesize ID`: one draft line, or nothing and one sentence why; a home video's soundtrack (no
+    call), the policy's refusal (no `dream` entry, an expired one), the endpoint's, a transcript above
+    the ceiling or without its text exit 2 before anything is sent; an answer that failed exits 1.
+    `synthesize --day DAY`: one block or row per transcript and a count; exit 1 when any answer was
+    refused."""
     if a.verb != VERB:
         print("transcript: the verb is synthesize: logbook transcript synthesize ID", file=sys.stderr)
         sys.exit(2)

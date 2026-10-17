@@ -70,6 +70,7 @@ def test_every_google_source_is_named_with_its_one_read_only_scope() -> None:
         "gcal": "https://www.googleapis.com/auth/calendar.readonly",
         "drive": "https://www.googleapis.com/auth/drive.activity.readonly",
         "drive paths": "https://www.googleapis.com/auth/drive.metadata.readonly",
+        "drive files": "https://www.googleapis.com/auth/drive.readonly",  # `videos fetch`: a file's bytes
         "gtasks": "https://www.googleapis.com/auth/tasks.readonly",
         "meet": "https://www.googleapis.com/auth/meetings.space.readonly",
         "gaudit": "https://www.googleapis.com/auth/admin.reports.audit.readonly",

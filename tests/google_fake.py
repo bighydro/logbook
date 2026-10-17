@@ -1,10 +1,11 @@
 """An in-process fake of the Google endpoints the sources on the one service-account key call: the OAuth
 token endpoint (a service account's signed assertion in, an access token out), the Drive Activity API v2
-(`activity:query`), the Drive API v3's file metadata (`files.get`), the Tasks API v1 (task lists, tasks),
-the Gmail API v1 (profile, labels, messages, history), the Calendar API v3 (calendar list, events), the
-People API v1 (the owner's contacts and other contacts), the Meet REST API v2 (conference records, their
-participants, transcripts and transcript entries, spaces) and the Admin SDK Reports API v1 (the login
-audit log).
+(`activity:query`), the Drive API v3's file metadata (`files.get`), its listing of a folder
+(`files.list`, the `q` of `sync drive --videos` and nothing else) and a file's bytes (`alt=media`, by
+`stream`, with `Range`), the Tasks API v1 (task lists, tasks), the Gmail API v1 (profile, labels,
+messages, history), the Calendar API v3 (calendar list, events), the People API v1 (the owner's contacts
+and other contacts), the Meet REST API v2 (conference records, their participants, transcripts and
+transcript entries, spaces) and the Admin SDK Reports API v1 (the login audit log).
 Nothing listens on a socket: the fake is a function with the shape of `service_account.send`, which a
 test puts in its place, and every request it answers is recorded so a test can say what was asked.
 
@@ -24,7 +25,10 @@ her files are `people/1001` and `people/1002` as the API would name them; the se
 from __future__ import annotations
 
 import base64
+import hashlib
+import io
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,6 +45,7 @@ USER = "ines@example.org"
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.activity.readonly"
 TASKS_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 METADATA_SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly"
+FILES_SCOPE = "https://www.googleapis.com/auth/drive.readonly"  # a file's bytes: `videos fetch` alone
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.readonly"
@@ -51,6 +56,7 @@ SCOPES = {  # what the owner delegated
     DRIVE_SCOPE,
     TASKS_SCOPE,
     METADATA_SCOPE,
+    FILES_SCOPE,
     GMAIL_SCOPE,
     CALENDAR_SCOPE,
     CONTACTS_SCOPE,
@@ -61,6 +67,13 @@ SCOPES = {  # what the owner delegated
 GMAIL = "gmail.googleapis.com/gmail/v1/users/me"
 CALENDAR = "www.googleapis.com/calendar/v3"
 FILES = "www.googleapis.com/drive/v3/files/"
+LIST = "www.googleapis.com/drive/v3/files"  # files.list: no id after it
+FOLDER_MIME = "application/vnd.google-apps.folder"
+# the one listing `sync drive --videos` asks: a folder's subfolders and video files, nothing in the trash
+LIST_QUERY = re.compile(
+    r"'(?P<parent>[A-Za-z0-9_-]+)' in parents and trashed = false and"
+    r" \(mimeType = 'application/vnd\.google-apps\.folder' or mimeType contains 'video/'\)\Z"
+)
 PEOPLE = "people.googleapis.com/v1/"
 MEET = "meet.googleapis.com/v2/"
 LOGINS = "admin.googleapis.com/admin/reports/v1/activity/users/"
@@ -111,7 +124,10 @@ class Fake:
     `contacts` and `other_contacts` are People API person objects (`connections`, `otherContacts`);
     `conferences` Meet conference records, with `participants`, `transcripts` (per record name) and
     `entries` (per transcript name) below them and `spaces` by name; `logins` the login audit log's
-    activities, every user's, the client asking for one user by address. `failures` are answered, in
+    activities, every user's, the client asking for one user by address. `media` holds a Drive file's
+    bytes by id, served by `stream` (`alt=media`, a `Range` honoured, `cut_after` breaking one answer
+    part way as a lost connection does), each request kept in `streamed`; `listed` is every item a
+    `files.list` page returned, so a test can say what a listing never saw. `failures` are answered, in
     order, to the next API calls (never to the token endpoint): `(status, headers, body)`."""
 
     key: rsa.RSAPrivateKey
@@ -136,6 +152,10 @@ class Fake:
     entries: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     spaces: dict[str, dict[str, Any]] = field(default_factory=dict)
     logins: list[dict[str, Any]] = field(default_factory=list)
+    media: dict[str, bytes] = field(default_factory=dict)  # a file's bytes by id, for `alt=media`
+    cut_after: int | None = None  # the next stream breaks after this many bytes, once (a lost connection)
+    streamed: list[dict[str, Any]] = field(default_factory=list)  # every `alt=media` asked: id, range, keys
+    listed: list[str] = field(default_factory=list)  # every item id a `files.list` page returned
     page: int = 3
     failures: list[tuple[int, dict[str, str], bytes]] = field(default_factory=list)
     requests: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
@@ -221,6 +241,8 @@ class Fake:
             return self._calendar(scope, path.removeprefix(CALENDAR + "/"), params)
         if path.startswith(FILES):
             return self._file(scope, path.removeprefix(FILES))
+        if path == LIST:
+            return self._list(scope, params)
         if path.startswith(PEOPLE):
             return self._people(scope, path.removeprefix(PEOPLE), params)
         if path.startswith(MEET):
@@ -461,6 +483,73 @@ class Fake:
             return _json(404, {"error": {"code": 404, "message": f"File not found: {file_id}."}})
         return _json(200, dict(found))
 
+    def _list(self, scope: str, params: dict[str, Any]) -> service_account.Response:
+        """`files.list` with the one query `sync drive --videos` asks; any other `q` is a 400, so the
+        client is held to it. The children of the folder, by name, a page at a time."""
+        if scope != METADATA_SCOPE:
+            return _insufficient()
+        found = LIST_QUERY.match(str(params.get("q") or ""))
+        if found is None:
+            return _json(400, {"error": {"code": 400, "message": f"Invalid Value: q={params.get('q')!r}"}})
+        parent = found["parent"]
+        if parent not in self.files:
+            return _json(404, {"error": {"code": 404, "message": f"File not found: {parent}."}})
+        children = sorted(
+            (
+                f
+                for f in self.files.values()
+                if parent in (f.get("parents") or [])
+                and not f.get("trashed")
+                and (f.get("mimeType") == FOLDER_MIME or str(f.get("mimeType", "")).startswith("video/"))
+            ),
+            key=lambda f: (str(f.get("name")), str(f["id"])),
+        )
+        start = int(params.get("pageToken") or 0)
+        shown = children[start : start + self.page]
+        self.listed.extend(str(f["id"]) for f in shown)
+        page: dict[str, Any] = {"files": [dict(f) for f in shown]}
+        if start + self.page < len(children):
+            page["nextPageToken"] = str(start + self.page)
+        return _json(200, page)
+
+    def stream(
+        self, method: str, url: str, headers: dict[str, str], timeout: float
+    ) -> service_account.Stream:
+        """`service_account.open_stream`'s shape: a file's bytes (`files/<id>?alt=media`) for a token of
+        the `drive.readonly` scope, from the offset a `Range: bytes=N-` asks (206), all of them without
+        one (200), 416 past the end. `cut_after` breaks the body after that many bytes, once."""
+        parts = urlsplit(url)
+        path = parts.netloc + unquote(parts.path)
+        params = {k: v[0] for k, v in parse_qs(parts.query).items()}
+        self.requests.append((method, path, params))
+        file_id = path.removeprefix(FILES)
+        keys = headers.get("X-Goog-Drive-Resource-Keys")
+        self.streamed.append({"id": file_id, "range": headers.get("Range"), "keys": keys})
+        if self.failures:
+            status, more, text = self.failures.pop(0)
+            return service_account.Stream(status, more, io.BytesIO(text))
+        scope = self.issued.get(headers.get("Authorization", "").removeprefix("Bearer "))
+        if scope is None:
+            return _stream(_unauthenticated())
+        if scope != FILES_SCOPE:
+            return _stream(_insufficient())
+        if method != "GET" or params.get("alt") != "media" or not path.startswith(FILES):
+            return _stream(_json(400, {"error": {"code": 400, "message": "only alt=media is served here"}}))
+        data = self.media.get(file_id)
+        if data is None:
+            return _stream(_json(404, {"error": {"code": 404, "message": f"File not found: {file_id}."}}))
+        start, status = 0, 200
+        wanted = headers.get("Range")
+        if wanted:
+            start, status = int(wanted.removeprefix("bytes=").rstrip("-")), 206
+            if start >= len(data):
+                return _stream(_json(416, {"error": {"code": 416, "message": "Range not satisfiable"}}))
+        body: Any = io.BytesIO(data[start:])
+        if self.cut_after is not None:
+            body, self.cut_after = _Cut(data[start:], self.cut_after), None
+        more = {"content-length": str(len(data) - start), "content-type": "video/mp4"}
+        return service_account.Stream(status, more, body)
+
     # -- People ---------------------------------------------------------------------------------
 
     def _people(self, scope: str, rest: str, params: dict[str, Any]) -> service_account.Response:
@@ -549,6 +638,36 @@ def _insufficient() -> service_account.Response:
 
 def _json(status: int, data: dict[str, Any]) -> service_account.Response:
     return service_account.Response(status, {"content-type": "application/json"}, json.dumps(data).encode())
+
+
+def _unauthenticated() -> service_account.Response:
+    return _json(401, {"error": {"code": 401, "message": "Request had invalid authentication."}})
+
+
+def _stream(answer: service_account.Response) -> service_account.Stream:
+    return service_account.Stream(answer.status, answer.headers, io.BytesIO(answer.body))
+
+
+class _Cut:
+    """A body that gives `n` bytes and then fails as a dropped connection does."""
+
+    def __init__(self, data: bytes, n: int) -> None:
+        self._data, self._left = io.BytesIO(data), n
+
+    def read(self, size: int = -1) -> bytes:
+        if self._left <= 0:
+            raise ConnectionResetError("synthetic: the connection was reset")
+        chunk = self._data.read(self._left if size < 0 else min(size, self._left))
+        self._left -= len(chunk)
+        return chunk
+
+    def close(self) -> None:
+        self._data.close()
+
+
+def md5_of(data: bytes) -> str:
+    """The digest Drive reports as `md5Checksum`."""
+    return hashlib.md5(data).hexdigest()
 
 
 def _activity_time(activity: dict[str, Any]) -> datetime:

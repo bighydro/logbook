@@ -20,6 +20,11 @@ from . import sealing
 from .chain import Line
 from .store import Logbook
 
+# transcripts that are no conversation: a home video's soundtrack (RFC 0040), its time unknown and its
+# speakers nobody the record knows; by the envelope's `source`, which reads without a key, so a sealed
+# one is left out as surely. The synthesis never sends one to a model, and `promises` never reads one.
+NOT_CALLS = frozenset({"video-transcription"})
+
 TIMING = re.compile(r"(?:(\d+):)?(\d\d):(\d\d)[.,](\d{1,3})")
 
 
