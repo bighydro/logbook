@@ -26,7 +26,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, policy, sealing, signing, stars
+from . import attachments, day_start, drafts, policy, sealing, signing, stars
 from .chain import Line, is_sealed
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
@@ -189,6 +189,9 @@ class Selection:
     missing: int  # distinct digests referenced whose file the store does not hold
     sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
     held_back_unsigned: int = 0  # lines in the tiers and kinds asked for whose day is not signed (RFC 0034)
+    held_back_by_entry: int = (
+        0  # person drafts the `relationship` entry no longer allows (`drafts.Allowed.of`)
+    )
 
     @property
     def held_back(self) -> int:
@@ -213,6 +216,7 @@ class Selection:
             "crossed": len(self.lines),
             "held_back": self.held_back,
             "held_back_unsigned": self.held_back_unsigned,
+            **({"held_back_by_entry": self.held_back_by_entry} if self.held_back_by_entry else {}),
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": len(self.resolutions),
@@ -269,6 +273,12 @@ def select(lb: Logbook, req: Request) -> Selection:
                 "are in the window: add one (RFC 0029 §7), or pass --open to ship them opened"
             )
     lines = [lb.opened(line) for line in raw]
+    # a person draft follows the entry it was written under, not the head (RFC 0036 amendment 1):
+    # once the `relationship` entry no longer allows its tier it stays home, whatever this ceiling
+    people = drafts.person_allowed(lb.root)
+    held_by_entry = len(lines)
+    lines = [line for line in lines if not _held_by_entry(line, people)]
+    held_by_entry -= len(lines)
     beside = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, beside)]
     last = standing([*retraction_lines, *(lb.opened(line) for line in raw_resolutions)])
@@ -276,7 +286,15 @@ def select(lb: Logbook, req: Request) -> Selection:
     found, missing = blobs(lb, lines)
     crossed = {str(line["id"]) for line in [*lines, *overlay]}
     carried = {k: v for k, v in sealed.items() if k in crossed}
-    return Selection(lines, len(inside), overlay, held, found, missing, carried, unsigned_held)
+    return Selection(lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry)
+
+
+def _held_by_entry(line: Line, people: drafts.Allowed) -> bool:
+    """A person draft the `relationship` entry no longer allows; every other line, and every other
+    unit's draft, is the tier's and the signed days' alone, as before."""
+    if line.get("kind") != drafts.KIND or drafts.unit_of(line) != drafts.UNIT_PERSON:
+        return False
+    return int(line.get("tier") or 0) > people.max_tier
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:

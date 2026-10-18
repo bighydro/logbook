@@ -185,14 +185,11 @@ def test_confirm_all_confirms_the_whole_page_on_a_re_sign_and_goes_alone(
     assert _by_seq(lb)[7]["payload"]["confirmed"] == [ids[1], ids[2], ids[3], ids[6], ids[4]]
     assert "goes alone" in _refused(capsys, "day", "sign", DAY, "--confirm", "all,2", "--at", AGAIN_AT)
     assert lb.meta["seq"] == 7, "nothing written"
+    # through the door, `"all"` is what the door shows (amendment 4, 18 October 2026): the door is at
+    # tier 1, so the three tier-2 notes stay unconfirmed and are counted, never named
     data = mcp_server.call(lb.root, "sign_day", {"day": DAY, "confirm": "all", "at": AGAIN_AT})["data"]
-    assert data["confirmed"] == 5 and _last(lb)["payload"]["confirmed"] == [
-        ids[1],
-        ids[2],
-        ids[3],
-        ids[6],
-        ids[4],
-    ]
+    assert data["confirmed"] == 2 and _last(lb)["payload"]["confirmed"] == [ids[1], ids[4]]
+    assert data["unconfirmed"] == "3 lines above the door's ceiling left unconfirmed"
 
 
 def test_confirm_none_still_confirms_nothing_on_a_re_sign(lb: Logbook, capsys: pytest.CaptureFixture[str]):

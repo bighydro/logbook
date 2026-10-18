@@ -42,9 +42,14 @@ What the model is sent is the person's name, the window, your question and their
 messages of your direct chat (both ways), your calls, the mail between you, the events you both
 attended and the calls that were recorded, each with its time, who spoke and its words, and the
 promises read in those words. Each line goes as a reference (`L1`, `L2`, ...), never its id. Nothing
-else of the record: no note that names them, no group chat, no photo, no stay, no draft, and none of
-the days you spent together, which rest on where you were. `people ask --show-prompt` prints exactly
-what is sent.
+else of the record: no note that names them, no group chat, no photo, no draft. The days you spent
+together in the window go too (RFC 0036 amendment 2): each its date, the name `places.json` gives the
+place you shared (`a place with no name` when it has none, never its coordinates) and the references of
+the lines it rests on, under the same gate as the lines (the entry's `max_tier`, your signed days), so a
+sentence about time together cites them; `--json` counts them, `days_together`. A person dreamed before
+at the same head is not dreamed again for them (rule 1 keys on the head, not the prompt): their next
+draft, once the record moves, reads the days together. `people ask
+--show-prompt` prints exactly what is sent.
 
 ## `people ingest` and `people ask`
 
@@ -67,3 +72,8 @@ lines or marked unsupported, refused when more than 30 % is unsupported. It is a
 Dreaming the same person over the same window at the same head writes nothing; another window, or a
 record that moved, writes a new draft that supersedes the standing one. `--dry-run` asks and writes
 nothing. No page shows a person draft yet.
+
+A person draft follows the `relationship` entry it was written under, never the `dream` entry: once the
+entry's `until` has passed, or its `max_tier` is below the draft's tier, the door holds it back as a line
+above its ceiling, a crossing package leaves it home (counted as `held_back_by_entry`), and `logbook doctor`
+names it on its `drafts` line, while the days' drafts still show under a live `dream` entry.

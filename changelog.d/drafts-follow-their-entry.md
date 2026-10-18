@@ -1,0 +1,6 @@
+### Fixed
+- A draft is held to the entry it was written under: a person's draft (`dream person`) to the `relationship` entry, every other unit to the `dream` entry. Once the `relationship` entry's `until` has passed, or its `max_tier` is below a person draft's tier, the MCP door holds the draft back and counts it, `export crossing` leaves it home (`held_back_by_entry`), and `doctor` names it, whatever the `dream` entry allows; a day's draft reads as before ([the dream](docs/dream.md), *When the entry changes*).
+- Through the MCP door, `sign_day` with `confirm: "all"` confirms only the page's lines at or under the door's ceiling, the ones the agent could be shown, and says how many above it were left unconfirmed (`unconfirmed`, `above_ceiling`: a count, never the lines). `day sign --confirm all` and the Library's Sign still confirm the whole page (RFC 0034 amendment 4; [the MCP server](docs/mcp.md)).
+
+### Added
+- `people ask` and `dream person` send the days you spent together in the window (RFC 0036 amendment 2): each its date, the `places.json` name of the place you shared (`a place with no name` when it has none, never coordinates) and the references of the lines it rests on, under the same gate as the lines, so a sentence about time together cites them; `people ask --json` counts them (`days_together`) ([the relationship reader](docs/relationship.md)).

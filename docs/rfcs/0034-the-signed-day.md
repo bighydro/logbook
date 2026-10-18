@@ -194,6 +194,8 @@ The tool `sign_day` takes the same rule through the same code (`confirm` absent 
 `"none"` are words), and still writes byte for byte the line the command writes; its answer carries
 `kept`, the sentence the command prints about what it kept from the signature it supersedes.
 
+*18 October 2026, the build chat's fix after S1's review:* through the door, `"all"` confirms only what the door can show, the page's lines at or under its ceiling (the `mcp` entry's `max_tier`), and the answer says how many lines above it were left unconfirmed (`2 lines above the door's ceiling left unconfirmed`, a count and never their content); the page signed is still the whole page, and `day sign --confirm all` and the Library's Sign, where the owner sees the whole page, are unchanged.
+
 What does not change: the payload, the page digest, the readers and the crossing (rule 5 gates on the
 standing signature, not on its confirmed set). Every line written before this amendment stays as it was
 written. `signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its schema may

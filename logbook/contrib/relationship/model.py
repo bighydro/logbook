@@ -11,7 +11,9 @@ answers it.
 
 **What crosses** is the `Question` and nothing else: the person's label, the window, the owner's
 question and the served lines (`ask.serve`), each as a reference `L1`, `L2`, ... standing for one line
-id, with its instant, kind, the speakers by label, its words and the promises read in them. The model
+id, with its instant, kind, the speakers by label, its words and the promises read in them; and the
+days together (RFC 0036 amendment 2), each its day, its places' names and the references of the lines
+it rests on (`together_material`). The model
 never sees a line id, so it cannot cite a plausible one it was not given; a reference it was not given
 is kept as it wrote it, which no line of the set is, so the reader marks the segment unsupported.
 
@@ -37,7 +39,7 @@ from ..model_client import Endpoint, Transport
 from .reader import ENTRY, Entry, RelationshipError
 
 PROMPT_FILE = Path(__file__).with_name("ask-prompt.md")
-PROMPT_NAME = "relationship-ask/1"
+PROMPT_NAME = "relationship-ask/2"
 KEY_SHOWN = "<key>"
 KEY_TAIL = 8  # the last characters of a key an error may quote alone (`...a1b2c3d4`)
 
@@ -87,13 +89,35 @@ def material(question: Any) -> tuple[dict[str, Any], dict[str, str]]:
         if line.get("promises"):
             shown["promises"] = [dict(p) for p in line["promises"]]
         lines.append(shown)
-    data = {
+    data: dict[str, Any] = {
         "person": question.person,
         "window": {"from": question.window[0], "to": question.window[1]},
         "question": question.question,
         "lines": lines,
     }
+    together = getattr(question, "together", None) or []
+    if together:  # amendment 2: each day with the places' names and the references it rests on
+        data["days_together"] = together_material(together, refs)
     return data, refs
+
+
+def together_material(together: Sequence[Mapping[str, Any]], refs: dict[str, str]) -> list[dict[str, Any]]:
+    """The days together as the model reads them: the day, the named places (`a place with no name`
+    for a stay at none) and the references of the lines it rests on, a line already given keeping its
+    reference and every other one minted after them in `refs`; never an id, never a coordinate,
+    never the words of a line the set does not hold."""
+    by_id = {line_id: ref for ref, line_id in refs.items()}
+    out = []
+    for day in together:
+        cited = []
+        for line_id in day["lines"]:
+            ref = by_id.get(str(line_id))
+            if ref is None:
+                ref = f"L{len(refs) + 1}"
+                refs[ref], by_id[str(line_id)] = str(line_id), ref
+            cited.append(ref)
+        out.append({"day": day["day"], "places": list(day["places"]), "evidence": cited})
+    return out
 
 
 def prompt(question: Any, data: Mapping[str, Any], file: Path = PROMPT_FILE) -> list[dict[str, str]]:

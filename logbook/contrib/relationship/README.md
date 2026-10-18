@@ -40,7 +40,10 @@ logbook dream person "Ola Nordmann" --window 2026-06-01 2026-06-30    # one draf
   speakers by label, the record's own words for it (never the store's, which may be edited) and the
   promises read in those words (a mail's among them: its text is its subject, and a promise sentence of
   its body crosses as the promise's quote). A promise is read from a line of the set and adds no line. The days
-  together are not sent: they rest on stays, which RFC 0036 amendment 1 keeps out of a person's set.
+  together in the window go beside the lines (RFC 0036 amendment 2, the owner's decision of 18 October
+  2026): each its date, the `places.json` name of the stay they shared (`a place with no name` when it
+  has none, never coordinates) and the references of the lines it rests on, through the same gate, read
+  again from the record and never kept in the store; the answer counts them, `days_together`.
 - **The key never shows.** Every error from the endpoint is said with the key, and its last eight
   characters, replaced by `<key>`; `--show-prompt` prints the two messages, never a header.
 - **The authorized input set** (RFC 0036 amendment 1, the person unit) of one canonical person is
@@ -97,6 +100,6 @@ logbook dream person "Ola Nordmann" --window 2026-06-01 2026-06-30    # one draf
 
 Mood and personality claims, Honcho itself, a door tool, and the person page showing the standing
 person draft (RFC 0036 amendment 1 puts it after the numbers; nothing reads a person draft yet, and the
-readers of drafts hold every draft to the `dream` entry, `drafts.allowed`, so where one is listed it is
-held to that entry). The days together are not sent (above). A person's label comes from a resolution
+readers of drafts hold a person draft to the `relationship` entry it was written under,
+`drafts.allowed`). The days together are sent as days, never as the stays' coordinates (above). A person's label comes from a resolution
 line at or under the ceiling and counts toward a draft's tier; a person named only above it is refused.
