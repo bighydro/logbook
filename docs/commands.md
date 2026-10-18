@@ -79,6 +79,7 @@ writer reads `logbook.json` again before every batch and writes nothing when the
 |---|---|
 | `demo` | a synthetic record to try the commands on; nothing in it is real |
 | `lab` | readers still finding their shape ([the lab](labs.md)); read-only |
+| `lab hold census files PATH…`, `senders`, `drive` | Hold v0: what you hold, counted read-only and written as a report under `state/hold/` (names stay in it; nothing moved, renamed, deleted or appended) ([Hold](hold.md)) |
 
 ## The old names
 
