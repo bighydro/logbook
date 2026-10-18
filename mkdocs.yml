@@ -104,6 +104,7 @@ nav:
   - The synthesis of a call: transcript-synthesis.md
   - "Speakers: who spoke": speakers.md
   - The synthesis prompt: synthesis-prompt.md
+  - The relationship reader: relationship.md
   - In a browser: serve.md
   - "The shelves: promises, goals, agents": shelves.md
   - The acts: acts.md

@@ -494,3 +494,29 @@ def test_the_guard_itself_records_and_refuses(no_network: list[str]) -> None:
         socket.create_connection(("127.0.0.1", 9))
     assert not isinstance(e.value, OSError)
     assert no_network == ["socket.socket", "urllib.request.urlopen", "socket.create_connection"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("people", "ask", "Ola Nordmann", "What did we plan for the boat?"),
+        ("dream", "person", "Ola Nordmann", "--window", "2026-06-01", "2026-06-30"),
+    ],
+    ids=lambda argv: " ".join(argv[:2]),
+)
+def test_the_relationship_reader_without_its_entry_sends_nothing(
+    argv: tuple[str, ...],
+    lb: Logbook,
+    no_network: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The demo record's policy names no `relationship` entry; with an endpoint set, as a cloud model's
+    would be, `people ask` and `dream person` refuse in one sentence and open no connection."""
+    monkeypatch.setenv("LOGBOOK_DREAM_ENDPOINT", "https://api.example.org/v1")
+    monkeypatch.setenv("LOGBOOK_DREAM_MODEL", "xy-chat-1")
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        cli.main(list(argv))
+    assert e.value.code == 2 and "names no 'relationship' entry" in capsys.readouterr().err
+    assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"

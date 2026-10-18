@@ -41,7 +41,9 @@ def people_arguments(sub: Subparsers) -> None:
         " --priority: ranked by a plain score; NAME: one person's page; merge: the same person named twice;"
         " review: who the sources saw that the record has not placed, proposed against the people it names;"
         " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go;"
-        " ingest NAME, ask NAME QUESTION: the relationship reader, experimental, no model wired yet",
+        " ingest NAME, ask NAME QUESTION: the relationship reader, experimental: a question answered by the"
+        " model of LOGBOOK_DREAM_ENDPOINT under the `relationship` entry of policy/crossing.json, from the"
+        " person's lines at or under its max_tier on signed days, every claim citing them or unsupported",
     )
     s.add_argument(
         "name",
@@ -53,7 +55,8 @@ def people_arguments(sub: Subparsers) -> None:
         " accepted or rejected only when told; `drift`: many days together in a year, no real contact"
         " for long; `nearby PLACE`: the people seen at or near a place; `ingest NAME`: one person's"
         " lines read into the relationship reader's store; `ask NAME QUESTION`: a question answered"
-        " from it, every cited line resolved (experimental)",
+        " from it by the model, every claim citing lines of it or listed as unsupported, nothing written"
+        " (experimental)",
     )
     s.add_argument(
         "place",
@@ -63,6 +66,9 @@ def people_arguments(sub: Subparsers) -> None:
         " ingest, ask: the person, as `people NAME` finds them",
     )
     s.add_argument("question", nargs="?", metavar="QUESTION", help="ask: the question about the person")
+    s.add_argument(
+        "--show-prompt", action="store_true", help="ask: print the prompt and the lines sent to the model"
+    )
     s.add_argument(
         "--window",
         nargs=2,
@@ -398,6 +404,7 @@ def _relationship(lb: Logbook, a: argparse.Namespace) -> None:
     and writes their store under `state/relationship/`, never a line; `ask` answers from the store with
     every cited id resolved against the record, or marked unsupported, and writes nothing."""
     from ..contrib.relationship import ask, reader
+    from ..contrib.relationship.model import AnswerFailed
 
     word = a.name
     try:
@@ -406,6 +413,8 @@ def _relationship(lb: Logbook, a: argparse.Namespace) -> None:
         if word == INGEST:
             if a.question is not None or a.window is None:
                 raise reader.RelationshipError("say the window, and only the window: --window FROM TO")
+            if a.show_prompt:
+                raise reader.RelationshipError("--show-prompt goes with `people ask`; ingest sends nothing")
             found, where = reader.ingest(lb, a.place, *a.window)
             if a.json:
                 print(
@@ -430,10 +439,12 @@ def _relationship(lb: Logbook, a: argparse.Namespace) -> None:
             raise reader.RelationshipError("--window goes with `people ingest`; ask reads the store's window")
         if a.question is None:
             raise reader.RelationshipError("say the question: `people ask NAME QUESTION`")
-        answer = ask.ask(lb, a.place, a.question)
+        if a.show_prompt and a.json:
+            raise reader.RelationshipError("--show-prompt prints the prompt as text; leave out --json")
+        answer = ask.ask(lb, a.place, a.question, say=print if a.show_prompt else None)
     except (ValueError, stays.SettingsError, policy.PolicyError) as e:
         print(f"people {word}: {e}", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(1 if isinstance(e, AnswerFailed) else 2)
     if a.json:
         print(json.dumps(answer.to_json(), indent=2, ensure_ascii=False))
         return

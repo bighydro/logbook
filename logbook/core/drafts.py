@@ -86,14 +86,15 @@ KIND = "draft"
 SCHEMA = "draft/v1"
 UNIT_DAY = "day"
 UNIT_EVENT = "event"  # a transcript's synthesis: the call is the unit, its line the subject
-UNITS = ("day", "journey", "event", "week", "month", "year", "chapter")
+UNITS = ("day", "journey", "event", "week", "month", "year", "chapter", "person")
 SOURCE_PREFIX = "model:"  # `source` names the model as its runner names it; never `manual`
 SUPPORTED, UNSUPPORTED, MALFORMED = "supported", "unsupported", "malformed"
 PARTS = ("day", "threads", "questions", "people", "promises")  # the parts of a dream, in order
 # the parts of a journey's dream and of a week's (`dream journey`, `dream week`), in order
 JOURNEY_PARTS = ("journey", "days", "places", "people", "decisions", "promises", "photos", "name")
 WEEK_PARTS = ("time", "energy", "people", "goals", "next_week", "personal")
-UNIT_PARTS = {"day": PARTS, "journey": JOURNEY_PARTS, "week": WEEK_PARTS}  # by `unit`
+PERSON_PARTS = ("person", "threads", "promises", "questions")  # `dream person` (amendment 1)
+UNIT_PARTS = {"day": PARTS, "journey": JOURNEY_PARTS, "week": WEEK_PARTS, "person": PERSON_PARTS}  # by `unit`
 PART_LABELS = {
     "day": "day",
     "threads": "thread",
@@ -111,6 +112,7 @@ PART_LABELS = {
     "goals": "goal",
     "next_week": "next week",
     "personal": "personal",
+    "person": "person",
 }
 # the parts of a transcript's synthesis, in order: actions on top (`logbook transcript synthesize`)
 SYNTHESIS_PARTS = ("actions", "topics", "decisions", "open_threads", "personal")
@@ -140,6 +142,8 @@ NOT_ON_JOURNEY = "evidence names a line that is not of the journey"
 NOT_ON_WEEK = "evidence names a line that is not of the week"
 UNIT_JOURNEY = "journey"
 UNIT_WEEK = "week"
+UNIT_PERSON = "person"  # one canonical person over a window (RFC 0036 amendment 1)
+WINDOW = "window"  # a person draft's `{from, to}`, two local days, both inclusive; absent on every other unit
 ISO_WEEK = re.compile(r"\d{4}-W(0[1-9]|[1-4]\d|5[0-3])\Z")  # a week's subject, `2026-W25`
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
@@ -202,10 +206,14 @@ def validate(payload: Mapping[str, Any]) -> list[str]:
     elif payload.get("unit") == UNIT_WEEK:
         if not isinstance(subject, str) or not ISO_WEEK.match(subject):
             problems.append(f"subject {subject!r} is not an ISO week, YYYY-Www")
+    elif payload.get("unit") == UNIT_PERSON:
+        if not isinstance(subject, str) or not subject.strip():
+            problems.append("subject must be one canonical person id, as a string")
     elif not isinstance(subject, str) and not (
         isinstance(subject, list) and subject and all(isinstance(s, str) for s in subject)
     ):
         problems.append("subject must be a string or a non-empty list of line ids")
+    problems += _window_problems(payload)
     head = payload.get("read_head")
     if not isinstance(head, str) or len(head) != SHA256_HEX or not all(c in "0123456789abcdef" for c in head):
         problems.append("read_head must be the record's head, 64 lowercase hex characters")
@@ -235,6 +243,21 @@ def validate(payload: Mapping[str, Any]) -> list[str]:
     if "extra" in payload and not isinstance(payload["extra"], dict):
         problems.append("extra must be an object")
     return problems
+
+
+def _window_problems(payload: Mapping[str, Any]) -> list[str]:
+    """A person draft's `window`, MUST and `{from, to}` with `from` not after `to`; any other unit's,
+    absent (amendment 1)."""
+    if payload.get("unit") != UNIT_PERSON:
+        return [] if WINDOW not in payload else [f"window is a {UNIT_PERSON} draft's alone"]
+    window = payload.get(WINDOW)
+    if not isinstance(window, dict) or set(window) != {"from", "to"}:
+        return ["a person draft's window must be {from, to}, two local days"]
+    try:
+        first, last = (datetime.strptime(str(window[k]), "%Y-%m-%d") for k in ("from", "to"))
+    except ValueError:
+        return ["a person draft's window must be two local days, YYYY-MM-DD"]
+    return [] if first <= last else ["a person draft's window runs backwards: from is after to"]
 
 
 def proposal_shape(proposal: object) -> bool:

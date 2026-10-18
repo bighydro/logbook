@@ -8,14 +8,15 @@ import sys
 from datetime import date, timedelta
 
 from ..contrib import dream as dreaming
-from ..contrib import dream_journey, dream_week, synthesis
+from ..contrib import dream_journey, dream_person, dream_week, synthesis
 from ..core import drafts, flights, stays
 from ..core.store import HeadMoved, Logbook
 from .common import Subparsers, _airports
 
 VERB = "day"
 JOURNEY, WEEK = "journey", "week"
-VERBS = (VERB, JOURNEY, WEEK)
+PERSON = "person"  # `dream person NAME`: under the `relationship` entry (RFC 0036 amendment 1)
+VERBS = (VERB, JOURNEY, WEEK, PERSON)
 DEFAULT_DAYS = 14
 
 
@@ -36,22 +37,34 @@ def dream_arguments(sub: Subparsers) -> None:
         " (`transcript synthesize`), or of the days from --since DAY on, an older call counted and named,"
         " never sent; then each journey that came home and each week whose Sunday is among the N days, when"
         " it needs it. The model is LOGBOOK_DREAM_ENDPOINT, LOGBOOK_DREAM_MODEL and, for a cloud model,"
-        " LOGBOOK_DREAM_KEY (docs/dream.md)",
+        " LOGBOOK_DREAM_KEY (docs/dream.md)"
+        ". `dream person NAME [--window FROM TO]` drafts what passed between you and one person, from their"
+        " lines only, under the `relationship` entry of policy/crossing.json and never the `dream` entry"
+        f" (default window: the {dream_person.DEFAULT_DAYS} days that end today; docs/relationship.md)",
     )
     s.add_argument(
         "verb",
         nargs="?",
-        metavar="day|journey|week",
-        help="`day` and the local day, `journey` and a journey's id, `week` and a week",
+        metavar="day|journey|week|person",
+        help="`day` and the local day, `journey` and a journey's id, `week` and a week, `person` and a"
+        " person",
     )
     s.add_argument(
         "day",
         nargs="?",
-        metavar="YYYY-MM-DD|ID|YYYY-Www",
+        metavar="YYYY-MM-DD|ID|YYYY-Www|NAME",
         help="with day: the local day, `yesterday` works; with journey: its id (`show trips` prints it) or"
-        " any day of it; with week: any day of it or YYYY-Www (default the last week whose Sunday is over)",
+        " any day of it; with week: any day of it or YYYY-Www (default the last week whose Sunday is over);"
+        " with person: the person, as `people NAME` finds them",
     )
     s.add_argument("--dry-run", action="store_true", help="ask the model and check its answer; write nothing")
+    s.add_argument(
+        "--window",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        help=f"with person: the local days read, both inclusive (default the {dream_person.DEFAULT_DAYS}"
+        " that end today)",
+    )
     s.add_argument("--show-prompt", action="store_true", help="print the prompt and the material sent")
     s.add_argument(
         "--catch-up",
@@ -87,6 +100,9 @@ def cmd_dream(a: argparse.Namespace) -> None:
     a day the model's answer failed exits 1 (`--catch-up`: when any day did). A head that moved under
     the reading is the record's HeadMoved, one sentence, exit 2."""
     lb = Logbook.find()
+    if a.window is not None and a.verb != PERSON:
+        print("dream: --window goes with `dream person NAME`", file=sys.stderr)
+        sys.exit(2)
     if a.since is not None and not a.catch_up:
         print("dream: --since goes with --catch-up: dream --catch-up --since 2026-06-01", file=sys.stderr)
         sys.exit(2)
@@ -101,6 +117,9 @@ def cmd_dream(a: argparse.Namespace) -> None:
         return
     if a.verb == WEEK:
         _dream_unit(lb, a, WEEK)
+        return
+    if a.verb == PERSON:
+        _dream_unit(lb, a, PERSON)
         return
     if a.verb != VERB or a.day is None:
         print("dream: the day is needed: logbook dream day 2026-06-13, or dream --catch-up", file=sys.stderr)
@@ -163,8 +182,19 @@ def _dream_unit(lb: Logbook, a: argparse.Namespace, unit: str) -> None:
             file=sys.stderr,
         )
         sys.exit(2)
+    if unit == PERSON and a.day is None:
+        print('dream person: the person is needed: dream person "Ola Nordmann"', file=sys.stderr)
+        sys.exit(2)
     try:
-        if unit == JOURNEY:
+        if unit == PERSON:
+            found = dream_person.run(
+                lb,
+                a.day,
+                None if a.window is None else (a.window[0], a.window[1]),
+                dry_run=a.dry_run,
+                say=print if a.show_prompt else None,
+            )
+        elif unit == JOURNEY:
             found = dream_journey.run(
                 lb,
                 a.day,
