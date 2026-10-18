@@ -23,7 +23,7 @@ from persona import attendee, event, note, resolution, transcript, utc
 
 from logbook import cli
 from logbook.contrib.relationship import ask, reader
-from logbook.core import policy
+from logbook.core import policy, signing
 from logbook.core.store import Logbook, uuid7
 
 TZ = "Europe/Oslo"
@@ -34,6 +34,7 @@ KARI |= {"email": "kari.nordmann@example.org", "phone": "+447700900001"}
 GUNNAR = {"name": "Gunnar Berg", "email": "gunnar.berg@example.org"}  # no resolution line names him
 WINDOW = ("2026-06-01", "2026-06-30")
 TODAY = date(2026, 7, 1)
+SIGNED = tuple(f"2026-06-{d:02d}" for d in range(1, 30))  # the 30th, a day with no line, is not
 DIRECT = (f"{OLA['phone'][1:]}@s.whatsapp.net", "direct", "Ola")
 CREW = ("120363000000000002@g.us", "group", "Crew")
 HIS = ("mine", "his", "thanks", "his_mail", "call", "meeting", "recorded")  # his set at tier 2
@@ -73,6 +74,8 @@ def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Logbook, d
     for p in (OLA, KARI):
         drafts.append(resolution(("email", p["email"]), p["id"], p["name"]))
         drafts.append(resolution(("phone", p["phone"]), p["id"], p["name"]))
+    for line in drafts:  # the names at tier 1, so a ceiling of 1 still knows whom a line is with
+        line["tier"] = 1
     lb.append_many(drafts)
     named = {
         # his set: the direct chat both ways, his mail, an answered call, a meeting, a recorded call
@@ -118,6 +121,8 @@ def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Logbook, d
         draft["id"] = uuid7()
     assert lb.append_many(list(named.values())) == len(named)
     ids = {name: str(draft["id"]) for name, draft in named.items()}
+    for day in SIGNED:  # the owner signed June, so its lines may cross (the signed-day gate, RFC 0034)
+        signing.sign(lb, day, at=utc(day, "23:30"))
     (lb.root / "policy").mkdir(exist_ok=True)
     (lb.root / "policy" / "owner.json").write_text(
         json.dumps({"names": [OWNER["name"]], "emails": [OWNER["email"]], "phones": [OWNER["phone"]]}),
@@ -331,8 +336,16 @@ def test_a_citation_outside_the_authorized_set_is_marked_unsupported(
     cli.main(["people", "ask", "Ola Nordmann", "What did we plan for the boat?"])
     text = capsys.readouterr().out
     assert "Ola said yes to Saturday." in text and ids["his"] in text and "whatsapp" in text
-    unsupported = [row for row in text.splitlines() if "unsupported" in row]
+    rows = text.splitlines()
+    heading = next(i for i, row in enumerate(rows) if row.startswith("unsupported:"))
+    assert rows.index("  Ola said yes to Saturday.") < heading, "the supported claims first"
+    unsupported = [row for row in rows[heading + 1 :] if "unsupported" in row]
     assert len(unsupported) == 3 and any(invented in row for row in unsupported)
+    assert [row for row in rows[heading + 1 :] if row.startswith("  ~ ")] == [
+        "  ~ Ola has dinner at the marina.",
+        "  ~ Ola sails in a regatta.",
+        "  ~ Ola likes the fjord.",
+    ], "every claim that rests on no line of his sits under `unsupported`"
     assert any(ids["note"] in row for row in unsupported)
     assert any("cites nothing" in row for row in unsupported)
 
@@ -346,8 +359,8 @@ def test_the_canonical_record_is_unchanged(
     assert lb.meta["head"] == head and _files(lb.root, _store(lb).parent) == before, "only the store"
     store = _files(_store(lb))
     with_store = _files(lb.root)
-    monkeypatch.setattr(ask, "MODEL", None)
-    assert "no model" in _refused(capsys, "ask", "Ola Nordmann", "What did we plan?")
+    monkeypatch.setattr(ask, "MODEL", None)  # the endpoint, which no variable names here
+    assert "LOGBOOK_DREAM_ENDPOINT is not set" in _refused(capsys, "ask", "Ola Nordmann", "What did we plan?")
     _ask(capsys, monkeypatch, Stub([{"text": "Ola said yes.", "evidence": [ids["his"]]}]))
     assert lb.meta["head"] == head and _files(lb.root) == with_store, "asking writes nothing"
     assert _files(_store(lb)) == store

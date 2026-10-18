@@ -70,3 +70,13 @@ def test_lab_hold_census_help_says_what_it_never_does() -> None:
     with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
         cli.main(["lab", "hold", "--help"])
     assert "nothing is moved, renamed, deleted or appended" in " ".join(out.getvalue().split())
+
+
+def test_the_relationship_reader_says_its_entry_and_its_model() -> None:
+    """`people` and `dream` name the relationship reader's entry and the model it asks (slice 1)."""
+    for argv, said in ((["people", "--help"], "relationship"), (["dream", "--help"], "dream person NAME")):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
+            cli.main(argv)
+        text = " ".join(out.getvalue().split())
+        assert said in text and "no model wired yet" not in text, argv

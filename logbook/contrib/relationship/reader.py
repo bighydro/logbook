@@ -1,15 +1,23 @@
 """The authorized input set of one canonical person, and the derived store it is written to
-(EXPERIMENTAL, slice 0; README.md beside this file).
+(EXPERIMENTAL, slice 1; README.md beside this file).
 
 **The entry.** Reading a person for a model is a crossing like any other, so it has its own entry in
 `policy/crossing.json`, `{"relationship": {"max_tier": 2, "until": "YYYY-MM-DD"}}`: `max_tier` is the
 ceiling the lines are read and served under, `until` the last day the lend holds, and it is required.
-No entry, no `until`, or an expired one, and nothing is read or served (`entry`).
+No entry, no `until`, or an expired one, and nothing is read or served (`entry`). Its optional `model`
+is the one model the person may go to, as the `dream` entry's is; its optional `include_unsigned`
+(`true`) lifts the signed-day gate below.
+
+**The gate** (`Gate`) is the crossing's, as `export notion` holds it: a line of evidence counts only at
+or under the ceiling and on a day the owner has signed (RFC 0034), unless the entry lifts that; a
+resolution line, which binds a ref to a person and gives the label, counts only at or under the
+ceiling, whatever its day. The people reader reads through it (`people.read(admit=...)`), so no
+person, label, speaker or line of the set rests on a line above the ceiling.
 
 **The authorized input set** (RFC 0036 amendment 1, the person unit) is exactly the lines on which the
 person is a counterpart (a message they sent or the owner sent in a direct chat with them, a call with
 them, a mail from or to them), an attendee (an event they did not decline) or a speaker (a transcript
-they spoke in), on a local day of the window, not retracted, not superseded, at or under the ceiling:
+they spoke in), on a local day of the window, not retracted, not superseded, through the gate:
 the person page's channels `messages`, `calls`, `mail`, `calendar` and `transcripts`, read as
 `logbook.core.people` reads them, and nothing else. A line that merely mentions them is never in it: a
 note that says "with Ola", a mail that names them, a message someone else sent in a group, a tagged
@@ -27,7 +35,8 @@ as a Honcho-like store would hold it: `peers.json` (one peer per canonical perso
 other people who spoke on their lines, the owner), `messages.jsonl` (one message per line of the set,
 with its speakers, role, kind, instant, source, tier and words), `lines.json` (the line-id map: message
 id to line id) and `manifest.json` (the person, the window, the head and the policy it was read under,
-how many lines it read and how many it held back above the ceiling), written last. Ingesting rebuilds
+how many lines it read, how many it held back above the ceiling and how many on unsigned days), written
+last. Ingesting rebuilds
 the whole store from the record, so ingesting twice writes the same bytes and a store wiped by hand is
 recovered by ingesting again. A store serves only under the head and the policy it was read under
 (`check`): a head that moved, an entry that changed or expired, and it serves nothing until rebuilt."""
@@ -38,19 +47,19 @@ import hashlib
 import json
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from ...core import people, policy, present, stays
+from ...core import day_start, people, policy, present, signing, stays
 from ...core.chain import Line
 from ...core.export import parse_day
 from ...core.resolve import Ref
 from ...core.store import Logbook
 
 ENTRY = "relationship"  # its entry in policy/crossing.json
-READER = "relationship/0"  # kept in the manifest: which reader wrote the store
+READER = "relationship/1"  # kept in the manifest: which reader wrote the store; 1 added the signed-day gate
 STATE = PurePosixPath("state/relationship")  # record-relative; one folder per person
 CHANNELS = ("messages", "calls", "mail", "calendar", "transcripts")  # the person page's, less `faces`
 ROLE = {
@@ -63,6 +72,7 @@ ROLE = {
 OWNER = "owner"  # the owner's peer's label
 FOLDER_NAME = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_-]*$")  # an entity id that can name a folder
 EN_DASH = "\u2013"
+CLOUD_CEILING = 2  # the owner's decision (18 Oct 2026): nothing above tier 2 goes to the cloud model
 EARLIEST = datetime.min.replace(tzinfo=UTC)  # a stamp that is no instant sorts first
 
 
@@ -73,13 +83,30 @@ class RelationshipError(ValueError):
 
 @dataclass(frozen=True)
 class Entry:
-    """The `relationship` entry as it counts today."""
+    """The `relationship` entry as it counts today: the ceiling, the last day, the one model it names
+    (None: the endpoint's) and whether unsigned days are read too."""
 
     max_tier: int
     until: date
+    model: str | None = None
+    include_unsigned: bool = False
 
     def to_json(self) -> dict[str, Any]:
-        return {"max_tier": self.max_tier, "until": self.until.isoformat()}
+        return {
+            "max_tier": self.max_tier,
+            "until": self.until.isoformat(),
+            "model": self.model,
+            "include_unsigned": self.include_unsigned,
+        }
+
+    @property
+    def version(self) -> str:
+        """`policy.version` of the entry: what a person draft records under `extra.policy_version`."""
+        return policy.version(self.ceiling)
+
+    @property
+    def ceiling(self) -> policy.Ceiling:
+        return policy.Ceiling(ENTRY, self.max_tier, self.until, False, model=self.model)
 
 
 def entry(root: Path) -> Entry:
@@ -105,7 +132,12 @@ def entry(root: Path) -> Entry:
             f"{path}: the {ENTRY!r} entry expired on {found.until.isoformat()} and counts as max_tier 0,"
             " so nothing is read or served; write a new until there or remove the entry"
         )
-    return Entry(found.max_tier, found.until)
+    if found.max_tier > CLOUD_CEILING:
+        raise RelationshipError(
+            f"{path}: the {ENTRY!r} entry says max_tier {found.max_tier}, and the relationship reader's"
+            f" model is a cloud one, which reads at most {CLOUD_CEILING}; write max_tier 1 or 2 there"
+        )
+    return Entry(found.max_tier, found.until, found.model, found.include_unsigned)
 
 
 @dataclass(frozen=True)
@@ -134,6 +166,8 @@ class InputSet:
     peers: dict[str, str]  # peer id -> label: the person, the others who spoke, the owner
     items: tuple[Item, ...]  # by instant
     held_back: int  # the person's lines in the window above the ceiling
+    unsigned: int = 0  # the person's lines in the window on a day the owner has not signed
+    tier: int = 1  # the highest tier read: the lines of the set and the resolution lines of their peers
 
     def by_line(self) -> dict[str, Item]:
         return {item.line: item for item in self.items}
@@ -143,13 +177,61 @@ class InputSet:
         return f"{self.first} {EN_DASH} {self.last}"
 
 
-def read(lb: Logbook, name: str, first: str, last: str, ceiling: int) -> InputSet:
-    """The set of the person `name` means (as `people NAME` finds them) over `[first, last]`, at or
-    under `ceiling`. Writes nothing."""
+@dataclass
+class Gate:
+    """What a line must pass to be read: a resolution line its tier, a line of evidence its tier and,
+    unless `signed` is None (the gate lifted), a signed local day. What it refuses is kept by id."""
+
+    ceiling: int
+    signed: frozenset[str] | None
+    days: day_start.DayStart
+    evidence: bool = True  # False: the counting read, which gates resolution lines alone
+    above: set[str] = field(default_factory=set)
+    unsigned: set[str] = field(default_factory=set)
+
+    def __call__(self, line: Line) -> bool:
+        tier = int(line.get("tier", 0))
+        if line.get("kind") == "resolution":
+            return tier <= self.ceiling
+        if not self.evidence:
+            return True
+        line_id = str(line.get("id"))
+        if tier > self.ceiling:
+            self.above.add(line_id)
+            return False
+        if self.signed is not None and not self._signed(line):
+            self.unsigned.add(line_id)
+            return False
+        return True
+
+    def _signed(self, line: Line) -> bool:
+        at = stays.instant(line.get("at"))
+        return at is not None and self.days.day(at).isoformat() in (self.signed or ())
+
+
+def gate(lb: Logbook, ceiling: int, include_unsigned: bool = False) -> Gate:
+    """The gate of the entry: `ceiling`, and the days with a standing signature unless lifted."""
+    signed = None
+    if not include_unsigned:
+        with lb.index() as idx:
+            signed = frozenset(signing.gate(idx, str(lb.meta.get("owner_id") or "") or None)[0])
+    return Gate(ceiling, signed, day_start.of(lb.meta))
+
+
+def read(
+    lb: Logbook, name: str, first: str, last: str, ceiling: int, include_unsigned: bool = False
+) -> InputSet:
+    """The set of the person `name` means (as `people NAME` finds them) over `[first, last]`, through
+    the gate of `ceiling` and, unless `include_unsigned`, of the signed days. The person's lines the
+    gate refuses are counted, never read: above the ceiling (`held_back`) or on a day not signed
+    (`unsigned`). Writes nothing."""
     first, last = _window(first, last)
+    through = gate(lb, ceiling, include_unsigned)
     try:
-        report = people.read(lb, first, last)
-        person = people.find(name, report)
+        report = people.read(lb, first, last, admit=through)
+        person = _find(lb, name, report, ceiling)
+        whole = people.read(lb, first, last, admit=Gate(ceiling, None, through.days, evidence=False))
+        counted = people.find(name, whole)
     except people.PersonError as e:
         raise RelationshipError(str(e)) from None
     role: dict[str, str] = {}
@@ -157,15 +239,14 @@ def read(lb: Logbook, name: str, first: str, last: str, ceiling: int) -> InputSe
         found = person.channels.get(channel)
         for id_ in found.ids if found is not None else []:
             role.setdefault(id_, ROLE[channel])
+    theirs = {id_ for channel in CHANNELS for id_ in _ids(counted, channel)} - set(role)
     owner = str(lb.meta.get("owner_id") or "")
     with lb.index() as idx:
         lines = idx.by_ids(role)
     items: list[Item] = []
-    held_back = 0
     for id_, line in lines.items():
         tier = int(line.get("tier", 0))
-        if tier > ceiling:
-            held_back += 1
+        if tier > ceiling:  # the gate refused it already; never read, whatever the reader returned
             continue
         speakers, unresolved = _speakers(line, report, owner)
         at, kind, source = str(line.get("at")), str(line.get("kind")), str(line.get("source"))
@@ -176,15 +257,78 @@ def read(lb: Logbook, name: str, first: str, last: str, ceiling: int) -> InputSe
         key=lambda e: (report.known[e].name.casefold(), e),
     )
     peers = {person.entity: person.name, **{e: report.known[e].name for e in others}, owner: OWNER}
-    return InputSet(person.entity, person.name, first, last, peers, tuple(items), held_back)
+    tier = max([i.tier for i in items] + [report.known[e].tier for e in (person.entity, *others)] + [1])
+    return InputSet(
+        person.entity,
+        person.name,
+        first,
+        last,
+        peers,
+        tuple(items),
+        len(theirs & through.above),
+        len(theirs & through.unsigned),
+        tier,
+    )
 
 
-def identify(lb: Logbook, name: str) -> tuple[str, str]:
-    """The entity id and label of the person `name` means. The people reader's `known` is every
-    person the resolution lines name, heard in its window or not, so one day's reading finds anyone."""
-    day = policy.today().isoformat()
+def _ids(person: people.Person, channel: str) -> list[str]:
+    found = person.channels.get(channel)
+    return found.ids if found is not None else []
+
+
+def _find(lb: Logbook, name: str, report: people.Report, ceiling: int) -> people.Person:
+    """The person in the gated reading; one named only by resolution lines above the ceiling is
+    refused in one sentence, since nothing of them may be read under it."""
     try:
-        person = people.find(name, people.read(lb, day, day))
+        return people.find(name, report)
+    except people.PersonError:
+        try:
+            people.find(name, people.directory(lb))
+        except people.PersonError:
+            raise
+        raise RelationshipError(
+            f"every resolution line that names {name!r} is above max_tier {ceiling} of the {ENTRY!r}"
+            " entry, so nothing of them is read"
+        ) from None
+
+
+def promises(lb: Logbook, found: InputSet, ceiling: int) -> dict[str, list[dict[str, Any]]]:
+    """The promises read in the lines of the set, by line id: `{owed, quote, due}`, `owed` `by_owner`
+    (the owner's own, or asked of the owner) or `to_owner` (theirs). A promise is the words of a line of
+    the set, so it adds no line: `promises` reads only the set's lines (and the resolution lines at or
+    under the ceiling, to know who spoke), never a group, a note or a mail that merely names the person
+    (RFC 0036 amendment 1). Writes nothing."""
+    from .. import promises as promise_reader
+
+    ids = {item.line for item in found.items}
+
+    def admit(line: Line) -> bool:
+        if line.get("kind") == "resolution":
+            return int(line.get("tier", 0)) <= ceiling
+        return str(line.get("id")) in ids
+
+    out: dict[str, list[dict[str, Any]]] = {}
+    report = promise_reader.extract(lb, found.first, until=found.last, admit=admit)
+    for proposal in report.proposals:
+        if proposal.line not in ids or not proposal.shows or proposal.role is None:
+            continue
+        mine = proposal.role in (promise_reader.PROMISE, promise_reader.ASKED)
+        said = {"owed": "by_owner" if mine else "to_owner", "quote": proposal.match.quote}
+        if proposal.due:
+            said["due"] = proposal.due
+        out.setdefault(proposal.line, []).append(said)
+    return out
+
+
+def identify(lb: Logbook, name: str, ceiling: int) -> tuple[str, str]:
+    """The entity id and label of the person `name` means, read through the resolution lines at or
+    under `ceiling` alone, as the set is: a name given only above it neither finds nor labels anyone.
+    The people reader's `known` is every person those lines name, heard in its window or not, so one
+    day's reading finds anyone."""
+    day = policy.today().isoformat()
+    names_only = Gate(ceiling, None, day_start.of(lb.meta), evidence=False)
+    try:
+        person = _find(lb, name, people.read(lb, day, day, admit=names_only), ceiling)
     except people.PersonError as e:
         raise RelationshipError(str(e)) from None
     return person.entity, person.name
@@ -316,7 +460,7 @@ def ingest(lb: Logbook, name: str, first: str, last: str) -> tuple[InputSet, Pat
     store, replacing what was there. The record is never written."""
     current = entry(lb.root)
     head = str(lb.meta.get("head"))
-    found = read(lb, name, first, last, current.max_tier)
+    found = read(lb, name, first, last, current.max_tier, current.include_unsigned)
     if str(lb.meta.get("head")) != head:
         raise RelationshipError(
             "the record's head moved while the reader read it; nothing was written, ingest again"
@@ -348,6 +492,7 @@ def ingest(lb: Logbook, name: str, first: str, last: str) -> tuple[InputSet, Pat
         "policy": current.to_json(),
         "read_count": len(found.items),
         "held_back": found.held_back,
+        "unsigned": found.unsigned,
     }
     _write(where / "peers.json", _json([{"id": k, "label": v} for k, v in found.peers.items()]))
     _write(where / "messages.jsonl", "".join(json.dumps(m, ensure_ascii=False) + "\n" for m in messages))
@@ -417,4 +562,7 @@ def check(lb: Logbook, store: Derived, current: Entry) -> None:
 def _policy(found: object) -> str:
     if not isinstance(found, dict):
         return "no policy"
-    return f"max_tier {found.get('max_tier')} until {found.get('until')}"
+    said = f"max_tier {found.get('max_tier')} until {found.get('until')}"
+    if found.get("model"):
+        said += f" model {found.get('model')}"
+    return said + (" with unsigned days" if found.get("include_unsigned") else "")
