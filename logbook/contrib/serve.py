@@ -19,7 +19,10 @@ what they decided about them (`orgs.shelf_of`, RFC 0037 §11), or only those one
 the review queue of `review org`, `/org/ID` one org (`orgs.page_of`) and `/manifest/people` the
 people with more than one org, the money only when asked and the gate reads tier 3, and a portfolio
 only when the gate reads tier 3; `/ideas` the ideas the owner named by stage (`ideas.shelf_of`, RFC
-0037 §11) and the review queue of `review idea`, `/idea/ID` one idea (`ideas.page_of`). Every
+0037 §11) and the review queue of `review idea`, `/idea/ID` one idea (`ideas.page_of`). `/line/ID`
+is one line as the record holds it, read-only, through the gate (`Site.page_line`): every Day row
+that is a line links to it. `/photo/ID` is a photo line's pixels from the record's own attachment
+store, the Day's thumbnails (`Site._photo`, `day_photos.stored`), through the gate too. Every
 derived row on them carries its evidence folded:
 what it rests on, the day, the ids of the lines. Every page is built from the index and the
 readers, so a Day renders in the time `logbook day` takes whatever the record's length, and nothing
@@ -45,7 +48,9 @@ posts to `/day/YYYY-MM-DD/sign`, which signs the day through `reflect.close`, th
 --sign` runs: `signing.sign` with the lines confirmed, the accepted dispositions and the reflection,
 a signed day signed again superseding its signature. The Day also carries the owner's two acts on
 lines already in the record: a star on every row that is a line, posting to `/star` (`Site._star`:
-`stars.star` and `stars.unstar`, the lines `logbook star` and `unstar` write), and a "with…" field
+`stars.star` and `stars.unstar`, the lines `logbook star` and `unstar` write; the photo review at the
+Day's foot posts there too, its Star a star and its Not a keeper `day_photos.pass_over`, the review's
+bookkeeping and no line), and a "with…" field
 in the header's `with` row, its names completed from the canonical people by a `datalist`, posting
 to `/with` (`Site._with`: `presence.state`, the lines `logbook with` writes). The Library's write
 acts, allowed because the server binds 127.0.0.1 and runs as the record's own user: a POST is
@@ -72,8 +77,12 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
 - The server binds 127.0.0.1 and refuses any other host (`HostError`, raised before a socket is
   opened), so the record is readable from this machine and nowhere else. It never resolves a
   name, not even its own.
-- A page is one HTML document with one inline stylesheet: no font, no image, no stylesheet link,
-  no script fetched, and no reference to any URL but the server's own paths. A script is inline on
+- A page is one HTML document with one inline stylesheet: no font, no stylesheet link, no script
+  fetched, and no reference to any URL but the server's own paths. The one image is a Day's
+  thumbnail of a photo, from `/photo/ID`, the record's own attachment store and nothing else: the
+  Day's policy allows images from the server alone (`DAY_IMAGES`), every other page's none, an
+  `<img>` is written only for pixels the store holds in a type every browser draws, and any other
+  photo is counted, never a broken image; a static page draws none. A script is inline on
   three pages, each named in that page's Content-Security-Policy by its hash and by nothing else: the
   Places page's keys (`PLACES_SCRIPT`: Enter, n and Space), the Day page's record button
   (`DAY_SCRIPT`, only where the server can hear a recording: it records with the browser's own
@@ -139,11 +148,12 @@ from ..core import (
 from ..core import day as day_reader
 from ..core import days as days_reader
 from ..core.chain import Line
-from ..core.export import parse_day
+from ..core.export import day_range, parse_day
 from ..core.flights import Airports
-from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, retractions
+from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, now_utc, retractions
 from . import (
     asset_status,
+    day_photos,
     dream,
     entities,
     entity_review,
@@ -159,6 +169,7 @@ from . import (
     shelf_goals,
     shelf_promises,
     trip_page,
+    week_paper,
     world,
 )
 
@@ -200,6 +211,11 @@ REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
 STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
 WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
 LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
+PASS = "pass"  # the photo review's Not a keeper, posted to STAR_PATH: no line (`day_photos.pass_over`)
+PHOTOS = "photos"  # the Day page's anchor of its photo review, where the review's acts send the owner back
+WEEK = "week"  # the anchor of a Sunday's week draft (`dream week`), which the other six days link to
+LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, through the gate
+PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
@@ -210,10 +226,24 @@ FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the p
 # another command holds the writer lock: every act's one answer, a 409 (the owner's word of 14 Oct 2026)
 BUSY = "Another command is writing to the record; nothing was written. Try again in a moment."
 # the fields of the forms the owner types in, shown again in the busy answer's form; the rest kept hidden
-TYPED = {"text": "your reflection", "name": "the name", "names": "who was there", "reason": "the reason"}
+TYPED = {
+    "text": "your reflection",
+    "name": "the name",
+    "names": "who was there",
+    "reason": "the reason",
+    "portfolio": "the portfolio",
+}
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
-STATE_FILES = (places_review.STATE_FILE,)  # record-relative bookkeeping the pages read, in the tag
+STATE_FILES = (
+    places_review.STATE_FILE,
+    day_photos.STATE_FILE,
+)  # record-relative bookkeeping the pages read, in the tag
 NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
+TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the Library's words
+    "Where you were (tier 1) may travel; what was said (tier 2) stays home unless a policy entry names"
+    " where it may go, and money and health (tier 3) never leave without one."
+)
+NO_DEVICE_WITH = "no device saw this day: say who was there"  # the `with` row of a day with no stay
 AUDIO_SUFFIXES = {
     "audio/webm": ".webm",
     "video/webm": ".webm",
@@ -272,7 +302,8 @@ recorder.start();button.textContent="Stop, and hear it";
 })();
 """
 DAY_SCRIPT_HASH = "sha256-" + base64.b64encode(hashlib.sha256(DAY_SCRIPT.encode("utf-8")).digest()).decode()
-DAY_CSP = CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
+DAY_IMAGES = CSP.replace("default-src 'none';", "default-src 'none'; img-src 'self';")  # a Day's thumbnails
+DAY_CSP = DAY_IMAGES.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
 WORLD_CSP = CSP.replace("style-src", f"script-src '{world.SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -418,6 +449,35 @@ li.cluster svg{max-width:100%}
 # phone: a table scrolls inside its own box (STYLE's phone rule says so too, for every page, the Day's
 # Sources among them) and a cluster's canvas keeps to the column
 IDEAS_STYLE = MANIFEST_STYLE + "p.refs{overflow-wrap:anywhere}\n"  # the Ideas pages: a Notion id is long
+DAY_STYLE = """
+p.tiers{color:var(--mute);font-size:.9rem;margin:0 0 1rem}
+a.raw{font-size:.75rem;margin-left:.35rem;color:var(--mute);text-decoration:none;font-variant-numeric:tabular-nums}
+ul.strip{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.35rem 0 0 7.5rem}
+ul.strip li{display:flex;flex-direction:column;align-items:flex-start;max-width:8rem;font-size:.85rem}
+ul.strip img,ul.review img{display:block;max-width:100%;width:8rem;height:auto;border-radius:3px;
+border:1px solid var(--line)}
+ul.strip li.mute{align-self:center}
+ul.strip span.name,ul.review span.name{overflow-wrap:anywhere}
+section.review ul.review{list-style:none;display:flex;flex-wrap:wrap;gap:.8rem;padding:0;margin:.5rem 0 1rem}
+ul.review li{display:flex;flex-direction:column;gap:.3rem;width:8.5rem;min-width:0}
+form.keep{display:block;margin:0}
+form.keep button{padding:.2rem .4rem}
+svg.track{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.track circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.track line{stroke:var(--mute);stroke-width:1.5}
+svg.track line.gap{stroke-dasharray:4 3}
+svg.track text{font:11px system-ui,sans-serif;fill:var(--fg)}
+ul.week{color:var(--mute);font-size:.9rem;margin:.3rem 0 1rem}
+div.outside ul.strip{margin-left:0}
+@media (max-width:40rem){ul.strip{margin-left:1rem}}
+"""
+LINE_STYLE = """
+pre.line{max-width:100%;box-sizing:border-box;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+font:.8rem/1.4 ui-monospace,monospace;padding:.6rem;border:1px solid var(--line);border-radius:3px}
+dl.header dd{overflow-wrap:anywhere}
+@media (max-width:40rem){pre.line{font-size:.75rem}}
+"""
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
@@ -459,6 +519,26 @@ class Upload(NamedTuple):
     filename: str
     content_type: str
     data: bytes
+
+
+class DayMarks(NamedTuple):
+    """What the Day page reads of a day's lines beside the Day (`Site._day_marks`), through its gate:
+    the stars standing by the line each marks, the photos standing (id → name), the lines standing."""
+
+    starred: dict[str, stars.Star]
+    photos: dict[str, str]
+    lines: dict[str, Line]
+    drawn: dict[str, bool]  # photo id → whether the store holds pixels a browser draws, filled as asked
+
+
+class Rows(NamedTuple):
+    """What a Day's rows draw beside the reader's words: `raw`, a row's link to its line as written
+    (the first of its ids the page reads); `strip`, a row's photos under it; `lines`, the day's lines
+    standing by id, which the Drive folds read (`_drive_folded`)."""
+
+    raw: Callable[[Sequence[str]], str]
+    strip: Callable[[Sequence[str]], str]
+    lines: Mapping[str, Line]
 
 
 class Closing(NamedTuple):
@@ -579,13 +659,15 @@ class Site:
         meta = self.current()
         if path == TODAY:
             return self._today(meta)
+        if (photo := PHOTO_PATH.match(path)) is not None:
+            return self._photo(unquote(photo.group(1)), if_none_match)
         etag = self.etag(path, query, meta)
         if etag is not None and if_none_match is not None and _matches(if_none_match, etag):
             return Response(304, b"", etag=etag)
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
-        if DAY_PATH.match(path) is not None and self._records():
-            csp = DAY_CSP
+        if DAY_PATH.match(path) is not None:
+            csp = DAY_CSP if self._records() else DAY_IMAGES
         try:
             return Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
         except NotFound as e:
@@ -908,10 +990,13 @@ class Site:
         the line written is theirs. A star on a line starred already writes nothing; an unstar of a
         line no longer starred (the page was older than the record) is a 409, a line that takes no
         star a 400; another command writing the record the Library's one answer (`_busy`), and
-        nothing written. Done, a 303 to the Day at the row (`open` keeps an expanded page expanded)."""
+        nothing written. The photo review posts here too (`from` photos): Star as any star, and Not a
+        keeper (`act` pass) through `day_photos.pass_over`, which writes no line, only the review's
+        bookkeeping, under the same lock; a line that is not a photo of the day standing is a 400.
+        Done, a 303 to the Day at the row (`open` keeps an expanded page expanded), or at the review."""
         act, line, day = form.get("act", ""), form.get("line", "").strip(), form.get("day", "")
-        if act not in ("star", "unstar") or not line:
-            return self._error(400, "the form names a line and an act: star or unstar")
+        if act not in ("star", "unstar", PASS) or not line:
+            return self._error(400, "the form names a line and an act: star, unstar or pass")
         try:
             day = parse_day(day).isoformat()
         except ValueError as e:
@@ -922,15 +1007,23 @@ class Site:
                     self.current()
                     if act == "star":
                         stars.star(self.lb, line)
-                    else:
+                    elif act == "unstar":
                         stars.unstar(self.lb, line)
+                    elif line not in self._day_marks(day).photos:
+                        return self._error(
+                            400,
+                            f"{line} is not a photo of {day} standing; Not a keeper is for the day's photos",
+                        )
+                    else:
+                        day_photos.pass_over(self.lb, line, now_utc())
             except stars.NotStarred as e:
                 return self._error(409, f"{e}; /day/{day} is the day as it stands")
             except stars.StarError as e:
                 return self._error(400, str(e))
             except HeadMoved as e:
                 return self._error(409, str(e))
-        back = f"/day/{day}" + ("?open=1" if form.get("open") == "1" else "") + f"#{_row_id(line)}"
+        anchor = PHOTOS if form.get("from") == PHOTOS else _row_id(line)
+        back = f"/day/{day}" + ("?open=1" if form.get("open") == "1" else "") + f"#{anchor}"
         return Response(303, b"", location=back)
 
     def _with(self, form: Mapping[str, str]) -> Response:
@@ -1044,6 +1137,7 @@ class Site:
             and PERSON_PATH.match(path) is None
             and ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
+            and LINE_PATH.match(path) is None
         ):
             return None
         root = self.lb.root
@@ -1085,11 +1179,82 @@ class Site:
         body = f'<p><a href="/day/{day}">{day}</a></p>\n'
         return Response(302, self.document("today", body).encode("utf-8"), location=f"/day/{day}")
 
+    def _standing_line(self, line_id: str) -> tuple[Line | None, Line | None]:
+        """The line `line_id` through the gate `tiers`, and the retraction that took it back when
+        one did; (None, None) for a line the record does not have, one the gate leaves out, one
+        whose retraction it leaves out (the line no longer stands, and why is above the gate), and a
+        model's draft the `dream` entry withholds (`drafts.allowed`: the Day shows its row, never
+        its words): a page never tells these apart."""
+        with self.lb.index() as idx:
+            found = idx.by_id(line_id)
+            if found is None or not reading.crossing([found], self.tiers):
+                return None, None
+            retraction = retractions(idx.retractions()).get(str(found["id"]))
+        if retraction is not None and not reading.crossing([retraction], self.tiers):
+            return None, None
+        if found.get("kind") == drafts.KIND and not drafts.allowed(self.lb.root).allows(found):
+            return None, None
+        return found, retraction
+
+    def _photo(self, line_id: str, if_none_match: str | None) -> Response:
+        """`/photo/ID`: the pixels of the photo line `ID` from the record's own attachment store
+        (`day_photos.stored`), as the Day page's thumbnail shows them: only for a photo line that
+        stands and that the gate lets through, in a media type every browser draws; a 404 for
+        anything else, a line or not, so a reader learns nothing of a line above its gate. Its tag is
+        the file's digest: the same bytes, kept."""
+        line, retraction = (None, None) if self.static else self._standing_line(line_id)
+        found = day_photos.opened(self.lb, line) if line is not None and retraction is None else None
+        if found is None:
+            return self._error(404, f"no photo at /photo/{line_id} on this machine")
+        stored, data = found
+        etag = f'"photo-{stored.sha256[:32]}"'
+        if if_none_match is not None and _matches(if_none_match, etag):
+            return Response(304, b"", etag=etag)
+        return Response(200, data, stored.media_type, etag=etag)
+
+    def page_line(self, line_id: str) -> str:
+        """`/line/ID`: one line as the record holds it, read-only: what it is, when, from which
+        source and at which tier, the day it is on (a link to that Day), whether it was retracted,
+        then the line itself as JSON. Through the gate `tiers`: a line above it is no line here
+        (`NotFound`, the words a line the record does not have gets)."""
+        line, retraction = self._standing_line(line_id)
+        if line is None:
+            raise NotFound(f"no line {line_id} on this page")
+        tz = ZoneInfo(str(line.get("tz") or self.lb.meta["timezone"]))
+        at = stays.instant(line.get("at"))
+        day = day_start.of(self.lb.meta).day(at).isoformat() if at is not None else None
+        payload = line.get("payload") or {}
+        schema = str(payload.get("schema") or line.get("kind")) if isinstance(payload, dict) else "sealed"
+        parts = [
+            f"<h1>line #{int(line['seq'])} <small>{escape(schema)}</small></h1>\n",
+            '<dl class="header">\n',
+            _dt("at", _clock(str(line["at"]), tz) if at is not None else str(line.get("at"))),
+            *([_dt("end", _clock(str(line["end"]), tz))] if line.get("end") else []),
+            _dt("source", str(line.get("source"))),
+            _dt("tier", str(line.get("tier"))),
+        ]
+        if day is not None:
+            parts.append(f"<dt>day</dt><dd>{self.link(escape(day), f'/day/{day}')}</dd>\n")
+        if retraction is not None:
+            reason = (retraction.get("payload") or {}).get("reason")
+            said = f"retracted by #{int(retraction['seq'])}" + (f": {reason}" if reason else "")
+            parts.append(_dt("standing", said))
+        parts.append("</dl>\n")
+        parts.append(
+            '<p class="mute">The line as the record holds it, read-only: nothing on this page writes,'
+            " and the line is never rewritten.</p>\n"
+        )
+        shown = json.dumps(line, indent=2, ensure_ascii=False)
+        parts.append(f'<pre class="line">{escape(shown)}</pre>\n')
+        return self.document(f"line #{int(line['seq'])}", "".join(parts), style=LINE_STYLE)
+
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
             return self.page_index()
         if (m := DAY_PATH.match(path)) is not None:
             return self.page_day(m.group(1), expanded=params.get("open") == "1")
+        if (m := LINE_PATH.match(path)) is not None:
+            return self.page_line(unquote(m.group(1)))
         if path == "/days":
             return self.page_days(params.get("from") or None, params.get("to") or None)
         if path == "/trips":
@@ -1214,11 +1379,18 @@ class Site:
     # -- /day/YYYY-MM-DD ------------------------------------------------------------------------------------
 
     def page_day(self, day: str, expanded: bool = False) -> str:
-        """The Day; with `expanded` every toggle is open, so a page prints or saves whole."""
+        """The Day; with `expanded` every toggle is open, so a page prints or saves whole. Under the
+        header, the one sentence of what crosses where (`TIERS_SAID`) and, on a day of a week whose
+        draft stands, the week (`_week_html`); the timeline under the day's track (`_track_svg`),
+        each row that is a line linked to it as written (`/line/ID`), a row's photos a strip under it
+        (`_strip`), many edits of one Drive file one row (`_drive_folded`); at the foot, the photo
+        review (`_photo_review_html`), then Reflect and sign."""
         data = day_reader.read(self.lb, day, self.airports, self.tiers)
         tz = ZoneInfo(data["tz"])
-        starred, photos = self._day_marks(day)
+        marks = self._day_marks(day)
+        starred, photos = marks.starred, marks.photos
         star = self._toggle(day, starred, expanded)
+        extras = Rows(self._raw(marks), self._strip(day, marks, expanded), marks.lines)
         d = date.fromisoformat(day)
         before, after = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=1)).isoformat()
         a, b = (d - timedelta(days=6)).isoformat(), (d + timedelta(days=7)).isoformat()
@@ -1252,30 +1424,36 @@ class Site:
         ]
         if data["all_day"]:
             entries = ", ".join(
-                escape(a["title"] + day_reader.sources_text(a)) + star([a["line"], *a["lines"]], False)
+                escape(a["title"] + day_reader.sources_text(a))
+                + star([a["line"], *a["lines"]], False)
+                + extras.raw([a["line"]])
                 for a in data["all_day"]
             )
             parts.append(f"<dt>all day</dt><dd>{entries}</dd>\n")
         company = day_reader.company_of_day(data)
         if company or not self.static:  # the "with" row: who was there, and the field to say so
+            nobody = NO_DEVICE_WITH if self._unseen(day, data) else "nobody the record saw"
             said = (
                 escape(day_reader.company_text(company))
                 if company
-                else '<span class="mute">nobody the record saw</span>'
+                else f'<span class="mute">{escape(nobody)}</span>'
             )
             field = "" if self.static else self._with_form(day)
             parts.append(f'<dt id="with">with</dt><dd>{said}{field}</dd>\n')
         parts.append("</dl>\n")
+        parts.append(f'<p class="tiers">{escape(TIERS_SAID)}</p>\n')
+        parts.append(self._week_html(day, expanded))
         if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
             parts.append(_reflection_html(data["reflection"], tz))
         if data.get("draft"):
             parts.append(_draft_html(data["draft"], star))
-        parts.append(_owner_html(data, star))
+        parts.append(_owner_html(data, star, extras.raw))
         if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
             parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
         syntheses = day_reader.syntheses_of(data)  # a call's synthesis, or the policy's row, under the call
         if data["timeline"]:
+            parts.append(_track_svg(data["timeline"]))
             parts.append('<ol class="timeline">\n')
             name_this = None if self.static else self._name_this
             parts.extend(
@@ -1287,15 +1465,20 @@ class Site:
                     syntheses=syntheses,
                     star=star,
                     photos=photos,
+                    rows=extras,
                 )
                 for entry in data["timeline"]
             )
             parts.append("</ol>\n")
         else:
             parts.append('<p class="mute">nothing logged</p>\n')
+        in_rows = [((e.get("attached") or {}).get("photos") or {}).get("lines", ()) for e in data["timeline"]]
+        outside = extras.strip([i for i in photos if not any(i in ids for ids in in_rows)])  # in no row
+        if outside:
+            parts.append(f'<h2>Photos outside any stay</h2>\n<div class="outside">{outside}</div>\n')
         if data["unplaced"]:
             parts.append('<h2>Unplaced</h2>\n<ul class="unplaced">\n')
-            for item in data["unplaced"]:
+            for item in _drive_folded(data["unplaced"], marks.lines, "at"):
                 span = day_reader.span_text(item["at"], item["end"], tz)
                 blocks = syntheses.get(item["line"], []) if item["kind"] == "transcript" else []
                 parts.append(
@@ -1303,7 +1486,7 @@ class Site:
                     f'<span class="clock">{escape(span)}</span> '
                     f'<span class="kind">{escape(item["kind"])}</span> '
                     f"{escape(item['title'] + day_reader.sources_text(item) + day_reader.voices_text(item))}"
-                    f"{star([item['line'], *item.get('lines', ())], False)}"
+                    f"{star([item['line'], *item.get('lines', ())], False)}{extras.raw([item['line']])}"
                     f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
                 )
             parts.append("</ul>\n")
@@ -1335,10 +1518,11 @@ class Site:
                 parts.append("</ul>\n")
         script = None
         if not self.static:
+            parts.append(self._photo_review_html(day, marks))
             closing, records = self._close_html(day)
             parts.append(closing)
             script = DAY_SCRIPT if records else None
-        return self.document(f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL)
+        return self.document(f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL, DAY_STYLE)
 
     def _close_html(self, day: str) -> tuple[str, bool]:
         """Reflect and sign, at the foot of the Day: the reflection's field (the Wispr Flow draft
@@ -1467,10 +1651,12 @@ class Site:
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
         return "".join(out)
 
-    def _day_marks(self, day: str) -> tuple[dict[str, stars.Star], dict[str, str]]:
-        """The stars standing on the day's lines, a photo's `memory` keeper among them, by the line
-        each marks, each beside a line the page reads and never a model's draft (`stars.shown`); and
-        the day's photos standing, id → name; through the gate `tiers`."""
+    def _day_marks(self, day: str) -> DayMarks:
+        """What the Day page reads of the day's lines besides the Day, through the gate `tiers`: the
+        stars standing on them, a photo's `memory` keeper among them, by the line each marks, each
+        beside a line the page reads and never a model's draft (`stars.shown`); the day's photos
+        standing, id → name; and the day's lines standing, by id (a row's link to its line, the
+        Drive folds, the photos' pixels)."""
         with self.lb.index() as idx:
             lines = reading.crossing(idx.day(day), self.tiers)
             retracted = retractions(idx.retractions())
@@ -1481,7 +1667,154 @@ class Site:
             if line.get("kind") == stars.PHOTO and str(line["id"]) not in retracted
         }
         by_id = {str(line["id"]): line for line in lines}
-        return stars.shown(stars.standing(marks, retracted), by_id), photos
+        standing = {id_: line for id_, line in by_id.items() if id_ not in retracted}
+        return DayMarks(stars.shown(stars.standing(marks, retracted), by_id), photos, standing, {})
+
+    def _unseen(self, day: str, data: Mapping[str, Any]) -> bool:
+        """Whether the Day says no device saw it (`NO_DEVICE_WITH`): a served day that has begun and
+        holds no line at all, under the page's gate: the night the phones were off."""
+        if self.static or data["sources"]:
+            return False
+        try:
+            return date.fromisoformat(day) <= day_start.of(self.lb.meta).today(self.now())
+        except day_start.DayStartError:
+            return False
+
+    def _raw(self, marks: DayMarks) -> Callable[[Sequence[str]], str]:
+        """The link of a row that is a line to the line as written (`/line/ID`), `#SEQ`: the first of
+        `ids` the page reads. Nothing on a static page, which has no such page."""
+
+        def raw(ids: Sequence[str]) -> str:
+            line = next((marks.lines[i] for i in ids if i in marks.lines), None)
+            if line is None:
+                return ""
+            href = self.href(f"/line/{quote(str(line['id']), safe='')}")
+            if href is None:
+                return ""
+            return (
+                f' <a class="raw" href="{escape(href)}" title="the line as written">#{int(line["seq"])}</a>'
+            )
+
+        return raw
+
+    def _thumbnail(self, line_id: str, marks: DayMarks) -> str | None:
+        """The `<img>` of a photo whose pixels the store holds and a browser draws (`day_photos.stored`),
+        from the server's own `/photo/ID`; None for any other, and always on a static page."""
+        line = marks.lines.get(line_id)
+        if line is None or self.static:
+            return None
+        if line_id not in marks.drawn:  # once a render: a sealed photo is opened to be judged
+            marks.drawn[line_id] = day_photos.stored(self.lb, line) is not None
+        if not marks.drawn[line_id]:
+            return None
+        href = self.href(f"/photo/{quote(line_id, safe='')}")
+        if href is None:
+            return None
+        name = escape(marks.photos.get(line_id) or "a photo")
+        return f'<img src="{escape(href)}" alt="{name}" loading="lazy">'
+
+    def _strip(self, day: str, marks: DayMarks, expanded: bool) -> Callable[[Sequence[str]], str]:
+        """A row's photos as a strip under it, starred first (RFC 0041): a thumbnail for each the store
+        holds, the starred ones it does not by name, and the rest counted, never a broken image. Its
+        star on each, and its link to its line. Nothing on a static page, whose rows name the photos."""
+        star = self._toggle(day, marks.starred, expanded)
+        raw = self._raw(marks)
+
+        def strip(ids: Sequence[str]) -> str:
+            ids = day_photos.starred_first([i for i in ids if i in marks.photos], marks.starred)
+            if self.static or not ids:
+                return ""
+            items, missing = [], 0
+            for id_ in ids:
+                image = self._thumbnail(id_, marks)
+                if image is None:
+                    missing += 1
+                    if id_ not in marks.starred:
+                        continue
+                    image = f'<span class="name">{escape(marks.photos[id_])}</span>'
+                items.append(f'<li id="{_row_id(id_)}-strip">{image}{star([id_], False)}{raw([id_])}</li>')
+            if missing:
+                items.append(f'<li class="mute">{_plural(missing, "photo")} not on this machine</li>')
+            return f'\n<ul class="strip" aria-label="the photos">{"".join(items)}</ul>'
+
+        return strip
+
+    def _photo_review_html(self, day: str, marks: DayMarks) -> str:
+        """The photo review at the foot of the Day: the day's photos with no star standing that the
+        owner has not passed over (`day_photos.passed`), a thumbnail each when the store holds it,
+        else the name; for each, Star (`stars.star`, a `memory` keeper) and Not a keeper (`PASS`,
+        `day_photos.pass_over`, no line), both posting to `STAR_PATH`, so another command writing is
+        the Library's one answer (`_busy`). Nothing on a day with no photo left to review."""
+        passed = day_photos.passed(self.lb.root)
+        waiting = [i for i in marks.photos if i not in marks.starred and i not in passed]
+        if not waiting:
+            return ""
+        out = [
+            f'<section class="review">\n<h2 id="{PHOTOS}">Photo review</h2>\n'
+            f'<p class="mute">{_plural(len(waiting), "photo")} of the day not starred: Star makes one the'
+            " day's hero and the press's pick; Not a keeper stops asking, and writes no line.</p>\n"
+            '<ul class="review">\n'
+        ]
+        for id_ in waiting:
+            image = self._thumbnail(id_, marks) or f'<span class="name">{escape(marks.photos[id_])}</span>'
+            fields = (
+                f'<input type="hidden" name="day" value="{day}">'
+                f'<input type="hidden" name="line" value="{escape(id_)}">'
+                f'<input type="hidden" name="from" value="{PHOTOS}">'
+            )
+            out.append(
+                f"<li>{image}"
+                f'<form class="keep" method="post" action="{STAR_PATH}">{fields}'
+                '<button name="act" value="star">Star</button></form>'
+                f'<form class="keep" method="post" action="{STAR_PATH}">{fields}'
+                f'<button name="act" value="{PASS}">Not a keeper</button></form></li>\n'
+            )
+        out.append("</ul>\n</section>\n")
+        return "".join(out)
+
+    def _week_html(self, day: str, expanded: bool) -> str:
+        """The week a day is in (`dream week`, RFC 0036 unit `week`): on its Sunday, its last day, the
+        standing draft folded under its head, or the row that says the `dream` entry withholds it; on
+        the six days before, a line linking to it. Through the gate `tiers`, as every draft on the
+        page (`drafts.for_unit`): a draft above it is not there, so neither is the link. Nothing for a
+        week with no draft."""
+        week, monday, sunday = week_paper.parse_week(week_paper.week_of(day))
+        with self.lb.index() as idx:
+            retracted = frozenset(retractions(idx.retractions()))
+            found = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_WEEK).get(week, [])
+            if not found:
+                return ""
+            on_week = {
+                str(line["id"])
+                for d in day_range(monday, sunday)
+                for line in idx.day(d)
+                if str(line["id"]) not in retracted
+            }
+        draft, withheld = drafts.for_unit(
+            found, on_week, self.tiers, drafts.allowed(self.lb.root), drafts.NOT_ON_WEEK
+        )
+        if draft is None and withheld is None:
+            return ""
+        if day != sunday:
+            href = self.href(f"/day/{sunday}")  # a static site maps the page, not its anchor
+            said = escape(f"on its Sunday, {sunday}")
+            link = said if href is None else f'<a href="{escape(href)}#{WEEK}">{said}</a>'
+            return f'<p class="mute week">The week {escape(week)} has a draft: {link}.</p>\n'
+        out = [f'<h2 id="{WEEK}">The week {escape(week)}</h2>\n']
+        if draft is not None:
+            href = self.href(f"/line/{quote(str(draft['line']), safe='')}")
+            if href is not None:
+                out.append(f'<p class="mute"><a href="{escape(href)}">the draft as written</a></p>\n')
+            folded = _draft_folded(draft)
+            out.append(folded.replace("<details", "<details open", 1) if expanded else folded)
+            rows = list(drafts.extra_rows(draft, ""))
+            if rows:
+                out.append(
+                    '<ul class="plain week">' + "".join(f"<li>{escape(r)}</li>" for r in rows) + "</ul>\n"
+                )
+        if withheld is not None:
+            out.append(_withheld_html(withheld, heading=False))
+        return "".join(out)
 
     def _toggle(self, day: str, starred: Mapping[str, stars.Star], expanded: bool) -> Toggle:
         """The star of a row whose lines are `ids`: a form that posts to `STAR_PATH`, ★ to unstar
@@ -2984,10 +3317,9 @@ class Site:
         under the act is a 409 too). The review acts on the proposal `id` (`act` `accept`, `name`
         with the field `name`, `reject`) through `entity_review.accept` and `reject`, what `review
         org --accept`, `--name` and `--reject` call; an org's status (`status`, `reason`, `at`,
-        `portfolio`) through
-        `entity_status.write`, what `status org ORG DISPOSITION` calls. A proposal no longer in the
-        queue, or an org the record does not name, is a 409; an answer the record refuses a 400.
-        Done, a 303 to `back` when it is one of the Manifest's own pages."""
+        `portfolio`) through `entity_status.write`, what `status org ORG DISPOSITION` calls. A
+        proposal no longer in the queue, or an org the record does not name, is a 409; an answer the
+        record refuses a 400. Done, a 303 to `back` when it is one of the Manifest's own pages."""
         if not self._acts():
             return self._error(
                 403,
@@ -3168,6 +3500,7 @@ def _entry_html(
     syntheses: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
     star: Toggle | None = None,
     photos: Mapping[str, str] | None = None,
+    rows: Rows | None = None,
 ) -> str:
     """One timeline row: the clock, the kind, what it was; then an `aboard` entry's inner rows;
     then, behind a toggle, the attachments by name and the company. The grammar is `day.rows`'.
@@ -3175,7 +3508,8 @@ def _entry_html(
     transcript line, `day.syntheses_of`) put a call's synthesis under the call, behind a toggle of its
     own, or the policy's row for one the `dream` entry withholds; `star` gives a row that is a line
     its star (a stay or a move is derived, not a line, and has none; a synthesis is a model's draft
-    and has none); `photos` names the photos a row counts, each with its star."""
+    and has none); `photos` names the photos a row counts, each with its star; `rows` gives a row that
+    is a line its link to the line as written and a row's photos their strip under it (`Rows`)."""
     if entry["kind"] == day_reader.FLIGHT:
         route = f"{entry['carrier']} {entry['number']}  {entry['from']} {ARROW} {entry['to']}"
         clock = day_reader.span_text(entry["start"], entry["end"], tz)
@@ -3184,7 +3518,8 @@ def _entry_html(
             f'<li class="row flight" id="{_row_id(line)}" title="line {escape(line)}">'
             f'<span class="clock">{escape(clock)}</span> <span class="kind">flight</span> '
             f"{escape(route)}{DOT}{escape(str(entry['evidence']))}"
-            f"{star([line], False) if star is not None else ''}</li>\n"
+            f"{star([line], False) if star is not None else ''}{rows.raw([line]) if rows is not None else ''}"
+            "</li>\n"
         )
     clock = day_reader.span_text(entry["within_day"]["start"], entry["within_day"]["end"], tz, clip=True)
     kind = day_reader.GAP if entry["gap"] else str(entry["kind"])
@@ -3230,6 +3565,7 @@ def _entry_html(
                 name_this=name_this,
                 star=star,
                 photos=photos,
+                rows=rows,
             )
             for s in entry["inside"]
         )
@@ -3240,7 +3576,7 @@ def _entry_html(
             n = len(confirmed) + len(proposed)
             summary = f"{summary}{DOT}with {n}" if summary else f"with {n}"
         out.append(f"\n<details{' open' if expanded else ''}><summary>{escape(summary)}</summary>\n")
-        out.append(_attached_html(entry.get("attached"), tz, syntheses, expanded, star, photos))
+        out.append(_attached_html(entry.get("attached"), tz, syntheses, expanded, star, photos, rows))
         if confirmed or proposed:
             text = ", ".join(day_reader.companion_text(c) for c in confirmed)
             more = ", ".join(day_reader.companion_text(c) for c in proposed)
@@ -3248,6 +3584,8 @@ def _entry_html(
                 text = f"{text}{DOT}proposed {more}" if text else f"proposed {more}"
             out.append(f'<p class="with">with {escape(text)}</p>\n')
         out.append("</details>")
+    if rows is not None and entry.get("attached"):
+        out.append(rows.strip(entry["attached"]["photos"]["lines"]))
     out.append("</li>\n")
     return "".join(out)
 
@@ -3264,18 +3602,23 @@ def _reflection_html(item: Mapping[str, Any], tz: ZoneInfo) -> str:
     )
 
 
-def _owner_html(data: Mapping[str, Any], star: Toggle | None = None) -> str:
+def _owner_html(
+    data: Mapping[str, Any], star: Toggle | None = None, raw: Callable[[Sequence[str]], str] | None = None
+) -> str:
     """RFC 0036 on the Day: the reviews made on the day, the goal's current text beside each, and
     `written` when it was written later; then the goal and chapter lines written on the day, marked
     when superseded. Nothing on a day with none. Each is the owner's line and carries its star
-    (`star`); a superseded one only while it is starred, since a star names the line that stands."""
+    (`star`); a superseded one only while it is starred, since a star names the line that stands; and
+    its link to the line as written (`raw`)."""
     parts: list[str] = []
     if data.get("reviews"):
         parts.append('<h2>Reviews</h2>\n<ul class="unplaced">\n')
         for row in data["reviews"]:
             text = goals.review_row_text(row, str(data["day"]), str(data["tz"]))
             line = str(row["line"])
-            mark = star([line], False) if star is not None else ""
+            mark = (star([line], False) if star is not None else "") + (
+                raw([line]) if raw is not None else ""
+            )
             parts.append(f'<li id="{_row_id(line)}" title="line {escape(line)}">{escape(text)}{mark}</li>\n')
         parts.append("</ul>\n")
     rows = [
@@ -3288,6 +3631,7 @@ def _owner_html(data: Mapping[str, Any], star: Toggle | None = None) -> str:
             mark = f"{DOT}superseded" if row.get("superseded") else ""
             line = str(row["line"])
             starred = star([line], bool(row.get("superseded"))) if star is not None else ""
+            starred += raw([line]) if raw is not None else ""
             parts.append(
                 f'<li id="{_row_id(line)}" title="line {escape(line)}"><span class="kind">{kind}</span> '
                 f"{escape(text + mark)}{starred}</li>\n"
@@ -3422,14 +3766,17 @@ def _attached_html(
     expanded: bool = False,
     star: Toggle | None = None,
     photos: Mapping[str, str] | None = None,
+    rows: Rows | None = None,
 ) -> str:
-    """A row's attachments, one item each, its star after it (`star`), then a call's synthesis
-    under it, which has none; a keeper's row carries a star only while it is one, and the photos a
-    row counts are named, each with its own."""
+    """A row's attachments, one item each, its star after it (`star`) and its link to its line
+    (`rows`), then a call's synthesis under it, which has none; a keeper's row carries a star only
+    while it is one, and the photos a row counts are named, each with its own; a Drive file's edits
+    are one item (`_drive_folded`)."""
     if not attached:
         return ""
+    raw = rows.raw if rows is not None else (lambda ids: "")
     items: list[tuple[str, str, Sequence[str]]] = []  # kind, text, the lines it points at
-    for e in attached["events"]:
+    for e in _drive_folded(attached["events"], rows.lines if rows is not None else {}, "start"):
         span = day_reader.span_text(e["start"], e["end"], tz)
         items.append(("event", f"{e['title']} {span}{day_reader.sources_text(e)}", e["lines"]))
     for t in attached["transcripts"]:
@@ -3454,9 +3801,11 @@ def _attached_html(
         mark, named = "", ""
         if star is not None and kind not in ("messages", "photos"):
             mark = star(lines, kind == "keeper")
+        if kind != "messages":
+            mark += raw(lines[:1]) if kind != "photos" else ""
         if star is not None and kind == "photos" and photos:
             named = ": " + ", ".join(
-                f'<span id="{_row_id(id_)}">{escape(photos[id_])}{star([id_], False)}</span>'
+                f'<span id="{_row_id(id_)}">{escape(photos[id_])}{star([id_], False)}{raw([id_])}</span>'
                 for id_ in lines
                 if id_ in photos
             )
@@ -3473,6 +3822,146 @@ def _attached_html(
 def _row_id(line: str) -> str:
     """The id of the row a line is listed in, the anchor a star's form comes back to."""
     return "l-" + re.sub(r"[^A-Za-z0-9-]", "", line)
+
+
+DRIVE = "drive"  # the source of `sync drive`'s lines: a file's activities of an hour, one line with a count
+DRIVE_NOUNS = {  # `extra.activity` → what the folded row counts
+    "edit": "edit",
+    "comment": "comment",
+    "rename": "rename",
+    "move": "move",
+    "share": "share",
+    "create": "creation",
+    "trash": "trashing",
+    "delete": "deletion",
+    "restore": "restore",
+}
+
+
+def _drive_file(item: Mapping[str, Any], lines: Mapping[str, Line]) -> tuple[str, str] | None:
+    """(the file's id, its name) of a Day item whose line is a Drive line (`sync drive`), else None."""
+    ids = item.get("lines") or [item.get("line")]
+    line = lines.get(str(ids[0])) if ids else None
+    if line is None or line.get("source") != DRIVE or line.get("kind") != "event":
+        return None
+    extra = (line.get("payload") or {}).get("extra")
+    file = extra.get("file") if isinstance(extra, dict) else None
+    if not isinstance(file, dict) or not isinstance(file.get("id"), str) or not file["id"]:
+        return None
+    return file["id"], str(file.get("name") or file["id"])
+
+
+def _drive_folded(
+    items: Sequence[Mapping[str, Any]], lines: Mapping[str, Line], start: str
+) -> list[Mapping[str, Any]]:
+    """A Day's items (a row's events, or the unplaced, whose start is under `start`) with the many
+    lines of one Drive file read as one item where the first of them was: `sync drive` writes a line
+    per file, hour and activity, so a morning of editing is several; folded, the item is the file's
+    name and what was done to it, counted (`Budget 2027 · 5 edits, 2 comments`), from the first
+    start to the last end, standing for every line (its star and its link name the first). The fold
+    is the page's alone: `logbook day` and the JSON list each line, as Notion's backfill folds in
+    the reader (`events.backfilled`) and these do not. An item no other line of its file joins
+    stays as it is."""
+    groups: dict[str, list[int]] = {}
+    for n, item in enumerate(items):
+        found = _drive_file(item, lines)
+        if found is not None:
+            groups.setdefault(found[0], []).append(n)
+    out: list[Mapping[str, Any]] = []
+    for n, item in enumerate(items):
+        found = _drive_file(item, lines)
+        if found is None or len(groups[found[0]]) == 1:
+            out.append(item)
+            continue
+        if groups[found[0]][0] != n:
+            continue
+        members = [items[i] for i in groups[found[0]]]
+        ids = [str(i) for m in members for i in (m.get("lines") or [m["line"]])]
+        counts: dict[str, int] = {}
+        for id_ in ids:
+            extra = ((lines.get(id_) or {}).get("payload") or {}).get("extra") or {}
+            activity = str(extra.get("activity") or "edit")
+            count = extra.get("count")
+            counts[activity] = counts.get(activity, 0) + (
+                count if isinstance(count, int) and count > 0 else 1
+            )
+        said = ", ".join(_plural(c, DRIVE_NOUNS.get(a, a)) for a, c in counts.items())
+        ends = [str(m.get("end") or m[start]) for m in members]
+        out.append(
+            {
+                **item,
+                "title": f"{found[1]}{DOT}{said}",
+                start: min(str(m[start]) for m in members),
+                "end": max(ends, key=_instant),
+                "line": ids[0],
+                "lines": ids,
+            }
+        )
+    return out
+
+
+TRACK_W, TRACK_PAD = 320, 18
+
+
+def _track_svg(timeline: Sequence[Mapping[str, Any]]) -> str:
+    """The day's track on a plain canvas, drawn here from the record's own coordinates: the timeline's
+    stays and stops with a position (an `aboard` entry by its own, when it has one) as dots numbered
+    in the timeline's order, the stays at one point one dot, and the move between two of them a
+    straight line, dashed where the track has a gap, a flight or a stay with no position between;
+    an equirectangular projection about their mean latitude and a scale bar. No tile, no image, no
+    fetch; nothing on a day with no stay that has a position."""
+    located: list[tuple[int, float, float]] = []
+    links: list[tuple[int, int, bool]] = []
+    broken = False
+    for entry in timeline:
+        if entry["kind"] == day_reader.FLIGHT or entry.get("gap"):
+            broken = True
+            continue
+        if entry["kind"] == stays.MOVE:
+            continue
+        if entry.get("lat") is None or entry.get("lon") is None:
+            broken = True  # a stay with no position: what lies between is not drawn as one move
+            continue
+        located.append((len(located) + 1, float(entry["lat"]), float(entry["lon"])))
+        if len(located) > 1:
+            links.append((len(located) - 2, len(located) - 1, broken))
+        broken = False
+    if not located:
+        return ""
+    k = math.cos(math.radians(sum(lat for _, lat, _ in located) / len(located)))
+    xs = [lon * k for _, _, lon in located]
+    ys = [-lat for _, lat, _ in located]
+    inner = TRACK_W - 2 * TRACK_PAD
+    scale = inner / max(max(xs) - min(xs), (max(ys) - min(ys)) * 2, 0.005)  # px per degree; 500 m at least
+    height = max(120, min(240, round((max(ys) - min(ys)) * scale) + 2 * TRACK_PAD))
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    at = [
+        (round((x - cx) * scale + TRACK_W / 2), round((y - cy) * scale + height / 2))
+        for x, y in zip(xs, ys, strict=True)
+    ]
+    out = [f'<svg class="track" viewBox="0 0 {TRACK_W} {height}" role="img" aria-label="the day\'s track">']
+    for a, b, gap in links:
+        (x1, y1), (x2, y2) = at[a], at[b]
+        if (x1, y1) != (x2, y2):
+            out.append(f'<line{' class="gap"' if gap else ""} x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"/>')
+    dots: dict[tuple[int, int], list[int]] = {}
+    for (n, _, _), point in zip(located, at, strict=True):
+        dots.setdefault(point, []).append(n)
+    for x, y in dots:
+        out.append(f'<circle cx="{x}" cy="{y}" r="5"/>')
+    for (x, y), numbers in dots.items():
+        anchor, tx = ("end", x - 8) if x > TRACK_W * 0.7 else ("start", x + 8)
+        label = ", ".join(str(n) for n in numbers)
+        out.append(f'<text x="{tx}" y="{y + 4}" text-anchor="{anchor}">{label}</text>')
+    km = 111.2 / scale * (TRACK_W / 4)
+    bar_km = max(
+        (b for b in (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000) if b <= km), default=0.1
+    )
+    bar = bar_km / 111.2 * scale
+    out.append(f'<line x1="8" y1="{height - 8}" x2="{8 + bar:.1f}" y2="{height - 8}"/>')
+    out.append(f'<text x="8" y="{height - 12}">{bar_km:g} km</text>')
+    out.append("</svg>\n")
+    return "".join(out)
 
 
 def _trip_row(trip: trips.Trip, rd: reading.Reading, dates: str) -> list[Cell]:

@@ -246,6 +246,24 @@ line among the ids it stands for; the Day page of `logbook serve` shows it once 
 no other line on the day keeps the backfill's line as its row. `show` still lists both lines, as it
 lists every line of the day.
 
+`sync drive` writes one line per Drive file, hour and activity, so a morning spent on one document
+is several lines. The Day page of `logbook serve` reads them as one row, the file's name and what was
+done to it counted, `Budget 2027 · 5 edits, 2 comments`, standing for every line it folds; the fold
+is the page's alone, and `logbook day` and `--json` list each line, as before
+([In a browser](serve.md#the-day--photos-the-track-the-line-the-week)).
+
+## In a browser
+
+The Day page of `logbook serve` is this Day with what a page can add: a sentence under the header
+on what crosses where (the tiers in plain words), the week's draft on its Sunday and a link to it
+from the six days before, the day's track drawn from the stays' own coordinates, each row's photos
+as a strip under it (starred first, a thumbnail only from the record's own attachment store, the
+rest counted), a link from every row that is a line to the line as written (`/line/ID`), a photo
+review at its foot, and the acts: a star, *with…*, Reflect and Sign
+([In a browser](serve.md#the-day--photos-the-track-the-line-the-week), [the acts](acts.md)). A day no
+device saw, the phones off, still takes *with…*: "I was with Ola" is one line, the line `logbook with`
+writes.
+
 ## A synthetic example
 
 The Oslo persona of the test suite, who does not exist, spends a June Saturday aboard the yacht

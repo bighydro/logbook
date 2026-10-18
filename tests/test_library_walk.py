@@ -38,6 +38,7 @@ from logbook.core.store import Logbook
 LOOPBACK = "127.0.0.1"
 OCTOBER = datetime(2025, 10, 1, 12, 0, tzinfo=UTC)
 DAY = "2022-01-10"  # a day of the Bergen winter, with the promise on it
+PHOTO_DAY = "2022-01-03"  # a day of it with a photo, for the photo review
 SAID = "Another command is writing to the record; nothing was written. Try again in a moment."
 HEARD = "Heard on this machine: the harbour office, then the ferry home."
 JUNE = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)  # after the persona's fortnight
@@ -52,6 +53,7 @@ DETAILS = (
     ("/idea/ID", serve.IDEA_PATH),
     ("/promises/ID", serve.PROMISE_PATH),
     ("/goals/ID", serve.GOAL_PATH),
+    ("/line/ID", serve.LINE_PATH),
 )  # the pages one of many: a route each
 ROUTES = frozenset(
     {
@@ -77,6 +79,7 @@ ROUTES = frozenset(
         "/goals",
         "/goals/ID",
         "/agents",
+        "/line/ID",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
@@ -268,6 +271,7 @@ def _acts(years: Logbook, manifest: Logbook, shelf_of_ideas: Logbook) -> list[Ac
         == 303
     )
     (sign,) = _forms(site.respond(f"/day/{DAY}", "").body.decode("utf-8"), "sign")
+    keep, passing = _forms(site.respond(f"/day/{PHOTO_DAY}", "").body.decode("utf-8"), "keep")  # the review
     clusters = [p.id for p in places_review.read(years).proposals]
     (person,) = people_review.read(years).proposals
     queue = entity_review.read(manifest, "org").proposals
@@ -343,6 +347,8 @@ def _acts(years: Logbook, manifest: Logbook, shelf_of_ideas: Logbook) -> list[Ac
         Act(site, serve.STAR_PATH, {"day": DAY, "line": stars[1], "act": "star"}),
         Act(site, serve.STAR_PATH, {"day": DAY, "line": stars[0], "act": "unstar"}),
         Act(site, serve.WITH_PATH, {"day": DAY, "names": f"{ASTRID['name']}, Bjørn Lie", "at": "13:30"}),
+        Act(site, serve.STAR_PATH, {**passing.fields, "act": serve.PASS}),  # the photo review's Not a keeper
+        Act(site, serve.STAR_PATH, {**keep.fields, "act": "star"}),  # and its Star
     ]
 
 
@@ -406,6 +412,7 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
         f"/day/D/reflect {serve.HEAR}",
         f"{serve.STAR_PATH} star",
         f"{serve.STAR_PATH} unstar",
+        f"{serve.STAR_PATH} {serve.PASS}",
     }
     locks = [lb.root.joinpath(*store.LOCK_FILE.parts) for lb in (mine, theirs, hers)]
     for lock in locks:
