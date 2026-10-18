@@ -19,10 +19,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import shelves_record
 from orgs_record import VERFT, settled_record
 
 from logbook import cli
-from logbook.contrib import journeys, orgs, serve
+from logbook.contrib import journeys, orgs, serve, shelf_promises
 from logbook.core import people
 from logbook.core.store import Logbook
 
@@ -276,6 +277,9 @@ PAGES = (
     "/trips?year=2026",
     "/places",
     "/ideas",
+    "/promises",
+    "/goals",
+    "/agents",
     "/journeys",
     "/journeys?year=2026",
     JOURNEY,
@@ -373,6 +377,44 @@ def test_an_org_page_opens_no_connection(page: str, org_lb: Logbook, no_network:
     named = {org.label: org.id for org in orgs.named(org_lb).values()}
     path, _, query = page.replace(ORG, f"/org/{named[VERFT]}").partition("?")
     response = serve.Site(org_lb).respond(path, query)
+    assert response.status == 200, response.body[:200]
+    assert no_network == [], f"the page {path} tried to connect: {no_network}"
+
+
+# The Promises, Goals and Agents shelves. The demo record has no goal and no agent session, so their
+# pages with something on them, and a promise's and a goal's own page, read `tests/shelves_record.py`.
+PROMISE, GOAL = "/promises/ID", "/goals/ID"  # the first promise the shelf lists; the quarter goal
+SHELF_PAGES = (
+    "/promises",
+    "/promises?person=Ola Nordmann",
+    PROMISE,
+    "/goals",
+    GOAL,
+    "/agents",
+    "/agents?day=2026-03-01",
+)
+
+
+@pytest.fixture(scope="module")
+def shelves_lb(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
+    folder = tmp_path_factory.mktemp("shelves")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Path, "home", lambda: folder / "home")
+        return shelves_record.record(folder, mp)
+
+
+@pytest.mark.parametrize("page", SHELF_PAGES)
+def test_a_shelf_page_opens_no_connection(
+    page: str, shelves_lb: Logbook, no_network: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The three shelves and their detail pages, the promises' verdicts and the sessions' turns read."""
+    monkeypatch.setenv("LOGBOOK_HOME", str(shelves_lb.root))
+    first = shelf_promises.read(shelves_lb).rows[0].proposal.id
+    quarter = shelves_record.ids(shelves_lb)["quarter"]
+    path, _, query = (
+        page.replace(PROMISE, f"/promises/{first}").replace(GOAL, f"/goals/{quarter}").partition("?")
+    )
+    response = serve.Site(shelves_lb, now=lambda: shelves_record.NOW).respond(path, query)
     assert response.status == 200, response.body[:200]
     assert no_network == [], f"the page {path} tried to connect: {no_network}"
 

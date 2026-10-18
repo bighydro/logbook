@@ -16,6 +16,7 @@ import contextlib
 import io
 import json
 import random
+import re
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import date, timedelta
@@ -28,7 +29,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from logbook import cli
-from logbook.contrib import demo
+from logbook.contrib import demo, serve
 from logbook.core import keepers, rollup
 from logbook.core.index import local_date
 from logbook.core.keepers import LANES
@@ -410,6 +411,25 @@ def assert_reads_cleanly(label: str, args: list[str]) -> None:
             raise AssertionError(f"{command} printed invalid JSON: {e}\n{out[:300]}") from e
 
 
+# the Promises, Goals and Agents shelves, served as `logbook serve` serves them, at every tier and through
+# a gate of tiers 1 and 2: a page or a 404 for a detail the record does not hold, never a traceback
+SHELF_PAGES = ("/promises", "/promises?person=Ola Nordmann", "/goals", "/agents", "/agents?page=2")
+
+
+def assert_shelves_serve(label: str, lb: Logbook) -> None:
+    for tiers in (None, (1, 2)):
+        site = serve.Site(lb, tiers=tiers)
+        for target in SHELF_PAGES:
+            path, _, query = target.partition("?")
+            response = site.respond(path, query)
+            assert response.status == 200, f"{label}: {target} through {tiers} answered {response.status}"
+            for link in sorted(
+                set(re.findall(r'href="(/(?:promises|goals)/[^"#]+)"', response.body.decode()))
+            )[:3]:
+                found = site.respond(link, "")
+                assert found.status == 200, f"{label}: {link} through {tiers} answered {found.status}"
+
+
 REFLECTION = "The photos went out. I'll call the yard tomorrow. Ola should book the ferry."  # `day reflect`
 
 
@@ -581,6 +601,7 @@ def every_reader_reads(
         if fresh:
             for args in WHOLE_RECORD_READERS:
                 assert_reads_cleanly(label, args)
+            assert_shelves_serve(label, lb)
         for args in windowed_readers(since, until, day, who, kind, by, which_lane, whose, n):
             assert_reads_cleanly(label, args)
 
