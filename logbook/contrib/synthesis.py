@@ -44,7 +44,18 @@ before today (the call's own `at` on the record's `day_start`), unless `dream --
 reaches further back, so a record with years of calls never sends its backlog unasked, as a source's
 first run never backfills more than its window without `--since`. The calls before the window with
 no synthesis are counted (`waiting`) and named in one line (`before_text`), and `doctor` counts them
-the same way."""
+the same way.
+
+**Ideas from the call** (`ideas_of`). Beside its five parts the model may propose, at most `IDEAS`, an
+idea the call put forward: a new one for the owner's Ideas shelf, or a refinement of one the owner has
+named already, by its reference `I1`, `I2`, ... in the material's `ideas` (the canonical ideas'
+labels, nothing else of them). They are proposals and nothing more: kept under `extra.ideas` (`{name,
+text, idea, utterances, evidence}`, `idea` the canonical idea's entity id or null, `evidence` the
+transcript's id), never a segment, and nothing reaches the Ideas shelf until the owner says yes in
+`review idea` (`entity_review.call_ideas`). An idea that rests on no utterance, or names a reference
+the material did not give, is dropped. The labels are given only when they are no higher than the
+transcript (an `entity/v1` line is tier 2), so a draft never takes a tier above the call's for them:
+a tier-1 call's synthesis is given no labels and can only propose new ideas."""
 
 from __future__ import annotations
 
@@ -64,16 +75,18 @@ from ..core.export import parse_day
 from ..core.index import Index
 from ..core.store import RETRACTION, HeadMoved, Logbook, now_utc, retractions
 from ..core.transcripts import NOT_CALLS, Turn, turns_of
-from . import dream, model_client
+from . import dream, entities, model_client
 from .dream import AnswerError, DreamError, Outcome
 from .model_client import Transport
 from .promises import due_of
 
 KIND = "transcript"
 PROMPT_FILE = Path(__file__).with_name("synthesis-prompt.md")
-PROMPT_NAME = "transcript-synthesis/1"  # kept under `extra.prompt`, so a draft says which prompt wrote it
+PROMPT_NAME = "transcript-synthesis/2"  # kept under `extra.prompt`, so a draft says which prompt wrote it
 TRANSCRIPT_REF = "T"
 UTTERANCE = re.compile(r"U([1-9][0-9]*)\Z")
+IDEA_REF = re.compile(r"I([1-9][0-9]*)\Z")
+IDEAS = 3  # the ideas a synthesis keeps, at most: new ones and refinements together
 UTTERANCE_CHARS = 2000  # one utterance's text in the material, at most; every utterance is given
 SUFFIX_MIN = 8  # the Day and `show` shorten an id to its last 8 characters
 ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
@@ -122,6 +135,7 @@ class Material:
     language: str
     turns: list[Turn]
     data: dict[str, Any] = field(default_factory=dict)  # the JSON the prompt carries
+    ideas: dict[str, str] = field(default_factory=dict)  # `I1` -> the canonical idea's entity id
 
 
 @dataclass(frozen=True)
@@ -270,15 +284,31 @@ def material(lb: Logbook, line: Line, found: policy.Ceiling) -> Material:
         said["speaker"] = turn.speaker or "unknown"
         said["text"] = _clip(turn.text, UTTERANCE_CHARS)
         utterances.append(said)
+    tier = int(line.get("tier") or 1)
+    call = line.get("source") not in NOT_CALLS  # a soundtrack is given no idea of the owner's
+    named = named_ideas(lb) if tier >= entities.TIER and call else []
+    refs = {f"I{n}": entity_id for n, (entity_id, _label) in enumerate(named, 1)}
+    data: dict[str, Any] = {"transcript": header, "utterances": utterances}
+    data["ideas"] = [{"ref": ref, "name": label} for ref, (_id, label) in zip(refs, named, strict=True)]
     return Material(
         transcript=line,
         day=day,
-        tier=int(line.get("tier") or 1),
+        tier=tier,
         read_head=str(lb.meta["head"]),
         language=dream.language_of([header["title"], *(t.text for t in turns)]),
         turns=turns,
-        data={"transcript": header, "utterances": utterances},
+        data=data,
+        ideas=refs,
     )
+
+
+def named_ideas(lb: Logbook) -> list[tuple[str, str]]:
+    """(entity id, label) of every idea the owner has named (`entities.canonical`), by label: what
+    the model may refine. Only the labels go to the model."""
+    with lb.index() as idx:
+        lines = [*idx.retractions(), *idx.by_kind(entities.ENTITY)]
+    found = [(e.id, e.label) for (kind, _id), e in entities.canonical(lines).items() if kind == entities.IDEA]
+    return sorted(found, key=lambda pair: (pair[1].casefold(), pair[0]))
 
 
 def offset_text(seconds: float) -> str:
@@ -410,6 +440,49 @@ def _item(part: str, value: object, made: Material) -> _Item | None:
     )
 
 
+def ideas_of(found: Mapping[str, Any], made: Material) -> list[dict[str, Any]]:
+    """The ideas the answer proposes, as `extra.ideas` keeps them, `IDEAS` at most: each with a name
+    and its text, resting on utterances of the call (`T` alone is not enough: an idea is something
+    said), `idea` the canonical idea it refines (its reference in the material) or None for a new
+    one. An item without a name or text, without an utterance, citing a reference the material never
+    gave, or naming an idea twice (the same reference, or a new one of the same name) is dropped; a
+    soundtrack (`NOT_CALLS`) keeps none."""
+    raw = found.get("ideas") if made.transcript.get("source") not in NOT_CALLS else None
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    transcript = str(made.transcript["id"])
+    for value in raw if isinstance(raw, list) else []:
+        if len(out) >= IDEAS or not isinstance(value, dict):
+            continue
+        name = " ".join(str(value.get("name") or "").split())
+        text = " ".join(str(value.get("text") or "").split())
+        item = _item("ideas", {"text": text, "evidence": value.get("evidence")}, made)
+        if not name or item is None or not item.supported or not item.utterances:
+            continue
+        ref = value.get("idea")
+        idea: str | None = None
+        if isinstance(ref, str) and ref.strip() and ref.strip().casefold() not in ("null", "none"):
+            if IDEA_REF.match(ref.strip()) is None or ref.strip() not in made.ideas:
+                continue  # a reference the material never gave
+            idea = made.ideas[ref.strip()]
+        elif ref is not None and not isinstance(ref, str):
+            continue
+        key = idea or "new:" + entities.title_key(name)
+        if key in seen or key == "new:":
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "name": name,
+                "text": text,
+                "idea": idea,
+                "utterances": [_utterance(n, made.turns) for n in item.utterances],
+                "evidence": [transcript],
+            }
+        )
+    return out
+
+
 def merge(items: list[_Item]) -> list[_Item]:
     """Topics named twice, case and spacing aside, are one topic: the first keeps its place, the
     later one's text is added to it and its utterances joined to its own. Only supported topics are
@@ -505,7 +578,9 @@ def synthesize(
             answer = model_client.complete(ep, messages, transport=transport)
         except model_client.ModelError as e:
             raise AnswerError(str(e)) from e
-        segments, details = segments_of(dream.parse(answer), made)
+        parsed = dream.parse(answer)
+        segments, details = segments_of(parsed, made)
+        proposed = ideas_of(parsed, made)
         payload: dict[str, Any] = {
             "schema": drafts.SCHEMA,
             "unit": drafts.UNIT_EVENT,
@@ -521,6 +596,8 @@ def synthesize(
                 "policy_version": policy.version(found),
             },
         }
+        if proposed:
+            payload["extra"]["ideas"] = proposed
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         problems = drafts.validate(payload)

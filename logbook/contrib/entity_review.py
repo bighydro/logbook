@@ -52,7 +52,21 @@ matches. A pair the owner rejected is never proposed again.
 entity — minting a UUIDv7 for a new org or idea after looking its dedupe key up, so a key that
 already resolves reuses its id; for a new asset, the `assets.json` entry as `assets add` writes it
 first. `--name N "…"` accepts a new one under the owner's name. `--reject` writes one
-`entity-review/v1` line. Every write goes through `Logbook.append`; nothing here opens a socket."""
+`entity-review/v1` line. Every write goes through `Logbook.append`; nothing here opens a socket.
+
+**Ideas from calls** (`call_ideas`). After the observed proposals, the idea queue lists what the calls'
+syntheses proposed (`transcript synthesize`, `extra.ideas`): a new idea, or a refinement of a named
+one by its entity id, each with the transcript's id and the utterances as evidence. Only a standing
+synthesis the `dream` entry allows today, of a transcript that stands and is a call (`NOT_CALLS`, a
+home video's soundtrack, never), is read; a candidate carries the higher tier of the call and its
+synthesis. They are candidates and nothing more: `--accept` (or `--name` for a new one) writes one
+`entity/v1` line, a new idea minted as any other, or, for a refinement, a line of the idea's own id.
+That line is tier 2 and never carries what a tier-3 line said: of a tier-3 call (a Granola call) it
+holds the name accepted and nothing else; of a call at tier 2 or below it adds the call as evidence
+and the words, `extra.pitch` for a new idea and `extra.refines` for a refinement;
+`--reject` writes the `entity-review/v1` no, on the idea's title for a new one and on the transcript
+(`line`) against the idea for a refinement, so it is never proposed again. A candidate an `entity/v1`
+line already answered (`extra.call`) is not proposed again."""
 
 from __future__ import annotations
 
@@ -62,18 +76,21 @@ import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
-from typing import Any
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
-from ..core import assets, day_start, flights, machine, policy, present, resolve, stays
+from ..core import assets, day_start, drafts, flights, goals, machine, policy, present, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
-from ..core.store import Logbook, now_utc, retractions, uuid7
+from ..core.store import HeadMoved, Logbook, now_utc, retractions, uuid7
+from ..core.transcripts import NOT_CALLS  # a home video's soundtrack (RFC 0040): it proposes no idea
 from . import entities
 from .entities import ASSET, IDEA, ORG, Ref
 
 KINDS = (ORG, IDEA, ASSET)
+TRANSCRIPT = "transcript"
+SYNTHESIS = "synthesis"  # the source an idea from a call is seen by, in the queue only
 TABLE_VERSION = "3"  # 2: transcripts, `sync github` acts, service hosts, the given name; 3: ideas (#292)
 SAMPLES = 3  # line ids kept per observed thing, as evidence
 NOTION = "notion"  # the source `sync notion` writes
@@ -909,6 +926,7 @@ class Proposal:
     canonical: Canonical | None  # None: a new entity
     score: int | None  # None for a new entity
     evidence: tuple[str, ...]
+    call: dict[str, Any] | None = None  # an idea a call's synthesis proposed (`call_ideas`)
 
     @property
     def tier(self) -> int:
@@ -928,6 +946,7 @@ class Proposal:
             "observed": self.observed.to_json(),
             "canonical": None if self.canonical is None else self.canonical.to_json(),
             "key": entities.key_of(self.observed.kind, self.observed.writable),
+            "call": self.call,
         }
 
 
@@ -978,6 +997,8 @@ def read(lb: Logbook, kind: str) -> Report:
     }
     unplaced = [o for o in rows if o.entity is None]
     proposals = propose(unplaced, canonicals, noes)
+    if kind == IDEA:
+        proposals += call_ideas(lb, canonicals, noes, len(proposals) + 1)
     placed = sum(1 for o in rows if o.entity is not None)
     return Report(kind, proposals, unplaced, placed, canonicals, len(noes), str(lb.meta["head"]))
 
@@ -1200,9 +1221,21 @@ def accept(lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | N
     Every proposal is checked before the first line is written."""
     plans: list[tuple[Proposal, str, str, list[Ref], assets.Asset | None]] = []
     keys: dict[Ref, Proposal] = {}
+    calls: dict[tuple[Ref, str | None], Proposal] = {}
     known = {e.key: e for e in (c.entity for c in report.canonicals.values()) if e.key is not None}
+    minted: dict[str, str] = {}  # a dedupe key -> the id minted for it in this sitting: one id per key
     for p, given in chosen:
         o = p.observed
+        if p.call is not None:
+            pair = (o.key, None if p.canonical is None else p.canonical.id)
+            other = calls.setdefault(pair, p)
+            if other is not p:
+                raise ReviewError(
+                    f"proposals {other.number} and {p.number} are the same idea from two calls; accept one,"
+                    " and reject the other or leave it"
+                )
+            plans.append(_call_plan(p, given, known, minted))
+            continue
         other = keys.setdefault(o.key, p)
         if other is not p:
             raise ReviewError(
@@ -1228,12 +1261,19 @@ def accept(lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | N
             asset = _new_asset(p, label, report)
             entity_id = asset.id
         else:
-            entity_id = uuid7()
+            entity_id = uuid7() if key is None else minted.setdefault(key, uuid7())
         plans.append((p, entity_id, label, refs, asset))
     written = []
     at = now_utc()
     for p, entity_id, label, refs, asset in plans:
         o = p.observed
+        if p.call is not None:
+            written.append(
+                Written(
+                    p, "accepted", label, [write_entity(lb, _call_payload(p, entity_id, label, report), at)]
+                )
+            )
+            continue
         if asset is not None:
             assets.add(lb.root, asset)
         payload = entities.entity_payload(
@@ -1286,6 +1326,31 @@ def reject(lb: Logbook, report: Report, proposals: Sequence[Proposal]) -> list[W
     for p in proposals:
         o = p.observed
         label = p.canonical.label if p.canonical is not None else o.name
+        if p.call is not None:
+            payload = entities.review_payload(
+                o.kind,
+                o.key,
+                refs=[o.key],
+                observed=[o.name],
+                entity_id=None if p.canonical is None else p.canonical.id,
+                label=label,
+                evidence=[i for i, _t in o.samples],
+                head=report.head,
+                raw_id=f"review:{entities.DIFFERENT}:{p.id}",
+                extra={"review": p.id, "call": _call_mark(p)},
+            )
+            problems = entities.validate_entity_review(payload)
+            if problems:
+                raise ReviewError(problems[0])
+            line = lb.append(
+                at=at,
+                source=entities.SOURCE,
+                kind=entities.ENTITY_REVIEW,
+                tier=entities.review_tier(t for _i, t in o.samples),
+                payload=payload,
+            )
+            written.append(Written(p, "rejected", label, [line]))
+            continue
         payload = entities.review_payload(
             o.kind,
             o.key,
@@ -1332,6 +1397,9 @@ def rows(report: Report) -> Iterator[str]:
         names = ", ".join(sorted(o.labels)[:3])
         shown = f'group "{o.key[1]}"' if o.key[0] == "group" else o.key[1]
         who = f"{shown} ({names}; {seen})" if names and names != shown else f"{shown} ({seen})"
+        if p.call is not None:
+            yield f"  {p.number:>{width}}  [call]  {call_text(p)}"
+            continue
         if p.canonical is None:
             yield f"  {p.number:>{width}}  [new]  {who} → {BLANK}"
         else:
@@ -1349,8 +1417,413 @@ def written_rows(written: Iterable[Written]) -> Iterator[str]:
         span = f" (seq {seqs[0]})" if len(seqs) == 1 else f" (seq {seqs[0]}{EN_DASH}{seqs[-1]})"
         sign = "→" if w.verdict == "accepted" else NOT_EQUAL
         into = w.label or BLANK
-        yield f"{w.verdict} {w.proposal.number} {o.key[1]} {sign} {into}: {_plural(len(seqs), 'line')}{span}"
+        name = f"“{o.name}”" if w.proposal.call is not None else o.key[1]
+        yield f"{w.verdict} {w.proposal.number} {name} {sign} {into}: {_plural(len(seqs), 'line')}{span}"
 
 
 def _plural(n: int, noun: str, plural: str | None = None) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {plural or noun + 's'}"
+
+
+# -- ideas from calls ---------------------------------------------------------------------------------------
+
+
+def call_ideas(
+    lb: Logbook, canonicals: Mapping[str, Canonical], noes: Sequence[entities.Review], start: int
+) -> list[Proposal]:
+    """The ideas the calls' standing syntheses propose (`synthesis.ideas_of`), as proposals numbered
+    from `start`, the oldest call first (the module's docstring): through the `dream` entry today,
+    of standing calls; one the owner already answered, by an `entity/v1` line (its `extra.review`
+    the proposal's id) or a standing no, left out; a new one whose title an idea of the record holds
+    already, left out too. Each carries the highest tier of the call and its synthesis. Writes
+    nothing."""
+    allowed = drafts.allowed(lb.root)
+    with lb.index() as idx:
+        marks = idx.retractions()
+        retracted = retractions(marks)
+        syntheses = drafts.by_transcript(idx.by_kind(drafts.KIND), retracted)
+        transcripts = idx.by_ids(list(syntheses))
+        superseded = idx.superseded(TRANSCRIPT)
+        answered = {
+            str(said)
+            for line in entities.standing([*marks, *idx.by_kind(entities.ENTITY)], entities.ENTITY)
+            if isinstance(extra := (line.get("payload") or {}).get("extra"), dict)
+            and isinstance(said := extra.get("review"), str)
+        }
+    titles = {
+        key
+        for c in canonicals.values()
+        for key in (entities.title_key(c.label), *(v for k, v in c.entity.refs if k == "title"))
+        if key
+    }
+    days = day_start.of(lb.meta)
+    found: list[Proposal] = []
+    for transcript_id, lines in syntheses.items():
+        transcript = transcripts.get(transcript_id)
+        if transcript is None or transcript.get("kind") != TRANSCRIPT or transcript_id in retracted:
+            continue
+        if transcript_id in superseded or transcript.get("source") in NOT_CALLS:
+            continue
+        draft = drafts.standing(lines)
+        if draft is None or not allowed.allows(draft):
+            continue
+        extra = (draft.get("payload") or {}).get("extra")
+        items = extra.get("ideas") if isinstance(extra, dict) else None
+        tier = max(int(draft.get("tier") or 0), int(transcript.get("tier") or 0))
+        for n, item in enumerate(items if isinstance(items, list) else []):
+            candidate = _call_candidate(
+                draft, transcript, n, item, tier, canonicals, noes, answered, titles, days
+            )
+            if candidate is None:
+                continue
+            first = next((p for p in found if p.id == candidate.id), None)
+            if first is None:
+                found.append(candidate)
+                continue
+            # the same idea from another call: one candidate, the other call among its evidence
+            o = candidate.observed
+            first.observed.add(SYNTHESIS, TRANSCRIPT, str(o.first), o.samples[0][0], o.tier)
+            if first.call is not None and candidate.call is not None:
+                first.call["calls"] = [*first.call["calls"], candidate.call["transcript"]]
+    found.sort(
+        key=lambda p: (str((p.call or {})["at"]), str((p.call or {})["synthesis"]), (p.call or {})["n"])
+    )
+    return [
+        Proposal(n, p.id, p.observed, p.canonical, None, p.evidence, p.call)
+        for n, p in enumerate(found, start)
+    ]
+
+
+def _call_candidate(
+    draft: Line,
+    transcript: Line,
+    n: int,
+    item: object,
+    tier: int,
+    canonicals: Mapping[str, Canonical],
+    noes: Sequence[entities.Review],
+    answered: set[str],
+    titles: set[str],
+    days: day_start.DayStart,
+) -> Proposal | None:
+    if not isinstance(item, dict):
+        return None
+    name, text, idea = item.get("name"), item.get("text"), item.get("idea")
+    if not _text(name) or not _text(text):
+        return None
+    transcript_id = str(transcript["id"])
+    canonical = canonicals.get(idea) if isinstance(idea, str) else None
+    if idea is not None and canonical is None:
+        return None  # a refinement of an idea the record no longer names
+    if canonical is None:
+        key: Ref = ("title", entities.title_key(str(name)))
+        if not key[1] or key[1] in titles:
+            return None
+    else:
+        key = ("line", transcript_id)
+    entity = None if canonical is None else canonical.id
+    if any(no.holds([key], entity) for no in noes):
+        return None
+    observed = Observed(IDEA, key)
+    observed.add(SYNTHESIS, TRANSCRIPT, days.day_of(str(transcript["at"])), transcript_id, tier, str(name))
+    payload = transcript.get("payload") or {}
+    title = payload.get("title") if _text(payload.get("title")) else "a recording"
+    utterances = [u.get("n") for u in item.get("utterances") or [] if isinstance(u, dict)]
+    call = {
+        "synthesis": str(draft["id"]),
+        "n": n,
+        "transcript": transcript_id,
+        "title": title,
+        "day": days.day_of(str(transcript["at"])),
+        "at": str(transcript["at"]),
+        "name": str(name),
+        "text": str(text),
+        "idea": None if canonical is None else canonical.id,
+        "utterances": utterances,
+        "calls": [transcript_id],  # every call that put it forward, the first first
+    }
+    why = (f"from the call “{title}” {call['day']}",)
+    found = proposal_id(observed, entity)
+    return None if found in answered else Proposal(0, found, observed, canonical, None, why, call)
+
+
+def call_text(p: Proposal) -> str:
+    """A call's idea in the queue: its name, the call and the utterances it rests on, and where it
+    goes: a new idea (`____`) or the named one it refines, with the words."""
+    call = p.call or {}
+    said = ", ".join(f"U{u}" for u in call.get("utterances") or [])
+    where = f"call “{call.get('title')}” {call.get('day')}" + (f"; {said}" if said else "")
+    into = BLANK if p.canonical is None else f"{p.canonical.label}, refines"
+    return f"“{call.get('name')}” ({where}) → {into}: {call.get('text')}"
+
+
+def _call_mark(p: Proposal) -> dict[str, Any]:
+    call = p.call or {}
+    return {"synthesis": call.get("synthesis"), "n": call.get("n"), "transcript": call.get("transcript")}
+
+
+def _call_plan(
+    p: Proposal, given: str | None, known: Mapping[str, entities.Entity], minted: dict[str, str]
+) -> tuple[Proposal, str, str, list[Ref], assets.Asset | None]:
+    """What accepting a call's idea writes: a new idea (its id the dedupe key's when the key resolves
+    already or was minted in this sitting, else a new UUIDv7) under the owner's name or the call's, or
+    the named idea it refines."""
+    if p.canonical is not None:
+        if given is not None:
+            raise ReviewError(f"proposal {p.number} refines {p.canonical.label}: --accept it, or reject it")
+        return p, p.canonical.id, p.canonical.label, [], None
+    label = " ".join((given or "").split()) or p.observed.name
+    key = entities.key_of(IDEA, [], None, label)
+    same = known.get(key) if key is not None else None
+    if same is not None:
+        return p, same.id, label, [], None
+    return p, uuid7() if key is None else minted.setdefault(key, uuid7()), label, [], None
+
+
+def _call_payload(p: Proposal, entity_id: str, label: str, report: Report) -> dict[str, Any]:
+    """The `entity/v1` line the owner's yes writes: tier 2, so of a tier-3 call (a Granola call is
+    tier 3) it carries the name the owner accepted and nothing else of the call, neither its words nor
+    the ids of its lines, as an observed title of a tier-3 line is accepted; of a call at tier 2 or
+    below, the call as evidence, the synthesis it came from and the words (`pitch` for a new idea,
+    `refines` for a refinement)."""
+    call = p.call or {}
+    extra: dict[str, Any] = {"review": p.id}
+    if p.observed.tier < entities.MONEY_TIER:
+        extra["call"] = _call_mark(p)
+        extra["refines" if p.canonical is not None else "pitch"] = call.get("text")
+    return entities.entity_payload(
+        IDEA,
+        entity_id,
+        label,
+        key=entities.key_of(IDEA, list(p.canonical.entity.refs) if p.canonical else [], entity_id, label),
+        evidence=[i for i, t in p.observed.samples if t < entities.MONEY_TIER],
+        head=report.head,
+        extra=extra,
+    )
+
+
+# -- goals (RFC 0036 amendment 1, RFC 0037 §12) --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GoalProposal:
+    """One standing goal open today with no review dated this week: asked once a week."""
+
+    number: int
+    goal: Line  # the standing goal line of its chain
+    last: Line | None  # its standing review, of any period, when it has one
+
+    @property
+    def id(self) -> str:
+        return str(self.goal["id"])
+
+    @property
+    def tier(self) -> int:
+        return goals.TIER
+
+    def to_json(self) -> dict[str, Any]:
+        payload = self.goal.get("payload") or {}
+        last = None if self.last is None else self.last.get("payload") or {}
+        return {
+            "number": self.number,
+            "goal": self.id,
+            "seq": int(self.goal["seq"]),
+            "text": payload.get("text"),
+            "horizon": payload.get("horizon"),
+            "from": payload.get("from"),
+            "until": payload.get("until"),
+            "last_review": None
+            if self.last is None or last is None
+            else {
+                "disposition": last.get("disposition"),
+                "period": last.get("period"),
+                "line": str(self.last["id"]),
+            },
+        }
+
+
+@dataclass(frozen=True)
+class GoalReport:
+    """The goal queue of the week `week` (Monday `monday` to `today`): the open goals not yet reviewed
+    this week, numbered, and how many open goals were reviewed this week already."""
+
+    week: str
+    monday: str
+    today: str
+    proposals: list[GoalProposal]
+    reviewed: int
+    head: str
+    days: day_start.DayStart
+    kind: str = goals.KIND
+
+    @property
+    def tier(self) -> int | None:
+        return goals.TIER if self.proposals else None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "week": self.week,
+            "on": self.today,
+            "tier": self.tier,
+            "reviewed": self.reviewed,
+            "proposals": [p.to_json() for p in self.proposals],
+        }
+
+
+@dataclass(frozen=True)
+class GoalWritten:
+    """What one answer came to: the `review/v1` line written, or the review that already held the key."""
+
+    proposal: GoalProposal
+    disposition: str
+    line: Line | None
+    existing: Line | None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "goal": self.proposal.id,
+            "number": self.proposal.number,
+            "disposition": self.disposition,
+            "period": GOAL_PERIOD,
+            "lines": [] if self.line is None else [str(self.line["id"])],
+            "existing": None if self.existing is None else str(self.existing["id"]),
+        }
+
+
+GOAL_PERIOD = "week"  # the sitting asks once a week, so its verdict covers the week
+GOAL_WORDS = "|".join(d.replace(" ", "-") for d in goals.DISPOSITIONS)  # advancing|stalled|…|superseded
+
+
+def goal_read(lb: Logbook) -> GoalReport:
+    """The goal queue at the record's head: every standing goal open today (begun, not closed by a
+    verdict, not past its `until`) whose chain has no `review/v1` line dated on a local day of this
+    ISO week, in the order the goals were written. Writes nothing."""
+    days = day_start.of(lb.meta)
+    today = days.today(goals.now())
+    monday = today - timedelta(days=today.weekday())
+    year, number, _weekday = today.isocalendar()
+    with lb.index() as idx:
+        retracted = retractions(idx.retractions())
+        found = goals.Goals(idx.by_kind(goals.KIND), retracted)
+        reviews = goals.review_lines(idx.by_kind(goals.REVIEW), retracted)
+    proposals: list[GoalProposal] = []
+    reviewed = 0
+    for line in found.standing():
+        if str((line.get("payload") or {}).get("from") or "") > today.isoformat():
+            continue
+        chain = found.chain(str(line["id"]))
+        last = goals.standing_review(reviews, chain)
+        if goals.state(line, last, today.isoformat()) != "open":
+            continue
+        this_week = any(
+            str(r["payload"]["goal"]) in chain
+            and monday.isoformat() <= days.day_of(str(r["at"])) <= today.isoformat()
+            for r in reviews
+        )
+        if this_week:
+            reviewed += 1
+            continue
+        proposals.append(GoalProposal(len(proposals) + 1, line, last))
+    return GoalReport(
+        f"{year}-W{number:02d}",
+        monday.isoformat(),
+        today.isoformat(),
+        proposals,
+        reviewed,
+        str(lb.meta["head"]),
+        days,
+    )
+
+
+def goal_answers(
+    report: GoalReport, said: Sequence[tuple[str, str]], notes: Sequence[tuple[str, str]]
+) -> list[tuple[GoalProposal, str, str | None]]:
+    """The answers told (`--say N DISPOSITION`, `--note N TEXT`), every one checked before anything is
+    written: each number a proposal of the queue, said once, its disposition one of the five, and each
+    note on a number that is said. (proposal, disposition as the line stores it, note) in order."""
+    by_number = {p.number: p for p in report.proposals}
+    answers: list[tuple[GoalProposal, str, str | None]] = []
+    seen: list[int] = []
+    for text, word in said:
+        found = numbers([text], goals.KIND)
+        if len(found) != 1:
+            raise ReviewError(f"--say takes one number and a verdict: --say 2 stalled, not {text!r}")
+        number = found[0]
+        if number in seen:
+            raise ReviewError(f"goal {number} is given --say twice; say one verdict")
+        seen.append(number)
+        try:
+            value = goals.disposition(word)
+        except goals.GoalError as e:
+            raise ReviewError(str(e)) from None
+        answers.append((by_number.get(number) or _no_goal(report, number), value, None))
+    noted: dict[int, str] = {}
+    for text, words_ in notes:
+        found = numbers([text], goals.KIND)
+        if len(found) != 1:
+            raise ReviewError(f'--note takes one number and your words: --note 2 "…", not {text!r}')
+        if found[0] not in seen:
+            raise ReviewError(
+                f"--note {found[0]} goes with --say {found[0]} DISPOSITION: a note is on a verdict"
+            )
+        if found[0] in noted:
+            raise ReviewError(f"goal {found[0]} is given --note twice; say it once")
+        noted[found[0]] = words_
+    return [(p, value, noted.get(p.number)) for p, value, _none in answers]
+
+
+def _no_goal(report: GoalReport, number: int) -> NoReturn:
+    have = _plural(len(report.proposals), "goal")
+    raise ReviewError(f"no goal {number}; the queue has {have} to review this week, `review goal` lists them")
+
+
+def goal_write(lb: Logbook, answers: Sequence[tuple[GoalProposal, str, str | None]]) -> list[GoalWritten]:
+    """Each answer as `goal review` writes it (`goals.review`, the same function: the same line, the
+    same bytes), for the period `week`, at now. A review the dedupe key holds already writes nothing
+    and says so; a head that moved under one is `ReviewError`, the answers before it written."""
+    written: list[GoalWritten] = []
+    for p, value, note in answers:
+        try:
+            done = goals.review(lb, p.id, value, GOAL_PERIOD, note)
+        except HeadMoved as e:
+            raise ReviewError(str(e)) from None
+        except goals.GoalError as e:
+            raise ReviewError(f"goal {p.number}: {e}") from None
+        written.append(GoalWritten(p, value, done.line, done.existing))
+    return written
+
+
+def goal_rows(report: GoalReport) -> Iterator[str]:
+    """The queue: one numbered line per goal with its horizon and its last verdict, then what to do."""
+    if not report.proposals:
+        done = f"{_plural(report.reviewed, 'goal')} reviewed this week" if report.reviewed else "no open goal"
+        yield f"no goal to review this week ({report.week}): {done}"
+        return
+    head = f"{_plural(len(report.proposals), 'goal')} to review this week ({report.week})"
+    yield f"{head} · {report.reviewed} reviewed · tier {report.tier}"
+    width = len(str(len(report.proposals)))
+    for p in report.proposals:
+        payload = p.goal.get("payload") or {}
+        if p.last is None:
+            last = "never reviewed"
+        else:
+            verdict = p.last.get("payload") or {}
+            last = f"last: {verdict.get('disposition')} on {report.days.day_of(str(p.last['at']))}"
+        what = f"{payload.get('text')}  ({payload.get('horizon')})"
+        yield f"  {p.number:>{width}}  #{p.goal['seq']}  {what} · {last}"
+    yield f'nothing written: `review goal --say N {GOAL_WORDS}`, `--note N "…"`'
+
+
+def goal_written_rows(written: Iterable[GoalWritten]) -> Iterator[str]:
+    for w in written:
+        text = (w.proposal.goal.get("payload") or {}).get("text")
+        if w.line is None:
+            existing = w.existing or {}
+            verdict = (existing.get("payload") or {}).get("disposition")
+            yield (
+                f"goal {w.proposal.number} “{text}” has a week review today already"
+                f" (#{existing.get('seq')}, {verdict}); nothing was written"
+            )
+            continue
+        yield f"{w.disposition} {w.proposal.number} “{text}”: review/v1 (seq {w.line['seq']})"

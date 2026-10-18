@@ -32,6 +32,11 @@ interpreter. The plists are `launchd_plist`'s and the units `unit_file`'s, the o
 which `serve --install-service` (`logbook.contrib.service`) uses too. `install` prints and writes;
 `uninstall` unlinks what `plan` names and nothing else; `run` hands the commands to the scheduler and
 reports, or says what to run when it is not on PATH.
+
+The evening question of the daily loop (`logbook.contrib.notify.daily`) goes out with the first run
+at or after `LOGBOOK_NOTIFY_EVENING_HOUR`; when the hour is set at install (in the shell or in
+`~/.config/logbook/sync.env`, `evening_hour_of`) and is not one of the four, the runs' job runs at it
+as well, so the question goes at the hour asked. Changing the hour later takes installing again.
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 LABEL = "org.logbook.sync"  # launchd: the runs at HOURS
 CLOSE_LABEL = "org.logbook.sync.close"  # launchd: the run at CLOSE_HOUR
@@ -110,32 +115,69 @@ def plan(
     *,
     user: str | None = None,
     system_root: Path = Path("/"),
+    evening_hour: int | None = None,
 ) -> Plan:
     """The files and commands for `system`: `darwin` two launchd agents, `linux` two systemd user
     timers; with `user`, daemons or system units that run as that account, written to `home` with the
     sudo commands that install them under `system_root`. `python` is the interpreter the jobs run;
     `logbook_home` the record they are pointed at (none: they find the record as the shell would);
-    `config_home` overrides `~/.config` (Linux, `$XDG_CONFIG_HOME`, the user's timers). ScheduleError
-    for any other platform."""
+    `config_home` overrides `~/.config` (Linux, `$XDG_CONFIG_HOME`, the user's timers); `evening_hour`
+    the daily loop's evening question, one more hour of the runs when it is none of the four.
+    ScheduleError for any other platform."""
     if system == "darwin":
-        return _launchd(home, python, logbook_home, user, system_root)
+        return _launchd(home, python, logbook_home, user, system_root, evening_hour)
     if system == "linux":
-        return _systemd(home, python, logbook_home, config_home, user, system_root)
+        return _systemd(home, python, logbook_home, config_home, user, system_root, evening_hour)
     raise ScheduleError(f"no scheduler here for {system}: launchd (macOS) and systemd user timers (Linux)")
 
 
-def _jobs() -> tuple[tuple[str, str, tuple[str, ...], tuple[int, ...]], ...]:
-    """(launchd label, systemd unit, arguments, local hours) of each job: the runs, then the close."""
-    return ((LABEL, UNIT, ARGS, HOURS), (CLOSE_LABEL, CLOSE_UNIT, CLOSE_ARGS, (CLOSE_HOUR,)))
+def _jobs(evening_hour: int | None = None) -> tuple[tuple[str, str, tuple[str, ...], tuple[int, ...]], ...]:
+    """(launchd label, systemd unit, arguments, local hours) of each job: the runs, then the close.
+    An evening hour that is none of the four is one more hour of the runs."""
+    hours = HOURS if evening_hour is None or evening_hour in RUNS else tuple(sorted((*HOURS, evening_hour)))
+    return ((LABEL, UNIT, ARGS, hours), (CLOSE_LABEL, CLOSE_UNIT, CLOSE_ARGS, (CLOSE_HOUR,)))
 
 
-def _launchd(home: Path, python: str, logbook_home: Path | None, user: str | None, system_root: Path) -> Plan:
+def evening_hour_of(
+    env: Mapping[str, str], home: Path, say: Callable[[str], None] | None = None
+) -> int | None:
+    """`LOGBOOK_NOTIFY_EVENING_HOUR` as the install finds it: in `env`, else as a `KEY=value` line of
+    `~/.config/logbook/sync.env` (read for that one key, nothing else of it kept or said). None when
+    neither sets it, or when it is not an hour, which `say` reports in one line."""
+    from . import notify
+
+    found = env.get(notify.EVENING_ENV, "").strip()
+    if not found:
+        try:
+            text = home.joinpath(*PurePosixPath(ENV_FILE).parts).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            text = ""
+        for raw in text.splitlines():
+            key, sep, value = raw.strip().removeprefix("export ").partition("=")
+            if sep and key.strip() == notify.EVENING_ENV:
+                found = value.strip().strip("'\"")
+    try:
+        return notify.evening_hour({notify.EVENING_ENV: found})
+    except ValueError as e:
+        if say is not None:
+            say(f"schedule: {e}")
+        return None
+
+
+def _launchd(
+    home: Path,
+    python: str,
+    logbook_home: Path | None,
+    user: str | None,
+    system_root: Path,
+    evening_hour: int | None = None,
+) -> Plan:
     environment = {"HOME": str(home)} if user is not None else {}  # a daemon has no HOME of its own
     if logbook_home is not None:
         environment["LOGBOOK_HOME"] = str(logbook_home)
     env_file = f'"$HOME/{ENV_FILE}"'
     files: dict[Path, str] = {}
-    for label, _unit, args, hours in _jobs():
+    for label, _unit, args, hours in _jobs(evening_hour):
         script = (
             f"if [ -r {env_file} ]; then set -a; . {env_file}; set +a; fi; "
             f"exec {shlex.quote(python)} {' '.join(args)}"
@@ -217,6 +259,7 @@ def _systemd(
     config_home: Path | None,
     user: str | None,
     system_root: Path,
+    evening_hour: int | None = None,
 ) -> Plan:
     if user is None:
         directory = (config_home or home / ".config") / "systemd" / "user"
@@ -226,7 +269,7 @@ def _systemd(
     environment = [environment_line("LOGBOOK_HOME", str(logbook_home))] if logbook_home is not None else []
     files: dict[Path, str] = {}
     timers: list[str] = []
-    for _label, unit, args, hours in _jobs():
+    for _label, unit, args, hours in _jobs(evening_hour):
         what = (
             "the run that closes the day, then the dream's catch-up"
             if unit == CLOSE_UNIT
@@ -385,7 +428,9 @@ def summary(plan: Plan, replacing: bool = False) -> list[str]:
         *head,
         "to be told when something is wrong, put LOGBOOK_NOTIFY_TELEGRAM_TOKEN and"
         " LOGBOOK_NOTIFY_TELEGRAM_CHAT in the same file: one Telegram message when a source fails or doctor"
-        " warns, and the week's counts on Sunday evening (docs/schedule.md)",
+        " warns, and the week's counts on Sunday evening (docs/schedule.md); with them, the daily loop:"
+        " the Day page after the close, and the evening question at LOGBOOK_NOTIFY_EVENING_HOUR"
+        " (docs/digest.md)",
         f"the variables your live sources need go in ~/{ENV_FILE}, one KEY=value per line, mode 600;"
         " a source whose variables are not set is skipped",
     ]

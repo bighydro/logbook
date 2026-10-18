@@ -23,7 +23,9 @@ logbook review video --accept 1 --date 2 "summer 1994" --ask 3   # a scene's own
 [`setup places review`](places.md#review): the same sitting, the same numbers, the same output byte
 for byte, under one name. `review speakers` is the voices of your recordings not yet named (RFC 0038
 §4), in the same shape with answers of its own (`--unnamed`, `--same-as`, `--consent`, `--play`,
-`--named`): [who they are](speakers.md#who-they-are). `review` alone lists its queue after the five.
+`--named`): [who they are](speakers.md#who-they-are). `review goal` is your goals, each asked once a
+week ([below](#goals-once-a-week)). `review` alone lists every queue, the videos', the goals' and the
+voices' after the five.
 
 ## The five queues
 
@@ -116,6 +118,62 @@ it refuses a place's:
 
 The lock is the sitting's, the same for every queue: the queue is read and you are asked with no lock
 held, and each answer's lines are appended under the record's writer lock.
+
+## Ideas from calls
+
+A call's synthesis (`logbook transcript synthesize`, [transcript synthesis](transcript-synthesis.md))
+may propose up to three ideas the call put forward: a new one, or a refinement of an idea you named,
+by its id. They are proposals and nothing more. `review idea` lists them after the observed ones,
+marked `[call]`, with the call and the utterances they rest on:
+
+```
+$ logbook review idea
+2 proposals · 0 observed ideas not yet placed, 0 placed · tier 3
+  1  [call]  “Fjord Kiosk” (call “Yard plans” 2026-06-10; U4) → Fjord Kiosk, refines: The kiosk sells mooring lines too.
+  2  [call]  “Shared haul-out calendar” (call “Yard plans” 2026-06-10; U8) → ____: One calendar the yard and the owners share.
+nothing written: `review idea --accept N[,N]`, `--name N "…"`, `--reject N[,N]`, or `--all-above SCORE`
+```
+
+`--all-above` never takes a call's idea: it has no score.
+
+Nothing reaches the Ideas shelf until you say yes here (or on the Ideas page of `logbook serve`, which
+reads the same queue). `--accept` (or `--name N "…"` for a new one) writes one `entity/v1` line: a new
+idea, minted as any other, or, for a refinement, a line of the idea's own id. That line is tier 2 and
+never cites a tier-3 line, and a Granola call is tier 3: so of such a call it carries the name you
+accepted and nothing else, as an observed title of a tier-3 line is accepted; of a call at tier 2 or
+below it cites the call and keeps the words (`extra.pitch` for a new idea, `extra.refines` for a
+refinement). `--reject` writes the `entity-review/v1` no as for any idea, on the idea's title for a
+new one and on the call against the idea for a refinement, at the call's tier: it is never proposed
+again; two calls that put the same new idea forward are one candidate that cites both. A home video's
+soundtrack is no call and proposes nothing; a synthesis the `dream` entry
+withholds today proposes nothing either, and comes back when the entry allows it again.
+
+## Goals, once a week
+
+`review goal` asks each of your goals once a week: every standing goal open today (begun, not closed
+by a verdict, not past its `until`) that has no review dated this ISO week, of any period. You answer
+with the verdict, one of the five of [goals](goals.md): `advancing`, `stalled`, `done`, `let-go` or
+`superseded`, and your words when you want them.
+
+```
+$ logbook review goal
+2 goals to review this week (2026-W42) · 1 reviewed · tier 2
+  1  #2  Sail to Lofoten and back between June and August, at anchor more nights than not.  (year) · last: advancing on 2026-10-08
+  2  #3  Rebuild the engine over the winter.  (quarter) · never reviewed
+nothing written: `review goal --say N advancing|stalled|done|let-go|superseded`, `--note N "…"`
+$ logbook review goal --say 1 stalled --say 2 advancing --note 1 "The boat is on land."
+stalled 1 “Sail to Lofoten and back between June and August, at anchor more nights than not.”: review/v1 (seq 7)
+advancing 2 “Rebuild the engine over the winter.”: review/v1 (seq 8)
+```
+
+Each verdict is written by the writer `goal review` uses, for the period `week`, at now: the line is
+the one `goal review N stalled --period week` writes, byte for byte (RFC 0036 amendment 1). A goal
+answered this week is not asked again until the next; a second verdict on the same day for the same
+period writes nothing and says so. Every number and every word is checked before the first line: a
+number the queue does not have, a sixth word, a goal said twice, or a `--note` on a goal not said
+exits 2 and writes nothing. A goal has no score, no no and no name of its own, so `--accept`,
+`--reject`, `--name` and `--all-above` are refused for it; `--say` and `--note` are refused for every
+other kind, as a place's and the speakers' options are. On a terminal each goal is asked in turn.
 
 ## The table
 

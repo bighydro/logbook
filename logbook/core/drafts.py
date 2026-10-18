@@ -430,14 +430,15 @@ def for_unit(
 def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
     """What a journey's or a week's draft keeps beside its segments, as a reader carries it: under
     `proposed` the name and the photos to star a journey's draft proposes (`name`, `star`) and the
-    review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`); under
+    review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`) and its
+    one stale question (`question`: `{entity, label, status, status_line, since, text}`); under
     `numbers` what the code computed from the lines for a week (each figure with its line ids); and
     `dropped` and `marked`, by why. Only the keys the draft has."""
     extra = payload.get("extra")
     if not isinstance(extra, dict):
         return {}
     out: dict[str, Any] = {}
-    proposed = {key: extra[key] for key in ("name", "star", "goals") if extra.get(key)}
+    proposed = {key: extra[key] for key in ("name", "star", "goals", "question") if extra.get(key)}
     if proposed:
         out["proposed"] = proposed
     for key in ("numbers", "dropped", "marked"):
@@ -897,12 +898,13 @@ def rows(draft: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
 def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
     """The rows after a journey's or a week's segments (`unit_json`, or a payload's `extra` as a
     writer has it): the name and the photos it proposes, the reviews it proposes for the goals, the
-    week's numbers, and what was dropped or marked; nothing for a block without them."""
+    week's stale question, the week's numbers, and what was dropped or marked; nothing for a block
+    without them."""
     found = block.get("proposed")
     proposed: Mapping[str, Any] = found if isinstance(found, dict) else {}
     extra = block.get("extra")
     if isinstance(extra, dict):  # a payload as the writer has it
-        proposed = {key: extra[key] for key in ("name", "star", "goals") if extra.get(key)}
+        proposed = {key: extra[key] for key in ("name", "star", "goals", "question") if extra.get(key)}
         block = {key: extra[key] for key in ("numbers", "dropped", "marked") if extra.get(key)}
     if proposed.get("name"):
         yield f"{indent}? {'name':<9} {proposed['name']}  proposed"
@@ -916,6 +918,9 @@ def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
         )
     for review in proposed.get("goals") or []:
         yield f"{indent}? {'review':<9} {review['disposition']} for “{review['text']}”  proposed"
+    question = proposed.get("question")
+    if isinstance(question, dict) and question.get("text"):
+        yield f"{indent}? {'question':<9} {question['text']}  asked once"
     numbers = block.get("numbers")
     if isinstance(numbers, dict):
         yield from number_rows(numbers, indent)

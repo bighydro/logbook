@@ -7,7 +7,7 @@ for tomorrow, and one closing question the owner can answer in a word, drawn fro
 own question bank. It is composed from the readers that already exist — the Day, the promises,
 `sources --gaps` — and derives nothing of its own; it writes nothing to the record (the question
 bank's defaults and a note of what it asked are files beside it, never lines) and it sends nothing.
-Who delivers it, and where, is a later decision; this command only says what the message would be.
+The command only says what the message would be; [the schedule delivers two lines of it](#delivery).
 
 ```bash
 logbook digest                       # today, as text
@@ -170,3 +170,19 @@ It does not read a day that has not come: a day after today in the record's zone
 not derive anything the Day, the promises reader and `sources --gaps` do not already derive, so a
 change in their rules is a change here; the one setting of its own is the question bank, which is
 the owner's file and not the code's.
+
+## Delivery
+
+The digest is not sent whole. The schedule's notifier, when it is set ([the
+schedule](schedule.md#the-daily-loop-the-morning-and-the-evening-message)), sends two short messages
+a day through Telegram, and nothing else of the day:
+
+- after the 06:00 close, `Your Day page for 2026-10-16 is ready · 42 lines`, with the link to the Day
+  when `LOGBOOK_NOTIFY_LINK_HOST` is set;
+- at `LOGBOOK_NOTIFY_EVENING_HOUR`, `Your question for 2026-10-16: What were you glad of today?`, the
+  question this command closes with, drawn the same way and remembered in `state/questions.json`, so
+  `logbook digest` that evening asks the same one. A question of the bank with a placeholder, filled
+  from the day (a name, a promise's sentence), is not sent: ``Your question for 2026-10-16 waits in
+  `logbook digest` ``.
+
+One message each, at most once a day; the token is never printed.

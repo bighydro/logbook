@@ -620,9 +620,10 @@ def test_review_alone_lists_the_video_queue_with_the_others(
         "asset",
         "place",
         "video",
+        "goal",  # RFC 0036 amendment 1, after the video's
         "speakers",
     ]
-    block = out[out.index("video") + 1 : out.index("speakers")]
+    block = out[out.index("video") + 1 : out.index("goal")]
     assert block[0] == "  " + video_review.head_text(video_review.read(lb))
     assert any("Home 01 · scene 2 of 4" in line and "→ Vollen Brygge (place)" in line for line in block)
     cli.main(["review", "--json"])
@@ -898,8 +899,8 @@ def test_rfc_0040_says_scene_review_v1_as_the_writer_writes_it(lb: Logbook) -> N
 # -- the independent check of the queue: every option, every number, the terminal, the identity ------
 
 
-KINDS = ("person", "org", "idea", "asset", "place", "video", "speakers")
-EVERY = "`review person|org|idea|asset|place|video|speakers …`"
+KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "speakers")
+EVERY = "`review person|org|idea|asset|place|video|goal|speakers …`"
 PLACE_ARGS: dict[str, tuple[str, ...]] = {
     "--near": ("--near", "Hjem"),
     "--radius": ("--radius", "5"),
@@ -1204,7 +1205,7 @@ def test_review_alone_on_a_record_with_no_videos(
     seq = _seq(empty)
     out = _out(capsys, "review").splitlines()
     assert [line for line in out if not line.startswith(" ")] == list(KINDS)
-    assert out[out.index("video") + 1 : out.index("speakers")] == [
+    assert out[out.index("video") + 1 : out.index("goal")] == [
         "  0 scenes proposed, 0 with nothing to go on · 0 confirmed, 0 refused, 0 kept to ask the family"
         " · tier 2",
         "  nothing to review: `videos infer` proposes the scenes of the files in the cache",

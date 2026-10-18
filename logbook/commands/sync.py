@@ -435,6 +435,14 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
             print(f"notify: telegram: {e}", file=sys.stderr)
         else:
             print(f"notify: telegram: sent ({'something is wrong' if notify.is_wrong(run) else 'the week'})")
+    notify.daily(  # the daily loop: the Day page after the close, the evening question at its hour
+        lb,
+        os.environ,
+        started,
+        close=closed is not None,
+        say=print,
+        warn=lambda line: print(line, file=sys.stderr),
+    )
     if interrupted:
         sys.exit(130)
     if run.failed:
@@ -589,6 +597,7 @@ def _sync_schedule(a: argparse.Namespace) -> None:
             Path(xdg).expanduser() if xdg else None,
             user=service.user_name() if system_wide else None,
             system_root=service.SYSTEM_ROOT,
+            evening_hour=schedule.evening_hour_of(os.environ, Path.home(), print),
         )
     except schedule.ScheduleError as e:
         print(f"sync: {flag}: {e}", file=sys.stderr)
