@@ -108,7 +108,7 @@ from __future__ import annotations
 import textwrap
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -121,6 +121,7 @@ from . import (
     keepers,
     ledger,
     notes,
+    people,
     policy,
     presence,
     present,
@@ -138,7 +139,7 @@ from . import (
 from . import countries as country_table
 from . import flights as flight_lines
 from . import places as named_places
-from .chain import Line
+from .chain import Line, is_sealed
 from .day_start import MIDNIGHT, span_words
 from .export import parse_day
 from .flights import Airports
@@ -152,9 +153,12 @@ COUNTED = ("message", "photo")  # attachments counted
 STATED = "you said"  # how the Day marks a person the owner stated present (`logbook with`)
 PLACED = ("event", "transcript", "note", "mail", "call")  # the kinds `unplaced` lists
 NOTE_CHARS = 72
+TEXT_CHARS = 280  # a message's text on the Day page; the whole of it is on its line
+WHAT_CHARS = 140  # "Everything this day held": one line of what a line was
 REFLECTION_WIDTH = 76  # the reflection's words, wrapped under its label
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 EN_DASH = "\u2013"
+EM_DASH = "\u2014"
 ARROW = "\u2192"
 DOT = " · "
 
@@ -163,12 +167,18 @@ DOT = " · "
 
 
 def read(
-    lb: Logbook, day: str, airports: Airports | None = None, tiers: Sequence[int] | None = None
+    lb: Logbook,
+    day: str,
+    airports: Airports | None = None,
+    tiers: Sequence[int] | None = None,
+    held: bool = False,
 ) -> dict[str, Any]:
     """The Day as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
-    health and story lines included. `ValueError` for a day that is not one; `stays.SettingsError`
-    when the record's settings, places or assets file is not what it should be. Nothing is written,
-    not even the settings file."""
+    health and story lines included. With `held` (the Day page's folds, `logbook serve`), each row's
+    messages by conversation and every line of the day, `hold`, from this same reading; the Day's
+    object (SPEC §3.2.7) is otherwise unchanged and `day --json` never asks for them. `ValueError`
+    for a day that is not one; `stays.SettingsError` when the record's settings, places or assets
+    file is not what it should be. Nothing is written, not even the settings file."""
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
     rd = reading.read(lb, before, day, airports, tiers)
@@ -195,7 +205,12 @@ def read(
             if line.get("kind") == "transcript" and str(line["id"]) not in retracted
         ]
         syntheses, syntheses_withheld = drafts.for_transcripts(idx, calls, tiers, allowed)
-    data = of_reading(rd, day, health_rows(found, rd).get(day), stories=story.standing(told, rd.retracted))
+    lines = day_lines(rd, d)
+    data = of_reading(
+        rd, day, health_rows(found, rd).get(day), lines, stories=story.standing(told, rd.retracted)
+    )
+    if held:
+        hold(data, lines, rd.names, allowed)
     night = night_row(found, rd, day)
     if night is not None:  # only on a day a night ends on: the Day's object is otherwise unchanged
         data["night"] = night
@@ -243,7 +258,7 @@ def of_reading(
     tz, bounds = rd.tz, rd.day_start
     day_start, day_end = bounds.span(d)  # midnight to midnight, unless `day_start` says otherwise
     if lines is None:
-        lines = [line for line in rd.lines if (at := stays.instant(line.get("at"))) and bounds.day(at) == d]
+        lines = day_lines(rd, d)
     lines = sorted(lines, key=lambda line: (str(line["at"]), int(line["seq"])))
     placeable = _standing_transcripts(lines)  # a transcript heard again stands for the one it supersedes
     folded, stands_for = events.fold(placeable, flight_lines.Airlines.load())  # one row per calendar entry
@@ -290,6 +305,227 @@ def of_reading(
         ),
         "sources": _sources(lines),  # every line, the folded calendar entries too
     }
+
+
+def day_lines(rd: Reading, d: date) -> list[Line]:
+    """The reading's lines on the local day `d`, under the record's `day_start`: every line the
+    sources row counts."""
+    bounds = rd.day_start
+    return [line for line in rd.lines if (at := stays.instant(line.get("at"))) and bounds.day(at) == d]
+
+
+# -- what the day held: the Day page's folds ------------------------------------------------------------
+
+
+def hold(
+    data: dict[str, Any], lines: Sequence[Line], names: Mapping[Ref, str], allowed: drafts.Allowed
+) -> None:
+    """The Day page's folds, into `data` from the day's `lines` the Day was read from: under each
+    row's `attached.messages`, `conversations` (`conversations`); and `held`, every line of the day
+    in time order, one row each (`held_row`), the lines the sources row counts, a line another of
+    them supersedes said so as `show` says it, and a model's draft the `dream` entry withholds
+    (`allowed`) only so, as the Day says it. Nothing is read."""
+    ordered = sorted(lines, key=lambda line: (_instant(str(line["at"])), int(line["seq"])))
+    messages = {str(line["id"]): (i, line) for i, line in enumerate(ordered) if line.get("kind") == "message"}
+    for entry in data["timeline"]:
+        found = (entry.get("attached") or {}).get("messages")
+        if found and found["count"]:
+            inside = sorted(messages[i] for i in found["lines"] if i in messages)
+            found["conversations"] = conversations([line for _i, line in inside], names)
+    superseded = _superseded(ordered)
+    data["held"] = [
+        held_row(line, names, superseded.get(str(line["id"])), withheld=_withheld(line, allowed))
+        for line in ordered
+    ]
+
+
+def conversations(lines: Iterable[Line], names: Mapping[Ref, str]) -> list[dict[str, Any]]:
+    """Message lines, in time order, by conversation, the first to start first: one per network and
+    chat, with `counterpart` (`_counterpart`), `network` (the network a bridge names,
+    `extra.network`, else the source), `group`, `count`, and `messages` in time order, each `{at,
+    from_me, who, text, cut, line}`: `who` the sender of a message in a group, `text` the first
+    `TEXT_CHARS` of the body, `cut` when there was more (the whole is on the line)."""
+    found: dict[tuple[str, str, str], dict[str, Any]] = {}
+    chats: dict[tuple[str, str, str], Mapping[str, Any]] = {}
+    senders: dict[tuple[str, str, str], list[Ref]] = {}
+    for line in lines:
+        payload = line.get("payload") or {}
+        chat = _chat(payload)
+        network = _network(line)
+        key = (network, str(line.get("source")), str(chat.get("id") or chat.get("name") or ""))
+        group = chat.get("type") == "group"
+        if key not in found:
+            found[key] = {"network": network, "group": group, "count": 0, "messages": []}
+            chats[key], senders[key] = chat, []
+        held = found[key]
+        ref = None if payload.get("from_me") is True else _ref(payload.get("sender"))
+        if ref is not None:
+            senders[key].append(ref)
+        text, cut = _message_body(line)
+        held["count"] += 1
+        held["messages"].append(
+            {
+                "at": line["at"],
+                "from_me": payload.get("from_me") is True,
+                "who": _who(ref, names) if group and ref is not None else None,
+                "text": text,
+                "cut": cut,
+                "line": str(line["id"]),
+            }
+        )
+    for key, held in found.items():
+        held["counterpart"] = _counterpart(chats[key], held["group"], senders[key], names)
+    return [{"counterpart": c.pop("counterpart"), **c} for c in found.values()]
+
+
+def held_row(
+    line: Line, names: Mapping[Ref, str], superseded_by: int | None = None, withheld: bool = False
+) -> dict[str, Any]:
+    """One line of the day as "Everything this day held" lists it: `{line, seq, at, end, source,
+    kind, what}`, `what` one line of what it was (`what_text`); a superseded line only what
+    superseded it, `superseded by #SEQ`, as `show` prints it (a goal or a chapter keeps its words,
+    marked), so the page shows the words of no line that does not stand; a `withheld` draft only
+    `superseded by policy`, never its words, and `withheld` true."""
+    what = drafts.SUPERSEDED_BY_POLICY if withheld else what_text(line, names)
+    if superseded_by is not None and not withheld:
+        kept = line.get("kind") in (goals.KIND, chapter.KIND)
+        what = f"{what}{DOT}superseded by #{superseded_by}" if kept else f"superseded by #{superseded_by}"
+    return {
+        "line": str(line["id"]),
+        "seq": int(line["seq"]),
+        "at": line["at"],
+        "end": line.get("end"),
+        "source": str(line.get("source")),
+        "kind": str(line.get("kind")),
+        "what": what,
+        **({"withheld": True} if withheld else {}),  # its line reads as no line through the page
+    }
+
+
+def _withheld(line: Line, allowed: drafts.Allowed) -> bool:
+    """Whether `line` is a model's draft the `dream` entry withholds today (`drafts.allowed`)."""
+    return line.get("kind") == drafts.KIND and not allowed.allows(line)
+
+
+def _superseded(lines: Sequence[Line]) -> dict[str, int]:
+    """id → the `seq` of the line of the same kind among `lines` that supersedes it, the last when
+    several do (SPEC §3); `lines` stand already, so a retracted superseder supersedes nothing."""
+    kinds = {str(line["id"]): line.get("kind") for line in lines}
+    found: dict[str, int] = {}
+    for line in sorted(lines, key=lambda line: int(line["seq"])):
+        target = (line.get("payload") or {}).get("supersedes")
+        if isinstance(target, str) and kinds.get(target) == line.get("kind"):
+            found[target] = int(line["seq"])
+    return found
+
+
+def what_text(line: Line, names: Mapping[Ref, str]) -> str:
+    """One line of what a line was, at most `WHAT_CHARS`: a message `who: text`, a mail its subject
+    and sender, a call who and how, a photo or a keeper the file, a point where; else the payload's
+    own text, title, subject, name or url; a sealed line says so. The line itself is a click away."""
+    if is_sealed(line):
+        return "sealed"
+    payload = line.get("payload") or {}
+    kind = line.get("kind")
+    if kind == "message":
+        ref = _ref(payload.get("sender"))
+        if payload.get("from_me") is True:
+            who = "me"
+        else:
+            who = _who(ref, names) if ref is not None else _chat_name(_chat(payload)) or "someone"
+        text = f"{who}: {_message_body(line)[0]}"
+    elif kind == "mail":
+        sender = payload.get("from")
+        by = (sender.get("name") or sender.get("email")) if isinstance(sender, dict) else None
+        text = _title(line) + (f" {EM_DASH} {by}" if by else "")
+    elif kind == "call":
+        text = call_text(_call(payload, names, str(line["id"])))
+    elif kind in ("event", "transcript", "note"):
+        text = _title(line)
+    elif kind == keepers.KIND:
+        text = keepers.name_of(line)
+    elif kind == "location" and all(isinstance(payload.get(k), (int, float)) for k in ("lat", "lon")):
+        text = f"{payload['lat']:.5f}, {payload['lon']:.5f}"
+    elif kind == drafts.KIND and payload.get("schema") == drafts.SCHEMA:
+        text = drafts.row_text(payload)
+    else:
+        found = next(
+            (payload[k] for k in ("text", "title", "subject", "name", "file_name", "url") if payload.get(k)),
+            "",
+        )
+        text = str(found)
+    text = " ".join(text.split())
+    return text if len(text) <= WHAT_CHARS else text[: WHAT_CHARS - 1] + "…"
+
+
+def _chat(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A message's chat (RFC 0008); a string `chat` is a direct chat's name (SPEC §3.2)."""
+    chat = payload.get("chat")
+    if isinstance(chat, str):
+        return {"type": "direct", "name": chat}
+    return chat if isinstance(chat, dict) else {}
+
+
+def _network(line: Line) -> str:
+    """The network a message went over: the one a bridge names (`extra.network`, Beeper's), else the
+    line's source (`whatsapp`, `telegram`, `imessage`, …)."""
+    extra = (line.get("payload") or {}).get("extra")
+    named = extra.get("network") if isinstance(extra, dict) else None
+    return named if isinstance(named, str) and named else str(line.get("source"))
+
+
+def _ref(sender: object) -> Ref | None:
+    if (
+        isinstance(sender, dict)
+        and isinstance(sender.get("kind"), str)
+        and isinstance(sender.get("value"), str)
+    ):
+        return (sender["kind"], sender["value"])
+    return None
+
+
+def _who(ref: Ref, names: Mapping[Ref, str]) -> str:
+    """A sender: the canonical person the record names, else the handle as the line has it."""
+    return names.get(ref) or ref[1]
+
+
+def _chat_name(chat: Mapping[str, Any]) -> str:
+    """A chat as the line names it: its name, else its id."""
+    return str(chat.get("name") or chat.get("id") or "")
+
+
+def _counterpart(
+    chat: Mapping[str, Any], group: bool, senders: Sequence[Ref], names: Mapping[Ref, str]
+) -> str:
+    """Who a conversation was with: a group by its name, else its id; a direct chat the canonical
+    person the record names for a sender in it, or for the ref its id is (`people`), else the
+    handle as the line has it: a sender's, else the chat's id or name."""
+    chat_id = str(chat.get("id") or "")
+    name = str(chat.get("name") or "")
+    if group:
+        return name or chat_id or "a group"
+    by_id = people._chat_ref(chat_id) if chat_id else None
+    for ref in [*senders, *([by_id] if by_id is not None else [])]:
+        if ref in names:
+            return names[ref]
+    if senders:
+        return senders[0][1]
+    return by_id[1] if by_id is not None else chat_id or name or "someone"
+
+
+def _message_body(line: Line) -> tuple[str, bool]:
+    """(the first `TEXT_CHARS` of a message's text, whether there was more); a message with no text
+    is what the source says it held (`media_kind`), a sealed one says so."""
+    if is_sealed(line):
+        return "sealed", False
+    payload = line.get("payload") or {}
+    text = payload.get("text")
+    if not isinstance(text, str) or not text.strip():
+        kind = payload.get("media_kind")
+        return (f"({kind})" if isinstance(kind, str) and kind else "(no text)"), False
+    if len(text) <= TEXT_CHARS:
+        return text, False
+    return text[: TEXT_CHARS - 1] + "…", True
 
 
 def owner_lines(

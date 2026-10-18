@@ -411,6 +411,25 @@ def assert_reads_cleanly(label: str, args: list[str]) -> None:
             raise AssertionError(f"{command} printed invalid JSON: {e}\n{out[:300]}") from e
 
 
+# the Day page, served as `logbook serve` serves it, every fold open and closed, at every tier and through a
+# gate of tier 1: a page, its conversations and "Everything this day held" read from any record, never a
+# traceback, and nothing above the gate on it
+
+
+def assert_day_serves(label: str, lb: Logbook, day: str) -> None:
+    for tiers in (None, (1,)):
+        site = serve.Site(lb, tiers=tiers)
+        for query in ("", "open=1"):
+            response = site.respond(f"/day/{day}", query)
+            assert response.status == 200, (
+                f"{label}: /day/{day}?{query} through {tiers} answered {response.status}"
+            )
+            if tiers == (1,):
+                assert 'class="conversation"' not in response.body.decode(), (
+                    f"{label}: a message above the gate"
+                )
+
+
 # the Promises, Goals and Agents shelves, served as `logbook serve` serves them, at every tier and through
 # a gate of tiers 1 and 2: a page or a 404 for a detail the record does not hold, never a traceback
 SHELF_PAGES = ("/promises", "/promises?person=Ola Nordmann", "/goals", "/agents", "/agents?page=2")
@@ -604,6 +623,7 @@ def every_reader_reads(
             assert_shelves_serve(label, lb)
         for args in windowed_readers(since, until, day, who, kind, by, which_lane, whose, n):
             assert_reads_cleanly(label, args)
+        assert_day_serves(label, lb, day)
 
 
 # -- the properties ----------------------------------------------------------------------------------------

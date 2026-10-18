@@ -264,6 +264,19 @@ review at its foot, and the acts: a star, *with…*, Reflect and Sign
 device saw, the phones off, still takes *with…*: "I was with Ola" is one line, the line `logbook with`
 writes.
 
+The page also shows everything the day held, folded so it stays readable
+([In a browser](serve.md#the-day--everything-it-held)). Under each stay or move, where this page counts
+the messages, the page lists them by conversation: who it was with (the person the record names, else
+the handle as the line has it, a group by its name), the network (`whatsapp`, `telegram`,
+`instagram`, …) and how many, then each message's time, *sent* or *received* and its text, the first
+280 characters of it, the whole a click away on its line. A conversation of more than 30 shows its
+first 10 and folds the rest under *show all N*. At the foot, *Everything this day held*: every line of
+the day, by source and in time order, each with its time, its kind, one line of what it was and a
+link to it, the count per source on its summary as the sources row has it. Every fold is closed until
+you open it, or until `?open=1` opens them all. Both come from the one reading the page makes of the
+day; `logbook day` and `--json` are as they were, and so is a static site's Day (`logbook export
+site`), which counts the messages.
+
 ## A synthetic example
 
 The Oslo persona of the test suite, who does not exist, spends a June Saturday aboard the yacht
