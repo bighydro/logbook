@@ -4,13 +4,13 @@
 [`logbook/contrib/synthesis-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/synthesis-prompt.md)
 in the package with the call and the language filled in, and the call as JSON. This page explains the
 prompt; `transcript synthesize ID --show-prompt` prints both as they go. The prompt's name,
-`transcript-synthesis/1`, is kept in every synthesis's `extra.prompt`, so a draft says which wording
+`transcript-synthesis/2` (the second added `ideas`), is kept in every synthesis's `extra.prompt`, so a draft says which wording
 wrote it, and a call synthesized under an older prompt is synthesized again; a change to the prompt that
 changes what a synthesis holds bumps the number.
 
 ## What it asks for
 
-One JSON object with five keys, each a list, in this order, which is the order the record keeps and
+One JSON object with six keys, each a list, in this order, which is the order the record keeps and
 the Day prints whatever order the model answers in:
 
 | Key | What | Each item |
@@ -20,6 +20,7 @@ the Day prints whatever order the model answers in:
 | `decisions` | what the call agreed and closed | `text`, `evidence` |
 | `open_threads` | what it left unanswered or said to come back to | `text`, `evidence` |
 | `personal` | anything personal that came up: at most three short neutral sentences | `text`, `evidence` |
+| `ideas` | at most three ideas the call put forward to make or try: a new one, or a refinement of one the material lists under `ideas` (`I1`, ...) | `name` (two to five words), `idea` (the reference it refines, or null), `text`, `evidence` (utterances, always) |
 
 `evidence` is a list of the material's references: `U12` for an utterance, `T` for what the header alone
 says. An item that rests on no utterance carries `"unsupported": true` in its place.

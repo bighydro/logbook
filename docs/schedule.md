@@ -44,7 +44,8 @@ scheduled run below with one step more, in this order:
    synthesized; run …`), `doctor` on its `synthesis` line, and they wait for you to send them by hand. A
    draft is a proposal, so what the dream does never changes the run's exit status;
 3. **the rest of the run**: the restore test on the first Sunday of the month, `doctor`, the outcome
-   in `state/last-run.json`, the message when something is wrong;
+   in `state/last-run.json`, the message when something is wrong, then, when the notifier is set, the
+   morning message of [the daily loop](#the-daily-loop-the-morning-and-the-evening-message);
 4. **one summary line**: `scheduled run, the close (dream caught up): clean; state/last-run.json`, or
    `(no dream command)`, `(no dream entry)`, `(dream --catch-up exit 1)`.
 
@@ -242,3 +243,31 @@ sends nothing, and `--uninstall-schedule` ends it. A test points the request at 
 A message the API refuses, or an endpoint that cannot be reached, is one line on stderr
 (`notify: telegram: …`) and never changes the run's exit status or what was written: the outcome is on
 disk before the message goes.
+
+## The daily loop: the morning and the evening message
+
+With the same two variables set, the schedule sends two more messages a day, each on its own and each
+at most once a local day:
+
+```
+Your Day page for 2026-10-16 is ready · 42 lines
+https://logbook.example.org/day/2026-10-16
+
+Your question for 2026-10-16: What were you glad of today?
+```
+
+- **the morning**: after the 06:00 close, for the day it closed: the date, how many lines the day holds
+  (a retracted line not counted), and the link to its Day page when `LOGBOOK_NOTIFY_LINK_HOST` names
+  the host `logbook serve` answers on (`logbook.example.org`, or `https://logbook.example.org:8443`;
+  `https://` when no scheme is given). Without it there is no link.
+- **the evening**: at `LOGBOOK_NOTIFY_EVENING_HOUR` (a local hour, 0 to 23), the day's question, the
+  one `logbook digest` closes with ([the digest](digest.md#delivery)). Without the variable there is
+  no evening message. An hour that is not one of the four runs is one more time the runs' job runs, set
+  when you install the schedule (in the shell or in `sync.env`): change it, and install again.
+
+Nothing else of the day is in either: no place, no person, no line's text, no source. A question the
+bank fills from the day (`Was {proposed} with you?`) would carry a name of the record, so it is not
+sent; the message says the question waits in `logbook digest`. The day each message last went out is
+kept in `state/notify-daily.json`, written before the request and given back when the request fails,
+so running the close again, or any later run of the day, sends nothing more, and a failed request is
+one line on stderr that a later run of the day may try again.

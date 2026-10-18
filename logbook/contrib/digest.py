@@ -30,7 +30,8 @@ evening, in at most `LIMIT` lines, never a list of everything. In order:
    two days running, and remembers what it asked in `state/questions.json`. The first run writes the
    default bank — the nudges this module used to choose in code, as questions — and nothing
    overwrites an edit. The day closes itself (ADR 0005): the question is the one
-   nudge, and the digest never sends it — delivery is a later decision.
+   nudge, and the digest never sends it: the schedule's notifier sends the question alone, at the
+   owner's evening hour, when it is set (`notify.daily`, docs/digest.md "Delivery").
 
 Everything here is composed from the readers; nothing is derived anew, nothing is written to the
 record (the question bank's default and the state of what was asked are files beside it, never

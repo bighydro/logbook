@@ -2735,6 +2735,9 @@ class Site:
         score = "new" if p.score is None else f"score {p.score}"
         seen = ", ".join(f"{kind} {count}" for kind, count in sorted(o.kinds.items()))
         items: list[Evidence] = [(why, [], None) for why in p.evidence if why != "new"]
+        if p.call is not None:  # an idea a call's synthesis proposed: its name, and its words to answer
+            shown = f"call “{p.call['name']}”"
+            items.insert(0, (str(p.call["text"]), [], None))
         items.append((f"seen on {seen}, {o.first} {EN_DASH} {o.last}", [i for i, _t in o.samples], None))
         items.extend((f"named {label} ({count})", [], None) for label, count in o.labels.most_common())
         form = [

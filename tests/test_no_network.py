@@ -180,6 +180,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("review", "idea"),
     ("review", "asset"),
     ("review", "place"),
+    ("review", "goal"),  # RFC 0036 amendment 1: the open goals not reviewed this week, nothing told
+    ("review", "goal", "--json"),
     ("status", "list", "org"),
     ("status", "list", "idea"),
     ("status", "list", "place"),

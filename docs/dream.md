@@ -309,6 +309,30 @@ they rest on); a day that has lines and no such draft refuses the week until it 
 
 The prompt says it in so many words: never moralise. No praise, no blame, no lesson.
 
+**One stale question a week.** Beside what the model writes, the code asks at most one question a
+week about the stalest holding or idea (RFC 0037 §10.6): an org or an idea whose status has aged
+past the reader's limit as of the Sunday (`hold` over three years and `exploring` over two by default,
+and any status `stale_days` in `policy/entities.json` names), its last touch counted as the Manifest
+and the Ideas shelf count it, so an org that mailed you last month is not stale. The stalest is
+asked:
+
+```
+    ? question  Harbour Map App: still exploring? Nothing since May 2023.  asked once
+```
+
+It is a proposal kept in the week's draft (`extra.question`: the entity, its label, its status and
+the status line, since when, the text, the lines it read), never a sentence of the draft, never a line of its own and
+never a status: your answer, if you give one, is `logbook status idea "Harbour Map App" …`, which
+restarts the clock, and nothing else happens when you do not. It is asked once: an entity a draft of
+another week asked about, under the status it still stands at, is passed over for the next stalest;
+when nothing is stale, nothing is asked. It never names an entity above the draft: only one whose
+status line, entity lines and touches are under the `dream` entry's ceiling and at or below the tier
+the week's own reading gave the draft is a candidate, so an org, whose status is tier 3, is asked
+about only in a week whose draft is tier 3 already. Nothing of it is sent to the model. The lines it
+read are named in the question (`read`) and kept out of `extra.read_ids_sha256`, so answering it, or
+naming an entity, never sends the week to the model again by itself; a `policy/entities.json` that
+does not read asks nothing, and the week is dreamed as ever.
+
 **Numbers are the code's.** Every figure the model is given is computed from the lines and carries
 their references: the hours at a place from the stays' first and last lines, clipped to each day (the
 Day's stays); the counts of messages in a direct chat, calendar entries attended, calls and recordings

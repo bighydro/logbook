@@ -294,7 +294,7 @@ Then:
 written: 4 files for the system domain, running as records from boot: `logbook sync --scheduled` (`sync --all`, then `doctor`) runs at 00:00, 12:00 and 18:00 local, and at 06:00 as `sync --scheduled --close`, which then runs the dream's catch-up when this version has it and policy/crossing.json has a dream entry; nothing runs until you install them, as an administrator:
   sudo cp /home/records/logbook-sync.service /home/records/logbook-sync.timer /home/records/logbook-sync-close.service /home/records/logbook-sync-close.timer /etc/systemd/system
   sudo systemctl enable --now logbook-sync.timer logbook-sync-close.timer
-to be told when something is wrong, put LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT in the same file: one Telegram message when a source fails or doctor warns, and the week's counts on Sunday evening (docs/schedule.md)
+to be told when something is wrong, put LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT in the same file: one Telegram message when a source fails or doctor warns, and the week's counts on Sunday evening (docs/schedule.md); with them, the daily loop: the Day page after the close, and the evening question at LOGBOOK_NOTIFY_EVENING_HOUR (docs/digest.md)
 the variables your live sources need go in ~/.config/logbook/sync.env, one KEY=value per line, mode 600; a source whose variables are not set is skipped
 home: this machine (server) is the record's home since 2026-10-13; state/home.json
 ```

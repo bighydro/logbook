@@ -90,6 +90,16 @@ discussed, and **work only**. That last one is a rule of the prompt and not a fi
 whole call reaches the model, and the model is told that anything personal goes to the personal part,
 at most three short neutral sentences, and nowhere else. No code decides what is personal.
 
+**Ideas.** The material also lists the labels of the ideas you have named (`I1`, `I2`, ...: the
+label alone), when the call is tier 2 or above, so an idea's label never raises the draft's tier; the
+model may propose up to three ideas the call put forward, new or a refinement of one of those, each
+resting on utterances of the call. They are kept beside the segments under `extra.ideas` (the name,
+the words, the idea it refines by its entity id or none, the utterances, the transcript's id), never
+as a segment, and wait in `review idea` until you say yes ([ideas from calls](review.md#ideas-from-calls)).
+An idea that rests on no utterance or names a reference the material did not give is dropped. A
+synthesis written under the first prompt (`transcript-synthesis/1`) proposes none; `synthesize ID`
+sends it again under the new one.
+
 ## Evidence: the transcript line, and the utterances beside it
 
 A transcript's utterances are not lines of their own: `transcript/v1` keeps the text in one attachment
@@ -117,7 +127,7 @@ utterance numbers, never the prompt, the material or the call's words.
 
 ## Once, and again
 
-A call the same model has synthesized under the same prompt (`transcript-synthesis/1`, kept in
+A call the same model has synthesized under the same prompt (`transcript-synthesis/2`, kept in
 `extra.prompt`) and the same `dream` entry (`extra.policy_version`) is **unchanged**: nothing is sent,
 nothing is written, and the standing synthesis is printed. Another model, a new prompt, another entry,
 or `--again` writes a new line that supersedes the standing one. A transcript that is retracted or

@@ -14,7 +14,16 @@ A sixth queue is no kind of thing the record names: `video`, the scenes `videos 
 or a date for (RFC 0040), `logbook.contrib.video_review`'s (`VideoQueue`, declared beside `videos` in
 `videos.py`). The same sitting drives it: `--accept` takes what a scene's draft proposes, `--reject`
 writes the scene's no (`scene-review/v1`, never an `entity-review/v1` line), and its own answers
-(`VIDEO_FLAGS`) are refused for every other kind as a place's options are."""
+(`VIDEO_FLAGS`) are refused for every other kind as a place's options are.
+
+A goal joins the sitting (RFC 0036 amendment 1, RFC 0037 §12): `review goal` asks each standing goal
+open today once a week, while its chain has no `review/v1` line dated this ISO week
+(`entity_review.goal_read`), and the owner answers with a verdict, `--say N DISPOSITION` (one of
+the five: advancing, stalled, done, let-go, superseded) and `--note N TEXT`, written through the one
+writer `goal review` uses (`logbook.core.goals.review`, period `week`): the same line, the same
+bytes. A goal has no score, no no and no name of its own, so `--accept`, `--reject`, `--name` and
+`--all-above` are refused for it, and its answers (`GOAL_FLAGS`) for every other kind, as a place's
+options are."""
 
 from __future__ import annotations
 
@@ -28,7 +37,8 @@ from ..core.store import Logbook
 from .common import Subparsers
 
 # video: RFC 0040, `commands.videos`; speakers: RFC 0038 §4, `commands.speakers`, listed last
-KINDS = ("person", "org", "idea", "asset", "place", "video", "speakers")
+# goal: RFC 0036 amendment 1, `GoalQueue` here
+KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "speakers")
 PLACE_FLAGS = (
     ("--near", "near"),
     ("--radius", "radius"),
@@ -47,6 +57,7 @@ VIDEO_FLAGS = (
     ("--asked", "asked"),
     ("--answered", "answered"),
 )
+GOAL_FLAGS = (("--say", "say"), ("--note", "note"))  # a goal's answers: its verdict, and your words on it
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
 
@@ -242,6 +253,94 @@ class EntityQueue(Queue):
         return True
 
 
+# -- goal --------------------------------------------------------------------------------------------------
+
+
+class GoalQueue(Queue):
+    """The goal queue (`logbook.contrib.entity_review.goal_read`): what `review` with no kind lists.
+    `review goal` answers through `goal_sitting`, not `sitting`: a goal is answered with a verdict."""
+
+    kind = "goal"
+
+    def __init__(self) -> None:
+        from ..contrib import entity_review
+
+        self.module = entity_review
+        self.error = entity_review.ReviewError
+
+    def read(self, lb: Logbook, a: argparse.Namespace) -> Any:
+        return self.module.goal_read(lb)
+
+    def rows(self, report: Any, shown: Sequence[Any], a: argparse.Namespace) -> Iterable[str]:
+        return self.module.goal_rows(report)
+
+
+def goal_sitting(lb: Logbook, a: argparse.Namespace) -> None:
+    """`review goal [--say N DISPOSITION]… [--note N TEXT]… [--json]`: the verdicts told, every one
+    checked before the first line is written, then written through `goal review`'s writer and said;
+    told nothing, the queue listed (as JSON, asked on a terminal, or printed). Raises
+    `entity_review.ReviewError` for anything the record cannot act on."""
+    from ..contrib import entity_review as module
+
+    told = [flag for flag, dest in TELLS if getattr(a, dest, None) not in (None, False)]
+    if told:
+        raise module.ReviewError(
+            f"{', '.join(told)} {'goes' if len(told) == 1 else 'go'} with a proposal; a goal is answered"
+            f" with your verdict: `review goal --say N {module.GOAL_WORDS}`"
+        )
+    report = module.goal_read(lb)
+    said = [(str(n), str(word)) for n, word in a.say or ()]
+    notes = [(str(n), str(text)) for n, text in a.note or ()]
+    if said or notes:
+        answers = module.goal_answers(report, said, notes)
+        written = module.goal_write(lb, answers)
+        if a.json:
+            print(json.dumps({"written": [w.to_json() for w in written]}, indent=2, ensure_ascii=False))
+            return
+        for text in module.goal_written_rows(written):
+            print(text)
+        return
+    if a.json:
+        print(json.dumps(report.to_json(), indent=2, ensure_ascii=False))
+        return
+    if report.proposals and sys.stdin.isatty() and sys.stdout.isatty():
+        _ask_goals(lb, report)
+        return
+    for text in module.goal_rows(report):
+        print(text)
+
+
+def _ask_goals(lb: Logbook, report: Any) -> None:
+    """Each goal of the queue asked in turn on a terminal: a verdict writes its line at once."""
+    from ..contrib import entity_review as module
+
+    rows = list(module.goal_rows(report))
+    print(rows[0])
+    for p, text in zip(report.proposals, rows[1:-1], strict=True):
+        print(text)
+        while True:
+            try:
+                answer = input(
+                    f"      {module.GOAL_WORDS.replace('|', ', ')}; Enter skips, q stops: "
+                ).strip()
+            except EOFError:
+                print()
+                return
+            if answer.casefold() == "q":
+                return
+            if not answer:
+                break
+            try:
+                answers = module.goal_answers(report, [(str(p.number), answer)], [])
+                written = module.goal_write(lb, answers)
+            except (module.ReviewError, ValueError) as e:
+                print(f"      {e}")
+                continue
+            for line in module.goal_written_rows(written):
+                print(f"      {line}")
+            break
+
+
 # -- the command -----------------------------------------------------------------------------------------
 
 
@@ -256,6 +355,7 @@ def review_arguments(sub: Subparsers) -> None:
         " is looked up. `review person` is `people review`, `review place` is `setup places review`;"
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
         " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040)."
+        " `review goal` your open goals not yet reviewed this week, each answered with --say (RFC 0036)."
         " With no KIND, every queue, one block each.",
     )
     s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
@@ -322,6 +422,21 @@ def review_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="the scenes already confirmed, to correct one: a new answer supersedes the standing line",
     )
+    g = s.add_argument_group("goal", "with `review goal` (RFC 0036): your verdict on each goal, once a week")
+    g.add_argument(
+        "--say",
+        nargs=2,
+        action="append",
+        metavar=("N", "DISPOSITION"),
+        help="your verdict on goal N this week: advancing, stalled, done, let-go or superseded",
+    )
+    g.add_argument(
+        "--note",
+        nargs=2,
+        action="append",
+        metavar=("N", "TEXT"),
+        help="with --say N: the verdict in your words",
+    )
     s.set_defaults(fn=cmd_review)
 
 
@@ -355,6 +470,13 @@ def cmd_review(a: argparse.Namespace) -> None:
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review video`",
             )
+    if a.kind != "goal":
+        given = [flag for flag, dest in GOAL_FLAGS if getattr(a, dest, None) not in (None, False)]
+        if given:
+            _refuse(
+                f"review {a.kind}",
+                f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review goal`",
+            )
     from . import speakers
 
     if a.kind == "speakers":
@@ -371,6 +493,14 @@ def cmd_review(a: argparse.Namespace) -> None:
             f"review {a.kind}",
             f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review speakers`",
         )
+    if a.kind == "goal":
+        from ..contrib import entity_review
+
+        try:
+            goal_sitting(lb, a)
+        except (entity_review.ReviewError, ValueError) as e:
+            _refuse("review goal", str(e))
+        return
     queue = queue_of(a.kind)
     try:
         sitting(queue, lb, a)
@@ -396,6 +526,8 @@ def queue_of(kind: str) -> Queue:
         from .speakers import SpeakerQueue
 
         return SpeakerQueue()
+    if kind == "goal":
+        return GoalQueue()
     return EntityQueue(kind)
 
 
@@ -404,7 +536,7 @@ def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
 
     told = [
         flag
-        for flag, dest in (*TELLS, *TOP_FLAGS, *PLACE_FLAGS, *VIDEO_FLAGS, *SPEAKER_FLAGS)
+        for flag, dest in (*TELLS, *TOP_FLAGS, *PLACE_FLAGS, *VIDEO_FLAGS, *SPEAKER_FLAGS, *GOAL_FLAGS)
         if getattr(a, dest, None) not in (None, False)
     ]
     if told:

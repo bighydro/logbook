@@ -51,7 +51,23 @@ segment (`drafts.WEEK_PARTS`); `extra.numbers` the numbers with their line ids; 
 review proposed for each goal (`{goal, text, disposition, segment}`, the goal's line id and the
 segment that says why); `extra.dropped` (a second proposal for next week, a goal item that names no
 goal of the material, no disposition, a goal twice, or no line of the week) and `extra.marked`.
-`day DAY` of a Sunday carries the week's standing draft (`on_sunday`)."""
+`day DAY` of a Sunday carries the week's standing draft (`on_sunday`).
+
+**One stale question** (RFC 0037 §10.6, `stale_question`). The code, not the model, asks at most one
+question a week about the stalest holding or idea: an org or an idea whose status has aged past the
+reader's limit as of the Sunday (`entities.stale`: a `hold` over three years and an `exploring` over
+two by default, any status `policy/entities.json` `stale_days` names), its last touch counted as the
+Manifest and the Ideas shelf count it. "Havn Data AS: still hold? Nothing since June 2023." It is kept
+under `extra.question` (`{entity, label, status, status_line, since, text, read}`), a proposal beside
+the goals' reviews and never a segment, a line of its own or a status: the owner's answer, if any, is
+`logbook status`, which restarts the clock. It is asked once: an entity whose standing status a draft
+of another week asked about already is passed over for the next stalest. It never names an entity
+above the draft: only an entity whose status line, entity lines and touches are under the ceiling and
+at or below the tier the week's own reading gave the draft is a candidate (an org's status is tier 3,
+so a holding is asked only of a tier-3 week). The lines it read are named in the question (`read`)
+and kept out of the digest, so a status written or an entity named since never sends the week to the
+model again by itself; and a `policy/entities.json` that does not read asks nothing and refuses
+nothing. Nothing of it is sent to the model."""
 
 from __future__ import annotations
 
@@ -84,7 +100,8 @@ from ..core.export import day_range, parse_day
 from ..core.flights import Airports
 from ..core.index import Index
 from ..core.store import HeadMoved, Logbook, retractions
-from . import dream, people_drift
+from . import dream, entities, ideas, people_drift
+from . import orgs as org_reader
 from . import promises as promise_reader
 from .dream import DreamError, Material, Outcome
 from .model_client import Transport
@@ -107,6 +124,8 @@ NOT_A_DISPOSITION = "not a disposition"
 GOAL_TWICE = "a goal reviewed twice"
 NOT_OF_THE_WEEK = "evidence not of the week"
 SUBJECT = re.compile(r"\d{4}-W\d{2}\Z")
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")  # fmt: skip
 
 
 class NotOver(DreamError):
@@ -130,6 +149,7 @@ class Read:
     goals: dict[str, Line] = field(default_factory=dict)  # `G1` -> the standing goal line
     beside: int = 0  # the lines it read beside the week's own: `extra.read_beside`
     numbers: dict[str, Any] = field(default_factory=dict)  # `extra.numbers`: the figures with line ids
+    question: dict[str, Any] | None = None  # `extra.question`: the one stale question, or None
 
 
 # -- the week ---------------------------------------------------------------------------------------------
@@ -278,12 +298,72 @@ def material(
         "goals": open_goals,
         "days": shown_days,
     }
+    made.tier = max([int(line.get("tier", 1)) for line in on] + list(beside.values()), default=1)
+    # at or below the tier the draft has already, so it never raises it; its lines are kept in the
+    # question (`read`), out of the digest, so a question alone never sends the week to the model again
+    read.question, _asked = stale_question(lb, week, sunday, tiers, made.tier)
     read_ids = ids | set(beside)
     made.read_count = len(ids)  # the lines of the unit (RFC 0036 rule 5); the digest covers all it read
     made.read_ids_sha256 = dream.digest(read_ids)
     read.beside = len(set(beside) - ids)
-    made.tier = max([int(line.get("tier", 1)) for line in on] + list(beside.values()), default=1)
     return read
+
+
+# -- the stale question -----------------------------------------------------------------------------------
+
+
+def stale_question(
+    lb: Logbook, week: str, sunday: str, tiers: Sequence[int], tier: int
+) -> tuple[dict[str, Any] | None, dict[str, int]]:
+    """The one question the week asks (the module's docstring), and the lines it read for it (id ->
+    tier): the stalest holding or idea as of `sunday`, stale as the Manifest and the Ideas shelf say
+    (`entities.stale` with the last touch, any status `stale_days` names), whose lines are all under
+    the gate `tiers` and at or below `tier`, not asked by a draft of another week since its standing
+    status; (None, {}) when nothing is stale, or when `policy/entities.json` cannot be read (the week
+    is drafted without a question, never refused for it)."""
+    gate = sorted({int(t) for t in tiers})
+    rows: list[tuple[str, entities.Entity, entities.Status | None, bool, str | None, int]] = []
+    try:
+        for i in ideas.shelf_of(ideas.read(lb, gate, today=sunday)).rows:
+            rows.append((entities.IDEA, i.idea, i.status, i.stale, i.stale_since, i.tier))
+        if entities.status_tier(entities.ORG) <= tier:  # an org's status is tier 3
+            record = org_reader.read(lb, org_reader.gate(gate), today=sunday)
+            for o in org_reader.shelf_of(lb, record).rows:
+                rows.append((entities.ORG, o.org, o.status, o.stale, o.stale_since, o.tier))
+    except entities.EntityError:
+        return None, {}
+    with lb.index() as idx:
+        retracted = frozenset(retractions(idx.retractions()))
+        weeks = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_WEEK)
+    asked = set()
+    for subject, found in weeks.items():
+        standing = drafts.standing(found)
+        extra = (standing.get("payload") or {}).get("extra") if standing is not None else None
+        question = extra.get("question") if isinstance(extra, dict) else None
+        if subject != week and isinstance(question, dict) and isinstance(question.get("status_line"), str):
+            asked.add(question["status_line"])
+    candidates: list[tuple[str, str, entities.Status, str, dict[str, int]]] = []  # since, label, …
+    for kind, entity, status, stale, since, row_tier in rows:
+        if not stale or status is None or since is None or status.line in asked:
+            continue
+        read_ids = {line_id: entities.TIER for line_id in entity.lines}
+        read_ids[status.line] = entities.status_tier(kind)
+        if max([row_tier, *read_ids.values()]) > tier:
+            continue
+        candidates.append((since, entity.label, status, kind, read_ids))
+    if not candidates:
+        return None, {}
+    since, label, status, kind, read_ids = min(candidates, key=lambda c: (c[0], c[1].casefold(), c[2].line))
+    when = date.fromisoformat(since)
+    return {
+        "entity": {"type": kind, "id": status.entity},
+        "label": label,
+        "status": status.status,
+        "status_line": status.line,
+        "since": since,
+        "text": f"{label}: still {status.status}? Nothing since {MONTHS[when.month - 1]} {when.year}.",
+        "read": sorted(read_ids),
+    }, read_ids
 
 
 def _gated(
@@ -730,6 +810,8 @@ def run(
                 "policy_version": version,
             },
         }
+        if read.question is not None:
+            payload["extra"]["question"] = read.question
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         dream.valid(payload)

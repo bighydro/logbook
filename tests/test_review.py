@@ -350,11 +350,21 @@ def test_review_with_no_kind_lists_every_queue_and_writes_nothing(
         "asset",
         "place",
         "video",
+        "goal",  # RFC 0036 amendment 1: the open goals not yet reviewed this week
         "speakers",  # RFC 0038 §4: the voices not yet named, in the same shape
     ]
     assert "  4 proposals · 5 observed orgs not yet placed, 1 placed · tier 2" in out
     assert "  no voice waits to be named · 0 named" in out
-    assert set(_json(capsys, "review")) == {"person", "org", "idea", "asset", "place", "video", "speakers"}
+    assert set(_json(capsys, "review")) == {
+        "person",
+        "org",
+        "idea",
+        "asset",
+        "place",
+        "video",
+        "goal",
+        "speakers",
+    }
     assert int(Logbook(lb.root).meta["seq"]) == seq, "nothing written"
 
 
