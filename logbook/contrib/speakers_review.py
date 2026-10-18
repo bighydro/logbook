@@ -380,9 +380,7 @@ def read(
         marks = idx.retractions()
         resolutions = idx.resolutions()
         retracted = retractions(marks)
-        heard_again = idx.superseded("transcript")  # a transcript heard again (§2.8) stands no more
-        by = idx.ids(heard_again.values())
-        superseded = {old for old, seq in heard_again.items() if by.get(seq) not in retracted}
+        superseded = idx.superseded("transcript")  # heard again (§2.8) by a line not retracted (#321)
         transcripts = [
             line
             for line in idx.by_kind("transcript")

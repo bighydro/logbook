@@ -44,3 +44,43 @@ rule.
 leaves at most the files ahead, never `logbook.json` or the index ahead of the files; a tail that does not
 verify (a torn last line, a changed byte) is never adopted by either; and the files behind `logbook.json`
 is not a crash's shape and is refused by both.
+
+## A line superseded twice, the later superseder retracted (the reference's issue #321)
+
+**The question.** SPEC §3.2 calls a line **standing** when it is not retracted and no later line of the same
+kind names it in `payload.supersedes`. Read to the letter, a retracted superseder still names the line, so
+the line it names never stands again; read as the Day read it, a retracted line is out of the record's
+reading and supersedes nothing. The reference held both readings at once: `Index.superseded` answered the
+*last* superseder of a line and its readers dropped the line only when that last one was not retracted,
+while the Day dropped a transcript when *any* superseder of the day stood. They agree on a chain and
+disagree when one line is superseded by two. Synthetic: Ines Nordmann records a dinner on 3 October 2026; A
+is the transcript, B and C are both heard again with `supersedes: A`, and C is retracted. The Day showed
+one dinner, B; `review speakers` and the voiceprint registry read A as standing again, beside B.
+
+**The reference (the owner's v1 choice, 18 October 2026): any superseder that is not retracted.** A line
+is superseded while at least one line of its kind that is not retracted supersedes it. A retracted
+superseder supersedes nothing, so retracting every superseder of a line stands the line again; a superseder
+that is itself superseded still supersedes (A←B←C hides A and B), so a correction of a correction never
+brings back the line the first one corrected. `Index.superseded` answers by this rule, the last superseder
+that is not retracted, and every reader that asks it (`show`, `review speakers`, the voiceprint registry,
+the MCP door, `people`, `promises` and the rest) reads by it with the Day:
+
+| Lines (each a transcript of the same dinner) | Superseded | Standing |
+|---|---|---|
+| B and C supersede A | A | B, C |
+| B and C supersede A; C retracted | A | B |
+| B and C supersede A; B and C retracted | none | A |
+| A←B←C | A, B | C |
+| A←B←C; C retracted | A | B |
+| A←B←C; B retracted | none (B's mark on A is void) | A, C |
+
+Retractions are not superseders in this sense and do not change: RFC 0003 forbids retracting a retraction,
+and a line retracted more than once is retracted by the one of highest seq (its rule 4). `search` still
+finds a superseded line, as `show` still lists it with its mark (`docs/search.md`); it never finds a
+retracted one.
+
+**What the spec would say.** SPEC §3.2, the sentence on standing, would read: *A line is **standing** when
+it is not retracted (RFC 0003) and no line of the same kind that is itself not retracted names it in
+`payload.supersedes`; a superseder superseded in turn still supersedes.* The wording is proposed on the
+pull request that settled this here, for the spec's next version; logbook-ts follows the reference or says
+why not.

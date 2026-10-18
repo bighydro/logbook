@@ -739,10 +739,15 @@ class Index:
         return self._read(found)
 
     def superseded(self, kind: str) -> dict[str, int]:
-        """id → the seq of the line of this kind that `supersedes` it (the last one when several
-        do), from the `supersedes` column, nothing read from the files."""
+        """id → the seq of the line of this kind that `supersedes` it (the last one not retracted when
+        several do), from the `supersedes` column, nothing read from the files. A superseder that is
+        retracted supersedes nothing: a line is superseded while at least one line of its kind that is
+        not retracted supersedes it, a superseder superseded in turn included (issue #321, the rule the
+        Day reads by). Retractions are every retraction (RFC 0003: a retraction is never retracted)."""
+        standing = "" if kind == "retraction" else f" AND id NOT IN ({RETRACTED})"
         found = self.db.execute(
-            "SELECT supersedes, seq FROM lines WHERE kind = ? AND supersedes IS NOT NULL ORDER BY seq",
+            f"SELECT supersedes, seq FROM lines WHERE kind = ? AND supersedes IS NOT NULL{standing}"
+            " ORDER BY seq",
             (kind,),
         ).fetchall()
         return {str(superseded): int(seq) for superseded, seq in found}

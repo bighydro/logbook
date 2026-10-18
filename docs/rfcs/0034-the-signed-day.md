@@ -1,6 +1,6 @@
 # RFC 0034 — The signed day: `signed-day/v1`, and the gate on the crossing
 
-Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08 · amendment 2 (an empty confirmation and the owner's clock) 2026-10-09 · amendment 3 (signing through the door) 2026-10-12
+Status: draft · 2026-10-07 · comment period: two weeks · amendment 1 (dispositions) 2026-10-08 · amendment 2 (an empty confirmation and the owner's clock) 2026-10-09 · amendment 3 (signing through the door) 2026-10-12 · amendment 4 (a re-sign keeps your confirmations) 2026-10-18
 
 Agents draft; the owner signs; only signed days cross. This RFC adds one payload profile, `signed-day/v1`, the line the owner appends when they have read a day's page and confirm it as the day's facts; one default for the crossing package (RFC 0005, ADR 0016), which now crosses the lines of signed days unless the owner asks for the rest; one header for `show`; and one block in the Day reader, `readiness`, which says per class of source whether the day's lines are in and which usual sources have not delivered. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and no agent can sign.
 
@@ -49,7 +49,7 @@ page_sha256 = sha256( canonical_json({"day": "<YYYY-MM-DD>", "tz": "<the record'
 1. **Only the owner signs.** `logbook day sign` is the one producer. The MCP server (`logbook serve mcp`) signs only through the tool `sign_day`, which the owner allows by name and which runs the same writer (amendment 3); without that, an agent that wants a day signed asks the owner (ARCHITECTURE: a confirmation stays with the human, enforced in layer 1). A line whose `subject` is not the record's `owner_id` is not a signature.
 2. **A signature appends; nothing is rewritten.** The writer appends one line through `Logbook.append` and touches no other line, no file of the record and no setting. Correcting a day is new lines and a new signature.
 3. **Re-signing supersedes.** A day may be signed any number of times. The later line carries `supersedes` with the earlier line's id. The **standing signature** of a day is the latest `signed-day` line (by `seq`) naming that day whose subject is the owner and that is not retracted (RFC 0003); a retracted later signature leaves the earlier standing. A day with no standing signature is **unsigned**.
-4. **The confirmed set defaults to the page.** Without `--confirm`, every line of the page not retracted is confirmed. With `--confirm ID,ID,…`, each entry is a line id or a `seq`, resolved against the page; an entry that names a line not on the page, or a retracted line, is refused naming it, and nothing is written.
+4. **The confirmed set defaults to the page.** Without `--confirm`, every line of the page not retracted is confirmed; a day signed before keeps what its standing signature confirmed instead (amendment 4), and `--confirm all` is the whole page. With `--confirm ID,ID,…`, each entry is a line id or a `seq`, resolved against the page; an entry that names a line not on the page, or a retracted line, is refused naming it, and nothing is written.
 5. **The crossing crosses signed days.** `logbook export crossing` selects, within its window, tiers and kinds (RFC 0005, ADR 0016), the lines whose local day in the record's zone has a standing signature at the time of the export; a `signed-day` line crosses with the day it signs, wherever its own `at` falls. `--unsigned` lifts the gate and crosses the rest as before. The manifest's `policy` carries `signed_days`, `"only"` or `"any"`; `counts` gains `held_back_unsigned`, the lines the gate held back (counted in `held_back` too); the `crossing/v1` line's `policy` gains `signed_only`, a boolean, beside `file` and `max_tier` (RFC 0011, additive). A trip bundle (RFC 0030), a shared page (RFC 0025), the vault and the site keep their own selections and are not gated by this RFC; `signed_only` is `false` in the line they append.
 6. **Readers say so.** `show <day>` prints the state in its header: `<day>  signed <when, local, to the minute>` or `<day>  unsigned`. The Day reader (`logbook day`) prints the same after the weekday and carries it in its JSON under `signed`: `null`, or `{ at, at_local, line, seq, confirmed, lines, page_sha256, page_matches, note, supersedes }` (`page_matches` is whether the page today digests to `page_sha256`; `null` when the reader is gated and cannot see the whole page). A `signed-day` line is listed on its own day by `show` as any line is. `days`, `digest`, `year` and the pages are unchanged.
 
@@ -165,6 +165,41 @@ What does not change: the payload, the page digest, the readers and the crossing
 through the door is a signature; nothing in the line says how it arrived, because the owner's reading of
 the page is the same reading wherever they clicked.
 
+## Amendment 4 — a re-sign keeps your confirmations
+
+Dated 2026-10-18, the owner's decision for v1. Rule 4 said a signature without `--confirm` confirms every
+line of the page not retracted, a re-sign as much as a first signature. The Day page's "Sign again" and
+`day reflect --sign` never did: they kept what the standing signature said. `day sign DAY` and the tool
+`sign_day` did, so the same owner signing the same day again confirmed a line they had left out, or one
+added since that they had not read, depending on which way they signed. A confirmation is the owner's,
+and a re-sign is not a reading of what they have not seen. The four ways are now one rule:
+
+**Re-signing keeps the standing signature's confirmations.** A day with a standing signature (rule 3),
+signed again without `--confirm`, confirms the lines that signature confirmed which are still on the page
+and not retracted; a line added to the day since stays unconfirmed until the owner confirms it, but a line
+the act itself writes is confirmed by it (an event the owner accepts with `--accept`, the reflection of
+`day reflect --sign` and "Sign again"), as it is on a first signature. It keeps
+the standing signature's dispositions on those lines and its note, as "Sign again" always has; what the
+owner types wins: a disposition flag on a line replaces the one kept for it (and confirms the line, as
+amendment 1 says), and `--note` replaces the note (`--note ""` clears it). A confirmed line retracted since, or no longer on the
+page, is dropped, never refused. A standing signature that confirmed nothing is kept as nothing.
+
+**`--confirm` is a fresh reading.** With `--confirm ID,ID`, `--confirm none` (amendment 2) or the new
+word `--confirm all`, nothing is kept: the ids named, nothing, or every line of the page not retracted.
+`all` goes alone, as `none` does: `--confirm all,4181` is refused in one sentence. A day not signed yet is
+signed as before: without `--confirm`, the whole page; so is a day whose every signature was retracted, since it has no
+standing signature to keep from (rule 3), and its new line supersedes nothing.
+
+The tool `sign_day` takes the same rule through the same code (`confirm` absent keeps; `"all"` and
+`"none"` are words), and still writes byte for byte the line the command writes; its answer carries
+`kept`, the sentence the command prints about what it kept from the signature it supersedes.
+
+What does not change: the payload, the page digest, the readers and the crossing (rule 5 gates on the
+standing signature, not on its confirmed set). Every line written before this amendment stays as it was
+written. `signed-day/v1` is, with this amendment, still a new profile and not a frozen one: its schema may
+change while this RFC is a draft, and it becomes frozen only by RFC 0031's process, a reader, a fixture in
+both implementations, a schema pass and one dated amendment to that RFC.
+
 ## Conformance
 
 `conformance/sample-logbook` carries one `signed-day/v1` line, the first day of the week signed on its last evening, as its 32nd line; the sealed sample carries the same, with the page digest the sealed lines give (a sealed line's hash is of its reference, so the two samples' digests differ, as their heads do). An implementation that reproduces the head reproduces the line; one that carries `show` prints `signed` in the first day's header. Neither sample carries `dispositions`: the field is optional, and the heads recorded before amendment 1 stand.
@@ -189,4 +224,9 @@ Nothing in §2–3. In §3.2.1 (`show`), one sentence: the header says whether t
   from the future would stand ahead of the page it signs. A moment before the day starts is a
   moment at which the page was empty by definition.
 - **Why a disposition is on the signature and not a line of its own (amendment 1).** The owner learns what became of a commitment while reading the day it was made, and that reading is the signature. A `task/v1` line (RFC 0016) says a task was done; a disposition says what the owner saw on the page, four words, by line id, in the one line that is already about the page. `promises done` remains for a promise closed on any other day, and the two never contradict: a task line closes a carried promise as it closes any other.
+- **Why a re-sign keeps and does not ask (amendment 4).** The owner who signs a day again has
+  usually come back for one thing: a line that came in late, a commitment they now know the end of.
+  Confirming the whole page again would confirm the late line unread; confirming nothing would undo
+  the reading they did. Keeping what they said and adding nothing is the one choice that never
+  speaks for them, and `--confirm all` is one word away when the whole page is what they mean.
 - **Why exactly four values.** Kept and missed are the two outcomes; dropped is the owner's decision that there is no outcome to wait for; carried is the one that keeps the promise open. A fifth word would be a comment, and the note is for that.

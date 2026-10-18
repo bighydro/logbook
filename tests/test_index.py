@@ -570,3 +570,63 @@ def test_evidence_serves_the_kinds_that_promote_a_stay_with_their_spans(lb: Logb
         ]
         assert idx.evidence(("event",), "2026-03-03", "2026-03-03") == []
     assert opened == []
+
+
+def _flight(lb: Logbook, supersedes: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"schema": "flight/v1"}
+    if supersedes is not None:
+        payload["supersedes"] = supersedes
+    return lb.append(at="2026-03-01T10:00:00Z", source="manual", kind="flight", tier=1, payload=payload)
+
+
+def _retract(lb: Logbook, line: dict[str, Any]) -> dict[str, Any]:
+    return lb.append(
+        at="2026-03-02T10:00:00Z",
+        source="manual",
+        kind="retraction",
+        tier=2,
+        payload={"schema": "retraction/v1", "supersedes": line["id"], "seq": line["seq"], "reason": ""},
+    )
+
+
+@pytest.mark.parametrize(
+    ("shape", "retract", "superseded"),
+    [
+        ("twice", None, {"A": "C"}),  # B and C both supersede A: the last of them names it
+        ("twice", "C", {"A": "B"}),  # #321: C retracted, B still stands and supersedes A
+        ("twice", "B", {"A": "C"}),
+        ("twice", "BC", {}),  # both superseders retracted: A stands again
+        ("chain", None, {"A": "B", "B": "C"}),  # A←B←C: a superseded superseder still supersedes
+        ("chain", "C", {"A": "B"}),  # C retracted: B stands, A stays superseded
+        ("chain", "B", {"B": "C"}),  # B retracted: it supersedes nothing, so A stands
+    ],
+)
+def test_superseded_counts_only_superseders_not_retracted_and_a_rebuild_agrees(
+    lb: Logbook, shape: str, retract: str | None, superseded: dict[str, str]
+):
+    """Issue #321, the owner's v1 rule: a line is superseded while at least one line of its kind that
+    is not retracted supersedes it, and `superseded` names the last such line. A retracted superseder
+    supersedes nothing; a superseder that is itself superseded still does. The index rebuilt from the
+    files says the same as the index kept current by the appends."""
+    a = _flight(lb)
+    b = _flight(lb, a["id"])
+    c = _flight(lb, a["id"] if shape == "twice" else b["id"])
+    lines = {"A": a, "B": b, "C": c}
+    for name in retract or "":
+        _retract(lb, lines[name])
+    want = {lines[old]["id"]: int(lines[new]["seq"]) for old, new in superseded.items()}
+    with lb.index() as idx:
+        assert idx.superseded("flight") == want
+    lb.index_rebuild()
+    with lb.index() as idx:
+        assert idx.superseded("flight") == want
+
+
+def test_superseded_retractions_are_every_retraction_as_rfc_0003_reads_them(lb: Logbook):
+    """`superseded("retraction")` is the retracted lines, by the last retraction of each (RFC 0003
+    rule 4); a retraction is never itself retracted (rule 1), so nothing is taken away from it."""
+    a = _flight(lb)
+    first, second = _retract(lb, a), _retract(lb, a)
+    with lb.index() as idx:
+        assert idx.superseded("retraction") == {a["id"]: int(second["seq"])}
+    assert first["seq"] < second["seq"]
