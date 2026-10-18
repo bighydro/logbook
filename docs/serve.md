@@ -70,8 +70,11 @@ carries `--host`. To read the record from another device, see
 [reaching it from another device](#reaching-it-from-another-device).
 
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
-font, no image, no stylesheet link, no frame, no script fetched; every link, form and tooltip points
-at the server's own paths. A script is inline on three pages, each named by its hash in that page's
+font, no stylesheet link, no frame, no script fetched; every link, form, image and tooltip points
+at the server's own paths. The one image is a Day's thumbnail of a photo, served from
+`/photo/ID` out of the record's own attachment store ([below](#the-day--photos-the-track-the-line-the-week)):
+the Day's policy allows images from the server and nowhere else (`img-src 'self'`), every other
+page's allows none. A script is inline on three pages, each named by its hash in that page's
 `Content-Security-Policy` and by nothing else: a dozen lines for the Places page's three keys; on a
 Day when this machine can hear a recording, a score of lines for its *Record* button, which records
 with the browser's own recorder and sends the recording with the form, never by a fetch (the policy
@@ -352,7 +355,8 @@ The Day carries the two acts on lines the record already holds ([the acts](acts.
   record names (a `datalist` the server fills, so no script), several with commas, and a clock when
   you know it. It posts to `/with`, which runs `presence.state`, the function of `logbook with`. A
   name the record does not place is a `400` with the way to place it (`logbook people review`), and
-  nothing is written.
+  nothing is written. A day no device saw (the phones off, nothing logged) has the row too, and says
+  so: *no device saw this day: say who was there*; what you add is the line `logbook with` writes.
 
 **This machine only**, as the Places form: a `POST` to `/star` or `/with` is answered only when the
 client address is loopback and, when the browser sends an `Origin`, it names `127.0.0.1` or
@@ -361,6 +365,51 @@ Writes are taken one at a time, and the page never waits for another writer: whi
 the record, a star, an unstar or a name says so (`409`, as every act does), nothing is
 written, and you click *Try again*. A static site (`logbook export site`) shows the stars, ★ beside the
 starred lines, and carries no form and no list of names.
+
+## The Day — photos, the track, the line, the week
+
+The Day page carries more than the text of `logbook day` prints, all of it read from the record and
+nothing fetched:
+
+- **What crosses where**, one sentence under the header: where you were (tier 1) may travel; what
+  was said (tier 2) stays home unless a policy entry names where it may go; money and health (tier
+  3) never leave without one ([crossing](crossing.md)).
+- **The week.** On a Sunday whose ISO week has a draft (`dream week`, [the dream](dream.md#journeys-and-weeks)),
+  the week's draft, folded under its head, with its numbers and a link to the line; on the six days
+  before it, a line linking to it (`/day/SUNDAY#week`). Through the page's gate, as every draft: a
+  draft above it is not there, and neither is the link.
+- **The track**, above the timeline: the day's stays as numbered dots on a plain drawing from their
+  own coordinates, a move a line between two of them, dashed across a gap or a flight, with a scale
+  bar. An inline SVG drawn by the server, as the Places page's spots are: no map tile, no image, no
+  fetch. A day with no stay that has a position has none.
+- **The line as written.** Every row that is a line (an event, a transcript, a note, a mail thread,
+  a call, a flight, an unplaced item, an all-day entry, a photo, a goal, a review) ends with its
+  number, `#5440`, a link to `/line/ID`: the line as the record holds it, its source, tier and day,
+  whether it was retracted, and its JSON, read-only. Through the gate: a line above it, a line whose
+  retraction is above it, and a model's draft the `dream` entry withholds (the Day shows its row,
+  never its words) read as no line (`404`), the same words as an id the record does not have.
+- **Photos.** A row's photos are a strip under it, the starred ones first: a thumbnail for each
+  photo whose pixels the record's attachment store holds in a type every browser draws (JPEG, PNG,
+  GIF, WebP), from `/photo/ID`; a starred photo the store does not hold by name; the rest counted,
+  *3 photos not on this machine*. A photo only your library holds, a HEIC, a reference whose file is
+  not there: counted, never a broken image. The page never asks a photo library for a picture (an
+  Immich line keeps the asset's id and the original's path, no URL). A sealed file is a thumbnail
+  only when this machine's identity opens it. Photos no row holds (a day with no stay) have their
+  strip under *Photos outside any stay*. `/photo/ID` answers only for a photo line that stands and
+  that the gate lets through; anything else is a `404`.
+- **Many edits of one Drive file** in a stay (or among the unplaced) are one row, the file's name and
+  what was done to it, counted: *Budget 2027 · 5 edits, 2 comments*, standing for every line it folds
+  (its star and its link name the first). `sync drive` writes a line per file, hour and activity; the
+  fold is the page's, and `logbook day` lists each line.
+- **Photo review**, above Reflect and sign: the day's photos with no star, a thumbnail or the name
+  each, and two buttons. *Star* stars it, as the star on its row does (a `memory` keeper, the press's
+  pick). *Not a keeper* stops the review asking about it and writes no line: RFC 0024 has no "not a
+  keeper" and RFC 0041 has no "not starred", so the no is the review's own bookkeeping,
+  `state/photo-review.json`, and the photo stays on the Day. Both post to `/star`, so another command
+  writing the record is the Library's one answer (`409`, the form kept) and nothing is written.
+
+A static site (`logbook export site`) draws none of the images and carries neither the review nor
+the links to `/line`: its rows name their photos.
 
 ## Journeys
 

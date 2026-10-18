@@ -265,6 +265,7 @@ def test_a_reader_opens_no_connection(
 
 JOURNEY = "/journeys/FIRST/LAST"  # the demo's latest journey, found as tests/test_journeys.py finds one
 PERSON = "/people/ID"  # Ola Nordmann's page, by the entity id the People page links
+LINE = "/line/ID"  # a line as written: the first of the Monday's, by its id, as a Day row links it
 # every page `serve` answers a GET with (`Site._page`), a query after `?`; the Manifest's and an org's
 # read the orgs record (`ORG_PAGES`, below), and /today is a redirect
 PAGES = (
@@ -290,6 +291,8 @@ PAGES = (
     "/gaps",
     "/world",
     "/world?from=2026-06-15&to=2026-06-20",
+    "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
+    LINE,
 )
 
 
@@ -300,6 +303,9 @@ def _page(path: str, lb: Logbook) -> str:
         return f"/journeys/{trip.start}/{trip.end}"
     if path == PERSON:
         return f"/people/{people.find('Ola Nordmann', people.directory(lb)).entity}"
+    if path == LINE:
+        with lb.index() as idx:
+            return f"/line/{idx.day('2026-06-08')[0]['id']}"
     return path
 
 
@@ -322,6 +328,39 @@ def test_today_redirects_to_the_day_and_opens_no_connection(lb: Logbook, no_netw
     assert (response.status, response.location) == (302, "/day/2026-06-08")
     assert site.respond("/day/2026-06-08", "").status == 200
     assert no_network == [], f"/today tried to connect: {no_network}"
+
+
+def test_a_photo_s_thumbnail_is_read_from_the_store_and_opens_no_connection(
+    record: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
+) -> None:
+    """A Day's thumbnail (`/photo/ID`) is the record's own attachment store, never a library's server:
+    a photo whose pixels the store holds is served from it, and the Day it is on fetches nothing. On
+    a copy of the demo record, which the other tests read as it is."""
+    import shutil
+
+    from logbook.core import attachments
+
+    shutil.copytree(record.root, tmp_path / "lb")
+    monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "lb"))
+    lb = Logbook(tmp_path / "lb")
+
+    data = b"\x89PNG\r\n\x1a\n" + b"\0" * 24  # a PNG's signature: the page checks no more of it
+    attachments.write(lb.root, data)
+    payload = {
+        "schema": "photo/v1",
+        "asset_id": "stored-1",
+        "library": "apple-photos",
+        "file_name": "IMG_0001.PNG",
+        "media": "image",
+        "raw_id": "stored-1",
+        "content": attachments.reference(data, "image/png"),
+    }
+    line = lb.append(at="2026-06-08T10:00:00Z", source="apple-photos", kind="photo", tier=1, payload=payload)
+    site = serve.Site(lb)
+    assert f'src="/photo/{line["id"]}"' in site.respond("/day/2026-06-08", "").body.decode("utf-8")
+    response = site.respond(f"/photo/{line['id']}", "")
+    assert (response.status, response.body) == (200, data)
+    assert no_network == []
 
 
 def test_the_favicon_answers_empty_and_opens_no_connection(lb: Logbook, no_network: list[str]) -> None:

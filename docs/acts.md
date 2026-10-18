@@ -7,7 +7,7 @@ line in the record, appended through `Logbook.append` like every other, never an
 | Act | From a terminal | On the page (`logbook serve`) | What it writes |
 |---|---|---|---|
 | **Name** a place | `logbook setup places review --name N "Hytta"` | *Name this place* on the Places page | the place in `places.json` and one `note/v1` line saying so ([places](places.md#review)) |
-| **Star** a line | `logbook star LINE [--note TEXT]`, `logbook unstar LINE` | the star on every row of the Day that is a line | one `star/v1` line ([RFC 0041](https://github.com/bighydro/logbook/blob/main/rfcs/0041-star-v1.md)); for a photo, a `keeper/v1` line of lane `memory` ([RFC 0024](https://github.com/bighydro/logbook/blob/main/rfcs/0024-keeper-v1.md)) |
+| **Star** a line | `logbook star LINE [--note TEXT]`, `logbook unstar LINE` | the star on every row of the Day that is a line, and *Star* in its photo review | one `star/v1` line ([RFC 0041](https://github.com/bighydro/logbook/blob/main/rfcs/0041-star-v1.md)); for a photo, a `keeper/v1` line of lane `memory` ([RFC 0024](https://github.com/bighydro/logbook/blob/main/rfcs/0024-keeper-v1.md)) |
 | **With**: who was there | `logbook with DAY NAME [NAME…] [--at HH:MM]` | the *with…* field in the Day's `with` row | one `note/v1` line per person, `with <name>` |
 | **Reflect** on the day and **sign** it | `logbook day reflect DAY [--sign]`, `logbook day sign DAY` | *Reflect and sign* at the foot of the Day ([serve](serve.md#reflect-and-sign)) | a `note/v1` line, label `reflection`, and one `signed-day/v1` line ([the signed day](signed-day.md)) |
 
@@ -119,6 +119,13 @@ of a past day, or now when the day is today. A day that has not begun, or a cloc
 refused: `with` says who was there. A person already stated on the day is not stated again (with
 `--at`, at that minute).
 
+**A day no device saw.** The night the phones were off, the record has nothing of the day, and the
+people reader has nothing to read company from. `with` needs nothing on the day: `logbook with
+2026-05-02 Ola --at 23:00` writes the one line, and the Day page's *with…* field writes the same line
+(byte for byte but for the clock), on a day whose page says *no device saw this day: say who was
+there*. The Day then lists the person in its header, your word marked; with no stay to fall in, the
+line is among the day's unplaced items.
+
 **On the Day.** On a day you said who was there, the Day's header has a `with` row: everyone a row
 confirms and everyone you stated, your word marked, `with  Kari Nordmann, Ola Nordmann (you said)`;
 `--json` carries `stated` (`person`, `name`, `at`, `line`), only on such a day. The stay the line
@@ -134,6 +141,10 @@ The Day page of `logbook serve` carries both acts:
   takes the star back, and the page comes back at the row. A keeper's row is a star while it is one.
   A stay or a move is derived from many lines, not a line, and has none; messages are counted, not
   listed, so star one by its id from `logbook show`;
+- **the photo review** at its foot: the day's photos with no star, each with *Star* (the photo's
+  star, a `memory` keeper) and *Not a keeper*, which stops the review asking about that photo and
+  writes no line: the no is the review's own bookkeeping, `state/photo-review.json`, since neither a
+  keeper nor a star has a "not" (RFC 0024 rule 3, RFC 0041 rule 4). Both post to `/star`;
 - **a *with…* field** in the header's `with` row: type a name and the page completes it from the
   people the record names (a `datalist` filled by the server, no script), several with commas, and a
   clock if you know it.
