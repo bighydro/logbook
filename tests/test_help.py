@@ -63,3 +63,10 @@ def test_a_command_help_carries_its_description() -> None:
     with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
         cli.main(["setup", "--help"])
     assert "one question at a time, resumable" in out.getvalue()
+
+
+def test_lab_hold_census_help_says_what_it_never_does() -> None:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
+        cli.main(["lab", "hold", "--help"])
+    assert "nothing is moved, renamed, deleted or appended" in " ".join(out.getvalue().split())

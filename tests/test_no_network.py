@@ -195,6 +195,11 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("lab", "introductions", "--json"),
     ("lab", "chapters"),
     ("lab", "chapters", "--json"),
+    ("lab", "hold", "census", "senders"),
+    ("lab", "hold", "census", "senders", "--tier", "3", "--json"),
+    ("lab", "hold", "census", "drive"),
+    ("lab", "hold", "census", "drive", "--json"),
+    ("lab", "hold", "census", "files", str(ROOT / "docs" / "adr")),  # a folder of the repository, read only
     ("key", "show"),
     ("repair", "tail", "--dry-run"),
     ("repair", "fork"),  # without --apply: which chain is the record, said
