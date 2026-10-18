@@ -74,7 +74,13 @@ what changes is what the readers show.
 - **A reader shows a draft only while the entry allows its tier.** A draft above the entry's `max_tier`
   today is not on the Day, not on `serve`'s Day page or its Journeys pages (a journey's draft, unit
   `journey`, is held to the same rule) and not through the MCP door, whichever head the record is at; an expired entry counts as `max_tier` 0, and so does a file with no `dream` entry, so
-  nothing a model wrote is shown until the entry is back. The line stays in the record, as every line
+  nothing a model wrote is shown until the entry is back.
+- **A draft is held to the entry it was written under.** A person's draft (`dream person`, unit `person`)
+  is written under the `relationship` entry, not this one ([the relationship reader](relationship.md)), so
+  every reader holds it to that entry: past its `until`, without an `until`, without the entry, or above its
+  `max_tier` today, a person draft is withheld from the door, stays out of a crossing package and is named by
+  `doctor`, whatever the `dream` entry allows. Every other unit (day, journey, week, a call's synthesis)
+  follows the `dream` entry, as before. The line stays in the record, as every line
   does. `day` says why in one row and nothing of the draft's text:
 
   ```

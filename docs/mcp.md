@@ -142,7 +142,9 @@ call through the same entry ([the synthesis of a call](transcript-synthesis.md))
 that entry as well as this one: a `draft` line, a day's draft or a call's synthesis, above the `dream`
 entry's `max_tier` today (lowered, expired or removed since it was written) is held back from every tool
 as a line above the ceiling is, and counted with them; `line` refuses it naming the entry (ADR 0016,
-*Derived material follows the policy, not the head*).
+*Derived material follows the policy, not the head*). A person's draft (`dream person`) is written under the
+`relationship` entry instead, and is held to that one the same way: past its `until`, or above its
+`max_tier`, it is held back and counted, whatever the `dream` entry allows.
 
 What the ceiling means in practice:
 
@@ -235,12 +237,17 @@ is one line; `at` is the moment you signed, with the same rules as `--at` (amend
 against the page as the command checks them, and a day already signed is signed again, the new line
 superseding the old and, without `confirm`, keeping what the old one confirmed, its dispositions and its note
 (RFC 0034 amendment 4): a line added to the day since stays unconfirmed, so a re-sign through the door never
-confirms a line the owner was not shown; `"all"` confirms the whole page. The line is byte for byte what `day sign` writes with the same flags and `--at`, source
+confirms a line the owner was not shown; `"all"` confirms the page's lines the door can show, those at or
+under its ceiling, and leaves every line above it unconfirmed (RFC 0034 amendment 4, 18 October 2026), since
+the orchestrator was never shown them: the answer says how many in `unconfirmed`, `2 lines above the door's
+ceiling left unconfirmed`, and `above_ceiling`, a count and never their content (`day sign --confirm all` and the
+Library's Sign still confirm the whole page, which the owner sees there). The line is byte for byte what `day sign` writes with the same flags and `--at` (for `"all"`, `--confirm` with the ids it confirmed), source
 `manual` included: the signature is yours, carried by the orchestrator. The page signed is the whole page, as
 `day sign` signs it, lines above the ceiling included, which the orchestrator cannot read; the answer is the
 line's envelope, `header` (the first line `day sign` prints, `2026-06-09: signed 2026-06-09T19:30:00Z as #813
 signed-day/v1`), `kept` (what was kept from the signature it supersedes, the sentence `day sign` prints, or
-null), and counts: `confirmed`, `on_page`, `dispositions` per word, and `supersedes`.
+null), and counts: `confirmed`, `on_page`, `dispositions` per word, `above_ceiling` (with `unconfirmed`, null
+unless `"all"` left a line above the ceiling unconfirmed), and `supersedes`.
 
 **`note_day(day, text, at?, kind?)`** appends one `note/v1` line: source `mcp`, tier 2, the text exactly as
 given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer one is refused and nothing is

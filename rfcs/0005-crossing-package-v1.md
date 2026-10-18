@@ -59,7 +59,9 @@ v1). The bundle is regenerable from the log at `logbook_head`.
 crossing; a held-back line is simply absent. Lines keep their source-native ids — identity is resolved
 separately (Resolution). Since RFC 0034 the subset is, by default, the lines of the days the owner has
 signed (`policy.signed_days` is `only`; `any` when the owner asked for `--unsigned`), and `counts`
-carries `held_back_unsigned`.
+carries `held_back_unsigned`. A person's draft (`draft/v1` unit `person`, RFC 0036 amendment 1) crosses
+only while the `relationship` entry it was written under allows its tier, whatever the destination's
+ceiling, and `counts` carries `held_back_by_entry` when one stayed home (18 October 2026).
 
 ## Blobs
 

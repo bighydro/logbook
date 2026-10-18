@@ -11,9 +11,11 @@ however it got there; the store is disposable and may be stale or edited (`serve
 
 The model (`Model`) is given the person's label, the window, the question and the served lines, each
 with its id, instant, kind, speakers by label, words and the promises read in them (`reader.promises`),
-and nothing else; it answers with segments `{text, evidence}`, as a `draft/v1` segment is. `MODEL` is
-None by default, which is the endpoint the dream uses (`model.Cloud`, LOGBOOK_DREAM_*), under the
-`relationship` entry's own `model` when it names one; the tests set a stub or fake the endpoint. Each id
+and the days together read again from the record (RFC 0036 amendment 2: `reader.Together`, a day, its
+places' names and the line ids it rests on, which a claim may cite), and nothing else; it answers
+with segments `{text, evidence}`, as a `draft/v1` segment is. `MODEL` is None by default, which is
+the endpoint the dream uses (`model.Cloud`, LOGBOOK_DREAM_*), under the `relationship` entry's own
+`model` when it names one; the tests set a stub or fake the endpoint. Each id
 a segment cites is resolved against the set: a line of the set is printed with its instant, kind,
 source and speakers; any other id, a line of the record or not, is marked unsupported with the reason,
 and so is a segment that cites nothing or that the model marked unsupported. A segment is supported only
@@ -23,7 +25,7 @@ under `unsupported`."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ...core.store import Logbook
@@ -41,6 +43,7 @@ class Question:
     window: tuple[str, str]
     question: str
     lines: list[dict[str, Any]]  # {id, at, kind, speakers, text}, and `promises` when it holds any
+    together: list[dict[str, Any]] = field(default_factory=list)  # {day, places, lines: [id]} (amendment 2)
 
 
 Model = Callable[[Question], Sequence[Mapping[str, Any]]]  # segments: {text, evidence: [line id]}
@@ -57,6 +60,7 @@ class Served:
     found: reader.InputSet
     lines: list[dict[str, Any]]
     withheld: int
+    together: list[dict[str, Any]] = field(default_factory=list)  # the days together sent, as `Question`'s
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,8 @@ class Answer:
     model: str | None = None  # the model's name, when the model says it
     max_tier: int | None = None  # the ceiling it was served under
     tier: int | None = None  # the highest tier read: an answer is derived from the lines it was given
+    days_together: int = 0  # the days together sent with the lines (RFC 0036 amendment 2)
+    together_held: int = 0  # the days together the entry's gate held back
 
     @property
     def unsupported(self) -> list[dict[str, Any]]:
@@ -88,6 +94,7 @@ class Answer:
             "read_head": self.read_head,
             "served": self.served,
             "withheld": self.withheld,
+            "days_together": {"sent": self.days_together, "held_back": self.together_held},
             "answer": self.segments,
             "segments": [_draft_segment(s) for s in self.segments],
             "unsupported": len(self.unsupported),
@@ -139,7 +146,8 @@ def serve(lb: Logbook, name: str) -> Served:
         if said.get(item.line):
             shown["promises"] = said[item.line]
         served.append(shown)
-    return Served(current, store, found, served, withheld)
+    together = [{"day": t.day, "places": list(t.places), "lines": list(t.lines)} for t in found.together]
+    return Served(current, store, found, served, withheld, together)
 
 
 def ask(
@@ -161,7 +169,7 @@ def ask(
     got = serve(lb, name)
     found = got.found
     first, last = found.first, found.last
-    answer = model(Question(found.label, (first, last), question, got.lines))
+    answer = model(Question(found.label, (first, last), question, got.lines, got.together))
     if not isinstance(answer, list | tuple):
         raise cloud.AnswerFailed("the model's answer is not a list of segments; nothing is shown")
     segments = [
@@ -181,11 +189,13 @@ def ask(
         getattr(model, "name", None),
         got.entry.max_tier,
         found.tier,
+        len(got.together),
+        found.together_held,
     )
 
 
 def _segment(segment: Mapping[str, Any], found: reader.InputSet) -> dict[str, Any]:
-    allowed = found.by_line()
+    allowed = found.by_evidence()  # the lines of the set, and the lines its days together rest on
     evidence = segment.get("evidence")
     cited: list[dict[str, Any]] = []
     for id_ in dict.fromkeys(str(e) for e in (evidence if isinstance(evidence, list) else [])):
@@ -195,7 +205,7 @@ def _segment(segment: Mapping[str, Any], found: reader.InputSet) -> dict[str, An
                 {"id": id_, "line": None, "why": f"not one of {found.label}'s lines in {found.span}"}
             )
             continue
-        speakers = [found.peers[s] for s in item.speakers]
+        speakers = [found.peers[s] for s in item.speakers] if isinstance(item, reader.Item) else []
         line = {"at": item.at, "kind": item.kind, "source": item.source, "speakers": speakers}
         cited.append({"id": id_, "line": line, "why": None})
     marked = segment.get("unsupported") not in (None, False)  # the model's own mark, however it wrote it
@@ -215,6 +225,8 @@ def rows(answer: Answer) -> Iterator[str]:
     with why, and each id that does not resolve said so."""
     head = f"{answer.label} · {answer.window[0]} {reader.EN_DASH} {answer.window[1]} · {answer.served} lines"
     head += f" served · read at {answer.read_head[:8]}"
+    if answer.days_together:
+        head += f" · {answer.days_together} day{'' if answer.days_together == 1 else 's'} together"
     if answer.withheld:
         head += f" · {answer.withheld} withheld"
     yield head if answer.model is None else f"{head} · model:{answer.model}"

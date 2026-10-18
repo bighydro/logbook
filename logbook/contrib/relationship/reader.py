@@ -24,6 +24,13 @@ note that says "with Ola", a mail that names them, a message someone else sent i
 face. The person is one the resolution lines name, never the owner (`people.find`); an unresolved name
 is refused and gets no store.
 
+**The days together** (RFC 0036 amendment 2, the owner's decision of 18 October 2026) go beside the set:
+each day the with module confirms the person at one of the owner's stays in the window, read through
+the same gate (`people.read`'s days together), with the `places.json` names of the stays (`NO_NAME`
+for a stay at none, never coordinates) and the lines it rests on (`Together`); a line of a day that is
+not in the set is a `Rest`, which a citation resolves to without its words. A day whose every line the
+gate refuses is counted (`together_held`). They are read from the record each time, never stored.
+
 **Speaker attribution.** Each line carries the peers whose words it is: a message its sender's (the
 owner's for one the owner sent), a mail its sender's, an answered call both ends', a transcript every
 participant the record resolves; an event is attendance, which is not speech. A peer is one canonical
@@ -53,6 +60,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ...core import day_start, people, policy, present, signing, stays
+from ...core import places as named_places
 from ...core.chain import Line
 from ...core.export import parse_day
 from ...core.resolve import Ref
@@ -72,6 +80,7 @@ ROLE = {
 OWNER = "owner"  # the owner's peer's label
 FOLDER_NAME = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_-]*$")  # an entity id that can name a folder
 EN_DASH = "\u2013"
+NO_NAME = "a place with no name"  # a day together's stay at no place places.json names: never coordinates
 CLOUD_CEILING = 2  # the owner's decision (18 Oct 2026): nothing above tier 2 goes to the cloud model
 EARLIEST = datetime.min.replace(tzinfo=UTC)  # a stamp that is no instant sorts first
 
@@ -156,6 +165,30 @@ class Item:
 
 
 @dataclass(frozen=True)
+class Rest:
+    """A line a day together rests on that is not a line of the set (a note "with Ola" written at the
+    stay): what a citation of it resolves to, never its words."""
+
+    line: str
+    at: str
+    kind: str
+    source: str
+    tier: int
+
+
+@dataclass(frozen=True)
+class Together:
+    """One day together in the window (RFC 0036 amendment 2): a day the with module confirms the
+    person at one of the owner's stays (`people.read`'s days together), the named places of the stays
+    they shared, `NO_NAME` for a stay at no place `places.json` names, and the lines it rests on."""
+
+    day: str
+    places: tuple[str, ...]
+    lines: tuple[str, ...]
+    tier: int
+
+
+@dataclass(frozen=True)
 class InputSet:
     """The authorized input set of one person over a window, read under one ceiling."""
 
@@ -167,10 +200,17 @@ class InputSet:
     items: tuple[Item, ...]  # by instant
     held_back: int  # the person's lines in the window above the ceiling
     unsigned: int = 0  # the person's lines in the window on a day the owner has not signed
-    tier: int = 1  # the highest tier read: the lines of the set and the resolution lines of their peers
+    tier: int = 1  # the highest tier read: the lines of the set, the days together's and the resolution lines
+    together: tuple[Together, ...] = ()  # the days together in the window, by day (amendment 2)
+    rests: tuple[Rest, ...] = ()  # the lines the days together rest on that are not lines of the set
+    together_held: int = 0  # days together the gate refused: resting on no line it lets through
 
     def by_line(self) -> dict[str, Item]:
         return {item.line: item for item in self.items}
+
+    def by_evidence(self) -> dict[str, Item | Rest]:
+        """Every line a claim may cite: the lines of the set and the lines the days together rest on."""
+        return {**{r.line: r for r in self.rests}, **self.by_line()}
 
     @property
     def span(self) -> str:
@@ -257,7 +297,15 @@ def read(
         key=lambda e: (report.known[e].name.casefold(), e),
     )
     peers = {person.entity: person.name, **{e: report.known[e].name for e in others}, owner: OWNER}
-    tier = max([i.tier for i in items] + [report.known[e].tier for e in (person.entity, *others)] + [1])
+    together = _together(lb, person, ceiling)
+    rests = _rests(lb, together, {i.line for i in items})
+    tier = max(
+        [i.tier for i in items]
+        + [t.tier for t in together]
+        + [report.known[e].tier for e in (person.entity, *others)]
+        + [1]
+    )
+    held = len({day for day, _stay in counted.shared} - {t.day for t in together})
     return InputSet(
         person.entity,
         person.name,
@@ -268,6 +316,47 @@ def read(
         len(theirs & through.above),
         len(theirs & through.unsigned),
         tier,
+        together,
+        rests,
+        held,
+    )
+
+
+def _together(lb: Logbook, person: people.Person, ceiling: int) -> tuple[Together, ...]:
+    """The person's days together in the gated reading (`people.read` through the entry's gate, so
+    every line a day rests on is at or under the ceiling and on a signed day unless lifted), one per
+    day: the stays' names as `places.json` gives them, else `NO_NAME`, never the coordinates a stay
+    at no named place reads as; and the lines it rests on, in the order the with module found them.
+    A day whose every line the gate refused is not one (`InputSet.together_held` counts it)."""
+    named = {place.name for place in named_places.read(lb.root)}
+    by_day: dict[str, list[people.SharedDay]] = {}
+    for (day, _stay), shared in sorted(person.shared.items()):
+        by_day.setdefault(day, []).append(shared)
+    out = []
+    for day, found in by_day.items():
+        found = [s for s in found if s.tier <= ceiling]  # the gate refused them already; never sent
+        lines = tuple(dict.fromkeys(id_ for s in found for id_ in s.lines))
+        if not lines:
+            continue
+        places = tuple(dict.fromkeys(s.where if s.where in named else NO_NAME for s in found))
+        out.append(Together(day, places, lines, max(s.tier for s in found)))
+    return tuple(out)
+
+
+def _rests(lb: Logbook, together: tuple[Together, ...], items: set[str]) -> tuple[Rest, ...]:
+    """The lines the days together rest on that are not lines of the set, read for what a citation
+    of one resolves to (its instant, kind, source and tier), never for its words."""
+    wanted = list(dict.fromkeys(id_ for t in together for id_ in t.lines if id_ not in items))
+    if not wanted:
+        return ()
+    with lb.index() as idx:
+        lines = idx.by_ids(wanted)
+    return tuple(
+        Rest(
+            id_, str(line.get("at")), str(line.get("kind")), str(line.get("source")), int(line.get("tier", 0))
+        )
+        for id_ in wanted
+        if (line := lines.get(id_)) is not None
     )
 
 

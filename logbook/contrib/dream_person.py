@@ -15,8 +15,10 @@ the dream's (`model_client`, LOGBOOK_DREAM_*), and the key is never said (`relat
 record, never from the reader's store: the lines on which they are a counterpart, an attendee or a
 speaker, on a local day of the window, not retracted, through the entry's gate (the ceiling, the
 signed days); with each line its instant, kind, speakers by label, words and the promises read in its
-words (`reader.promises`), and the person's label. Nothing else of the record: no note, no group, no
-stay, no draft. Each line is a reference (`L1`, ...) that stands for its id, so the model cites
+words (`reader.promises`), and the person's label; and the days together in the window (RFC 0036
+amendment 2: `reader.Together`), each its day, the named places of the stays they shared and the
+references of the lines it rests on, never coordinates. Nothing else of the record: no note's words,
+no group, no draft. Each line is a reference (`L1`, ...) that stands for its id, so the model cites
 references and the record keeps ids.
 
 **The line**, as the day's (`logbook.contrib.dream`): the answer checked (`dream.segments_of`, strict:
@@ -54,7 +56,7 @@ from .relationship import reader
 from .relationship.reader import ENTRY, RelationshipError
 
 PROMPT_FILE = Path(__file__).with_name("dream-person-prompt.md")
-PROMPT_NAME = "dream-person/1"  # kept under `extra.prompt`, so a draft says which prompt wrote it
+PROMPT_NAME = "dream-person/2"  # kept under `extra.prompt`, so a draft says which prompt wrote it
 DEFAULT_DAYS = 90  # the window when none is given: the 90 local days that end today
 
 
@@ -88,7 +90,7 @@ def window_of(window: tuple[str, str] | None, on: date) -> tuple[str, str]:
 def material(lb: Logbook, found: reader.InputSet, ceiling: int, head: str) -> Material:
     """The person's material: the label, the window and each line of the set as a reference."""
     said = reader.promises(lb, found, ceiling)
-    ids = {item.line for item in found.items}
+    ids = {item.line for item in found.items} | {line for t in found.together for line in t.lines}
     made = Material(
         day=f"{found.label} {found.span}",
         tier=found.tier,
@@ -108,6 +110,11 @@ def material(lb: Logbook, found: reader.InputSet, ceiling: int, head: str) -> Ma
             shown["promises"] = said[item.line]
         lines.append(shown)
     made.data = {"person": found.label, "window": {"from": found.first, "to": found.last}, "lines": lines}
+    if found.together:  # amendment 2: each day with its places' names and the references it rests on
+        made.data["days_together"] = [
+            {"day": t.day, "places": list(t.places), "evidence": [made.ref_of(line) for line in t.lines]}
+            for t in found.together
+        ]
     return made
 
 
@@ -169,7 +176,7 @@ def run(
             found = reader.read(lb, name, first, last, current.max_tier, current.include_unsigned)
         except RelationshipError as e:
             raise DreamError(str(e)) from None
-        if not found.items:
+        if not found.items and not found.together:
             raise DreamError(
                 f"{found.label} has no line in {found.span} through the {ENTRY!r} entry (max_tier"
                 f" {current.max_tier}{'' if current.include_unsigned else ', signed days'}); nothing to dream"
@@ -212,6 +219,8 @@ def run(
                 "signed_only": signed,
             },
         }
+        if found.together:  # the days together it read beside the lines (amendment 2)
+            payload["extra"]["days_together"] = len(found.together)
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         dream.valid(payload)

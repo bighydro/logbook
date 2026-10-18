@@ -615,13 +615,16 @@ def _opened(lb: Logbook, line: Line) -> Line:
 
 
 def drafts_check(lb: Logbook, state: str) -> Check | None:
-    """None unless a day's standing draft is above what the `dream` entry allows today."""
+    """None unless a standing draft is above what the entry it was written under allows today: a
+    day's the `dream` entry, a person's the `relationship` entry (`drafts.Allowed.of`)."""
     allowed = drafts.allowed(lb.root)
-    if allowed.max_tier >= policy.TIERS[-1]:
+    people = allowed.of(drafts.UNIT_PERSON)
+    if allowed.max_tier >= policy.TIERS[-1] and people.max_tier >= policy.TIERS[-1]:
         return None  # no draft is above tier 3
     lines = draft_lines(lb, state)
     retracted = retractions(line for line in lines if line.get("kind") == RETRACTION)
     above = drafts.withheld(lines, retracted, allowed)
+    persons = drafts.withheld_people(lines, retracted, allowed)
     sealed = sum(
         1
         for line in lines
@@ -630,24 +633,43 @@ def drafts_check(lb: Logbook, state: str) -> Check | None:
         and is_sealed(line)
         and not allowed.allows(line)
     )
-    if not above and not sealed:
+    if not above and not sealed and not persons:
         return None
-    named = ", ".join(
-        f"{(line.get('payload') or {}).get('subject')} (#{line['seq']}, tier {line['tier']})"
-        for line in above
-    )
-    why = (
-        allowed.reason
-        if allowed.reason is not None
-        else f"the {policy.DREAM_DESTINATION!r} entry allows max_tier {allowed.max_tier} now;"
-        " `logbook dream --catch-up` dreams them again under it"
-    )
-    found = f"{len(above)} day(s) with a draft above what the dream entry allows, which no reader shows"
-    if named:
-        found += f": {named}"
-    if sealed:
-        found += f"; {sealed} sealed draft(s) above it that this machine has no identity to open"
-    return Check("drafts", "warn", f"{found}; {why}")
+    found = ""
+    if above or sealed:
+        named = ", ".join(
+            f"{(line.get('payload') or {}).get('subject')} (#{line['seq']}, tier {line['tier']})"
+            for line in above
+        )
+        why = (
+            allowed.reason
+            if allowed.reason is not None
+            else f"the {policy.DREAM_DESTINATION!r} entry allows max_tier {allowed.max_tier} now;"
+            " `logbook dream --catch-up` dreams them again under it"
+        )
+        found = f"{len(above)} day(s) with a draft above what the dream entry allows, which no reader shows"
+        if named:
+            found += f": {named}"
+        if sealed:
+            found += f"; {sealed} sealed draft(s) above it that this machine has no identity to open"
+        found += f"; {why}"
+    if persons:
+        named = ", ".join(
+            f"{(line.get('payload') or {}).get('subject')} (#{line['seq']}, tier {line['tier']})"
+            for line in persons
+        )
+        why = (
+            people.reason
+            if people.reason is not None
+            else f"the {drafts.PERSON_ENTRY!r} entry allows max_tier {people.max_tier} now;"
+            " `logbook dream person NAME` dreams them again under it"
+        )
+        said = (
+            f"{len(persons)} person(s) with a draft above what the {drafts.PERSON_ENTRY} entry allows,"
+            f" which no reader shows: {named}; {why}"
+        )
+        found = f"{found} · {said}" if found else said
+    return Check("drafts", "warn", found)
 
 
 def synthesis_check(lb: Logbook, state: str, now: datetime) -> Check | None:

@@ -65,7 +65,15 @@ same way, by the same rule (`through`), and its row goes under the call's own ro
 (`syntheses_withheld`), never in the day's draft's place. `doctor` lists the days whose standing draft
 is withheld (`withheld`), and `dream --catch-up` dreams them again under the entry when it allows any
 tier. A reader of another unit (a journey's: `by_unit`, `for_unit`) holds its drafts to the same rule
-(`through`), the row included."""
+(`through`), the row included.
+
+**A draft is held to the entry it was written under** (`Allowed.of`): a person draft (unit `person`,
+`dream person`) to the `relationship` entry, read as the relationship reader reads it (`person_allowed`:
+no entry, no `until` or one past it withholds every person draft), every other unit to the `dream`
+entry. The unit decides, as the draft line carries it; `extra.policy_version` says which version of
+that entry wrote it, and today's entry, not the version, decides what is shown. A sealed draft this
+machine cannot open has no unit to read and follows the `dream` entry. `doctor` lists the people whose
+standing draft is withheld beside the days (`withheld_people`)."""
 
 from __future__ import annotations
 
@@ -143,6 +151,7 @@ NOT_ON_WEEK = "evidence names a line that is not of the week"
 UNIT_JOURNEY = "journey"
 UNIT_WEEK = "week"
 UNIT_PERSON = "person"  # one canonical person over a window (RFC 0036 amendment 1)
+PERSON_ENTRY = "relationship"  # the entry a person draft is written under and held to (`Allowed.of`)
 WINDOW = "window"  # a person draft's `{from, to}`, two local days, both inclusive; absent on every other unit
 ISO_WEEK = re.compile(r"\d{4}-W(0[1-9]|[1-4]\d|5[0-3])\Z")  # a week's subject, `2026-W25`
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
@@ -289,51 +298,104 @@ def proposal_shape(proposal: object) -> bool:
 
 @dataclass(frozen=True)
 class Allowed:
-    """What the `dream` entry of the crossing policy lets a reader show today of what the dream
-    wrote: the drafts at or under `max_tier`. `max_tier` is 0 when the file names no entry, when the
-    entry has expired, or when the file is not a policy, and `reason` then says which; None when the
-    entry is in force."""
+    """What the entry a draft was written under lets a reader show today of it: the drafts at or
+    under `max_tier`. `max_tier` is 0 when the file names no entry, when the entry has expired, or
+    when the file is not a policy, and `reason` then says which; None when the entry is in force.
+    `entry` names it: `dream` for every unit but one, and a person draft (`dream person`, RFC 0036
+    amendment 1) is held to `person`, the `relationship` entry it was written under (`of`)."""
 
     max_tier: int
     reason: str | None = None
+    entry: str = policy.DREAM_DESTINATION
+    person: Allowed | None = None  # the `relationship` entry, for unit `person`; None: this entry
+
+    def of(self, unit: object) -> Allowed:
+        """The entry a draft of `unit` is held to: the `relationship` entry for a person, this one
+        (the `dream` entry) for every other unit, and for a line whose unit cannot be read."""
+        return self.person if unit == UNIT_PERSON and self.person is not None else self
 
     def allows(self, line: Line) -> bool:
-        return int(line.get("tier") or 0) <= self.max_tier
+        return int(line.get("tier") or 0) <= self.of(unit_of(line)).max_tier
 
     def why_not(self, tier: int, unit: str = UNIT_DAY) -> str:
         """Why a draft of `tier` is withheld, in words, for the Day and `doctor`. A day is dreamed
         again under the entry; a call's synthesis is of the call's tier, so the call is above the
         entry as well and stays home (`synthesis.gate`) until the entry allows it again."""
-        if self.reason is not None:
-            return self.reason
-        found = f"tier {tier}, above max_tier {self.max_tier} of the {policy.DREAM_DESTINATION!r} entry"
+        held = self.of(unit)
+        if held.reason is not None:
+            return held.reason
+        found = f"tier {tier}, above max_tier {held.max_tier} of the {held.entry!r} entry"
         if unit == UNIT_EVENT:
             return f"{found}; the call stays home until the entry allows its tier"
-        if unit in (UNIT_JOURNEY, UNIT_WEEK):
+        if unit in (UNIT_JOURNEY, UNIT_WEEK, UNIT_PERSON):
             return f"{found}; `dream {unit}` dreams it again under it"
         return f"{found}; `dream --catch-up` dreams the day again under it"
 
 
+def unit_of(line: Line) -> object:
+    """The `unit` a draft line names; None for a payload that does not say (a sealed one)."""
+    payload = line.get("payload")
+    return payload.get("unit") if isinstance(payload, dict) else None
+
+
 def allowed(root: Path) -> Allowed:
-    """The `dream` entry of `root`'s policy as the readers of drafts hold them against it today.
-    Never raises: a file that is not a policy withholds every draft and says why, so the Day still
-    reads."""
+    """The entries of `root`'s policy as the readers of drafts hold them against them today: the
+    `dream` entry, and the `relationship` entry for a person draft (`person_allowed`). Never raises:
+    a file that is not a policy withholds every draft and says why, so the Day still reads."""
     name = policy.POLICY_FILE.as_posix()
+    person = person_allowed(root)
     try:
         entry = policy.dream_today(root)
     except policy.PolicyError as e:
-        return Allowed(policy.EXPIRED_TIER, f"{e}; no draft is shown until it is")
+        return Allowed(policy.EXPIRED_TIER, f"{e}; no draft is shown until it is", person=person)
     if entry is None:
         return Allowed(
-            policy.EXPIRED_TIER, f"{name} names no {policy.DREAM_DESTINATION!r} entry; no draft is shown"
+            policy.EXPIRED_TIER,
+            f"{name} names no {policy.DREAM_DESTINATION!r} entry; no draft is shown",
+            person=person,
         )
     if entry.expired and entry.until is not None:
         return Allowed(
             policy.EXPIRED_TIER,
             f"the {policy.DREAM_DESTINATION!r} entry expired on {entry.until.isoformat()} and counts as"
             f" max_tier 0; nothing it allowed is shown until {name} gives it a new until",
+            person=person,
         )
-    return Allowed(entry.max_tier)
+    return Allowed(entry.max_tier, person=person)
+
+
+def person_allowed(root: Path) -> Allowed:
+    """The `relationship` entry as the readers of person drafts hold them against it today, read as
+    the relationship reader reads it (`relationship.reader.entry`): no entry, no `until` (a lend to
+    the reader has a last day) or one past it, and no person draft is shown, and `reason` says why;
+    else its `max_tier` as written (the reader's cloud ceiling refuses a reading above tier 2, and no
+    person draft is written above it). Never raises."""
+    name = policy.POLICY_FILE.as_posix()
+    try:
+        entry = next((c for c in policy.ceilings(root) if c.destination == PERSON_ENTRY), None)
+    except policy.PolicyError as e:
+        return Allowed(policy.EXPIRED_TIER, f"{e}; no person draft is shown until it is", PERSON_ENTRY)
+    if entry is None:
+        return Allowed(
+            policy.EXPIRED_TIER,
+            f"{name} names no {PERSON_ENTRY!r} entry; no person draft is shown",
+            PERSON_ENTRY,
+        )
+    if entry.until is None:
+        return Allowed(
+            policy.EXPIRED_TIER,
+            f"the {PERSON_ENTRY!r} entry has no until, and a lend to the relationship reader has a last"
+            " day; no person draft is shown",
+            PERSON_ENTRY,
+        )
+    if entry.expired:
+        return Allowed(
+            policy.EXPIRED_TIER,
+            f"the {PERSON_ENTRY!r} entry expired on {entry.until.isoformat()} and counts as max_tier 0;"
+            f" nothing it allowed is shown until {name} gives it a new until",
+            PERSON_ENTRY,
+        )
+    return Allowed(entry.max_tier, entry=PERSON_ENTRY)
 
 
 def model_of(source: object) -> str:
@@ -498,7 +560,7 @@ def withheld_json(line: Line, allowed: Allowed) -> dict[str, Any]:
         "line": str(line["id"]),
         "seq": int(line["seq"]),
         "tier": tier,
-        "max_tier": allowed.max_tier,
+        "max_tier": allowed.of(unit_of(line)).max_tier,
         "why": allowed.why_not(tier, str((line.get("payload") or {}).get("unit"))),
     }
 
@@ -513,6 +575,17 @@ def withheld(lines: Iterable[Line], retracted: Collection[str], allowed: Allowed
     `doctor` lists."""
     out = []
     for _day, found in sorted(by_day(lines, retracted).items()):
+        top = standing(found)
+        if top is not None and not allowed.allows(top):
+            out.append(top)
+    return out
+
+
+def withheld_people(lines: Iterable[Line], retracted: Collection[str], allowed: Allowed) -> list[Line]:
+    """The standing draft of every person whose standing draft the `relationship` entry withholds
+    (`Allowed.of`), by the person's id: what `doctor` lists beside the days."""
+    out = []
+    for _person, found in sorted(by_unit(lines, retracted, UNIT_PERSON).items()):
         top = standing(found)
         if top is not None and not allowed.allows(top):
             out.append(top)
