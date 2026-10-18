@@ -25,6 +25,7 @@ import ideas_record
 import page_text
 import phone_width
 import pytest
+import shelves_record
 from four_years import ASTRID
 from library_record import BERGEN_WINTER, library_record
 from orgs_record import TODAY, evidence_record, settle
@@ -49,6 +50,8 @@ DETAILS = (
     ("/people/ID", serve.PERSON_PATH),
     ("/org/ID", serve.ORG_PATH),
     ("/idea/ID", serve.IDEA_PATH),
+    ("/promises/ID", serve.PROMISE_PATH),
+    ("/goals/ID", serve.GOAL_PATH),
 )  # the pages one of many: a route each
 ROUTES = frozenset(
     {
@@ -69,6 +72,11 @@ ROUTES = frozenset(
         "/org/ID",
         "/ideas",
         "/idea/ID",
+        "/promises",
+        "/promises/ID",
+        "/goals",
+        "/goals/ID",
+        "/agents",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
@@ -543,6 +551,11 @@ def walked(
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
             (_ideas_site(_copy(shelf_of_ideas, folder / "ideas", mp)), ["/", "/ideas"]),
+            # the Promises, Goals and Agents shelves, on their record (`shelves_record.py`)
+            (
+                serve.Site(shelves_record.record(folder / "shelves", mp), now=lambda: shelves_record.NOW),
+                ["/", "/promises", "/goals", "/agents"],
+            ),
         )
         found: dict[str, list[Page]] = {}
         for one, seeds in sites:

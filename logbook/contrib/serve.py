@@ -155,6 +155,9 @@ from . import (
     person_page,
     places_review,
     reflect,
+    shelf_agents,
+    shelf_goals,
+    shelf_promises,
     trip_page,
     world,
 )
@@ -173,11 +176,14 @@ TODAY = "/today"
 RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
     | {"/ideas"}
+    | {"/promises", "/goals", "/agents"}  # the shelves' lists
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
 ORG_PATH = re.compile(r"^/org/([^/]+)$")  # a named org, by entity id (RFC 0037 §11)
 IDEA_PATH = re.compile(r"^/idea/([^/]+)$")  # a named idea, by entity id (RFC 0037 §11)
+PROMISE_PATH = re.compile(r"^/promises/([0-9a-f]+)$")  # one promise, by its proposal id (`shelf_promises`)
+GOAL_PATH = re.compile(r"^/goals/([^/]+)$")  # one goal, by the id of any line of its chain (`shelf_goals`)
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
 PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review --accept`, `--reject`
@@ -196,7 +202,7 @@ WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
 LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/")
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
@@ -416,7 +422,8 @@ IDEAS_STYLE = MANIFEST_STYLE + "p.refs{overflow-wrap:anywhere}\n"  # the Ideas p
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
-    '<a href="/ideas">ideas</a><a href="/places">places</a><a href="/assets">assets</a>'
+    '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
+    '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
     '<a href="/gaps">gaps</a><a href="/world">world</a>'
 )
 
@@ -1108,6 +1115,16 @@ class Site:
             return self.page_ideas(params.get("page") or "1")
         if (m := IDEA_PATH.match(path)) is not None:
             return self.page_idea(unquote(m.group(1)))
+        if path == "/promises":
+            return shelf_promises.page_promises(self, params.get("person") or None)
+        if (m := PROMISE_PATH.match(path)) is not None:
+            return shelf_promises.page_promise(self, m.group(1))
+        if path == "/goals":
+            return shelf_goals.page_goals(self)
+        if (m := GOAL_PATH.match(path)) is not None:
+            return shelf_goals.page_goal(self, unquote(m.group(1)))
+        if path == "/agents":
+            return shelf_agents.page_agents(self, params.get("page") or "1", params.get("day") or None)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
