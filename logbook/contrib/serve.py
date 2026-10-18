@@ -107,6 +107,7 @@ from __future__ import annotations
 
 import base64
 import email
+import functools
 import hashlib
 import ipaddress
 import json
@@ -181,6 +182,7 @@ PORT = 8765
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
+SHOWN_MESSAGES, LONG_CONVERSATION = 10, 30  # a conversation of more than 30 shows 10, the rest folded
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
 # the record's pages, not the clock's (and every Day, journey, person and org)
@@ -470,6 +472,15 @@ svg.track line.gap{stroke-dasharray:4 3}
 svg.track text{font:11px system-ui,sans-serif;fill:var(--fg)}
 ul.week{color:var(--mute);font-size:.9rem;margin:.3rem 0 1rem}
 div.outside ul.strip{margin-left:0}
+ul.conversations,ol.messages{list-style:none;padding:0;margin:.2rem 0 0 .8rem}
+ol.messages li{padding:.1rem 0;overflow-wrap:anywhere}
+ol.messages .clock{min-width:3.2rem}
+section.held td{overflow-wrap:anywhere;vertical-align:baseline}
+section.held td.at{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute)}
+details.conversation,details.all{margin:.2rem 0 0}
+section.held details.held{margin:1.5rem 0 0}
+section.held h3{font-size:1rem;margin:.8rem 0 .2rem}
+span.way{font-size:.78rem;color:var(--mute)}
 @media (max-width:40rem){ul.strip{margin-left:1rem}}
 """
 LINE_STYLE = """
@@ -1383,9 +1394,12 @@ class Site:
         header, the one sentence of what crosses where (`TIERS_SAID`) and, on a day of a week whose
         draft stands, the week (`_week_html`); the timeline under the day's track (`_track_svg`),
         each row that is a line linked to it as written (`/line/ID`), a row's photos a strip under it
-        (`_strip`), many edits of one Drive file one row (`_drive_folded`); at the foot, the photo
-        review (`_photo_review_html`), then Reflect and sign."""
-        data = day_reader.read(self.lb, day, self.airports, self.tiers)
+        (`_strip`), many edits of one Drive file one row (`_drive_folded`), a row's messages by
+        conversation (`_conversations_html`); at the foot, every line of the day, folded
+        (`_held_html`), the photo review (`_photo_review_html`), then Reflect and sign. A static
+        page (`export site`) has neither fold: its rows count the messages, as they did."""
+        # the folds from the same reading; a static page (`export site`) keeps to the rows, as before
+        data = day_reader.read(self.lb, day, self.airports, self.tiers, held=not self.static)
         tz = ZoneInfo(data["tz"])
         marks = self._day_marks(day)
         starred, photos = marks.starred, marks.photos
@@ -1516,6 +1530,7 @@ class Site:
                     line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
                     parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
                 parts.append("</ul>\n")
+        parts.append(_held_html(data, tz, extras.raw, expanded))
         script = None
         if not self.static:
             parts.append(self._photo_review_html(day, marks))
@@ -1682,18 +1697,26 @@ class Site:
 
     def _raw(self, marks: DayMarks) -> Callable[[Sequence[str]], str]:
         """The link of a row that is a line to the line as written (`/line/ID`), `#SEQ`: the first of
-        `ids` the page reads. Nothing on a static page, which has no such page."""
+        `ids` the page reads. Nothing on a static page, which has no such page. Each link is made once
+        a page: a message is linked under its row and again in "Everything this day held"."""
+        made: dict[str, str] = {}
 
         def raw(ids: Sequence[str]) -> str:
             line = next((marks.lines[i] for i in ids if i in marks.lines), None)
             if line is None:
                 return ""
-            href = self.href(f"/line/{quote(str(line['id']), safe='')}")
-            if href is None:
-                return ""
-            return (
-                f' <a class="raw" href="{escape(href)}" title="the line as written">#{int(line["seq"])}</a>'
+            id_ = str(line["id"])
+            if id_ in made:
+                return made[id_]
+            href = self.href(f"/line/{quote(id_, safe='')}")
+            seq = int(line["seq"])
+            link = (
+                ""
+                if href is None
+                else f' <a class="raw" href="{escape(href)}" title="the line as written">#{seq}</a>'
             )
+            made[id_] = link
+            return link
 
         return raw
 
@@ -3810,13 +3833,108 @@ def _attached_html(
                 if id_ in photos
             )
         anchor = f' id="{_row_id(lines[0])}"' if lines and kind not in ("messages", "photos") else ""
+        talk = (
+            _conversations_html(attached[kind].get("conversations"), tz, raw, expanded)
+            if kind == "messages"
+            else ""
+        )
         out.append(
             f'<li{anchor} title="{escape(_plural(len(lines), "line"))}: {escape(title)}">'
-            f'<span class="kind">{escape(kind)}</span> {escape(text)}{named}{mark}'
+            f'<span class="kind">{escape(kind)}</span> {escape(text)}{named}{mark}{talk}'
             f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
         )
     out.append("</ul>\n")
     return "".join(out)
+
+
+def _conversations_html(
+    found: Sequence[Mapping[str, Any]] | None,
+    tz: ZoneInfo,
+    raw: Callable[[Sequence[str]], str],
+    expanded: bool,
+) -> str:
+    """A row's messages by conversation (`day.conversations`), each folded under who it was with, the
+    network and how many; inside, the messages in time order (`_message_html`). A conversation of
+    more than `LONG_CONVERSATION` shows its first `SHOWN_MESSAGES` and folds the rest under "show
+    all N". Every fold closed, unless the page is `?open=1`."""
+    if not found:
+        return ""
+    is_open = " open" if expanded else ""
+    out = ['\n<ul class="conversations">\n']
+    for c in found:
+        said = f"{c['counterpart']}{DOT}{c['network']}{DOT}{_plural(int(c['count']), 'message')}"
+        items = [_message_html(m, tz, raw) for m in c["messages"]]
+        shown, rest = (
+            (items[:SHOWN_MESSAGES], items[SHOWN_MESSAGES:])
+            if len(items) > LONG_CONVERSATION
+            else (items, [])
+        )
+        out.append(
+            f'<li><details class="conversation"{is_open}><summary>{escape(said)}</summary>\n'
+            f'<ol class="messages">\n{"".join(shown)}</ol>\n'
+        )
+        if rest:
+            out.append(
+                f'<details class="all"{is_open}><summary>show all {int(c["count"]):,}</summary>\n'
+                f'<ol class="messages">\n{"".join(rest)}</ol>\n</details>\n'
+            )
+        out.append("</details></li>\n")
+    out.append("</ul>")
+    return "".join(out)
+
+
+def _message_html(m: Mapping[str, Any], tz: ZoneInfo, raw: Callable[[Sequence[str]], str]) -> str:
+    """One message: the clock, sent or received, who wrote it in a group, the text as far as
+    `day.TEXT_CHARS` (cut with an ellipsis), and the link to its line, where the whole of it is."""
+    way = "sent" if m["from_me"] else "received"
+    who = f'<span class="who">{escape(str(m["who"]))}</span>: ' if m.get("who") else ""
+    return (
+        f'<li class="message"><span class="clock">{_hm(str(m["at"]), tz)}</span> '
+        f'<span class="way">{way}</span> {who}{escape(str(m["text"]))}{raw([m["line"]])}</li>\n'
+    )
+
+
+def _held_html(
+    data: Mapping[str, Any], tz: ZoneInfo, raw: Callable[[Sequence[str]], str], expanded: bool
+) -> str:
+    """ "Everything this day held", at the foot of the Day: every line of the day (`day.hold`), a table
+    per source in the sources row's order, its lines in time order, each the clock, the kind, one
+    line of what it was and the link to its line; folded, the counts per source on its summary, as
+    the sources row has them. Closed, unless the page is `?open=1`. Nothing on a day with no line."""
+    rows = data.get("held") or []
+    if not rows:
+        return ""
+    by: dict[str, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        by.setdefault(str(row["source"]), []).append(row)
+    counts = DOT.join(f"{s['source']} {int(s['lines']):,}" for s in data["sources"])
+    out = [
+        f'<section class="held">\n<details class="held"{" open" if expanded else ""}>'
+        f"<summary>{escape(f'Everything this day held{DOT}{counts}')}</summary>\n"
+    ]
+    for source in [*(str(s["source"]) for s in data["sources"]), *by]:
+        found = by.pop(source, None)
+        if not found:
+            continue
+        out.append(f"<h3>{escape(source)} <small>{escape(_plural(len(found), 'line'))}</small></h3>\n")
+        cells: list[list[Cell]] = [
+            [
+                (_hm(str(row["at"]), tz), "at"),
+                f'<span class="kind">{escape(str(row["kind"]))}</span>',
+                f"{escape(str(row['what']))}{'' if row.get('withheld') else raw([row['line']])}",
+            ]
+            for row in found
+        ]
+        out.append(_table([("at", "at"), "kind", "what"], cells))
+    out.append("</details>\n</section>\n")
+    return "".join(out)
+
+
+@functools.lru_cache(maxsize=8192)
+def _hm(stamp: str, tz: ZoneInfo) -> str:
+    """The local clock of a stamp, escaped, once: a busy day's message is on the page twice, under its
+    row and in "Everything this day held"."""
+    return escape(day_reader.span_text(stamp, None, tz))
 
 
 def _row_id(line: str) -> str:

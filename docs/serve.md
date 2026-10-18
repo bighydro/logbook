@@ -29,7 +29,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 
 | Page | What it is | The command it renders |
 |---|---|---|
-| `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages counted; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
+| `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
@@ -50,8 +50,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 `/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
 before until the record's `day_start` when it sets one (at 05:59 under `06:00`, yesterday's Day), whatever
 the clock of the device that asks: the page to bookmark on a phone.
-`/day/YYYY-MM-DD?open=1` is the Day with every toggle open, for printing or saving whole; the page's
-*expand all* link is that.
+`/day/YYYY-MM-DD?open=1` is the Day with every toggle open, for printing or saving whole, the
+conversations and *Everything this day held* among them; the page's *expand all* link is that.
 
 Every row reads as the command prints it, because it is the same code: the grammar of a stay, a
 move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip's is `logbook/core/trips.py`'s, a
@@ -110,7 +110,10 @@ A Day is one `day.read`: one reading of the day and the day before through `inde
 health lines of the two days by an indexed column, nothing swept. On the demo record a Day answers in
 tens of milliseconds, a month of `/days` in under half a second; on a record of millions of lines a
 Day still renders in under a second, because the index locates the day's lines and only they are
-read ([docs/day.md](day.md), *Performance*). `/days` reads the window in chunks of a month, as the
+read ([docs/day.md](day.md), *Performance*). The conversations and *Everything this day held* come
+from that same reading: a synthetic day of 3,000 messages across 40 conversations, 400 mails and 200
+Notion events renders in about 0.4 s into a page of 2.3 MB (`tests/test_day_page_everything.py`
+holds it under 8 MB). `/days` reads the window in chunks of a month, as the
 command does; a year is a dozen readings. The airports table is loaded once, when the server starts.
 
 A reload at the same head costs nothing. Every page that is the record's and nothing else (`/`, a
@@ -341,7 +344,8 @@ The Day carries the two acts on lines the record already holds ([the acts](acts.
   it became). ☆ stars the line, ★ takes the star back, and the page comes back at the row (expanded,
   if it was). A keeper's row, and a goal or chapter a later one superseded, carries ★ only while it
   is a star. A stay, a stop or a move is derived from many lines and is not one, so it has none;
-  messages are counted, not listed; the Night line and the weather are read from many lines. A
+  a message, listed under its row by conversation, has its link to its line and no star; the Night
+  line and the weather are read from many lines. A
   model's draft is never starred: not the dream's sentences, not a proposal you have not confirmed,
   not a call's synthesis, and not the row of a draft the policy withholds (*superseded by policy*);
   a draft is a proposal, not yours to keep as a memory ([the acts](acts.md#star-a-line-worth-keeping)),
@@ -410,6 +414,37 @@ nothing fetched:
 
 A static site (`logbook export site`) draws none of the images and carries neither the review nor
 the links to `/line`: its rows name their photos.
+
+## The Day — everything it held
+
+Nothing on a day is reachable only from the terminal. Two folds show the rest of it, closed by
+default so the page stays readable, and open all at once with `?open=1` (*expand all*); neither needs
+a script.
+
+- **Messages under their row.** In a stay's or a move's attachments, where the count was, the
+  messages that fell inside it, by conversation: who it was with (the person the record names, else
+  the handle as the line has it; a group by its name), the network (the source, or the network a
+  bridge such as Beeper names: `whatsapp`, `telegram`, `instagram`, `imessage`, …) and how many, each
+  conversation a fold of its own. Inside, the messages in time order: the clock, *sent* or
+  *received*, in a group who wrote it, and the text, its first 280 characters (a longer one ends with
+  `…`), with the line's number, a link to `/line/ID`, where the whole of it is. A conversation of more
+  than 30 messages shows the first 10 and folds the rest under *show all N*. The count stays on the
+  row's summary line.
+- **Everything this day held**, at the foot, above the photo review: every line of the day, a table
+  per source in the order of the sources row, each line in time order with its clock, its kind, one
+  line of what it was (`Kari Nordmann: See you at the cafe?`, a mail's subject and sender, an event's
+  title) and its number, a link to `/line/ID`. Its summary counts the lines per source, the counts of
+  the sources row. A line another of the day supersedes says only that, *superseded by #5441*, as
+  `logbook show` says it; a model's draft the `dream` entry withholds says *superseded by policy*,
+  never its words, as the Day does; a retracted line is not on the day.
+
+Both are read through the page's gate, as the rest of the Day: a message is tier 2, so a page that
+reads tier 1 only lists none, and *Everything this day held* lists only the lines the gate lets
+through. Both come from the `day.read` the page already makes (`day.read(..., held=True)`, which adds
+the conversations and the rows to what it returns for the page alone): the record is read once, and
+`logbook day --json` is unchanged. A static site (`logbook export site`) has neither fold: its Day
+pages count the messages under their rows, as before. The signed day's digest is over the hashes of the page's lines
+(RFC 0034), not over what the page draws, so the folds leave a signature as it was.
 
 ## Journeys
 
