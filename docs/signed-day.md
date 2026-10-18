@@ -12,6 +12,7 @@ record.
 logbook show 2026-06-09                 # read the page; the header says `unsigned`
 logbook day 2026-06-09                  # the Day: the readiness row says whether every usual source is in
 logbook day sign 2026-06-09             # sign it: every line on the page is confirmed
+logbook day sign 2026-06-09 --confirm all          # signed before: confirm the whole page again
 logbook day sign 2026-06-09 --note "Quiet day. The call with Kari was the thing."
 logbook day sign 2026-06-09 --confirm 4181,4183   # only these lines, by seq or id as `show` lists them
 logbook day sign 2026-06-09 --kept 4181 --carried 4183   # and what became of the commitments on them
@@ -29,7 +30,8 @@ One line, `signed-day/v1` (RFC 0034, `docs/rfcs/0034-the-signed-day.md`), tier 1
 
 - the day signed, and you as its subject (the record's `owner_id`);
 - the ids of the lines you confirmed, in the page's order: every line on the page unless
-  `--confirm` names some, or none at all with `--confirm none` (below);
+  `--confirm` names some, or none at all with `--confirm none` (below); a day you signed before
+  keeps what you confirmed then (below);
 - the digest of the page as shown: the SHA-256 over the hashes of the lines the page listed, in
   order. Not over the text: the words are a reader's own, the lines are the record's. Anyone with
   the record recomputes it, and a day that grew after you signed is seen to have;
@@ -41,6 +43,17 @@ One line, `signed-day/v1` (RFC 0034, `docs/rfcs/0034-the-signed-day.md`), tier 1
 It rewrites nothing. A day that was wrong is corrected the way the record corrects anything, by
 new lines, and then signed again; the later signature stands and the earlier stays in the chain.
 Retracting a signature (`repair retract SEQ`) leaves the earlier one standing, or the day unsigned.
+
+**Signing again keeps your confirmations** (RFC 0034 amendment 4). A day you signed before, signed
+again without `--confirm`, confirms what the standing signature confirmed and is still on the page, not
+retracted; a line added to the day since stays unconfirmed until you confirm it, so signing again never
+confirms a line you have not read (a line the act itself writes, an event you `--accept` or the reflection
+you sign with, is confirmed by it). The dispositions and the note come along too, and whatever you type
+wins: `--kept 4183` on a line the earlier signature said was carried makes it kept, `--note` replaces the
+note and `--note ""` clears it. `day sign` says what it kept (`keeps from the signature it supersedes (#812): 14 lines confirmed,
+kept 1, the note`). `--confirm all` confirms the whole page, `--confirm none` nothing, and `--confirm
+4181,4183` just those: each is a fresh reading and keeps nothing. The Day page's *Sign again*, `day
+reflect --sign` and the door's `sign_day` follow the same rule.
 
 Only you sign: here, on the Day page of `logbook serve`, or through the door when you allow it
 (below).

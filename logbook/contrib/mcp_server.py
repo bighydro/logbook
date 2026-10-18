@@ -82,7 +82,7 @@ from ..core.store import (
     utc,
 )
 from . import digest as digest_reader
-from . import gaps, promises
+from . import gaps, promises, sign_again
 from .rows import _attendee, _clock, _line_text, _mail_person, _name, _ref_value
 
 SERVER_NAME = "logbook"
@@ -667,11 +667,19 @@ def _counterpart(line: Line, names: Mapping[Ref, str]) -> str | None:
     return ", ".join(who for who in people if who) or None
 
 
+def _superseded(idx: Index) -> dict[str, int]:
+    """The lines `show` marks superseded, by the index's one rule (a superseder not retracted, issue
+    #321): a flight another flight line replaced (RFC 0013 rule 4) and a transcript heard again
+    (RFC 0038 §2.8)."""
+    return {**idx.superseded(flights.KIND), **idx.superseded("transcript")}
+
+
 def _row_json(
     line: Line, tz: ZoneInfo, names: Mapping[Ref, str], superseded: Mapping[str, int]
 ) -> dict[str, Any]:
     """One line as `day_lines` lists it: its envelope, the local clock, the counterpart and the text
-    part of the row `show` prints (a flight another flight line replaced says so instead)."""
+    part of the row `show` prints (a flight another flight line replaced, or a transcript heard again,
+    says so instead)."""
     by = superseded.get(str(line["id"]))
     return {
         "id": line["id"],
@@ -702,7 +710,7 @@ def tool_day_lines(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
         assert isinstance(idx, GatedIndex)
         on_day = idx.day(day)
         marks = retractions(idx.retractions())
-        superseded = idx.superseded(flights.KIND)
+        superseded = _superseded(idx)
         names = labels(lb, idx)
         above = idx.day_above(day, kinds)
     rows: list[dict[str, Any]] = []
@@ -780,7 +788,7 @@ def tool_line(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
         line = idx.by_id(id_)
         assert line is not None  # the tier is at or below the ceiling: the gate lets it through
         marks = retractions(idx.retractions())
-        superseded = idx.superseded(flights.KIND)
+        superseded = _superseded(idx)
         names = labels(lb, idx)
     mark = marks.get(str(line["id"]))
     if mark is not None:  # `show` prints the marker and nothing of the line
@@ -919,19 +927,24 @@ def _entries(a: Arguments, key: str) -> list[str]:
 def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     """`logbook day sign DAY` through the door: the arguments mapped onto the flags and handed to
     `signing.sign`, the one implementation, over the record itself and not through the gate, so the
-    line is byte for byte what the command writes with the same flags and `--at`. Returns the line's
-    envelope, the header the command prints, and counts."""
+    line is byte for byte what the command writes with the same flags and `--at`. A day signed before
+    keeps what its standing signature said when `confirm` is not given (`sign_again`, RFC 0034
+    amendment 4), as `day sign` does; `"all"` confirms the whole page. Returns the line's envelope,
+    the header the command prints, what was kept, and counts."""
     day = _write_day(lb, a)  # `_today` under the record's day_start: a boundary not a clock is refused
     confirm = a.get("confirm")
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
+    record = Logbook(lb.root)
+    chosen, keep = sign_again.confirmation(entries, bool(disposed))
+    args = sign_again.again(record, day, chosen, keep, disposed, _string(a, "note"))  # under `call`'s hold
     line = signing.sign(
-        Logbook(lb.root),
+        record,
         day,
-        confirm=signing.confirmation(entries, bool(disposed)),
-        note=_string(a, "note"),
+        confirm=args.confirm,
+        note=args.note,
         at=_string(a, "at"),
-        dispositions=disposed,
+        dispositions=args.dispositions,
     )
     p = line["payload"]
     given = signing.dispositions_of(p).values()
@@ -943,6 +956,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
         "on_page": p["page"]["lines"],
         "dispositions": {value: n for value in signing.DISPOSITIONS if (n := list(given).count(value))},
         "supersedes": p.get("supersedes"),
+        "kept": args.kept,
     }
 
 
@@ -1177,17 +1191,19 @@ TOOLS: dict[str, Tool] = {
             "sign_day",
             "Sign a day as `logbook day sign DAY` does, through the same code: one signed-day/v1 line,"
             " tier 1, the owner's reading of the page. `confirm` names the lines confirmed (default every"
-            ' line on the page; "none" confirms nothing and goes alone), `kept`, `missed`, `dropped`,'
-            " `carried` say what became of a commitment, `at` is when the owner signed. A day signed before"
-            ' is superseded. Refused unless the mcp entry of policy/crossing.json names it under "write".',
+            ' line on the page; "all" confirms every line, "none" nothing, each alone), `kept`, `missed`,'
+            " `dropped`, `carried` say what became of a commitment, `at` is when the owner signed. A day"
+            " signed before is superseded and, without `confirm`, keeps what its signature confirmed, its"
+            " dispositions and note: a line added since stays unconfirmed. Refused unless the mcp entry of"
+            ' policy/crossing.json names it under "write".',
             {
                 "day": DAY,
                 "confirm": {
                     "anyOf": [
                         {"type": "array", "items": {"type": "string"}},
-                        {"type": "string", "enum": [signing.NOTHING]},
+                        {"type": "string", "enum": [sign_again.EVERY, signing.NOTHING]},
                     ],
-                    "description": 'line ids or seqs on the page, or "none"',
+                    "description": 'line ids or seqs on the page, or "all", or "none"',
                 },
                 **{
                     value: {"type": "array", "items": {"type": "string"}, "description": f"lines {meaning}"}

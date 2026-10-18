@@ -23,6 +23,7 @@ from ..contrib import (
     print_page,
     questions,
     reflect,
+    sign_again,
     week_paper,
     year_poster,
 )
@@ -299,10 +300,9 @@ def cmd_show(a: argparse.Namespace) -> None:
         # A retraction is not an event of its own day; it shows as a marker where the line it hides was.
         rows = [line for line in idx.day(day) if line["kind"] != RETRACTION]
         retracted = retractions(idx.retractions())
-        superseded = idx.superseded(flights.KIND)  # a flight another flight line replaced (RFC 0013 rule 4)
-        heard_again = idx.superseded("transcript")  # RFC 0038 §2.8: a transcript heard again and separated
-        by = idx.ids(heard_again.values())
-        superseded.update({old: seq for old, seq in heard_again.items() if by.get(seq) not in retracted})
+        # a superseder not retracted (issue #321): a flight another flight line replaced (RFC 0013
+        # rule 4), a transcript heard again and separated (RFC 0038 §2.8)
+        superseded = {**idx.superseded(flights.KIND), **idx.superseded("transcript")}
         for kind in ("attribution", "scene-review"):  # RFC 0040: a scene's answer corrected, its no followed
             superseded.update(idx.superseded(kind))
         names: dict[Ref, str] | None = None if a.raw else labels(lb, idx)
@@ -376,9 +376,10 @@ def day_arguments(sub: Subparsers) -> None:
     s.add_argument("--note", metavar="TEXT", help="sign: one line in your words; it is tier 1 and crosses")
     s.add_argument(
         "--confirm",
-        metavar="ID,ID|none",
+        metavar="ID,ID|all|none",
         help="sign: the lines you confirm as the day's facts, by seq or id as `show` lists them"
-        f" (default: every line on the page); `{signing.NOTHING}` confirms nothing, and goes alone",
+        " (default: every line on the page; a day signed before keeps what its signature confirmed);"
+        f" `{sign_again.EVERY}` confirms the whole page and `{signing.NOTHING}` nothing, each alone",
     )
     s.add_argument(
         "--at",
@@ -559,23 +560,28 @@ def _dispositions(a: argparse.Namespace) -> dict[str, list[str]]:
     }
 
 
-def _confirm(a: argparse.Namespace) -> list[str] | None:
-    """`--confirm ID,ID` as `signing.sign` takes it (`signing.confirmation`): None when not given,
-    the entries typed, or the empty list for `--confirm none` (amendment 2), which goes alone."""
+def _confirm(a: argparse.Namespace) -> tuple[list[str] | None, bool]:
+    """`--confirm ID,ID` as `signing.sign` takes it (`sign_again.confirmation`): None for the whole
+    page, the entries typed, or the empty list for `--confirm none` (amendment 2); and whether the
+    standing signature's confirmations are kept, as they are when `--confirm` is not given
+    (amendment 4). `all` and `none` each go alone."""
     entries = None if a.confirm is None else str(a.confirm).split(",")
-    return signing.confirmation(entries, bool(_dispositions(a)))
+    return sign_again.confirmation(entries, bool(_dispositions(a)))
 
 
 def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
-    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID|none] [--at RFC3339] [--kept ID,ID] [--missed
-    ID,ID] [--dropped ID,ID] [--carried ID,ID]` (RFC 0034 and its amendments, `logbook.core.signing`):
-    the owner's reading of the day's page, appended as one `signed-day/v1` line, tier 1, source manual
-    — the day, the ids confirmed (every line on the page by default; a line given a disposition is
-    confirmed by that; none at all for `--confirm none`), what became of each commitment named, the
-    digest of the page as shown and the note, at the moment the owner signed (`--at`, else now) — and
-    nothing else touched. A day signed before is signed again: the new line supersedes the standing
-    one. Only the owner signs: here, or through the MCP tool `sign_day` when the owner's policy allows
-    it by name (ADR 0022), which signs through the same `signing.sign`."""
+    """`day sign YYYY-MM-DD [--note TEXT] [--confirm ID,ID|all|none] [--at RFC3339] [--kept ID,ID]
+    [--missed ID,ID] [--dropped ID,ID] [--carried ID,ID]` (RFC 0034 and its amendments,
+    `logbook.core.signing`): the owner's reading of the day's page, appended as one `signed-day/v1`
+    line, tier 1, source manual — the day, the ids confirmed (every line on the page by default, or
+    `--confirm all`; a line given a disposition is confirmed by that; none at all for `--confirm
+    none`), what became of each commitment named, the digest of the page as shown and the note, at
+    the moment the owner signed (`--at`, else now) — and nothing else touched. A day signed before is
+    signed again: the new line supersedes the standing one and, without `--confirm`, keeps what it
+    said (`sign_again`, RFC 0034 amendment 4): its confirmed lines still on the page, its
+    dispositions and its note, what is typed winning; a line added since stays unconfirmed. Only the
+    owner signs: here, or through the MCP tool `sign_day` when the owner's policy allows it by name
+    (ADR 0022), which signs through the same `sign_again` and `signing.sign`."""
     if a.signed_day is None or a.signed_day == signing_verb:
         print("day sign: the day, YYYY-MM-DD, is needed: logbook day sign 2026-06-09", file=sys.stderr)
         sys.exit(2)
@@ -587,19 +593,21 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
         day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
         day = parse_day(a.signed_day).isoformat()
         wanted = [] if a.accept is None else reflect.numbers(a.accept)
-        confirm, dispositions = _confirm(a), _dispositions(a)
+        (confirm, keep), dispositions = _confirm(a), _dispositions(a)
         found = dream_events.listed(lb, day)  # the draft the Day shows: a withheld one proposes nothing
         taken = dream_events.chosen(found, wanted, day, dream_events.held_back(lb, day) if wanted else None)
         if taken:  # every flag checked before an event is written
             dream_events.check_signature(lb, day, confirm, dispositions, a.at, a.note)
         for text in dream_events.rows(found):
             print(text)
-        line = _sign_with_events(lb, day, taken, confirm, a.note, a.at, dispositions)
+        line, kept = _sign_with_events(lb, day, taken, confirm, keep, a.note, a.at, dispositions)
     except ValueError as e:  # SignError, EventError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
     for text in signing.summary(line):
         print(text)
+    if kept is not None:
+        print(f"  {kept}")
     left = [p for p in found if p.pending and p not in taken]
     if left:
         n = len(left)
@@ -614,18 +622,23 @@ def _sign_with_events(
     day: str,
     taken: Sequence[dream_events.Proposed],
     confirm: list[str] | None,
+    keep: bool,
     note: str | None,
     at: str | None,
     dispositions: dict[str, list[str]],
-) -> Line:
+) -> tuple[Line, str | None]:
     """Under one hold of the writer lock: the proposals read again and every event line made before
-    the first is written (`dream_events.prepared`), each written, then the signature through
-    `signing.sign`, the events among the lines confirmed."""
+    the first is written (`dream_events.prepared`), each written, then the standing signature read
+    (`sign_again.again`: kept when `keep`) and the signature through `signing.sign`, the events among
+    the lines confirmed; with what was kept from the standing signature, said in a sentence."""
     with lb.writer():
         written = [_write_event(lb, p, line) for p, line in dream_events.prepared(lb, day, taken)]
-        if confirm:
+        args = sign_again.again(lb, day, confirm, keep, dispositions, note)
+        confirm = args.confirm
+        if confirm is not None and (confirm or keep):
             confirm = [*confirm, *written]
-        return signing.sign(lb, day, confirm=confirm, note=note, at=at, dispositions=dispositions)
+        line = signing.sign(lb, day, confirm=confirm, note=args.note, at=at, dispositions=args.dispositions)
+        return line, args.kept
 
 
 def _write_event(lb: Logbook, proposal: dream_events.Proposed, made: dict[str, Any]) -> str:

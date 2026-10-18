@@ -216,9 +216,9 @@ def test_confirm_names_seqs_or_ids_on_the_page_and_refuses_anything_else(lb: Log
     assert _fails("day", "sign", DAY, "--confirm", "2") == 2, "a retracted line is not a fact"
     assert "retracted" in capsys.readouterr().err
     assert lb.meta["seq"] == seq + 1, "the retraction; no signature was written"
-    _run(capsys, "day", "sign", DAY)
+    _run(capsys, "day", "sign", DAY, "--confirm", "all")  # a re-sign: `all` is the whole page (amendment 4)
     p = _by_seq(lb)[lb.meta["seq"]]["payload"]
-    assert p["confirmed"] == [ids[1], ids[5], ids[3]], "by default every line of the page not retracted"
+    assert p["confirmed"] == [ids[1], ids[5], ids[3]], "with all, every line of the page not retracted"
     assert p["page"]["lines"] == 4, "the retracted line is still on the page, marked"
 
 
@@ -530,10 +530,10 @@ def test_the_four_flags_write_dispositions_and_add_their_lines_to_confirmed(
     assert p["confirmed"] == [ids[s] for s in PAGE], "without --confirm, every line on the page"
     assert p["dispositions"] == {ids[1]: "kept", ids[5]: "missed", ids[2]: "dropped", ids[3]: "carried"}
     assert "kept 1, missed 1, dropped 1, carried 1" in out
-    _run(capsys, "day", "sign", DAY, "--kept", " 2 , 5 ")
+    _run(capsys, "day", "sign", DAY, "--confirm", "all", "--kept", " 2 , 5 ")  # a fresh reading keeps nothing
     p = _by_seq(lb)[8]["payload"]
     assert p["dispositions"] == {ids[5]: "kept", ids[2]: "kept"}
-    _run(capsys, "day", "sign", DAY)
+    _run(capsys, "day", "sign", DAY, "--confirm", "all")
     assert "dispositions" not in _by_seq(lb)[9]["payload"], "the field is optional: absent when none is given"
     assert lb.verify()[2] == []
     signed = json.loads(_run(capsys, "day", DAY, "--json"))["signed"]

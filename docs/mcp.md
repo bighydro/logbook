@@ -59,7 +59,7 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | `digest` | `period?` (`day`, `week`), `date?` | `logbook digest DATE`, the text as printed ([below](#the-lines-themselves)) |
 | `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2 |
 | `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line |
-| `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; only when the policy names it |
+| `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; a day signed before keeps its confirmations; only when the policy names it |
 | `note_day` | `day`, `text`, `at?`, `kind?` | one `note/v1` line on `day`, tier 2, source `mcp`; only when the policy names it |
 
 `search` is a scan, not the ranked search `logbook search` is ([search](search.md)). It cuts the window
@@ -230,14 +230,17 @@ Neither is allowed until the `mcp` entry of `policy/crossing.json` names it unde
 
 **`sign_day(day, confirm?, kept?, missed?, dropped?, carried?, note?, at?)`** is `logbook day sign DAY` through
 the same code, `signing.sign`, with no second implementation: `confirm` is a list of ids or seqs on the page,
-or `"none"` (which goes alone); the four dispositions are lists of ids or seqs (RFC 0034 amendment 1); `note`
+`"all"` or `"none"` (each goes alone); the four dispositions are lists of ids or seqs (RFC 0034 amendment 1); `note`
 is one line; `at` is the moment you signed, with the same rules as `--at` (amendment 2). The ids are checked
 against the page as the command checks them, and a day already signed is signed again, the new line
-superseding the old. The line is byte for byte what `day sign` writes with the same flags and `--at`, source
+superseding the old and, without `confirm`, keeping what the old one confirmed, its dispositions and its note
+(RFC 0034 amendment 4): a line added to the day since stays unconfirmed, so a re-sign through the door never
+confirms a line the owner was not shown; `"all"` confirms the whole page. The line is byte for byte what `day sign` writes with the same flags and `--at`, source
 `manual` included: the signature is yours, carried by the orchestrator. The page signed is the whole page, as
 `day sign` signs it, lines above the ceiling included, which the orchestrator cannot read; the answer is the
 line's envelope, `header` (the first line `day sign` prints, `2026-06-09: signed 2026-06-09T19:30:00Z as #813
-signed-day/v1`), and counts: `confirmed`, `on_page`, `dispositions` per word, and `supersedes`.
+signed-day/v1`), `kept` (what was kept from the signature it supersedes, the sentence `day sign` prints, or
+null), and counts: `confirmed`, `on_page`, `dispositions` per word, and `supersedes`.
 
 **`note_day(day, text, at?, kind?)`** appends one `note/v1` line: source `mcp`, tier 2, the text exactly as
 given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer one is refused and nothing is
