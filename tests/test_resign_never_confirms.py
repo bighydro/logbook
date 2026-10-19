@@ -4,8 +4,9 @@ re-signs through any of the four ways (`day sign`, the MCP tool `sign_day`, `day
 Day page's "Sign again"), every id a bare re-sign confirms is one of: a line the standing signature
 confirmed, still on the page; a line given a disposition in that very call; a line the act itself
 wrote (the reflection). And every line the standing signature confirmed that is still on the page is
-kept. A day with no standing signature is signed whole, as a first signature is. Synthetic Oslo
-persona, who does not exist."""
+kept. A day with no standing signature is signed whole, as a first signature is; through the door,
+whole up to its ceiling, since the door never confirms what it cannot show (19 October 2026). Synthetic
+Oslo persona, who does not exist."""
 
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ FIRST_AT = "2026-03-03T19:00:00+01:00"
 AGAIN_AT = "2026-03-04T08:00:00+01:00"
 REFLECTION = "Good day on the boat."
 WAYS = ("day sign", "sign_day", "day reflect --sign", "Sign again")
+DOOR = 1  # the mcp entry's max_tier: every note is tier 2, above it
 
 
 def _note(at: str, text: str) -> dict[str, Any]:
@@ -120,7 +122,7 @@ def test_a_bare_re_sign_confirms_only_what_the_owner_confirmed(
         lb.append_many([_note(f"2026-03-03T0{h}:00:00Z", f"line {h}") for h in range(6, 10)])  # seqs 1-4
         path = policy.policy_path(lb.root)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"mcp": {"max_tier": 1, "write": ["sign_day"]}}), encoding="utf-8")
+        path.write_text(json.dumps({"mcp": {"max_tier": DOOR, "write": ["sign_day"]}}), encoding="utf-8")
         added = 0
         for kind, arg in steps:
             if kind == "first":
@@ -182,9 +184,11 @@ def test_a_bare_re_sign_confirms_only_what_the_owner_confirmed(
                 page_after, _ = _page(lb)
                 assert confirmed <= {str(line["id"]) for line in page_after}
                 if standing is None:
-                    assert confirmed == {str(line["id"]) for line in page_after}, (
-                        "a first signature: the page"
-                    )
+                    whole = {str(line["id"]) for line in page_after}
+                    if way == "sign_day":  # the lines at or under the door's ceiling, and the one disposed
+                        whole = {str(line["id"]) for line in page_before if int(line["tier"]) <= DOOR}
+                        whole |= {by_seq[seq]} if disposed is not None else set()
+                    assert confirmed == whole, "a first signature: the page"
                     continue
                 assert signature["payload"]["supersedes"] == standing["id"]
                 kept = {str(i) for i in standing["payload"]["confirmed"]} & on_page

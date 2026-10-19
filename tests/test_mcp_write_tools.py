@@ -157,7 +157,9 @@ def _appended(root: Path) -> bytes:
 @pytest.mark.parametrize(
     ("flags", "arguments"),
     [
-        ([], {}),
+        # a first signature without `confirm` through the door confirms the lines at or under its ceiling
+        # (19 October 2026): #2 is tier 2, above the mcp entry's 1, so `day sign` names the other two
+        (["--confirm", "1,3"], {}),
         (
             ["--confirm", "1,3", "--note", "A quiet Sunday."],
             {"confirm": ["1", "3"], "note": "A quiet Sunday."},
@@ -333,7 +335,9 @@ def test_the_log_carries_counts_and_never_text(lb: Logbook, caplog: pytest.LogCa
     assert NAME not in caplog.text and "Ines" not in caplog.text and "aboard" not in caplog.text
     assert lines[0].startswith("note_day day=2026-03-01 kind=proposal") and "chars=" in lines[0]
     assert lines[1].startswith("sign_day day=2026-03-01")
-    assert "confirmed=4" in lines[1], "the note written above is on the page"
+    # the note written above is on the page, at tier 2 above the door's ceiling of 1: a first signature
+    # through the door leaves it unconfirmed, and #2, above it too, is confirmed by its disposition
+    assert "confirmed=3 on_page=4 above_ceiling=1" in lines[1], "the note written above is on the page"
 
 
 # -- what the host sees -----------------------------------------------------------------------------------

@@ -137,3 +137,94 @@ def test_all_through_the_door_writes_what_day_sign_writes_for_the_ids_it_confirm
     mcp_server.call(lb.root, "sign_day", {"day": DAY, "confirm": "all", "at": SIGNED_AT})
     month = ("logbook", "2026", "03.jsonl")
     assert lb.root.joinpath(*month).read_bytes() == twin.joinpath(*month).read_bytes()
+
+
+# The door never confirms what it cannot show, on a first signature too (the owner's answer to #332's
+# open question, 19 October 2026): `sign_day` with no `confirm`, on a day not yet signed, confirms the
+# page's lines at or under the door's ceiling, as `"all"` does, and counts the rest.
+
+
+def test_a_first_signature_through_the_door_leaves_a_line_above_its_ceiling_unconfirmed(lb: Logbook):
+    _policy(lb, 2)
+    data = mcp_server.call(lb.root, "sign_day", {"day": DAY, "at": SIGNED_AT})["data"]
+    ids = _ids(lb)
+    payload = _last(lb)["payload"]
+    assert payload["confirmed"] == [ids[1], ids[2], ids[4]]
+    assert payload["page"]["lines"] == 4 and "supersedes" not in payload
+    assert data["confirmed"] == 3 and data["on_page"] == 4 and data["kept"] is None
+    assert data["above_ceiling"] == 1
+    assert data["unconfirmed"] == "1 line above the door's ceiling left unconfirmed"
+    said = json.dumps(data, ensure_ascii=False)
+    assert SECRET not in said and ids[3] not in said, "a count, never the line"
+
+
+def test_a_first_signature_through_the_door_confirms_every_line_when_the_ceiling_is_three(lb: Logbook):
+    _policy(lb, 3)
+    data = mcp_server.call(lb.root, "sign_day", {"day": DAY, "at": SIGNED_AT}, allow_tier_3=True)["data"]
+    ids = _ids(lb)
+    assert _last(lb)["payload"]["confirmed"] == [ids[1], ids[2], ids[3], ids[4]]
+    assert data["confirmed"] == 4 and data["above_ceiling"] == 0 and data["unconfirmed"] is None
+
+
+def test_a_first_signature_with_a_disposition_still_leaves_the_line_above_unconfirmed(lb: Logbook):
+    _policy(lb, 2)
+    data = mcp_server.call(lb.root, "sign_day", {"day": DAY, "kept": ["2"], "at": SIGNED_AT})["data"]
+    ids = _ids(lb)
+    payload = _last(lb)["payload"]
+    assert payload["confirmed"] == [ids[1], ids[2], ids[4]]
+    assert payload["dispositions"] == {ids[2]: "kept"}
+    assert data["above_ceiling"] == 1
+
+
+def test_a_first_signature_through_the_door_writes_what_day_sign_writes_for_the_ids_it_confirmed(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    _policy(lb, 2)
+    twin = Path(shutil.copytree(lb.root, tmp_path / "twin"))
+    monkeypatch.setattr(store, "uuid7", lambda: "019ca000-0000-7000-8000-000000000002")
+    monkeypatch.setattr(store, "now_utc", lambda: "2026-03-02T08:05:00Z")
+    monkeypatch.setenv("LOGBOOK_HOME", str(twin))
+    cli.main(["day", "sign", DAY, "--confirm", "1,2,4", "--at", SIGNED_AT])
+    capsys.readouterr()
+    mcp_server.call(lb.root, "sign_day", {"day": DAY, "at": SIGNED_AT})
+    month = ("logbook", "2026", "03.jsonl")
+    assert lb.root.joinpath(*month).read_bytes() == twin.joinpath(*month).read_bytes()
+
+
+def test_day_sign_without_confirm_still_confirms_the_whole_page(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    _policy(lb, 1)
+    cli.main(["day", "sign", DAY, "--at", SIGNED_AT])
+    capsys.readouterr()
+    ids = _ids(lb)
+    assert _last(lb)["payload"]["confirmed"] == [ids[1], ids[2], ids[3], ids[4]]
+
+
+def test_a_re_sign_through_the_door_without_confirm_keeps_what_the_owner_confirmed(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+):
+    _policy(lb, 2)
+    cli.main(["day", "sign", DAY, "--at", SIGNED_AT])  # the owner, who saw the whole page
+    capsys.readouterr()
+    ids = _ids(lb)
+    data = mcp_server.call(lb.root, "sign_day", {"day": DAY, "at": "2026-03-02T09:00:00Z"})["data"]
+    payload = _last(lb)["payload"]
+    assert payload["confirmed"] == [ids[1], ids[2], ids[3], ids[4]], "kept, as RFC 0034 amendment 4 says"
+    assert payload["supersedes"] == ids[5]
+    assert data["above_ceiling"] == 0 and data["unconfirmed"] is None
+
+
+def test_a_bare_first_signature_under_a_ceiling_over_the_whole_page_writes_what_bare_day_sign_writes(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    _policy(lb, 3)
+    twin = Path(shutil.copytree(lb.root, tmp_path / "twin"))
+    monkeypatch.setattr(store, "uuid7", lambda: "019ca000-0000-7000-8000-000000000003")
+    monkeypatch.setattr(store, "now_utc", lambda: "2026-03-02T08:05:00Z")
+    monkeypatch.setenv("LOGBOOK_HOME", str(twin))
+    cli.main(["day", "sign", DAY, "--at", SIGNED_AT])
+    capsys.readouterr()
+    mcp_server.call(lb.root, "sign_day", {"day": DAY, "at": SIGNED_AT}, allow_tier_3=True)
+    month = ("logbook", "2026", "03.jsonl")
+    assert lb.root.joinpath(*month).read_bytes() == twin.joinpath(*month).read_bytes()

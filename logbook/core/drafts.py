@@ -152,6 +152,7 @@ UNIT_JOURNEY = "journey"
 UNIT_WEEK = "week"
 UNIT_PERSON = "person"  # one canonical person over a window (RFC 0036 amendment 1)
 PERSON_ENTRY = "relationship"  # the entry a person draft is written under and held to (`Allowed.of`)
+SCENE_SOURCE = "model:video-rules/"  # a video scene's draft (`labs/scenes.py`): written here, under no entry
 WINDOW = "window"  # a person draft's `{from, to}`, two local days, both inclusive; absent on every other unit
 ISO_WEEK = re.compile(r"\d{4}-W(0[1-9]|[1-4]\d|5[0-3])\Z")  # a week's subject, `2026-W25`
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
@@ -330,6 +331,13 @@ class Allowed:
         if unit in (UNIT_JOURNEY, UNIT_WEEK, UNIT_PERSON):
             return f"{found}; `dream {unit}` dreams it again under it"
         return f"{found}; `dream --catch-up` dreams the day again under it"
+
+
+def under_entry(line: Line) -> bool:
+    """Whether a draft was written under an entry of the crossing policy: every draft but a video
+    scene's (source `SCENE_SOURCE`), which the rules on this machine write from lines that never
+    crossed, so that no entry governs it and a crossing carries it by its tier like any line."""
+    return not str(line.get("source") or "").startswith(SCENE_SOURCE)
 
 
 def unit_of(line: Line) -> object:

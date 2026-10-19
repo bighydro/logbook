@@ -42,7 +42,7 @@ import re
 import sys
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -108,7 +108,7 @@ NOTE_KINDS = (notes.NOTE, notes.PROPOSAL, notes.REFLECTION)  # `note_day(kind)`,
 NOTE_MAX = 4000  # `note_day(text)`: the most characters one note through the door may hold
 NOTE_SOURCE = "mcp"  # the source of a `note_day` line: written through the door, in the owner's words
 NOTE_TIER = notes.TIER  # RFC 0010: a note/v1 line is tier 2, whoever writes it
-ABOVE_LEFT = "above the door's ceiling left unconfirmed"  # `sign_day`'s `"all"`: a count, never the lines
+ABOVE_LEFT = "above the door's ceiling left unconfirmed"  # `sign_day`'s `"all"` and first signature: a count
 NOT_WAITED = "; the door does not wait for another writer, so nothing was written"
 # `day_lines(kinds)`: a profile family -> the kinds in it (`calendar` is the `event/v1` lines)
 FAMILIES: dict[str, tuple[str, ...]] = {
@@ -198,7 +198,8 @@ class Gate:
         return self.max_tier, self.drafts
 
     def shows(self, line: Line) -> bool:
-        """A line the gate lets a client see, nothing counted: what `sign_day`'s `"all"` confirms."""
+        """A line the gate lets a client see, nothing counted: what `sign_day`'s `"all"` confirms, and
+        its first signature without `confirm`."""
         return self.allows_line(line)
 
     def keep(self, line: Line) -> bool:
@@ -1022,20 +1023,22 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     `signing.sign`, the one implementation, over the record itself and not through the gate, so the
     line is byte for byte what the command writes with the same flags and `--at`. A day signed before
     keeps what its standing signature said when `confirm` is not given (`sign_again`, RFC 0034
-    amendment 4), as `day sign` does; `"all"` confirms the page's lines at or under the door's ceiling
-    and leaves the rest unconfirmed, counted (`_shown_on_page`; amendment 4, 18 October 2026), since
-    the agent was never shown them. Returns the line's envelope, the header the command prints, what
-    was kept, and counts."""
+    amendment 4), as `day sign` does; `"all"`, and a first signature without `confirm`, confirm the
+    page's lines at or under the door's ceiling and leave the rest unconfirmed, counted
+    (`_shown_on_page`; amendment 4, 18 and 19 October 2026), since the agent was never shown them.
+    Returns the line's envelope, the header the command prints, what was kept, and counts."""
     day = _write_day(lb, a)  # `_today` under the record's day_start: a boundary not a clock is refused
     confirm = a.get("confirm")
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
     record = Logbook(lb.root)
     chosen, keep = sign_again.confirmation(entries, bool(disposed))
-    above = 0
-    if entries is not None and chosen is None:  # `"all"`: the page's lines the door can show, no more
-        chosen, above = _shown_on_page(lb, record, day)
     args = sign_again.again(record, day, chosen, keep, disposed, _string(a, "note"))  # under `call`'s hold
+    hidden: set[str] = set()
+    if args.confirm is None:  # `"all"`, or a first signature: the page's lines the door can show, no more
+        shown, hidden = _shown_on_page(lb, record, day)
+        # a line given a disposition is confirmed whatever `confirm` says; none shown is not `"none"`
+        args = replace(args, confirm=shown or [e for found in args.dispositions.values() for e in found])
     line = signing.sign(
         record,
         day,
@@ -1046,6 +1049,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     )
     p = line["payload"]
     given = signing.dispositions_of(p).values()
+    above = len(hidden - set(p["confirmed"]))  # a line given a disposition is confirmed, so not left
     return {
         **_written(lb, line),
         "day": p["day"],
@@ -1060,15 +1064,16 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     }
 
 
-def _shown_on_page(lb: GatedLogbook, record: Logbook, day: str) -> tuple[list[str], int]:
-    """What `confirm: "all"` confirms through the door (RFC 0034 amendment 4, 18 October 2026): the
-    ids of the page's lines the gate lets the agent see, in the page's order, and how many lines of
-    the page it does not, which stay unconfirmed. The page is read from the record itself, as
-    `signing.sign` reads it; nothing of a line above the gate leaves this function but the count."""
+def _shown_on_page(lb: GatedLogbook, record: Logbook, day: str) -> tuple[list[str], set[str]]:
+    """What `confirm: "all"` confirms through the door, and a first signature without `confirm` (RFC
+    0034 amendment 4, 18 and 19 October 2026): the ids of the page's lines the gate lets the agent
+    see, in the page's order, and the ids of those it does not, which stay unconfirmed unless given a
+    disposition. The page is read from the record itself, as `signing.sign` reads it; the caller says
+    nothing of a line above the gate but how many there are."""
     lines, retracted = reflect.day_lines(record, day)
     page = reflect.on_page(lines, retracted)
     shown = [str(line["id"]) for line in lines if str(line["id"]) in page and lb.gate.shows(line)]
-    return shown, len(page) - len(shown)
+    return shown, set(page) - set(shown)
 
 
 def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
@@ -1302,9 +1307,9 @@ TOOLS: dict[str, Tool] = {
             "sign_day",
             "Sign a day as `logbook day sign DAY` does, through the same code: one signed-day/v1 line,"
             " tier 1, the owner's reading of the page. `confirm` names the lines confirmed (default every"
-            ' line on the page; "all" confirms every line at or under the ceiling, "none" nothing, each'
-            " alone), `kept`, `missed`,"
-            " `dropped`, `carried` say what became of a commitment, `at` is when the owner signed. A day"
+            ' line on the page at or under the ceiling; "all" the same, "none" nothing, each alone),'
+            " `kept`, `missed`, `dropped`, `carried` say what became of a commitment, `at` is when the"
+            " owner signed; a line above the ceiling is left unconfirmed and counted. A day"
             " signed before is superseded and, without `confirm`, keeps what its signature confirmed, its"
             " dispositions and note: a line added since stays unconfirmed. Refused unless the mcp entry of"
             ' policy/crossing.json names it under "write".',

@@ -145,6 +145,8 @@ The gate is every other line's: a day together counts only on the lines of it at
 
 What does not change: the envelope, `draft/v1`, the five channels of the set, the store's files (a day together is read again from the record each time, never kept in the store), and every line already written.
 
+*19 October 2026, the owner's answer to #332's open question:* a day together's place name takes the tier of what it rests on, the highest tier of the owner's location lines behind the stay and of the line that names the company, so a day whose stay rests on location lines above the entry's `max_tier` is not sent and is counted as held back, never its name alone.
+
 ## Relation to RFC 0037
 
 RFC 0037 (entities, a draft at this writing) was written before this RFC merged and cites nothing from it; the cross-reference is made here, from the side that merged first (amendment 1).

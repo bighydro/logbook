@@ -680,8 +680,8 @@ def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
     yield f"  {c['logged']} lines in the window, {c['crossed']} cross, {c['held_back']} held back"
     if c.get("held_back_by_entry"):
         yield (
-            f"  {c['held_back_by_entry']} person draft(s) held back: the 'relationship' entry they were"
-            " written under no longer allows their tier"
+            f"  {c['held_back_by_entry']} draft(s) held back: the entry they were written under (the"
+            " 'dream' entry, a person's the 'relationship' entry) no longer allows their tier"
         )
     if c["held_back_unsigned"]:
         yield (

@@ -7,8 +7,10 @@ people without the whole registry; and a manifest a JSON parser can read. The ce
 destination is a setting in the record, `policy/crossing.json` (ADR 0016), never a constant here.
 Every real export is itself a line in the chain, `crossing/v1` (RFC 0011), and moves a watermark
 per destination in `exports/crossing.json`. A second gate beside the tier (RFC 0034): only the
-lines of days the owner has signed cross, unless the request says `--unsigned`. Nothing here
-rewrites a line; the only write to the log is that one `Logbook.append`."""
+lines of days the owner has signed cross, unless the request says `--unsigned`. A draft crosses
+only while the entry it was written under allows its tier (`drafts.Allowed.of`): a person's the
+`relationship` entry, every other unit's the `dream` entry, whatever the destination's ceiling. Nothing
+here rewrites a line; the only write to the log is that one `Logbook.append`."""
 
 from __future__ import annotations
 
@@ -190,7 +192,7 @@ class Selection:
     sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
     held_back_unsigned: int = 0  # lines in the tiers and kinds asked for whose day is not signed (RFC 0034)
     held_back_by_entry: int = (
-        0  # person drafts the `relationship` entry no longer allows (`drafts.Allowed.of`)
+        0  # drafts the entry they were written under no longer allows (`drafts.Allowed.of`)
     )
 
     @property
@@ -273,11 +275,12 @@ def select(lb: Logbook, req: Request) -> Selection:
                 "are in the window: add one (RFC 0029 §7), or pass --open to ship them opened"
             )
     lines = [lb.opened(line) for line in raw]
-    # a person draft follows the entry it was written under, not the head (RFC 0036 amendment 1):
-    # once the `relationship` entry no longer allows its tier it stays home, whatever this ceiling
-    people = drafts.person_allowed(lb.root)
+    # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
+    # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
+    # longer allows its tier it stays home, whatever this ceiling
+    entries = drafts.allowed(lb.root)
     held_by_entry = len(lines)
-    lines = [line for line in lines if not _held_by_entry(line, people)]
+    lines = [line for line in lines if not _held_by_entry(line, entries)]
     held_by_entry -= len(lines)
     beside = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, beside)]
@@ -289,12 +292,12 @@ def select(lb: Logbook, req: Request) -> Selection:
     return Selection(lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry)
 
 
-def _held_by_entry(line: Line, people: drafts.Allowed) -> bool:
-    """A person draft the `relationship` entry no longer allows; every other line, and every other
-    unit's draft, is the tier's and the signed days' alone, as before."""
-    if line.get("kind") != drafts.KIND or drafts.unit_of(line) != drafts.UNIT_PERSON:
-        return False
-    return int(line.get("tier") or 0) > people.max_tier
+def _held_by_entry(line: Line, entries: drafts.Allowed) -> bool:
+    """A draft the entry it was written under no longer allows (`drafts.Allowed.allows`: a person's
+    the `relationship` entry, every other unit's the `dream` entry, and a sealed one this machine
+    cannot open the `dream` entry); every other line, a video scene's draft among them (written under no
+    entry, `drafts.under_entry`), is the tier's and the signed days' alone."""
+    return line.get("kind") == drafts.KIND and drafts.under_entry(line) and not entries.allows(line)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
