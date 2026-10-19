@@ -56,7 +56,7 @@ Everything above the record is derived and disposable: stays, moves, trips, who 
 
 ## What is rough
 
-- Encryption at rest for tiers 2 and 3 is specified in outline and not built. Today the files are plain.
+- Encryption at rest for tiers 2 and 3 is built and off until you turn it on: `logbook key init`, then `key seal --all` for what came before. The envelope stays plain, so the files still show which source wrote at what time, and a backup taken before sealing still holds the words.
 - The circle, the exchange of pages between two records, has a bundle format and no transport.
 - The adapters are the maintainer's own sources first: iPhone backups, Google Takeout, WhatsApp, iMessage, Apple Health, a handful of apps. Android has only what Takeout carries. See the [adapter bounties](adapter-bounties.md).
 - The country of a night comes from a named place, else the nearest large airport, which is wrong near borders.
