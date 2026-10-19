@@ -246,7 +246,7 @@ def day_line(day: str, line: str) -> str:
 def page_promises(site: Site, person: str | None = None) -> str:
     """`/promises`: open first (the oldest first), then kept and dropped (the newest first), each row
     who, what, when it was said, the evidence line; `person` keeps one person's."""
-    shelf = read(site.lb, site.tiers)
+    shelf = site.shared(("promises",), lambda: read(site.lb, site.tiers))
     person = person.strip() if person and person.strip() else None
     shown = [r for r in shelf.rows if person is None or _with(r, person)]
     head = f"{_plural(len(shown), 'promise')}{DOT}tier {shelf.tier or '-'}"
@@ -321,7 +321,7 @@ def _row_html(site: Site, r: Row) -> str:
 def page_promise(site: Site, pid: str) -> str:
     """`/promises/ID`: one promise: what, who, when, its state and verdict, the sentences around it, and
     the line it was read in, linked on its Day."""
-    shelf = read(site.lb, site.tiers)
+    shelf = site.shared(("promises",), lambda: read(site.lb, site.tiers))
     try:
         r = shelf.row(pid)
     except PromiseNotFound as e:

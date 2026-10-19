@@ -306,9 +306,10 @@ class Context:
         entity, _label = present.resolve_ref(ref, self.identities)
         return None if entity is None or entity in self.owner.entities else entity
 
-    def standing(self, idx: Index, kind: str) -> Iterator[Line]:
+    def standing(self, idx: Index, kind: str, source: str | None = None) -> Iterator[Line]:
+        """The standing lines of `kind` (of `source` alone when given: the index cuts it), in file order."""
         superseded = idx.superseded(kind)
-        for line in idx.of_kind(kind):
+        for line in idx.of_kind(kind, source=source):
             line_id = str(line.get("id"))
             if line_id not in self.retracted and line_id not in superseded:
                 yield line
@@ -650,7 +651,7 @@ class NotionTree:
 
 def notion_tree(idx: Index, ctx: Context) -> NotionTree:
     """Every page the standing `sync notion` lines name, as its latest line says it."""
-    lines = [line for line in ctx.standing(idx, "event") if line.get("source") == NOTION]
+    lines = list(ctx.standing(idx, "event", NOTION))  # the record's other events are never read
     lines.sort(key=lambda line: (_instant(line), int(line.get("seq") or 0)))
     pages: dict[str, NotionPage] = {}
     for line in lines:

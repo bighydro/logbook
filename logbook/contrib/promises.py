@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
@@ -310,17 +310,17 @@ class Rules:
             m = pattern.search(sentence)
             if m and (first is None or m.start() < first[0]):
                 first = (m.start(), m, REQUEST, language)
-        phrase = due_phrase(sentence)
         if first is None:
-            if question or phrase is None or len(sentence.split()) > DEADLINE_WORDS:
-                return None
-            if not _TERSE_DEADLINE.match(phrase):
+            if question or len(sentence.split()) > DEADLINE_WORDS:
+                return None  # no cue, and no terse deadline either: the date phrase is not asked
+            phrase = due_phrase(sentence)
+            if phrase is None or not _TERSE_DEADLINE.match(phrase):
                 return None
             language = "de" if phrase.casefold().startswith(("bis", "spät")) else "en"
             return Match(sentence, phrase, DEADLINE, language, phrase)
         _start, m, phrase_class, language = first
         cue = m.group(1) if m.lastindex else m.group(0)
-        return Match(sentence, cue, phrase_class, language, phrase)
+        return Match(sentence, cue, phrase_class, language, due_phrase(sentence))
 
 
 RULES = Rules()
@@ -705,14 +705,6 @@ def extract(
         resolutions = [line for line in idx.resolutions() if admit is None or admit(line)]
         identities = identities_from([*marks, *resolutions])
         superseded = {i for kind in kinds for i in idx.superseded(kind)}
-        lines = [
-            line
-            for kind in kinds
-            for line in idx.by_kind(kind, since, until)
-            if str(line["id"]) not in retracted
-            and str(line["id"]) not in superseded
-            and (admit is None or admit(line))
-        ]
         closed = closes(idx.by_kind(TASK), retracted)
         disposed = signing.disposed_lines(idx, str(lb.meta.get("owner_id") or "") or None)
     owner = present.owner_of(
@@ -723,6 +715,7 @@ def extract(
     )
     owner_label = _owner_label(owner, identities)
     voices = attribution.Voices(identities, owner.entities, owner.id)
+    lines = _words(lb, kinds, since, until, frozenset(retracted) | superseded, admit)
     skipped: dict[str, int] = {}
     proposals: list[Proposal] = []
     seen: set[str] = set()
@@ -862,6 +855,24 @@ def extract(
             at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
     return Report(proposals, skipped, describe(extractor), since, owner_label, kinds)
+
+
+def _words(
+    lb: Logbook,
+    kinds: Sequence[str],
+    since: str | None,
+    until: str | None,
+    out: Collection[str],
+    admit: Callable[[Line], bool] | None,
+) -> Iterator[Line]:
+    """The standing lines of `kinds` in the days asked, kind after kind, each in chain order, less the
+    ids in `out` (the retracted and the superseded) and what `admit` refuses: streamed, so the record's
+    messages are never all in memory at once."""
+    with lb.index() as idx:
+        for kind in kinds:
+            for line in idx.stream(kind, since, until):
+                if str(line["id"]) not in out and (admit is None or admit(line)):
+                    yield line
 
 
 def _voice(

@@ -27,6 +27,7 @@ import contextlib
 import math
 import sqlite3
 import time
+from array import array
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
@@ -54,6 +55,7 @@ FILE_NAME = "index.sqlite"
 SCHEMA_VERSION = "8"
 BUILD_PROGRESS_EVERY = 100_000  # rebuild: lines between progress reports
 INSERT_EVERY = 10_000  # rebuild: rows per INSERT
+STREAM_EVERY = 1_000  # `stream`: lines read from the files at a time
 
 SEARCH = "search"  # the FTS5 table: rowid is the line's seq; kind, tier and day cut a query, unindexed
 
@@ -95,6 +97,19 @@ SCHEMA = (
         else ()
     ),
 )
+# Indexes added after schema 8, by read queries alone: a line by its id (`by_id`, `by_ids`, the Library's
+# `/line/ID` and every photo), and the lines that supersede another, by kind (`superseded`, and the
+# retractions every reader leaves out). What a column holds is unchanged, so the schema is too: a new
+# index has them from `rebuild`, an existing one is given them by the Library, once, the first time it
+# finds the index current (`Index.add_indexes`; never a writer, which must not wait on them).
+ADDED = {
+    "lines_id": "CREATE INDEX IF NOT EXISTS lines_id ON lines (id)",
+    "lines_kind_supersedes": (
+        "CREATE INDEX IF NOT EXISTS lines_kind_supersedes ON lines (kind, supersedes)"
+        " WHERE supersedes IS NOT NULL"
+    ),
+}
+
 # What the sources saw, one table for every kind (RFC 0037, decision 7): a row per observed person,
 # org, idea, asset or place, keyed by the kind and its strongest identifier, built by the review that
 # reads it (`logbook.contrib.people_review`, `places_review`, `entity_review`) and stamped per kind in
@@ -328,6 +343,47 @@ class Index:
             idx = cls(lb)
         return idx
 
+    def add_indexes(self) -> bool:
+        """The indexes `ADDED` names, on an index built before them that is current with the record;
+        nothing when they are there, or when the index is not current (the rebuild that comes makes
+        them with the rest). Asked by a reader that serves many requests (the Library, on a GET, once
+        per head), never by a writer: building one over millions of rows takes seconds, and a writer
+        must not wait on it inside SQLite's busy timeout. So the build takes the record's writer lock
+        itself, without waiting, and lets it go the moment the statements are done: a writer that
+        arrives meanwhile waits on the lock, saying so in its one line, and then appends. Nothing is
+        built while another process holds the lock, or the record folder takes no lock file (True:
+        the next head tries again), nor while this process holds it (a write path) or another
+        connection holds the file (no busy wait; False: ask again)."""
+        from .store import Locked, _held  # store imports this module
+
+        if not self.matches(self.lb.meta):
+            return True
+        try:
+            present = {
+                str(name)
+                for (name,) in self.db.execute("SELECT name FROM sqlite_master WHERE type = 'index'")
+            }
+            missing = [statement for name, statement in ADDED.items() if name not in present]
+            if not missing:
+                return True
+            if _held.get(self.lb._lock_path()):
+                return False
+            with self.lb.writer(wait=False):
+                if not self.matches(self.lb.meta):  # a writer came between the look and the lock
+                    return True
+                (waited,) = self.db.execute("PRAGMA busy_timeout").fetchone()
+                self.db.execute("PRAGMA busy_timeout = 0")
+                try:
+                    for statement in missing:
+                        self.db.execute(statement)
+                finally:
+                    self.db.execute(f"PRAGMA busy_timeout = {int(waited)}")
+            return True
+        except (Locked, OSError):
+            return True
+        except sqlite3.OperationalError:
+            return False
+
     @property
     def db(self) -> sqlite3.Connection:
         if self._db is None:
@@ -460,6 +516,7 @@ class Index:
                 "DROP TABLE IF EXISTS meta",
                 f"DROP TABLE IF EXISTS {SEARCH}",
                 *SCHEMA,
+                *ADDED.values(),
             ):
                 self.db.execute(statement)
             self._observed_schema()
@@ -677,6 +734,31 @@ class Index:
             (kind, first_day or "", last_day or "9999-12-31"),
         ).fetchall()
         return self._read(found)
+
+    def stream(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
+        """`by_kind`, a thousand lines at a time: the same lines in the same chain order, read from the
+        files as they are asked for, so a reader that keeps a few of a kind's million lines (an agent's
+        chat among the messages, a promise among the words) never holds them all, nor where they all
+        are: their seqs are read first, in one statement, so no read of the index stays open while the
+        caller works; the lines are read through `read`, so an index that gates what it reads back
+        gates these too."""
+        seqs = array(
+            "q",
+            (
+                int(seq)
+                for (seq,) in self.db.execute(
+                    "SELECT seq FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ? ORDER BY seq",
+                    (kind, first_day or "", last_day or "9999-12-31"),
+                )
+            ),
+        )  # eight bytes a line; where each is, a thousand at a time by the primary key
+        for n in range(0, len(seqs), STREAM_EVERY):
+            chunk = seqs[n : n + STREAM_EVERY].tolist()
+            places = self.db.execute(
+                f"SELECT file, offset FROM lines WHERE seq IN ({', '.join('?' * len(chunk))}) ORDER BY seq",
+                chunk,
+            ).fetchall()
+            yield from self.read(places)
 
     def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:
         """The standing location points of one subject (None is the owner) for every location line

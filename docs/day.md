@@ -488,6 +488,12 @@ query — and asks that reading for each day in turn: a year is a dozen readings
 day, and the lines stream out as each chunk is read. A year of the demo record (`logbook demo
 --days 365`, 155,000 lines) prints in seconds, the first line within one.
 
+On the synthetic records of `scripts/bench_library.py` (ten years, [docs/serve.md](serve.md),
+*Performance*), the busiest Day of the last year answers in the Library in 0.14 seconds at a
+million lines and 0.67 at five million, the first time it is asked after the server starts; asked
+again at the same head it is the page the server kept, and answers in a millisecond. Fourteen
+`/days` take 0.49 and 2.3 seconds.
+
 ## What it is not
 
 Not a narrative: no title, no summary, no score. The reader never writes a note, a confirmation or

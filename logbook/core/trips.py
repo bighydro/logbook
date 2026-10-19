@@ -36,6 +36,7 @@ from . import flights as flight_lines
 from . import places as named_places
 from . import present, stays, weather
 from .assets import Asset
+from .chain import Line
 from .flights import Airport, Airports
 from .reading import Reading, window_json
 
@@ -287,10 +288,23 @@ def companions(
     per person (by entity id, else by name) with the evidence of every stay merged, most evidence
     first. A person confirmed at one stay and proposed at another is confirmed, never a proposal
     too, so the confirmed and the proposed lists of a trip share nobody."""
+    # each stay read with the evidence of its own days (every source places only a line that overlaps
+    # the stay or lies inside it) and the transcripts that supersede another, wherever they are
+    near = present.Evidence(reading.lines, reading.tz)
+    again = [
+        line
+        for line in reading.lines
+        if line.get("kind") == "transcript" and isinstance((line.get("payload") or {}).get("supersedes"), str)
+    ]
+
+    def evidence(stay: stays.Segment) -> list[Line]:
+        found = {str(line.get("id")): line for line in [*near.near(stay), *again]}
+        return sorted(found.values(), key=lambda line: int(line.get("seq", 0)))
+
     found = [
         c
         for stay in visited
-        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner)
+        for c in present.company(stay, evidence(stay), reading.identities, reading.places, reading.owner)
     ]
     confirmed = {_key(c) for c in found if c.status == present.CONFIRMED}
     merged: dict[tuple[str | None, str], present.Companion] = {}

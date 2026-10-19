@@ -709,14 +709,16 @@ def propose(
     the ones in `passed`, rejected), ranked by score, then by how much evidence, then by the observed
     key and the label; numbered from 1."""
     links = Links(contacts, canonicals, prefix) if contacts else None
+    meets = _Meeting(canonicals, prefix)
     found: list[tuple[int, tuple[str, ...], Observed, Canonical | None, Contact | None, str]] = []
     for o in unplaced:
         if not o.writable:
             continue
         linked, naming = links.of(o) if links is not None else ({}, [])
+        could = meets.could(o) | set(linked)
         for c in canonicals.values():
-            if rejected.holds(o, c.entity):
-                continue
+            if c.entity not in could or rejected.holds(o, c.entity):
+                continue  # nothing of theirs is the observed person's: `evidence` would find nothing
             link = linked.get(c.entity)
             score, why = evidence(o, c, prefix, (link,) if link is not None else ())
             if score:
@@ -737,6 +739,43 @@ def propose(
     return [
         Proposal(n, pid, o, c, score, why, k) for n, (score, why, o, c, k, pid) in enumerate(found, start=1)
     ]
+
+
+class _Meeting:
+    """The canonical people an observed person could be, by what `evidence` compares: the same email,
+    the same phone, or a name of two words or more sharing a word with theirs (`similar_names` holds
+    only for two such names with a word in common). Any other pair has no evidence but a contact's,
+    which `Links` names, so `propose` asks `evidence` of these alone: the same proposals, without
+    comparing every observed person with every canonical one."""
+
+    def __init__(self, canonicals: Mapping[str, Canonical], prefix: str):
+        self.prefix = prefix
+        self.by_key: dict[tuple[str, str], set[str]] = {}
+        for c in canonicals.values():
+            keys = {("email", key[1]) for ref in c.refs if (key := _email_key(ref)) is not None}
+            keys |= {
+                ("phone", key[1])
+                for ref in c.refs
+                if (key := people_merge._phone_key(ref, prefix)) is not None
+            }
+            keys |= {("word", w) for w in _name_words(c.label)}
+            for key in keys:
+                self.by_key.setdefault(key, set()).add(c.entity)
+
+    def could(self, o: Observed) -> set[str]:
+        keys = {("email", key[1]) for ref in o.identifiers if (key := _email_key(ref)) is not None}
+        keys |= {
+            ("phone", key[1]) for ref in o.identifiers if (key := _phone_key(ref, self.prefix)) is not None
+        }
+        for label in o.labels:
+            keys |= {("word", w) for w in _name_words(label)}
+        return set().union(*(self.by_key.get(key, ()) for key in keys))
+
+
+def _name_words(label: str) -> list[str]:
+    """The words `similar_names` compares, when there are enough of them to be a name (two or more)."""
+    words = people_merge._words(label)
+    return words if len(words) >= 2 else []
 
 
 def proposal_id(key: Ref, entity: str) -> str:

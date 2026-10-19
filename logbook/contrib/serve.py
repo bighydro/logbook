@@ -123,7 +123,7 @@ from email.utils import collapse_rfc2231_value
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PureWindowsPath
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from zoneinfo import ZoneInfo
 
@@ -151,6 +151,7 @@ from ..core import days as days_reader
 from ..core.chain import Line
 from ..core.export import day_range, parse_day
 from ..core.flights import Airports
+from ..core.index import Index
 from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, now_utc, retractions
 from . import (
     asset_status,
@@ -177,6 +178,7 @@ from . import (
 if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
     from . import people_review
 
+T = TypeVar("T")
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
@@ -224,6 +226,9 @@ CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  #
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
+PAGES_KEPT = 64  # pages the server keeps by their tag, the latest asked for last (`Site._keep`)
+PAGE_BYTES_KEPT = 64 * 1024 * 1024  # and at most this many bytes of them
+SHARED_KEPT = 32  # readings `Site.shared` keeps for the record as it stands, the oldest going first
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
 # another command holds the writer lock: every act's one answer, a 409 (the owner's word of 14 Oct 2026)
 BUSY = "Another command is writing to the record; nothing was written. Try again in a moment."
@@ -640,7 +645,15 @@ class Site:
         # another process's writer, never this server's other thread
         self._write_lock = threading.Lock()
         self._head: str | None = None  # the head the index was last brought to by `current`
+        self._indexed: str | None = None  # the head `_add_indexes` last tried
         self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
+        # what is kept between requests (`_keep`, `shared`), under one lock held only to look and to put
+        self._kept_lock = threading.Lock()
+        self._kept: dict[str, Response] = {}  # a page by its tag, the latest asked for last
+        self._kept_bytes = 0
+        self._shared: dict[tuple[Any, ...], Any] = {}  # a reader's result, for `_shared_state`
+        self._shared_state: str | None = None
+        self._building: dict[tuple[Any, ...], threading.Lock] = {}  # one build of each result at a time
 
     def href(self, path: str) -> str | None:
         """The link to write for a server path: the path itself, or what `href` makes of it."""
@@ -670,6 +683,7 @@ class Site:
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
         meta = self.current()
+        self._add_indexes(str(meta.get("head")))
         if path == TODAY:
             return self._today(meta)
         if (photo := PHOTO_PATH.match(path)) is not None:
@@ -677,12 +691,17 @@ class Site:
         etag = self.etag(path, query, meta)
         if etag is not None and if_none_match is not None and _matches(if_none_match, etag):
             return Response(304, b"", etag=etag)
+        if etag is not None and (kept := self._kept_page(etag)) is not None:
+            return kept  # the tag names the page: what the browser may keep, the server may keep too
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
         try:
-            return Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
+            response = Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
+            if etag is not None:
+                self._keep(etag, response)
+            return response
         except NotFound as e:
             return self._error(404, str(e))
         except Redirect as r:
@@ -1133,7 +1152,82 @@ class Site:
                     with self.lb.index():
                         pass
                     self._head = head
+                    with self._kept_lock:  # every kept page names the old head in its tag
+                        self._kept.clear()
+                        self._kept_bytes = 0
         return meta
+
+    def _add_indexes(self, head: str) -> None:
+        """An index built before `index.ADDED` is given them here, on a GET, once a head: never by an
+        act, which reads `current` under the writer lock, and never while one of this server's own
+        acts writes (`_write_lock`, not waited for: the next GET asks again). `Index.add_indexes` takes
+        the record's writer lock without waiting; when another process holds it, the next head tries
+        again, and when one of this server's readers held the file, the next GET."""
+        if head == self._indexed or not self._write_lock.acquire(blocking=False):
+            return
+        try:
+            if head != self._indexed:
+                with Index.open(self.lb) as idx:  # never a rebuild here: `current` makes those
+                    if idx.add_indexes():
+                        self._indexed = head
+        finally:
+            self._write_lock.release()
+
+    def _kept_page(self, etag: str) -> Response | None:
+        with self._kept_lock:
+            found = self._kept.pop(etag, None)
+            if found is not None:
+                self._kept[etag] = found  # the latest asked for last
+            return found
+
+    def _keep(self, etag: str, response: Response) -> None:
+        """Keep a page by its tag, so the next request for it is answered without reading: the tag
+        is the head, the request and everything else the page reads (`etag`), so the same tag is the
+        same page, as the browser's `304` already holds. `PAGES_KEPT` pages and `PAGE_BYTES_KEPT`
+        bytes at most, the one asked for longest ago going first; a head that moves drops them all."""
+        with self._kept_lock:
+            if etag in self._kept or len(response.body) > PAGE_BYTES_KEPT:
+                return
+            self._kept[etag] = response
+            self._kept_bytes += len(response.body)
+            while len(self._kept) > PAGES_KEPT or self._kept_bytes > PAGE_BYTES_KEPT:
+                oldest = next(iter(self._kept))
+                self._kept_bytes -= len(self._kept.pop(oldest).body)
+
+    def shared(self, key: tuple[Any, ...], build: Callable[[], T]) -> T:
+        """What `build` reads, read once for the record as it stands and handed to every request that
+        asks for `key` until it moves: the same head, the same settings beside the chain and the same
+        day (`_state`, what a page's tag digests besides the request). Requests that ask together wait
+        for one build. A page reads it and never changes it."""
+        state = self._state(self.lb.meta)
+        with self._kept_lock:
+            if state != self._shared_state:
+                self._shared.clear()
+                self._building.clear()
+                self._shared_state = state
+            building = self._building.setdefault(key, threading.Lock())
+        with building:
+            with self._kept_lock:
+                if self._shared_state == state and key in self._shared:
+                    found: T = self._shared[key]
+                    return found
+            found = build()
+            with self._kept_lock:
+                if self._shared_state == state:
+                    self._shared[key] = found
+                    while len(self._shared) > SHARED_KEPT:  # a `?since=` asked of every day: the oldest go
+                        self._shared.pop(next(iter(self._shared)))
+            return found
+
+    def _state(self, meta: Mapping[str, Any]) -> str:
+        """The record as the pages read it: `logbook.json`, the record's today, and the settings,
+        bookkeeping and pages beside the chain that `etag` digests."""
+        try:
+            today = day_start.of(meta).today(self.now()).isoformat()
+        except day_start.DayStartError:
+            today = "-"
+        parts = [json.dumps(meta, sort_keys=True), today, *self._beside()]
+        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
     def etag(self, path: str, query: str, meta: Mapping[str, Any]) -> str | None:
         """The tag of a page that is the record's and nothing else: the head, then a digest of the
@@ -1142,7 +1236,9 @@ class Site:
         pages received from the circle, this server's start, and for a Day the day the owner is in
         (its forms are there from that day on). One page's tag never stands for
         another's, and a request that is an error is given none. None for a page the clock moves
-        (`/assets`, `/gaps`) or a path with no page."""
+        (`/assets`, `/gaps`) or a path with no page. The server keeps a page by its tag (`_keep`), so
+        anything a page comes to read beside the chain must be digested here (`_beside`): what the tag
+        does not name, a kept page never reads again until the head moves."""
         if (
             path not in RECORD_PAGES
             and DAY_PATH.match(path) is None
@@ -1153,6 +1249,21 @@ class Site:
             and LINE_PATH.match(path) is None
         ):
             return None
+        parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
+        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
+            # a Day's forms are there from the day the owner is in; this year, the coming
+            # anniversaries and a silence move with it too
+            try:
+                parts.append(day_start.of(meta).today(self.now()).isoformat())
+            except day_start.DayStartError:
+                parts.append("-")
+        parts += self._beside()
+        digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+        return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
+
+    def _beside(self) -> list[str]:
+        """What the pages read beside the chain, each file as its path and its stat: the places, the
+        assets, the policies, the review's bookkeeping and the pages received from the circle."""
         root = self.lb.root
         circle = root / share.CIRCLE_DIR
         senders = sorted(p for p in circle.iterdir() if p.is_dir()) if circle.is_dir() else []
@@ -1164,14 +1275,7 @@ class Site:
             circle,
             *senders,
         ]
-        parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
-            # a Day's forms are there from the day the owner is in; this year, the coming
-            # anniversaries and a silence move with it too
-            try:
-                parts.append(day_start.of(meta).today(self.now()).isoformat())
-            except day_start.DayStartError:
-                parts.append("-")
+        parts = []
         for file in read:
             try:
                 st = file.stat()
@@ -1179,8 +1283,7 @@ class Site:
                 parts.append(f"{file.relative_to(root).as_posix()} -")
                 continue
             parts.append(f"{file.relative_to(root).as_posix()} {st.st_mtime_ns} {st.st_size} {st.st_ino}")
-        digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
-        return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
+        return parts
 
     def _today(self, meta: Mapping[str, Any]) -> Response:
         """A redirect to the Day the owner is in now: the current date in the record's timezone,
@@ -2357,7 +2460,7 @@ class Site:
         together then last real contact, each a link to their page with its evidence folded; then
         the review queue: who the sources saw that the record has not placed, proposed against the
         people it names, with Merge and Not the same person; the observed are listed there only."""
-        data = person_page.ranked(self.lb, year, self.now())
+        data = self.shared(("ranked", year), lambda: person_page.ranked(self.lb, year, self.now()))
         if data["year"] is None:
             return self.document("people", "<h1>People</h1>\n<p>no people: the record has no lines</p>\n")
         year = str(data["year"])
@@ -2381,7 +2484,7 @@ class Site:
             from . import people_review
 
             with self._review_lock:  # the observed table is built once, as the Places page's queue is
-                report = people_review.read(self.lb)
+                report = self.shared(("people review",), lambda: people_review.read(self.lb))
             parts.append(self._review_html(report, year))
         return self.document(f"people {year}", "".join(parts))
 
@@ -2469,7 +2572,8 @@ class Site:
         """One person's page: the numbers, the last real contact and what it was, the drift, the
         days together by year, the promises both ways, the anniversaries of the coming month, the
         places; every row with its evidence folded."""
-        data = person_page.read(self.lb, name, self.now(), self.airports)
+        everyone = self.shared(("everyone",), lambda: person_page.everyone(self.lb, self.airports))
+        data = person_page.read(self.lb, name, self.now(), self.airports, everyone)
         refs = ", ".join(str(r["value"]) for r in data["refs"])
         parts = [
             f"<h1>{escape(data['name'])}</h1>\n",
@@ -2603,7 +2707,14 @@ class Site:
 
     def _org_record(self, money: bool = False) -> orgs.Record:
         """The orgs as these pages read them: through the site's gate, money only when asked."""
-        return orgs.read(self.lb, orgs.gate(self.tiers, money), self._today_of())
+        return self.shared(
+            ("orgs", money), lambda: orgs.read(self.lb, orgs.gate(self.tiers, money), self._today_of())
+        )
+
+    def _review_of(self, kind: str) -> entity_review.Report:
+        """The review queue of `kind` (an org's, an idea's) as the record stands: read once for every
+        page that shows it; an act reads it again, under the lock it writes under."""
+        return self.shared(("review", kind), lambda: entity_review.read(self.lb, kind))
 
     def _today_of(self) -> str:
         """The day the owner is in (the record's zone and `day_start`): what the stale flag counts to."""
@@ -2621,7 +2732,7 @@ class Site:
             raise ValueError(f"page must be a number from 1, not {page!r}")
         with self._review_lock:  # the observed table is built once, as the other queues' are
             shelf = orgs.shelf_of(self.lb, self._org_record(), portfolio=portfolio)
-            report = entity_review.read(self.lb, entities.ORG) if self._acts() else None
+            report = self._review_of(entities.ORG) if self._acts() else None
         filtered = portfolio is not None and shelf.portfolios_read
         count = _plural(len(shelf.rows), "org") + (f" in {portfolio}" if filtered else "")
         head = f"{count}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
@@ -2796,7 +2907,7 @@ class Site:
         with self._review_lock:
             rec = self._org_record(money and not self.static)
             page = orgs.page_of(self.lb, rec, org_id)
-            report = entity_review.read(self.lb, entities.ORG) if self._acts() else None
+            report = self._review_of(entities.ORG) if self._acts() else None
         org = page.org
         parts = [f"<h1>{escape(org.label)} <small>org{DOT}tier {page.tier}</small></h1>\n"]
         refs = ", ".join(v for _k, v in org.refs)
@@ -2982,7 +3093,7 @@ class Site:
 
     def _idea_record(self) -> ideas.Record:
         """The ideas as these pages read them: through the site's gate, today the owner's day."""
-        return ideas.read(self.lb, self.tiers, self._today_of())
+        return self.shared(("ideas",), lambda: ideas.read(self.lb, self.tiers, self._today_of()))
 
     def page_ideas(self, page: str = "1") -> str:
         """The ideas the owner named, by stage (RFC 0037 §11: build, exploring, spark, built, killed, no
@@ -2993,7 +3104,7 @@ class Site:
             raise ValueError(f"page must be a number from 1, not {page!r}")
         with self._review_lock:  # the observed table is built once, as the other queues' are
             shelf = ideas.shelf_of(self._idea_record())
-            report = entity_review.read(self.lb, entities.IDEA) if self._idea_acts() else None
+            report = self._review_of(entities.IDEA) if self._idea_acts() else None
         head = f"{_plural(len(shelf.rows), 'idea')}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
         parts = [f"<h1>Ideas <small>{escape(head)}</small></h1>\n"]
         if not shelf.rows:
@@ -3145,7 +3256,7 @@ class Site:
         and the proposals that would place something with it."""
         with self._review_lock:
             page = ideas.page_of(self._idea_record(), idea_id)
-            report = entity_review.read(self.lb, entities.IDEA) if self._idea_acts() else None
+            report = self._review_of(entities.IDEA) if self._idea_acts() else None
         idea = page.idea
         parts = [f"<h1>{escape(idea.label)} <small>idea{DOT}tier {page.tier}</small></h1>\n"]
         refs = ", ".join(v for _k, v in idea.refs)
@@ -3466,8 +3577,18 @@ class Site:
             )
         return found
 
+    def _activity(self, first: str, last: str) -> list[dict[str, Any]]:
+        """`Index.activity` of the record as it stands, read once per window: the page moves with the
+        clock, what it counts only with the head."""
+
+        def read() -> list[dict[str, Any]]:
+            with self.lb.index() as idx:
+                return idx.activity(first, last)
+
+        return self.shared(("activity", first, last), read)
+
     def page_gaps(self, since: str | None) -> str:
-        data = gaps.report(self.lb, since=since)
+        data = gaps.report(self.lb, since=since, activity=self._activity)
         tz = ZoneInfo(data["timezone"])
         body = (
             "<h1>Gaps <small>where each source went quiet</small></h1>\n"

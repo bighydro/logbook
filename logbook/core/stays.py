@@ -963,24 +963,52 @@ def night(
     through the night is a night aboard, not a night in transit, and the night carries the inner
     segment that held the longest part of it, so the asset's position that night is known. At
     home when the stay is a place of kind `home`, or its centre lies in one's radius (`places`,
-    from places.json)."""
-    start, end = night_window(day, tz, settings)
+    from places.json). For the nights of many days over the same segments, `Nights`."""
+    return Nights(segments, tz, settings, places).of(day)
 
-    def overlap_s(s: Segment) -> float:
-        return (min(s.end, end) - max(s.start, start)).total_seconds()
 
-    best: Segment | None = None
-    best_overlap = 0.0
-    for s in fold(s for s in segments if s.subject is None):
-        if s.kind != STAY:
-            continue
-        overlap = overlap_s(s)
-        if overlap > best_overlap:
-            best, best_overlap = s, overlap
-    if best is None or best_overlap < settings.stay_min_s:
-        return Night(day, None)
-    inside = max(best.inside, key=overlap_s) if best.inside else None
-    return Night(day, best, is_home(best, places), inside)
+class Nights:
+    """`night` for every day asked, over one list of segments: the owner's segments folded once, and
+    each night read from the stays its window can overlap, found by bisection, never from every stay
+    of the record. The same night as `night` for every day: the stays are visited in their order, the
+    first with the longest overlap wins, and a stay the cut leaves out overlaps the window by nothing,
+    so it could never be chosen (an overlap must be more than none). When the stays are not in the
+    order of their starts, every stay is visited, as `night` visits them."""
+
+    def __init__(
+        self, segments: Iterable[Segment], tz: ZoneInfo, settings: Settings, places: Sequence[Place] = ()
+    ):
+        self.tz, self.settings, self.places = tz, settings, places
+        self.stays = [s for s in fold(s for s in segments if s.subject is None) if s.kind == STAY]
+        self.starts = [s.start for s in self.stays]
+        self.ordered = all(a <= b for a, b in pairwise(self.starts))
+        self.ends: list[datetime] = []  # the latest end of the stays up to each, in their order
+        for s in self.stays:
+            self.ends.append(s.end if not self.ends or s.end > self.ends[-1] else self.ends[-1])
+
+    def of(self, day: str) -> Night:
+        start, end = night_window(day, self.tz, self.settings)
+
+        def overlap_s(s: Segment) -> float:
+            return (min(s.end, end) - max(s.start, start)).total_seconds()
+
+        # every stay before `first` ends by the window's start, and every one from `last` on starts
+        # at its end or after: neither overlaps it
+        first, last = (
+            (bisect_right(self.ends, start), bisect_left(self.starts, end))
+            if self.ordered
+            else (0, len(self.stays))
+        )
+        best: Segment | None = None
+        best_overlap = 0.0
+        for s in self.stays[first:last]:
+            overlap = overlap_s(s)
+            if overlap > best_overlap:
+                best, best_overlap = s, overlap
+        if best is None or best_overlap < self.settings.stay_min_s:
+            return Night(day, None)
+        inside = max(best.inside, key=overlap_s) if best.inside else None
+        return Night(day, best, is_home(best, self.places), inside)
 
 
 HOME_NEAR_M = 400.0  # a night whose stay centre is this close to a home place is a night at home
