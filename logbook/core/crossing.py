@@ -50,6 +50,8 @@ TIER_SETS = {"1": (1,), "1,2": (1, 2), "1,2,3": (1, 2, 3)}
 TIER3_WARNING = "TIER-3 CONTENT IS IN THIS PACKAGE"
 DIGEST = re.compile(r"[0-9a-f]{64}")
 REF_KINDS = frozenset({"email", "phone", "handle", "provider_id", "device_id", "domain", "line"})  # RFC 0006
+MAIL_HEADERS = ("from", "to", "cc", "bcc")  # RFC 0015: each an `{email, name?}`, or a list of them
+PARTICIPANT_REFS = ("email", "phone", "provider_id")  # RFC 0004: a transcript participant's identifiers
 COPY_CHUNK = 1 << 20
 
 
@@ -301,10 +303,10 @@ def _held_by_entry(line: Line, entries: drafts.Allowed) -> bool:
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
-    """Every resolution line standing that the lines' refs resolve through, alias hops included,
-    once each in chain order; a line above the requested tiers stays home and is counted."""
+    """Every resolution line standing that the lines' refs (`line_refs`) resolve through, alias hops
+    included, once each in chain order; a line above the requested tiers stays home and is counted."""
     found: dict[str, Line] = {}
-    for ref in sorted({ref for line in lines for ref in refs(line.get("payload"))}):
+    for ref in sorted({ref for line in lines for ref in line_refs(line)}):
         for hop in walk(ref, last):
             found[str(hop["id"])] = hop
     ordered = sorted(found.values(), key=lambda line: int(line["seq"]))
@@ -323,6 +325,41 @@ def refs(obj: object) -> Iterator[Ref]:
     elif isinstance(obj, list):
         for child in obj:
             yield from refs(child)
+
+
+def line_refs(line: Line) -> Iterator[Ref]:
+    """The refs one line names: the `{kind, value}` refs in its payload (`refs`), and the identifiers
+    a profile spells as plain fields, each the ref of its kind: a mail's `from`, `to`, `cc` and `bcc`
+    (RFC 0015 rule 2) and a transcript's participants' `email`, `phone` and `provider_id` (RFC 0004).
+    Without them a mail or a transcript would cross with nobody on it named."""
+    payload = line.get("payload")
+    yield from refs(payload)
+    if not isinstance(payload, dict):
+        return
+    if line.get("kind") == "mail":
+        for header in MAIL_HEADERS:
+            value = payload.get(header)
+            for address in value if isinstance(value, list) else [value]:
+                yield from _named(address, ("email",))
+    elif line.get("kind") == "transcript":
+        participants = payload.get("participants")
+        for participant in participants if isinstance(participants, list) else []:
+            yield from _named(participant, PARTICIPANT_REFS)
+
+
+def _named(who: object, kinds: tuple[str, ...]) -> Iterator[Ref]:
+    """The identifiers an object spells under the ref kinds' own names. An address is given both ways
+    the record's resolutions spell one: lower-cased (the contact imports, as the mail adapter writes
+    it) and case-folded (`people review`, `people merge`). The two differ only past ASCII (`weiß`,
+    `weiss`), and a ref spelled one way never meets a resolution spelled the other."""
+    for kind in kinds:
+        value = who.get(kind) if isinstance(who, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            continue
+        if kind == "email":
+            yield from dict.fromkeys([(kind, value.strip().lower()), (kind, value.strip().casefold())])
+        else:
+            yield kind, value.strip()
 
 
 def blobs(lb: Logbook, lines: list[Line]) -> tuple[list[dict[str, Any]], int]:
