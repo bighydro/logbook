@@ -211,10 +211,9 @@ def read(
         str(tz),
         airports,
     )
-    nights = [stays.night(derived.segments, day, tz, settings, known) for day in days]
-    nights_after = [
-        stays.night(derived.segments, day, tz, settings, known) for day in nights_of if day > last
-    ]
+    night = stays.Nights(derived.segments, tz, settings, known).of  # the stays folded once, not once a day
+    nights = [night(day) for day in days]
+    nights_after = [night(day) for day in nights_of if day > last]
     standing = [line for line in window if str(line["id"]) not in retracted]
     identities = resolve.identities_from([*marks, *resolutions])
     names = {ref: who.label for ref, who in identities.items() if who.label}

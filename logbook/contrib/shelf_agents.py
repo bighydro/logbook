@@ -30,7 +30,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from ..core import day_start, goals, machine, reading
 from ..core.chain import Line
@@ -126,11 +126,16 @@ def _superseded(idx: Index, kind: str) -> set[str]:
 
 
 def _standing(idx: Index, kind: str, tiers: Sequence[int] | None, retracted: Collection[str]) -> list[Line]:
+    """The standing sessions of `kind` the gate reads, in chain order: the kind streamed, so the
+    record's messages are read one at a time and only an agent's are kept."""
     superseded = _superseded(idx, kind)
     return [
         line
-        for line in reading.crossing(idx.by_kind(kind), tiers)
-        if str(line["id"]) not in retracted and str(line["id"]) not in superseded and is_session(line)
+        for line in idx.stream(kind)
+        if reading.crossing([line], tiers)
+        and str(line["id"]) not in retracted
+        and str(line["id"]) not in superseded
+        and is_session(line)
     ]
 
 
@@ -156,16 +161,18 @@ def sessions_among(
     }
 
 
-def read(
-    lb: Logbook,
-    tiers: Sequence[int] | None = None,
-    shown: Callable[[list[str]], Collection[str]] | None = None,
-) -> Shelf:
-    """Every session through the gate `tiers` (None: every tier), the latest first. `shown`, given
-    the days that have a session (the latest first), names the days whose turns are read from the
-    attachment store; the other days' sessions are counted, their words left unread. Writes
-    nothing."""
-    days = day_start.of(lb.meta)
+class Standing(NamedTuple):
+    """The lines the shelf is made of, through the gate: the standing sessions of each kind and the
+    goals and reviews that say a session served a goal. What every page of the shelf reads alike (the
+    Library keeps it while the record stands); which turns are read depends on the page."""
+
+    transcripts: list[Line]
+    messages: list[Line]
+    goal_lines: list[Line]
+    reviews: list[Line]
+
+
+def standing(lb: Logbook, tiers: Sequence[int] | None = None) -> Standing:
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
         transcripts = _standing(idx, TRANSCRIPT, tiers, retracted)
@@ -174,6 +181,21 @@ def read(
             g for g in reading.crossing(idx.by_kind(goals.KIND), tiers) if str(g["id"]) not in retracted
         ]
         reviews = goals.review_lines(reading.crossing(idx.by_kind(goals.REVIEW), tiers), retracted)
+    return Standing(transcripts, messages, goal_lines, reviews)
+
+
+def read(
+    lb: Logbook,
+    tiers: Sequence[int] | None = None,
+    shown: Callable[[list[str]], Collection[str]] | None = None,
+    lines: Standing | None = None,
+) -> Shelf:
+    """Every session through the gate `tiers` (None: every tier), the latest first. `shown`, given
+    the days that have a session (the latest first), names the days whose turns are read from the
+    attachment store; the other days' sessions are counted, their words left unread. `lines` is
+    `standing` of this record and gate, when read already. Writes nothing."""
+    days = day_start.of(lb.meta)
+    transcripts, messages, goal_lines, reviews = lines or standing(lb, tiers)
     served = _served(goal_lines, reviews)
     every = sorted({days.day_of(str(line["at"])) for line in [*transcripts, *messages]}, reverse=True)
     wanted = set(every) if shown is None else set(shown(every))
@@ -377,7 +399,8 @@ def page_agents(site: Site, page: str = "1", day: str | None = None) -> str:
     def chosen(days: list[str]) -> list[str]:
         return [d for d in days if d == day] if day is not None else days[(n - 1) * PAGE_DAYS : n * PAGE_DAYS]
 
-    shelf = read(site.lb, site.tiers, chosen)  # the turns of the days shown, and no others
+    lines = site.shared(("agents",), lambda: standing(site.lb, site.tiers))
+    shelf = read(site.lb, site.tiers, chosen, lines)  # the turns of the days shown, and no others
     every = shelf.days()
     wanted = set(chosen([d for d, _s in every]))
     shown = [(d, s) for d, s in every if d in wanted]

@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..core import day_start, people, reading
 from ..core.chain import Line
@@ -98,26 +98,50 @@ def today_of(lb: Logbook, now: datetime | None = None) -> str:
 # -- one person ------------------------------------------------------------------------------------------
 
 
+class Everyone(NamedTuple):
+    """What every person's page reads of the whole record, the same for each of them: the people of
+    the record's days, their last real contacts, and the proposals of `promises` open today."""
+
+    window: tuple[str, str]
+    report: people.Report
+    contacts: dict[str, people_drift.Contact]
+    proposals: list[promise_reader.Proposal]
+
+
+def everyone(lb: Logbook, airports: Airports | None = None) -> Everyone | None:
+    """`Everyone` of the record at its head; None for a record with no days. Read once and handed to
+    `read` for every person's page (the Library keeps it while the head and the settings stand)."""
+    whole = reading.record_days(lb)
+    if whole is None:
+        return None
+    report = people.read(lb, *whole, airports)
+    contacts = people_drift.real_contacts(lb, report)
+    proposals = [p for p in promise_reader.extract(lb).proposals if p.status == "open"]
+    return Everyone(whole, report, contacts, proposals)
+
+
 def read(
     lb: Logbook,
     name: str,
     now: datetime | None = None,
     airports: Airports | None = None,
+    found: Everyone | None = None,
 ) -> dict[str, Any]:
-    """One person's page as one JSON-ready object (see the module). `people.PersonError` when the
+    """One person's page as one JSON-ready object (see the module), from `found` when given (what
+    `everyone` read of this record at this head), else read here. `people.PersonError` when the
     name is nobody's, several people's or the owner's; `ValueError` for a record with no days.
     Writes nothing."""
-    whole = reading.record_days(lb)
-    if whole is None:
+    found = found or everyone(lb, airports)
+    if found is None:
         raise ValueError("the record has no days")
-    report = people.read(lb, *whole, airports)
+    whole, report, contacts = found.window, found.report, found.contacts
     person = people.find(name, report)
-    contacts = people_drift.real_contacts(lb, report)
     contact = contacts.get(person.entity)
     verdict = people_drift.verdict(person, contact, people_drift.until_of(report, whole[1]))
     together = people_drift.days_together(person)
     by_year = Counter(d["day"][:YEAR_DIGITS] for d in together)
-    owed = people_drift.promises_with(lb, [person]).get(person.entity, [])
+    # the proposals open today, as `promises_with` reads them when it reads them itself
+    owed = people_drift.promises_with(lb, [person], proposals=found.proposals).get(person.entity, [])
     today = today_of(lb, now)
     return {
         "page": "person",

@@ -20,7 +20,7 @@ written."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -40,11 +40,17 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
-def report(lb: Logbook, since: str | None = None, expect: Sequence[str] | None = None) -> dict[str, Any]:
+def report(
+    lb: Logbook,
+    since: str | None = None,
+    expect: Sequence[str] | None = None,
+    activity: Callable[[str, str], list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     """The JSON-ready report: `since`, `today`, `timezone`, `expect` (the names asked for, or
     None), `sources` (most lines first, or in `expect` order), `flagged` (the expected sources
     flagged, in that order; empty without `expect`). Raises ValueError for a `since` that is not a
-    day or is after today."""
+    day or is after today. `activity(first, last)` is `Index.activity` of the record as it stands,
+    when a caller keeps it (the Library, per head: three passes over the index); read here else."""
     days = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse
     instant = now()
     today = days.today(instant)
@@ -53,8 +59,12 @@ def report(lb: Logbook, since: str | None = None, expect: Sequence[str] | None =
         start = parse_day(since)
         if start > today:
             raise ValueError(f"--since {since} is after today ({today.isoformat()})")
-    with lb.index() as idx:
-        found = idx.activity("" if start is None else start.isoformat(), today.isoformat())
+    window = ("" if start is None else start.isoformat(), today.isoformat())
+    if activity is not None:
+        found = activity(*window)
+    else:
+        with lb.index() as idx:
+            found = idx.activity(*window)
     by_source = {a["source"]: a for a in found}
     names = list(by_source) if expect is None else list(dict.fromkeys(expect))
     sources = [_source(name, by_source.get(name), start, today, instant, days) for name in names]

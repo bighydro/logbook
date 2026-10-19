@@ -98,9 +98,10 @@ rather than leaving the browser waiting: `409`, the sentence *Another command is
 record; nothing was written. Try again in a moment.*, the command that holds the lock, and the form
 you sent kept in a form that sends it again (*Try again*): the words you typed in their fields, the
 rest as they were. Nothing is written. A recording is the one input a page cannot put back: its form
-asks you to choose the file again. The server keeps nothing
-but the head it last saw: when a sync, or a form, moves the head while it runs, the next request
-brings the index to the new head first and every page reads the new lines, with no restart. That
+asks you to choose the file again. The server keeps the head it last saw, and for that head the
+pages it rendered and what several pages read alike ([Performance](#performance)): when a sync, or
+a form, moves the head while it runs, the next request brings the index to the new head first, the
+kept pages and readings go, and every page reads the new lines, with no restart. That
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
 rather than each starting their own on the same file.
 
@@ -129,11 +130,124 @@ that moves the head, a place renamed or a restart changes the tag, and the next 
 again. `/assets` and `/gaps`, which the clock moves (the age of a fix, a silence that runs to now),
 and every error carry no tag and `Cache-Control: no-store`, as before.
 
+The server keeps what the browser may keep. A page with a tag is kept by it, so a second request for
+it, from this browser or another, is answered without reading anything: the same tag is the same
+page, as the `304` already says. It keeps the last 64 pages asked for, 64 MB at most, and drops them
+all when the head moves. What several pages read alike is read once for the record as it stands —
+the head, the settings beside the chain that the tags digest, and the day — and handed to each of
+them until it moves (`Site.shared`): the people of the whole record, their last real contacts and the
+promises open today, for every person's page; the year's ranking and the review queue of `/people`;
+the orgs and their review queue for the Manifest, an org's page and `/manifest/people`; the ideas and
+theirs for the Ideas pages; the promises; the sessions with an agent; and the index's counts behind
+`/gaps`, whose clock is read again on every request. Requests that ask together wait for one reading.
+
 A journeys page is one reading of its year and a month either side, and a journey's page one
 reading of its days and a week either side, as `show trip` reads it; the People page is `people`
 over the year and the review queue's table, built once per head; a person's page reads the whole
-record's people once. On the four synthetic years of the tests each answers in about a fifth of a
-second.
+record's people once, and every other person's page is read from that. On the four synthetic years
+of the tests each answers in about a fifth of a second.
+
+What a page reads, it reads through `index.sqlite`, and never sweeps the files. A night is found by
+bisection over the owner's stays (`stays.Nights`), not by reading every stay of the record once a
+day; the people review compares an observed person only with the people who share an address, a
+number or a word of a name with them; the promises and the sessions with an agent stream the
+messages, one line at a time, and keep only what they show. The pages that read the whole record —
+the People pages, the Manifest, the Promises and Agents shelves, the World, the Places review —
+still read it once for each head: the first of them after a sync, or after the server starts, takes
+the time those lines take to read (minutes, on a record of millions), and every page after it at
+that head, a second.
+
+### Measured
+
+`scripts/bench_library.py` builds a synthetic record of ten years shaped like a real one (55%
+messages, 15% mail, 15% location fixes, 8% photos, the rest calendar, notes, Notion, Drive, calls
+and transcripts, sessions with an agent; a few hundred people, a few thousand handles; orgs, ideas,
+goals, signed days, stars), indexes it, and times every route in a process of its own: **cold** is
+the first request after the server starts, **warm** the second, **after append** a third once one
+line has been appended (a sync: the head moves). Seconds, and the process's peak memory:
+
+```bash
+uv run python scripts/bench_library.py --lines 1000000 --root ~/bench-1m --markdown
+```
+
+Measured on a 4-CPU cloud container (Intel Xeon at 2.8 GHz, 15.7 GB, Python 3.12, SQLite 3.45),
+before this change (0.7.0) and after it, with other benchmarks running beside it. A request runs on
+one core, so the CPU count does not change these numbers, and a laptop core of today is no slower
+than one of these: the times are held to the targets (a second warm, five cold) as they are, not
+scaled. A route's id is the busiest person, the first org and idea, the busiest day of the last
+year. "Out of memory" is the container's limit (about 11.7 GB) reached, the request killed.
+
+Each cell is before → **after**; "warm" after is the page the server kept (a millisecond),
+"after append" the first request once the head has moved, which reads again what the page needs.
+`/`, `/trips` and `/world` at a million lines were timed again, old and new code one after the other
+on the same page cache, because a first pass ran beside the five-million runs. The first time the
+Library opens an index built before this change, it adds the two new indexes, once: 1.3 s at a
+million lines, 5.2 s at five million. The Library builds them on a page it serves (a GET), under the
+record's writer lock taken without waiting, and lets it go once they are built: never by a writer,
+never while a writer holds the lock (a `sync` that arrives meanwhile waits on the lock, saying so in
+its one line, and then appends, as one of the Library's own acts sent meanwhile waits for them; one
+already writing means the next head tries again).
+
+**1,000,000 lines** (before → after, seconds)
+
+| route | cold | warm | after append | peak |
+|---|--:|--:|--:|--:|
+| `/` | 0.75 → **0.18** | 0.16 → **0.00** | 0.16 → **0.17** | 40 MB → 41 MB |
+| `/today` | 0.00 → **0.00** | 0.00 → **0.00** | 0.00 → **0.00** | 39 MB → 41 MB |
+| `/day/DAY` | 0.14 → **0.14** | 0.13 → **0.00** | 0.14 → **0.17** | 48 MB → 48 MB |
+| `/days` | 0.76 → **0.49** | 0.77 → **0.00** | 0.69 → **0.35** | 62 MB → 63 MB |
+| `/trips` | 7.79 → **5.93** | 7.89 → **0.00** | 7.76 → **5.29** | 428 MB → 428 MB |
+| `/journeys` | 10 → **6.38** | 10 → **0.00** | 10 → **5.86** | 469 MB → 469 MB |
+| `/journeys/START/END` | 1.53 → **0.43** | 0.71 → **0.00** | 0.66 → **0.43** | 65 MB → 64 MB |
+| `/people` | 189 → **85** | 155 → **0.00** | 201 → **72** | 458 MB → 456 MB |
+| `/people/ID` | 251 → **108** | 210 → **0.00** | 212 → **107** | 2.3 GB → 375 MB |
+| `/manifest` | 37 → **38** | 17 → **0.00** | 38 → **38** | 178 MB → 172 MB |
+| `/org/ID` | 17 → **17** | 18 → **0.00** | 36 → **36** | 170 MB → 170 MB |
+| `/manifest/people` | 18 → **17** | 17 → **0.00** | 18 → **17** | 173 MB → 173 MB |
+| `/ideas` | 6.05 → **3.93** | 2.74 → **0.00** | 5.60 → **4.16** | 96 MB → 91 MB |
+| `/idea/ID` | 2.55 → **1.74** | 2.64 → **0.00** | 5.51 → **4.05** | 96 MB → 91 MB |
+| `/places` | 9.85 → **9.71** | 0.01 → **0.00** | 9.73 → **11** | 299 MB → 299 MB |
+| `/assets` | 0.10 → **0.00** | 0.09 → **0.00** | 0.09 → **0.00** | 41 MB → 41 MB |
+| `/gaps` | 4.23 → **4.35** | 4.29 → **0.06** | 4.33 → **4.26** | 50 MB → 51 MB |
+| `/world` | 63 → **51** | 62 → **0.00** | 62 → **53** | 617 MB → 616 MB |
+| `/promises` | 67 → **61** | 65 → **0.00** | 64 → **56** | 2.3 GB → 56 MB |
+| `/goals` | 0.00 → **0.00** | 0.00 → **0.00** | 0.00 → **0.01** | 39 MB → 41 MB |
+| `/agents` | 15 → **14** | 14 → **0.00** | 15 → **13** | 1.7 GB → 56 MB |
+
+**5,000,000 lines** (before → after, seconds)
+
+| route | cold | warm | after append | peak |
+|---|--:|--:|--:|--:|
+| `/` | 6.55 → **3.15** | 1.00 → **0.00** | 0.83 → **1.24** | 43 MB → 46 MB |
+| `/today` | 0.00 → **0.00** | 0.00 → **0.00** | 0.00 → **0.00** | 40 MB → 46 MB |
+| `/day/DAY` | 0.66 → **0.67** | 0.50 → **0.00** | 0.47 → **0.64** | 70 MB → 75 MB |
+| `/days` | 8.28 → **2.29** | 2.48 → **0.00** | 2.46 → **3.01** | 143 MB → 143 MB |
+| `/trips` | 44 → **41** | 44 → **0.00** | 40 → **38** | 1.9 GB → 1.9 GB |
+| `/journeys` | 50 → **39** | 45 → **0.00** | 43 → **37** | 2.1 GB → 2.1 GB |
+| `/journeys/START/END` | 3.77 → **2.06** | 3.60 → **0.00** | 3.80 → **1.99** | 152 MB → 149 MB |
+| `/people` | 591 → **502** | 359 → **0.00** | 519 → **354** | 1.8 GB → 1.8 GB |
+| `/people/ID` | out of memory → **522** | out of memory → **0.00** | out of memory → **522** | – → 1.6 GB |
+| `/manifest` | 198 → **187** | 94 → **0.00** | 187 → **187** | 698 MB → 700 MB |
+| `/org/ID` | 83 → **87** | 81 → **0.00** | 178 → **188** | 642 MB → 649 MB |
+| `/manifest/people` | 92 → **91** | 92 → **0.00** | 95 → **91** | 688 MB → 688 MB |
+| `/ideas` | 27 → **20** | 12 → **0.00** | 29 → **20** | 307 MB → 278 MB |
+| `/idea/ID` | 13 → **8.32** | 13 → **0.00** | 27 → **20** | 305 MB → 276 MB |
+| `/places` | 48 → **46** | 0.00 → **0.00** | 46 → **47** | 1.3 GB → 1.3 GB |
+| `/assets` | 0.50 → **0.00** | 0.58 → **0.00** | 0.54 → **0.00** | 41 MB → 41 MB |
+| `/gaps` | 22 → **23** | 23 → **0.06** | 23 → **22** | 52 MB → 52 MB |
+| `/world` | 295 → **280** | 280 → **0.00** | 280 → **293** | 2.8 GB → 2.8 GB |
+| `/promises` | 497 → **293** | 480 → **0.00** | 431 → **277** | 11.2 GB → 86 MB |
+| `/goals` | 0.01 → **0.00** | 0.01 → **0.00** | 0.00 → **0.00** | 39 MB → 41 MB |
+| `/agents` | 119 → **68** | 88 → **0.00** | 99 → **64** | 8.5 GB → 96 MB |
+
+Warm, every page answers within a millisecond at any size (`/gaps` reads its clock again: 0.06 s).
+Cold — the first request after the server starts, or after a sync — is under five seconds at five
+million lines for the Day, `/days`, a journey's page, `/`, `/assets` and `/goals`; the pages that read a
+year (`/trips`, `/journeys`) take tens of seconds, and those that read the whole record minutes, once
+for each head. Keeping their readings across a restart, and growing them with each sync instead of
+reading again, would bring those under a second too; it would put what they read of the sealed lines
+in a file beside the index, which is a decision for the record's owner, not for a reader.
+
 
 The server is the standard library's (`http.server`, one thread per request); it is meant for one
 reader on one machine, not for a crowd.

@@ -634,12 +634,26 @@ def _by_label(name: str, identities: Mapping[Ref, Identity]) -> tuple[str | None
 
 
 def _labels(identities: Mapping[Ref, Identity]) -> dict[str, str]:
-    """entity → the first label a resolution gives it, for every person the record resolves."""
+    """entity → the first label a resolution gives it, for every person the record resolves. Made
+    once for the identities a reader asks with (`_LAST`): a reader of a year asks once per name a
+    transcript or a note speaks, all of them of the one table. The caller never changes it, and
+    nothing changes an identities table once `resolve.identities_from` has made it (the cache knows
+    a table by itself and its size)."""
+    global _LAST
+    last = _LAST
+    if last is not None and last[0] is identities and last[1] == len(identities):
+        return last[2]
     labels: dict[str, str] = {}
     for who in identities.values():
         if who.entity and who.label and who.type in PERSON_TYPES:
             labels.setdefault(who.entity, who.label)
+    _LAST = (identities, len(identities), labels)
     return labels
+
+
+# the identities `_labels` read last, their size, and the labels: held, so the identities cannot go and
+# another table take their place under the same id; one table at a time
+_LAST: tuple[Mapping[Ref, Identity], int, dict[str, str]] | None = None
 
 
 # The lookups other readers of people share (`people`, `keepers`): a ref to the person it resolves to,
