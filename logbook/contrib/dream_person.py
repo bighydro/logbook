@@ -17,9 +17,10 @@ speaker, on a local day of the window, not retracted, through the entry's gate (
 signed days); with each line its instant, kind, speakers by label, words and the promises read in its
 words (`reader.promises`), and the person's label; and the days together in the window (RFC 0036
 amendment 2: `reader.Together`), each its day, the named places of the stays they shared and the
-references of the lines it rests on, never coordinates. Nothing else of the record: no note's words,
-no group, no draft. Each line is a reference (`L1`, ...) that stands for its id, so the model cites
-references and the record keeps ids.
+references of the lines it rests on, never coordinates, a day only when the location lines behind its
+stay are at or under the entry's ceiling as well (a place's name takes their tier). Nothing else of the
+record: no note's words, no group, no draft. Each line is a reference (`L1`, ...) that stands for its
+id, so the model cites references and the record keeps ids.
 
 **The line**, as the day's (`logbook.contrib.dream`): the answer checked (`dream.segments_of`, strict:
 one reference the material did not give marks the segment, so evidence outside the set is never

@@ -61,7 +61,9 @@ separately (Resolution). Since RFC 0034 the subset is, by default, the lines of 
 signed (`policy.signed_days` is `only`; `any` when the owner asked for `--unsigned`), and `counts`
 carries `held_back_unsigned`. A person's draft (`draft/v1` unit `person`, RFC 0036 amendment 1) crosses
 only while the `relationship` entry it was written under allows its tier, whatever the destination's
-ceiling, and `counts` carries `held_back_by_entry` when one stayed home (18 October 2026).
+ceiling, and `counts` carries `held_back_by_entry` when one stayed home (18 October 2026). Every other draft
+(a day's, a journey's, a week's, a call's synthesis) crosses only while the `dream` entry it was written
+under allows its tier, and is counted there too (19 October 2026, the owner's answer to #332).
 
 ## Blobs
 

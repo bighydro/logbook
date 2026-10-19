@@ -13,6 +13,17 @@ logbook export crossing --to hermes --since 2026-03-01T00:00:00Z --until 2026-03
 logbook export crossing --to hermes --since last --out ~/Handover/hermes
 ```
 
+## Drafts follow the entry they were written under
+
+A model's draft (`draft/v1`, [the dream](dream.md)) crosses only while the entry it was written under
+allows its tier, whatever the member's ceiling: a person's draft (`dream person`) the `relationship`
+entry, every other draft (a day's, a journey's, a week's, a call's synthesis) the `dream` entry. Once that
+entry's `until` has passed, it is removed, or its `max_tier` is below the draft's tier (and, for the
+`relationship` entry, when it has no `until`), the draft stays home and `counts` says how many did,
+`held_back_by_entry` (written only when one did); a record with drafts and no `dream` entry ships none of
+them. A video scene's draft (`video review`) is written on this machine under no entry and crosses by its
+tier like any line. With the entry in force the package is what it was.
+
 ## The package
 
 ```

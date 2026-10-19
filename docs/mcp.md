@@ -59,7 +59,7 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | `digest` | `period?` (`day`, `week`), `date?` | `logbook digest DATE`, the text as printed ([below](#the-lines-themselves)) |
 | `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2 |
 | `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line |
-| `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; a day signed before keeps its confirmations; only when the policy names it |
+| `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; a day signed before keeps its confirmations; never confirms a line above the ceiling of its own accord; only when the policy names it |
 | `note_day` | `day`, `text`, `at?`, `kind?` | one `note/v1` line on `day`, tier 2, source `mcp`; only when the policy names it |
 
 `search` is a scan, not the ranked search `logbook search` is ([search](search.md)). It cuts the window
@@ -237,17 +237,18 @@ is one line; `at` is the moment you signed, with the same rules as `--at` (amend
 against the page as the command checks them, and a day already signed is signed again, the new line
 superseding the old and, without `confirm`, keeping what the old one confirmed, its dispositions and its note
 (RFC 0034 amendment 4): a line added to the day since stays unconfirmed, so a re-sign through the door never
-confirms a line the owner was not shown; `"all"` confirms the page's lines the door can show, those at or
-under its ceiling, and leaves every line above it unconfirmed (RFC 0034 amendment 4, 18 October 2026), since
-the orchestrator was never shown them: the answer says how many in `unconfirmed`, `2 lines above the door's
-ceiling left unconfirmed`, and `above_ceiling`, a count and never their content (`day sign --confirm all` and the
-Library's Sign still confirm the whole page, which the owner sees there). The line is byte for byte what `day sign` writes with the same flags and `--at` (for `"all"`, `--confirm` with the ids it confirmed), source
+confirms a line the owner was not shown; `"all"`, and a day's first signature without `confirm`, confirm the
+page's lines the door can show, those at or under its ceiling, and leave every line above it unconfirmed (RFC
+0034 amendment 4, 18 and 19 October 2026), since the orchestrator was never shown them: the answer says how
+many in `unconfirmed`, `2 lines above the door's ceiling left unconfirmed`, and `above_ceiling`, a count and
+never their content (`day sign`, with or without `--confirm all`, and the Library's Sign still confirm the
+whole page, which the owner sees there). The line is byte for byte what `day sign` writes with the same flags and `--at` (for `"all"` and a first signature without `confirm`, `--confirm` with the ids it confirmed), source
 `manual` included: the signature is yours, carried by the orchestrator. The page signed is the whole page, as
 `day sign` signs it, lines above the ceiling included, which the orchestrator cannot read; the answer is the
 line's envelope, `header` (the first line `day sign` prints, `2026-06-09: signed 2026-06-09T19:30:00Z as #813
 signed-day/v1`), `kept` (what was kept from the signature it supersedes, the sentence `day sign` prints, or
 null), and counts: `confirmed`, `on_page`, `dispositions` per word, `above_ceiling` (with `unconfirmed`, null
-unless `"all"` left a line above the ceiling unconfirmed), and `supersedes`.
+unless the door left a line above the ceiling unconfirmed), and `supersedes`.
 
 **`note_day(day, text, at?, kind?)`** appends one `note/v1` line: source `mcp`, tier 2, the text exactly as
 given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer one is refused and nothing is

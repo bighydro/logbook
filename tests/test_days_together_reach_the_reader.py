@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from persona import CAFE, FJORD, MARINA, PLACES, attendee, dwell, event, note, utc
+from persona import CAFE, FJORD, MARINA, PLACES, attendee, dwell, event, note, point, utc
 from test_relationship_model import _env, _fake, _sent
 from test_relationship_reader import OLA, WINDOW, _entry, _ingest, _record
 
@@ -34,6 +34,13 @@ COORDINATE = re.compile(r"\d{1,3}\.\d{3,}")  # 59.9050, 10.735: what a stay at n
 def june(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
 ) -> tuple[Logbook, dict[str, str]]:
+    return _june(tmp_path, monkeypatch)
+
+
+def _june(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, marina_tier: int = 1
+) -> tuple[Logbook, dict[str, str]]:
+    """The June above; `marina_tier` is the tier of the owner's location lines at the Marina on the 12th."""
     lb, ids = _record(tmp_path, monkeypatch)
     _env(monkeypatch)
     monkeypatch.setattr(dream_person, "today", lambda: date(2026, 7, 1))
@@ -50,7 +57,9 @@ def june(
     dinner["id"] = uuid7()
     lb.append_many(
         [
-            *dwell("2026-06-12", "16:30", "23:30", MARINA),  # the meeting and the dinner note: the Marina
+            *(  # the meeting and the dinner note: the Marina
+                {**point, "tier": marina_tier} for point in dwell("2026-06-12", "16:30", "23:30", MARINA)
+            ),
             *dwell("2026-06-17", "09:30", "11:30", FJORD),  # the recorded crew call: no named place
             *dwell("2026-06-30", "18:00", "21:00", CAFE),  # the 30th, a day not signed
             coffee,
@@ -238,3 +247,103 @@ def test_a_person_with_no_day_together_is_sent_as_before(
         "held_back": 0,
     }
     assert ask.Question("x", ("2026-06-01", "2026-06-30"), "q", []).together == []
+
+
+# A day together's place name takes the tier of what it rests on (the owner's answer to #332's open
+# question, 19 October 2026): the highest tier of the owner's location lines behind the stay, and of the
+# line that names the company. At max_tier 1 a day whose stay rests on tier-2 location lines is not sent
+# and is counted as held back; never its name alone.
+
+
+def test_at_max_tier_1_a_day_together_whose_stay_rests_on_tier_1_locations_is_sent_with_its_name(
+    june: tuple[Logbook, dict[str, str]],
+) -> None:
+    lb, _ids = june
+    _entry(lb, 1, "2026-12-31")
+    found = reader.read(lb, "Ola Nordmann", *WINDOW, 1)
+    assert _days(found) == [("2026-06-12", ("Marina",))]
+    assert found.together[0].tier == 1 and found.tier == 1
+
+
+def test_at_max_tier_1_a_day_together_whose_stay_rests_on_tier_2_locations_is_held_back(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_network: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    lb, ids = _june(tmp_path, monkeypatch, marina_tier=2)
+    _entry(lb, 1, "2026-12-31")
+    found = reader.read(lb, "Ola Nordmann", *WINDOW, 1)
+    # the dinner at the Marina is tier 1, but the stay it was held at rests on tier-2 location lines:
+    # the day is not sent, not even as "a place with no name", and is counted with the other two
+    assert found.together == () and found.together_held == 3
+    assert ids["dinner"] in found.by_line(), "the dinner itself is a line of his set, as before"
+    _ingest(lb)
+    seen = _fake(monkeypatch, _cites_the_days)
+    code, out, err = _ask(capsys, "--show-prompt")
+    assert code == 0, err
+    assert '"days_together"' not in out and "days_together" not in _sent(seen)
+    assert not COORDINATE.search(out), "no coordinate is ever in the prompt"
+    code, out, err = _ask(capsys, "--json")
+    assert code == 0, err
+    assert json.loads(out)["days_together"] == {"sent": 0, "held_back": 3}
+
+
+def test_at_max_tier_2_the_same_day_is_sent_and_the_reading_is_tier_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_network: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    lb, _ids = _june(tmp_path, monkeypatch, marina_tier=2)
+    found = reader.read(lb, "Ola Nordmann", *WINDOW, 2)
+    assert _days(found) == [("2026-06-12", ("Marina",)), ("2026-06-17", (reader.NO_NAME,))]
+    assert found.together[0].tier == 2, "the Marina's name rests on tier-2 location lines"
+    _ingest(lb)
+    seen = _fake(monkeypatch, _cites_the_days)
+    code, out, err = _ask(capsys, "--show-prompt")
+    assert code == 0, err
+    assert "Marina" in out and not COORDINATE.search(out), "no coordinate is ever in the prompt"
+    assert not COORDINATE.search(json.dumps(seen["calls"][-1], ensure_ascii=False))
+
+
+def test_dream_person_at_max_tier_1_never_sends_the_name_of_a_stay_on_tier_2_locations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_network: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    lb, _ids = _june(tmp_path, monkeypatch, marina_tier=2)
+    _entry(lb, 1, "2026-12-31")
+
+    def first_line(material: dict[str, Any]) -> dict[str, Any]:
+        said = {"text": "You wrote first.", "evidence": [material["lines"][0]["ref"]]}
+        return {"person": [said], "threads": [], "promises": [], "questions": []}
+
+    seen = _fake(monkeypatch, first_line)
+    code = 0
+    try:
+        cli.main(["dream", "person", "Ola Nordmann", "--window", *WINDOW, "--show-prompt"])
+    except SystemExit as e:
+        code = int(e.code or 0)
+    out, err = capsys.readouterr()
+    assert code == 0, err
+    assert '"days_together"' not in out and not COORDINATE.search(out), "no coordinate is ever in the prompt"
+    assert "days_together" not in _sent(seen)
+    (line,) = [line for line in lb.lines() if line.get("kind") == drafts.KIND]
+    assert "days_together" not in line["payload"]["extra"] and line["tier"] == 1
+
+
+def test_one_tier_2_point_inside_the_stay_holds_the_day_back_and_its_retraction_lets_it_go(
+    june: tuple[Logbook, dict[str, str]],
+) -> None:
+    lb, _ids = june
+    _entry(lb, 1, "2026-12-31")
+    stray = {**point(utc("2026-06-12", "20:02"), MARINA), "tier": 2}  # one fix of the evening, kept at tier 2
+    lb.append(**stray)
+    found = reader.read(lb, "Ola Nordmann", *WINDOW, 1)
+    assert found.together == () and found.together_held == 3, "the Marina's name rests on that point too"
+    lb.retract(int(lb.meta["seq"]), "a fix from another phone")
+    found = reader.read(lb, "Ola Nordmann", *WINDOW, 1)
+    assert _days(found) == [("2026-06-12", ("Marina",))], "a retracted point is not behind the stay"
+    assert found.together[0].tier == 1

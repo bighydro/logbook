@@ -28,8 +28,10 @@ is refused and gets no store.
 each day the with module confirms the person at one of the owner's stays in the window, read through
 the same gate (`people.read`'s days together), with the `places.json` names of the stays (`NO_NAME`
 for a stay at none, never coordinates) and the lines it rests on (`Together`); a line of a day that is
-not in the set is a `Rest`, which a citation resolves to without its words. A day whose every line the
-gate refuses is counted (`together_held`). They are read from the record each time, never stored.
+not in the set is a `Rest`, which a citation resolves to without its words. A stay's name takes the
+highest tier of the owner's location lines behind it (`_stay_tiers`, 19 October 2026), so a stay above
+the ceiling is not sent, never its name alone. A day whose every line, or every stay, the gate refuses is
+counted (`together_held`). They are read from the record each time, never stored.
 
 **Speaker attribution.** Each line carries the peers whose words it is: a message its sender's (the
 owner's for one the owner sent), a mail its sender's, an answered call both ends', a transcript every
@@ -55,14 +57,15 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from ...core import day_start, people, policy, present, signing, stays
+from ...core import day_start, people, policy, present, reading, signing, stays
 from ...core import places as named_places
 from ...core.chain import Line
 from ...core.export import parse_day
+from ...core.index import RETRACTED
 from ...core.resolve import Ref
 from ...core.store import Logbook
 
@@ -80,6 +83,8 @@ ROLE = {
 OWNER = "owner"  # the owner's peer's label
 FOLDER_NAME = re.compile(r"^[0-9A-Za-z][0-9A-Za-z_-]*$")  # an entity id that can name a folder
 EN_DASH = "\u2013"
+UNKNOWN_STAY = policy.TIERS[-1] + 1  # a stay `_stay_tiers` cannot place again: above every ceiling
+ONE_DAY = timedelta(days=1)
 NO_NAME = "a place with no name"  # a day together's stay at no place places.json names: never coordinates
 CLOUD_CEILING = 2  # the owner's decision (18 Oct 2026): nothing above tier 2 goes to the cloud model
 EARLIEST = datetime.min.replace(tzinfo=UTC)  # a stamp that is no instant sorts first
@@ -203,7 +208,7 @@ class InputSet:
     tier: int = 1  # the highest tier read: the lines of the set, the days together's and the resolution lines
     together: tuple[Together, ...] = ()  # the days together in the window, by day (amendment 2)
     rests: tuple[Rest, ...] = ()  # the lines the days together rest on that are not lines of the set
-    together_held: int = 0  # days together the gate refused: resting on no line it lets through
+    together_held: int = 0  # days together the gate refused: no line, or no stay, it lets through
 
     def by_line(self) -> dict[str, Item]:
         return {item.line: item for item in self.items}
@@ -297,7 +302,7 @@ def read(
         key=lambda e: (report.known[e].name.casefold(), e),
     )
     peers = {person.entity: person.name, **{e: report.known[e].name for e in others}, owner: OWNER}
-    together = _together(lb, person, ceiling)
+    together = _together(lb, person, ceiling, first, last)
     rests = _rests(lb, together, {i.line for i in items})
     tier = max(
         [i.tier for i in items]
@@ -322,25 +327,63 @@ def read(
     )
 
 
-def _together(lb: Logbook, person: people.Person, ceiling: int) -> tuple[Together, ...]:
+def _together(
+    lb: Logbook, person: people.Person, ceiling: int, first: str, last: str
+) -> tuple[Together, ...]:
     """The person's days together in the gated reading (`people.read` through the entry's gate, so
     every line a day rests on is at or under the ceiling and on a signed day unless lifted), one per
     day: the stays' names as `places.json` gives them, else `NO_NAME`, never the coordinates a stay
     at no named place reads as; and the lines it rests on, in the order the with module found them.
-    A day whose every line the gate refused is not one (`InputSet.together_held` counts it)."""
+    A stay's name is derived from the owner's location lines behind it, so it takes their highest
+    tier beside the tier of the lines that name the company (`_stay_tiers`; the owner's answer to
+    #332, 19 October 2026): a stay above the ceiling is not sent, never its name alone. A day whose
+    every stay the gate refused is not one (`InputSet.together_held` counts it)."""
     named = {place.name for place in named_places.read(lb.root)}
     by_day: dict[str, list[people.SharedDay]] = {}
     for (day, _stay), shared in sorted(person.shared.items()):
         by_day.setdefault(day, []).append(shared)
+    behind = _stay_tiers(lb, {s.stay for found in by_day.values() for s in found}, first, last)
     out = []
     for day, found in by_day.items():
-        found = [s for s in found if s.tier <= ceiling]  # the gate refused them already; never sent
+        tiers = {id(s): max(s.tier, behind.get(s.stay, UNKNOWN_STAY)) for s in found}
+        found = [s for s in found if tiers[id(s)] <= ceiling]  # never sent, its name included
         lines = tuple(dict.fromkeys(id_ for s in found for id_ in s.lines))
         if not lines:
             continue
         places = tuple(dict.fromkeys(s.where if s.where in named else NO_NAME for s in found))
-        out.append(Together(day, places, lines, max(s.tier for s in found)))
+        out.append(Together(day, places, lines, max(tiers[id(s)] for s in found)))
     return tuple(out)
+
+
+def _stay_tiers(lb: Logbook, wanted: set[str], first: str, last: str) -> dict[str, int]:
+    """Stay id → the highest tier of the location lines it was derived from: the owner's points (and,
+    for a stay aboard, the asset's) from its first to its last instant, not retracted, read from the
+    index's own columns. The owner's stays are derived again as `people.read` derives them
+    (`reading.owner_track`), so the ids agree; a stay not found again, or with no point found behind
+    it, is `UNKNOWN_STAY`, never sent."""
+    if not wanted:
+        return {}
+    track = [s for s in reading.owner_track(lb, first, last).stays if s.id in wanted]
+    if not track:
+        return {}
+    days = track[0].start.date(), track[-1].end.date()
+    with lb.index() as idx:
+        rows = idx.db.execute(
+            "SELECT at, tier, subject FROM lines WHERE kind = 'location' AND day_local BETWEEN ? AND ?"
+            f" AND lat IS NOT NULL AND lon IS NOT NULL AND id NOT IN ({RETRACTED})",
+            ((days[0] - ONE_DAY).isoformat(), (days[1] + ONE_DAY).isoformat()),
+        ).fetchall()
+    points = [
+        (at, int(tier), subject) for stamp, tier, subject in rows if (at := stays.instant(stamp)) is not None
+    ]
+    out: dict[str, int] = {}
+    for stay in track:
+        subjects = {None, stay.aboard} if stay.aboard else {None}
+        behind = [
+            tier for at, tier, subject in points if subject in subjects and stay.start <= at <= stay.end
+        ]
+        out[stay.id] = max(behind, default=UNKNOWN_STAY)  # a stay no point is found behind is never sent
+    return out
 
 
 def _rests(lb: Logbook, together: tuple[Together, ...], items: set[str]) -> tuple[Rest, ...]:

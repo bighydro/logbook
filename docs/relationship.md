@@ -46,7 +46,11 @@ else of the record: no note that names them, no group chat, no photo, no draft. 
 together in the window go too (RFC 0036 amendment 2): each its date, the name `places.json` gives the
 place you shared (`a place with no name` when it has none, never its coordinates) and the references of
 the lines it rests on, under the same gate as the lines (the entry's `max_tier`, your signed days), so a
-sentence about time together cites them; `--json` counts them, `days_together`. A person dreamed before
+sentence about time together cites them; `--json` counts them, `days_together`. The place's name is read
+from your location lines, so it takes their tier: a day together goes only when the highest tier of the
+location lines behind the stay, and of the line that says who was there, is at or under `max_tier`. At
+`max_tier` 1 a day spent at a stay your tier-2 locations found is not sent, not even as `a place with no
+name`, and is counted as held back. A person dreamed before
 at the same head is not dreamed again for them (rule 1 keys on the head, not the prompt): their next
 draft, once the record moves, reads the days together. `people ask
 --show-prompt` prints exactly what is sent.
