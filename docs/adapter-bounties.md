@@ -6,7 +6,7 @@ The adapters not yet written, each with the export it would read, the profile it
 
 Every adapter obeys the same rules: pure (no network on the default path), never writes the source, never lowers the tier the profile sets, gives every line a stable `raw_id` so a re-import appends nothing (ADR 0017), confirms a SQLite schema with `PRAGMA table_info` before reading it, and is tested on a **synthetic** fixture only. The sample person lives in Oslo and does not exist; her numbers are `07700 900xxx`, her addresses end in `example.org`.
 
-Spotify and Pocket are not on this list: Pocket is in the package (`browse/v1`, a `save` per page) and Spotify is spoken for. The longer wish list, from Letterboxd to boat passage logs, is at the foot of [adapters/README.md](adapters/README.md).
+Spotify, Pocket and Mac Screen Time are not on this list: Pocket is in the package (`browse/v1`, a `save` per page), Screen Time too (`event/v1`, an `app-use` line per session, [adapters/screentime.md](adapters/screentime.md)), and Spotify is spoken for. The longer wish list, from Letterboxd to boat passage logs, is at the foot of [adapters/README.md](adapters/README.md).
 
 | Source | Export | Profile | Tier | Good first adapter |
 |---|---|---|---|---|
@@ -18,7 +18,6 @@ Spotify and Pocket are not on this list: Pocket is in the package (`browse/v1`, 
 | Garmin | Connect data export, JSON per domain | `health-sample/v1` | 3 | no |
 | Oura | account export, CSV and JSON | `health-sample/v1` | 3 | yes |
 | Notion | workspace export, Markdown and CSV | `note/v1` | 2 | yes |
-| Mac Screen Time | `knowledgeC.db` on this Mac | `activity/v1`, to be proposed | 2 | no |
 | HomeKit | none from Apple; Home Assistant's recorder store | `activity/v1`, to be proposed | 1 | no |
 | Bank CSVs | one CSV per bank, a mapping file per bank | `transaction/v1` | 3, MUST | yes, each mapping |
 
@@ -86,19 +85,11 @@ Spotify and Pocket are not on this list: Pocket is in the package (`browse/v1`, 
 
 **Tier** 2 (MUST). **Good first adapter:** yes. The fixture is a folder of four pages and one database, synthetic.
 
-## Mac Screen Time
-
-**Export.** None from Apple. This Mac keeps `~/Library/Application Support/Knowledge/knowledgeC.db`, a SQLite store the terminal can read with Full Disk Access: `ZOBJECT` rows whose `ZSTREAMNAME` is `/app/usage` or `/app/inFocus`, `ZSTARTDATE` and `ZENDDATE` as seconds since 2001, `ZVALUESTRING` the bundle id, with `ZSTRUCTUREDMETADATA` for the device. The phone's equivalent is not in a backup. A live adapter on the Mac itself, like `imessage`, reading a copy of the store.
-
-**Target.** No profile fits. An app in the foreground for a span is not a browse, not a note, not an event; it is an `activity/v1` profile nobody has proposed yet. Propose it first: `kind` `activity`, a span, `app` the bundle id, `device`, `raw_id` `screen-time:<device>:<start>:<bundle id>`; the window title never, the content never. Then the adapter.
-
-**Tier** 2: what you were doing on the computer is as private as what you were reading. **Good first adapter:** no. An RFC comes first, and the schema of `knowledgeC.db` shifts between macOS versions, so every column is confirmed by `PRAGMA table_info` and a missing one leaves its field out.
-
 ## HomeKit
 
 **Export.** None. The Home app keeps its data in iCloud and offers no export; a backup carries the home's configuration, not its history. The practical source is a home hub the owner runs: Home Assistant's `home-assistant_v2.db` (the recorder's `states` and `events` tables, a row per state change with `last_updated_ts` and the entity id) or Homebridge's log. The adapter reads a copy of the recorder store, or Home Assistant's history export (CSV per entity from the history panel).
 
-**Target.** The same `activity/v1` profile Screen Time needs, or a sibling: a state change of a thing in the home (a door opened, a light on, someone arrived) is an occurrence, not a calendar entry. `raw_id` `home-assistant:<entity id>:<last_updated_ts>`; `extra` the state and its attributes; nothing a camera saw.
+**Target.** An `activity/v1` profile nobody has proposed yet, or a sibling: a state change of a thing in the home (a door opened, a light on, someone arrived) is an occurrence, not a calendar entry. `raw_id` `home-assistant:<entity id>:<last_updated_ts>`; `extra` the state and its attributes; nothing a camera saw.
 
 **Tier** 1 by default: a door that opened at 18:04 says you were home, as a location point does; the owner may raise it. **Good first adapter:** no, until the profile exists.
 
