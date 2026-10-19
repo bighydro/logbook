@@ -253,8 +253,10 @@ binds 127.0.0.1 and runs as the record's own user: whoever can reach the form ca
 the connection comes from this machine (the client address is loopback, `127.0.0.0/8` or `::1`) and,
 when the browser sends an `Origin` header, it names `127.0.0.1` or `[::1]` (the server's own pages,
 as reached from here; not `localhost`, a name, and not another scheme or host). Anything else is a
-`403` and nothing is written. Through an SSH tunnel the browser's origin is `127.0.0.1` and the form
-works; behind a proxy with its own name it is read-only, as every other page is written, and the
+`403` and nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
+names the page a form came from (`Origin: http://127.0.0.1:<port>`) and sends nothing to other sites
+(under `no-referrer` it would send `Origin: null`, and every form would be refused). Through an SSH
+tunnel the browser's origin is `127.0.0.1` and the form works; behind a proxy with its own name it is read-only, as every other page is written, and the
 naming is done here. `GET /places/review` is a `405`.
 
 **A Day's stay without a name** carries a small *name this place* link to the Places page at its

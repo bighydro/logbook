@@ -588,7 +588,9 @@ class Response(NamedTuple):
             "Content-Security-Policy": self.csp,
             "Cache-Control": "no-store" if self.etag is None else "no-cache",
             "X-Content-Type-Options": "nosniff",
-            "Referrer-Policy": "no-referrer",
+            # no referrer to any other site; to its own, the page's origin, which a form's POST
+            # names (under `no-referrer` a browser sends `Origin: null`, and the write gate refuses it)
+            "Referrer-Policy": "same-origin",
         }
         if self.etag is not None:
             found["ETag"] = self.etag
