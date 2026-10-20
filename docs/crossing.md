@@ -34,6 +34,10 @@ tier like any line. With the entry in force the package is what it was.
   attachments/<sha256>   the files those lines point at that the store holds
 ```
 
+A line's refs are the `{kind, value}` refs in its payload (a message's sender, a calendar guest), a mail's
+`from`, `to`, `cc` and `bcc` addresses, and a transcript's participants' email, phone and provider id, so
+the resolution that names someone on a mail or in a transcript crosses with it.
+
 `manifest.json` lists every other file of the package under `files`, in path order:
 
 ```json

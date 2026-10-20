@@ -92,7 +92,11 @@ line. Placement is a deployment choice:
   nothing outside its own record.
 - **Exporter-side.** The exporter runs a resolution pass and ships `resolution.jsonl` — `resolution/v1`
   lines (RFC 0006): each `{ ref: { kind, value, source? }, entity: { type, id, registry }, … }` stating the
-  entity a source-native id refers to. A consumer joins an entry to its entity by `ref`.
+  entity a source-native id refers to. A consumer joins an entry to its entity by `ref`. Which refs does an
+  entry have? The `{ kind, value }` objects in its payload, and the identifiers a profile writes as plain
+  fields: a mail's `from`, `to`, `cc` and `bcc` addresses (RFC 0015 rule 2), and the `email`, `phone` and
+  `provider_id` of a transcript's participants (RFC 0004). An address is looked up both lower-cased and
+  case-folded, because resolutions spell it both ways (19 October 2026).
 
 `resolution_file` is OPTIONAL, so the choice is a deployment decision, not a format change. Either way the
 crossed lines stay raw — resolution is a separate overlay (RFC 0006), never written back into a line.

@@ -62,6 +62,41 @@ def _message(at: str, sender: dict[str, str], media: dict[str, Any] | None = Non
     return {"at": at, "source": "whatsapp", "kind": "message", "tier": 2, "payload": payload}
 
 
+def _mail(at: str, **headers: Any) -> dict[str, Any]:
+    """A mail/v1 line (RFC 0015) whose `from`, `to`, `cc` and `bcc` are the `{email, name?}` given."""
+    return {
+        "at": at,
+        "source": "mail",
+        "kind": "mail",
+        "tier": 2,
+        "payload": {
+            "schema": "mail/v1",
+            "raw_id": f"m-{at}@mail.example.org",
+            "thread": f"m-{at}@mail.example.org",
+            "subject": "Mooring for the weekend",
+            "direction": "received",
+            "size": 1024,
+            **headers,
+        },
+    }
+
+
+def _transcript(at: str, participants: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "at": at,
+        "source": "granola",
+        "kind": "transcript",
+        "tier": 2,
+        "payload": {
+            "schema": "transcript/v1",
+            "provider": "granola",
+            "raw_id": f"t-{at}",
+            "title": "Catch-up at the harbour",
+            "participants": participants,
+        },
+    }
+
+
 def _resolution(kind: str, value: str, label: str, entity: str) -> dict[str, Any]:
     return {
         "at": "2026-02-01T09:00:00Z",  # before the window: the overlay is what carries it across
@@ -338,6 +373,115 @@ def test_resolution_overlay_never_crosses_above_the_requested_tier(lb: Logbook, 
     m = _manifest(out)
     assert "resolution_file" not in m
     assert m["counts"]["resolutions"] == 0 and m["counts"]["resolutions_held_back"] == 1
+
+
+def test_the_resolution_that_names_a_mails_address_crosses_with_the_mail(lb: Logbook, tmp_path: Path):
+    """RFC 0015 rule 2: a mail's `{email, name}` is the ref `{kind: "email", value}`, so the line that
+    names the address crosses with the mail, as a message sender's does."""
+    headers = {"from": {"email": EMAIL_B, "name": "Kari"}, "to": [{"email": "harbour@example.org"}]}
+    lb.append(**_mail("2026-03-01T14:00:00Z", **headers))
+    out = tmp_path / "out"
+    _run(
+        "--to",
+        "hermes",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2",
+        "--kinds",
+        "mail",
+        "--out",
+        str(out),
+    )
+    overlay = _jsonl(out / "resolution.jsonl")
+    assert [r["seq"] for r in overlay] == [3]  # Kari's address; never Ola's phone or the lid alias
+    assert _manifest(out)["counts"]["resolutions"] == 1
+
+
+def test_the_resolutions_that_name_a_transcripts_participants_cross_with_it(lb: Logbook, tmp_path: Path):
+    """RFC 0004: a participant is `{name, email?, phone?, provider_id?}`, each identifier the ref of
+    its kind; a participant known by a name alone resolves through nothing here."""
+    participants = [{"name": "Kari", "email": EMAIL_B}, {"name": "Ola", "phone": PHONE_A}, {"name": "Ines"}]
+    lb.append(**_transcript("2026-03-01T14:00:00Z", participants))
+    out = tmp_path / "out"
+    _run(
+        "--to",
+        "hermes",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2",
+        "--kinds",
+        "transcript",
+        "--out",
+        str(out),
+    )
+    assert [r["seq"] for r in _jsonl(out / "resolution.jsonl")] == [1, 3]  # Ola's phone, Kari's address
+
+
+def test_an_address_meets_its_resolution_whichever_way_the_resolver_cased_it(lb: Logbook, tmp_path: Path):
+    """A contact import lower-cases an address (`weiß@…`), `people review` case-folds it (`strauss@…`
+    for `strauß@…`); past ASCII the two differ, and the mail's resolution crosses either way."""
+    lb.append(**_resolution("email", "weiß@example.org", "Jon Weiß", PERSON_A))  # seq 15: an import
+    lb.append(**_resolution("email", "strauss@example.org", "Ida Strauß", PERSON_B))  # seq 16: people review
+    headers = {"from": {"email": "weiß@example.org"}, "cc": [{"email": "strauß@example.org"}]}
+    lb.append(**_mail("2026-03-01T14:00:00Z", **headers))
+    out = tmp_path / "out"
+    _run(
+        "--to",
+        "hermes",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2",
+        "--kinds",
+        "mail",
+        "--out",
+        str(out),
+    )
+    assert [r["seq"] for r in _jsonl(out / "resolution.jsonl")] == [15, 16]
+
+
+def test_a_mails_headers_and_a_transcripts_participants_are_refs_of_their_line() -> None:
+    """Every header and every participant, an address both lower-cased and case-folded, the two ways
+    the record's resolutions spell one; a name alone, an empty field or an entry that is not an object
+    is no ref. A line of any other kind keeps to the `{kind, value}` refs in its payload."""
+    mail = _mail(
+        "2026-03-01T14:00:00Z",
+        **{
+            "from": {"email": " Kari@Example.ORG ", "name": "Kari"},
+            "to": [{"email": "ola@example.org"}, {"name": "Nobody"}, "not-an-address", {"email": ""}],
+            "cc": [{"email": "ines@example.org"}],
+            "bcc": [{"email": "Weiß@example.org"}],
+        },
+    )
+    assert sorted(crossing.line_refs(mail)) == [
+        ("email", "ines@example.org"),
+        ("email", "kari@example.org"),
+        ("email", "ola@example.org"),
+        ("email", "weiss@example.org"),
+        ("email", "weiß@example.org"),
+    ]
+    participants = [
+        {"name": "Kari", "email": "KARI@example.org", "phone": PHONE_B, "provider_id": "u1"},
+        {"name": "Ines"},
+    ]
+    assert sorted(crossing.line_refs(_transcript("2026-03-01T14:00:00Z", participants))) == [
+        ("email", "kari@example.org"),
+        ("phone", PHONE_B),
+        ("provider_id", "u1"),
+    ]
+    note = _note("2026-03-01T14:00:00Z", "met Kari")
+    note["payload"]["from"] = {"email": EMAIL_B}
+    assert list(crossing.line_refs(note)) == []  # only a mail's headers are its addresses
+    message = _message("2026-03-01T14:00:00Z", {"kind": "phone", "value": PHONE_A})
+    assert list(crossing.line_refs(message)) == [("phone", PHONE_A)]
 
 
 # -- attachments (SPEC §1.1) -----------------------------------------------------------------
