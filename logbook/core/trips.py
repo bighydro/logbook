@@ -26,6 +26,7 @@ can be outside home, so there are no trips and the reader says so."""
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -255,6 +256,34 @@ def coordinates_label(
     return f"{label} ({city})" if city else label
 
 
+UNNAMED_LABEL = re.compile(  # `coordinates_label`'s text for a point at no airport
+    r"^-?\d+\.\d{4},-?\d+\.\d{4}(?: near (?P<near>.+, \d+\.\d km)| \((?P<city>[^()]+)\))?$"
+)
+
+
+def route_name(label: str) -> str:
+    """How printed text names a route element: an unnamed stay's label (`coordinates_label`) without
+    its coordinates when something names the point — `near Cabin, 1.1 km`, `Zurich` —, the
+    coordinates alone where nothing does, any other label as it is. Text only: the JSON keeps the
+    label SPEC §3.2.6 gives."""
+    found = UNNAMED_LABEL.match(label)
+    if found is None:
+        return label
+    if found["near"]:
+        return f"near {found['near']}"
+    return found["city"] or label
+
+
+def route_names(route: Sequence[str]) -> list[str]:
+    """Each element of a route as `route_name` prints it, except that two neighbours that would read
+    the same (two anchorages off one town) keep their labels, so a reader still tells them apart."""
+    names = [route_name(label) for label in route]
+    return [
+        label if name != label and name in names[max(i - 1, 0) : i] + names[i + 1 : i + 2] else name
+        for i, (label, name) in enumerate(zip(route, names, strict=True))
+    ]
+
+
 def airport_at(lat: float, lon: float, airports: Airports) -> Airport | None:
     """The airport a point is at: the nearest whose radius holds it — `SCHEDULED_AIRPORT_KM` from
     the reference point of an airport with scheduled traffic (`Airport.scheduled`: OurAirports type
@@ -390,7 +419,7 @@ def trip_rows(trip: Trip) -> Iterator[str]:
         aside.append(f"{trip.in_transit} in transit")
     if aside:
         nights += f" ({', '.join(aside)})"
-    parts = [nights, f"route {f' {ARROW} '.join(trip.route)}" if trip.route else "route unknown"]
+    parts = [nights, f"route {f' {ARROW} '.join(route_names(trip.route))}" if trip.route else "route unknown"]
     for label, flights in (("in", trip.flights_in), ("out", trip.flights_out)):
         for f in flights:
             name = f"{f['carrier']} {f['number']} " if f["number"] else ""

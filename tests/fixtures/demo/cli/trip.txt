@@ -1,6 +1,6 @@
 trip:2026-06-08:2026-06-10  2026-06-08 – 2026-06-10 · 3 nights · until 2026-06-11
   route
-     1  2026-06-08 – 2026-06-10  3 nights  47.3769,8.5417 (Zurich)
+     1  2026-06-08 – 2026-06-10  3 nights  Zurich
   flights       in XY 561 OSL → ZRH · out XY 562 ZRH → OSL
   with          Marta Keller, Jonas Weber
   days

@@ -405,8 +405,7 @@ def page_agents(site: Site, page: str = "1", day: str | None = None) -> str:
     wanted = set(chosen([d for d, _s in every]))
     shown = [(d, s) for d, s in every if d in wanted]
     count = sum(len(s) for _d, s in shown)
-    head = f"{_plural(len(shelf.sessions), 'session')}{DOT}tier {shelf.tier or '-'}"
-    parts = [f"<h1>Agents <small>{escape(head)}</small></h1>\n"]
+    parts = [f"<h1>Agents {site.tier_small(_plural(len(shelf.sessions), 'session'), shelf.tier)}</h1>\n"]
     if not shelf.sessions:
         if site.tiers is not None:
             gate = ", ".join(str(t) for t in sorted({int(t) for t in site.tiers})) or "none"

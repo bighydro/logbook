@@ -251,6 +251,11 @@ TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the 
     " where it may go, and money and health (tier 3) never leave without one."
 )
 NO_DEVICE_WITH = "no device saw this day: say who was there"  # the `with` row of a day with no stay
+NONE_CONFIRMED = "nobody confirmed; proposed below"  # the `with` row when only a row's proposals name anyone
+TIER_TITLE = (  # a shelf header's tier, on hover; never the words of a tier a gated page does not read
+    "The highest tier among the lines this page read (SPEC §4): 1 places, photos and the calendar;"
+    " 2 notes, messages and mail; 3 money and health."
+)
 AUDIO_SUFFIXES = {
     "audio/webm": ".webm",
     "video/webm": ".webm",
@@ -1450,6 +1455,42 @@ class Site:
         """The days the owner's track covers, else any line's; None for an empty record."""
         return reading.record_days(self.lb, "location") or reading.record_days(self.lb)
 
+    def tier_small(self, facts: str, tier: int | None) -> str:
+        """A shelf header's `<small>`: its facts, then what its tier means in words — `nothing read
+        above tier N`, the highest tier among the lines it read, or `no lines` — the scale on hover."""
+        words = f"nothing read above tier {tier}" if tier else "no lines"
+        return f'<small title="{escape(TIER_TITLE)}">{escape(facts + DOT + words)}</small>'
+
+    def _record_days(self) -> tuple[str, str] | None:
+        """`_whole`, read once for the record as it stands (`shared`): `/assets` is never kept."""
+        return self.shared(("whole",), self._whole)
+
+    def _nothing_held(self, day: str) -> str:
+        """The one sentence of a Day the record holds nothing for (`/today` on a record that ended long
+        ago): the record's first and last day, each a link to its Day. Empty when the day holds lines
+        the server's tier gate leaves out: the record is not empty there, only this reading."""
+        with self.lb.index() as idx:
+            held, _per_source = idx.source_days(day, day)
+        if held:
+            return ""
+        whole = self._record_days()
+        if whole is None:
+            return '<p class="mute">The record has no lines yet.</p>\n'
+        first, last = whole
+        return (
+            f"<p>The record holds nothing for {escape(day)}: its days run from"
+            f" {self.link(escape(first), f'/day/{first}')} to"
+            f" {self.link(escape(last), f'/day/{last}')}.</p>\n"
+        )
+
+    def _last_spoke(self, said: str, last_day: str | None, today: str, runs: str) -> str:
+        """The one line of `/gaps` and `/assets` on a record that went quiet before yesterday: `said`
+        and when (`last_day`), and that what the page counts (`runs`) still runs to today. Empty
+        otherwise."""
+        if last_day is None or parse_day(last_day) >= parse_day(today) - timedelta(days=1):
+            return ""
+        return f'<p class="mute">{escape(said)} {escape(last_day)}; {escape(runs)}.</p>\n'
+
     # -- / --------------------------------------------------------------------------------------------------
 
     def page_index(self) -> str:
@@ -1467,13 +1508,18 @@ class Site:
         )
         a, b = _last_window(whole)
         year = whole[1][:4]
-        manifest = (  # the owner's own shelves: never in an exported site
+        manifest = (  # the owner's own shelves: never in an exported site, as the navigation has them
             ""
             if self.static
             else f"<li>{self.link('The Manifest', '/manifest')}: the orgs you named, under what you decided"
             " about them; the review of the ones the sources saw.</li>\n"
             f"<li>{self.link('Ideas', '/ideas')}: the ideas you named, by stage, each with its timeline;"
             " the review of the ones the sources saw.</li>\n"
+            f"<li>{self.link('Promises', '/promises')}: what was promised in the messages, to whom and by"
+            " whom, open first.</li>\n"
+            f"<li>{self.link('Goals', '/goals')}: the goals you wrote, by horizon, and the chapter today is"
+            " in.</li>\n"
+            f"<li>{self.link('Agents', '/agents')}: the sessions with an agent, day by day.</li>\n"
         )
         parts.append(
             '<ul class="plain">\n'
@@ -1488,6 +1534,7 @@ class Site:
             f"<li>{self.link('Places', '/places')}: the named places of the record.</li>\n"
             f"<li>{self.link('Assets', '/assets')}: the assets tracked and the last fix of each.</li>\n"
             f"<li>{self.link('Gaps', '/gaps')}: where each source went quiet.</li>\n"
+            f"<li>{self.link('The world', '/world')}: the places of the record on a map of the world.</li>\n"
             "</ul>\n"
         )
         return self.document("Logbook", "".join(parts))
@@ -1530,6 +1577,7 @@ class Site:
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
             f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
+            "" if self.static or data["sources"] else self._nothing_held(day),
             '<dl class="header">\n',
             *(
                 [_dt("the day", day_start.span_words(data["day_start"]))]
@@ -1551,7 +1599,14 @@ class Site:
             parts.append(f"<dt>all day</dt><dd>{entries}</dd>\n")
         company = day_reader.company_of_day(data)
         if company or not self.static:  # the "with" row: who was there, and the field to say so
-            nobody = NO_DEVICE_WITH if self._unseen(day, data) else "nobody the record saw"
+            proposed = any((e.get("with") or {}).get("proposed") for e in data["timeline"])
+            nobody = (
+                NONE_CONFIRMED
+                if proposed  # a row below proposes who: the header says nobody is confirmed, not seen
+                else NO_DEVICE_WITH
+                if self._unseen(day, data)
+                else "nobody the record saw"
+            )
             said = (
                 escape(day_reader.company_text(company))
                 if company
@@ -2284,7 +2339,7 @@ class Site:
         head = self.link(f"<b>{title}</b>", f"/journeys/{t.start}/{t.end}")
         facts = [journeys.nights_text(j.to_json()), f"home {t.until}"]
         if t.route:
-            facts.append(f" {ARROW} ".join(t.route))
+            facts.append(f" {ARROW} ".join(trips.route_names(t.route)))
         facts.append(_plural(len(j.photos), "photo"))
         with_ = self._people_links(j.people, j.unplaced)
         out = [
@@ -2309,16 +2364,17 @@ class Site:
         """Where a journey row comes from: each run of nights at one place with the lines of its
         stays, the flights, each person with the lines that put them there, the photos, the name."""
         items: list[Evidence] = []
-        run: list[dict[str, Any]] = []
-        for night in [*j.nights_of, None]:
-            if run and (night is None or night["where"] != run[-1]["where"]):
-                first, last = run[0]["day"], run[-1]["day"]
-                span = first if first == last else f"{first} {EN_DASH} {last}"
-                lines = list(dict.fromkeys(i for n in run for i in n["lines"]))
-                items.append((f"{_plural(len(run), 'night')} {span} {run[0]['where']}", lines, first))
-                run = []
-            if night is not None:
-                run.append(night)
+        runs: list[list[dict[str, Any]]] = []
+        for night in j.nights_of:
+            if runs and night["where"] == runs[-1][-1]["where"]:
+                runs[-1].append(night)
+            else:
+                runs.append([night])
+        for run, where in zip(runs, trips.route_names([r[0]["where"] for r in runs]), strict=True):
+            first, last = run[0]["day"], run[-1]["day"]
+            span = first if first == last else f"{first} {EN_DASH} {last}"
+            lines = list(dict.fromkeys(i for n in run for i in n["lines"]))
+            items.append((f"{_plural(len(run), 'night')} {span} {where}", lines, first))
         for f in j.trip.flights:
             name = f"{f['carrier']} {f['number']} " if f.get("number") else ""
             items.append((f"flight {name}{f['from']} {ARROW} {f['to']}", list(f["lines"]), str(f["date"])))
@@ -2377,9 +2433,9 @@ class Site:
         parts.append("<h2>Stays</h2>\n")
         parts.append(_stays_svg(data["route"]))
         parts.append('<ol class="shelf">\n')
-        for s in data["route"]:
+        for s, name in zip(data["route"], trip_page.route_names(data["route"]), strict=True):
             span = s["first"] if s["first"] == s["last"] else f"{s['first']} {EN_DASH} {s['last']}"
-            what = f"{s['n']}. {span}{DOT}{_plural(s['nights'], 'night')}{DOT}{trip_page.stay_text(s)}"
+            what = f"{s['n']}. {span}{DOT}{_plural(s['nights'], 'night')}{DOT}{trip_page.stay_text(s, name)}"
             evidence = [(f"stay {s['stay']}", s["lines"], s["first"])] if s["stay"] else []
             parts.append(f"<li><p>{escape(what)}</p>\n{self._evidence(evidence)}</li>\n")
         parts.append("</ol>\n")
@@ -2735,8 +2791,7 @@ class Site:
             report = self._review_of(entities.ORG) if self._acts() else None
         filtered = portfolio is not None and shelf.portfolios_read
         count = _plural(len(shelf.rows), "org") + (f" in {portfolio}" if filtered else "")
-        head = f"{count}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
-        parts = [f"<h1>The Manifest <small>{escape(head)}</small></h1>\n"]
+        parts = [f"<h1>The Manifest {self.tier_small(f'{count}{DOT}{shelf.on}', shelf.tier)}</h1>\n"]
         if shelf.portfolios:
             here = None if portfolio is None else entities.fold(portfolio)
             links = ["<b>every org</b>" if here is None else self.link("every org", "/manifest")]
@@ -2836,9 +2891,7 @@ class Site:
         counts = f"{_plural(len(proposals), 'proposal')}{DOT}{len(report.unplaced)} seen, not placed"
         out = [f'<h2 id="review">{title} <small>{escape(counts)}{DOT}{report.placed} placed</small></h2>\n']
         if not proposals:
-            out.append(
-                '<p class="mute">nothing to review: every org the sources saw is placed or answered</p>\n'
-            )
+            out.append(f'<p class="mute">{escape(_nothing_to_review(len(report.unplaced), "org"))}</p>\n')
             return "".join(out)
         if into is None:
             out.append(
@@ -3105,8 +3158,8 @@ class Site:
         with self._review_lock:  # the observed table is built once, as the other queues' are
             shelf = ideas.shelf_of(self._idea_record())
             report = self._review_of(entities.IDEA) if self._idea_acts() else None
-        head = f"{_plural(len(shelf.rows), 'idea')}{DOT}{shelf.on}{DOT}tier {shelf.tier or '-'}"
-        parts = [f"<h1>Ideas <small>{escape(head)}</small></h1>\n"]
+        head = f"{_plural(len(shelf.rows), 'idea')}{DOT}{shelf.on}"
+        parts = [f"<h1>Ideas {self.tier_small(head, shelf.tier)}</h1>\n"]
         if not shelf.rows:
             parts.append(
                 "<p>no ideas named yet: name them below, from what Notion, the repositories, the calls and"
@@ -3181,9 +3234,7 @@ class Site:
         counts = f"{_plural(len(proposals), 'proposal')}{DOT}{len(report.unplaced)} seen, not placed"
         out = [f'<h2 id="review">{title} <small>{escape(counts)}{DOT}{report.placed} placed</small></h2>\n']
         if not proposals:
-            out.append(
-                '<p class="mute">nothing to review: every idea the sources saw is placed or answered</p>\n'
-            )
+            out.append(f'<p class="mute">{escape(_nothing_to_review(len(report.unplaced), "idea"))}</p>\n')
             return "".join(out)
         if into is None:
             out.append(
@@ -3550,6 +3601,10 @@ class Site:
                     escape(asset_status.age_text(fix.age_s)),
                 ]
             rows.append(row)
+        whole = self._record_days()  # the days the Day and the front page give the record
+        today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+        last = None if whole is None else whole[1]
+        body += self._last_spoke("The record's last day is", last, today, "each fix's age here runs to now")
         body += _table(
             [
                 "id",
@@ -3622,6 +3677,13 @@ class Site:
                     escape(gaps.runs(missing)),
                 ]
             )
+        newest = max(s["last"] for s in data["sources"] if s["lines"])
+        body += self._last_spoke(
+            "The record's last line is from",
+            day_start.of(self.lb.meta).day_of(newest),
+            data["today"],
+            f"every silence and every missing day here runs to today, {data['today']}",
+        )
         body += _table(
             ["source", ("lines", "num"), "first", "last", "longest silence", ("missing days", "num"), ""],
             rows,
@@ -4220,7 +4282,9 @@ def _trip_row(trip: trips.Trip, rd: reading.Reading, dates: str) -> list[Cell]:
     return [
         (dates, "day"),
         escape(nights),
-        escape(f" {ARROW} ".join(trip.route)) if trip.route else '<span class="mute">unknown</span>',
+        escape(f" {ARROW} ".join(trips.route_names(trip.route)))
+        if trip.route
+        else '<span class="mute">unknown</span>',
         escape(", ".join(flights)),
         escape(", ".join(trip.places)),
         escape(", ".join(c.name for c in trip.people)),
@@ -4501,6 +4565,17 @@ def _num(n: int) -> Cell:
 
 def _plural(n: int, noun: str) -> str:
     return f"{n:,} {noun}" if n == 1 else f"{n:,} {noun}s"
+
+
+def _nothing_to_review(unplaced: int, noun: str) -> str:
+    """What a review queue with no proposal says under its counts, in agreement with them: with
+    nothing seen and not placed, that everything is; else why what was seen is not proposed."""
+    if not unplaced:
+        return f"nothing to review: every {noun} the sources saw is placed or answered"
+    return (
+        f"nothing to review: the {unplaced:,} seen, not placed, match no {noun} you named"
+        " or are ones you said no to"
+    )
 
 
 def _number(value: float) -> str:

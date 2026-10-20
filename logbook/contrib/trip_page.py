@@ -402,8 +402,9 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
         yield f"  ({warning})"
     yield "  route"
     width = max(len(_dates(s)) for s in data["route"]) if data["route"] else 0
-    for s in data["route"]:
-        yield f"    {s['n']:>2}  {_dates(s):<{width}}  {_plural(s['nights'], 'night'):<9} {stay_text(s)}"
+    for s, name in zip(data["route"], route_names(data["route"]), strict=True):
+        nights = _plural(s["nights"], "night")
+        yield f"    {s['n']:>2}  {_dates(s):<{width}}  {nights:<9} {stay_text(s, name)}"
     if data["legs"]:
         yield _row("legs", DOT.join(leg_text(leg) for leg in data["legs"]))
     yield _row("flights", flights_text(data) or "none")
@@ -454,8 +455,17 @@ def _dates(s: Mapping[str, Any]) -> str:
     return s["first"] if s["first"] == s["last"] else f"{s['first']} {EN_DASH} {s['last']}"
 
 
-def stay_text(s: Mapping[str, Any]) -> str:
-    return f"{s['label']}{DOT}aboard {s['asset']}" if s["aboard"] else str(s["label"])
+def stay_text(s: Mapping[str, Any], name: str | None = None) -> str:
+    """A route stay as text: `name` (the label as `route_names` prints it) or its label, then the
+    asset it was aboard."""
+    where = str(s["label"]) if name is None else name
+    return f"{where}{DOT}aboard {s['asset']}" if s["aboard"] else where
+
+
+def route_names(route: Sequence[Mapping[str, Any]]) -> list[str]:
+    """The route's stays as text names them (`trips.route_names`): the place, the airport or the
+    city, the coordinates where nothing names a stay or two neighbours would read the same."""
+    return trips.route_names([str(s["label"]) for s in route])
 
 
 def leg_text(leg: Mapping[str, Any]) -> str:
@@ -582,10 +592,10 @@ def _route_html(route: Sequence[Mapping[str, Any]], legs: Sequence[Mapping[str, 
             (str(s["n"]), "n"),
             (_dates(s), "d"),
             (f"{s['nights']:,}", "n"),
-            (str(s["label"]), ""),
+            (name, ""),
             (s["asset"] or "", ""),
         ]
-        for s in route
+        for s, name in zip(route, route_names(route), strict=True)
     ]
     out += table([("#", "n"), ("nights of", ""), ("nights", "n"), ("where", ""), ("aboard", "")], rows_)
     if legs:

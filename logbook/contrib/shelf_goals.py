@@ -238,8 +238,8 @@ def page_goals(site: Site) -> str:
     """`/goals`: the chapter today is in, then the goals by horizon, each a link to its page with its
     state and its standing review's disposition and day; the empty shelf says how to add the first."""
     shelf = read(site.lb, site.tiers, _today(site))
-    head = f"{_plural(len(shelf.goals), 'goal')}{DOT}{shelf.today}{DOT}tier {shelf.tier or '-'}"
-    parts = [f"<h1>Goals <small>{escape(head)}</small></h1>\n"]
+    head = f"{_plural(len(shelf.goals), 'goal')}{DOT}{shelf.today}"
+    parts = [f"<h1>Goals {site.tier_small(head, shelf.tier)}</h1>\n"]
     if site.tiers is not None and goals.TIER not in site.tiers:
         parts.append(
             f'<p class="mute">Goals, reviews and chapters are your own words, tier {goals.TIER}; this page'
