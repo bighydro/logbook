@@ -28,6 +28,14 @@ proposal is numbered by its place in the list, from 1. It is never an event line
 `raw_id` is `<draft id>/<number>` and whose `extra.from` names the draft (`confirmations`); the Day
 then shows the proposal confirmed and the event among the day's events.
 
+**Forward compatibility** (`draft/v1`, 19 Oct 2026). A proposal of a kind this module does not know
+(`PROPOSAL_KINDS`), one written by a later writer, is not a malformed line to a reader: the Day shows
+the proposals of the kinds it knows, counts the others under `proposals_unknown` and keeps their
+numbers, so a known proposal's number, and the `raw_id` it is confirmed under, never moves. A known
+kind of the wrong shape, or a proposal with no kind at all, is still malformed. The writers stay
+strict: `validate` refuses an unknown kind unless it is asked as a reader (`reader=True`), so the dream
+and every other writer here write only the kinds they know.
+
 **A transcript's synthesis** (`logbook transcript synthesize`, `logbook.contrib.synthesis`) is a
 draft of unit `event` whose `subject` is `[<the transcript line's id>]`. A transcript's utterances
 are not lines of their own (`transcript/v1` keeps the text in one attachment, RFC 0004), so every
@@ -161,6 +169,7 @@ DOT = " · "
 EN_DASH = "\u2013"
 PROPOSALS = "proposals"  # the payload key of what a draft proposes beside its text
 EVENT = "event"  # the one kind of proposal so far: an event the owner may confirm into an event/v1 line
+PROPOSAL_KINDS = frozenset({EVENT})  # the kinds this reader shows and its writers write; others are counted
 EVENT_KIND = "event"  # the line a confirmed proposal becomes
 OWNER = "owner"  # its source: the owner confirmed it, the model only proposed it
 CLUSTER = "place:"  # an observed place's id, `place:<lat>,<lon>`, as `places review` names a cluster
@@ -199,9 +208,12 @@ def segment_shape(segment: object) -> str:
     return MALFORMED
 
 
-def validate(payload: Mapping[str, Any]) -> list[str]:
+def validate(payload: Mapping[str, Any], *, reader: bool = False) -> list[str]:
     """Every way the payload is not a `draft/v1`, in words; empty when it is one. A writer refuses
-    a payload with any problem; a reader keeps reading and says the line is malformed."""
+    a payload with any problem; a reader keeps reading and says the line is malformed. A proposal of
+    a kind not in `PROPOSAL_KINDS` is a problem to a writer, which writes only the kinds it knows, and
+    none to a `reader`, which counts it (`unknown_proposals`); a known kind of the wrong shape is a
+    problem to both."""
     problems: list[str] = []
     if payload.get("schema") != SCHEMA:
         problems.append(f"schema is {payload.get('schema')!r}, not {SCHEMA!r}")
@@ -247,7 +259,11 @@ def validate(payload: Mapping[str, Any]) -> list[str]:
         if not isinstance(proposals, list):
             problems.append("proposals must be a list")
         else:
-            bad = [i for i, proposal in enumerate(proposals) if not proposal_shape(proposal)]
+            unknown = [i for i, proposal in enumerate(proposals) if unknown_kind(proposal)]
+            bad = [i for i, p in enumerate(proposals) if i not in unknown and not proposal_shape(p)]
+            if unknown and not reader:
+                kind = proposals[unknown[0]]["kind"]
+                problems.append(f"proposal {unknown[0] + 1} is of a kind this writer does not know: {kind!r}")
             if bad:
                 problems.append(f"proposal {bad[0] + 1} is malformed: {NOT_A_PROPOSAL}")
     if "extra" in payload and not isinstance(payload["extra"], dict):
@@ -268,6 +284,21 @@ def _window_problems(payload: Mapping[str, Any]) -> list[str]:
     except ValueError:
         return ["a person draft's window must be two local days, YYYY-MM-DD"]
     return [] if first <= last else ["a person draft's window runs backwards: from is after to"]
+
+
+def unknown_kind(proposal: object) -> bool:
+    """Whether `proposal` names a kind, a non-empty string, that is not one of `PROPOSAL_KINDS`: a
+    later writer's, which a reader counts and does not show. One with no kind is malformed instead."""
+    if not isinstance(proposal, dict):
+        return False
+    kind = proposal.get("kind")
+    return isinstance(kind, str) and bool(kind.strip()) and kind not in PROPOSAL_KINDS
+
+
+def unknown_proposals(payload: Mapping[str, Any]) -> int:
+    """How many of the draft's proposals are of a kind this reader does not know (`unknown_kind`)."""
+    found = payload.get(PROPOSALS)
+    return sum(1 for proposal in found if unknown_kind(proposal)) if isinstance(found, list) else 0
 
 
 def proposal_shape(proposal: object) -> bool:
@@ -639,13 +670,14 @@ def day_json(
     """The standing draft as the Day carries it: the line, its source and model, when it was
     written, what it read, its segments each with `supported` and, when a reader holding the
     record found the evidence not on the day, `why`; its proposals (`proposals_json`, the people by
-    `names`, each with the event line that `confirmed` it); the ids of the earlier drafts newest
+    `names`, each with the event line that `confirmed` it) and how many are of a kind this reader
+    does not know (`proposals_unknown`); the ids of the earlier drafts newest
     first, how many times the day was dreamed and the day it was last. Another unit's page reads its
     draft the same way, `on_day` the unit's lines and `not_on` its own words for an id outside
     them (`NOT_ON_JOURNEY`)."""
     payload = line.get("payload") or {}
     tz = ZoneInfo(str(line.get("tz") or "UTC"))
-    problems = validate(payload)
+    problems = validate(payload, reader=True)
     segments = [
         segment_json(s, on_day, not_on) for s in (payload.get("segments") or []) if isinstance(s, dict)
     ]
@@ -672,6 +704,7 @@ def day_json(
         "segments": segments,
         "unsupported": sum(1 for s in segments if not s["supported"]),
         "proposals": proposals_json(payload, on_day, tz, names or {}, confirmed or {}, not_on),
+        "proposals_unknown": unknown_proposals(payload),
         "supersedes": payload.get("supersedes"),
         "earlier": earlier,
         "dreamed": len(found),
@@ -708,7 +741,8 @@ def proposals_json(
     not_on: str = NOT_ON_DAY,
 ) -> list[dict[str, Any]]:
     """The draft's event proposals as a reader shows them, each numbered by its place in the list
-    (a malformed one is left out, and its number with it): the title, the span in UTC and in `tz`,
+    (a malformed one, or one of a kind this reader does not know, is left out, and its number with
+    it): the title, the span in UTC and in `tz`,
     the place and where that is in words, the people by id and name, the evidence, `supported` when
     every evidence id is a line of the day (when the reader holds the day), else `why` (`not_on`);
     and `confirmed`, the event line that confirmed it, or None."""
@@ -842,7 +876,7 @@ def synthesis_json(line: Line, found: Sequence[Line], transcript: str) -> dict[s
         "earlier": [str(other["id"]) for other in reversed(found) if other["id"] != line["id"]],
         "synthesized": len(found),
         "last": _instant(last).astimezone(tz).date().isoformat(),
-        "malformed": validate(payload),
+        "malformed": validate(payload, reader=True),
     }
 
 

@@ -1,6 +1,6 @@
 # RFC 0036 — payload profile `draft/v1`: what a model wrote about a unit of the record
 
-Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md) · amendment 1 (the person unit; rule 7 for every unit and through every crossing) 2026-10-13
+Status: draft · 2026-10-13 · comment period: two weeks · one of the four profiles of [RFC 0036](../docs/rfcs/0036-goals-reviews-drafts-chapters.md) · amendment 1 (the person unit; rule 7 for every unit and through every crossing) 2026-10-13 · forward compatibility (a proposal of an unknown kind is counted, not malformed) 2026-10-19
 
 A model's text about one unit of the record, a day, a journey, an event, a week, a month, a year, a chapter or a person, kept so that the page an orchestrator built can be rebuilt from the record alone, and kept under one rule: every sentence points at the line ids it rests on, or is marked unsupported, and a reader never shows an unsupported sentence as fact. A draft is a proposal. Nothing in it is a fact of the record until the owner confirms it through an act of their own: a signed day (RFC 0034), a note (RFC 0010), a review (`review/v1`) or a star (`keeper/v1`, RFC 0024). The draft is never that confirmation.
 
@@ -45,7 +45,7 @@ A segment with both, with neither, with an empty `evidence`, or with `unsupporte
 | `people` | array of string | canonical person ids: entity ids the resolution lines (RFC 0006) name as a person after the alias walk, never the owner; may be empty |
 | `evidence` | array of string | the line ids it rests on, non-empty, every one a line of the unit the model read |
 
-A proposal is numbered by its place in the array, from 1. Unlike a segment it has no unsupported form: a writer drops a proposal whose time, place, people or evidence is not of the unit, and MAY count the drops under `extra`. A proposal of another shape makes the line invalid, as a malformed segment does; a reader shows the valid ones and says the line is malformed. A proposal is never a line of its own kind. The owner confirms an event proposal by writing it as an `event/v1` line (RFC 0009), source `owner`, `raw_id` `<draft id>/<number>`, `extra.from` the draft's id; a reader shows a proposal with such a line standing as confirmed, and the event among the day's events. A draft withheld by rule 7 is withheld with its proposals: a reader shows none of them and offers none to confirm; an event the owner confirmed from it before is the owner's line and stays.
+A proposal is numbered by its place in the array, from 1. Unlike a segment it has no unsupported form: a writer drops a proposal whose time, place, people or evidence is not of the unit, and MAY count the drops under `extra`. A proposal of a kind the profile names (`event`) and of another shape makes the line invalid, as a malformed segment does, and so does a proposal with no `kind`; a reader shows the valid ones and says the line is malformed. A proposal of a kind the reader does not know is not malformed (forward compatibility, 2026-10-19, below). A proposal is never a line of its own kind. The owner confirms an event proposal by writing it as an `event/v1` line (RFC 0009), source `owner`, `raw_id` `<draft id>/<number>`, `extra.from` the draft's id; a reader shows a proposal with such a line standing as confirmed, and the event among the day's events. A draft withheld by rule 7 is withheld with its proposals: a reader shows none of them and offers none to confirm; an event the owner confirmed from it before is the owner's line and stays.
 
 ## Tier
 
@@ -88,7 +88,7 @@ draft · model:qwen2.5-7b-instruct · read at bb97e90d · 5 lines
   ~ Ola came by in the evening.                                           unsupported
 ```
 
-The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. The Day's draft is of unit `day` alone, the day's one standing draft (rule 2); a draft of another unit is for that unit's page (the trip page, the year) and never takes the day's place. The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. After the segments come the proposed events, one row each: a proposal waiting for the owner marked as one (a leading `?` and the word `proposed` in text, greyed in `serve`), one the owner confirmed marked with the line it became, which the Day shows among its events. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, proposals, supersedes }`.
+The text form prints each segment on its own lines with its evidence after it, the ids shortened as `show` shortens them; an unsupported segment is marked `unsupported` and set apart (a leading `~` in text, a muted block with the word in `serve`), never between two supported segments as if it were one. In `serve` each id is a link to the line. The Day's draft is of unit `day` alone, the day's one standing draft (rule 2); a draft of another unit is for that unit's page (the trip page, the year) and never takes the day's place. The draft line is listed on its day among the day's lines too, as every line is (SPEC §3.2.1), with the mark `draft`. After the segments come the proposed events, one row each: a proposal waiting for the owner marked as one (a leading `?` and the word `proposed` in text, greyed in `serve`), one the owner confirmed marked with the line it became, which the Day shows among its events. JSON: `draft`, `null` or `{ line, source, at, read_head, read_count, language, segments, proposals, proposals_unknown, supersedes }`, `proposals_unknown` the count of proposals of a kind the reader does not know (forward compatibility, below).
 
 A call has no page of its own, so its row on the Day is where it is read: a call's synthesis, the standing draft of unit `event` whose subject is one `transcript/v1` line of the day (`docs/transcript-synthesis.md`), is read there by a reader of its own and shown under that transcript's row, collapsed, as the call's and never as the day's. It does not replace, shadow or change the day's draft: `draft` is what it is without it, and the synthesis is beside it (JSON `syntheses`). It follows rule 7 there as the day's draft does, by its own tier and the same entry, and is withheld under the call's row (JSON `syntheses_withheld`, beside `draft_withheld`, which it does not change either).
 
@@ -117,6 +117,19 @@ A local model drafts what has passed between Ines Nordmann and Ola Nordmann sinc
   {"text":"The cost of the rebuild seems to weigh on you both.","unsupported":true}],
  "extra":{"policy_version":"7ec8517a06f1a2c18195832423682f4389056f84cacb94d2922549e4c1009aaf"}}}
 ```
+
+## Forward compatibility (amendment of 2026-10-19)
+
+A later amendment may name a new kind of proposal (RFC 0043 proposes `link`). A reader written before it must not turn a good draft into a malformed one because it meets that kind, or the owner's Day would say `malformed` on every draft a newer writer made. So:
+
+1. **A reader shows the proposals of the kinds it knows** and leaves the others out of `proposals`.
+2. **It counts the others** in the draft's JSON as `proposals_unknown`, an integer, 0 when there are none. It prints nothing of their content and offers none to confirm.
+3. **An unknown kind does not make the line malformed.** A kind is unknown when `kind` is a non-empty string the reader does not know.
+4. **A known kind of the wrong shape is still malformed**, as before, and so is a proposal that is not an object or names no `kind`.
+5. **Numbers do not move.** A proposal is still numbered by its place in the array, the unknown ones included, so the `raw_id` `<draft id>/<number>` a known proposal is confirmed under is the same in every reader, old or new.
+6. **Writers stay strict.** A writer writes only the kinds it knows and refuses a payload that carries any other; a reader's tolerance is never a writer's licence.
+
+The reference reader (`logbook/core/drafts.py`, `validate(payload, reader=True)`, `unknown_kind`, `unknown_proposals`) does this from 2026-10-19; its writers (`dream`, `transcript synthesize`, the scenes lab) call `validate` as writers and refuse an unknown kind. A second implementation (`bighydro/logbook-ts`) needs the same change.
 
 ## Notes
 
