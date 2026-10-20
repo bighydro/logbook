@@ -280,6 +280,76 @@ def test_a_malformed_proposal_makes_the_draft_invalid() -> None:
     assert drafts.validate(payload) == ["proposal 1 is malformed: " + drafts.NOT_A_PROPOSAL]
 
 
+# -- forward compatibility (draft/v1, 19 Oct 2026) -------------------------------------------------------
+
+LINK = {"kind": "link", "from": "idea:boat-share-log", "to": KARI_ID, "evidence": ["x"]}  # a kind of later
+
+
+def _with_proposals(lb: Logbook, *proposals: dict[str, Any]) -> dict[str, Any]:
+    """A note on the day and a draft whose proposals rest on it: an event, then whatever is given."""
+    at = utc(DAY, "20:00")
+    note = lb.append(at, "manual", "note", 1, {"schema": "note/v1", "text": "Dinner at the bistro."})
+    dinner = {
+        "kind": "event",
+        "title": "Dinner",
+        "start": utc(DAY, "19:30"),
+        "end": utc(DAY, "22:00"),
+        "place": None,
+        "people": [],
+        "evidence": [str(note["id"])],
+    }
+    payload = {
+        "schema": drafts.SCHEMA,
+        "unit": "day",
+        "subject": DAY,
+        "read_head": lb.meta["head"],
+        "read_count": 1,
+        "language": "en",
+        "segments": [{"text": "Dinner at the bistro.", "evidence": [str(note["id"])]}],
+        "proposals": [dinner, *proposals],
+    }
+    return payload
+
+
+def test_a_reader_counts_a_proposal_of_an_unknown_kind_and_shows_the_event(lb: Logbook) -> None:
+    payload = _with_proposals(lb, LINK)
+    assert drafts.validate(payload, reader=True) == []  # a reader: not malformed
+    lb.append(utc(DAY, "23:00"), "model:x", "draft", 1, payload)  # written by a writer that knows `link`
+    draft = day_reader.read(lb, DAY)["draft"]
+    (shown,) = draft["proposals"]
+    assert shown["number"] == 1 and shown["kind"] == "event" and shown["title"] == "Dinner"
+    assert draft["proposals_unknown"] == 1 and draft["malformed"] == []
+    _code, out, _err = _cli("day", DAY, "--no-anniversaries")
+    assert "? event 1" in out and "malformed" not in out
+
+
+def test_a_writer_still_refuses_a_proposal_of_a_kind_it_does_not_know(lb: Logbook) -> None:
+    payload = _with_proposals(lb, LINK)
+    refused = f"proposal 2 is of a kind this writer does not know: {LINK['kind']!r}"
+    assert drafts.validate(payload) == [refused]
+    with pytest.raises(dream.AnswerError, match="nothing was written"):
+        dream.valid(payload)
+
+
+def test_a_malformed_event_beside_an_unknown_kind_is_still_malformed(lb: Logbook) -> None:
+    broken = {"kind": "event", "title": "Dinner", "start": "19:30", "end": None, "evidence": []}
+    payload = _with_proposals(lb, LINK, broken)
+    assert drafts.validate(payload, reader=True) == ["proposal 3 is malformed: " + drafts.NOT_A_PROPOSAL]
+    lb.append(utc(DAY, "23:00"), "model:x", "draft", 1, payload)
+    draft = day_reader.read(lb, DAY)["draft"]
+    assert [p["number"] for p in draft["proposals"]] == [1] and draft["proposals_unknown"] == 1
+    assert draft["malformed"] == ["proposal 3 is malformed: " + drafts.NOT_A_PROPOSAL]
+    assert "malformed" in _cli("day", DAY, "--no-anniversaries")[1]
+
+
+def test_a_proposal_with_no_kind_is_malformed_not_unknown(lb: Logbook) -> None:
+    payload = _with_proposals(lb, {"title": "Dinner"})
+    assert drafts.validate(payload, reader=True) == ["proposal 2 is malformed: " + drafts.NOT_A_PROPOSAL]
+    lb.append(utc(DAY, "23:00"), "model:x", "draft", 1, payload)
+    draft = day_reader.read(lb, DAY)["draft"]
+    assert draft["proposals_unknown"] == 0 and draft["malformed"]
+
+
 # -- nothing written without --accept --------------------------------------------------------------------
 
 

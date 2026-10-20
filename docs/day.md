@@ -392,7 +392,9 @@ from), `sources`, and `received`, one object per page the circle shared for the 
 `seq`, `source`, `model`, `tier`, `at`, `read_head`, `read_count`, `language`, `segments` each with
 `text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `proposals` each with
 `number`, `kind`, `title`, `start`, `end`, `start_local`, `end_local`, `place`, `where`, `people` (`id`,
-`name`), `evidence`, `supported`, `why` and `confirmed` (`line`, `seq`, or null), `supersedes`,
+`name`), `evidence`, `supported`, `why` and `confirmed` (`line`, `seq`, or null), `proposals_unknown`, how
+many proposals are of a kind this reader does not know (counted, never shown, never malformed: `draft/v1`,
+*Forward compatibility*), `supersedes`,
 `earlier` newest first, `dreamed`, `last`, `malformed`), left out under `--no-dream`; and, only on a
 day whose standing draft the `dream` entry no longer allows, `draft_withheld` (`line`, `seq`, `tier`,
 `max_tier`, `why`, and nothing of the draft's text or proposals), left out under `--no-dream` too;
@@ -498,3 +500,12 @@ again at the same head it is the page the server kept, and answers in a millisec
 
 Not a narrative: no title, no summary, no score. The reader never writes a note, a confirmation or
 a naming; those are yours, and when you make one it is a line in the record that the next Day reads.
+
+Nor is it finished. [RFC 0043, the Day page and its rhythm](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md)
+(a draft) is the design the page grows toward: what the day was meant for (the chapter, the goals, the
+plan) beside what it held, with no verdict drawn; the loose ends in one place, promises both ways, replies
+owed and decisions, each kept, carried or let go when you sign; a page whose shape follows the hour,
+morning, live, evening and signed; and one form that keeps what you choose of the model's draft and signs
+the day. Every part of it is marked built or proposed there, and nothing in this page changes until a
+slice of it is built. The rule above holds: a model's story of the day is the draft's, set apart as a
+draft, never the reader's, and a summary line is a count.

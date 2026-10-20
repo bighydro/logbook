@@ -732,7 +732,8 @@ def test_an_unchanged_policy_dreams_nothing_again_and_reads_as_before(
     assert "draft_withheld" not in data
     assert set(data["draft"]) == {
         "line", "seq", "source", "model", "tier", "at", "read_head", "read_count", "language",
-        "segments", "unsupported", "proposals", "supersedes", "earlier", "dreamed", "last", "malformed",
+        "segments", "unsupported", "proposals", "proposals_unknown", "supersedes", "earlier", "dreamed",
+        "last", "malformed",
     }  # fmt: skip
 
 
