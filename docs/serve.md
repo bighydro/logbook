@@ -22,7 +22,7 @@ With](#the-day--star-and-with)). The acts, from a terminal and on the page, are 
 
 ![The Day of 17 June of the demo record, every attachment toggle open](serve.png)
 
-*The demo record (`logbook demo --days 30 --seed 1 --out ~/Demo`), Wednesday 17 June: a week
+*The demo record (`logbook demo --days 30 --seed 1 --out ~/Demo/Logbook`), Wednesday 17 June: a week
 aboard the yacht Nordlys. Nothing in it is real.*
 
 ## The pages
@@ -30,8 +30,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | Page | What it is | The command it renders |
 |---|---|---|
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
-| `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook days` |
-| `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook trips --year` |
+| `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
+| `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook show trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
 | `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
 | `/people?year=` | the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
@@ -41,9 +41,12 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/manifest/people` | the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio | `logbook show orgs` |
 | `/ideas` | the ideas you named by stage (build, exploring, spark, built, killed, no status), the most recent touch first, the stale ones flagged, each with its reason (a killed idea sparked again keeps its old one) and its evidence folded, the people it was discussed with counted and never named; below, the review queue of `review idea` | `logbook show ideas`, `logbook review idea` |
 | `/idea/ID` | one idea: its refs, its status and reason, the status form, first said, every touch newest first, the people it was discussed with by name, its documents as references (its Notion pages, its repositories and their README), its title thread, the words by month, every status line | `logbook show idea NAME` |
+| `/promises?person=` | the promises the record's own words suggest: open first, then kept, then dropped; each with who it is with, the sentence, the day it was said, the due hint and the line it was read in, linked on its Day; `/promises/ID` one promise and its evidence ([the shelves](shelves.md)) | `logbook promises` |
+| `/goals` | the chapter you are in today, then your goals by horizon (life, this year, this quarter), each with its state and your latest verdict; `/goals/ID` one goal, its earlier wordings and every review ([the shelves](shelves.md)) | `logbook goal list`, `chapter list` |
+| `/agents?page=&day=` | your sessions with your own agents by day, latest first, fourteen days a page: the source, the length, your words, the agent's summary, the agent's words folded ([the shelves](shelves.md)) | — |
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
-| `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook assets status` |
-| `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook sources --gaps` |
+| `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook setup assets status` |
+| `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook doctor sources --gaps` |
 | `/world?from=&to=` | the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page `export world` writes by default ([the world](world.md)) | `logbook export world` |
 
 `/` is the front page: how many lines the record holds and the days it covers, and a link to each page.
@@ -597,7 +600,7 @@ day, the line), its people confirmed and the photos.
 function `logbook add --trip` runs:
 
 ```bash
-logbook add --trip trip:2026-06-14:2026-06-20 "Midsummer aboard"   # or any day of it: --trip 2026-06-16
+logbook add --trip trip:2026-06-15:2026-06-20 "Midsummer aboard"   # or any day of it: --trip 2026-06-16
 ```
 
 That is one `note/v1` line in your words (whitespace folded), label `name`, the journey's id under

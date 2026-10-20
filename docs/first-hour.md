@@ -136,7 +136,7 @@ copy the two numbers it shows, like 59.9139, 10.7522. Never type an address here
 Your home, as latitude, longitude [skip] (e.g. 59.9139, 10.7522):
 ```
 
-Not sure yet? Enter skips it; `logbook setup places name Home 59.9139,10.7522 --kind home` does it later,
+Not sure yet? Enter skips it; `logbook setup places name 59.9139,10.7522 Home --kind home` does it later,
 or `logbook setup --step home` asks again.
 
 ### Step 5: what is on this machine
@@ -275,7 +275,7 @@ A key goes in the variable in your shell profile, never in a file of the record,
 
 One you have set shows as *configured (LOGBOOK_DAWARICH_URL, LOGBOOK_DAWARICH_KEY)*: the names, so
 you can see it took; never what they hold. Setting one is a line in your shell profile, such as
-`export LOGBOOK_DAWARICH_KEY=...`; the README has each service's section.
+`export LOGBOOK_DAWARICH_KEY=...`; [the tour](tour.md#keep-it-flowing) has each service's section.
 
 ### Step 6: a check-up
 
@@ -287,13 +287,20 @@ pass  index             index.sqlite is current with logbook.json
 pass  owner             policy/owner.json names 2 names, 1 emails, 1 phones
 pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
+pass  dates             every line is dated inside its source's plausible range (policy/plausible.json)
 pass  extra:ais         websockets is installed
 pass  extra:crypto      cryptography is installed
+pass  extra:sealed      pyrage is installed
 warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
 warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
+pass  crossing          hermes 2, mcp 1
+pass  home              no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)
+pass  last-run          no schedule on this machine; `logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it
+warn  restore-test      no restore test yet: `logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it; the schedule runs it on the first Sunday of the month
+pass  serve             no serve service on this machine; `logbook serve --install-service` keeps the pages at http://127.0.0.1:8765/ from load (docs/serve.md)
 pass  disk              29.0 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client
-11 checks: 9 pass, 2 warn, 0 fail
+18 checks: 15 pass, 3 warn, 0 fail
 
 Setup is complete. Your record is at ~/Logbook.
 Next:
@@ -304,7 +311,7 @@ docs/first-hour.md walks through the first hour.
 ```
 
 `warn` is advice, not a problem: here, the optional extras for transcribing voice memos and telling the
-voices of a recording apart are not installed.
+voices of a recording apart are not installed, and no backup has had its restore test yet.
 `fail` names what to fix. `logbook doctor` runs these checks any time, and changes nothing.
 
 ## Stopping, skipping, and coming back
@@ -347,8 +354,8 @@ a line's text. `verify` recomputes every hash and says *valid*; it will say so e
 changes.
 
 Then, at your pace: [Try it](try-it.md) runs every command on a demo record of a person who does not
-exist; [the 23 commands](commands.md) are one page, with the older names each still answers to; the
-README's *Sources* lists every export the adapters read, with the command for each; and
+exist; [the 32 commands](commands.md) are one page, with the older names each still answers to; [the
+tour's *Sources*](tour.md#sources) lists the exports the adapters read, with the command for each; and
 `logbook doctor` is there whenever something feels off.
 
 ## `--yes`
