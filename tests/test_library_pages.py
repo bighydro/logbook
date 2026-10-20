@@ -173,14 +173,14 @@ def test_the_journeys_of_a_year_most_recent_first_each_row_with_its_evidence(lb:
     assert text.count('<details class="evidence">') == len(rows), "every row says where it came from"
     bergen = _row(text, "trip-2022-01-03-2022-03-31")
     assert f'href="{BERGEN_PAGE}"' in bergen and "88 nights away (19 in transit)" in bergen
-    assert "home 2022-04-01" in bergen and "2 photos" in bergen and "60.3913,5.3221 (Bergen)" in bergen
+    assert "home 2022-04-01" in bergen and "2 photos" in bergen and "· Bergen ·" in bergen
     assert f'href="/people/{ASTRID["id"]}">Astrid Bakke</a>' in bergen
     assert OBSERVED["name"] not in bergen and 'href="/people#review">1 not placed</a>' in bergen
     assert '<details class="draft"><summary>draft · model:qwen2.5-7b-instruct' in bergen, "the draft, folded"
     assert '<details class="draft" open' not in text and '<details class="evidence" open' not in text
     evidence = bergen[bergen.index('<details class="evidence">') :]
     dash = serve.EN_DASH
-    assert f"69 nights 2022-01-03 {dash} 2022-03-12 60.3913,5.3221 (Bergen)" in evidence
+    assert f"69 nights 2022-01-03 {dash} 2022-03-12 Bergen" in evidence and "60.3913" not in bergen
     assert f"19 nights 2022-03-13 {dash} 2022-03-31 in transit" in evidence
     assert 'title="line 019cadd3-6bc0-7dcd-9133-0000000002a1"' in evidence, "the photos' lines"
     assert "<summary>… and 6 more</summary>" in evidence, "three rows shown, the rest behind a toggle"

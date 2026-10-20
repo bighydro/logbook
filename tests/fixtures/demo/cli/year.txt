@@ -3,9 +3,9 @@
   nights        18 home · 12 away · 0 in transit · 6 nights aboard Nordlys
   trips         4 trips · 12 nights away
     2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann
-    2026-06-08 – 2026-06-10  3 nights · route 47.3769,8.5417 (Zurich) · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
-    2026-06-15 – 2026-06-20  6 nights aboard nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann
-    2026-06-25 – 2026-06-26  2 nights · route 55.6850,12.5500 (Copenhagen) · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen
+    2026-06-08 – 2026-06-10  3 nights · route Zurich · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
+    2026-06-15 – 2026-06-20  6 nights aboard Nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann
+    2026-06-25 – 2026-06-26  2 nights · route Copenhagen · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen
   flights       4 flights · 3,886 km · 0 long-haul · declared 1, inferred 1, tracked 2
     2026-06-08  XY 561  OSL → ZRH · 1,426 km · tracked
     2026-06-11  XY 562  ZRH → OSL · 1,426 km · inferred
@@ -19,10 +19,10 @@
     Nordlys (nordlys) (yacht)                   6 nights · 3 stays · 148 h · with Anders Vik, Ola Nordmann, Sigrid Moen
     unnamed:
     47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58 h · with Marta Keller
-    59.0500,10.0300 aboard nordlys (Sandefjord) 2 nights · 2 stays · 41 h
-    59.8500,10.6000 aboard nordlys              2 nights · 2 stays · 40 h
+    59.0500,10.0300 aboard Nordlys (Sandefjord) 2 nights · 2 stays · 41 h
+    59.8500,10.6000 aboard Nordlys              2 nights · 2 stays · 40 h
     55.6850,12.5500 (Copenhagen)                2 nights · 2 stays · 33 h · with Freja Lund
-    59.4300,10.4800 aboard nordlys (Sandefjord) 1 night · 1 stay · 18 h
+    59.4300,10.4800 aboard Nordlys (Sandefjord) 1 night · 1 stay · 18 h
   people        by days together
     Per Hansen                                  10 days · 0 nights · last 2026-06-30 · Office
     Liv Berg                                    9 days · 0 nights · last 2026-06-29 · Office

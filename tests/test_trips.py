@@ -68,7 +68,7 @@ def test_the_fortnight_has_a_weekend_aboard_and_three_nights_in_zurich(
     assert lb.meta["head"] == head, "trips are read, never written"
     text = _run(capsys)
     assert "2 trips" in text and "1 night aboard Solvind" in text and "route aboard Solvind" in text
-    assert "route 47.37" in text
+    assert "route Zurich ·" in text and "47.37" not in text, "the text names the city; the JSON keeps §3.2.6"
     assert "XY 561" in text and "XY 562" in text and "Ola Nordmann" in text and "3 nights" in text
 
 

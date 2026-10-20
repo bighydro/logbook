@@ -212,7 +212,7 @@ def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(
     assert [f["number"] for f in copenhagen["flights_in"]] == ["571"]
     assert [f["number"] for f in copenhagen["flights_out"]] == ["572"]
     text = _run(capsys, "show", "trips")
-    assert "Cabin" in text and "route 47.3769,8.5417 (Zurich)" in text
+    assert "Cabin" in text and "route Zurich ·" in text and "47.3769,8.5417" not in text
 
 
 def test_rollup_countries_and_flights(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:

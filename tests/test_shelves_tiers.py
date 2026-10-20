@@ -218,10 +218,11 @@ def _main(page: str) -> str:
 
 
 def _header_tier(page: str) -> str:
-    """The `tier N` (or `tier -`) the page's heading says."""
-    found = re.search(r"<h1>.*?tier (\S+)</small></h1>", page, re.S)
+    """The tier the page's heading says: N of a shelf's `nothing read above tier N` or of a detail
+    page's `tier N`, `-` for a shelf's `no lines`."""
+    found = re.search(r"<h1>.*?(?:tier (\S+)|no lines)</small></h1>", page, re.S)
     assert found is not None, page[:400]
-    return found.group(1)
+    return found.group(1) or "-"
 
 
 def _absent(page: str, *words: str) -> None:

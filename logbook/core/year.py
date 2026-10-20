@@ -193,6 +193,7 @@ def _trips(rd: Reading, warnings: list[str]) -> list[dict[str, Any]]:
     for trip in found:
         data = trip.to_json()
         data["people"] = [c.name for c in trip.people]
+        data["asset_name"] = trips.asset_name(trip.asset, rd.assets) if trip.asset else None
         del data["flights"], data["lines"]
         out.append(data)
     return out
@@ -357,10 +358,11 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
         yield f"    {flight_text(f)}"
     yield _row("places", "by nights")
     places = data["places"]
+    names = asset_names(places)
     heads = [
         *(_place_head(p) for p in places["places"]),
         *(_asset_head(a) for a in places["assets"]),
-        *(str(u["label"]) for u in places["unnamed"]),
+        *(aboard_text(str(u["label"]), names) for u in places["unnamed"]),
     ]
     width = max(28, *(len(h) for h in heads)) if heads else 28
     for p in places["places"]:
@@ -370,12 +372,12 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
     if places["unnamed"]:
         yield "    unnamed:"
     for u in places["unnamed"]:
-        yield f"    {u['label']:<{width}} {visit_text(u)}"
+        yield f"    {aboard_text(str(u['label']), names):<{width}} {visit_text(u)}"
     if not heads:
         yield "    nowhere"
     yield _row("people", "by days together")
     for p in data["people"]:
-        yield f"    {p['name']:<{width}} {person_text(p)}"
+        yield f"    {p['name']:<{width}} {aboard_text(person_text(p), names)}"
     if not data["people"]:
         yield "    nobody confirmed"
     yield _row("health", "by month")
@@ -428,10 +430,13 @@ def trip_text(trip: Mapping[str, Any]) -> str:
     the places, the people."""
     nights = _plural(int(trip["nights"]), "night")
     if trip["asset"]:
-        nights += f" aboard {trip['asset']}"
+        nights += f" aboard {trip.get('asset_name') or trip['asset']}"
     if trip["in_transit"]:
         nights += f" ({trip['in_transit']} in transit)"
-    parts = [nights, f"route {f' {ARROW} '.join(trip['route'])}" if trip["route"] else "route unknown"]
+    parts = [
+        nights,
+        f"route {f' {ARROW} '.join(trips.route_names(trip['route']))}" if trip["route"] else "route unknown",
+    ]
     for label in ("in", "out"):
         for f in trip[f"flights_{label}"]:
             name = f"{f['carrier']} {f['number']} " if f["number"] else ""
@@ -475,6 +480,19 @@ def visit_text(v: Mapping[str, Any]) -> str:
     if v["people"]:
         parts.append("with " + ", ".join(v["people"]))
     return DOT.join(parts)
+
+
+def asset_names(places: Mapping[str, Any]) -> dict[str, str]:
+    """The registered name of each asset the year's places were aboard, by its id."""
+    return {str(a["asset"]): str(a["name"]) for a in places["assets"] if a.get("name")}
+
+
+def aboard_text(text: str, names: Mapping[str, str]) -> str:
+    """`aboard <asset id>` in a label of the rollups (`rollup places`, `rollup people`, whose JSON
+    keeps the id, SPEC §6.1) as text names the asset: `aboard <registered name>`, as a trip does."""
+    for asset, name in names.items():
+        text = re.sub(rf"\baboard {re.escape(asset)}\b", f"aboard {name}".replace("\\", "\\\\"), text)
+    return text
 
 
 def person_text(p: Mapping[str, Any]) -> str:
@@ -616,7 +634,7 @@ def html(data: Mapping[str, Any], nav: str = "", links: Links | None = None) -> 
     out += section("trips", "Trips", _trips_html(data["trips"], links))
     out += section("flights", "Flights", _flights_html(data["flights"]))
     out += section("places", "Places, by nights", _places_html(data["places"]))
-    out += section("people", "People", _people_html(data["people"], links))
+    out += section("people", "People", _people_html(data["people"], links, asset_names(data["places"])))
     out += section("health", "Health, by month", _health_html(data["health"]))
     if data.get("weather"):
         out += section("weather", "Weather", [f"<p>{escape(weather.span_text(data['weather']))}</p>"])
@@ -690,7 +708,9 @@ def _trips_html(found: Sequence[Mapping[str, Any]], links: Links | None = None) 
     links = links or {}
     rows_: list[list[Cell]] = []
     for t in found:
-        nights = _plural(int(t["nights"]), "night") + (f" aboard {t['asset']}" if t["asset"] else "")
+        nights = _plural(int(t["nights"]), "night") + (
+            f" aboard {t.get('asset_name') or t['asset']}" if t["asset"] else ""
+        )
         flights = []
         for label in ("in", "out"):
             for f in t[f"flights_{label}"]:
@@ -700,7 +720,7 @@ def _trips_html(found: Sequence[Mapping[str, Any]], links: Links | None = None) 
             [
                 (linked(f"{t['start']} {EN_DASH} {t['end']}", str(t["id"]), links), "d"),
                 (nights, ""),
-                (f" {ARROW} ".join(t["route"]) if t["route"] else "unknown", ""),
+                (f" {ARROW} ".join(trips.route_names(t["route"])) if t["route"] else "unknown", ""),
                 (flights, ""),
                 (", ".join(t["people"]), ""),
             ]
@@ -735,7 +755,7 @@ def _places_html(p: Mapping[str, Any]) -> list[str]:
     for e in p["assets"]:
         rows_.append(_visit_row(_asset_head(e), e))
     for e in p["unnamed"]:
-        rows_.append(_visit_row(str(e["label"]), e))
+        rows_.append(_visit_row(aboard_text(str(e["label"]), asset_names(p)), e))
     if not rows_:
         return ['<p class="muted">Nowhere.</p>']
     out = table([("place", ""), ("nights", "n"), ("stays", "n"), ("hours", "n"), ("with", "")], rows_)
@@ -756,7 +776,9 @@ def _visit_row(head: str, v: Mapping[str, Any]) -> list[Cell]:
     ]
 
 
-def _people_html(people: Sequence[Mapping[str, Any]], links: Links | None = None) -> list[str]:
+def _people_html(
+    people: Sequence[Mapping[str, Any]], links: Links | None = None, names: Mapping[str, str] | None = None
+) -> list[str]:
     if not people:
         return ['<p class="muted">Nobody confirmed.</p>']
     links = links or {}
@@ -766,7 +788,7 @@ def _people_html(people: Sequence[Mapping[str, Any]], links: Links | None = None
             (f"{p['days']:,}", "n"),
             (f"{p['nights']:,}", "n"),
             (p["last_contact"] or "", "d"),
-            (", ".join(p["places"]), ""),
+            (aboard_text(", ".join(p["places"]), names or {}), ""),
         ]
         for p in people
     ]

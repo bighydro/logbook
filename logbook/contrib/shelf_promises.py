@@ -249,8 +249,7 @@ def page_promises(site: Site, person: str | None = None) -> str:
     shelf = site.shared(("promises",), lambda: read(site.lb, site.tiers))
     person = person.strip() if person and person.strip() else None
     shown = [r for r in shelf.rows if person is None or _with(r, person)]
-    head = f"{_plural(len(shown), 'promise')}{DOT}tier {shelf.tier or '-'}"
-    parts = [f"<h1>Promises <small>{escape(head)}</small></h1>\n"]
+    parts = [f"<h1>Promises {site.tier_small(_plural(len(shown), 'promise'), shelf.tier)}</h1>\n"]
     if not shelf.rows:
         if site.tiers is not None:
             parts.append(
