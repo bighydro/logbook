@@ -91,15 +91,28 @@ The first time, Homebrew fetches the *tap* (the small repository that holds the 
 then
 
     ==> Fetching bighydro/logbook/logbook
-    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-0.6.0.tar.gz
+    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-0.7.0.tar.gz
     ==> Installing logbook from bighydro/logbook
 
 and a minute or two of lines about Python and a package called `ijson`, which it builds for your
 machine. The last line is the beer glass:
 
-    🍺  /opt/homebrew/Cellar/logbook/0.6.0: 180 files, 2.1MB, built in 45 seconds
+    🍺  /opt/homebrew/Cellar/logbook/0.7.0: 180 files, 2.1MB, built in 45 seconds
 
-The numbers differ; the glass is what matters. Jump to [Did it work?](#did-it-work).
+The numbers differ; the glass is what matters.
+
+The three lines, to a demo record in your browser, are
+
+```bash
+brew install bighydro/logbook/logbook
+logbook demo --out ~/Demo/Logbook
+LOGBOOK_HOME=~/Demo/Logbook logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17 in your browser; leave the terminal running, and
+Ctrl-C stops it.
+
+Jump to [Did it work?](#did-it-work).
 
 ### Mac, without Homebrew
 
@@ -111,6 +124,17 @@ uv tool install openlogbook
 ```
 
 does the same thing, and is the way to install an [extra](#optional-extras).
+
+The three lines, to a demo record in your browser, are
+
+```bash
+pipx install openlogbook          # or: uv tool install openlogbook
+logbook demo --out ~/Demo/Logbook
+LOGBOOK_HOME=~/Demo/Logbook logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17 in your browser; leave the terminal running, and
+Ctrl-C stops it.
 
 ## Windows
 
@@ -170,10 +194,21 @@ pipx install openlogbook
 
 It takes half a minute and prints
 
-      installed package openlogbook 0.6.0, installed using Python 3.13.2
+      installed package openlogbook 0.7.0, installed using Python 3.13.2
       These apps are now globally available
         - logbook.exe
     done! ✨ 🌟 ✨
+
+The three lines, to a demo record in your browser, are
+
+```powershell
+pipx install openlogbook
+logbook demo --out "$HOME\Demo\Logbook"
+$env:LOGBOOK_HOME = "$HOME\Demo\Logbook"; logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17 in your browser; leave the terminal running, and
+Ctrl-C stops it.
 
 Jump to [Did it work?](#did-it-work).
 
@@ -195,6 +230,17 @@ prints *Resolved*, *Installed* and finally `Installed 1 executable: logbook.exe`
 yellow warning that a folder is *not on your PATH*, run `uv tool update-shell`, then close and
 reopen the terminal.
 
+The three lines, to a demo record in your browser, are
+
+```powershell
+uv tool install openlogbook
+logbook demo --out "$HOME\Demo\Logbook"
+$env:LOGBOOK_HOME = "$HOME\Demo\Logbook"; logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17 in your browser; leave the terminal running, and
+Ctrl-C stops it.
+
 ## Linux
 
 The one line is
@@ -207,7 +253,7 @@ with `pipx` from your distribution: `sudo apt install pipx` on Debian and Ubuntu
 pipx` on Fedora, `sudo pacman -S python-pipx` on Arch. Then `pipx ensurepath` once, a new terminal,
 and the line above, which ends with
 
-      installed package openlogbook 0.6.0, installed using Python 3.12.3
+      installed package openlogbook 0.7.0, installed using Python 3.12.3
       These apps are now globally available
         - logbook
     done! ✨ 🌟 ✨
@@ -230,7 +276,18 @@ which prints *Resolved*, *Installed* and `Installed 1 executable: logbook`. Both
 put the command in `~/.local/bin`; if the terminal cannot find `logbook` afterwards, that folder is
 not on your path and `pipx ensurepath` or `uv tool update-shell` adds it, from the next terminal on.
 
-Nix and Docker users: [the tour](tour.md) has the `nix run` and `docker run` lines.
+The three lines, to a demo record in your browser, are
+
+```bash
+pipx install openlogbook          # or: uv tool install openlogbook
+logbook demo --out ~/Demo/Logbook
+LOGBOOK_HOME=~/Demo/Logbook logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17 in your browser; leave the terminal running, and
+Ctrl-C stops it.
+
+Nix and Docker users: [the tour](tour.md#docker-and-nix) has the `nix build` and `docker run` lines.
 
 ## Did it work?
 
@@ -242,7 +299,7 @@ logbook --version
 
 and press Enter. It prints one short line, the version:
 
-    0.6.0
+    0.7.0
 
 That is the whole check. From here, [The first hour](first-hour.md) sets up your own record one
 question at a time, and [Try it](try-it.md) gives you a month of someone who does not exist to
@@ -272,9 +329,12 @@ it again.
 ## Optional extras
 
 Some features need an extra library: reading an encrypted iPhone backup and sharing a signed page
-(both `crypto`), serving the record to an AI assistant (`mcp`), listening to ships (`ais`),
-transcribing voice memos (`transcribe`), telling the voices of a recording apart (`speakers`, beside
-`transcribe`; it brings torch), and the two local models on Apple silicon (`judge`, `describe`).
+(both `crypto`), sealing tiers 2 and 3 at rest (`sealed`), reading a multi-gigabyte export such as
+Dawarich's or Spotify's (`stream`), serving the record to an AI assistant (`mcp`), listening to ships
+(`ais`), transcribing voice memos (`transcribe`), telling the voices of a recording apart (`speakers`,
+beside `transcribe`; it brings torch, with CUDA on Linux: the two took six and a half minutes and about
+10 GB of disk on one Linux machine), and the two local models on Apple silicon (`judge`, `describe`;
+anywhere else they install nothing).
 Logbook tells you when a command needs one; `logbook doctor` lists five of them (`ais`, `crypto`,
 `sealed`, `speakers`, `transcribe`) with a `pass` or `warn` each ([the doctor](doctor.md#the-extras)).
 You add one by installing the package with the extra's name in brackets:

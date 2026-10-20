@@ -12,13 +12,13 @@ Plug the iPhone into a Mac, select it in Finder and press *Back Up Now*. The bac
 
 ```bash
 export LOGBOOK_DIAL_PREFIX=47                       # your country code, for numbers saved without one
-logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --dry-run   # what is there, how big
-logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid>
-logbook import-backup <the same> --only contacts,whatsapp        # just some of it
+logbook import backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --dry-run   # what is there, how big
+logbook import backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only <sources>   # the stores the dry run found
+logbook import backup <the same> --only contacts,whatsapp        # just some of it
 ```
 
-One command reads the backup's `Manifest.db`, finds the six stores the adapters know — Contacts, WhatsApp's
-contacts and chats, Messages, Calendar, Notes — copies each one with its `-wal`/`-shm` siblings and its media
+One command reads the backup's `Manifest.db`, finds the stores the adapters know — Contacts, WhatsApp's
+contacts and chats, Messages, Calendar, Notes and more — copies each one with its `-wal`/`-shm` siblings and its media
 folder into `inbox/ios-backup-<udid>/<source>/`, checks every copy against the stored blob, and runs the adapters on the copies:
 contacts first, so the chats that follow already have their people. The backup itself is only ever read. Per
 source it prints found or not found, the lines added and what was skipped, and it ends with `verify`.
@@ -27,13 +27,13 @@ manifest's `Size` is what a file measured on the phone and can be stale against 
 matches the blob but not `Size` is one warning naming the file and both sizes, recorded in `copies.json`, never an error.
 
 **An encrypted backup** (*Encrypt local backup* ticked in Finder) holds more than an unencrypted one: Health,
-the call log and Safari's history are only ever backed up encrypted. `import-backup` reads one with the
+the call log and Safari's history are only ever backed up encrypted. `import backup` reads one with the
 `crypto` extra and the password in one environment variable, never a flag:
 
 ```bash
-pip install "openlogbook[crypto]"        # or: uv tool install "openlogbook[crypto]"
+pipx install --force "openlogbook[crypto]"   # or: uv tool install "openlogbook[crypto]"
 read -s LOGBOOK_BACKUP_PASSWORD && export LOGBOOK_BACKUP_PASSWORD   # typed once, never echoed
-logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid>
+logbook import backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only <sources>
 ```
 
 The keybag in `Manifest.plist` is unlocked first, so a wrong password fails on one line before any file is
@@ -44,7 +44,7 @@ password is never printed, never written anywhere, and never part of an error. `
 the call log (`ios-calls/CallHistory.storedata`) runs through its adapter like the others; Health
 (`health/healthdb_secure.sqlite`, `healthdb.sqlite`) and Safari (`safari/History.db`) are copied out beside
 them: Health runs through `apple-health` (RFC 0014; `healthdb.sqlite` is copied first so the store finds its
-source names beside it), Safari is reported as *copied, no adapter yet*; `--only calls,health` names them too. Without the extra
+source names beside it), Safari runs through `safari`; `--only calls,health` names them too. Without the extra
 installed the command prints the `pip install` line and exits 2; without the variable it says which one to set.
 
 ## Where to keep the record
@@ -120,9 +120,9 @@ The chain is untouched: `verify` checks every hash without any key and says how 
 with your identity it opens each one and checks it against its digest too. Tier 1 is never sealed.
 
 ```bash
-pip install "openlogbook[sealed]"          # pyrage, age's Rust implementation; nothing else changes
+pipx install --force "openlogbook[sealed]"   # pyrage, age's Rust implementation; nothing else changes
 logbook key init --recovery                # this machine's identity, and a recovery identity printed once for paper
-logbook seal --all                         # seal the tier 2–3 lines written before the record had recipients
+logbook key seal --all                     # seal the tier 2–3 lines written before the record had recipients
 logbook verify                             # valid — …; sealed: 4,100 lines, every one opened and checked
 logbook key show                           # the recipients, and whether this machine's identity opens the record
 logbook key add-recipient --recipient age1…   # a new laptop, a hardware key: resealed, no hash changes
@@ -136,8 +136,18 @@ without it reads tier 1, lists every day, verifies the chain and refuses to writ
 Attachments a sealed line points at are sealed under the same name. The index is a plaintext locator and lives in
 your cache directory (`~/.cache/logbook/<owner_id>/`), not in the record, with chat ids blinded; `logbook search`
 does not search sealed lines. `export` writes opened payloads unless `--sealed`; a crossing package reseals to the
-destination's recipient from `policy/crossing.json`, or ships opened under `--open`. `seal --all` replaces the
+destination's recipient from `policy/crossing.json`, or ships opened under `--open`. `key seal --all` replaces the
 plain files and shreds nothing: a backup from before still holds the plaintext.
+
+## Docker and Nix
+
+The repository builds both; in a clone of it:
+
+```bash
+docker build -t logbook .
+docker run --rm -v ~/Logbook:/data logbook show today   # the record is /data inside
+nix build                                               # then result/bin/logbook
+```
 
 ## Upgrading
 
@@ -145,10 +155,10 @@ plain files and shreds nothing: a backup from before still holds the plaintext.
 
 ```bash
 cp -a ~/Logbook ~/Logbook.bak    # or wherever LOGBOOK_HOME points
-logbook migrate                  # same lines, new hashes; keeps the old files at logbook-0.1/
+logbook repair migrate           # same lines, new hashes; keeps the old files at logbook-0.1/
 ```
 
-Format `logbook/0.3` (sealing, SPEC §3.1) hashes by the same rule as 0.2, so a 0.2 record is read as it is and needs no migration; `logbook seal --all` is the one optional step, and it leaves a `migration/v1` line.
+Format `logbook/0.3` (sealing, SPEC §3.1) hashes by the same rule as 0.2, so a 0.2 record is read as it is and needs no migration; `logbook key seal --all` is the one optional step, and it leaves a `migration/v1` line.
 
 0.5.0 corrects the units `apple-health` gave resting heart rate and HRV (RFC 0014). A record that imported a Health store with an earlier version carries those lines 60 and 1,000 times too large; put them right once:
 
@@ -163,7 +173,7 @@ logbook repair health-units             # per wrong line a corrected line and a 
 ~/Logbook/
   logbook/          the record. one file per month. append only. never edit.
     2026/09.jsonl
-  inbox/            drop anything here. `logbook inbox list` says what was read; `inbox clean` moves or deletes it.
+  inbox/            drop anything here. `logbook import inbox list` says what was read; `import inbox clean` moves or deletes it.
   notes/            what you write. plain Markdown, one file per day.
   logbook.json      who this is, your timezone, the chain head; `day_start` when your day does not begin at
                     midnight ("06:00": a line at 02:00 belongs to the evening before; RFC 0036, draft).
@@ -174,7 +184,7 @@ logbook repair health-units             # per wrong line a corrected line and a 
                     owner.json: your own other names, emails and phones, so you are never your own company. yours to edit.
                     questions.json: the digest's closing questions, each with the facts it asks on. yours to edit.
   assets.json       the boats, aircraft and cars whose tracks the record keeps (ADR 0018). yours to edit.
-  places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook places`.
+  places.json       the named places: lat, lon, radius_m, kind (home, asset-berth, other), tags, country. `logbook setup places`.
   state/            where each live source left off, and which question the digest asked. bookkeeping, not the record.
   exports/          crossing.json: where the last crossing to each member ended. bookkeeping.
 ```
@@ -199,10 +209,10 @@ logbook add ~/backup/4f98687d8ab0d6d1a371110e6b7300f6e465bef2   # Apple Notes No
 logbook add ~/backup/2041457d5fe04d39d0ab481178355df6781e6858   # iOS Calendar.sqlitedb from the same backup
 logbook add ios-calls ~/inbox/ios-backup-<udid>/ios-calls/CallHistory.storedata   # the call log, by adapter name
 logbook add health ~/inbox/ios-backup-<udid>/health/healthdb_secure.sqlite   # Apple Health, by adapter name (or apple-health)
-logbook import-backup ~/backup                    # all of the above from the backup folder, in one go
-logbook inbox list                                # every file under inbox/: size, the import that read it, whether every line is in
-logbook inbox clean --to /Volumes/Archive        # move what is imported in full to an external disk (or --delete it); the rest stays
-logbook attach import-backup ~/backup --only whatsapp,imessage,photos   # then the media the lines name, into attachments/
+logbook import backup ~/backup --only contacts,whatsapp,notes,calendar,calls,health   # all of the above from the backup folder, in one go
+logbook import inbox list                         # every file under inbox/: size, the import that read it, whether every line is in
+logbook import inbox clean --to /Volumes/Archive   # move what is imported in full to an external disk (or --delete it); the rest stays
+logbook import attachments import-backup ~/backup --only whatsapp,imessage,photos   # then the media the lines name, into attachments/
 logbook add transcript ~/Meetings/tromso.md --source manual   # a transcript: JSON (transcript/v1), WebVTT, SRT, Markdown, text
 logbook add ~/Zoom/GMT20260301-130000_Recording.transcript.vtt --source zoom   # VTT and SRT are recognised on sight
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # Gmail via Google Takeout: one mail/v1 line per message
@@ -214,8 +224,8 @@ logbook add github-export ~/code/oldboat          # an old project's clone or Gi
 logbook add flights ~/Downloads/flighty.csv       # a Flighty export: one flight/v1 line per flight, evidence tracked
 logbook add flight "LX 561 NCE ZRH 2026-09-27 pilot"   # your own word: evidence declared
 logbook add story ~/Stories/lake.md --teller ola@example.org --listener kari.nordmann@example.org --refers-to 1961   # a told story (RFC 0028): on the day it was told, about the time it names
-logbook infer flights                             # calendar entries + your location points leaving one airport for another: evidence inferred
-logbook transcribe voice-memos                    # a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine
+logbook derive flights                            # calendar entries + your location points leaving one airport for another: evidence inferred
+logbook derive transcripts voice-memos            # a transcript/v1 line per voice memo, by a local model (openlogbook[transcribe]); nothing leaves the machine
 logbook add screentime --mac                      # this Mac's Screen Time sessions (knowledgeC.db, behind Full Disk Access): app, span, device; never a title or URL
 logbook add screentime --backup ~/backup          # the phone's Screen Time store out of an iOS backup: hourly totals per app (docs/adapters/screentime.md)
 logbook sync immich                               # everything since the last run; safe to repeat
@@ -297,7 +307,7 @@ variable is unset, is kept as entered and flagged `unnormalised`.
 WhatsApp messages become `message/v1` lines (RFC 0008), one per message, with the sender as the same kind of
 phone ref, so one resolution of a number covers the address book and the chats. Media files are not copied
 with the lines: a file found under `Message/` beside the database is hashed and its digest kept under
-`extra.media`, and `logbook attach import-backup <backup> --only whatsapp,imessage,photos` later streams every
+`extra.media`, and `logbook import attachments import-backup <backup> --only whatsapp,imessage,photos` later streams every
 file the lines name out of the backup into the content-addressed store, checked against the line
 ([docs/attachments.md](attachments.md)); set `LOGBOOK_WHATSAPP_HASH_MEDIA=0` to skip the hashing on a large store.
 A group message sent from a linked device carries a `@lid` id instead of a phone number, which no contact list
@@ -334,7 +344,7 @@ the adapter for a store copied out under another name; `logbook add <file>` reco
 
 Flights become `flight/v1` lines (RFC 0013), one per flight, from up to three places that meet on one key,
 `(date, carrier, number)`: a Flighty export (`add flights <csv>`, evidence `tracked`), your calendar plus your
-location points leaving one airport and next reaching another, silent in between or not (`infer flights`,
+location points leaving one airport and next reaching another, silent in between or not (`derive flights`,
 evidence `inferred`), and your own sentence (`add flight "LX 561 NCE ZRH 2026-09-27 pilot"`, evidence `declared`). A
 flight seen twice is not written twice as two flights: the later observation supersedes the standing line with
 the merge — the tracker's fields win, your declared role always wins — and lists every observation it folded in; a
@@ -395,9 +405,9 @@ it all again). `show` prints
 `✉ subject — from → to (n attachments)`, never the body; `show --raw` prints the body under the row.
 [docs/adapters/mail.md](adapters/mail.md) has the whole of it.
 
-`stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
+`show stats` is one screen of what the record holds, counted through the index: lines per kind, source and year, retractions,
 resolutions, attachments. It prints numbers, kinds, sources and dates, never what a line says; `--json` gives the same as one object.
-`stats --health` is one row per day from the health lines — hours asleep (the night that ends on that day, asleep
+`show stats --health` is one row per day from the health lines — hours asleep (the night that ends on that day, asleep
 stages only — never in bed or awake — each device's spans unioned so a night written twice counts once, then the longest device, never a sum across devices), steps (per quarter hour the larger device, summed) and resting heart rate — and
 prints no device, zone or other field; `--json` gives the rows as `days`.
 
@@ -412,7 +422,7 @@ prints no device, zone or other field; `--json` gives the rows as `days`.
 | `github` | `LOGBOOK_GITHUB_TOKEN` (a fine-grained token, read-only) and `LOGBOOK_GITHUB_REPOS` (`owner/name`, comma-separated, or `--all`; `LOGBOOK_GITHUB_URL` for a GitHub Enterprise Server); your logins under `handles` in `policy/owner.json` | one `event/v1` line per commit, issue or pull request created, closed or merged, review and comment, tier 1 (tier 2 from a private repository): the message, body or comment in full, who acted (`owner` or `other`), `agent: true` when an agent's session marker is in the text; a watermark per repo ([GitHub](#github)) |
 | `gcal` | `LOGBOOK_GCAL_URLS`: Google Calendar's private iCal addresses, comma-separated, each optionally `name=url` (`LOGBOOK_GCAL_LOOKBACK_H`, default 24) | one `event/v1` line per event, identical to the line the calendar's `.ics` export gives (`source` `ics`) |
 | `drive` | `LOGBOOK_DRIVE_SA_KEY` (a Workspace service account's JSON key file) and `LOGBOOK_DRIVE_USER` (the address it reads as); [Google Drive](#google-drive) | one `event/v1` line per file, hour and activity — created, edited, renamed, moved, shared, commented on, trashed, deleted, restored — with a count; the file's name, type, id and link, who acted, never its content; tier 1 |
-| `gtasks` | the same two; [Google Tasks](#google-tasks) | one `task/v1` line per task each time it changes, the line a Takeout export gives (`source` `google-takeout`), so `logbook tasks` reads it and a later export writes nothing twice; a done one says how long it was open; never the notes; tier 2 |
+| `gtasks` | the same two; [Google Tasks](#google-tasks) | one `task/v1` line per task each time it changes, the line a Takeout export gives (`source` `google-takeout`), so `logbook promises tasks` reads it and a later export writes nothing twice; a done one says how long it was open; never the notes; tier 2 |
 | `meet` | the same two; [Google Meet](#google-meet) | one `event/v1` line per call that has ended, tier 1: when, the meeting code, who joined as Meet names them; and when Meet transcribed it, one `transcript/v1` line as Granola's is, tier 3, the words in `attachments/` |
 | `gaudit` | the same two; [Google sign-ins](#google-sign-ins) | one `event/v1` line per sign-in event of yours in the Workspace's login audit log, tier 1: when, what happened, how, and the place Google derived from the address; never the address |
 
@@ -423,8 +433,8 @@ The logbook only ever reads; a key that cannot write is a key that cannot do har
 
 Demo, sample or placeholder data never enters the record: an adapter existing is not a decision to run it.
 Your list of switched-off sources lives in `policy/import.json`, `{"disabled": [{"source": "sbb", "reason":
-"a demo account"}]}`; `add`, `sync` and `import-backup` skip a disabled source and say so, with or without
-`--only`, and `logbook sources` lists every adapter this build has, file and live, with its state and the
+"a demo account"}]}`; `add`, `sync` and `import backup` skip a disabled source and say so, with or without
+`--only`, and `logbook doctor sources` lists every adapter this build has, file and live, with its state and the
 reason. `init` writes the empty list, and a record made earlier gets it on the first run. An alias stands for
 its adapter (`books` for `apple-books`, `health` for `apple-health`), and a name no adapter carries is
 listed as such rather than silently ignored.
@@ -450,7 +460,7 @@ before its watermark and skips what the record already has, and says how many th
 
 On a Mac, `logbook sync imessage` reads the Messages database the Mac itself keeps, read-only, and writes
 the same line for the same message as the phone backup (same `raw_id`, the message guid), so a record
-seeded with `import-backup` carries on from its newest message and nothing is written twice. The first
+seeded with `import backup` carries on from its newest message and nothing is written twice. The first
 run starts from the newest iMessage line already in the record (the first scheduled run from 14 days
 back when that line is older, or when there is none), later runs from the newest message seen,
 each looking back 24 hours (`LOGBOOK_IMESSAGE_LOOKBACK_H`) for a conversation another device synced late.
@@ -753,7 +763,7 @@ browser dies months later. Only you can stop it: by deleting the key or withdraw
 
 `unauthorized_client` means the delegation does not yet grant the scope named in the message (step 4);
 `invalid_grant` that the key was deleted, this machine's clock is wrong, or `LOGBOOK_DRIVE_USER` is not a
-user of the domain. Signing needs the `crypto` extra (`pip install "openlogbook[crypto]"`); without it a
+user of the domain. Signing needs the `crypto` extra (`pipx install --force "openlogbook[crypto]"`); without it a
 sync says so. Every request is retried with a doubling wait on a rate limit or a server error, and stops
 on one plain line, exit 1, the watermark where it was, when that does not pass. `sync --all` runs the
 six in the order mail, gmail, gcal, drive, gtasks, meet, gaudit are registered: `mail` (IMAP) before
@@ -946,12 +956,12 @@ Your boat, your aircraft and your car are *subjects* with tracks of their own, n
 each once in `assets.json`, then let `sync` ask the receivers that hear them:
 
 ```bash
-logbook assets add solvind --kind yacht --name Solvind --mmsi 999000001        # synthetic MMSI; use your own
-logbook assets add ln-zz1 --kind aircraft --name "the club's Cub" --icao24 000a01 --registration ZZ-ZZ1
-logbook assets list
-logbook assets status                                       # where each one last was, and how old that fix is
+logbook setup assets add solvind --kind yacht --name Solvind --mmsi 999000001  # synthetic MMSI; use your own
+logbook setup assets add ln-zz1 --kind aircraft --name "the club's Cub" --icao24 000a01 --registration ZZ-ZZ1
+logbook setup assets list
+logbook setup assets status                                 # where each one last was, and how old that fix is
 export LOGBOOK_AISSTREAM_KEY=...                            # free key from aisstream.io
-uv sync --extra ais                                         # or: pip install 'openlogbook[ais]'
+uv sync --extra ais                                         # or: pipx install --force "openlogbook[ais]"
 logbook sync ais --dry-run                                  # listen for 60 s, count, write nothing
 logbook sync ais                                            # then: */10 * * * * logbook sync ais
 logbook sync ais --listen 3600                              # or: one long sitting, written at the end
@@ -981,7 +991,7 @@ Keep it in the shell environment only (your shell profile, a password manager's 
 outside the record) and never in the record, the repository or a script you share. The logbook sends it
 only in the `Authorization` header and never prints it.
 
-**Is every source still flowing?** `logbook sources --gaps` reads the index alone, never the files, and
+**Is every source still flowing?** `logbook doctor sources --gaps` reads the index alone, never the files, and
 prints one row per source with lines: how many, its last line's time, the longest silent stretch (between two
 lines, or since the last one, still running) and the days with no line from it, folded into runs, so a phone
 that stopped sending or a sync that died is seen on one screen. The range runs from each source's first line
@@ -989,7 +999,7 @@ to today in the record's zone, or from `--since YYYY-MM-DD`; a line dated after 
 entries) is outside it, and today counts as a missing day only once the source has been silent a full day.
 `--expect dawarich imessage` shows only those sources, marks one that has been silent a day or more at any
 point of the range, or has no line at all, with `!`, and exits 1 when any is marked, so a cron job can tell
-you: `0 7 * * * logbook sources --gaps --since 2026-09-01 --expect dawarich imessage`. Every line counts,
+you: `0 7 * * * logbook doctor sources --gaps --since 2026-09-01 --expect dawarich imessage`. Every line counts,
 retracted or not; `--json` gives the same report as data.
 
 ## Reading the day back
@@ -1061,10 +1071,10 @@ The readers above the day page derive, and never append: every one of them is a 
 head, and the same record reads the same way twice. The only lines they ever add are the captain's own namings.
 
 ```bash
-logbook places propose                        # unnamed stays ranked by hours, with the nearest known place and a suggested name
-logbook places propose --write                # name the ones you accept: places.json, and one note/v1 line each
-logbook places add Home --lat 59.9139 --lon 10.7522 --kind home
-logbook places name 59.92,10.74 Cafe          # or a stay id from `propose`; the naming is a note in the record
+logbook setup places propose                  # unnamed stays ranked by hours, with the nearest known place and a suggested name
+logbook setup places propose --write          # name the ones you accept: places.json, and one note/v1 line each
+logbook setup places add Home --lat 59.9139 --lon 10.7522 --kind home
+logbook setup places name 59.92,10.74 Cafe    # or a stay id from `propose`; the naming is a note in the record
 
 logbook rollup countries --year 2026          # days per country from the overnight stay; in transit apart
 logbook rollup flights                        # count, km, long-haul, by evidence, from the flight lines standing
@@ -1077,33 +1087,33 @@ logbook rollup listen --year 2026             # listens, hours, skips, the top a
 logbook rollup attention --year 2026          # hours by app and by category (communication, browser, media, work, other) from Screen Time
 logbook rollup money --year 2026              # the transactions by month, by country of the stay, by the source's category
 
-logbook trips --year 2026                     # runs of nights away: route, places, people, flights in and out
-logbook ledger --month 2026-06                # the transactions at the stay and in the trip, per day; shares per person
-logbook year 2026 --html ~/2026.html          # the year read back: the rollups, the trips, one day a month; a page that prints
-logbook trip trip:2026-06-15:2026-06-20       # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
-logbook year 2026 --html ~/2026.html --print  # the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter
-logbook trip trip:2026-06-15:2026-06-20 --html ~/week.html --print  # the same for one trip, a spread a day; docs/print.md says how to make the PDF
+logbook show trips --year 2026                # runs of nights away: route, places, people, flights in and out
+logbook rollup ledger --month 2026-06         # the transactions at the stay and in the trip, per day; shares per person
+logbook show year 2026 --html ~/2026.html     # the year read back: the rollups, the trips, one day a month; a page that prints
+logbook show trip trip:2026-06-15:2026-06-20  # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
+logbook show year 2026 --html ~/2026.html --print   # the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter
+logbook show trip trip:2026-06-15:2026-06-20 --html ~/week.html --print   # the same for one trip, a spread a day; docs/print.md says how to make the PDF
 logbook export trip-bundle trip:2026-06-15:2026-06-20 --to kari --tier 1,2   # that trip for a member of the circle; `import trip-bundle` takes one in
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays
 logbook show asset solvind                    # trips aboard, nights, people, the track's summary
 logbook show place Office                     # visits, people, photos
 logbook people --year 2026                    # everyone the record names: channels, days and nights together, last real contact
-logbook person ola@example.org                # one page: the numbers, then the shared days, most recent first
+logbook people ola@example.org                # one page: the numbers, then the shared days, most recent first
 logbook people merge                          # the same person named twice: proposals with the evidence; --apply ID merges
 logbook search '"with kari"' --since 2026-06-01   # full-text, literal, ranked, by day: notes, messages, mail, events, transcripts
 
-logbook infer keepers                         # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
-logbook keepers --since 2026-06-01 --lane art
-logbook keepers --people                      # who appears on the keepers, per month: the faces the library named, proposed
-logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper photo (openlogbook[describe]); never a name, never a place
+logbook derive keepers                        # favourites → keeper/v1 (memory); the Art album → keeper/v1 (art)
+logbook show keepers --since 2026-06-01 --lane art
+logbook show keepers --people                 # who appears on the keepers, per month: the faces the library named, proposed
+logbook derive descriptions keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper photo (openlogbook[describe]); never a name, never a place
 
 logbook promises --judge                      # a local model reads every "I'll…" the rules found; the commitments, as proposals
 logbook promises --all --since 2026-06-01     # every candidate the rules found, judged or not
 logbook promises done 3b9e5d0f2a71c846        # it was kept: one task/v1 line, so --open hides it
 
-logbook tasks --open                          # the task/v1 lines as they stand: the latest snapshot of each
-logbook tasks --propose-done                  # the mail, calendar entry or transaction that says an open task was done
-logbook tasks done 0dd9108fb6d5d715 --evidence 01a0fda3-99b0-7af6-a986-0a377117a94b   # one task/v1 line, done
+logbook promises tasks --open                 # the task/v1 lines as they stand: the latest snapshot of each
+logbook promises tasks --propose-done         # the mail, calendar entry or transaction that says an open task was done
+logbook promises tasks done 0dd9108fb6d5d715 --evidence 01a0fda3-99b0-7af6-a986-0a377117a94b   # one task/v1 line, done
 
 logbook digest                                # today in 25 lines at most, with one question you answer in a word
 logbook digest 2026-06-10 --markdown          # the same lines as Markdown; --json the sets behind them
@@ -1125,7 +1135,7 @@ record's resolution lines (RFC 0006); a bare address nobody has named and a cale
 (`calendar.google.com`, `noreply`, `reservations@`, `invite@`) are dropped. You are never your own company:
 the with module knows you by `owner_id` and `owner_emails` in `logbook.json`, by every resolution line that
 names those, and by `policy/owner.json`, `{"names": [...], "emails": [...], "phones": [...], "handles":
-[...]}`, where your other spellings and your logins go; `init` writes it empty. `trips` lists at most twelve names, most evidence first.
+[...]}`, where your other spellings and your logins go; `init` writes it empty. `show trips` lists at most twelve names, most evidence first.
 
 **Countries, coarsely.** `rollup countries` has no map. The country of a night is the one a place in
 `places.json` carries (`country`, your word), else the nearest large airport within 300 km and the country its
@@ -1144,10 +1154,10 @@ airport's code); consecutive points within 200 m of each other are one. `logbook
 same way.
 
 **Keepers** (RFC 0024) are the photos you marked: a favourite in the library is a `memory`, a photo in an album
-named Art is `art`. `add photos` writes them with the photo lines, and `infer keepers` reads the marks out of any
-library's photo lines once; `show <day>` lists the day's keepers first, as its hero photos. `keepers --people` is
+named Art is `art`. `add photos` writes them with the photo lines, and `derive keepers` reads the marks out of any
+library's photo lines once; `show <day>` lists the day's keepers first, as its hero photos. `show keepers --people` is
 who appears on them per month, from the names your library gave its faces — proposed, never confirmed; a face's
-name is a person only when it is exactly a label a resolution line carries (`docs/adapters/photos.md`). `describe keepers`
+name is a person only when it is exactly a label a resolution line carries (`docs/adapters/photos.md`). `derive descriptions keepers`
 (`docs/describe.md`) has a local vision model (`openlogbook[describe]`, mlx-vlm on Apple silicon) write one factual
 sentence and the visible things for each keeper whose file is reachable, as a derived note on the photo's day,
 once per photo; it is never told who is in the picture or where it was taken and may not guess either.
@@ -1163,11 +1173,11 @@ it is sure of (`--all` for everything). No model runs unless you ask, never a cl
 machine. `promises done <id>` is the one thing it writes: a `task/v1` line marked done.
 
 **Tasks** (`docs/tasks.md`) are the `task/v1` lines a task app's export left, each as its latest snapshot (RFC 0016);
-`tasks --propose-done` asks the record whether an open one was done without anyone ticking it off: within the
+`promises tasks --propose-done` asks the record whether an open one was done without anyone ticking it off: within the
 fortnight after the task, a mail subject that names its key nouns and confirms something (a booking confirmation
 for "book flights to Zürich"), a calendar entry for an appointment ("Call with Ola" for "call Ola"), a transaction
 at a merchant the task names — by rules, English and German, no model, no network — each a proposal with the
-evidence line's id. `tasks done <id> --evidence <line>` appends the closing `task/v1` line and nothing else. The
+evidence line's id. `promises tasks done <id> --evidence <line>` appends the closing `task/v1` line and nothing else. The
 matcher is a value, so the promises judge's engine can replace the rules later without changing the report.
 
 **The digest** (`docs/digest.md`) is the day in 25 lines at most, composed from the readers above and never a
@@ -1214,11 +1224,11 @@ verifies the signature under the key they hold for you, recomputes every line's 
 their record, never in it.
 
 ```bash
-logbook circle key                                   # your public key; give it to Ola
-logbook circle add ola 5df798a3…                     # Ola's, once; policy/circle.json
-logbook share day 2026-06-13 --to ola                # tier 1, under the ceiling policy/crossing.json gives ola
-logbook share day 2026-06-13 --to ola --tier 2 --out ~/Desktop/saturday.zip
-logbook receive ~/Downloads/saturday.zip             # Ola's side: verified, then circle/ines/2026-06-13/
+logbook key circle key                               # your public key; give it to Ola
+logbook key circle add ola 5df798a3…                 # Ola's, once; policy/circle.json
+logbook export share day 2026-06-13 --to ola         # tier 1, under the ceiling policy/crossing.json gives ola
+logbook export share day 2026-06-13 --to ola --tier 2 --out ~/Desktop/saturday.zip
+logbook import page ~/Downloads/saturday.zip         # Ola's side: verified, then circle/ines/2026-06-13/
 logbook day 2026-06-13                               # … and the Day ends with a `from ines` section
 ```
 
@@ -1237,16 +1247,16 @@ ceiling of 2. Every run appends one `crossing/v1` line, and re-running rewrites 
 
 ## Asking an agent
 
-`logbook mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
+`logbook serve mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
 process's stdin and stdout and nothing else: no port, no socket. The host starts it, and the tools are the
 readers above — `day`, `days`, `trips`, `places`, `people`, `person`, `promises`, `gaps`, and a `search` over
 the index — plus two that write through `Logbook.append` and nothing else: `add_note` (one `note/v1` line, as
 `logbook add`) and `promise_done` (one `task/v1` line, as `logbook promises done`).
 
 ```bash
-pip install "openlogbook[mcp]"                # the official Python MCP SDK
-logbook mcp --inspect                         # the tool table and a sample request; no record needed
-logbook mcp                                   # what a host runs; LOGBOOK_HOME or --root names the record
+pipx install --force "openlogbook[mcp]"       # the official Python MCP SDK
+logbook serve mcp --inspect                   # the tool table and a sample request; no record needed
+logbook serve mcp                             # what a host runs; LOGBOOK_HOME or --root names the record
 ```
 
 Every answer passes the crossing gate of ADR 0016: `policy/crossing.json` names the `mcp` destination and its

@@ -35,6 +35,7 @@ logbook verify
 
 ```
 valid — 12772 lines, head 3ee025e7a9fbdbbbf5b91de0ec3bfac7ca27c22d53255aecd615e75fbca0c609
+  attachments: 2 files named by the lines; 2 present, checked against their name
 ```
 
 Every line is hash-chained to the one before. Change one character of any line and `verify`
@@ -67,8 +68,9 @@ logbook day 2026-06-17
 ```
 
 ```
-2026-06-17  Wednesday
+2026-06-17  Wednesday · unsigned
   night before  aboard Nordlys · 59.4300,10.4800 · away
+  night         slept 00:24–07:10 · 6 h 40 min
   night after   aboard Nordlys · 59.0500,10.0300 · away
   country       NO (nearest airport TRF)
 
@@ -79,8 +81,9 @@ logbook day 2026-06-17
       note         Anchored by nine. Grilled.
       with         proposed Anders Vik (photo)
 
-  health        sleep 6.7 h · 6,602 steps · resting 56 bpm
+  health        6,602 steps · resting 56 bpm
   sources       dawarich 263 lines, last 23:55 · ais 173 lines, last 23:50 · apple-health 84 lines, last 22:29 · …
+  readiness     mail none · message present · meeting none · location present · photo present · calendar none
 ```
 
 One day read back: the nights around it, the country, the stays and moves with what was attached
@@ -126,11 +129,13 @@ logbook setup places propose --top 4
 ```
 
 ```
-2026-06-01 – 2026-06-30: 14 unnamed places, by hours
+2026-06-01 – 2026-06-30: 4 unnamed places, by hours
   1.   58.5 h · 47.3769,8.5417 · 3 stays · 1400 km from Marina   stay:owner:20260608T0830Z@47.3769,8.5417
-  2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard nordlys · 103 km from Marina   …
-  3.   40.0 h · 59.8500,10.6000 · 2 stays · aboard nordlys · 9.7 km from Marina   …
-  4.   33.1 h · 55.6850,12.5500 · 2 stays · 481 km from Marina   …
+  2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard nordlys · 103 km from Marina   stay:owner:20260617T1200Z@59.0500,10.0300
+      suggested: aboard nordlys
+  3.   40.0 h · 59.8500,10.6000 · 2 stays · aboard nordlys · 9.7 km from Marina   stay:owner:20260615T1100Z@59.8500,10.6000
+      suggested: aboard nordlys
+  4.   33.1 h · 55.6850,12.5500 · 2 stays · 481 km from Marina   stay:owner:20260625T1630Z@55.6850,12.5500
 ```
 
 `places.json` names Home, Office, Marina and Cabin; the hotels, the anchorages, the cafe and the
@@ -208,6 +213,7 @@ logbook rollup people
 ```
 countries 2026-06-01 – 2026-06-30
   2026  NO 25 days · CH 3 days · DK 2 days · in transit 0
+  method: country of the overnight stay: a place with a country in places.json when the stay lies in it, else the nearest large airport within 300 km (airports table) and its zone's country (zone.tab); coarse near borders and far from airports
 ```
 
 ```

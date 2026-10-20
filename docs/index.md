@@ -7,7 +7,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Install](install.md): one line on each platform, for someone who has never opened a terminal, with what each step prints.
 - [Try it](try-it.md): five minutes with a demo record, every reader on a month that never happened.
 - [The first hour](first-hour.md): `logbook setup` screen by screen, for someone who has never used a terminal.
-- [The commands](commands.md): the 23 commands by what you are doing, and the older names each still answers to.
+- [The commands](commands.md): the 32 commands by what you are doing, and the older names each still answers to.
 - [The tour](tour.md): every command on your own record, from the first import to handing a day to a friend.
 - [A life in a record](demo.md): `logbook demo --years N`, a synthetic life in phases from a childhood of scanned photos to the boat.
 - [Your life in a folder](launch-post.md): the launch post, with everything in it synthetic.
@@ -29,7 +29,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [How a line becomes a Day](line-to-day.md): one line followed from the adapter through the index to the page.
 - [Conformance](conformance/README.md): the sample record and the head every implementation must reproduce.
 - [Decisions](adr/README.md): the architecture decision records, numbered, never edited after acceptance.
-- [RFCs](rfcs/README.md): the payload profiles and spec changes, each with a schema and one synthetic example.
+- [RFCs](https://github.com/bighydro/logbook/blob/main/rfcs/README.md): the payload profiles and spec changes, each with a schema and one synthetic example.
 - [RFC 0025, the shared bundle](rfcs/rfc-0025-shared-page-bundle.md): the signed page one logbook hands another.
 - [RFC 0027, reflection](rfcs/0027-reflection.md): the digest's closing question comes from the record.
 - [RFC 0034, the signed day](rfcs/0034-the-signed-day.md): agents draft, the owner signs, only signed days cross.
@@ -39,7 +39,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 
 ## Reading the record
 
-- [The Day](day.md): one calendar day read back, and `days` for a window of them.
+- [The Day](day.md): one calendar day read back, and `show days` for a window of them.
 - [The signed day](signed-day.md): `day sign`, the readiness row, and the gate on the crossing.
 - [The Year](year.md): one year composed from every reader, and one trip read back on its own.
 - [The rollups](rollups.md): countries, flights, nights, places, people, health, listening, attention, summed over a range.
@@ -51,6 +51,7 @@ A diary that writes itself: your life, in a folder you hold, read back to you as
 - [Tasks](tasks.md): every task line, open or done, and the evidence that one was finished.
 - [Search](search.md): full text across notes, transcripts, messages, mail and events, within a tier.
 - [In a browser](serve.md): `logbook serve`, the record read on this machine only.
+- [The shelves](shelves.md): promises, goals and agents in `logbook serve`; each one only reads.
 - [On paper](print.md): the year and the trip laid out for A4 and Letter.
 - [The vault](vault.md): the record as a folder of Markdown with wikilinks for Obsidian or Logseq.
 - [Describing keepers](describe.md): a local vision model's note per photo you marked a keeper.
