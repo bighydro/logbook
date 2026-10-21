@@ -523,3 +523,25 @@ def test_the_relationship_reader_without_its_entry_sends_nothing(
         cli.main(list(argv))
     assert e.value.code == 2 and "names no 'relationship' entry" in capsys.readouterr().err
     assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"
+
+
+def test_the_map_is_named_drawn_and_asked_with_no_connection(
+    lb: Logbook, tmp_path: Path, no_network: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The map (RFC 0043 §11, docs/map.md), from the synthetic coast of `tests/oslo_map.py`: `setup map`
+    reads the file's header, `lab map render` draws a day's track over it and the nearest named thing
+    is read from its tiles; the file is this machine's, and nothing is fetched."""
+    import oslo_map
+
+    from logbook.contrib.map import KEY, nearest
+
+    coast = oslo_map.write_coast(tmp_path / "coast.pmtiles")
+    try:
+        cli.main(["setup", "map", str(coast), "--yes"])
+        cli.main(["lab", "map", "render", "--track", "2026-06-08", "--out", str(tmp_path / "day.svg")])
+        lon, lat = oslo_map.CAFE
+        assert nearest.nearest_named(coast, lat, lon) is not None
+    finally:
+        cli.main(["setup", "map", "--off", "--yes"])
+    assert KEY not in lb.meta and (tmp_path / "day.svg").is_file()
+    assert no_network == [], f"the map tried to connect: {no_network}"
