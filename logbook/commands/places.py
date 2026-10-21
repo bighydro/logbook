@@ -80,6 +80,17 @@ def places_arguments(sub: Subparsers) -> None:
         v.add_argument("--tags", metavar="A,B", help="free text, comma-separated")
         v.set_defaults(fn=cmd_places)
     v = verbs.add_parser(
+        "class",
+        help="the class of a place, the colour of its nights on the timeline: home, family, aboard, away",
+        description="Write `class` for one place in places.json (RFC 0043 §12): home, family (the family's"
+        " places), aboard or away. Without one a place is home by kind home, aboard on a night aboard an"
+        " asset, else away. Says what it will write and asks first; nothing is appended to the record.",
+    )
+    v.add_argument("name", help="the place, as `setup places list` names it (case aside)")
+    v.add_argument("value", metavar="CLASS", choices=places.CLASSES, help=", ".join(places.CLASSES))
+    v.add_argument("--yes", action="store_true", help="write without asking (tests, scripts)")
+    v.set_defaults(fn=cmd_places)
+    v = verbs.add_parser(
         "import-takeout", help="propose entries from Google Maps' saved and starred places (Takeout)"
     )
     v.add_argument("path", help="Takeout/, `Maps (your places)/`, `Saved/`, or one file of them")
@@ -183,6 +194,8 @@ def cmd_places(a: argparse.Namespace) -> None:
         elif a.verb == "name":
             lat, lon = places.parse_stay_id(a.where)
             _name_place(lb, _place_from_args(a.name, lat, lon, a.radius, a.kind, a.tags))
+        elif a.verb == "class":
+            _places_class(lb, a)
         elif a.verb == "import-takeout":
             _places_import_takeout(lb, a)
         elif a.verb == "review":
@@ -192,6 +205,37 @@ def cmd_places(a: argparse.Namespace) -> None:
     except (places.PlaceError, stays.SettingsError, ValueError) as e:
         print(f"places: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _places_class(lb: Logbook, a: argparse.Namespace) -> None:
+    """`setup places class NAME CLASS`: a setup write. Says what it will write and what the place's
+    class is now, asks (`--yes` does not), and writes `class` into places.json under the writer lock
+    (`places.set_class`, every other key kept); a place that has it already is left alone."""
+    from .setup import Console, Skipped, Stopped  # the guided setup's console: it reaches the adapters
+
+    known = {p.name.casefold(): p for p in places.read(lb.root)}
+    place = known.get(" ".join(a.name.split()).casefold())
+    if place is None:
+        raise places.PlaceError(
+            f"{a.name!r} is not a place in places.json; `logbook setup places list` names them"
+        )
+    given = places.classes(lb.root)
+    now = places.class_of(place, None, given)
+    if given.get(place.name) == a.value:
+        print(f"{place.name} already has class {a.value} in places.json; nothing written")
+        return
+    how = "given in places.json" if place.name in given else "by its kind"
+    print(f"{place.name}: class {a.value} (now {now}, {how})")
+    try:
+        yes = Console(a.yes).confirm(f"Write class {a.value} for {place.name} to places.json?")
+    except (Skipped, Stopped):
+        yes = False
+    if not yes:
+        print("nothing written")
+        return
+    with lb.writer():
+        name, _before = places.set_class(lb.root, place.name, a.value)
+    print(f"wrote class {a.value} for {name} in places.json; no line changed")
 
 
 def _place_from_args(
