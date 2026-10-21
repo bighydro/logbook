@@ -344,6 +344,7 @@ def test_search_json(lb: Logbook, capsys):
         "kinds": None,
         "max_tier": 2,
         "limit": search.LIMIT,
+        "standing": False,
     }
     assert data["hits"] == 3 and data["more"] is False
     assert [d["day"] for d in data["days"]] == ["2026-06-13", "2026-06-11", "2026-06-10"]
@@ -374,6 +375,217 @@ def test_search_limit_says_when_it_was_reached(lb: Logbook, capsys):
     assert out[-1] == "1 hit in 1 day; the first 1 by rank, --limit for more"
     cli.main(["search", "kari", "--limit", "2", "--json"])
     assert json.loads(capsys.readouterr().out)["more"] is True
+
+
+# -- standing: a hit a later line of its kind supersedes is marked, and `--standing` leaves it out ----
+
+
+def _correct_the_dinner(lb: Logbook) -> int:
+    """Kari's dinner moved: a note on the 14th that supersedes the note of the 10th (seq 1); its seq."""
+    first = lb.line_by_seq(1)
+    assert first is not None
+    line = lb.append(
+        at="2026-06-14T16:00:00Z",
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={
+            "schema": "note/v1",
+            "text": "Dinner with Kari moved to the marina",
+            "supersedes": first["id"],
+        },
+    )
+    return int(line["seq"])
+
+
+def _hits(capsys: pytest.CaptureFixture[str], *args: str) -> dict[int, dict[str, Any]]:
+    cli.main(["search", *args, "--json"])
+    data = json.loads(capsys.readouterr().out)
+    return {hit["seq"]: hit for day in data["days"] for hit in day["lines"]}
+
+
+def test_search_marks_a_note_a_later_note_supersedes(lb: Logbook, capsys):
+    later = _correct_the_dinner(lb)
+    out = _search(capsys, "dinner")
+    assert out == [
+        "2026-06-14 Sunday",
+        "  18:00  note       manual         Dinner with Kari moved to the marina",
+        "         [Dinner] with Kari moved to the marina",
+        "2026-06-10 Wednesday",
+        "  20:00  note       manual         Dinner with Kari at the cafe, running late"
+        + f" · superseded by #{later}",
+        "         [Dinner] with Kari at the cafe, running late",
+        "2 hits in 2 days",
+    ]
+
+
+def test_search_a_standing_hit_has_no_mark(lb: Logbook, capsys):
+    out = _search(capsys, "run")
+    assert out[1] == "  12:00  note       manual         Kari said the run was good"
+    assert not any("superseded" in row for row in out)
+    hit = _hits(capsys, "run")[6]
+    assert hit["standing"] is True and hit["superseded_by"] is None
+
+
+def test_search_json_says_standing_and_superseded_by(lb: Logbook, capsys):
+    later = _correct_the_dinner(lb)
+    superseder = lb.line_by_seq(later)
+    assert superseder is not None
+    hits = _hits(capsys, "dinner")
+    assert hits[1]["standing"] is False and hits[1]["superseded_by"] == superseder["id"]
+    assert hits[later]["standing"] is True and hits[later]["superseded_by"] is None
+    cli.main(["search", "dinner", "--json"])
+    assert json.loads(capsys.readouterr().out)["query"]["standing"] is False
+
+
+def test_search_standing_shows_standing_hits_only(lb: Logbook, capsys):
+    later = _correct_the_dinner(lb)
+    out = _search(capsys, "dinner", "--standing")
+    assert out == [
+        "2026-06-14 Sunday",
+        "  18:00  note       manual         Dinner with Kari moved to the marina",
+        "         [Dinner] with Kari moved to the marina",
+        "1 hit in 1 day",
+    ]
+    assert list(_hits(capsys, "dinner", "--standing")) == [later]
+    cli.main(["search", "dinner", "--standing", "--json"])
+    assert json.loads(capsys.readouterr().out)["query"]["standing"] is True
+
+
+def test_search_standing_fills_the_limit_with_standing_hits(lb: Logbook, capsys):
+    _correct_the_dinner(lb)  # kari: the corrected note, the second note, the mail, the superseded note
+    assert len(_hits(capsys, "kari")) == 4
+    for limit in ("1", "2", "3"):
+        cli.main(["search", "kari", "--standing", "--limit", limit, "--json"])
+        data = json.loads(capsys.readouterr().out)
+        hits = [hit for day in data["days"] for hit in day["lines"]]
+        assert len(hits) == data["hits"] == int(limit) and data["more"] is True, limit
+        assert all(hit["standing"] for hit in hits) and 1 not in {hit["seq"] for hit in hits}
+    cli.main(["search", "kari", "--standing", "--limit", "4", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["hits"] == 3 and data["more"] is False
+
+
+def test_search_a_retracted_superseder_supersedes_nothing(lb: Logbook, capsys):
+    later = _correct_the_dinner(lb)
+    lb.retract(later, "the dinner did not move")
+    out = _search(capsys, "dinner")
+    assert out[-1] == "1 hit in 1 day"  # the retracted correction is never a hit
+    assert out[1] == "  20:00  note       manual         Dinner with Kari at the cafe, running late"
+    assert _hits(capsys, "dinner", "--standing")[1]["standing"] is True
+
+
+def test_search_a_retracted_line_is_never_a_hit_marked_or_not(lb: Logbook, capsys):
+    for args in (["secret"], ["secret", "--standing"]):
+        assert _search(capsys, *args)[0] == "nothing matches: secret"
+    assert _hits(capsys, "secret") == {}
+
+
+def test_search_gives_an_index_built_before_the_supersedes_index_that_index_once(lb: Logbook, capsys):
+    later = _correct_the_dinner(lb)
+    _search(capsys, "dinner")  # the index is current
+    _tamper(lb, "DROP INDEX lines_kind_supersedes")
+    indexes = "SELECT name FROM sqlite_master WHERE type = 'index'"
+    assert "lines_kind_supersedes" not in {r[0] for r in _rows(lb, indexes)}
+    assert _search(capsys, "dinner")[4].endswith(f" · superseded by #{later}")
+    assert "lines_kind_supersedes" in {r[0] for r in _rows(lb, indexes)}  # the mark asks it
+
+
+def test_search_a_superseder_of_another_kind_marks_nothing(lb: Logbook, capsys):
+    first = lb.line_by_seq(1)
+    assert first is not None
+    lb.append(
+        at="2026-06-14T16:00:00Z",
+        source="manual",
+        kind="task",
+        tier=2,
+        payload={"schema": "task/v1", "title": "book the marina table", "supersedes": first["id"]},
+    )
+    assert _hits(capsys, "dinner")[1]["standing"] is True
+    assert not any("superseded" in row for row in _search(capsys, "dinner"))
+
+
+def _solvind_berths(lb: Logbook) -> tuple[list[int], int]:
+    """Three short notes about the yacht Solvind, each superseded by a correction without the word,
+    and one long note that stands: the superseded ones rank first (bm25 favours a short line)."""
+    superseded = []
+    for n, day in enumerate(("2026-06-15", "2026-06-16", "2026-06-17")):
+        line = lb.append(
+            at=f"{day}T08:00:00Z",
+            source="manual",
+            kind="note",
+            tier=2,
+            payload={"schema": "note/v1", "text": "Solvind"},
+        )
+        superseded.append(int(line["seq"]))
+        lb.append(
+            at=f"{day}T09:00:00Z",
+            source="manual",
+            kind="note",
+            tier=2,
+            payload={"schema": "note/v1", "text": f"the yacht moved to berth {n}", "supersedes": line["id"]},
+        )
+    standing = lb.append(
+        at="2026-06-18T08:00:00Z",
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={
+            "schema": "note/v1",
+            "text": "Per Hansen and Ola sailed Solvind out of the fjord past the cabins",
+        },
+    )
+    return superseded, int(standing["seq"])
+
+
+def test_search_standing_asks_again_until_the_limit_holds_standing_hits(lb: Logbook, capsys):
+    superseded, standing = _solvind_berths(lb)
+    cli.main(["search", "solvind", "--limit", "1", "--json"])
+    best = json.loads(capsys.readouterr().out)["days"][0]["lines"][0]
+    assert best["seq"] in superseded and best["standing"] is False  # the superseded ones rank first
+    assert list(_hits(capsys, "solvind", "--standing", "--limit", "1")) == [standing]
+    assert list(_hits(capsys, "solvind", "--standing")) == [standing]
+    assert len(_hits(capsys, "solvind")) == 4
+
+
+def test_superseded_by_takes_the_rule_index_superseded_reads_by(lb: Logbook):
+    first, second = lb.line_by_seq(1), lb.line_by_seq(6)
+    assert first is not None and second is not None
+    corrections = []
+    for at, text in (
+        ("2026-06-14T08:00:00Z", "dinner moved"),
+        ("2026-06-14T09:00:00Z", "dinner moved again"),
+    ):
+        line = lb.append(
+            at=at,
+            source="manual",
+            kind="note",
+            tier=2,
+            payload={"schema": "note/v1", "text": text, "supersedes": first["id"]},
+        )
+        corrections.append(line)
+    wrong = lb.append(
+        at="2026-06-14T10:00:00Z",
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={"schema": "note/v1", "text": "the run was bad", "supersedes": second["id"]},
+    )
+    lb.retract(int(wrong["seq"]), "it was good")  # a retracted superseder supersedes nothing
+    lb.append(
+        at="2026-06-14T11:00:00Z",
+        source="manual",
+        kind="task",
+        tier=2,
+        payload={"schema": "task/v1", "title": "write it up", "supersedes": second["id"]},  # another kind
+    )
+    with lb.index() as idx:
+        lines = idx.by_kind("note")
+        by = search.superseded_by(idx, lines)
+        rule = idx.superseded("note")
+    latest = corrections[1]  # superseded twice: the last in chain order is the one that stands
+    assert rule == {first["id"]: int(latest["seq"])}
+    assert by == {1: (int(latest["seq"]), latest["id"])}
 
 
 # -- the module ---------------------------------------------------------------------------------------
