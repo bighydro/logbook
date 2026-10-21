@@ -103,6 +103,12 @@ read your track from the index alone and count photos and signatures from the in
 Library reads each once for the record as it stands (the head, the settings beside the chain and the day):
 a reload, or another tab, is served from that reading until the record moves.
 
+All years is not rebuilt each time the record moves. The first time it is opened after a move, the Library
+starts one build of it and waits up to ten seconds for it, so a record of a few years shows it at once. On
+a record of many years the build takes longer (about a minute at five million lines), and meanwhile the
+page says, in one line, that all years is being built; a reload shows it once it is done, and it is kept
+until the record moves again. `show timeline --life` builds it every time it runs.
+
 ## What it is not
 
 Not a summary: every count is a count of lines, and the words are yours or the sources'. Not an editor:

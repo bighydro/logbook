@@ -12,7 +12,11 @@ import html
 import io
 import json
 import re
+import shutil
+import threading
+import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import phone_width
@@ -335,3 +339,59 @@ def test_a_gate_without_the_track_places_no_night_on_the_month_or_all_years(demo
     assert "no nights" in month and "home 18" not in month
     life = _text(site.respond("/timeline/life").body.decode("utf-8"))
     assert "Home" not in life and "Nordlys" not in life
+
+
+def test_all_years_is_built_once_after_a_move_and_says_so_meanwhile(
+    demo: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The owner's answer on all years: never rebuilt on every move of the head. The first open after
+    a move starts one build and, while it runs, the page says so in one line; asked again meanwhile,
+    no second build; done, it is kept until the record moves again, and the next open builds anew."""
+    shutil.copytree(demo.root, tmp_path / "copy")
+    lb = Logbook(tmp_path / "copy")
+    gate, built = threading.Event(), []
+    real = moments.read
+
+    def slow(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        if args[1] == "life":
+            built.append(args[1])
+            assert gate.wait(60), "the test never let the build finish"
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(moments, "read", slow)
+    monkeypatch.setattr(timeline_page, "LIFE_WAIT_S", 0.05)  # a big record's build: longer than the wait
+    site = _site(lb)
+
+    def life() -> str:
+        response = site.respond("/timeline/life")
+        assert response.status == 200
+        return _text(response.body.decode("utf-8"))
+
+    def when_built() -> str:
+        for _ in range(600):
+            said = life()
+            if timeline_page.BUILDING not in said:
+                return said
+            time.sleep(0.05)
+        raise AssertionError("all years was never built")
+
+    first = life()
+    assert timeline_page.BUILDING in first and "Cabin" not in first
+    page = site.respond("/timeline/life").body.decode("utf-8")  # the one line: a page like any other
+    assert "<script" not in page and phone_width.problems(page) == [] and "<meta http-equiv" not in page
+    assert timeline_page.BUILDING in life() and built == ["life"]  # asked again while it builds: one build
+    gate.set()
+    done = when_built()
+    assert "Cabin · 1 visit since 2026" in done and built == ["life"]
+    assert life() == done and built == ["life"]  # kept: read again, nothing built
+    gate.clear()
+    lb.append(
+        at="2026-06-30T10:00:00Z",
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={"schema": "note/v1", "text": "One more line, as a sync would write it."},
+    )
+    assert timeline_page.BUILDING in life() and built == ["life", "life"]  # the head moved: built anew, once
+    gate.set()
+    assert "Cabin · 1 visit since 2026" in when_built() and built == ["life", "life"]

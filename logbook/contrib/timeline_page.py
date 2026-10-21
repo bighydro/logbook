@@ -21,12 +21,16 @@ the same function, on the same rows).
 A person is never shown with a number beside their name (VISION: no metrics near people). The month,
 the year and all years are read once for the record as it stands (`Site.shared`, the lifetime every
 shared reading has: the head, the settings beside the chain and the day), so a reload never scans the
-record again; a day and a week read their own few days. The page says the highest tier it read."""
+record again; a day and a week read their own few days. All years is built once after the record moves,
+in a thread of its own, by the first request that opens it; while a long build runs the page says so in
+one line (`BUILDING`), and it is kept until the next move (`_Life`). The page says the highest tier it
+read."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+import threading
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, timedelta
 from html import escape
 from typing import TYPE_CHECKING, Any
@@ -40,6 +44,10 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
 PATH = re.compile(r"^/timeline(?:/(day|week|month|year)/([0-9W-]+)|/(life))?$")
 MAP_LATER = "the map comes with slice G"
 TAP = "tap"  # a link that is a 44 px target on its own, wherever it stands in a line
+LIFE_WAIT_S = 10.0  # how long a request waits for all years to be built before saying it is being built
+BUILDING = (
+    "All years is being built from the record as it stands, once until the record moves; reload in a minute."
+)
 DOT = moments.DOT
 EN_DASH = day_reader.EN_DASH
 NO_MOMENT = '<span class="mute">no moment</span>'
@@ -134,9 +142,12 @@ def page(site: Site, path: str) -> str:
 # -- what every zoom has --------------------------------------------------------------------------------
 
 
-def _head(site: Site, zoom: str, key: str | None, title: str, facts: str, tier: int | None) -> list[str]:
+def _head(
+    site: Site, zoom: str, key: str | None, title: str, facts: str | None, tier: int | None
+) -> list[str]:
     """The heading, the zoom links (the one shown in bold) and the previous and next of this zoom; the
-    other zooms open on the day this one starts on (all years: the day the owner is in)."""
+    other zooms open on the day this one starts on (all years: the day the owner is in). With no
+    `facts` (all years while it is built), the heading says nothing of what was read."""
     day = site._today_of() if key is None else moments.window(zoom, key)[0]
     targets = {
         "day": f"/timeline/day/{day}",
@@ -150,7 +161,9 @@ def _head(site: Site, zoom: str, key: str | None, title: str, facts: str, tier: 
         for z, target in targets.items()
     )
     out = [
-        f"<h1>Timeline <small>{escape(title)}</small> {site.tier_small(facts, tier)}</h1>\n",
+        f"<h1>Timeline <small>{escape(title)}</small>"
+        + ("" if facts is None else f" {site.tier_small(facts, tier)}")
+        + "</h1>\n",
         f'<p class="zooms">{zooms}</p>\n',
     ]
     if key is not None:
@@ -180,7 +193,7 @@ def _beside(zoom: str, key: str) -> tuple[str, str]:
 
 
 def _shared(site: Site, zoom: str, key: str | None) -> dict[str, Any]:
-    """A zoom read once for the record as it stands (`Site.shared`): the month, the year, all years."""
+    """A zoom read once for the record as it stands (`Site.shared`): the month and the year."""
     tiers = None if site.tiers is None else tuple(site.tiers)
     return site.shared(
         ("timeline", zoom, key, tiers), lambda: moments.read(site.lb, zoom, key, site.airports, site.tiers)
@@ -408,8 +421,54 @@ def _year(site: Site, key: str) -> str:
 # -- all years --------------------------------------------------------------------------------------------
 
 
+class _Life:
+    """All years for one state of the record: built once, in a thread of its own, by the first request
+    that asks for it; every request after it is answered from what was built, until the record moves
+    and `Site.shared` hands out a new one."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._done = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.data: dict[str, Any] | None = None
+        self.error: BaseException | None = None
+
+    def get(self, build: Callable[[], dict[str, Any]], wait: float) -> dict[str, Any] | None:
+        """What was built, waiting `wait` seconds for a build that runs; None while it still runs. The
+        first call starts the build; a build that failed raises its error until the record moves."""
+        with self._lock:
+            if self._thread is None:
+                self._thread = threading.Thread(
+                    target=self._run, args=(build,), name="timeline-life", daemon=True
+                )
+                self._thread.start()
+        if not self._done.wait(wait):
+            return None
+        if self.error is not None:
+            raise self.error
+        return self.data
+
+    def _run(self, build: Callable[[], dict[str, Any]]) -> None:
+        try:
+            self.data = build()
+        except BaseException as e:  # handed to the request that reads it, as a page's own error
+            self.error = e
+        finally:
+            self._done.set()
+
+
 def _life(site: Site) -> str:
-    data = _shared(site, "life", None)
+    """All years, built once for the record as it stands (`_Life`, kept by `Site.shared` until the head,
+    the settings beside it or the day move): a request waits `LIFE_WAIT_S` for the build, so a record
+    of a few years answers at once; a longer build is said in one line (`BUILDING`), and a reload shows
+    it once it is done."""
+    tiers = None if site.tiers is None else tuple(site.tiers)
+    held = site.shared(("timeline", "life", tiers), _Life)
+    data = held.get(lambda: moments.read(site.lb, "life", None, site.airports, site.tiers), LIFE_WAIT_S)
+    if data is None:
+        parts = _head(site, "life", None, "all years", None, None)
+        parts.append(f'<p class="mute">{escape(BUILDING)}</p>\n')
+        return site.document("Timeline, all years", "".join(parts), style=STYLE)
     span = f"{data['first']} {EN_DASH} {data['last']}" if data["first"] else "no days"
     facts = f"{len(data['places'])} places{DOT}{len(data['vessels'])} vessels"
     parts = _head(site, "life", None, f"all years, {span}", facts, data["tier"])
