@@ -133,8 +133,11 @@ Then the ink, folded: people, photos and track, everything the day held, looking
 ### 3.4 Signed
 
 What the owner kept, in ink, first: the notes kept at the close, the dispositions given, the signature and
-its note. The pencil is folded at the foot, under its head, as the draft is today. A signed day whose page
-has changed since says so in the header [main] and offers *Sign again* [main].
+its note. The pencil is folded at the foot, under its head [proposed]. On `main` the Day prints the
+standing draft in full above the timeline, under the heading *Draft* and its head, signed day or not
+[main] (`docs/serve.md`, *The footer*; `docs/day.md`, item 7, for the CLI's `draft` row); a week's or a
+journey's draft is the one folded. A signed day whose page has changed since says so in the header
+[main] and offers *Sign again* [main].
 
 ### 3.5 The close
 
@@ -189,8 +192,11 @@ work.
 
 Three kinds, computed, never pencil:
 
-- **promises both ways**: the open promises of `logbook promises` (I promised, I was asked; and what was
-  promised to the owner) [main, the reader];
+- **promises both ways**: the open promises of `logbook promises`, I promised and I was asked [main, the
+  reader's two sections]; what was promised to the owner, which `logbook promises` lists only under
+  `--all`, in its third section with the candidates nobody resolves [main] (`people drift`,
+  `docs/people.md`, and the person page, `docs/serve.md`, already read promises both ways [main]), is a
+  loose end here [proposed];
 - **replies owed**: a message or mail in a direct conversation, from a person the record names, the last
   word in the conversation not the owner's for more than a day [proposed];
 - **decisions** with a revisit date due (§4.8) [proposed].
@@ -284,7 +290,8 @@ One form at the foot of the evening page, one POST, one hold of the writer lock,
 Every item is checked before the first line is written; any refusal writes nothing. The lock is held from
 the reading to the last append; a moved head is `HeadMoved` and nothing is written [main, the rule].
 
-**CLI parity**, so every click has a command that writes the same lines byte for byte:
+**CLI parity** [proposed], so every click has a command that writes the same lines byte for byte. `day
+sign` and `day reflect --text … --sign --accept` are [main]; `--keep` is not, and `main` refuses it:
 
 ```
 logbook day sign 2026-10-19 --keep 2,5
@@ -295,8 +302,10 @@ logbook day reflect 2026-10-19 --text "…" --sign --keep 2,5 --accept 1
 `--keep` and the existing `--kept` (a disposition) are one letter apart; §16 q6 asks whether the name
 stays.
 
-The Library's *What it is not* (`docs/serve.md`) says the pages write no note but the reflection. Keep and
-sign writes kept notes from the page, so that sentence is amended with this slice (§13.6).
+The Library's *What it is not* (`docs/serve.md`) names the reflection as the only note the pages write, but
+Sign already writes more on `main`: the ticked delegations, each a `note/v1` line labelled `delegation`,
+through `reflect.close` (`docs/serve.md`, *Sign*) [main]. Keep and sign writes kept notes from the page as
+well, so that sentence is amended with this slice (§13.6).
 
 ## 6. The rules of the evening dream
 
@@ -412,7 +421,11 @@ link (no script). A **moment** is a stay, drawn as a card:
 - **photos**, the owner's own camera first;
 - **paid**, at tier 3;
 - what passed **during** the window: messages, calls, Claude and agent conversations, mail from people;
-- **what was said**, only when recorded with consent (`transcript/v1`'s consent, [main] as a field);
+- **what was said**, only when recorded with consent [proposed]. `transcript/v1` has no consent field on
+  `main`; consent is stated per voice, as `consent` (`yes`, `no`, `unknown`; absent reads as `unknown`) on
+  the voice's `resolution/v1` line (RFC 0038 §3.2, `review speakers --consent`), and the Day prints
+  `recorded with consent: unknown` (or `no`) on a recording's row when a guest's voice was not stated as
+  consenting [main];
 - **notes**, **gifts**.
 
 **The map**: one offline OpenStreetMap PMTiles file on the home machine, named by `map_file` in
@@ -540,7 +553,8 @@ on `main`, 19 October 2026. Each finding, and how this RFC answers it:
    the evening question. → §13.2 lands with the digest's skip.
 8. **A day is in the record's zone.** SPEC §3.2 and RFC 0036 group by the record's zone; the page digest
    names it. "The day where it began" is a spec change. → §12, its own RFC with a version bump.
-9. **The Library writes no note but the reflection.** → §13.6.
+9. **The Library's *What it is not* names no note but the reflection**, while Sign already writes the
+   ticked delegations as `note/v1` lines [main] (`docs/serve.md`, *Sign*). → §13.6.
 10. **The Library refuses Sign with no reflection** (`docs/serve.md`, *Reflect and Sign*), while freedom says
     the question may be ignored forever. → Keep and sign takes no reflection; `day sign` already signs
     without one [main].

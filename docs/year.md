@@ -83,8 +83,8 @@ have no days:
   nights        122 home · 92 away · 0 in transit · 46 nights aboard Nordlys
   trips         31 trips · 92 nights away
     2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann
-    2026-06-08 – 2026-06-10  3 nights · route 47.3769,8.5417 (Zurich) · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
-    2026-06-15 – 2026-06-20  6 nights aboard nordlys · route 59.8500,10.6000 → 59.4300,10.4800 (Sandefjord) → … → Marina · places Marina · with Anders Vik, Ola Nordmann
+    2026-06-08 – 2026-06-10  3 nights · route Zurich · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber
+    2026-06-15 – 2026-06-20  6 nights aboard Nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann
     …
   flights       30 flights · 30,050 km · 0 long-haul · declared 7, inferred 8, tracked 15
     2026-06-08  XY 561  OSL → ZRH · 1,426 km · tracked
@@ -152,7 +152,9 @@ month) and `--poster` one sheet, A2 or A3, a square a day in the ink of its nigh
 record has no day in); `head`, the chain head the Year was read at; `warnings` (the trips reader's,
 when `places.json` names no home); `countries` (`countries` as `{country, days}`, `in_transit`,
 `unknown`); `nights` (`home`, `away`, `in_transit`, `aboard` as `{asset, name, nights}`); `trips`,
-each as `trips --json` gives it with `people` as names and without the line ids; `flights`
+each as `trips --json` gives it with `people` as names, without its `flights` and `lines` keys, and
+with one key more, `asset_name`, the name of the asset the trip was aboard (`Nordlys`; `asset` stays
+its id, `nordlys`), `null` for a trip on land; `flights`
 (`count`, `km`, `long_haul`, `unmeasured`, `by_evidence`, `flights`); `places` (`places`, `assets`,
 `unnamed`, each entry with `nights`, `stays`, `hours`, `first`, `last` and `people` as names; an
 unnamed cluster with its `id`, the stay id `places name` takes, `label`, `lat`, `lon`, `aboard`
