@@ -797,7 +797,9 @@ def _finish(
     )
     entry["attached"] = _attached(start, end, lines, stands_for, rd)
     companions = (
-        [] if entry["kind"] == stays.MOVE else present.company(span, lines, rd.identities, rd.places, owner)
+        []
+        if entry["kind"] == stays.MOVE
+        else present.company(span, lines, rd.identities, rd.places, owner, rd.voice_gate)
     )  # with is a stay's relation: a photo from the train attaches to the move, nobody is with you on it
     entry["with"] = {
         "confirmed": [c.to_json() for c in companions if c.status == present.CONFIRMED],

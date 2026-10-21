@@ -84,7 +84,7 @@ def test_a_speaker_ref_carries_basis_consent_confidence_and_unnamed_and_other_re
     ]
     found = resolve.identities_from(lines)
     assert found[("speaker", f"{DINNER}#S2")] == resolve.Identity(
-        KARI_ID, "person", "Kari Nordmann", False, "voice", "yes", None
+        KARI_ID, "person", "Kari Nordmann", False, "voice", "yes", None, 2
     )
     assert found[("speaker", f"{DINNER}#S3")].unnamed is True
     assert found[("speaker", f"{DINNER}#S3")].label is None

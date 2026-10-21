@@ -104,6 +104,12 @@ def export_arguments(sub: Subparsers) -> None:
         help=f"trip-bundle, site, world: a CSV that adds to the airports table (else {flights.AIRPORTS_ENV})",
     )
     s.add_argument(
+        "--with-drafts",
+        action="store_true",
+        help="site: put a model's drafts (pencil) on the Day pages, each headed with its model (default:"
+        " left out)",
+    )
+    s.add_argument(
         "--style",
         choices=world_chart.STYLES,
         help="world: modern, the globe (default), or chart, the record on a period chart (docs/world.md)",
@@ -166,6 +172,9 @@ SHARE = "share"  # `export share day`: the command `share day` until 0.6
 
 
 def cmd_export(a: argparse.Namespace) -> None:
+    if a.with_drafts and a.path != site.DESTINATION:
+        print(f"export {a.path}: --with-drafts goes with `export site`", file=sys.stderr)
+        sys.exit(2)
     if a.path == SHARE:
         if a.target != "day" or a.shared_day is None:
             print("export share: `export share day YYYY-MM-DD --to NAME` hands one day over", file=sys.stderr)
@@ -446,16 +455,17 @@ def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
 
 
 def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
-    """site FOLDER [--tier 1|1,2]: the readers as a folder of static HTML (`logbook/contrib/site.py`): a
-    Year page per year, a Day page per pick, every Trip page, a Days index per year, the places and the
-    people, with relative links, no script and nothing fetched; tier-gated under the `site` ceiling in
-    policy/crossing.json (ADR 0016; tier 1 when the file does not name it), recorded as a crossing/v1
-    line (RFC 0011). Only the files whose content changed are rewritten."""
+    """site FOLDER [--tier 1|1,2] [--with-drafts]: the readers as a folder of static HTML
+    (`logbook/contrib/site.py`): a Year page per year, a Day page per pick, every Trip page, a Days index
+    per year, the places and the people, with relative links, no script and nothing fetched; tier-gated
+    under the `site` ceiling in policy/crossing.json (ADR 0016; tier 1 when the file does not name it),
+    a model's drafts left out unless `--with-drafts`, recorded as a crossing/v1 line (RFC 0011). Only
+    the files whose content changed are rewritten."""
     generated_at = now_utc()
     try:
         if not a.target:
             raise site.SiteError("export site needs a folder: logbook export site <folder>")
-        req = site.request(lb, site.parse_tiers("1" if a.tier is None else a.tier))
+        req = site.request(lb, site.parse_tiers("1" if a.tier is None else a.tier), drafts=a.with_drafts)
     except site.SiteError as e:
         print(f"export site: {e}", file=sys.stderr)
         sys.exit(2)
@@ -471,7 +481,8 @@ def _export_site(lb: Logbook, a: argparse.Namespace) -> None:
         sys.exit(2)
     tiers = ",".join(map(str, req.tiers))
     window = f"{req.since} {EN_DASH} {req.until}"
-    print(f"site: {_plural(built.years, 'year')} {window}, tier {tiers} {ARROW} {folder}")
+    drafts = "a model's drafts included" if req.drafts else "drafts left out"
+    print(f"site: {_plural(built.years, 'year')} {window}, tier {tiers}, {drafts} {ARROW} {folder}")
     pages = ", ".join(_plural(n, *site.PAGE_NOUNS[kind]) for kind, n in built.pages.items())
     print(f"  pages: {pages}; {result.written} written, {result.unchanged} unchanged")
     if built.held_back:

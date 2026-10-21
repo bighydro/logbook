@@ -190,7 +190,7 @@ def test_apply_appends_alias_lines_and_the_readers_follow_them(
     assert identities[("handle", KARI_JID)].entity == KARI_A
     assert identities[("handle", KARI_LID)].entity == KARI_A
     # lid → number as entered → the number → Per: an alias of an alias, followed transitively
-    assert identities[("handle", PER_LID)] == resolve.Identity(PER_A, "person", "Per Hansen")
+    assert identities[("handle", PER_LID)] == resolve.Identity(PER_A, "person", "Per Hansen", tier=2)
     assert identities[("email", PER_EMAIL_SPELLED)].entity == PER_A
     after = _json(capsys, "people")
     people = {p["id"]: p for p in after["people"]}

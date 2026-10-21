@@ -54,6 +54,7 @@ OWNER, PERSON, UNNAMED, NOT_YET_NAMED = "owner", "person", "unnamed", "not yet n
 PERSON_TYPES = (None, "person")
 ASSERTED = 1.0  # RFC 0006: a confidence that is absent means asserted
 SHOWN_UNNAMED = "unnamed"
+NAMED_VOICE = "a named voice"  # a person's voice whose name was learned above the reader's tiers
 
 
 def ref_value(line_id: str, label: str) -> str:
@@ -108,6 +109,7 @@ class Heard:
     basis: str | None  # the line's; `channel` for a `from_me` voice no line binds; None not yet named
     consent: str | None  # the line's, absent read as `unknown`; None for the owner and not yet named
     confidence: float | None  # the line's; None when asserted or not yet named
+    withheld: bool = False  # a person's name learned above the reader's tiers: shown as NAMED_VOICE
 
     @property
     def label(self) -> str:
@@ -130,6 +132,8 @@ class Heard:
             return speakers.OWNER
         if self.state == PERSON and self.name:
             return self.name
+        if self.state == PERSON and self.withheld:
+            return NAMED_VOICE
         if self.state == UNNAMED:
             return SHOWN_UNNAMED
         return self.voice.name or self.voice.label
@@ -141,11 +145,13 @@ class Heard:
     def to_json(self) -> dict[str, Any]:
         """`{label, person, name, seconds, basis, consent, owner}` (§3.4, `day --json`): `person` the
         entity bound (the owner's for the owner), null for an unnamed voice and one not yet named;
-        `name` a person's label, the name the source displayed for a voice not yet named, else null."""
+        `name` a person's label (`a named voice` when it was learned above the reader's tiers), the
+        name the source displayed for a voice not yet named, else null."""
+        person = NAMED_VOICE if self.withheld else self.name
         return {
             "label": self.voice.label,
             "person": self.entity if self.state in (OWNER, PERSON) else None,
-            "name": self.name if self.state == PERSON else self.voice.name if not self.bound else None,
+            "name": person if self.state == PERSON else self.voice.name if not self.bound else None,
             "seconds": self.voice.seconds,
             "basis": self.basis,
             "consent": self.consent,
@@ -163,30 +169,47 @@ class Voices:
     """The voices of transcript lines joined to the identities of one reading. `owner_entities` are
     the owner's entity ids (`present.Owner.entities`), `owner_id` the record's own (`logbook.json`),
     which a `from_me` voice is bound to without a line. The labels of the people are taken once, on
-    the first line with voices."""
+    the first line with voices. `tiers` is the reading's gate: a person's name whose tier (`tiers`
+    of `labels`) is above it is held back, the voice shown as `a named voice`; None reads every tier."""
 
     def __init__(
         self,
         identities: Mapping[Ref, Identity],
         owner_entities: Collection[str] = (),
         owner_id: str | None = None,
+        tiers: Collection[int] | None = None,
     ) -> None:
         self.identities = identities
         self.owner_entities = frozenset(owner_entities) | ({owner_id} if owner_id else frozenset())
         self.owner_id = owner_id or next(iter(sorted(owner_entities)), None)
+        self.ceiling = max(tiers) if tiers else None  # a gate is 1, 1,2 or 1,2,3: its top is the rule
         self._labels: dict[str, str] | None = None
+        self._tiers: dict[str, int] = {}
 
     def labels(self) -> dict[str, str]:
         """entity → the first label a resolution gives it (a person's name as readers show it), taken
         once per `Voices`, on the first voice bound to a person: a reader that asks for many lines
-        keeps one `Voices`."""
+        keeps one `Voices`. The name's tier, the highest of the lines that give that label, is kept
+        beside it (`tier_of`)."""
         if self._labels is None:
             found: dict[str, str] = {}
             for who in self.identities.values():
                 if who.entity and who.label and who.type in PERSON_TYPES:
                     found.setdefault(who.entity, who.label)
+            for who in self.identities.values():
+                if who.entity in found and who.label == found[who.entity] and who.tier is not None:
+                    self._tiers[who.entity] = max(who.tier, self._tiers.get(who.entity, who.tier))
             self._labels = found
         return self._labels
+
+    def tier_of(self, entity: str) -> int | None:
+        """The tier of the name `labels` gives `entity`: the highest of the lines it was learned
+        from; None when no line that gives it says."""
+        self.labels()
+        return self._tiers.get(entity)
+
+    def _above(self, tier: int | None) -> bool:
+        return self.ceiling is not None and tier is not None and tier > self.ceiling
 
     def of(self, line: Line) -> list[Heard]:
         """The voices of one transcript line, in the line's order; none for a line without
@@ -207,7 +230,11 @@ class Voices:
                 return Heard(voice, ref, OWNER, who.entity, None, who.basis, who.consent, who.confidence)
             if who.unnamed:
                 return Heard(voice, ref, UNNAMED, who.entity, None, who.basis, consent, who.confidence)
-            name = self.labels().get(who.entity) or who.label
+            name = self.labels().get(who.entity)
+            tier = self.tier_of(who.entity) if name else who.tier
+            name = name or who.label
+            if name and self._above(tier):  # learned above the gate: the voice is someone's, not who
+                return Heard(voice, ref, PERSON, who.entity, None, who.basis, consent, who.confidence, True)
             return Heard(voice, ref, PERSON, who.entity, name, who.basis, consent, who.confidence)
         if voice.from_me:
             return Heard(voice, ref, OWNER, self.owner_id, None, "channel", None, None)

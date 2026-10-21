@@ -333,7 +333,9 @@ def companions(
     found = [
         c
         for stay in visited
-        for c in present.company(stay, evidence(stay), reading.identities, reading.places, reading.owner)
+        for c in present.company(
+            stay, evidence(stay), reading.identities, reading.places, reading.owner, reading.voice_gate
+        )
     ]
     confirmed = {_key(c) for c in found if c.status == present.CONFIRMED}
     merged: dict[tuple[str | None, str], present.Companion] = {}

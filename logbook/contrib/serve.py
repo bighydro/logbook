@@ -633,6 +633,7 @@ class Site:
         nav: str = NAV,
         footer: str | None = None,
         voice: Voice | None = None,
+        with_drafts: bool = True,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -643,6 +644,7 @@ class Site:
         self.nav = nav
         self.footer = footer
         self.voice = voice
+        self.with_drafts = with_drafts  # False: no model's draft (pencil) on the Day (`export site`)
         self._lock = threading.Lock()
         # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
@@ -1616,16 +1618,18 @@ class Site:
             parts.append(f'<dt id="with">with</dt><dd>{said}{field}</dd>\n')
         parts.append("</dl>\n")
         parts.append(f'<p class="tiers">{escape(TIERS_SAID)}</p>\n')
-        parts.append(self._week_html(day, expanded))
+        parts.append(self._week_html(day, expanded) if self.with_drafts else "")
         if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
             parts.append(_reflection_html(data["reflection"], tz))
-        if data.get("draft"):
+        if self.with_drafts and data.get("draft"):
             parts.append(_draft_html(data["draft"], star))
         parts.append(_owner_html(data, star, extras.raw))
-        if data.get("draft_withheld"):  # the policy no longer allows it: the row, never the text
+        # the policy no longer allows it: the row, never the text
+        if self.with_drafts and data.get("draft_withheld"):
             parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
         parts.append("<h2>Timeline</h2>\n")
-        syntheses = day_reader.syntheses_of(data)  # a call's synthesis, or the policy's row, under the call
+        # a call's synthesis, or the policy's row, under the call
+        syntheses = day_reader.syntheses_of(data) if self.with_drafts else {}
         if data["timeline"]:
             parts.append(_track_svg(data["timeline"]))
             parts.append('<ol class="timeline">\n')
@@ -1677,6 +1681,7 @@ class Site:
                     escape(_clock(s["newest"], tz)),
                 ]
                 for s in data["sources"]
+                if self.with_drafts or not str(s["source"]).startswith(drafts.SOURCE_PREFIX)
             ]
             parts.append(_table(["source", ("lines", "num"), "first", "last"], rows))
         else:

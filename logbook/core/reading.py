@@ -72,9 +72,17 @@ class Reading:
     owner: present.Owner = field(default_factory=lambda: present.Owner(frozenset(), frozenset(), frozenset()))
     retracted: dict[str, Line] = field(default_factory=dict)
     tiers: tuple[int, ...] | None = None  # the gate the reading was read through; None is every tier
+    # the gate a voice's name is held to (RFC 0038 §3.4) when it is not `tiers`: an export that reads
+    # the record whole and gates line by line (the vault, a trip bundle) sets it to the tiers it sends
+    voice_tiers: tuple[int, ...] | None = None
     # the night after the last day when it is not the last day's own (a day that begins at or after the
     # night's start, RFC 0036): not one of `nights`, which are the window's days', and empty at midnight
     nights_after: list[stays.Night] = field(default_factory=list)
+
+    @property
+    def voice_gate(self) -> tuple[int, ...] | None:
+        """The tiers a voice's name is shown through: `voice_tiers` when set, else the reading's gate."""
+        return self.tiers if self.voice_tiers is None else self.voice_tiers
 
     @property
     def owner_stays(self) -> list[stays.Segment]:
@@ -106,8 +114,9 @@ class Reading:
     @functools.cached_property
     def voices(self) -> attribution.Voices:
         """The transcripts' voices joined to who they are (RFC 0038 §3.4), one join for the reading:
-        a Day asks per transcript, and the people's labels are taken once."""
-        return attribution.Voices(self.identities, self.owner.entities, self.owner.id)
+        a Day asks per transcript, and the people's labels are taken once. Through the reading's gate:
+        a name learned above it is `a named voice`."""
+        return attribution.Voices(self.identities, self.owner.entities, self.owner.id, self.voice_gate)
 
     @functools.cached_property
     def by_kind(self) -> Mapping[str, tuple[Line, ...]]:
