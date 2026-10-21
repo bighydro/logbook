@@ -29,7 +29,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from logbook import cli
-from logbook.contrib import demo, serve
+from logbook.contrib import demo, serve, week_paper
 from logbook.core import keepers, rollup
 from logbook.core.index import local_date
 from logbook.core.keepers import LANES
@@ -491,6 +491,9 @@ def windowed_readers(
         ["review", "speakers", "--named", "--day", day, "--json"],
         ["people", "nearby", "--days", since, until],
         ["people", "nearby", "--days", since, until, "--json"],
+        ["review", "with", "--from", day, "--to", day],  # RFC 0043 §11: one day, inside the 60 a queue takes
+        ["review", "with", "--week", week_paper.week_of(day), "--json"],
+        ["people", "city", "Oslo", "--json"],
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
         ["doctor"],

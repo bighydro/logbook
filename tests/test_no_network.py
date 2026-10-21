@@ -150,6 +150,10 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "nearby", "Marina"),
     ("people", "nearby", "Cabin"),
     ("people", "nearby", "--days", "2026-06-08", "2026-06-10"),
+    ("people", "city", "Bergen"),  # RFC 0043 §12: your people in a city, from the lives-in notes
+    ("people", "city", "Oslo", "--journey", "2026-06-09", "--json"),
+    ("review", "with", "--week", "2026-W24"),  # RFC 0043 §11: the review-with queue, nothing written
+    ("review", "with", "--journey", "2026-06-09", "--json"),
     ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
     ("review", "speakers", "--json"),
     ("show", "ideas", "--json"),
