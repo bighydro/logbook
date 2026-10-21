@@ -11,7 +11,9 @@ record folder (`REPORTS`), replaced on every run:
   changed for `UNTOUCHED_DAYS` days.
 - **senders**: the record's own `mail/v1` lines (RFC 0015). Every address that wrote to the owner, by
   count and by last seen, whether the owner ever wrote back, and whether its mail says it is a
-  newsletter (a `List-Unsubscribe` header, when the line holds one).
+  newsletter (a `List-Unsubscribe` header, when the line holds one); per sender, how many of its mails
+  carry `extra.list.unsubscribe` and how many sit in Gmail's Promotions, Social or Updates tab
+  (`extra.gmail_category`; RFC 0015, amendment of 2026-10-20: lines written before it hold neither).
 - **drive**: the record's own Drive lines (`event/v1` of source `drive`): every file they name, by
   type, folder and last activity, the ones untouched for `UNTOUCHED_DAYS` days, the shared and the
   trashed.
@@ -152,6 +154,7 @@ NO_SENT = (
     " logbook.json to your addresses before the mail is imported (RFC 0015 `direction`)"
 )
 UNSUBSCRIBE_KEYS = ("list_unsubscribe", "list-unsubscribe")  # where a mail line may hold the header
+TABS = ("promotions", "social", "updates")  # the Gmail tabs counted per sender (`extra.gmail_category`)
 
 
 Identity = tuple[int, int]  # (device, inode), either 0 where the system does not say
@@ -612,9 +615,27 @@ def _addresses(payload: Mapping[str, Any]) -> Iterator[str]:
                 yield email
 
 
+def _listed(payload: Mapping[str, Any]) -> bool:
+    """Whether the line says its message had a List-Unsubscribe header (`extra.list.unsubscribe`, RFC
+    0015, amendment of 2026-10-20)."""
+    extra = payload.get("extra")
+    found = extra.get("list") if isinstance(extra, Mapping) else None
+    return isinstance(found, Mapping) and found.get("unsubscribe") is True
+
+
+def _tab(payload: Mapping[str, Any]) -> str | None:
+    """Gmail's inbox tab the line names (`extra.gmail_category`), when it is one of `TABS`."""
+    extra = payload.get("extra")
+    tab = extra.get("gmail_category") if isinstance(extra, Mapping) else None
+    return tab if tab in TABS else None
+
+
 def _unsubscribe(payload: Mapping[str, Any]) -> bool | None:
     """Whether the line holds a List-Unsubscribe header: True when it does, None when it cannot say
-    (mail/v1 keeps no such field; a producer may keep it under `extra`, or a `headers` object)."""
+    (`extra.list.unsubscribe` on a line written since RFC 0015's amendment of 2026-10-20; before it a
+    producer may have kept the header under `extra`, or a `headers` object)."""
+    if _listed(payload):
+        return True
     extra = payload.get("extra")
     places = [payload, extra if isinstance(extra, Mapping) else {}]
     for place in list(places):
@@ -637,12 +658,15 @@ class _Sender:
     names: Counter[str] = field(default_factory=Counter)
     threads: set[str] = field(default_factory=set)
     newsletter: bool = False
+    listed: int = 0  # mails with `extra.list.unsubscribe`
+    tabs: Counter[str] = field(default_factory=Counter)  # mails per Gmail tab of `TABS`
 
 
 def census_senders(lb: Logbook, max_tier: int = MAX_TIER, now: datetime | None = None) -> dict[str, Any]:
     """The senders report: every address the owner's received mail came from, by count and last seen,
     whether the owner ever wrote to it (a sent line with it under `to`, `cc` or `bcc`) or answered in
-    one of its threads, and whether its lines hold a List-Unsubscribe header."""
+    one of its threads, whether its lines hold a List-Unsubscribe header, and how many of its mails carry
+    `extra.list.unsubscribe` and sit in each of the `TABS`."""
     now = now or datetime.now(UTC)
     read = _Read()
     senders: dict[str, _Sender] = defaultdict(_Sender)
@@ -681,6 +705,10 @@ def census_senders(lb: Logbook, max_tier: int = MAX_TIER, now: datetime | None =
         if _unsubscribe(payload):
             sender.newsletter = True
             holding += 1
+        if _listed(payload):
+            sender.listed += 1
+        if (tab := _tab(payload)) is not None:
+            sender.tabs[tab] += 1
     rows: list[dict[str, Any]] = [
         {
             "email": email,
@@ -695,6 +723,8 @@ def census_senders(lb: Logbook, max_tier: int = MAX_TIER, now: datetime | None =
             "last_written": _stamp(w) if (w := written.get(email)) else None,
             "answered": email in written or bool(s.threads & sent_threads),
             "newsletter": True if s.newsletter else None,
+            "list_unsubscribe": s.listed,
+            "tabs": {tab: s.tabs[tab] for tab in TABS},
         }
         for email, s in senders.items()
     ]
@@ -721,7 +751,12 @@ def census_senders(lb: Logbook, max_tier: int = MAX_TIER, now: datetime | None =
             "senders": len(letters),
             "note": None
             if holding
-            else "no mail line holds a List-Unsubscribe header (mail/v1 keeps none); newsletters are unknown",
+            else "no mail line holds a List-Unsubscribe header (none written before 20 October 2026 does);"
+            " newsletters are unknown",
+        },
+        "lists_and_tabs": {
+            "list_unsubscribe": sum(row["list_unsubscribe"] for row in rows),
+            **{tab: sum(row["tabs"][tab] for row in rows) for tab in TABS},
         },
         "senders": rows,
         "left_out": dict(sorted(read.left_out.items())),
@@ -1042,10 +1077,29 @@ def _senders_md(r: Mapping[str, Any]) -> list[str]:
         "",
         *(table(letters) if n["held"] else [n["note"]]),
         "",
+        "## Lists and tabs",
+        "",
+        *_lists_and_tabs(rows),
+        "",
         "## Left out",
         "",
         *_table(("what", "count"), sorted(r["left_out"].items())),
     ]
+
+
+def _lists_and_tabs(rows: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Per sender with any: its mails with List-Unsubscribe and in each counted tab, most first."""
+    found = [x for x in rows if x["list_unsubscribe"] or any(x["tabs"].values())]
+    if not found:
+        return [
+            "No mail line says it came from a list or sits in Promotions, Social or Updates"
+            " (lines written before 20 October 2026 say neither)."
+        ]
+    found = sorted(found, key=lambda x: (-x["list_unsubscribe"] - sum(x["tabs"].values()), x["email"]))
+    return _table(
+        ("sender", "List-Unsubscribe", "Promotions", "Social", "Updates"),
+        ((x["email"], x["list_unsubscribe"], *(x["tabs"][tab] for tab in TABS)) for x in found[:TOP]),
+    ) + _more(found)
 
 
 def _drive_md(r: Mapping[str, Any]) -> list[str]:
@@ -1155,6 +1209,7 @@ def summary(report: Mapping[str, Any], written: Sequence[Path]) -> dict[str, Any
         out["changed"] = dict(report["changed"])
     elif census == "senders":
         out["newsletters"] = {k: report["newsletters"][k] for k in ("held", "lines_with_header", "senders")}
+        out["lists_and_tabs"] = dict(report["lists_and_tabs"])
         out["answered_note"] = report["answered_note"]
         out["left_out"] = dict(report["left_out"])
     else:
@@ -1184,6 +1239,11 @@ def summary_rows(s: Mapping[str, Any]) -> list[str]:
                 if s["newsletters"]["held"]
                 else "unknown (no line holds the header)"
             )
+        )
+        lt = s["lists_and_tabs"]
+        first += (
+            f"; {lt['list_unsubscribe']:,} mails with List-Unsubscribe,"
+            f" {sum(lt[tab] for tab in TABS):,} in Promotions, Social or Updates"
         )
         rest = [f"note: {s['answered_note']}"] if s.get("answered_note") else []
     else:

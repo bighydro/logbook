@@ -42,7 +42,10 @@ Gmail's labels and thread id (the `X-GM-EXT-1` extension: `X-GM-LABELS`, `X-GM-T
 with the body and written as the mbox adapter writes Takeout's `X-Gmail-Labels` and `X-GM-THRID`:
 `payload.labels` (system labels spelled as Takeout spells them, `Inbox`, `Sent`) and
 `extra.gmail_thread_id`. They are the state of the mailbox at ingest, taken once; a label moved
-later is never revisited. Without the extension the line carries neither.
+later is never revisited. Without the extension the line carries neither. X-GM-LABELS does not carry
+Gmail's inbox tabs, so a line from here has no `extra.gmail_category` (`mail.gmail_fields` drops one a
+Takeout header in the bytes would give); the list headers (`extra.list`) are the parser's, as on every
+road.
 
 Errors are one plain sentence each, naming the variable or the folder and never a value: the login
 refused (`LOGBOOK_IMAP_USER`, `LOGBOOK_IMAP_PASSWORD`), TLS failed (`LOGBOOK_IMAP_HOST`), a folder
