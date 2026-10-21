@@ -102,8 +102,8 @@ def test_setup_places_class_with_yes_writes_and_refuses_what_is_not_a_place_or_a
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     said, code = _run("setup", "places", "class", "Home", "away", "--yes")
     assert code == 0 and places.classes(lb.root) == {"Home": "away"}
-    said, code = _run("setup", "places", "class", "Drøbak", "away", "--yes")
-    assert code == 2 and "Drøbak" in said and "not a place" in said
+    said, code = _run("setup", "places", "class", "Nowhere Quay", "away", "--yes")
+    assert code == 2 and "Nowhere Quay" in said and "not a place" in said
     said, code = _run("setup", "places", "class", "Home", "cottage", "--yes")
     assert code == 2  # argparse refuses a class outside the four
     assert places.classes(lb.root) == {"Home": "away"}
