@@ -167,6 +167,7 @@ from . import (
     person_page,
     places_review,
     reflect,
+    search_page,
     shelf_agents,
     shelf_goals,
     shelf_promises,
@@ -192,6 +193,7 @@ RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
     | {"/ideas"}
     | {"/promises", "/goals", "/agents"}  # the shelves' lists
+    | {"/search"}  # the record's words (`search_page`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -502,6 +504,7 @@ dl.header dd{overflow-wrap:anywhere}
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
+    '<a href="/search">search</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
     '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
     '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
@@ -1413,6 +1416,8 @@ class Site:
             return shelf_goals.page_goal(self, unquote(m.group(1)))
         if path == "/agents":
             return shelf_agents.page_agents(self, params.get("page") or "1", params.get("day") or None)
+        if path == "/search":
+            return search_page.page_search(self, params)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":

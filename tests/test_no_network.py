@@ -300,6 +300,9 @@ PAGES = (
     "/world?from=2026-06-15&to=2026-06-20",
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
     LINE,
+    "/search",
+    "/search?q=kari",
+    "/search?q=kari&kind=note&year=2026",
 )
 
 

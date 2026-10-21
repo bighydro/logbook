@@ -133,6 +133,50 @@ A Python whose SQLite was built without FTS5 (every official build has it; a dis
 not) builds an index with no search table and `logbook search` says so and exits 1; every other
 reader is unaffected.
 
+## In the Library
+
+`logbook serve` has the same search at `/search` (`logbook/contrib/search_page.py`), under
+**search** in the navigation: a form with one field, the words as you would type them after
+`logbook search`, sent as a GET. It calls the two functions the command calls (`search.query`,
+`search.search`), so the words, the phrases, the prefixes, the ranking and the retracted lines are
+the command's own.
+
+```
+/search?q=kari                          every line with the word
+/search?q=kari&kind=note                notes only (trip and journey are one kind, as with --kinds)
+/search?q=kari&year=2026                lines of 2026 only, by local day
+/search?q=harbour&kind=note&page=2      the next fifty
+```
+
+- **The tier is the page's.** The hits are held to the Library's tier gate as every other page
+  holds its lines: `logbook serve` reads every tier on this machine, as its Day and `/line/ID` do,
+  so a search there finds tier 3 too; a gated page (`export site`'s, a test's `Site(tiers=…)`) finds
+  only what its gate lets through, and a hit above it is not on the page, not in a count and not
+  in a filter. The header says the highest tier among the hits it read.
+- **A hit** is one row under its day, the date a link to the Day: its local time, a link to its own
+  row on that Day; its kind; an excerpt of up to sixteen words around the match, each matching word
+  marked (the command's `[brackets]`, drawn); and its line's id, a link to `/line/ID`, the line as
+  the record holds it.
+- **The filters are links**: each kind and each year the words are found in, with the hits the
+  gate lets through for it, the filter in force in bold and *every* to take it off. A kind or a year
+  with no hit is not offered. Nothing about a filter is kept in the browser: the address is the
+  whole search, so it can be bookmarked, reloaded and sent back to.
+- **The pages are links** of fifty hits. The rank decides which page a hit is on, the day where it
+  is read on that page, as the command does with `--limit`. Page 20 is the last (a thousand hits);
+  past that, a kind or a year narrows the search.
+- An empty query is the form and nothing else. A query that finds nothing says so in one sentence.
+
+The page is the Library's: one document with the Day's tokens and type, no script, nothing fetched,
+no reference but the server's own paths, nothing written, and phone width first, every link and
+control a 44 px target. No person is a filter and no number stands beside a name. An exported site
+(`logbook export site`) has no server to answer a form, and has no search.
+
+A page of hits is kept by its tag like every page of the record (`Site.etag`): asked again at the
+same head, it is not searched again. The counts of the filters are one grouped query over the same
+table, read once per query and head. On the five-million-line synthetic record of
+`scripts/bench_library.py`, see the pull request that added the page for the cold and warm numbers;
+the cost is the matches of the words, never the size of the record, as for the command.
+
 ## What it is not
 
 Not a question answered: it finds the lines that say the words, and ranks them; it does not read
