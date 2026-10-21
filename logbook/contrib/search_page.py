@@ -13,16 +13,16 @@ it), with its kind, an excerpt of up to sixteen words around the match with ever
 `<mark>` (the snippet `search` prints in brackets), and its line's id, a link to `/line/ID`. The rank
 decides which page a hit is on; on its page the hits are read by day, the latest first, as the
 command prints them. A page holds `PAGE` hits; the pages, and the filters by kind and by year, are
-links, never state in the browser: `?q=&kind=&year=&page=`. The filters count the hits the gate lets
-through (one grouped query over the same table, `_facets`), and a kind or a year with none is not
-offered. An empty query is the form and nothing else; a query that finds nothing says so in one
-sentence.
+links, never state in the browser: `?q=&kind=&year=&page=`. The filters are every kind with words
+and every year the record runs over, never counted: a count would cost the matches of the words a
+second time, and would say how many lines a gate holds back. An empty query is the form and nothing
+else; a query, or a filter, that finds nothing says so in one sentence.
 
 A GET form only: nothing is written, no script, nothing fetched, no reference but the server's own
 paths; the page carries the Day's tokens and type (`TOKENS`, copied from `serve.STYLE`, which a test
 holds equal) and the server's one stylesheet, phone width first, every link and control a 44 px
-target. No person is a filter and no number stands beside a name: the page counts kinds, years and
-hits. Superseded lines are hits as `show` prints both (`docs/search.md`); their mark is not on main
+target. No person is a filter and no number stands beside a name: the page counts nothing but its pages.
+Superseded lines are hits as `show` prints both (`docs/search.md`); their mark is not on main
 yet, and `_superseded` is where it goes. An exported site (`export site`) has no server to ask, and
 its search is one sentence."""
 
@@ -38,7 +38,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import reading, search
 from ..core.chain import Line
-from ..core.index import RETRACTED, SEARCH, Index
+from ..core.index import Index
 
 if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never the other way at import
     from .serve import Site
@@ -77,15 +77,15 @@ li.hit .superseded{color:var(--mute);font-size:.85rem}
 @media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
 """
 )
-NOTHING = "Nothing in the record matches {text}."  # a query with no hit: one sentence
+NOTHING = "Nothing in the record matches {text}{among}."  # a query with no hit: one sentence
 PAST = "Page {page} is past the last hit."  # a page asked for beyond them
 NO_SERVER = "Search answers in logbook serve, on this machine; an exported site has no server to ask."
 
 
 def page_search(site: Site, params: Mapping[str, str]) -> str:
     """`/search?q=&kind=&year=&page=`: the form, then the hits of page `page` (1 to `MAX_PAGE`) held
-    to the gate, the filters by kind and year as links with their counts, and the pages as links.
-    `ValueError` (a 400) for a kind with no words, a year that is not one, a page that is not one."""
+    to the gate, the filters by kind and year as links, and the pages as links. `ValueError` (a 400)
+    for a kind with no words, a year that is not one, a page that is not one."""
     if site.static:
         return site.document("search", f"<h1>Search</h1>\n<p>{escape(NO_SERVER)}</p>\n")
     text = params.get("q") or ""
@@ -108,29 +108,26 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
     try:
         with site.lb.index() as idx:
             result = search.search(idx, q)
-            facets = site.shared(
-                ("search", q.expression, _gate(site.tiers)), lambda: _facets(idx, q, site.tiers)
-            )
+            years = _years(idx)
     except RuntimeError as e:  # a SQLite without FTS5: the index holds no search table
         parts.append(f"<p>{escape(str(e))}.</p>\n")
         return _document(site, parts)
-    held = reading.crossing([hit.line for hit in result.hits], site.tiers)
-    kept = {id(line) for line in held}
-    hits = [hit for hit in result.hits if id(hit.line) in kept]
+    held = {id(line) for line in reading.crossing([hit.line for hit in result.hits], site.tiers)}
+    hits = [hit for hit in result.hits if id(hit.line) in held]
     shown = hits[PAGE * (page - 1) : PAGE * page]
-    total = _total(facets, kind, year)
+    if shown or kind is not None or year is not None:  # a filter that found nothing can be taken off
+        parts.append(_filters(text, kind, year, years))
     if not shown:
-        said = NOTHING.format(text=text) if not hits else PAST.format(page=page)
+        said = NOTHING.format(text=text, among=_among(kind, year)) if not hits else PAST.format(page=page)
         parts.append(f"<p>{escape(said)}</p>\n")
         return _document(site, parts)
-    top = max(int(hit.line.get("tier") or 0) for hit in hits)
-    parts[0] = f"<h1>Search {site.tier_small(_plural(total, 'hit'), top)}</h1>\n"
-    parts.append(_facets_html(text, kind, year, facets))
+    top = max(int(hit.line.get("tier") or 0) for hit in shown)
+    parts[0] = f"<h1>Search {site.tier_small(f'page {page}{DOT}the best by rank', top)}</h1>\n"
     superseded = _superseded(shown)
     tz = ZoneInfo(str(site.lb.meta["timezone"]))
     for day, on_day in search.Result(q, shown).days():
         parts.append(_day_html(site, day, on_day, superseded, tz))
-    parts.append(_pager(text, kind, year, page, more=total > PAGE * page))
+    parts.append(_pager(text, kind, year, page, more=result.full))
     return _document(site, parts)
 
 
@@ -151,10 +148,6 @@ def _max_tier(tiers: Sequence[int] | None) -> int:
     return 3 if tiers is None else max((int(t) for t in tiers), default=0) or 1
 
 
-def _gate(tiers: Sequence[int] | None) -> tuple[int, ...]:
-    return (1, 2, 3) if tiers is None else tuple(sorted({int(t) for t in tiers}))
-
-
 def _form(text: str) -> str:
     return (
         '<form class="search" method="get" action="/search">'
@@ -167,35 +160,15 @@ def _form(text: str) -> str:
 # -- the filters -----------------------------------------------------------------------------------------
 
 
-Facets = dict[tuple[str, str], int]  # (kind, year) → the hits the gate lets through
-
-
-def _facets(idx: Index, q: search.Query, tiers: Sequence[int] | None) -> Facets:
-    """The hits of `q`'s words in the whole record by kind and year, through the gate: one grouped
-    query over the search table, no rank and no snippet, a retracted line left out as `Index.search`
-    leaves it out. A kind of two spellings is counted under its newer one (`_folded`)."""
-    gate = _gate(tiers)
-    found = idx.db.execute(
-        f"SELECT {SEARCH}.kind, substr({SEARCH}.day, 1, 4), count(*) FROM {SEARCH}"
-        f" JOIN lines l ON l.seq = {SEARCH}.rowid"
-        f" WHERE {SEARCH} MATCH ? AND {SEARCH}.tier IN ({', '.join('?' * len(gate))})"
-        f" AND l.id NOT IN ({RETRACTED}) GROUP BY 1, 2",
-        (q.expression, *gate),
-    ).fetchall()
-    counted: Facets = {}
-    for kind, year, n in found:
-        key = (_folded(str(kind)), str(year))
-        counted[key] = counted.get(key, 0) + int(n)
-    return counted
-
-
-def _total(facets: Facets, kind: str | None, year: str | None) -> int:
-    """The hits the gate lets through for the filters in force: what the header counts and the pager
-    reads."""
-    asked = None if kind is None else _folded(kind)
-    return sum(
-        n for (k, y), n in facets.items() if (asked is None or k == asked) and (year is None or y == year)
-    )
+def _years(idx: Index) -> list[str]:
+    """The years the record's local days run over, the latest first: the first and the last
+    `day_local`, each one lookup in its index (a single min or max; `Index.span`, both in one
+    statement, reads every row, half a second on five million lines)."""
+    first = idx.db.execute("SELECT min(day_local) FROM lines").fetchone()[0]
+    last = idx.db.execute("SELECT max(day_local) FROM lines").fetchone()[0]
+    if first is None or last is None:
+        return []
+    return [str(y) for y in range(int(str(last)[:4]), int(str(first)[:4]) - 1, -1)]
 
 
 def _href(text: str, kind: str | None, year: str | None, page: int = 1) -> str:
@@ -209,37 +182,37 @@ def _href(text: str, kind: str | None, year: str | None, page: int = 1) -> str:
     return "/search?" + urlencode(params)
 
 
-def _facets_html(text: str, kind: str | None, year: str | None, facets: Facets) -> str:
-    """The filters as links: each kind the words are found in (the most hits first), counted in the
-    year asked for, and each year (the latest first), counted in the kind asked for; the filter in
-    force in bold, and `every` a link that takes it off."""
+def _filters(text: str, kind: str | None, year: str | None, years: Sequence[str]) -> str:
+    """The filters as links, never counted: every kind with words (`search.KINDS`, a kind of two
+    spellings under its newer one) and every year the record runs over; the filter in force in
+    bold, and `every` a link that takes it off. A count would cost the matches of the words a second
+    time (the search table's kind and day are read per match), and a filter that finds nothing says
+    so in its sentence."""
     asked = None if kind is None else _folded(kind)
-    by_kind: dict[str, int] = {}
-    by_year: dict[str, int] = {}
-    for (k, y), n in facets.items():
-        if year is None or y == year:
-            by_kind[k] = by_kind.get(k, 0) + n
-        if asked is None or k == asked:
-            by_year[y] = by_year.get(y, 0) + n
-    kinds = [(k, by_kind[k], _href(text, k, year)) for k in sorted(by_kind, key=lambda k: (-by_kind[k], k))]
-    years = [(y, by_year[y], _href(text, kind, y)) for y in sorted(by_year, reverse=True)]
-    return (
-        f'<p class="facets">kind: {_choices(asked, kinds, _href(text, None, year))}</p>\n'
-        f'<p class="facets">year: {_choices(year, years, _href(text, kind, None))}</p>\n'
-    )
+    kinds = [k for k in search.KINDS if _folded(k) == k]
+    by_kind = _choices(asked, [(k, _href(text, k, year)) for k in kinds], _href(text, None, year))
+    by_year = _choices(year, [(y, _href(text, kind, y)) for y in years], _href(text, kind, None))
+    return f'<p class="facets">kind: {by_kind}</p>\n<p class="facets">year: {by_year}</p>\n'
 
 
-def _choices(asked: str | None, choices: Sequence[tuple[str, int, str]], every: str) -> str:
+def _choices(asked: str | None, choices: Sequence[tuple[str, str]], every: str) -> str:
     out = ["<b>every</b>" if asked is None else _link("every", every)]
-    for value, n, href in choices:
-        label = f'{escape(value)} <span class="n">{n:,}</span>'
-        out.append(f"<b>{label}</b>" if value == asked else _link(label, href))
+    out += [
+        f"<b>{escape(value)}</b>" if value == asked else _link(escape(value), href) for value, href in choices
+    ]
     return " ".join(out)
 
 
 def _folded(kind: str) -> str:
-    """A kind of two spellings (RFC 0031) under its newer one: `trip` is counted as `journey`."""
+    """A kind of two spellings (RFC 0031) under its newer one: `trip` is offered as `journey`."""
     return search.ALIASES.get(kind, (kind,))[-1]
+
+
+def _among(kind: str | None, year: str | None) -> str:
+    said = [f"as a {kind}"] if kind is not None else []
+    if year is not None:
+        said.append(f"in {year}")
+    return "" if not said else " " + " ".join(said)
 
 
 def _link(label: str, href: str) -> str:
@@ -310,7 +283,3 @@ def _pager(text: str, kind: str | None, year: str | None, page: int, more: bool)
     if more and page < MAX_PAGE:
         links.append(_link(f"page {page + 1} →", _href(text, kind, year, page + 1)))
     return f'<p class="pager">{DOT.join(links)}</p>\n'
-
-
-def _plural(n: int, noun: str) -> str:
-    return f"{n:,} {noun}" if n == 1 else f"{n:,} {noun}s"

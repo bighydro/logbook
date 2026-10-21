@@ -99,7 +99,7 @@ def test_a_hit_at_the_gate_shows_and_one_above_it_is_absent(lb: Logbook) -> None
     page = _get(gated, "/search", "q=kari")
     assert len(_hits(page)) == 2  # the note at 2 and the calendar entry at 1
     assert "Dinner with" in page and "Sailing Solvind" in page
-    assert "Receipt" not in page and "pharmacy" not in page and "mail" not in page_text.seen(page).split()
+    assert "Receipt" not in page and "pharmacy" not in page and '<span class="kind">mail</span>' not in page
     assert "nothing read above tier 2" in page
     # the Library reads every tier on this machine, as every other page of `logbook serve` does
     every = _get(serve.Site(lb), "/search", "q=kari")
@@ -139,7 +139,7 @@ def test_paging_is_links_of_fifty(lb: Logbook) -> None:
     site = serve.Site(lb)
     first = _get(site, "/search", "q=harbour")
     assert len(_hits(first)) == search_page.PAGE == 50
-    assert f"{HARBOUR} hits" in page_text.seen(first)
+    assert "page 1" in page_text.seen(first)
     assert 'href="/search?q=harbour&amp;page=2"' in first and "page=0" not in first
     second = _get(site, "/search", "q=harbour&page=2")
     assert len(_hits(second)) == 50
@@ -171,9 +171,13 @@ def test_filters_are_links_of_kind_and_year(lb: Logbook) -> None:
     assert site.respond("/search", "q=kari&year=26").status == 400
 
 
-def test_the_facets_count_only_what_the_gate_lets_through(lb: Logbook) -> None:
-    page = _get(serve.Site(lb, tiers=(1, 2)), "/search", "q=kari")
-    assert "kind=mail" not in page  # the mail is tier 3: no filter says it is there
+def test_a_filter_never_says_what_the_gate_holds_back(lb: Logbook) -> None:
+    gated = serve.Site(lb, tiers=(1, 2))
+    page = _get(gated, "/search", "q=kari")
+    assert 'href="/search?q=kari&amp;kind=mail"' in page  # every kind is offered, none counted
+    held = _get(gated, "/search", "q=kari&kind=mail")
+    assert _hits(held) == [] and "Nothing in the record matches kari as a mail." in page_text.seen(held)
+    assert "Receipt" not in held
 
 
 def test_an_empty_query_is_the_form_alone(lb: Logbook) -> None:

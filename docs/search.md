@@ -157,10 +157,11 @@ the command's own.
   row on that Day; its kind; an excerpt of up to sixteen words around the match, each matching word
   marked (the command's `[brackets]`, drawn); and its line's id, a link to `/line/ID`, the line as
   the record holds it.
-- **The filters are links**: each kind and each year the words are found in, with the hits the
-  gate lets through for it, the filter in force in bold and *every* to take it off. A kind or a year
-  with no hit is not offered. Nothing about a filter is kept in the browser: the address is the
-  whole search, so it can be bookmarked, reloaded and sent back to.
+- **The filters are links**: every kind with words and every year the record runs over, the
+  filter in force in bold and *every* to take it off. They are never counted: a count would cost
+  the matches of the words a second time, and would say how many lines a gate holds back. A filter
+  that finds nothing says so in its sentence. Nothing about a filter is kept in the browser: the
+  address is the whole search, so it can be bookmarked, reloaded and sent back to.
 - **The pages are links** of fifty hits. The rank decides which page a hit is on, the day where it
   is read on that page, as the command does with `--limit`. Page 20 is the last (a thousand hits);
   past that, a kind or a year narrows the search.
@@ -172,10 +173,15 @@ control a 44 px target. No person is a filter and no number stands beside a name
 (`logbook export site`) has no server to answer a form, and has no search.
 
 A page of hits is kept by its tag like every page of the record (`Site.etag`): asked again at the
-same head, it is not searched again. The counts of the filters are one grouped query over the same
-table, read once per query and head. On the five-million-line synthetic record of
-`scripts/bench_library.py`, see the pull request that added the page for the cold and warm numbers;
-the cost is the matches of the words, never the size of the record, as for the command.
+same head, it is not searched again (a millisecond). Otherwise the cost is the command's: the
+matches of the words, never the size of the record. On the five-million-line synthetic record of
+`scripts/bench_library.py` (ten years, 4 vCPUs), a fresh query in a running server answers in
+0.06 to 0.8 s — a name (`kari`, 205,000 lines) 0.47 s, a word (`fjord`) 0.41 s, a phrase
+(`"running late"`, 346,000 lines) 0.73 s, a name and a word together 0.06 s, page 5 of `fjord`
+0.40 s — and `kari` from a cold disk, the first request after a restart with nothing in the
+operating system's cache, 1.5 s. A word in most lines costs its matches, every one ranked: the
+persona's surname, in 2.2 million of the five million, takes 4 s, as `logbook search` does.
+Narrow with a second word, a kind or a year.
 
 ## What it is not
 

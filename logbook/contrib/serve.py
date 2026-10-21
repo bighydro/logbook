@@ -1527,6 +1527,7 @@ class Site:
             f"<li>{self.link('Goals', '/goals')}: the goals you wrote, by horizon, and the chapter today is"
             " in.</li>\n"
             f"<li>{self.link('Agents', '/agents')}: the sessions with an agent, day by day.</li>\n"
+            f"<li>{self.link('Search', '/search')}: the record's words, as logbook search finds them.</li>\n"
         )
         parts.append(
             '<ul class="plain">\n'
