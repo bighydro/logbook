@@ -1,0 +1,24 @@
+{
+    "injected_packages": {},
+    "main_package": {
+        "apps": [
+            "logbook"
+        ],
+        "include_apps": true,
+        "include_dependencies": false,
+        "package": "openlogbook",
+        "package_or_url": "openlogbook[mcp]",
+        "package_version": "0.7.0",
+        "pinned": false,
+        "pip_args": [
+            "--no-index",
+            "--find-links",
+            "/home/ines/src/dist",
+            "--force-reinstall"
+        ],
+        "suffix": "-ola"
+    },
+    "pipx_metadata_version": "0.5",
+    "python_version": "Python 3.12.3",
+    "venv_args": []
+}

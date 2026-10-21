@@ -13,9 +13,9 @@ from logbook import cli
 from logbook.commands import parser
 
 TOP_LEVEL = 32
-# it prints 49: 40 until RFC 0036, 42 until `transcript`, 43 until `review` and `status`, 45 until
-# `star`, `unstar` and `with`, 48 until `videos`
-MAX_LINES = 50
+# it prints 50: 40 until RFC 0036, 42 until `transcript`, 43 until `review` and `status`, 45 until
+# `star`, `unstar` and `with`, 48 until `videos`, 49 until the line for a newcomer (#334)
+MAX_LINES = 51
 MAX_WIDTH = 80
 
 
@@ -53,7 +53,7 @@ def test_help_lists_every_command_once_under_its_group_and_no_paragraph() -> Non
     listed = re.findall(r"^  ([a-z][a-z-]*)\s{2,}\S", text, re.M)
     assert listed == [name for _, names in parser.GROUPS for name in names]
     headers = [line for line in text.split("\n") if line and not line.startswith((" ", "usage:", "options:"))]
-    assert headers == [parser.DESCRIPTION, *(header for header, _ in parser.GROUPS)]
+    assert headers == [parser.DESCRIPTION, parser.NEW, *(header for header, _ in parser.GROUPS)]
     body = text.split("\noptions:")[0]
     assert "\n\n\n" not in body and all(len(line) < MAX_WIDTH * 2 for line in body.split("\n"))
 
@@ -80,3 +80,24 @@ def test_the_relationship_reader_says_its_entry_and_its_model() -> None:
             cli.main(argv)
         text = " ".join(out.getvalue().split())
         assert said in text and "no model wired yet" not in text, argv
+
+
+def test_a_newcomer_is_told_where_to_start_near_the_top() -> None:
+    """#334: `--help` assumed the product's vocabulary and said nothing of where to begin."""
+    lines = _help().split("\n")
+    assert parser.NEW in lines[:6]
+    assert "`logbook demo`" in parser.NEW and "`logbook setup`" in parser.NEW
+
+
+def test_dream_names_every_kind_it_drafts() -> None:
+    (line,) = [line for line in _help().split("\n") if line.startswith("  dream ")]
+    assert all(kind in line for kind in ("day", "journey", "week", "person")), line
+
+
+def test_init_help_describes_its_path_and_timezone() -> None:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.suppress(SystemExit):
+        cli.main(["init", "--help"])
+    text = " ".join(out.getvalue().split())
+    assert "LOGBOOK_HOME" in text and "~/Logbook" in text, "where the record goes with no path"
+    assert "--timezone ZONE" in text and "Europe/Oslo" in text

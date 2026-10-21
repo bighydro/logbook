@@ -1,0 +1,6 @@
+[tool]
+requirements = [{ name = "openlogbook", path = "/home/ines/src/dist/openlogbook-0.7.0-py3-none-any.whl" }]
+python = "3.12"
+entrypoints = [
+    { name = "logbook", install-path = "/home/ines/.local/bin/logbook", from = "openlogbook" },
+]

@@ -1,0 +1,20 @@
+{
+  "homebrew_version": "4.6.0",
+  "used_options": [],
+  "unused_options": [],
+  "built_as_bottle": false,
+  "poured_from_bottle": false,
+  "installed_as_dependency": false,
+  "installed_on_request": true,
+  "time": 1760000000,
+  "runtime_dependencies": [
+    { "full_name": "python@3.13", "version": "3.13.7", "declared_directly": true }
+  ],
+  "source": {
+    "path": "/opt/homebrew/Library/Taps/bighydro/homebrew-logbook/Formula/logbook.rb",
+    "tap": "bighydro/logbook",
+    "spec": "stable",
+    "versions": { "stable": "0.7.0", "head": "HEAD", "version_scheme": 0 }
+  },
+  "arch": "arm64"
+}

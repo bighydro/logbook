@@ -85,6 +85,7 @@ ARGUMENTS: tuple[Callable[[Subparsers], None], ...] = (
 )
 
 DESCRIPTION = "A diary that writes itself. `logbook <command> --help` explains one command."
+NEW = "New? `logbook demo` to try a made-up record, then `logbook setup` for your own."  # 80 columns at most
 USAGE = "logbook [--version] [--identity-file PATH] [--no-wait] <command> ..."  # one line, never wrapped
 WIDTH = 80  # one screen: no line of the root help is wider
 
@@ -99,7 +100,7 @@ class _RootParser(argparse.ArgumentParser):
         choices = cast("argparse._SubParsersAction[argparse.ArgumentParser]", commands)._choices_actions
         helps = {choice.dest: choice.help or "" for choice in choices}
         width = max(len(name) for name in helps)
-        lines = [self.format_usage().rstrip(), "", self.description or "", ""]
+        lines = [self.format_usage().rstrip(), "", self.description or "", NEW, ""]
         for header, names in GROUPS:
             lines.append(header)
             lines.extend(f"  {name:<{width}}  {helps[name]}" for name in names)

@@ -1,0 +1,31 @@
+{
+    "injected_packages": {
+        "ijson": {
+            "apps": [],
+            "include_apps": false,
+            "include_dependencies": false,
+            "package": "ijson",
+            "package_or_url": "ijson",
+            "package_version": "3.5.1",
+            "pinned": false,
+            "pip_args": [],
+            "suffix": ""
+        }
+    },
+    "main_package": {
+        "apps": [
+            "logbook"
+        ],
+        "include_apps": true,
+        "include_dependencies": false,
+        "package": "openlogbook",
+        "package_or_url": "openlogbook[mcp]",
+        "package_version": "0.7.0",
+        "pinned": false,
+        "pip_args": [],
+        "suffix": ""
+    },
+    "pipx_metadata_version": "0.5",
+    "python_version": "Python 3.12.3",
+    "venv_args": []
+}

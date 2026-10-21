@@ -56,6 +56,7 @@ from ..core import (
     flights,
     notes,
     pages,
+    people,
     policy,
     reading,
     rollup,
@@ -83,7 +84,7 @@ from ..core.store import (
     utc,
 )
 from . import digest as digest_reader
-from . import gaps, promises, reflect, sign_again
+from . import gaps, people_drift, promises, reflect, sign_again
 from .rows import _attendee, _clock, _line_text, _mail_person, _name, _ref_value
 
 SERVER_NAME = "logbook"
@@ -594,12 +595,23 @@ def tool_people(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
 
 
 def tool_person(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """`show person`'s page, its commitments as `show person` counts them: the open promises of
+    `promises` with the person, read through the ceiling as the `promises` tool reads them, as counts
+    and the command that lists them, never a promise's words."""
     name = _string(a, "name", required=True)
     assert name is not None
     rd = _reading_of_whole(lb)
     if rd is None:
         raise ToolError("the record has no lines")
-    return pages.person(rd, name)
+    page = pages.person(rd, name)
+    who = people.Person(page["id"], page["name"], (), None, 0)
+    found = people_drift.promises_with(lb, [who]).get(page["id"], [])
+    mine = sum(1 for _p, owed in found if owed)
+    theirs = len(found) - mine
+    # `promises` lists the ones owed to the owner only with --all, as `show person` says
+    listing = None if not found else "logbook promises --all" if theirs else "logbook promises"
+    page["commitments"] = {"open": len(found), "you_owe": mine, "they_owe": theirs, "command": listing}
+    return page
 
 
 def tool_promises(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:

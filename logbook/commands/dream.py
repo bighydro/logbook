@@ -25,7 +25,7 @@ def dream_arguments(sub: Subparsers) -> None:
     week [DAY|YYYY-Www]`, `logbook dream --catch-up [--days N] [--since DAY]`."""
     s = sub.add_parser(
         "dream",
-        help="a model drafts a day, a journey or a week, every sentence cited",
+        help="a model drafts a day, journey, week or person, each sentence cited",
         description="`dream day YYYY-MM-DD`: a model reads the day under the `dream` entry of"
         " policy/crossing.json and writes one draft/v1 line, the day in a paragraph, the threads it moved,"
         " two questions, the people and promises it proposes, every sentence pointing at the lines it came"
