@@ -672,6 +672,7 @@ def _bands(
                     "nights": len(run),
                     "where": where.most_common(1)[0][0] if where else None,
                     "classes": counts(run),
+                    "class": max(counts(run).items(), key=lambda kv: kv[1])[0],  # most of its nights
                 }
             )
         run = []
@@ -856,7 +857,7 @@ def money_gap_text(money: Mapping[str, Any]) -> str:
 
 
 def place_text(p: Mapping[str, Any]) -> str:
-    """`Drøbak · 23 visits since 2014`."""
+    """`Saltbu · 23 visits since 2014`."""
     return f"{p['place']}{DOT}{_plural(p['visits'], 'visit')} since {p['first'][:4]}"
 
 

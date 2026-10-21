@@ -170,6 +170,7 @@ from . import (
     shelf_agents,
     shelf_goals,
     shelf_promises,
+    timeline_page,
     trip_page,
     week_paper,
     world,
@@ -199,6 +200,7 @@ ORG_PATH = re.compile(r"^/org/([^/]+)$")  # a named org, by entity id (RFC 0037 
 IDEA_PATH = re.compile(r"^/idea/([^/]+)$")  # a named idea, by entity id (RFC 0037 §11)
 PROMISE_PATH = re.compile(r"^/promises/([0-9a-f]+)$")  # one promise, by its proposal id (`shelf_promises`)
 GOAL_PATH = re.compile(r"^/goals/([^/]+)$")  # one goal, by the id of any line of its chain (`shelf_goals`)
+TIMELINE_PATH = re.compile(r"^/timeline/(?:(?:day|week|month|year)/[0-9W-]+|life)$")  # a zoom (timeline_page)
 REVIEW_PATH = "/places/review"  # the Places page's writes: POST only, from this machine only
 NAME_PATH = "/journeys/name"  # the Journeys page's form: `add --trip`; likewise
 PEOPLE_REVIEW_PATH = "/people/review"  # the People page's queue: `people review --accept`, `--reject`
@@ -502,6 +504,7 @@ dl.header dd{overflow-wrap:anywhere}
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
+    '<a href="/timeline">timeline</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
     '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
     '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
@@ -1380,6 +1383,8 @@ class Site:
             return self.page_line(unquote(m.group(1)))
         if path == "/days":
             return self.page_days(params.get("from") or None, params.get("to") or None)
+        if path == "/timeline" or TIMELINE_PATH.match(path) is not None:
+            return timeline_page.page(self, path)
         if path == "/trips":
             return self.page_trips(params.get("year") or None)
         if path == "/places":
@@ -1527,6 +1532,7 @@ class Site:
             '<ul class="plain">\n'
             f"<li>{self.link('The last day', f'/day/{whole[1]}')}, {whole[1]}: the Day as a timeline.</li>\n"
             f"<li>{self.link('The last fortnight', f'/days?from={a}&to={b}')}, one row per day.</li>\n"
+            f"<li>{self.link('The timeline', '/timeline')}: moments beside the map, day to all years.</li>\n"
             f"<li>{self.link(f'Trips of {year}', f'/trips?year={year}')}: runs of nights away.</li>\n"
             f"<li>{self.link('Journeys', '/journeys')}: the trips one at a time, named, with their days,"
             " stays, photos and promises.</li>\n"

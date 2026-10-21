@@ -52,6 +52,8 @@ from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _clock, _csv, _print_target, _under_home
 from .derive import TRANSCRIBE_DEFAULT_MODEL
 from .rows import _day_rows, _line_row, _line_text, by_photo
+from .timeline import WHAT as TIMELINE
+from .timeline import cmd_timeline, timeline_arguments
 
 if TYPE_CHECKING:
     from ..contrib import serve
@@ -70,14 +72,16 @@ def show_arguments(sub: Subparsers) -> None:
         description="one day's lines (default today), a page (person, asset, place, org, idea), or a reader:"
         " year, trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most"
         " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
-        " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason)",
+        " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason),"
+        " timeline (the moments of a day, a week, a month, a year or all years: --day, --week, --month,"
+        " --year, --life)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
         help="YYYY-MM-DD or today; person|asset|place|org|idea NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats; orgs; ideas",
+        " keepers; stats; orgs; ideas; timeline",
     )
     s.add_argument(
         "name",
@@ -98,8 +102,9 @@ def show_arguments(sub: Subparsers) -> None:
         "--year",
         metavar="YYYY",
         help="trips: one calendar year (default: the whole record); orgs --money: the ledger's year (default"
-        " this one); ideas: the year of the words written (default this one)",
+        " this one); ideas: the year of the words written (default this one); timeline: one year",
     )
+    timeline_arguments(s)
     s.add_argument(
         "--since",
         "--from",
@@ -274,6 +279,9 @@ def cmd_show(a: argparse.Namespace) -> None:
     in time order (then chain order for the same instant). Senders, organizers and attendees
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
+    if a.day == TIMELINE:
+        cmd_timeline(a)
+        return
     if a.day in READERS:
         _show_reader(a)
         return

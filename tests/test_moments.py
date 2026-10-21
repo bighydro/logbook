@@ -7,7 +7,7 @@ from __future__ import annotations
 import contextlib
 import io
 import re
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -191,3 +191,32 @@ def test_a_key_that_is_not_one_is_refused(demo: Logbook) -> None:
     for zoom, key in (("day", "2026-6-1"), ("month", "2026-13"), ("year", "26"), ("hour", "1")):
         with pytest.raises(ValueError):
             moments.read(demo, zoom, key)
+
+
+@pytest.fixture(scope="module")
+def sessions(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
+    """The shelves' record (sessions with Claude Code, the Claude apps and a Telegram bot, early March
+    2026) with a synthetic track: the owner still at one spot from the evening of 28 February on."""
+    import shelves_record
+
+    with pytest.MonkeyPatch.context() as mp:
+        lb = shelves_record.record(tmp_path_factory.mktemp("sessions"), mp)
+    at = datetime(2026, 2, 28, 22, 0, tzinfo=UTC)
+    while at < datetime(2026, 3, 4, tzinfo=UTC):
+        stamp = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        point = {"schema": "location/v1", "lat": 59.9139, "lon": 10.7522, "accuracy_m": 10}
+        lb.append(stamp, "dawarich", "location", 1, {**point, "raw_id": f"dawarich:{stamp}"})
+        at += timedelta(minutes=15)
+    return lb
+
+
+def test_a_session_with_an_agent_during_a_moment_keeps_the_machine_s_words_apart(sessions: Logbook) -> None:
+    (moment,) = _moments(moments.read(sessions, "day", "2026-03-01"))
+    (session,) = moment["during"]["agents"]
+    assert (session["agent"], session["title"]) == ("Claude Code", "Passage planner for Solvind")
+    assert session["owner"][0] == "Write a passage planner for Solvind. I'll test it on Saturday."
+    assert session["machine"][0] == "I'll start with the tide tables. Can you send me the harbour list?"
+    assert not set(session["owner"]) & set(session["machine"])
+    bots = moment["during"]["messages"]
+    assert bots and all(c["agent"] for c in bots)  # the Telegram bot's chats, marked as an agent's
+    assert f"{len(bots) + 1} conversations" in moments.item_text(moment)  # the chats and the session

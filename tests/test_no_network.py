@@ -54,6 +54,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ),
     ("show", "days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
+    ("show", "timeline", "--day", "2026-06-17"),
+    ("show", "timeline", "--life", "--json"),
     ("show", "2026-06-08", "--raw"),
     (
         "show",
@@ -300,6 +302,12 @@ PAGES = (
     "/world?from=2026-06-15&to=2026-06-20",
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
     LINE,
+    "/timeline",  # the timeline at each zoom (RFC 0043 §11)
+    "/timeline/day/2026-06-17",
+    "/timeline/week/2026-W25",
+    "/timeline/month/2026-06",
+    "/timeline/year/2026",
+    "/timeline/life",
 )
 
 
