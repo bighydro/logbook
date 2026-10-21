@@ -124,7 +124,8 @@ cross to each member of your circle — names the `mcp` destination and the high
 {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
 ```
 
-`logbook init` writes it at 1. A record made before this version, whose file does not name `mcp`, has a
+`logbook init` writes it at 1 and writes no other entry; you write the others yourself.
+A record made before this version, whose file does not name `mcp`, has a
 ceiling of 1 as well: the one destination with a default, since the client is an agent on your own machine
 and tier 1 is what crosses on its own. Raise it by editing the file; the server reads it on every call and
 never writes it, so the change takes effect at the next call and nothing needs restarting.

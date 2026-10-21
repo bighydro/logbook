@@ -51,7 +51,6 @@ from typing import Any
 from .chain import canonical_json
 
 POLICY_FILE = PurePosixPath("policy/crossing.json")  # record-relative, as the manifest names it
-DEFAULT_DESTINATION = "hermes"
 MCP_DESTINATION = "mcp"  # `logbook mcp`: an agent on this machine, reading through the ceiling
 MCP_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name the mcp destination
 VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on the owner's own disk
@@ -64,10 +63,7 @@ DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and d
 NOTION_DESTINATION = "notion"  # `logbook export notion`: the record's facts for the owner's Notion
 INCLUDE_UNSIGNED = "include_unsigned"  # an entry's optional key: `--include-unsigned` may lift the gate
 MODEL = "model"  # an entry's optional key: the one model the destination is
-DEFAULT_POLICY: dict[str, Any] = {
-    DEFAULT_DESTINATION: {"max_tier": 2},
-    MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER},
-}
+DEFAULT_POLICY: dict[str, Any] = {MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER}}
 TIERS = (1, 2, 3)
 UNTIL = "until"  # the last day an entry holds, `YYYY-MM-DD`; absent: for good
 EXPIRED_TIER = 0  # what an entry past its `until` day counts as: nothing crosses

@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from policy_entry import allow
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from logbook.core import sealing
@@ -807,6 +808,7 @@ def test_a_crossing_to_a_destination_without_a_recipient_needs_open_and_then_shi
 
 def test_a_crossing_of_a_plain_record_is_unchanged(tmp_path: Path, monkeypatch):
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    allow(lb.root, "hermes", 2)  # the owner's entry: a new record names no one above tier 1
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append(at="2026-03-01T09:00:00Z", source="manual", kind="note", tier=2, payload=NOTE)
     out = tmp_path / "out"

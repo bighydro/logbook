@@ -293,7 +293,7 @@ pass  extra:crypto      cryptography is installed
 pass  extra:sealed      pyrage is installed
 warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
 warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
-pass  crossing          hermes 2, mcp 1
+pass  crossing          mcp 1
 pass  home              no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)
 pass  last-run          no schedule on this machine; `logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it
 warn  restore-test      no restore test yet: `logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it; the schedule runs it on the first Sunday of the month
