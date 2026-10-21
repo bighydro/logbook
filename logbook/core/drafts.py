@@ -110,7 +110,17 @@ PARTS = ("day", "threads", "questions", "people", "promises")  # the parts of a 
 JOURNEY_PARTS = ("journey", "days", "places", "people", "decisions", "promises", "photos", "name")
 WEEK_PARTS = ("time", "energy", "people", "goals", "next_week", "personal")
 PERSON_PARTS = ("person", "threads", "promises", "questions")  # `dream person` (amendment 1)
-UNIT_PARTS = {"day": PARTS, "journey": JOURNEY_PARTS, "week": WEEK_PARTS, "person": PERSON_PARTS}  # by `unit`
+# `dream month` and `dream chapter` (the amendment of 2026-10-21), in order
+MONTH_PARTS = ("month", "where", "goals", "next_month", "question")
+CHAPTER_PARTS = ("arc", "rule", "held", "closed")
+UNIT_PARTS = {
+    "day": PARTS,
+    "journey": JOURNEY_PARTS,
+    "week": WEEK_PARTS,
+    "person": PERSON_PARTS,
+    "month": MONTH_PARTS,
+    "chapter": CHAPTER_PARTS,
+}  # by `unit`
 PART_LABELS = {
     "day": "day",
     "threads": "thread",
@@ -129,6 +139,14 @@ PART_LABELS = {
     "next_week": "next week",
     "personal": "personal",
     "person": "person",
+    "month": "month",
+    "where": "where",
+    "next_month": "proposal",
+    "question": "question",
+    "arc": "arc",
+    "rule": "rule",
+    "held": "held",
+    "closed": "closed",
 }
 # the parts of a transcript's synthesis, in order: actions on top (`logbook transcript synthesize`)
 SYNTHESIS_PARTS = ("actions", "topics", "decisions", "open_threads", "personal")
@@ -159,6 +177,11 @@ NOT_ON_WEEK = "evidence names a line that is not of the week"
 UNIT_JOURNEY = "journey"
 UNIT_WEEK = "week"
 UNIT_PERSON = "person"  # one canonical person over a window (RFC 0036 amendment 1)
+UNIT_MONTH = "month"  # a calendar month, `2026-06` (the amendment of 2026-10-21)
+UNIT_CHAPTER = "chapter"  # a chapter, its `chapter/v1` lines the subject (the same amendment)
+NOT_ON_MONTH = "evidence names a line that is not of the month"
+NOT_ON_CHAPTER = "evidence names a line that is not of the chapter"
+ISO_MONTH = re.compile(r"\d{4}-(0[1-9]|1[0-2])\Z")  # a month's subject, `2026-06`
 PERSON_ENTRY = "relationship"  # the entry a person draft is written under and held to (`Allowed.of`)
 SCENE_SOURCE = "model:video-rules/"  # a video scene's draft (`labs/scenes.py`): written here, under no entry
 WINDOW = "window"  # a person draft's `{from, to}`, two local days, both inclusive; absent on every other unit
@@ -228,6 +251,9 @@ def validate(payload: Mapping[str, Any], *, reader: bool = False) -> list[str]:
     elif payload.get("unit") == UNIT_WEEK:
         if not isinstance(subject, str) or not ISO_WEEK.match(subject):
             problems.append(f"subject {subject!r} is not an ISO week, YYYY-Www")
+    elif payload.get("unit") == UNIT_MONTH:
+        if not isinstance(subject, str) or not ISO_MONTH.match(subject):
+            problems.append(f"subject {subject!r} is not a month, YYYY-MM")
     elif payload.get("unit") == UNIT_PERSON:
         if not isinstance(subject, str) or not subject.strip():
             problems.append("subject must be one canonical person id, as a string")
@@ -359,7 +385,7 @@ class Allowed:
         found = f"tier {tier}, above max_tier {held.max_tier} of the {held.entry!r} entry"
         if unit == UNIT_EVENT:
             return f"{found}; the call stays home until the entry allows its tier"
-        if unit in (UNIT_JOURNEY, UNIT_WEEK, UNIT_PERSON):
+        if unit in (UNIT_JOURNEY, UNIT_WEEK, UNIT_PERSON, UNIT_MONTH, UNIT_CHAPTER):
             return f"{found}; `dream {unit}` dreams it again under it"
         return f"{found}; `dream --catch-up` dreams the day again under it"
 

@@ -545,3 +545,22 @@ def test_the_map_is_named_drawn_and_asked_with_no_connection(
         cli.main(["setup", "map", "--off", "--yes"])
     assert KEY not in lb.meta and (tmp_path / "day.svg").is_file()
     assert no_network == [], f"the map tried to connect: {no_network}"
+
+
+@pytest.mark.parametrize("argv", [("dream", "month", "2026-06"), ("dream", "chapter")], ids=" ".join)
+def test_a_month_or_a_chapter_without_the_dream_entry_sends_nothing(
+    argv: tuple[str, ...],
+    lb: Logbook,
+    no_network: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The demo record's policy names no `dream` entry; with an endpoint set, `dream month` and `dream
+    chapter` refuse in one sentence before anything is read and open no connection."""
+    monkeypatch.setenv("LOGBOOK_DREAM_ENDPOINT", "https://api.example.org/v1")
+    monkeypatch.setenv("LOGBOOK_DREAM_MODEL", "xy-chat-1")
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        cli.main(list(argv))
+    assert e.value.code == 2 and "names no 'dream' entry" in capsys.readouterr().err
+    assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"
