@@ -183,6 +183,7 @@ def test_all_years_per_place_and_per_vessel_names_only(demo: Logbook) -> None:
     assert moments.place_text(by_place["Cabin"]) == "Cabin · 1 visit since 2026"
     (vessel,) = data["vessels"]
     assert moments.vessel_text(vessel) == "aboard Nordlys · 6 nights on 3 passages"
+    assert vessel["people"][0] == "Ola Nordmann"  # confirmed aboard, the berth's stays among them
     for row in [*data["places"], *data["vessels"]]:
         assert all(isinstance(n, str) and not re.search(r"\d", n) for n in row["people"])
 

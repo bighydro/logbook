@@ -26,8 +26,9 @@ Every zoom reads through the gate `tiers` (`reading.crossing`, as every reader h
 highest tier it read. Day and week read the lines of their days (`reading.read`, as the Day does); month,
 year and life read the owner's track from the index alone (`reading.owner_track`) and count photos and
 signatures from the index's columns, so no zoom past the week opens a month file for its lines. Life
-reads the people of the whole record once (`people.read`): who was at each place and aboard each vessel,
-by name, never with a count beside a name.
+reads who was there once for the whole record: the with module's confirmed company at each of the
+owner's stays, from the calendar entries, recordings and notes alone (`_who_was_there`), by name, never
+with a count beside a name.
 
 Nothing here writes; the same record at the same head gives the same timeline (ADR 0013)."""
 
@@ -41,13 +42,13 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from . import day as day_reader
-from . import ledger, machine, people, reading, signing, stars, stays
+from . import ledger, machine, policy, present, reading, resolve, signing, stars, stays
 from . import places as named_places
 from .chain import Line
 from .export import day_range, parse_day
 from .flights import Airports
 from .index import RETRACTED, Index
-from .store import Logbook
+from .store import Logbook, retractions
 from .transcripts import turns_of
 
 ZOOMS = ("day", "week", "month", "year", "life")
@@ -65,6 +66,7 @@ CLASS_WORDS = {  # how a count of nights reads: "home 21 · the family's places 
     "away": "away",
     IN_TRANSIT: IN_TRANSIT,
 }
+CONFIRMING = ("event", "transcript", "note")  # the evidence that can confirm company (`present`)
 CAMERA = "camera"  # a photo's `provenance` when the owner's own camera took it
 WORDS_SHOWN = 3  # an agent session's turns of each side a moment carries; the rest are on its line
 WORDS_CHARS = 280
@@ -736,7 +738,7 @@ def life_of(
     """All years: per named place, its visits (a run of the owner's stays there, no stay elsewhere
     between), the years and who was there; per vessel (an asset the owner was aboard), the nights
     aboard, the passages (the runs aboard, `stays.fold`), the years and who was aboard. Who was there is
-    the people the record confirms at those stays (`people.read`, the with module's confirmed set),
+    the people the record confirms at those stays (the with module's confirmed set, `_who_was_there`),
     names only, the most often there first and never with a count beside a name."""
     whole = _days_span(lb, "location", tiers)
     if whole is None:
@@ -752,12 +754,7 @@ def life_of(
     first, last = whole
     given = named_places.classes(lb.root)
     days, tier, track, nights = _days_of(lb, first, last, airports, tiers)
-    admit = None if tiers is None else (lambda line: int(line.get("tier") or 0) in tiers)
-    report = people.read(lb, first, last, airports, admit)
-    at_place: dict[str, Counter[str]] = {}
-    for person in report.people:
-        for shared in person.shared.values():
-            at_place.setdefault(shared.where, Counter())[person.name] += 1
+    at_place, people_tier = _who_was_there(lb, track, first, last, tiers)
     known = {p.name: p for p in track.places}
     visits: dict[str, list[str]] = {}  # place → the first day of each visit
     previous: str | None = None
@@ -799,7 +796,6 @@ def life_of(
                 "people": [n for n, _ in at_place.get(f"aboard {asset_id}", Counter()).most_common()],
             }
         )
-    people_tier = report.tier
     return {
         "zoom": LIFE,
         "first": first,
@@ -809,6 +805,51 @@ def life_of(
         "vessels": vessels,
         "tier": max((t for t in (tier, people_tier) if t is not None), default=None),
     }
+
+
+def _who_was_there(
+    lb: Logbook, track: reading.OwnerTrack, first: str, last: str, tiers: Sequence[int] | None
+) -> tuple[dict[str, Counter[str]], int | None]:
+    """Who the with module confirms at each of the owner's stays (`present.company`, the rule the
+    Day and `people` read by), by where: a named place's name or `aboard <asset id>`, each person by
+    name and how often, for an order and never to be shown. Only the kinds that can confirm someone
+    are read (`present.EVIDENCE_KINDS` but photos, whose faces only propose), standing and through the
+    gate, streamed from the index: never the record's messages and mail, which place nobody. And the
+    highest tier among the lines that confirmed someone."""
+    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()  # a stay's night runs into it
+    with lb.index() as idx:
+        marks = idx.retractions()
+        resolutions = reading.crossing(idx.resolutions(), tiers)
+        retracted = frozenset(retractions(marks))
+        lines: list[Line] = []
+        for kind in CONFIRMING:
+            superseded = idx.superseded(kind)
+            lines.extend(
+                line
+                for line in reading.crossing(idx.of_kind(kind, first, spill), tiers)
+                if str(line.get("id")) not in retracted and str(line.get("id")) not in superseded
+            )
+    identities = resolve.identities_from([*marks, *resolutions])
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
+    tiers_of = {str(line["id"]): int(line.get("tier") or 0) for line in lines}
+    near = present.Evidence(lines, track.tz)
+    found: dict[str, Counter[str]] = {}
+    tier: int | None = None
+    for stay in track.stays:
+        if stay.place is None and stay.aboard is None:
+            continue  # an unnamed place has no row of its own here
+        where = f"aboard {stay.aboard}" if stay.aboard is not None else str(stay.place)
+        for c in present.company(stay, near.near(stay), identities, track.places, owner):
+            if c.status != present.CONFIRMED or c.person is None:
+                continue
+            found.setdefault(where, Counter())[c.name] += 1
+            tier = max([*(tiers_of.get(i, 0) for i in c.lines), *([tier] if tier is not None else [])])
+    return found, tier
 
 
 # -- the text: `logbook show timeline` without --json ---------------------------------------------------
