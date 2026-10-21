@@ -220,3 +220,47 @@ def test_a_session_with_an_agent_during_a_moment_keeps_the_machine_s_words_apart
     bots = moment["during"]["messages"]
     assert bots and all(c["agent"] for c in bots)  # the Telegram bot's chats, marked as an agent's
     assert f"{len(bots) + 1} conversations" in moments.item_text(moment)  # the chats and the session
+
+
+def test_month_year_and_all_years_hold_the_gate_on_the_track(demo: Logbook) -> None:
+    """The owner's points are tier 1: a gate that does not read tier 1 places no night anywhere."""
+    assert moments.read(demo, "month", "2026-06", tiers=(0, 2, 3))["nights"] == {}
+    assert moments.read(demo, "year", "2026", tiers=(0, 2, 3))["journeys"] == []
+    life = moments.read(demo, "life", tiers=(0, 2, 3))
+    assert (life["places"], life["vessels"], life["nights"]) == ([], [], {})
+    assert moments.read(demo, "month", "2026-06", tiers=(0, 1, 2))["nights"] == {
+        "home": 18,
+        "aboard": 6,
+        "away": 6,
+    }
+
+
+def test_one_stay_has_one_class_on_the_day_and_on_the_week(demo: Logbook) -> None:
+    week = moments.read(demo, "week", "2026-W24")
+    for d in week["days"]:
+        found = [(m["place"], m["span"], m["class"]) for m in _moments(moments.read(demo, "day", d["day"]))]
+        assert [(c["place"], c["span"], c["class"]) for c in d["moments"]] == found, d["day"]
+
+
+def test_a_visit_is_not_broken_by_an_unnamed_stop(demo: Logbook) -> None:
+    """Home, a bench on the walk, Home again is one visit; Home, the Office, Home is two."""
+    by_place = {p["place"]: p for p in moments.read(demo, "life")["places"]}
+    assert by_place["Home"]["visits"] == 16 and by_place["Office"]["visits"] == 12
+
+
+def test_a_retracted_payment_covers_no_day(demo: Logbook, tmp_path: Path) -> None:
+    """The last day a payment source covers is the last day of a transaction that stands."""
+    import shutil
+    from zoneinfo import ZoneInfo
+
+    copy = tmp_path / "copy"
+    shutil.copytree(demo.root, copy)
+    lb = Logbook(copy)
+    oslo = ZoneInfo("Europe/Oslo")
+    with lb.index() as idx:
+        found = sorted(idx.by_kind("transaction"), key=lambda line: (str(line["at"]), int(line["seq"])))
+    days = [_at(str(line["at"])).astimezone(oslo).date().isoformat() for line in found]
+    assert days[-1] != days[-2], "the demo's last payment is alone on its day"
+    assert moments.read(lb, "day", "2026-07-15")["money"]["last_covered"] == days[-1]
+    lb.retract(int(found[-1]["seq"]), "a test: the last payment never was")
+    assert moments.read(lb, "day", "2026-07-15")["money"]["last_covered"] == days[-2]

@@ -238,3 +238,40 @@ def test_show_timeline_takes_one_zoom(demo: Logbook, monkeypatch: pytest.MonkeyP
     with contextlib.redirect_stdout(out):
         cli.main(["show", "timeline", "--day", OFFICE_DAY])
     assert "Office · 07:50\u201317:25 · Per Hansen, Liv Berg" in out.getvalue()
+
+
+ANCHOR = re.compile(r"<a\b[^>]*>")
+TARGETS = re.compile(r'class="(?:tap|chip [a-z]+|cell [a-z]*|month)"')
+ROWS_OF_TARGETS = re.compile(r'<p class="(?:zooms|pager)">.*?</p>', re.S)  # their links are 44 px by the row
+
+
+@pytest.mark.parametrize("path", PAGES)
+def test_every_link_of_a_zoom_is_a_44_px_target(demo: Logbook, path: str) -> None:
+    page = _site(demo).respond(path).body.decode("utf-8")
+    main = ROWS_OF_TARGETS.sub("", page[page.index("<main>") : page.index("</main>")])
+    small = [a for a in ANCHOR.findall(main) if not TARGETS.search(a)]
+    assert small == [], (path, small[:3])
+    assert "a.tap{display:inline-block;min-height:2.75rem" in page
+
+
+def test_every_link_of_the_year_and_all_years_answers(demo: Logbook) -> None:
+    site = _site(demo)
+    for path in (
+        "/timeline/year/2026",
+        "/timeline/life",
+        "/timeline/week/2026-W25",
+        "/timeline/month/2026-06",
+    ):
+        page = site.respond(path).body.decode("utf-8")
+        main = page[page.index("<main>") : page.index("</main>")]  # the navigation's /today is a redirect
+        for link in sorted(set(HREF.findall(main))):
+            target, _, query = html.unescape(link).partition("?")
+            assert site.respond(target, query).status == 200, (path, link)
+
+
+def test_a_gate_without_the_track_places_no_night_on_the_month_or_all_years(demo: Logbook) -> None:
+    site = _site(demo, (0, 2, 3))
+    month = _text(site.respond("/timeline/month/2026-06").body.decode("utf-8"))
+    assert "no nights" in month and "home 18" not in month
+    life = _text(site.respond("/timeline/life").body.decode("utf-8"))
+    assert "Home" not in life and "Nordlys" not in life

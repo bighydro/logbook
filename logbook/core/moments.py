@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -184,23 +185,6 @@ def _moment(
 ) -> dict[str, Any]:
     attached = entry.get("attached") or {}
     named = next((p for p in rd.places if p.name == entry.get("place")), None)
-    home = (
-        entry.get("lat") is not None
-        and entry.get("lon") is not None
-        and stays.is_home(
-            stays.Segment(
-                kind=stays.STAY,
-                subject=None,
-                start=_at(entry["start"]),
-                end=_at(entry["end"]),
-                points=0,
-                lat=float(entry["lat"]),
-                lon=float(entry["lon"]),
-                place=entry.get("place"),
-            ),
-            rd.places,
-        )
-    )
     photos = [i for i in (attached.get("photos") or {}).get("lines", ()) if i in lines]
     own = [i for i in photos if (lines[i].get("payload") or {}).get("provenance") == CAMERA]
     others = [i for i in photos if i not in own]
@@ -211,7 +195,7 @@ def _moment(
         "aboard": entry.get("aboard"),
         "place": entry.get("where") or "somewhere",
         "named": named is not None or entry["kind"] == day_reader.ABOARD,
-        "class": named_places.class_of(named, entry.get("aboard"), given, home=bool(home)),
+        "class": _class_of(entry, rd, given),
         "start": entry["start"],
         "end": entry["end"],
         "start_local": entry["start_local"],
@@ -229,6 +213,31 @@ def _moment(
         if not money["covered"]:
             out["money"]["said"] = NO_PAYMENT
     return out
+
+
+def _class_of(entry: Mapping[str, Any], rd: reading.Reading, given: Mapping[str, str]) -> str:
+    """A Day row's class (`places.class_of`): its named place's, home when the stay lies within reach
+    of a home place (`stays.is_home`, the night rule), aboard on an asset, else away. The day and the
+    week both ask here, so one stay has one class on both."""
+    named = next((p for p in rd.places if p.name == entry.get("place")), None)
+    home = (
+        entry.get("lat") is not None
+        and entry.get("lon") is not None
+        and stays.is_home(
+            stays.Segment(
+                kind=stays.STAY,
+                subject=None,
+                start=_at(entry["start"]),
+                end=_at(entry["end"]),
+                points=0,
+                lat=float(entry["lat"]),
+                lon=float(entry["lon"]),
+                place=entry.get("place"),
+            ),
+            rd.places,
+        )
+    )
+    return named_places.class_of(named, entry.get("aboard"), given, home=bool(home))
 
 
 def _move(entry: Mapping[str, Any], rd: reading.Reading) -> dict[str, Any]:
@@ -394,8 +403,7 @@ def _money_of_day(lb: Logbook, day: str, rd: reading.Reading) -> dict[str, Any] 
     that last day."""
     if rd.tiers is not None and MONEY_TIER not in rd.tiers:
         return None
-    with lb.index() as idx:
-        span = idx.span(ledger.KIND)
+    span = _days_span(lb, ledger.KIND, rd.tiers)
     on_day = [line for line in ledger.standing(rd.of_kind(ledger.KIND)) if rd.day_of(line) == day]
     paid = []
     for line in on_day:
@@ -494,11 +502,10 @@ def week_of_days(
         for entry in data["timeline"]:
             if entry["kind"] not in (stays.STAY, day_reader.ABOARD):
                 continue
-            named = next((p for p in rd.places if p.name == entry.get("place")), None)
             chips.append(
                 {
                     "place": entry.get("where") or "somewhere",
-                    "class": named_places.class_of(named, entry.get("aboard"), given),
+                    "class": _class_of(entry, rd, given),
                     "start_local": entry["start_local"],
                     "end_local": entry["end_local"],
                     "within_day": dict(entry["within_day"]),
@@ -522,11 +529,50 @@ def week_of_days(
 # -- a month and a year: nights, photos and signatures from the index ----------------------------------
 
 
-def _nights(
-    lb: Logbook, first: str, last: str, airports: Airports | None
-) -> tuple[reading.OwnerTrack, dict[str, stays.Night]]:
-    """The owner's track of the window (the index alone) and the night after each of its days."""
+def _track(
+    lb: Logbook, first: str, last: str, airports: Airports | None, tiers: Sequence[int] | None
+) -> reading.OwnerTrack:
+    """The owner's track of the window through the gate: from the index alone (`reading.owner_track`)
+    when the gate reads every location line of it, none when it reads none, and otherwise the stays of
+    a reading of the window through the gate (`reading.read`), slower and as exact."""
     track = reading.owner_track(lb, first, last, airports)
+    if tiers is None:
+        return track
+    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()  # a night runs into the next day
+    with lb.index() as idx:
+        found = {
+            int(t)
+            for (t,) in idx.db.execute(
+                "SELECT DISTINCT tier FROM lines WHERE kind = 'location' AND day_local BETWEEN ? AND ?",
+                (first, spill),
+            )
+        }
+    if found <= {int(t) for t in tiers}:
+        return track
+    if not found & {int(t) for t in tiers}:
+        return replace(track, stays=[])
+    return replace(track, stays=reading.read(lb, first, last, airports, tiers).owner_stays)
+
+
+def _days_span(lb: Logbook, kind: str, tiers: Sequence[int] | None) -> tuple[str, str] | None:
+    """The first and last local day a standing line of `kind` the gate reads is on: the index alone."""
+    where = f"kind = ? AND id NOT IN ({RETRACTED})"
+    params: list[object] = [kind]
+    if tiers is not None:
+        where += f" AND tier IN ({','.join('?' * len(tiers))})"
+        params += [int(t) for t in tiers]
+    with lb.index() as idx:
+        found = idx.db.execute(
+            f"SELECT min(day_local), max(day_local) FROM lines WHERE {where}", params
+        ).fetchone()
+    return None if found is None or found[0] is None else (str(found[0]), str(found[1]))
+
+
+def _nights(
+    lb: Logbook, first: str, last: str, airports: Airports | None, tiers: Sequence[int] | None
+) -> tuple[reading.OwnerTrack, dict[str, stays.Night]]:
+    """The owner's track of the window through the gate (`_track`) and the night after each day."""
+    track = _track(lb, first, last, airports, tiers)
     nights = stays.Nights(track.stays, track.tz, track.settings, track.places)
     night_start = track.settings.night[0]
     return track, {
@@ -564,17 +610,19 @@ def _days_of(
     airports: Airports | None,
     tiers: Sequence[int] | None,
 ) -> tuple[list[dict[str, Any]], int | None, reading.OwnerTrack, dict[str, stays.Night]]:
-    """Each day of the window: its night's class and where, its photos, whether it is signed."""
+    """Each day of the window: its night's class and where (a day inside the span of the owner's track
+    the gate reads; none outside it), its photos, whether it is signed."""
     given = named_places.classes(lb.root)
-    track, nights = _nights(lb, first, last, airports)
+    track, nights = _nights(lb, first, last, airports, tiers)
+    span = _days_span(lb, "location", tiers)
     with lb.index() as idx:
         photos, photo_tier = _counted(idx, "photo", first, last, tiers)
-        logged, location_tier = _counted(idx, "location", first, last, tiers)
+        _logged, location_tier = _counted(idx, "location", first, last, tiers)
     signed = _signed(lb, tiers)
     out = []
     for day in day_range(first, last):
         night = nights[day]
-        tracked = bool(logged.get(day)) or night.stay is not None
+        tracked = span is not None and span[0] <= day <= span[1]
         out.append(
             {
                 "day": day,
@@ -690,7 +738,7 @@ def life_of(
     aboard, the passages (the runs aboard, `stays.fold`), the years and who was aboard. Who was there is
     the people the record confirms at those stays (`people.read`, the with module's confirmed set),
     names only, the most often there first and never with a count beside a name."""
-    whole = reading.record_days(lb, "location")
+    whole = _days_span(lb, "location", tiers)
     if whole is None:
         return {
             "zoom": LIFE,
@@ -713,11 +761,13 @@ def life_of(
     known = {p.name: p for p in track.places}
     visits: dict[str, list[str]] = {}  # place → the first day of each visit
     previous: str | None = None
-    for stay in track.stays:
+    for stay in track.stays:  # an unnamed stay (a walk's stop, a bench) neither starts nor breaks a visit
+        if stay.aboard is None and stay.place is None:
+            continue
         here = stay.place if stay.aboard is None else None
         if here is not None and here != previous:
             visits.setdefault(here, []).append(track.day_start.day(stay.start).isoformat())
-        previous = here if stay.aboard is None else None
+        previous = here
     places_out = [
         {
             "place": name,

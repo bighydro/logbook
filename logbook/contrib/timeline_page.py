@@ -39,6 +39,7 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
 
 PATH = re.compile(r"^/timeline(?:/(day|week|month|year)/([0-9W-]+)|/(life))?$")
 MAP_LATER = "the map comes with slice G"
+TAP = "tap"  # a link that is a 44 px target on its own, wherever it stands in a line
 DOT = moments.DOT
 EN_DASH = day_reader.EN_DASH
 NO_MOMENT = '<span class="mute">no moment</span>'
@@ -56,6 +57,7 @@ STYLE = (
 p.zooms{display:flex;flex-wrap:wrap;gap:.2rem .4rem;margin:.2rem 0 .6rem}
 p.zooms a,p.zooms b,p.pager a{display:inline-block;min-height:2.75rem;line-height:2.75rem;padding:0 .4rem}
 p.zooms b{color:var(--fg)}
+a.tap{display:inline-block;min-height:2.75rem;line-height:2.75rem}
 p.pager{display:flex;flex-wrap:wrap;gap:.2rem .8rem;margin:0 0 .4rem}
 div.timeline{display:flex;flex-direction:column;gap:1rem}
 section.map{border:1px solid var(--line);border-radius:4px;padding:.5rem;min-width:0}
@@ -207,7 +209,7 @@ def _day(site: Site, day: str) -> str:
     where = f" ({night['where']})" if night.get("where") else ""
     parts.append(
         f'<p class="{_class(night["class"])}"><span class="class"></span>night after: '
-        f"{escape(night['class'] + where)}{DOT}{site.link('the Day', f'/day/{day}')}</p>\n"
+        f"{escape(night['class'] + where)}{DOT}{site.link('the Day', f'/day/{day}', TAP)}</p>\n"
     )
     money = data.get("money")
     if money is not None and not money["covered"]:
@@ -251,7 +253,9 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
         )
         rows.append(_dt("proposed", f'<span class="pencil">{proposed}</span>'))
     if item["photos"]:
-        photos = ", ".join(site.link(f"photo {n}", f"/line/{i}") for n, i in enumerate(item["photos"], 1))
+        photos = ", ".join(
+            site.link(f"photo {n}", f"/line/{i}", TAP) for n, i in enumerate(item["photos"], 1)
+        )
         rows.append(_dt("photos", photos))
     during = item["during"]
     for c in during["messages"]:
@@ -270,7 +274,7 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
         tail = f'<p class="mute">machine text, {escape(s["agent"])}:</p>{machine}' if machine else ""
         rows.append(_dt("agent", f"{head}{said}{tail}"))
     for r in during["recordings"]:
-        rows.append(_dt("recording", site.link(escape(r["title"]), f"/line/{r['line']}")))
+        rows.append(_dt("recording", site.link(escape(r["title"]), f"/line/{r['line']}", TAP)))
     for t in during["mail"]:
         rows.append(
             _dt(
@@ -286,7 +290,7 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
         said = money.get("said")
         paid = ", ".join(_paid(t) for t in money["paid"]) or escape(said or "nothing")
         rows.append(_dt("paid", paid))
-    rows.append(_dt("record", site.link("the Day", f"/day/{day}")))
+    rows.append(_dt("record", site.link("the Day", f"/day/{day}", TAP)))
     return "".join(rows)
 
 
@@ -317,7 +321,7 @@ def _week(site: Site, key: str) -> str:
             f"{escape(c['place'])} {escape(c['span'])}</a>"
             for c in d["moments"]
         )
-        day_link = site.link(escape(f"{d['weekday'][:3]} {d['day']}"), f"/timeline/day/{d['day']}")
+        day_link = site.link(escape(f"{d['weekday'][:3]} {d['day']}"), f"/timeline/day/{d['day']}", TAP)
         parts.append(
             f'<li><p class="{_class(night["class"])}"><span class="class"></span>{day_link}{DOT}night '
             f"{escape(night['class'] + where)}</p>\n<p>{chips or NO_MOMENT}</p></li>\n"
@@ -392,10 +396,10 @@ def _year(site: Site, key: str) -> str:
         for j in bands:
             nights = f"{j['nights']} night{'' if j['nights'] == 1 else 's'}"
             text = f"{j['first']} {EN_DASH} {j['last']}{DOT}{j['where'] or 'away'}{DOT}{nights}"
-            journey = f"/journeys/{j['first']}/{j['last']}"  # a journey's page, by its first and last day
+            journey = f"/timeline/day/{j['first']}"  # its first day: always a page, whatever the trips say
             parts.append(
                 f'<li class="{_class(j["class"])}"><span class="class"></span>'
-                f"{site.link(escape(text), journey)}</li>\n"
+                f"{site.link(escape(text), journey, TAP)}</li>\n"
             )
         parts.append("</ul>\n")
     else:
@@ -425,7 +429,7 @@ def _shelf(site: Site, rows: Sequence[tuple[str, Mapping[str, Any]]]) -> str:
         return '<p class="mute">none</p>\n'
     out = ['<ol class="shelf">\n']
     for text, row in rows:
-        years = ", ".join(site.link(y, f"/timeline/year/{y}") for y in row["years"])
+        years = ", ".join(site.link(y, f"/timeline/year/{y}", TAP) for y in row["years"])
         who = f"<p>with {escape(', '.join(row['people']))}</p>" if row["people"] else ""
         cls = _class(row.get("class") or "aboard")
         out.append(

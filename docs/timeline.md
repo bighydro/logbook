@@ -33,7 +33,9 @@ line, a photo or a call is already a stay), or a run aboard an asset (`aboard So
   many you sent and how many you received), the calls, the sessions with an agent (your words, and the
   agent's marked as machine text), the mail threads, the notes, the calendar's entries;
 - **paid**, at tier 3 only: the transactions whose time falls inside it, with the merchant. A day no
-  payment source covers says *No payment source covers this day*, with the last day one does.
+  payment source covers says *No payment source covers this day*, with the last day one does: a day is
+  covered when it lies between the first and the last day of a transaction that stands (a retracted one
+  covers nothing).
 
 On the page each moment is folded to one line, `Saltbu · 19:30–22:40 · Ola Nordmann, Kari Nordmann, Per
 Hansen? · 6 photos · 2 conversations`, and opens to the rest. The moves between moments are one line
@@ -55,9 +57,10 @@ The month and the year count the nights apart: `home 21 · the family's places 4
 Solvind · 41 nights on 9 passages`, with the people who were there by name only: no number ever stands
 beside a person.
 
-A **visit** is a run of your stays at the place with no stay elsewhere between; a **passage** is a run
-aboard one vessel, from going aboard to coming ashore (`stays.fold`). A **journey** on the year is a run of
-nights away from home, the rule of `show trips`, and links to its page on the Journeys shelf.
+A **visit** is a run of your stays at the place with no other named place (or vessel) between: a bench on
+the walk home does not end one. A **passage** is a run aboard one vessel, from going aboard to coming ashore
+(`stays.fold`). A **journey** on the year is a run of nights away from home, the rule of `show trips` (a
+night in transit continues it), drawn for the part of it inside the year and linked to its first day.
 
 ## The map
 
