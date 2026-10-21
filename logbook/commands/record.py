@@ -672,6 +672,7 @@ def setup_arguments(sub: Subparsers) -> None:
     declared beside the code that reads it."""
     from .day import questions_arguments
     from .derive import speakers_arguments
+    from .maps import setup_map_arguments
     from .places import places_arguments
     from .sync import assets_arguments
 
@@ -693,6 +694,7 @@ def setup_arguments(sub: Subparsers) -> None:
     questions_arguments(settings)
     day_start_arguments(settings)
     speakers_arguments(settings)
+    setup_map_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:

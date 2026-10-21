@@ -11,6 +11,7 @@ from ..core import flights, reading, stays
 from ..core.search import MAX_TIER
 from ..core.store import Logbook
 from .common import Subparsers, _airports
+from .maps import lab_map_arguments
 from .rollup import _rollup_days
 
 # The defaults `lab chapters --help` names. `logbook.labs.chapters` owns them and is imported only when
@@ -70,6 +71,7 @@ def lab_arguments(sub: Subparsers) -> None:
             )
         v.set_defaults(fn=cmd_lab)
     hold_arguments(verbs)
+    lab_map_arguments(verbs)
 
 
 def hold_arguments(verbs: Subparsers) -> None:
