@@ -42,6 +42,8 @@ needs a `dream` entry:
  "dream": {"max_tier": 2, "until": "2026-12-31", "model": "qwen2.5-7b-instruct"}}
 ```
 
+You write each entry yourself; a new record names only `mcp`, at 1.
+
 - `max_tier` is the ceiling the day is read under. The model sees only lines at or under it: with 2,
   the stays, photos, calendar, notes and messages; with 1, no note and no message at all, since those
   are tier 2; tier 3 (health, money) only when you write 3.

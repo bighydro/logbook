@@ -113,7 +113,8 @@ makes tier 1 the default and refuses `--tier 1,2`, naming the file:
 {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}, "world": {"max_tier": 3}}
 ```
 
-An entry may carry an `until` day, as every entry may (ADR 0022); past it, nothing crosses to the page.
+You write each entry yourself; a new record names only `mcp`, at 1. An entry may carry an `until` day, as
+every entry may (ADR 0022); past it, nothing crosses to the page.
 
 ## The record shows it left (RFC 0011)
 

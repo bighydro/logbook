@@ -14,10 +14,11 @@ from typing import Any
 
 import pytest
 from test_relationship_model import KEY, MODEL, _env, _fake
-from test_relationship_reader import HIS, OLA, WINDOW, _entry, _files, _record
+from test_relationship_reader import HIS, OLA, WINDOW, _entry, _files, _ingest, _record
 
 from logbook import cli
 from logbook.contrib import dream_person, model_client
+from logbook.contrib.relationship import reader
 from logbook.core import drafts, policy
 from logbook.core.chain import Line
 from logbook.core.store import Logbook
@@ -179,6 +180,33 @@ def test_dream_person_is_refused_without_the_entry_and_sends_nothing(
     code, _out, err = _dream(capsys)
     assert code == 2 and "relationship" in err and len(err.strip().splitlines()) == 1
     assert seen["calls"] == [] and no_network == [] and _files(lb.root) == before
+
+
+def test_a_relationship_entry_at_tier_3_is_refused_by_people_ask_and_dream_person(
+    june: tuple[Logbook, dict[str, str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    no_network: list[str],
+) -> None:
+    """`CLOUD_CEILING`, the owner's decision of 18 Oct 2026: nothing above tier 2 goes to the cloud
+    model, whatever the entry says. Both readers refuse, naming the ceiling, and no request is made."""
+    lb, _ids = june
+    _entry(lb, 3, "2026-12-31")
+    with monkeypatch.context() as m:  # a store built under the entry, so only the ceiling stands between
+        m.setattr(reader, "CLOUD_CEILING", 3)
+        _ingest(lb)
+    seen = _fake(monkeypatch, _person)
+    before = _files(lb.root)
+    for argv in (
+        ["people", "ask", "Ola Nordmann", "What did we plan for the boat?"],
+        ["dream", "person", "Ola Nordmann", "--window", *WINDOW],
+    ):
+        with pytest.raises(SystemExit) as e:
+            cli.main(argv)
+        err = capsys.readouterr().err
+        assert e.value.code == 2 and "max_tier 3" in err and f"at most {reader.CLOUD_CEILING}" in err, argv
+    assert seen["calls"] == [] and no_network == [], "no request was made"
+    assert _files(lb.root) == before and _drafts(lb) == []
 
 
 def test_dream_person_reads_nothing_above_the_ceiling_and_takes_its_tier(

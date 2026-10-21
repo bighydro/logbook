@@ -109,7 +109,8 @@ needs one line added:
 {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}, "vault": {"max_tier": 2}}
 ```
 
-A request above the ceiling is refused naming the file, and nothing is written or appended.
+You write each entry yourself; a new record names only `mcp`, at 1. A request above the ceiling is
+refused naming the file, and nothing is written or appended.
 
 ## The record shows it left (RFC 0011)
 

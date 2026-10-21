@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 import shelves_record
 from orgs_record import VERFT, settled_record
+from policy_entry import allow
 
 from logbook import cli
 from logbook.contrib import journeys, orgs, serve, shelf_promises
@@ -222,9 +223,11 @@ READERS: tuple[tuple[str, ...], ...] = (
 
 @pytest.fixture(scope="module")
 def record(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
-    """The demo record, generated once per worker; the readers only read it."""
+    """The demo record, generated once per worker; the readers only read it. Its policy names hermes
+    at tier 2, as the owner writes it, for the dry runs that cross to it."""
     root = tmp_path_factory.mktemp("demo") / "Demo"
     cli.main(["demo", "--days", "30", "--seed", "7", "--out", str(root)])
+    allow(root, "hermes", 2)
     return Logbook(root)
 
 

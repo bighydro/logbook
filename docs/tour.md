@@ -1207,7 +1207,8 @@ reference), and `resolution.jsonl` when any exported line names someone your con
 alias hops included. A JSON parser is all a reader needs.
 
 How much may cross is a setting in your record, not in the code (ADR 0016): `policy/crossing.json` maps each
-destination to its ceiling, `{"hermes": {"max_tier": 2}}` by default. Tier 1 crosses by default; tier 2 only
+destination to its ceiling, `{"hermes": {"max_tier": 2}}`, and you write each entry yourself: a new record
+names only `mcp`, at 1. Tier 1 crosses by default; tier 2 only
 with `--tier 1,2`, and the manifest then lists every tier-2 line under `review`; tier 3 only when the file
 allows it *and* you type `--tier 1,2,3`, and the manifest and the console say loudly that it did. A request
 above the ceiling is refused with the file's name. Every real export appends one `crossing/v1` line (RFC 0011)

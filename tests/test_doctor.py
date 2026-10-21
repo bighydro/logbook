@@ -760,6 +760,10 @@ def today(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_the_default_policy_passes_listing_each_ceiling(lb: Logbook, today: None) -> None:
     check = _run(lb)["crossing"]
     assert check.status == "pass"
+    assert check.detail == "mcp 1", "a new record names the door at tier 1 and no one else"
+    _write(policy.policy_path(lb.root), {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}})
+    check = _run(lb)["crossing"]
+    assert check.status == "pass"
     assert "hermes 2" in check.detail and "mcp 1" in check.detail
 
 
@@ -767,7 +771,8 @@ def test_no_policy_file_passes_with_the_defaults(lb: Logbook, today: None) -> No
     policy.policy_path(lb.root).unlink()
     check = _run(lb)["crossing"]
     assert check.status == "pass"
-    assert "no policy/crossing.json" in check.detail and "hermes 2" in check.detail
+    assert "no policy/crossing.json" in check.detail and check.detail.endswith(": mcp 1")
+    assert "hermes" not in check.detail
 
 
 def test_an_entry_with_a_date_passes_showing_the_date(lb: Logbook, today: None) -> None:

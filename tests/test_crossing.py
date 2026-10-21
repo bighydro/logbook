@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from policy_entry import allow
 
 from logbook import cli
 from logbook.core import crossing, signing
@@ -139,8 +140,10 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     message with a present attachment and one with a missing attachment. Before the window: the
     resolutions (Ola's phone, the lid alias, and Kari, whom nothing in the window mentions) and a
     location. At exactly UNTIL: a location that must not cross. Both days are signed (RFC 0034), on
-    the 3rd, so the crossing's default gate lets them through."""
+    the 3rd, so the crossing's default gate lets them through. The policy names hermes at tier 2,
+    as the owner writes it: a new record names no one above tier 1."""
     lb = Logbook.init(tmp_path / "lb", TZ)
+    allow(lb.root, "hermes", 2)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     store = lb.root / "attachments"
     store.mkdir()
@@ -199,14 +202,14 @@ def _policy(lb: Logbook, max_tier: int, destination: str = "hermes") -> Path:
 def test_init_writes_the_default_policy(tmp_path: Path):
     lb = Logbook.init(tmp_path / "fresh", TZ)
     policy = json.loads((lb.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
-    assert policy == {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
+    assert policy == {"mcp": {"max_tier": 1}}
 
 
 def test_first_export_writes_the_default_policy_when_missing(lb: Logbook, tmp_path: Path):
     (lb.root / "policy" / "crossing.json").unlink()  # a record made before ADR 0016
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))
+    _run("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))  # the one named
     policy = json.loads((lb.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
-    assert policy == {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}}
+    assert policy == {"mcp": {"max_tier": 1}}
 
 
 def test_request_above_the_ceiling_is_refused_naming_the_file(lb: Logbook, tmp_path: Path, capsys):
@@ -505,9 +508,8 @@ def test_present_attachments_are_copied_and_missing_ones_stay_references(lb: Log
 
 
 def test_dry_run_prints_counts_and_writes_nothing(lb: Logbook, tmp_path: Path, capsys):
-    (
-        lb.root / "policy" / "crossing.json"
-    ).unlink()  # a record made before ADR 0016: a dry run writes no default
+    policy_file = lb.root / "policy" / "crossing.json"
+    written = policy_file.read_bytes()  # the owner's file, which names hermes
     head, seq = lb.meta["head"], lb.meta["seq"]
     out = tmp_path / "out"
     _run(
@@ -522,7 +524,15 @@ def test_dry_run_prints_counts_and_writes_nothing(lb: Logbook, tmp_path: Path, c
     assert not out.exists()
     assert (lb.meta["head"], lb.meta["seq"]) == (head, seq)
     assert not (lb.root / "exports").exists()
-    assert not (lb.root / "policy" / "crossing.json").exists()
+    assert policy_file.read_bytes() == written
+    policy_file.unlink()  # a record made before ADR 0016: a dry run writes no default
+    _run("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--dry-run")  # the one named
+    text = capsys.readouterr().out
+    assert "dry run" in text and "nothing written" in text
+    assert not out.exists()
+    assert (lb.meta["head"], lb.meta["seq"]) == (head, seq)
+    assert not (lb.root / "exports").exists()
+    assert not policy_file.exists()
 
 
 # -- the crossing line (RFC 0011) and the watermark ----------------------------------------------
