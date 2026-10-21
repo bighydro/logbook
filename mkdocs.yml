@@ -36,6 +36,7 @@ nav:
   - Home: index.md
   - Install: install.md
   - Try it: try-it.md
+  - First questions: faq.md
   - The first hour: first-hour.md
   - The tour: tour.md
   - The commands: commands.md
@@ -95,6 +96,7 @@ nav:
       - "0038 Speakers: who spoke, and who they are (draft)": rfcs/0038-speakers.md
       - "0040 Videos: a recording file, its scenes, the owner's attribution (draft)": rfcs/0040-videos.md
   - Letters:
+      - "Why I built it (2026-10-12)": letters/2026-10-12-why-i-built-it.md
       - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
   - The signed day: signed-day.md
