@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from persona import TZ
 from shared_day import (
     CREATED,
     DAY,
@@ -24,11 +25,13 @@ from shared_day import (
     OLA_SEED,
     PHOTO_BYTES,
     both,
+    ines_drafts,
+    install_keys,
     use,
 )
 
 from logbook import cli
-from logbook.core import share
+from logbook.core import sealing, share
 from logbook.core.chain import canonical_json
 from logbook.core.store import Logbook
 
@@ -638,3 +641,77 @@ def test_a_page_says_where_the_senders_day_begins_and_the_receiver_holds_its_lin
     members["manifest.json"] = (json.dumps(altered, indent=2, sort_keys=True) + "\n").encode("utf-8")
     with pytest.raises(share.ReceiveError, match="day_start"):
         share.receive(ola, _rewrite(page, members, INES_SEED))
+
+
+# -- a sealed record (RFC 0029 §7, #320) ------------------------------------------------------------------
+
+
+@pytest.fixture
+def sealed_ines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    """Ines's Saturday in a record sealed to two recipients, her identity where `LOGBOOK_IDENTITY_FILE`
+    says: the photo's store file is an age file kept under its plaintext digest, the tier-2 lines
+    are sealed on append, and Ola is allowed to tier 2."""
+    install_keys()
+    pairs = [sealing.generate_identity() for _ in range(2)]
+    identity = tmp_path / "keys" / "ines.txt"
+    sealing.write_identity_file(identity, pairs[0][0], "synthetic, for the sealed share test")
+    monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
+    lb = Logbook.init(tmp_path / "ines", TZ)
+    lb.set_meta(owner_id=INES_ID)
+    meta = lb.meta
+    meta["recipients"] = [recipient for _, recipient in pairs]
+    lb._save_meta(meta)
+    lb = Logbook(lb.root)
+    lb.attach(PHOTO_BYTES)
+    lb.append_many(ines_drafts())
+    _allow(lb, "ola", 2)
+    use(monkeypatch, lb)
+    return lb
+
+
+def test_a_sealed_record_shares_a_day_whose_line_names_a_sealed_attachment(
+    sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """The issue's case: the photo's store file is sealed, so its bytes on disk never hash to its
+    name; the share opens it with this machine's identity, checks the opened bytes and puts them
+    in the zip, as the lines are opened."""
+    assert sealing.is_sealed_file(sealed_ines.root / "attachments" / PHOTO_SHA)
+    out = tmp_path / "sealed-to-ola.zip"
+    _run(capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out))
+    members = _members(out)
+    photo = members[f"attachments/{PHOTO_SHA}"]
+    assert hashlib.sha256(photo).hexdigest() == PHOTO_SHA and photo == PHOTO_BYTES
+    assert _manifest(out)["attachments"] == [
+        {"sha256": PHOTO_SHA, "bytes": len(PHOTO_BYTES), "media_type": "image/jpeg"}
+    ]
+
+
+def test_a_sealed_attachment_that_opens_to_other_bytes_stops_the_share(
+    sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """A store file sealed to the right recipients but holding other bytes opens, and does not hash to
+    its name: an error, and no zip is left behind."""
+    store = sealed_ines.root / "attachments" / PHOTO_SHA
+    other = tmp_path / "other.bin"
+    other.write_bytes(b"synthetic bytes that are not the photo")
+    store.unlink()
+    sealing.seal_file(other, store, sealed_ines.recipients)
+    out = tmp_path / "sealed-to-ola.zip"
+    code, err = _failure(
+        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out)
+    )
+    assert code != 0 and "opens to bytes that do not hash to its name" in err
+    assert not out.exists() and not out.with_name(out.name + ".tmp").exists()
+
+
+def test_a_plain_attachment_that_does_not_hash_to_its_name_stops_the_share(
+    records: tuple[Logbook, Logbook], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    ines, _ = records
+    (ines.root / "attachments" / PHOTO_SHA).write_bytes(b"synthetic bytes that are not the photo")
+    out = tmp_path / "ines-to-ola.zip"
+    code, err = _failure(
+        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out)
+    )
+    assert code != 0 and "does not hash to its name" in err
+    assert not out.exists()

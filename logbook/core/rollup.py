@@ -285,7 +285,12 @@ def places(reading: Reading, with_table: bool = False) -> dict[str, Any]:
         who = [
             c
             for c in present.company(
-                stay, evidence.near(stay), reading.identities, reading.places, reading.owner
+                stay,
+                evidence.near(stay),
+                reading.identities,
+                reading.places,
+                reading.owner,
+                reading.voice_gate,
             )
             if c.status == present.CONFIRMED
         ]
@@ -555,7 +560,9 @@ def people(reading: Reading) -> dict[str, Any]:
         if heard:
             unnamed.setdefault(_year_of(stay_day), set()).update(heard)
             years.setdefault(_year_of(stay_day), {"year": _year_of(stay_day), "people": {}, "unresolved": {}})
-        found = present.present(stay, near, reading.identities, reading.places, reading.owner)
+        found = present.present(
+            stay, near, reading.identities, reading.places, reading.owner, reading.voice_gate
+        )
         for c in found:
             if c.status != present.CONFIRMED:
                 continue

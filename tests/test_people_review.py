@@ -261,7 +261,7 @@ def test_accept_writes_the_line_people_merge_writes_and_the_readers_follow(
     assert identities[("phone", astrid["phone"])].entity == astrid["id"]
     assert identities[("handle", jid(eva))].entity == eva["id"]
     assert identities[("provider_id", TRANSCRIPT_SPEAKER)] == resolve.Identity(
-        maren["id"], "person", "Maren Eide"
+        maren["id"], "person", "Maren Eide", tier=2
     )
     after = {p["id"]: p for p in _json(capsys, "people")["people"]}
     assert after[astrid["id"]]["channels"]["messages"]["lines"] == 3, "her two and the owner's reply"

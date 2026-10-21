@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import crossing, day_start, policy, stars
+from . import attachments, crossing, day_start, policy, sealing, stars
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -374,7 +374,7 @@ def share_day(
             zf.writestr(zipfile.ZipInfo(PACKAGE_FILE, when), package_raw, zipfile.ZIP_DEFLATED)
             for blob in sel.blobs:
                 sha256 = str(blob["sha256"])
-                _copy_checked(lb.root / ATTACHMENTS_DIR / sha256, zf, f"{ATTACHMENTS_DIR}/{sha256}", when)
+                _copy_checked(lb, sha256, zf, when)
             zf.writestr(zipfile.ZipInfo(MANIFEST_FILE, when), manifest_raw, zipfile.ZIP_DEFLATED)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -415,18 +415,28 @@ def _manifest_bytes(manifest: dict[str, Any]) -> bytes:
     return (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _copy_checked(src: Path, zf: zipfile.ZipFile, name: str, when: Stamp) -> None:
+def _copy_checked(lb: Logbook, sha256: str, zf: zipfile.ZipFile, when: Stamp) -> None:
     """One attachment into the zip, hashed on the way: a store file whose bytes do not match its
-    name is an error (SPEC §1.1), never something a receiver should find out."""
+    name is an error (SPEC §1.1), never something a receiver should find out. A sealed file is
+    opened with this machine's identity and its opened bytes are checked and zipped, as the lines
+    are opened (RFC 0029 §7, as `crossing._copy_checked` does)."""
+    src = lb.root / ATTACHMENTS_DIR / sha256
+    name = f"{ATTACHMENTS_DIR}/{sha256}"
+    sealed = sealing.is_sealed_file(src)
     digest = hashlib.sha256()
     info = zipfile.ZipInfo(name, when)
     info.compress_type = zipfile.ZIP_DEFLATED
-    with src.open("rb") as fi, zf.open(info, "w") as fo:
+    with (
+        attachments.opened(lb.root, sha256, lb.identities) as plain,
+        plain.open("rb") as fi,
+        zf.open(info, "w") as fo,
+    ):
         while chunk := fi.read(CHUNK):
             digest.update(chunk)
             fo.write(chunk)
-    if f"{ATTACHMENTS_DIR}/{digest.hexdigest()}" != name:
-        raise ShareError(f"{src} does not hash to its name (SPEC §1.1); the record needs repair first")
+    if digest.hexdigest() != sha256:
+        what = "opens to bytes that do not hash" if sealed else "does not hash"
+        raise ShareError(f"{src} {what} to its name (SPEC §1.1); the record needs repair first")
 
 
 def default_out(lb: Logbook, to: str, day: str) -> Path:

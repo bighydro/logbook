@@ -55,7 +55,8 @@ class Identity(NamedTuple):
     `place` or `company`), when it names one, and the label it carries. A `speaker` ref (RFC 0038
     §3.2) also carries `unnamed`, from the deciding line, and the `basis`, `consent` and `confidence`
     of the voice's own standing line (`attribution.speaker_fields`); every other ref keeps the
-    defaults."""
+    defaults. `tier` is the deciding line's, the line the label is learned from (None for a line
+    that carries none), so a reader under a gate can hold a name back (`attribution.Voices`)."""
 
     entity: str | None
     type: str | None
@@ -64,6 +65,7 @@ class Identity(NamedTuple):
     basis: str | None = None
     consent: str | None = None
     confidence: float | None = None
+    tier: int | None = None
 
 
 def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
@@ -73,7 +75,9 @@ def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
     last = standing(lines)
     found: dict[Ref, Identity] = {}
     for ref in last:
-        payload = walk(ref, last)[-1].get("payload") or {}
+        deciding = walk(ref, last)[-1]
+        payload = deciding.get("payload") or {}
+        tier = deciding.get("tier")
         entity = payload.get("entity")
         label = payload.get("label")
         entity_id = entity.get("id") if isinstance(entity, dict) else None
@@ -87,6 +91,7 @@ def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
                 if ref[0] == attribution.SPEAKER
                 else {}
             ),
+            tier=tier if isinstance(tier, int) and not isinstance(tier, bool) else None,
         )
     return found
 
