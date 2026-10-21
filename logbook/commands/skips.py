@@ -71,6 +71,7 @@ SKIP_PHRASES = {
     "skipped_no_designator": "without a carrier and flight number",
     "skipped_no_route": "without both airports",
     "skipped_label": "by label",
+    "skipped_list_header": "list headers that would not parse (each kept by its name alone)",
     "skipped_no_value": "without a value",
     "skipped_bad_span": "ending before they start",
     "skipped_other_type": "of a type this version does not know",
