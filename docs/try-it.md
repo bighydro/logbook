@@ -15,6 +15,14 @@ demo record: 30 days, 2026-06-01 to 2026-06-30, seed 1; nothing in it is real
 wrote 12,772 lines to ~/Demo/Logbook, head 3ee025e7a9fb…
 ```
 
+## Open it in a browser
+
+```bash
+logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17: one day of a person who does not exist, a week aboard. The page is computed on this machine from the lines you just made. Press Ctrl-C in the terminal to stop it.
+
 ## Who
 
 Ines Nordmann lives in Oslo with Ola. She has a sister, Kari; colleagues, Per and Liv; a crew for
