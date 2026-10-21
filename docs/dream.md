@@ -405,6 +405,119 @@ $ logbook dream --catch-up
 trip:2026-06-15:2026-06-17  unchanged unchanged since #5480
 ```
 
+## Months
+
+`logbook dream month [YYYY-MM]` drafts a calendar **month** once it is over (unit `month`, subject
+`2026-06`), under the same `dream` entry, the same endpoint and the same evidence rule as the week; with
+no month named, the last month that is over. A month whose last day is today or later is refused (`which
+is not over`).
+
+**Told from the days you signed.** The month's paragraph is told from the days you signed (`day sign`)
+and from nothing else of the record's words: each signed day's standing draft the entry allows, its
+supported sentences only, given as a model's words with the lines they rest on, and your own words on
+the day, its reflections (`day reflect`) and the note you signed it with. A raw line's text the day
+drafts did not use is never sent. A day you did not sign is not told; the month says how many you
+signed of how many days. A month with no signed day under the ceiling has nothing to tell: `dream
+month` refuses it and `--catch-up` counts it `empty`.
+
+It writes:
+
+- `month`: the month told back, a short paragraph;
+- `where`: where it went, from figures the code computes from the month's lines: the places with their
+  hours and days (the week's count), the nights by class (`home`, `away`, `aboard`, `in transit` as the
+  year's poster classes them, and `unknown` for a night of a day the record holds nothing of; `no data`
+  when the month has no stay at all), and the people **in the order of the time spent together** (the
+  days the with module puts them at your stays, then their contacts): **names only**. No count is given
+  beside a person, none is kept in the line, a day draft's sentence that puts one beside a name is not
+  passed on, and a sentence of the month that writes a figure where it names a person is marked
+  unsupported (`a number beside a person` under `extra.marked`), whatever it cites;
+- `goals`: for each goal open on the month's last day or reviewed in it, what the month shows, from
+  what the code computed: your reviews dated in the month, the standing verdict on the last day, and the
+  days a line of the month **touched** the goal, as dates and never a count (a goal's words may name a
+  person): a contact with a person, or a stay at a named place,
+  that the goal's own words name ("Keep the berth in Vollen, as agreed with Ola Nordmann" is touched by
+  the call and the dinner with Ola Nordmann). Kept under `extra.numbers.goals`; the month proposes no
+  verdict, `goal review` is yours;
+- `next_month`: one proposal for next month, never more (a second is dropped and counted);
+- `question`: one question about the month for you to answer, never more.
+
+```
+$ logbook dream month 2026-06
+2026-06: dreamed as #5620 draft/v1 · model:qwen2.5-7b-instruct · tier 2 · 1188 lines read at 4f0c2a91 · 6 segments
+    month     A month at home and at the office, with Zürich in the middle.  [9c1f04a2]
+    where     173.8 hours at Home.  [0b44e1d0]
+    where     Mostly with Ola Nordmann, then Kari Nordmann.  [5d2e8a17]
+    goals     The berth came up on the call and at the dinner.  [77a0c3e9]
+    proposal  Send Kari Nordmann the harbour map.  [9c1f04a2]
+    question  Is the berth in Vollen still what you want for next summer?  [9c1f04a2]
+    signed    3 of 30 days
+    hours     Home 173.8 h · Office 58.0 h
+    nights    home 12 · away 3 · unknown 15
+    with      Ola Nordmann · Kari Nordmann
+    goal      “Keep the berth in Vollen, as agreed with Ola Nordmann.” · touched on 2026-06-11, 2026-06-16
+  a draft is a proposal: your signatures, your notes, your reviews and your chapters are the facts
+```
+
+`read_count` is the month's lines under the ceiling and the signatures of its days; the day drafts and
+the goals and reviews dated before the month are read beside them, toward the tier and the digest. The
+promises, the people who moved and the stale question of the week are not read: each walks more of the
+record than a month.
+
+## Chapters
+
+`logbook dream chapter [ID]` drafts a **chapter** you named (`chapter open`, [RFC 0036's chapter
+profile](https://github.com/bighydro/logbook/blob/main/rfcs/0036-chapter-v1.md)), open or closed (unit
+`chapter`). `ID` is the id of any of its lines, its seq (`12` or `#12`) or its name, as `chapter list`
+prints them; with none, the chapter yesterday was in, else the one that closed last. An open chapter,
+or one closed ahead of its last day, is read up to yesterday.
+
+**From the drafts it spans, never the raw lines.** A chapter may run for years, so it is never read line
+by line. It reads the chapter as you named it (its name, its stretch and its `rules`, your words on what
+it is for), then the **month drafts** for the months it spans, and, for a month no month draft covers,
+the **week drafts** of its weeks (at most 24 months and 12 weeks, the latest), each draft's supported
+sentences only, and a sentence only when every line it rests on is a line of the chapter's days under
+the ceiling and it puts no figure beside a person (a week's `people` sentence does): a June draft given to a chapter that began on the 20th gives only what rests on the 20th
+and after. It writes:
+
+- `arc`: the chapter's arc, in the order it was lived, from the months and the weeks;
+- `rule`: what it was for, said back from its rules, never judged against them;
+- `held`: what it held, from figures the code computes: its days, the days you signed, the months and
+  weeks drafted;
+- `closed`: what it closed: the goals you reviewed `done`, `let go` or `superseded` on one of its days,
+  and its own close.
+
+The same rules hold: every sentence cited or marked, more than 30 % unsupported refused, no figure the
+items do not give, no figure beside a person. A chapter is a tier-2 line, so under a ceiling of 1 it
+is refused before anything is read. Its `subject` is the ids of its lines, the standing one first, so
+`dream chapter --json` and a later page find the draft by any of them; closing a chapter writes a new
+line, which is a change, so the chapter is dreamed again. A chapter no month or week draft says anything
+of is refused (`dream month` or `dream week` first) and counted `empty` by the catch-up.
+
+**The catch-up.** After the days, the weeks, the calls and the journeys, `dream --catch-up` looks at
+each month whose last day is among the days it looks at, so **the first 06:00 close of a month dreams
+the month before**, then at each chapter whose last day, or the line that closed it, is among them, so a
+chapter is dreamed **when it closes**, and at each closed chapter that spans the month it looks at, so
+a chapter dreamed from its week drafts is dreamed again from its month draft once that exists. A
+chapter whose line is above the entry's `max_tier` is held back there (`empty`, never `refused`): the
+policy doing its job is not a failed close. After that each is left alone while it is
+unchanged and dreamed again, superseding its draft, by the week's rule: what it would read today is not
+what it read (a day signed since, a day or a month dreamed again), the draft above the entry's
+`max_tier` today, or dreamed under another version of the entry. An open chapter is never caught up,
+only dreamed on demand.
+
+```
+$ logbook dream --catch-up
+2026-06-30  dreamed   #5618 · no draft yet · 3 segments
+2026-06  dreamed   #5620 · its last day is over, no draft yet · 6 segments
+chapter Ashore, fixing things  dreamed   #5621 · closed, no draft yet · 4 segments
+```
+
+**JSON.** `dream month --json` and `dream chapter --json` print the standing draft after the write as a
+reader shows it (`draft`, or `draft_withheld` when the entry no longer allows its tier), its segments
+with their parts and evidence and, under `numbers`, what the code computed; under `--dry-run`, the
+payload that would have been written. No page shows them yet: the timeline's month and life zooms will,
+after the 1.0 tag.
+
 ## What a morning looks like
 
 ```
