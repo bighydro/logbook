@@ -1342,17 +1342,26 @@ def search_arguments(sub: Subparsers) -> None:
     )
     s.add_argument("--limit", type=int, default=search.LIMIT, help=f"the hits shown (default {search.LIMIT})")
     s.add_argument(
-        "--json", action="store_true", help="the query, the hits by day with rank, snippet, summary"
+        "--standing",
+        action="store_true",
+        help="standing hits only: leave out a line a later line of its kind supersedes (marked otherwise)",
+    )
+    s.add_argument(
+        "--json",
+        action="store_true",
+        help="the query, the hits by day with rank, snippet, summary, standing and superseded_by",
     )
     s.set_defaults(fn=cmd_search)
 
 
 def cmd_search(a: argparse.Namespace) -> None:
-    """`search TEXT [--since DAY] [--until DAY] [--kinds a,b] [--tier 1|2|3] [--limit N] [--json]`:
-    full-text search through the index's FTS5 table (`logbook/core/search.py`): words and quoted
-    phrases, literal (no stemming), case and accents aside; the hits ranked by bm25, grouped by
-    local day, each as the row `show` prints with a snippet of the matching words under it. Tiers
-    1 and 2 unless `--tier 3`. Nothing is written."""
+    """`search TEXT [--since DAY] [--until DAY] [--kinds a,b] [--tier 1|2|3] [--limit N] [--standing]
+    [--json]`: full-text search through the index's FTS5 table (`logbook/core/search.py`): words and
+    quoted phrases, literal (no stemming), case and accents aside; the hits ranked by bm25, grouped by
+    local day, each as the row `show` prints with a snippet of the matching words under it, and
+    `superseded by #N` after the row of a hit a later line of its kind supersedes (`--standing`: such
+    a hit is left out). Tiers 1 and 2 unless `--tier 3`. Nothing is written to the record (an index built
+    before `lines_kind_supersedes` is given it, as the Library gives it)."""
     lb = Logbook.find()
     day_start.of(lb.meta)  # a hit is listed on its day: a boundary not a clock is refused (RFC 0036)
     try:
@@ -1363,6 +1372,7 @@ def cmd_search(a: argparse.Namespace) -> None:
             kinds=_csv(a.kinds),
             max_tier=a.tier,
             limit=a.limit,
+            standing=a.standing,
         )
     except (search.QueryError, ValueError) as e:
         print(f"search: {e}", file=sys.stderr)
@@ -1370,6 +1380,9 @@ def cmd_search(a: argparse.Namespace) -> None:
     tz = ZoneInfo(lb.meta["timezone"])
     try:
         with lb.index() as idx:
+            # an index built before `lines_kind_supersedes` is given it, once (the Library's way, the
+            # writer lock not waited for): the mark asks it, and without it reads every line of a kind
+            idx.add_indexes()
             result = search.search(idx, q)
             names = labels(lb, idx)
     except RuntimeError as e:  # no FTS5 in this SQLite
