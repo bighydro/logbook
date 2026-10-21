@@ -258,12 +258,10 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
         )
         rows.append(_dt("photos", photos))
     during = item["during"]
-    for c in during["messages"]:
-        side = f"{c['sent']} sent, {c['received']} received"
-        agent = " (an agent)" if c["agent"] else ""
-        rows.append(_dt("messages", f"{escape(c['network'])}: with {escape(c['with'])}{agent}{DOT}{side}"))
-    for c in during["calls"]:
-        rows.append(_dt("call", escape(day_reader.call_text(c))))
+    for c in during["messages"]:  # the name and the channel, never a count beside the name
+        rows.append(_dt("messages", escape(moments.conversation_text(c))))
+    for c in during["calls"]:  # the name and which way, never how long
+        rows.append(_dt("call", escape(moments.call_text(c))))
     for s in during["agents"]:
         said = "".join(f'<blockquote class="said">{escape(t)}</blockquote>' for t in s["owner"])
         machine = "".join(

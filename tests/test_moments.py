@@ -58,13 +58,12 @@ def test_a_day_is_its_moments_and_the_moves_between_them(demo: Logbook) -> None:
         "network": "whatsapp",
         "group": False,
         "agent": False,
-        "sent": 0,
-        "received": 1,
         "lines": [],
     }
     assert [t["merchant"] for t in office["money"]["paid"]] == ["Havnekiosken"]
     rows = list(moments.rows(data))
-    assert any(r.strip().startswith("Office · 07:50\u201317:25 · Per Hansen, Liv Berg") for r in rows), rows
+    assert any(r.strip().startswith("Office · 07:50\u201317:25 · 1 conversation") for r in rows), rows
+    assert any(r.strip().endswith("· with Per Hansen, Liv Berg") for r in rows), rows  # the people last
 
 
 def test_what_passed_during_a_moment_lies_inside_its_window(demo: Logbook) -> None:
@@ -101,15 +100,28 @@ def test_a_proposed_person_is_never_confirmed_and_says_why(demo: Logbook) -> Non
     )
     assert aboard["people"]["confirmed"] == []
     assert [(p["name"], p["because"]) for p in aboard["people"]["proposed"]] == [
-        ("Ola Nordmann", ["face on 1 photo"])
+        ("Ola Nordmann", ["face on photos"])
     ]
     assert "Ola Nordmann?" in moments.item_text(aboard)
+
+
+def test_a_conversation_and_a_call_say_who_and_never_how_many(demo: Logbook) -> None:
+    """No number beside a person, in the JSON as on the page: a conversation is who and the network,
+    a call who and which way; neither carries a count or a length."""
+    (home,) = [m for m in _moments(moments.read(demo, "day", "2026-06-03")) if m["during"]["calls"]]
+    (call,) = home["during"]["calls"]
+    assert set(call) == {"who", "direction", "answered", "line"}
+    assert moments.call_text(call) == "Ola Nordmann · call in"
+    office = next(m for m in _moments(moments.read(demo, "day", OFFICE_DAY)) if m["place"] == "Office")
+    (chat,) = office["during"]["messages"]
+    assert set(chat) == {"with", "network", "group", "agent", "lines"}
+    assert moments.conversation_text(chat) == "Ola Nordmann · whatsapp"
 
 
 def test_the_reasons_read_in_words() -> None:
     assert moments.because(
         ["attendee of Lunch", "face in A.HEIC", "face Ola in B.HEIC", "spoke in Call", "note says with Ola"]
-    ) == ["invited", "spoke", "you said", "face on 2 photos"]
+    ) == ["invited", "spoke", "you said", "face on photos"]  # faces never counted beside a name
     assert moments.because(["attendee of Sail (all day)"]) == ["invited"]
 
 

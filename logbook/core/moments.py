@@ -10,13 +10,13 @@ promoted to one) or a run aboard an asset (`stays.fold`), as the Day lists them.
 - its **time** and duration, its real span and the part of it on the day;
 - its **people**, from the with module the Day reads (`present.company`): the confirmed in one list, the
   proposed in another, each with its reasons in words — `invited` (a calendar's attendee), `spoke` (a
-  recording), `you said` (the owner's note), `face on 2 photos` (a library's face). No proposer is new
+  recording), `you said` (the owner's note), `face on photos` (a library's face). No proposer is new
   here; a proposal is never shown as confirmed. A person is a name and its reasons, never a number;
 - its **photos**, the owner's own camera first (`provenance` `camera`), the starred first within each;
 - what passed **during** its window, placed by time and never by subject: the messages by conversation
-  (sent and received counted), the calls, the sessions with an agent (a transcript with a machine
-  participant: the owner's words, and the agent's marked as machine text), the mail threads, the notes
-  and the calendar's entries;
+  (who and on which network, never how many), the calls (who and which way, never how long), the
+  sessions with an agent (a transcript with a machine participant: the owner's words, and the agent's
+  marked as machine text), the mail threads, the notes and the calendar's entries;
 - **paid** (tier 3, a slot): the `transaction/v1` lines standing whose instant lies in the window, with
   the merchant. When no payment source covers the day (the day lies outside the first and last day any
   source has a transaction line on), the day says `No payment source covers this day` and the last day
@@ -67,6 +67,8 @@ CLASS_WORDS = {  # how a count of nights reads: "home 21 · the family's places 
     IN_TRANSIT: IN_TRANSIT,
 }
 CONFIRMING = ("event", "transcript", "note")  # the evidence that can confirm company (`present`)
+ARROWS = f" {day_reader.ARROW} "  # a flight's airports, `OSL → ZRH`
+FACES = "face on photos"  # a face's reason, however many photos: no number beside a person
 CAMERA = "camera"  # a photo's `provenance` when the owner's own camera took it
 WORDS_SHOWN = 3  # an agent session's turns of each side a moment carries; the rest are on its line
 WORDS_CHARS = 280
@@ -285,13 +287,14 @@ def _people(found: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
 
 
 def because(reasons: Sequence[str]) -> list[str]:
-    """The with module's reasons (`present`) in the timeline's words, each once, faces counted by photo:
-    `invited`, `spoke`, `you said`, `face on 2 photos`; a reason it does not know, as it is."""
+    """The with module's reasons (`present`) in the timeline's words, each once: `invited`, `spoke`,
+    `you said`, `face on photos` (however many: no number beside a person); a reason it does not know,
+    as it is."""
     words: list[str] = []
-    faces = 0
+    faces = False
     for reason in reasons:
         if reason.startswith("face "):
-            faces += 1
+            faces = True
             continue
         word = (
             "invited"
@@ -305,7 +308,7 @@ def because(reasons: Sequence[str]) -> list[str]:
         if word not in words:
             words.append(word)
     if faces:
-        words.append(f"face on {faces} photo{'s' if faces != 1 else ''}")
+        words.append(FACES)
     return words
 
 
@@ -316,7 +319,6 @@ def _during(
     messages = [lines[i] for i in (attached.get("messages") or {}).get("lines", ()) if i in lines]
     conversations = []
     for c in day_reader.conversations(messages, rd.names):
-        sent = sum(1 for m in c["messages"] if m["from_me"])
         agent = any(machine.with_agent(lines[m["line"]].get("payload") or {}) for m in c["messages"])
         conversations.append(
             {
@@ -324,8 +326,6 @@ def _during(
                 "network": c["network"],
                 "group": c["group"],
                 "agent": agent,
-                "sent": sent,
-                "received": c["count"] - sent,
                 "lines": [m["line"] for m in c["messages"]],
             }
         )
@@ -343,7 +343,9 @@ def _during(
             recordings.append({"title": t["title"], "line": t["line"]})
     return {
         "messages": conversations,
-        "calls": [dict(c) for c in attached.get("calls") or ()],
+        "calls": [  # who and which way, never how long: no number beside a person
+            {k: c[k] for k in ("who", "direction", "answered", "line")} for c in attached.get("calls") or ()
+        ],
         "agents": agents,
         "recordings": recordings,
         "mail": [
@@ -895,31 +897,20 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
 
 
 def item_text(item: Mapping[str, Any]) -> str:
-    """One item of a day folded to one line: a moment as `Saltbu · 19:30-22:40 · Ola, Kari, Per? · 6
-    photos · 2 conversations`, a move as its span, mode and distance."""
+    """One item of a day folded to one line: a moment as `Saltbu · 19:30-22:40 · 6 photos · 2
+    conversations · with Ola, Kari, Per?`, the people last and after the word `with`, so no number
+    ever stands beside a name; a move as its span, mode and distance."""
     span = item["span"]
-    if item["kind"] != "moment":
-        what = (
-            f"flight {item['flight']} {day_reader.ARROW.join(item['airports'])}".rstrip()
-            if item["kind"] == day_reader.FLIGHT
-            else "a gap in the track"
-            if item["kind"] == day_reader.GAP
-            else DOT.join(
-                p
-                for p in (
-                    item.get("mode") or "move",
-                    day_reader.distance_text(item["distance_m"]) if item.get("distance_m") else "",
-                )
-                if p
-            )
+    if item["kind"] == day_reader.FLIGHT:  # a word first: a row under a name never opens on a number
+        return DOT.join(
+            p for p in (f"flight {item['flight']}".rstrip(), ARROWS.join(item["airports"]), span) if p
         )
-        return f"{span}  {what}"
+    if item["kind"] == day_reader.GAP:
+        return f"a gap in the track{DOT}{span}"
+    if item["kind"] != "moment":
+        far = day_reader.distance_text(item["distance_m"]) if item.get("distance_m") else ""
+        return DOT.join(p for p in (item.get("mode") or "move", span, far) if p)
     parts = [item["place"], span]
-    names = [p["name"] for p in item["people"]["confirmed"]] + [
-        f"{p['name']}?" for p in item["people"]["proposed"]
-    ]
-    if names:
-        parts.append(", ".join(names))
     if item["photos"]:
         parts.append(_plural(len(item["photos"]), "photo"))
     talk = len(item["during"]["messages"]) + len(item["during"]["agents"])
@@ -930,7 +921,27 @@ def item_text(item: Mapping[str, Any]) -> str:
             parts.append(_plural(len(item["during"][kind]), noun))
     if item.get("money", {}).get("paid"):
         parts.append("paid " + ", ".join(t["merchant"] for t in item["money"]["paid"]))
+    names = [p["name"] for p in item["people"]["confirmed"]]
+    names += [f"{p['name']}?" for p in item["people"]["proposed"]]
+    if names:
+        parts.append("with " + ", ".join(names))
     return DOT.join(parts)
+
+
+def conversation_text(c: Mapping[str, Any]) -> str:
+    """A conversation during a moment: who and where, `Kari Nordmann · iMessage`; never how many."""
+    return f"{c['with']}{DOT}{c['network']}" + (f"{DOT}an agent" if c.get("agent") else "")
+
+
+def call_text(c: Mapping[str, Any]) -> str:
+    """A call during a moment: who and which way, `Ola Nordmann · call out`; never how long."""
+    outgoing = c.get("direction") == "outgoing"
+    way = (
+        ("call out" if outgoing else "call in")
+        if c.get("answered")
+        else ("no answer" if outgoing else "missed")
+    )
+    return f"{c['who']}{DOT}{way}"
 
 
 def tally_text(found: Mapping[str, Any]) -> str:

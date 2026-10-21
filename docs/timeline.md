@@ -26,20 +26,22 @@ line, a photo or a call is already a stay), or a run aboard an asset (`aboard So
 - **the time**: the part of the stay on the day, `19:30–22:40`, and its length;
 - **who was there**: the confirmed in one list and the proposed in another, in grey with a `?` and
   the reason in words: *invited* (an attendee of a calendar entry), *spoke* (a recording), *you said*
-  (your own note), *face on 2 photos* (a photo library's face). Nothing new proposes anyone here: these
-  are the Day's own proposals, and a proposal is never shown as confirmed;
+  (your own note), *face on photos* (a photo library's face, however many photos). Nothing new proposes
+  anyone here: these are the Day's own proposals, and a proposal is never shown as confirmed;
 - **the photos** taken during it, your own camera's first and the starred first;
-- **what passed during it**, placed by time and never by subject: the messages by conversation (how
-  many you sent and how many you received), the calls, the sessions with an agent (your words, and the
-  agent's marked as machine text), the mail threads, the notes, the calendar's entries;
+- **what passed during it**, placed by time and never by subject: the messages by conversation (who
+  and where, `Kari Nordmann · iMessage`), the calls (who and which way, `Ola Nordmann · call in`), the
+  sessions with an agent (your words, and the agent's marked as machine text), the mail threads, the
+  notes, the calendar's entries. Never how many messages or how long a call: no number stands beside a
+  person;
 - **paid**, at tier 3 only: the transactions whose time falls inside it, with the merchant. A day no
   payment source covers says *No payment source covers this day*, with the last day one does: a day is
   covered when it lies between the first and the last day of a transaction that stands (a retracted one
   covers nothing).
 
-On the page each moment is folded to one line, `Saltbu · 19:30–22:40 · Ola Nordmann, Kari Nordmann, Per
-Hansen? · 6 photos · 2 conversations`, and opens to the rest. The moves between moments are one line
-each.
+On the page each moment is folded to one line, `Saltbu · 19:30–22:40 · 6 photos · 2 conversations · with
+Ola Nordmann, Kari Nordmann, Per Hansen?`, the people last, so no number stands beside a name, and opens
+to the rest. The moves between moments are one line each, `walk · 07:25–07:41 · 460 m`.
 
 ## The zooms
 

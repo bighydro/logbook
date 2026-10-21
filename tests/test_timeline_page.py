@@ -31,10 +31,22 @@ PAGES = (
     f"/timeline/day/{OFFICE_DAY}",
     f"/timeline/day/{ABOARD_DAY}",
     "/timeline/day/2026-06-26",
+    "/timeline/day/2026-06-03",  # a call with Ola at home
     "/timeline/week/2026-W25",
     "/timeline/month/2026-06",
     "/timeline/year/2026",
     "/timeline/life",
+)
+CLI_OF_PAGES = (  # `show timeline`'s options for each of `PAGES`, its text held to the same guard
+    ("--day", "2026-06-21"),
+    ("--day", OFFICE_DAY),
+    ("--day", ABOARD_DAY),
+    ("--day", "2026-06-26"),
+    ("--day", "2026-06-03"),
+    ("--week", "2026-W25"),
+    ("--month", "2026-06"),
+    ("--year", "2026"),
+    ("--life",),
 )
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 TAG = re.compile(r"<[^>]+>")
@@ -110,9 +122,12 @@ def test_a_moment_folds_to_one_line_and_opens_to_its_detail(demo: Logbook) -> No
     summary = re.search(r"<summary>(.*?)</summary>", page[page.index("Office") - 200 :], re.S)
     assert summary is not None
     line = _text(f"<main>{summary.group(1)}</main>")
-    assert line.startswith("Office · 07:50\u201317:25 · Per Hansen, Liv Berg · 1 conversation")
+    assert line == (  # the people last, after the word `with`: no number stands beside a name
+        "Office · 07:50\u201317:25 · 1 conversation · 1 mail thread · paid Havnekiosken"
+        " · with Per Hansen, Liv Berg"
+    )
     detail = _text(page)
-    for said in ("Mooring for the week", "Release sync", "whatsapp: with Ola Nordmann · 0 sent, 1 received"):
+    for said in ("Mooring for the week", "Release sync", "Ola Nordmann · whatsapp"):
         assert said in detail, said
     assert "Havnekiosken -119.00 NOK" in detail
 
@@ -122,21 +137,63 @@ def test_proposed_company_is_pencil_and_never_confirmed(demo: Logbook) -> None:
     assert "<dt>with</dt>" not in page  # nobody confirmed aboard that day
     proposed = re.search(r"<dt>proposed</dt><dd>(.*?)</dd>", page, re.S)
     assert proposed is not None and 'class="pencil"' in proposed.group(1)
-    assert "Ola Nordmann? (face on 1 photo)" in html.unescape(proposed.group(1))
+    assert "Ola Nordmann? (face on photos)" in html.unescape(proposed.group(1))
     assert "Ola Nordmann?" in _text(page)
 
 
-def test_no_number_stands_beside_a_person_s_name_on_any_zoom(demo: Logbook) -> None:
-    """VISION: no metrics near people. For every person the record names, nowhere on any zoom is a
-    digit right before or after the name (but for the separator a list or a field puts between)."""
+BESIDE = r"[\s(:×x#·,]*"  # what may stand between a name and a number and still be beside it
+
+
+def _beside(name: str) -> re.Pattern[str]:
+    """A digit before `name`, or after it (a proposed name's `?` aside), with nothing between but
+    `BESIDE`: a space, a bracket, a colon, a times sign, a hash, the middle dot, a comma."""
+    named = re.escape(name)
+    return re.compile(rf"(\d{BESIDE}{named})|({named}\??{BESIDE}\d)")
+
+
+def test_the_guard_catches_a_number_beside_a_name() -> None:
+    """The guard below is only as good as its pattern: each of these must fail it."""
+    for said in (
+        "Ola Nordmann 3",
+        "Ola Nordmann (12)",
+        "Ola Nordmann: 4 days",
+        "Ola Nordmann × 2",
+        "Ola Nordmann #1",
+        "Office · 07:50\u201317:25 · Ola Nordmann · 1 conversation",
+        "Ola Nordmann, 2 photos",
+        "Ola Nordmann? 2",
+        "3 · Ola Nordmann",
+        "07:50\u201317:25 · Ola Nordmann",
+        "with Kari Nordmann, 12 min",
+    ):
+        names = ("Ola Nordmann", "Kari Nordmann")
+        assert any(_beside(name).search(said) for name in names), said
+    for said in (
+        "Office · 07:50\u201317:25 · 1 conversation · with Ola Nordmann, Kari Nordmann?",
+        "Kari Nordmann · iMessage",
+        "Ola Nordmann? (face on photos)",
+    ):
+        assert not any(_beside(name).search(said) for name in ("Ola Nordmann", "Kari Nordmann")), said
+
+
+def test_no_number_stands_beside_a_person_s_name_on_any_zoom(
+    demo: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VISION: no metrics near people. For every person the record names, nowhere on any zoom, on
+    the page or in `show timeline`'s text, is a digit beside the name (`_beside`)."""
     names = [p.name for p in people.directory(demo).known.values()]
     assert "Ola Nordmann" in names
     site = _site(demo)
-    for path in PAGES:
+    monkeypatch.setenv("LOGBOOK_HOME", str(demo.root))
+    for path, args in zip(PAGES, CLI_OF_PAGES, strict=True):
         said = _text(site.respond(path).body.decode("utf-8"))
-        for name in names:
-            near = re.compile(rf"(\d[\s(:×x#]*{re.escape(name)})|({re.escape(name)}\??[\s(:×x#]*\d)")
-            assert near.search(said) is None, (path, name, near.search(said))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.main(["show", "timeline", *args])
+        for text in (said, out.getvalue()):
+            for name in names:
+                found = _beside(name).search(text)
+                assert found is None, (path, name, found)
 
 
 def test_a_gate_without_tier_three_shows_no_payment(demo: Logbook) -> None:
@@ -237,7 +294,10 @@ def test_show_timeline_takes_one_zoom(demo: Logbook, monkeypatch: pytest.MonkeyP
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         cli.main(["show", "timeline", "--day", OFFICE_DAY])
-    assert "Office · 07:50\u201317:25 · Per Hansen, Liv Berg" in out.getvalue()
+    assert (
+        "Office · 07:50\u201317:25 · 1 conversation · 1 mail thread · paid Havnekiosken · with Per Hansen"
+        in (out.getvalue())
+    )
 
 
 ANCHOR = re.compile(r"<a\b[^>]*>")
