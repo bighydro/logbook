@@ -30,7 +30,7 @@ from hypothesis import strategies as st
 
 from logbook import cli
 from logbook.contrib import demo, serve, week_paper
-from logbook.core import keepers, rollup
+from logbook.core import keepers, moments, rollup
 from logbook.core.index import local_date
 from logbook.core.keepers import LANES
 from logbook.core.store import Logbook
@@ -497,6 +497,11 @@ def windowed_readers(
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
         ["doctor"],
+        ["show", "timeline", "--day", day],  # RFC 0043 §11: the timeline at each zoom
+        ["show", "timeline", "--day", day, "--json"],
+        ["show", "timeline", "--week", moments.week_of(day), "--json"],
+        ["show", "timeline", "--month", day[:7]],
+        ["show", "timeline", "--month", since[:7], "--json"],
     ]
 
 
@@ -556,6 +561,9 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["lab", "hold", "census", "senders", "--tier", "3", "--json"],
     ["lab", "hold", "census", "drive", "--json"],
     ["verify"],
+    ["show", "timeline", "--year", "2026", "--json"],
+    ["show", "timeline", "--life"],
+    ["show", "timeline", "--life", "--json"],
 ]
 
 
