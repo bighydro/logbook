@@ -37,8 +37,7 @@ def test_a_person_page_is_the_arc_of_the_relationship(
     assert data["first_contact"] == "2026-06-11" and data["last_contact"] == "2026-06-16"
     assert data["days_together"] == {"2026": 3}
     assert set(data["places"]) >= {"Office", "aboard solvind"}
-    assert data["commitments"] == {"open": [], "note": data["commitments"]["note"]}
-    assert "commitment" in data["commitments"]["note"]
+    assert data["commitments"] == {"open": [], "you_owe": 0, "they_owe": 0}, "no promise with Ola here"
     stays = data["shared_stays"]
     assert len(stays) == 3 and stays[0]["start"] > stays[-1]["start"], "the last stays first"
     assert stays[0]["sources"] == ["calendar"] and stays[-1]["sources"] == ["transcript"]
@@ -46,7 +45,8 @@ def test_a_person_page_is_the_arc_of_the_relationship(
     assert lb.meta["head"] == head
     text = _run(capsys, "person", "Ola Nordmann")
     assert "Ola Nordmann" in text and "2026-06-11" in text and "2026-06-16" in text
-    assert "2026  3 days" in text and "commitments" in text and "Office" in text
+    assert "2026  3 days" in text and "Office" in text
+    assert "  commitments  none open\n" in text and "RFC" not in text, "#334: no developer text"
 
 
 def test_a_first_name_resolves_when_it_is_unique_and_an_unknown_name_is_refused(

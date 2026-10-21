@@ -337,15 +337,20 @@ beside `transcribe`; it brings torch, with CUDA on Linux: the two took six and a
 anywhere else they install nothing).
 Logbook tells you when a command needs one; `logbook doctor` lists five of them (`ais`, `crypto`,
 `sealed`, `speakers`, `transcribe`) with a `pass` or `warn` each ([the doctor](doctor.md#the-extras)).
-You add one by installing the package with the extra's name in brackets:
+You add one by installing the package with the extra's name in brackets, into the Logbook you have.
+`logbook doctor` prints that line for your install when it can prove it keeps everything else as it
+is; when it prints none, it is one of these, with the version `logbook --version` prints:
 
 ```bash
-pipx install --force "openlogbook[crypto]"
-uv tool install "openlogbook[crypto]"
+pipx runpip openlogbook install "openlogbook[crypto]==0.7.0"
+uv tool install --force --python 3.12 "openlogbook[crypto,mcp]==0.7.0"
 ```
 
-Several at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter;
-the brackets mean something else to the terminal without them. The Homebrew formula installs the
+`pipx runpip` adds the extra to the environment pipx made, on its Python. `uv tool install --force`
+makes the tool again with exactly the extras it names, so name every one you already have, on the
+Python `--python` names: the one it runs on now (`uv tool list --show-python` shows it). Several
+at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter; the
+brackets mean something else to the terminal without them. The Homebrew formula installs the
 base package only: a Mac that needs an extra uses `pipx` or `uv` for Logbook instead, which is a
 `brew uninstall logbook` followed by one of the two lines above. Your record is untouched either way.
 

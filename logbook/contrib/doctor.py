@@ -9,7 +9,7 @@ The checks, in the order they print:
   Not found, not intact or hashed by another rule is a fail. The attachments the lines name are looked
   for and the missing ones counted in the pass (SPEC §1.1 allows them); their bytes are `verify`'s.
 - `index`: `index.sqlite` was built at the record's head (a stale or missing index is a warn: the
-  next reader rebuilds it, `logbook index` shows progress).
+  next reader rebuilds it, `logbook repair index` shows progress).
 - `day-start`: where the owner's day begins, when `logbook.json` sets `day_start` to anything but
   midnight (RFC 0036), as a pass; a warn when `index.sqlite` was built under another boundary (its
   `day_local` puts lines on other days until the next reader rebuilds it); a fail when the value is
@@ -33,9 +33,15 @@ The checks, in the order they print:
   `logbook doctor --implausible` lists their ids. Read from the index when it is current, else
   from the month files. A settings file that is not the shape is a fail naming it.
 - `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `speakers`, `transcribe`) is installed,
-  with its install line when not (a warn). Nothing is imported to find out: a module's spec is looked
-  for, and pyannote.audio (`speakers`) is asked by its installed distribution, as `diarize.installed`
-  asks it, since its spec alone would import the `pyannote` package around it.
+  with its install line when not (a warn): the line adds the extra to this Logbook exactly as it is
+  installed (its Python, its venv's options, its source and version, a pipx suffix, uv's companions):
+  this venv's pip at the installed version, `pipx runpip` in pipx's venv, `uv tool install --force
+  --python` this interpreter, or, in a checkout, `uv sync --python` this interpreter `--inexact
+  --no-default-groups`. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
+  receipt it cannot read, a source that may have changed since, uv's cache) it prints none: the warn
+  says why and points to docs/install.md, in one sentence. Nothing is imported to find out: a module's
+  spec is looked for, and pyannote.audio (`speakers`) is asked by its installed distribution, as
+  `diarize.installed` asks it, since its spec alone would import the `pyannote` package around it.
 - `google`: when either variable of the one Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
   `LOGBOOK_DRIVE_USER`), whether the key file is there and is a service-account key, whether the user
   is an address, which of the sources on the key (gmail, gcal, drive, gtasks, meet, gaudit) are
@@ -100,11 +106,17 @@ from __future__ import annotations
 import contextlib
 import importlib.metadata
 import importlib.util
+import itertools
+import json
+import os
+import re
 import shutil
 import sqlite3
 import sys
+import tomllib
+import urllib.parse
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal, TextIO
@@ -134,7 +146,13 @@ Usage = Callable[[Path], tuple[int, int, int]]  # (total, used, free) in bytes, 
 GIB = 1024**3
 DISK_WARN_BYTES = 5 * GIB
 DISK_FAIL_BYTES = GIB // 2
-PIP = 'pip install "openlogbook[{extra}]"'
+#: how this Logbook was installed, each with the one line that adds an extra to it as it is (`install_line`):
+#: pip and pipx's `runpip` add to the environment this Logbook runs in, `uv tool install --force` and `uv
+#: sync` make it again with exactly what they are given, so the line names every extra, the Python and the
+#: version; Homebrew's formula installs no extra, and where doctor proves no line it prints none
+HowInstalled = Literal["pipx", "uv-tool", "checkout", "pip", "homebrew"]
+PIPX_RECEIPT = "pipx_metadata.json"  # in the venv pipx made, which is `sys.prefix`
+UV_TOOL_RECEIPT = "uv-receipt.toml"  # in the environment `uv tool install` made, likewise
 #: each extra with the modules that satisfy it, any one of them; `transcribe` has an engine per platform,
 #: and `speakers` (pyannote.audio, which brings torch) is apart from it
 EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -144,6 +162,16 @@ EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("speakers", ("pyannote.audio",)),
     ("transcribe", ("mlx_whisper", "faster_whisper")),
 )
+#: the extras doctor has no check for, with the modules that show one is installed; `judge` and
+#: `describe` install nothing off Apple silicon, so there only the installer's receipt names them
+UNCHECKED_EXTRAS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("describe", ("mlx_vlm",)),
+    ("judge", ("mlx_lm",)),
+    ("mcp", ("mcp",)),
+    ("stream", ("ijson",)),
+)
+#: every extra the package has: what a pipx receipt's brackets name is read only when it is one of them
+KNOWN_EXTRAS = frozenset(extra for extra, _ in (*EXTRAS, *UNCHECKED_EXTRAS))
 #: a module asked by its installed distribution, not its spec: finding the spec of `pyannote.audio`
 #: imports the `pyannote` package around it, so it is asked as `diarize.installed` asks (labs, which
 #: contrib never imports)
@@ -201,7 +229,7 @@ def record_check(lb: Logbook) -> Check:
     missing = len(walk.missing)
     if missing:
         noted = f"; {missing:,} attachment{'s' if missing != 1 else ''} missing (SPEC §1.1 allows it;"
-        noted += " `logbook attach status`)"
+        noted += " `logbook import attachments status`)"
     else:
         noted = ""
     detail = f"{seq:,} lines, head {head[:12]}…, verified{noted}; {lb.root}"
@@ -290,11 +318,13 @@ def index_check(state: str) -> Check:
     if state == "current":
         return Check("index", "pass", "index.sqlite is current with logbook.json")
     if state == "missing":
-        return Check("index", "warn", "no index.sqlite; the next reader builds it, or run `logbook index`")
+        return Check(
+            "index", "warn", "no index.sqlite; the next reader builds it, or run `logbook repair index`"
+        )
     return Check(
         "index",
         "warn",
-        "index.sqlite is behind logbook.json; the next reader rebuilds it, or run `logbook index`",
+        "index.sqlite is behind logbook.json; the next reader rebuilds it, or run `logbook repair index`",
     )
 
 
@@ -317,7 +347,7 @@ def owner_check(root: Path) -> Check:
 
 def places_check(root: Path) -> Check:
     path = places.path_of(root)
-    hint = "`logbook places add Home --lat LAT --lon LON --kind home` so nights at home are known"
+    hint = "`logbook setup places add Home --lat LAT --lon LON --kind home` so nights at home are known"
     try:
         known = places.read(root)
     except places.PlaceError as e:
@@ -435,14 +465,514 @@ def module_installed(module: str) -> bool:
         return False
 
 
-def extras_checks(installed: Callable[[str], bool] = module_installed) -> Iterator[Check]:
+@dataclass(frozen=True)
+class Here:
+    """What doctor knows of the process it runs in, all of it read, none of it run: the interpreter
+    (`sys.executable`, and `sys._base_executable` behind a venv's), its version, openlogbook's installed
+    version and its `direct_url.json` and `INSTALLER`, whether pip is importable here (its spec, never
+    the module), the version of another installed distribution (`version_of`), whether the line is
+    for PowerShell (what Windows Terminal opens), whether this interpreter is a venv's (`sys.prefix` is
+    not `sys.base_prefix`), and the environment's variables, read, never set."""
+
+    executable: str = ""
+    base: str = ""
+    python: tuple[int, int, int] = (0, 0, 0)
+    cpython: bool = True
+    version: str = ""
+    direct_url: str | None = None
+    installer: str = ""
+    pip: bool = False
+    version_of: Callable[[str], str | None] = field(default=lambda name: None, compare=False)
+    windows: bool = False
+    venv: bool = False
+    env: Mapping[str, str] = field(default_factory=dict, compare=False)
+
+
+@dataclass(frozen=True)
+class Install:
+    """How this Logbook was installed, and what the line that adds an extra keeps: the requirement after
+    `openlogbook[extras]` (`==0.7.0`, the installed version, or ` @ git+…@<commit>`, the commit installed),
+    or the folder of an editable install or a checkout; the interpreter the line names; pipx's home and
+    venv; the options the line carries (pip's index options under pipx, uv's index options and
+    companions). `why` set: doctor proves no line, and says why."""
+
+    how: HowInstalled
+    extras: frozenset[str] = frozenset()
+    requirement: str = ""
+    folder: str = ""
+    python: str = ""
+    home: str = ""
+    venv: str = ""
+    options: tuple[str, ...] = ()
+    uv_pip: bool = False
+    windows: bool = False
+    why: str = ""
+
+
+#: a command-line value that needs no quotes in any shell doctor's reader has
+PLAIN = re.compile(r"[\w.:/\\@%+=,~-]+")
+#: what no quoting makes literal in both POSIX shells and PowerShell: a value with one has no line
+UNQUOTABLE = re.compile(r"[\"$`!\n\r]")
+#: the pip options that name where pip looks, the only ones a pipx receipt's `pip_args` may carry into
+#: the line: pip and uv's pip (pipx's uv backend) both take them, and they change nothing but the index
+INDEX_OPTIONS = ("--index-url", "-i", "--extra-index-url", "--find-links", "-f")
+#: the sources a requirement in uv's receipt names (one at most: none is an index), and every other key
+UV_SOURCES = ("specifier", "git", "url", "path", "directory", "editable")
+UV_KEYS = frozenset({"name", "extras", "marker", "subdirectory", *UV_SOURCES})
+#: the `[tool]` keys a receipt has that one line reproduces; `constraints`, `overrides` and
+#: `build-constraint-dependencies` came from files no line names, so a receipt with one has no line
+UV_TOOL_KEYS = frozenset({"requirements", "python", "entrypoints", "options"})
+#: a Python request in uv's receipt doctor can hold against the running interpreter: `3.12`, `3.12.3`,
+#: `cpython3.12`, `cpython@3.12`, `cpython-3.12`, `python3.12`; anything else (a range, `pypy`, `3.13t`)
+#: is not guessed at
+PYTHON_REQUEST = re.compile(r"^(?:c?python[-@]?)?(\d+)(?:\.(\d+))?(?:\.(\d+))?$", re.IGNORECASE)
+HOMEBREW = "Homebrew installed this Logbook and its formula installs the base package only"
+
+
+class NoLine(ValueError):
+    """Doctor cannot prove the line: why, as a clause."""
+
+
+def _names(extras: str | None) -> frozenset[str]:
+    return frozenset(e.strip() for e in (extras or "").split(",") if e.strip())
+
+
+def _arg(value: str) -> str:
+    """A value as one word of the line: bare when it can be, else in double quotes; `NoLine` for one
+    that no double quotes keep literal (`"`, `$`, a backtick, `!`, and off Windows a backslash, which a
+    POSIX shell drops bare and may read as an escape in quotes)."""
+    if UNQUOTABLE.search(value) or ("\\" in value and sys.platform != "win32"):
+        raise NoLine("a path or address in it has a character no shell keeps literal in quotes")
+    return value if PLAIN.fullmatch(value) else f'"{value}"'
+
+
+def _command(path: str, windows: bool) -> str:
+    """An interpreter's path as the first word of a line: bare when it can be, else quoted, and in
+    PowerShell (what Windows Terminal opens) a quoted path runs only after `&`."""
+    word = _arg(path)
+    return f"& {word}" if word.startswith('"') and windows else word
+
+
+def _strings(value: object) -> Iterator[str]:
+    """Every string a parsed receipt holds, at any depth."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _strings(v)
+
+
+def _secret(receipt: object) -> bool:
+    """Whether a receipt names an address with a password (`https://__token__:…@`) or a name in an
+    HTTP address (`https://<token>@github.com`, how a token is often given); `git+ssh://git@…` is no
+    secret. Doctor prints no such line: it would land on the screen and in `state/last-run.json`."""
+    for value in _strings(receipt):
+        for word in value.split():
+            if "://" not in word:
+                continue
+            try:
+                parts = urllib.parse.urlsplit(word)
+                named = parts.username and parts.scheme.endswith(("http", "https"))
+                if parts.password is not None or named:
+                    return True
+            except ValueError:
+                return True  # an address that will not parse is not printed either
+    return False
+
+
+SECRET = "an address it was installed from has a password or token in it, which doctor never prints"
+
+
+def _source(here: Here) -> tuple[str, str]:
+    """What this Logbook was installed from, from its own `direct_url.json` (PEP 610) and version: an
+    index (`("==0.7.0", "")`, the version installed now), an editable folder (`("", folder)`) or a git
+    commit (`(" @ git+…@<commit>", "")`, the commit installed now, never a branch that may have moved).
+    A folder installed whole, a URL and a wheel may have changed since: `NoLine`."""
+    if not here.direct_url:
+        if not here.version:
+            raise NoLine("its installed version cannot be read")
+        return (f"=={here.version}", "")
+    try:
+        origin = json.loads(here.direct_url)
+        url = origin["url"]
+        if not isinstance(origin, dict) or not isinstance(url, str):
+            raise TypeError
+    except (ValueError, KeyError, TypeError):
+        raise NoLine("its direct_url.json does not read") from None
+    if _secret(url):
+        raise NoLine(SECRET)
+    dir_info, vcs = origin.get("dir_info"), origin.get("vcs_info")
+    if isinstance(dir_info, dict) and dir_info.get("editable") is True:
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme != "file" or parts.netloc not in ("", "localhost"):
+            raise NoLine("it is editable from somewhere that is not a folder on this machine")
+        from urllib.request import url2pathname  # a path, never split as a string; only here
+
+        folder = str(Path(url2pathname(parts.path)))
+        _arg(folder)
+        return ("", folder)
+    if isinstance(vcs, dict) and vcs.get("vcs") == "git" and isinstance(vcs.get("commit_id"), str):
+        subdirectory = origin.get("subdirectory")
+        fragment = f"#subdirectory={subdirectory}" if isinstance(subdirectory, str) and subdirectory else ""
+        requirement = f" @ git+{url}@{vcs['commit_id']}{fragment}"
+        _arg(requirement)
+        return (requirement, "")
+    raise NoLine("it was installed from a folder, a URL or a wheel, which may have changed since")
+
+
+def _pipx(path: Path, here: Here) -> Install:
+    """pipx's venv (`path` is its receipt): the line runs pip in that venv, `pipx runpip`, so its Python
+    and its options (`--system-site-packages`) stay, with `PIPX_HOME` naming the home the venv is in,
+    which every pipx honours, so the line never depends on where this pipx looks by default (a version,
+    a platform, `--global`). The venv's name keeps a `--suffix`. Its pip may be given the index options
+    the receipt's `pip_args` name, and nothing else; injected packages are not touched."""
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    package = receipt["main_package"]
+    spec, args = package["package_or_url"], package.get("pip_args") or []
+    if package.get("package", "openlogbook") != "openlogbook":
+        raise NoLine(f"its venv is another app's ({package.get('package')}), which pipx installed it beside")
+    if not isinstance(spec, str) or not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+        raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
+    if _secret(receipt):
+        raise NoLine(
+            f"its receipt, {path}, names an address with a password or token, which doctor never prints"
+        )
+    named = re.findall(r"\[([^\[\]]*)\]", spec)  # the last bracket: a folder is never split on `@` or `~`
+    extras = _names(named[-1] if named else "") & KNOWN_EXTRAS
+    venv = path.parent
+    if venv.parent.name != "venvs":
+        raise NoLine(f"its venv, {venv}, is not in a pipx home's venvs folder")
+    carried: list[str] = []
+    rest = [
+        a for a in args if a not in ("-e", "--editable", "--force-reinstall")
+    ]  # pipx's own, or the source's
+    while rest:
+        word = rest.pop(0)
+        option, eq, value = word.partition("=")
+        if word == "--no-index":
+            carried.append(word)
+        elif option in INDEX_OPTIONS and eq:
+            carried.append(f"{option}={_arg(value)}")
+        elif word in INDEX_OPTIONS and rest:
+            carried += [word, _arg(rest.pop(0))]
+        else:
+            raise NoLine(f"its receipt, {path}, gives pip an option doctor does not carry ({word})")
+    requirement, folder = _source(here)
+    home, name = str(venv.parent.parent), _arg(venv.name)
+    _arg(home)
+    return Install(
+        "pipx",
+        extras,
+        requirement,
+        folder,
+        home=home,
+        venv=name,
+        options=tuple(carried),
+        windows=here.windows,
+    )
+
+
+def _python_agrees(request: object, here: Here) -> bool:
+    """Whether uv's receipt's `python` (none, a version request, a path) is the interpreter running."""
+    if request is None:
+        return True
+    if not isinstance(request, str):
+        return False
+    found = PYTHON_REQUEST.match(request.strip())
+    if found:
+        wanted = tuple(int(p) for p in found.groups() if p is not None)
+        return here.cpython and here.python[: len(wanted)] == wanted
+    return any(_same(Path(request), Path(p)) for p in (here.executable, here.base) if p)
+
+
+def _uv_kind(entry: dict[str, object]) -> str:
+    """Which source a requirement in uv's receipt names: `index` (none, or a specifier), `git`,
+    `editable`, or `NoLine` for a URL, a wheel, a folder installed whole or a shape doctor does not know."""
+    sources = [k for k in UV_SOURCES if k in entry]
+    if set(entry) - UV_KEYS or len(sources) > 1 or not all(isinstance(entry[k], str) for k in sources):
+        raise NoLine("its receipt names a requirement in a shape doctor does not read")
+    if not sources or sources == ["specifier"]:
+        return "index"
+    if sources[0] in ("git", "editable"):
+        return sources[0]
+    raise NoLine("it was installed from a folder, a URL or a wheel, which may have changed since")
+
+
+def _uv_with(entry: dict[str, object], executables: bool, here: Here) -> str:
+    """A requirement beside openlogbook's in uv's receipt as the option that put it there, at the
+    version installed now: `--with`, or `--with-executables-from` when the tool's executables include
+    its own (`executables`). One from anywhere but an index, or with a marker, is `NoLine`."""
+    name, extras = entry.get("name"), entry.get("extras") or []
+    if _uv_kind(entry) != "index" or "marker" in entry or not isinstance(name, str):
+        raise NoLine(f"a package installed beside it ({name}) did not come from an index")
+    version = here.version_of(name)
+    if not isinstance(extras, list) or version is None:
+        raise NoLine(f"the version of a package installed beside it ({name}) cannot be read")
+    named = f"{name}[{','.join(str(e) for e in extras)}]" if extras else name
+    option = "--with-executables-from" if executables else "--with"
+    return f"{option} {_arg(f'{named}=={version}')}"
+
+
+def _uv_options(options: object) -> tuple[str, ...]:
+    """`[tool.options]`, the index options uv was given, as the flags that give them again; an option that
+    is not an index's is not guessed at."""
+    if not isinstance(options, dict):
+        raise NoLine("its receipt's options are in a shape doctor does not read")
+    flags: list[str] = []
+    for key, value in options.items():
+        if key == "no-index" and isinstance(value, bool):
+            flags += ["--no-index"] if value else []
+        elif key == "index-url" and isinstance(value, str):
+            flags += [f"--index-url {_arg(value)}"]
+        elif key in ("find-links", "extra-index-url") and isinstance(value, list):
+            if not all(isinstance(v, str) for v in value):
+                raise NoLine("its receipt's options are in a shape doctor does not read")
+            flags += [f"--{key} {_arg(v)}" for v in value]
+        else:
+            raise NoLine(f"its receipt names an option doctor does not carry ({key})")
+    return tuple(flags)
+
+
+def _uv_tool(path: Path, here: Here) -> Install:
+    """uv's tool environment (`path` is its receipt): `uv tool install --force` makes it again with
+    exactly what the line names, so the line names the interpreter running now (`--python`), the
+    receipt's index options, each companion at its installed version, every extra, and openlogbook
+    as installed now (`_source`). A receipt whose Python is not the one running, whose source is not
+    the one installed, or that names what one line cannot give again (constraints, a companion from a
+    URL), is `NoLine`."""
+    tool = tomllib.loads(path.read_text(encoding="utf-8"))["tool"]
+    if _secret(tool):
+        raise NoLine(
+            f"its receipt, {path}, names an address with a password or token, which doctor never prints"
+        )
+    requirements, entrypoints = tool["requirements"], tool.get("entrypoints") or []
+    if not all(isinstance(r, dict) for r in (*requirements, *entrypoints)) or set(tool) - UV_TOOL_KEYS:
+        raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
+    ours = requirements[0]  # the tool's own package; openlogbook beside another tool is that tool's
+    if ours.get("name") != "openlogbook" or any(r.get("name") == "openlogbook" for r in requirements[1:]):
+        raise NoLine(f"its receipt, {path}, makes another tool, with openlogbook beside it")
+    named = ours.get("extras") or []
+    if not isinstance(named, list) or not all(isinstance(e, str) for e in named):
+        raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
+    extras = frozenset(named)
+    kind = _uv_kind(ours)
+    if "marker" in ours or "subdirectory" in ours:
+        raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
+    if not here.executable:
+        raise NoLine("the interpreter it runs in cannot be named")
+    if not _python_agrees(tool.get("python"), here):
+        raise NoLine("uv's receipt names another Python than the one it runs on")
+    requirement, folder = _source(here)
+    installed = "editable" if folder else ("git" if requirement.startswith(" @") else "index")
+    if installed != kind:
+        raise NoLine("uv's receipt names another source than the one installed")
+    sources = {e.get("from") for e in entrypoints} - {"openlogbook"}
+    others = [r for r in requirements if r is not ours]
+    if not sources <= {r.get("name") for r in others}:
+        raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
+    options = _uv_options(tool.get("options", {}))
+    withs = tuple(_uv_with(r, r.get("name") in sources, here) for r in others)
+    _arg(here.executable)
+    return Install("uv-tool", extras, requirement, folder, here.executable, options=options + withs)
+
+
+def _homebrew(prefix: Path) -> bool:
+    """`prefix` is a Homebrew keg's (`…/Cellar/logbook/0.7.0/libexec`, where the formula's
+    `virtualenv_install_with_resources` puts it), told by its path's parts alone."""
+    parts = [p.casefold() for p in prefix.parts]
+    return any(a == "cellar" and b in ("logbook", "openlogbook") for a, b in itertools.pairwise(parts))
+
+
+def _same(a: Path, b: Path) -> bool:
+    """One file or folder, as the filesystem tells (macOS and Windows ignore case); a missing one is
+    no match."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def install_of(prefix: Path, here: Here | None = None) -> Install:
+    """How the Logbook in `prefix` (`sys.prefix`) was installed, from the files its installer left and
+    what `here` knows: pipx's and uv's receipts in the prefix, a Homebrew keg by its path, a checkout
+    when the package is editable from a folder whose `.venv` is `prefix` (`uv sync`), else pip. Each
+    is held to what one line can keep (`install_line`); what it cannot is an `Install` with `why` set,
+    never a traceback. Reads files only, never runs a command."""
+    here = here or Here()
+    pipx, uv = prefix / PIPX_RECEIPT, prefix / UV_TOOL_RECEIPT
+    how: HowInstalled = "pipx" if pipx.is_file() else "uv-tool" if uv.is_file() else "pip"
+    try:
+        if how == "pipx":
+            return _pipx(pipx, here)
+        if how == "uv-tool":
+            return _uv_tool(uv, here)
+        if _homebrew(prefix):
+            return Install("homebrew", why=HOMEBREW)
+        return _pip(prefix, here)
+    except NoLine as e:
+        return Install(how, why=str(e))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError):
+        receipt = pipx if how == "pipx" else uv if how == "uv-tool" else None
+        why = f"its receipt, {receipt}, is in a shape doctor does not read" if receipt else ""
+        return Install(how, why=why or "what it was installed from does not read")
+
+
+def _pip(prefix: Path, here: Here) -> Install:
+    """A checkout (`uv sync`), or pip: this interpreter's pip, or uv's pip aimed at it in an environment
+    uv made (its `INSTALLER`), with openlogbook at the version installed now from an index. Never an
+    environment in uv's cache (`uvx`, `uv run --with`), which keeps nothing it is given, and never a
+    Python that is not a venv's, whose pip would install beside (`--user`) or refuse (PEP 668)."""
+    parts = {p.casefold() for p in prefix.parts}
+    config = prefix / "pyvenv.cfg"
+    relocatable = config.is_file() and re.search(
+        r"^\s*relocatable\s*=\s*true\s*$", config.read_text(encoding="utf-8"), re.MULTILINE | re.IGNORECASE
+    )
+    if parts & {"archive-v0", "builds-v0"} or relocatable:
+        raise NoLine("it runs from uv's cache (`uvx`, `uv run --with`), which keeps nothing added to it")
+    requirement, folder = _source(here)
+    if folder and _same(prefix, Path(folder) / ".venv") and (Path(folder) / "pyproject.toml").is_file():
+        try:
+            if here.env.get("UV_PROJECT_ENVIRONMENT"):
+                raise NoLine("UV_PROJECT_ENVIRONMENT is set, so `uv sync` would sync another environment")
+            if not here.executable:
+                raise NoLine("the interpreter it runs in cannot be named")
+            _arg(here.executable)
+            return Install("checkout", folder=folder, python=here.executable)
+        except NoLine as e:
+            return Install("checkout", why=str(e))
+    if not requirement or folder or requirement.startswith(" @"):
+        raise NoLine("pip installed it from a folder, a repository, a URL or a wheel, not an index")
+    if not here.executable:
+        raise NoLine("the interpreter it runs in cannot be named")
+    if not here.venv:
+        raise NoLine("the Python it runs in is not a venv's, so pip would install beside it or refuse")
+    _arg(here.executable)
+    uv_pip = not here.pip and here.installer.strip() == "uv"
+    if not here.pip and not uv_pip:
+        raise NoLine("the interpreter it runs in has no pip")
+    return Install(
+        "pip", requirement=requirement, python=here.executable, uv_pip=uv_pip, windows=here.windows
+    )
+
+
+def here_now() -> Here:
+    """`Here` of this process."""
+    direct_url: str | None
+    try:
+        found = importlib.metadata.distribution("openlogbook")
+        version = found.version
+    except (importlib.metadata.PackageNotFoundError, OSError, ValueError):
+        found, version = None, ""
+    try:
+        direct_url = found.read_text("direct_url.json") if found else None
+    except (OSError, ValueError):
+        direct_url = "unreadable"  # not JSON: `_source` says it does not read, never "from an index"
+    try:
+        installer = (found.read_text("INSTALLER") if found else None) or ""
+    except (OSError, ValueError):
+        installer = ""
+    try:
+        pip = importlib.util.find_spec("pip") is not None  # its spec: pip is never imported
+    except (ImportError, ValueError):
+        pip = False
+
+    def version_of(name: str) -> str | None:
+        try:
+            return importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    return Here(
+        sys.executable or "",
+        getattr(sys, "_base_executable", "") or "",
+        (sys.version_info.major, sys.version_info.minor, sys.version_info.micro),
+        sys.implementation.name == "cpython",
+        version or "",
+        direct_url,
+        installer,
+        pip,
+        version_of,
+        sys.platform == "win32",
+        sys.prefix != sys.base_prefix,
+        os.environ,
+    )
+
+
+def detect_install() -> Install:
+    """`install_of` this process: `sys.prefix` and `here_now`."""
+    return install_of(Path(sys.prefix), here_now())
+
+
+def install_line(install: Install, extras: set[str] | frozenset[str]) -> str | None:
+    """The line that adds `extras`, all of them, to this Logbook as it is installed, keeping its Python,
+    its venv's options, its source and version, its suffix and its companions; None when doctor proves
+    no such line (`install.why`)."""
+    needs = {"pipx": (install.home, install.venv), "checkout": (install.folder, install.python)}.get(
+        install.how, (install.python,)
+    )
+    if install.why or install.how == "homebrew" or not all(needs):
+        return None
+    names = ",".join(sorted(extras))
+    try:
+        if install.how == "checkout":
+            flags = "".join(f" --extra {e}" for e in sorted(extras))
+            project = f"--project {_arg(install.folder)} --python {_arg(install.python)}"
+            return f"uv sync {project} --inexact --no-default-groups{flags}"
+        if install.folder:
+            requirement = f"--editable {_arg(f'{install.folder}[{names}]')}"
+        else:
+            requirement = _arg(f"openlogbook[{names}]{install.requirement}")
+        options = "".join(f"{o} " for o in install.options)
+        if install.how == "pipx":
+            home = _arg(install.home)  # PowerShell's right side is an expression: a path there is quoted
+            set_home = f'$env:PIPX_HOME = "{install.home}"; ' if install.windows else f"PIPX_HOME={home} "
+            return f"{set_home}pipx runpip {install.venv} install {options}{requirement}"
+        if install.how == "uv-tool":
+            return f"uv tool install --force --python {_arg(install.python)} {options}{requirement}"
+        if install.uv_pip:
+            return f"uv pip install --python {_arg(install.python)} {requirement}"
+        return f"{_command(install.python, install.windows)} -m pip install {requirement}"
+    except NoLine:
+        return None
+
+
+def no_line(install: Install, extra: str) -> str:
+    """Why there is no line for `extra`, and where to read how to add it, in one sentence."""
+    if install.how == "homebrew":
+        why = HOMEBREW
+    else:
+        why = f"doctor prints no line, since {install.why or 'it cannot prove one'}"
+    return f'{why}; docs/install.md, "Optional extras", says how to add {extra}'
+
+
+def extras_checks(
+    installed: Callable[[str], bool] = module_installed, install: Install | None = None
+) -> Iterator[Check]:
+    how = install or detect_install()
+    present = set(how.extras) | {
+        extra for extra, modules in (*EXTRAS, *UNCHECKED_EXTRAS) if any(installed(m) for m in modules)
+    }
+    missing = [extra for extra, modules in EXTRAS if not any(installed(m) for m in modules)]
     for extra, modules in EXTRAS:
         found = [m for m in modules if installed(m)]
         if found:
             yield Check(f"extra:{extra}", "pass", f"{found[0].replace('_', '-')} is installed")
-        else:
-            wanted = " or ".join(m.replace("_", "-") for m in modules)
-            yield Check(f"extra:{extra}", "warn", f"{wanted} not installed: {PIP.format(extra=extra)}")
+            continue
+        wanted = " or ".join(m.replace("_", "-") for m in modules)
+        # pip, pipx's runpip and `uv sync --inexact` add and remove nothing else, so they name the extra
+        # (and what pipx's receipt names, which pipx writes back); `uv tool install --force` names them all
+        line = install_line(how, (present if how.how == "uv-tool" else set(how.extras)) | {extra})
+        if line is None:
+            yield Check(f"extra:{extra}", "warn", f"{wanted} not installed: {no_line(how, extra)}")
+            continue
+        # said before the line, so the line is the last thing on it and copies whole
+        notes = ""
+        if how.how == "uv-tool" and len(missing) > 1:
+            notes += "; the line installs exactly the extras it names, so add any other one wanted to it"
+        yield Check(f"extra:{extra}", "warn", f"{wanted} not installed{notes}: {line}")
 
 
 def disabled_sources(lb: Logbook) -> set[str]:
@@ -705,10 +1235,10 @@ def videos_check(lb: Logbook, state: str) -> Check | None:
     try:
         found = videos.counts(lb, lines)
     except videos.StateError as e:
-        return Check("videos", "warn", f"{e}; delete it and `videos fetch` writes it again")
+        return Check("videos", "warn", f"{e}; delete it and `logbook videos fetch` writes it again")
     text = videos.counts_text(found)
     if found.used > found.cap:
-        return Check("videos", "warn", f"{text}: over its cap; `videos infer` empties it as it goes")
+        return Check("videos", "warn", f"{text}: over its cap; `logbook videos infer` empties it as it goes")
     return Check("videos", "pass", text)
 
 
@@ -930,12 +1460,14 @@ def run(
     installed: Callable[[str], bool] = module_installed,
     usage: Usage = shutil.disk_usage,
     now: datetime | None = None,
+    install: Install | None = None,
 ) -> list[Check]:
-    """Every check in print order. Without a record only the record failure and the extras."""
+    """Every check in print order. Without a record only the record failure and the extras. `install` is
+    how this Logbook was installed, which the extras' lines follow (`detect_install` when None)."""
     checks: list[Check] = []
     if lb is None:
         checks.append(Check("record", "fail", "no logbook found; run `logbook init`, or set LOGBOOK_HOME"))
-        checks.extend(extras_checks(installed))
+        checks.extend(extras_checks(installed, install))
         return checks
     checks.append(record_check(lb))
     state, sources = index_state(lb)
@@ -950,7 +1482,7 @@ def run(
     if prints is not None:
         checks.append(prints)
     checks.append(dates_check(lb, state, now or last_run.now()))
-    checks.extend(extras_checks(installed))
+    checks.extend(extras_checks(installed, install))
     google = google_check(lb, env)
     if google is not None:
         checks.append(google)

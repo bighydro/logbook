@@ -161,8 +161,8 @@ def read(
         if contact is None
         else {**contact.to_json(), "what": _what(lb, contact, together)},
         "promises": {
-            "you_owe": [_promise(p) for p, mine in owed if mine],
-            "they_owe": [_promise(p) for p, mine in owed if not mine],
+            "you_owe": [promise_json(p) for p, mine in owed if mine],
+            "they_owe": [promise_json(p) for p, mine in owed if not mine],
         },
         "anniversaries": anniversaries(together, today),
         "drift": {**verdict.to_json(), "text": verdict.text()},
@@ -208,7 +208,8 @@ def places(person: people.Person) -> list[dict[str, Any]]:
     return out
 
 
-def _promise(p: promise_reader.Proposal) -> dict[str, Any]:
+def promise_json(p: promise_reader.Proposal) -> dict[str, Any]:
+    """One open proposal of `promises`, as the person's page and `show person --json` give it."""
     return {
         "id": p.id,
         "day": p.day,

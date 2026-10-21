@@ -103,8 +103,8 @@ pass  assets             1 asset(s): nordlys
 pass  extra:ais          websockets is installed
 pass  extra:crypto       cryptography is installed
 pass  extra:sealed       pyrage is installed
-warn  extra:speakers     pyannote.audio not installed: pip install "openlogbook[speakers]"
-warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
+warn  extra:speakers     pyannote.audio not installed: pipx install --force "openlogbook[ais,crypto,sealed,speakers]"
+warn  extra:transcribe   mlx-whisper or faster-whisper not installed: pipx install --force "openlogbook[ais,crypto,sealed,transcribe]"
 warn  sync:dawarich      set LOGBOOK_DAWARICH_KEY
 pass  disk               184.2 GiB free on the record's volume
 pass  folder             a plain local folder, no sync client

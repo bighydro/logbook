@@ -252,6 +252,7 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
         if s.place is None and s.lat is not None and s.lon is not None
     ]
     proposals = places.propose(unnamed, read.places, read.timeline_visits)
+    total = len(proposals)
     if a.top is not None:
         proposals = proposals[: a.top]
     saved = _saved_candidates(a.takeout) if getattr(a, "takeout", None) else []
@@ -276,11 +277,12 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
             out["saved_elsewhere"] = [c.to_json() for c in elsewhere]
         print(json.dumps(out, indent=2))
         return
-    if not proposals:
+    if not total:
         print(f"{first} {EN_DASH} {last}: no unnamed stays")
         _say_saved_elsewhere(elsewhere)
         return
-    print(f"{first} {EN_DASH} {last}: {_plural(len(proposals), 'unnamed place')}, by hours")
+    cut = f"; the first {len(proposals)} shown (--top)" if len(proposals) < total else ""
+    print(f"{first} {EN_DASH} {last}: {_plural(total, 'unnamed place')}, by hours{cut}")
     for n, proposal in enumerate(proposals, 1):
         for text in _proposal_rows(n, proposal):
             print(text)

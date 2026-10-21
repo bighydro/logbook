@@ -154,9 +154,14 @@ def test_doctor_names_the_extra_on_disk_without_importing_it(installed_extra, mo
     _nothing_imported(installed_extra)
     monkeypatch.setitem(sys.modules, "pyannote.audio", None)  # the distribution here, its import failed
     assert doctor.module_installed(diarize.MODULE) is diarize.installed() is False
-    checks = {c.name: c for c in doctor.run(None, {})}
+    pip = doctor.Install("pip", requirement="==0.7.0", python="/home/ines/venv/bin/python")
+    checks = {c.name: c for c in doctor.run(None, {}, install=pip)}
     assert checks["extra:speakers"].status == "warn"
-    assert 'pip install "openlogbook[speakers]"' in checks["extra:speakers"].detail
+    line = checks["extra:speakers"].detail.split("not installed: ")[1]
+    assert line.startswith('/home/ines/venv/bin/python -m pip install "openlogbook[') and line.endswith(
+        ']==0.7.0"'
+    )
+    assert "speakers" in line.split("[")[1].split("]")[0].split(",")
     assert installed_extra.imports == []
 
 

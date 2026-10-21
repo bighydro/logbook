@@ -44,6 +44,8 @@ BOAT_NAME = "Nordlys"
 MMSI = "970123456"
 CARRIER = "XY"
 NAMESPACE = uuid.UUID("7e2d5c1a-0000-4000-8000-00000000de30")
+#: the key `write` sets in `logbook.json`, so `setup` never takes the demo for the owner's own record
+MARK = "demo"
 
 KINDS = frozenset(
     {
@@ -1463,6 +1465,28 @@ def generate(root: Path, days: int | None = None, seed: int = 1) -> Logbook:
     return write(root, seed, story, START, PLACES, notes)
 
 
+def is_demo(meta: dict[str, Any]) -> bool:
+    """Whether `logbook.json` is a demo record's: it carries `MARK`, or (a demo 0.7.0 wrote, before the
+    mark) its owner id is a seed's, a name-based UUID no `init` makes, and its owner is the persona."""
+    if meta.get(MARK):
+        return True
+    try:
+        seeded = uuid.UUID(str(meta.get("owner_id"))).version == 5
+    except ValueError:
+        return False
+    emails = meta.get("owner_emails")
+    return seeded and isinstance(emails, list) and OWNER.email in emails
+
+
+def is_demo_at(root: Path) -> bool:
+    """`is_demo` of the record at `root`; a `logbook.json` that is missing or will not read is not one."""
+    try:
+        meta = json.loads((root / "logbook.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(meta, dict) and is_demo(meta)
+
+
 def write(
     root: Path,
     seed: int,
@@ -1478,6 +1502,7 @@ def write(
     meta["owner_id"] = str(uuid.uuid5(NAMESPACE, f"owner:{seed}"))
     meta["created_at"] = _utc(first - timedelta(days=1), "06:00")
     meta["owner_emails"] = [OWNER.email]
+    meta[MARK] = "made by `logbook demo`; nothing in it is real"
     lb._save_meta(meta)
     for blob in story.blobs:
         lb.attach(blob)

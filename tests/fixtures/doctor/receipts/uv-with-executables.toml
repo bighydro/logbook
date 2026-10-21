@@ -1,0 +1,10 @@
+[tool]
+requirements = [
+    { name = "openlogbook", extras = ["mcp"] },
+    { name = "uvicorn" },
+]
+python = "3.12"
+entrypoints = [
+    { name = "logbook", install-path = "/home/ines/.local/bin/logbook", from = "openlogbook" },
+    { name = "uvicorn", install-path = "/home/ines/.local/bin/uvicorn", from = "uvicorn" },
+]

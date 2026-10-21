@@ -1,7 +1,7 @@
 """The pages: `logbook show person|asset|place <name>`, read from the whole record.
 
 A person page is the arc of a relationship: first and last contact, days together per year, the
-places shared, the open commitments (a placeholder until `commitment/v1` lines are read) and the
+places shared, the open commitments (a placeholder here; `show person` fills it from `promises`) and the
 last ten stays shared. An asset page: the trips aboard, the nights aboard, the people aboard, and
 the summary of the asset's own track (its AIS or ADS-B positions as stays and moves) when the
 record holds one. A place page: visits, hours, first and last, per year, the people met there,
@@ -281,7 +281,14 @@ def _person_rows(p: dict[str, Any]) -> Iterator[str]:
         yield f"  {year}  {_plural(n, 'day')} together"
     if p["places"]:
         yield f"  places  {', '.join(p['places'])}"
-    yield f"  commitments  none open ({p['commitments']['note']})"
+    owed = p["commitments"]
+    if owed["open"]:
+        mine, theirs = owed.get("you_owe", 0), owed.get("they_owe", 0)
+        listing = "`logbook promises --all`" if theirs else "`logbook promises`"  # theirs only with --all
+        counts = f"{len(owed['open'])} open ({mine} you owe, {theirs} they owe)"
+        yield f"  commitments  {counts}: {listing} lists them"
+    else:
+        yield "  commitments  none open"
     if p["shared_stays"]:
         yield f"  last {_plural(len(p['shared_stays']), 'shared stay')}"
         for s in p["shared_stays"]:

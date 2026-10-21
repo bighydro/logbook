@@ -303,7 +303,7 @@ def test_doctor_reports_a_missing_attachment_and_still_passes(plain_lb: Logbook)
     _store(plain_lb, gone).unlink()
     check = doctor.record_check(plain_lb)
     assert check.status == "pass"
-    assert "1 attachment missing (SPEC §1.1 allows it; `logbook attach status`)" in check.detail
+    assert "1 attachment missing (SPEC §1.1 allows it; `logbook import attachments status`)" in check.detail
 
 
 def test_doctor_looks_for_the_files_and_leaves_their_bytes_to_verify(plain_lb: Logbook):

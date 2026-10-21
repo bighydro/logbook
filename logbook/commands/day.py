@@ -1293,11 +1293,28 @@ def _show_page(lb: Logbook, a: argparse.Namespace) -> None:
     except (pages.PageError, stays.SettingsError) as e:
         print(f"show {a.day}: {e}", file=sys.stderr)
         sys.exit(2)
+    if a.day == "person":
+        page["commitments"] = _commitments(lb, page)
     if a.json:
         print(json.dumps(page, indent=2, ensure_ascii=False))
         return
     for text in pages.rows(page):
         print(text)
+
+
+def _commitments(lb: Logbook, page: dict[str, Any]) -> dict[str, Any]:
+    """The open promises with the page's person, as `promises` reads them (`people_drift.promises_with`:
+    by the speaker, else the counterpart's name), each with whether the owner owes it."""
+    from ..contrib import people_drift, person_page
+    from ..core import people
+
+    who = people.Person(page["id"], page["name"], (), None, 0)
+    found = people_drift.promises_with(lb, [who]).get(page["id"], [])
+    return {
+        "open": [{**person_page.promise_json(p), "you_owe": mine} for p, mine in found],
+        "you_owe": sum(1 for _p, mine in found if mine),
+        "they_owe": sum(1 for _p, mine in found if not mine),
+    }
 
 
 def search_arguments(sub: Subparsers) -> None:
