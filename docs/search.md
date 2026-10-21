@@ -151,16 +151,20 @@ the command's own.
 - **The tier is the page's.** The hits are held to the Library's tier gate as every other page
   holds its lines: `logbook serve` reads every tier on this machine, as its Day and `/line/ID` do,
   so a search there finds tier 3 too; a gated page (`export site`'s, a test's `Site(tiers=…)`) finds
-  only what its gate lets through, and a hit above it is not on the page, not in a count and not
-  in a filter. The header says the highest tier among the hits it read.
-- **A hit** is one row under its day, the date a link to the Day: its local time, a link to its own
-  row on that Day; its kind; an excerpt of up to sixteen words around the match, each matching word
-  marked (the command's `[brackets]`, drawn); and its line's id, a link to `/line/ID`, the line as
-  the record holds it.
-- **The filters are links**: every kind with words and every year the record runs over, the
-  filter in force in bold and *every* to take it off. They are never counted: a count would cost
+  only what its gate lets through, and a hit above it is not on the page and not in a page's
+  count; a gate of some tiers only (1 and 3) searches further until its page is full. The header
+  says the highest tier among the hits shown.
+- **A hit** is one row under its day, the date a link to the Day: its local time, a link to the
+  Day too, to the hit's own row on it for a note, a mail and a calendar entry (the kinds the Day
+  lists as rows of their own; a message is under its conversation there); its kind; an excerpt of
+  up to sixteen words around the match, each matching word marked (the command's `[brackets]`,
+  drawn; a bracket the record itself holds, `[urgent]` in a note, stays as written); and its line's
+  id, a link to `/line/ID`, the line as the record holds it.
+- **The filters are links**: every kind with words and every year the record runs over (its span,
+  as the front page says it, whatever the gate), the filter in force in bold and *every* to take
+  it off. They are never counted: a count would cost
   the matches of the words a second time, and would say how many lines a gate holds back. A filter
-  that finds nothing says so in its sentence. Nothing about a filter is kept in the browser: the
+  that finds nothing says so in its sentence (`In 2025, nothing in the record matches marina.`). Nothing about a filter is kept in the browser: the
   address is the whole search, so it can be bookmarked, reloaded and sent back to.
 - **The pages are links** of fifty hits. The rank decides which page a hit is on, the day where it
   is read on that page, as the command does with `--limit`. Page 20 is the last (a thousand hits);

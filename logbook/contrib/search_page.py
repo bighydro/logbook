@@ -4,13 +4,16 @@ The hits are what `logbook search` finds, through the same two functions (`searc
 `search.search` over the index's FTS5 table): the same literal words, phrases and prefixes, the same
 bm25 ranking, a retracted line never a hit. They are held to the page's tier gate as every other page
 holds its lines (`reading.crossing` over `Site.tiers`): the search runs up to the gate's highest tier
-and each hit is then let through the gate itself, so a gate of tiers 1 and 3 shows no tier 2. `logbook
+and each hit is then let through the gate itself, so a gate of tiers 1 and 3 shows no tier 2 (and
+searches further, `_gated`, until its page is full). `logbook
 serve` reads every tier, as its Day and `/line/ID` do, since nothing leaves this machine; a gated
 `Site` (`tiers`) reads only those.
 
-Each hit is a row under its day (the date a link to the Day, the time a link to the hit's own row on
-it), with its kind, an excerpt of up to sixteen words around the match with every matching word in
-`<mark>` (the snippet `search` prints in brackets), and its line's id, a link to `/line/ID`. The rank
+Each hit is a row under its day (the date a link to the Day, the time a link to it too, to the hit's
+own row there for the kinds the Day lists as rows, `ROWED`), with its kind, an excerpt of up to
+sixteen words around the match with every matching word in `<mark>` (the snippet `search` prints in
+brackets; a bracket the record itself holds stays as written, `marked`), and its line's id, a link
+to `/line/ID`. The rank
 decides which page a hit is on; on its page the hits are read by day, the latest first, as the
 command prints them. A page holds `PAGE` hits; the pages, and the filters by kind and by year, are
 links, never state in the browser: `?q=&kind=&year=&page=`. The filters are every kind with words
@@ -28,7 +31,9 @@ its search is one sentence."""
 
 from __future__ import annotations
 
+import dataclasses
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from html import escape
@@ -44,9 +49,12 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
     from .serve import Site
 
 PAGE = 50  # hits a page
+WIDEN = 16  # how far past a page `_gated` searches for hits a gate of some tiers lets through
 MAX_PAGE = 20  # the last page asked for: a search reads every hit up to its page, so 1,000 at most
 YEAR = re.compile(r"^\d{4}$")
 DOT = " · "
+ROWED = frozenset({"note", "mail", "event"})  # the kinds whose line the Day lists as a row of its own, `l-ID`
+STROKES = str.maketrans({"ø": "o", "đ": "d", "ł": "l", "ħ": "h"})  # letters `unicode61` folds, NFKD not
 MARKED = re.compile(re.escape(search.MARK[0]) + r"([^\[\]]+?)" + re.escape(search.MARK[1]))
 # the Day page's tokens, copied from `serve.STYLE` (tests/test_search_page.py holds them equal)
 TOKENS = """
@@ -77,7 +85,6 @@ li.hit .superseded{color:var(--mute);font-size:.85rem}
 @media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
 """
 )
-NOTHING = "Nothing in the record matches {text}{among}."  # a query with no hit: one sentence
 PAST = "Page {page} is past the last hit."  # a page asked for beyond them
 NO_SERVER = "Search answers in logbook serve, on this machine; an exported site has no server to ask."
 
@@ -92,8 +99,12 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
     kind = params.get("kind") or None
     year = params.get("year") or None
     page = _page_number(params.get("page") or "1")
-    if year is not None and YEAR.match(year) is None:
+    if year is not None and YEAR.fullmatch(year) is None:
         raise ValueError(f"year {year}: four digits, such as 2026")
+    if kind is not None and kind not in search.KINDS:
+        raise search.QueryError(
+            f"{kind}: not a kind with words; the kinds searched are {', '.join(search.KINDS)}"
+        )
     parts = ["<h1>Search</h1>\n", _form(text)]
     if search.expression(text) is None:
         return _document(site, parts)
@@ -103,22 +114,19 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
         until=None if year is None else f"{year}-12-31",
         kinds=None if kind is None else [kind],
         max_tier=_max_tier(site.tiers),
-        limit=PAGE * page,
     )
     try:
         with site.lb.index() as idx:
-            result = search.search(idx, q)
+            hits, more = _gated(idx, q, site.tiers, PAGE * page)
             years = _years(idx)
     except RuntimeError as e:  # a SQLite without FTS5: the index holds no search table
         parts.append(f"<p>{escape(str(e))}.</p>\n")
         return _document(site, parts)
-    held = {id(line) for line in reading.crossing([hit.line for hit in result.hits], site.tiers)}
-    hits = [hit for hit in result.hits if id(hit.line) in held]
     shown = hits[PAGE * (page - 1) : PAGE * page]
     if shown or kind is not None or year is not None:  # a filter that found nothing can be taken off
         parts.append(_filters(text, kind, year, years))
     if not shown:
-        said = NOTHING.format(text=text, among=_among(kind, year)) if not hits else PAST.format(page=page)
+        said = _nothing(text, kind, year) if not hits else PAST.format(page=page)
         parts.append(f"<p>{escape(said)}</p>\n")
         return _document(site, parts)
     top = max(int(hit.line.get("tier") or 0) for hit in shown)
@@ -126,9 +134,32 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
     superseded = _superseded(shown)
     tz = ZoneInfo(str(site.lb.meta["timezone"]))
     for day, on_day in search.Result(q, shown).days():
-        parts.append(_day_html(site, day, on_day, superseded, tz))
-    parts.append(_pager(text, kind, year, page, more=result.full))
+        parts.append(_day_html(site, day, on_day, superseded, tz, text))
+    parts.append(_pager(text, kind, year, page, more))
     return _document(site, parts)
+
+
+def _gated(
+    idx: Index, q: search.Query, tiers: Sequence[int] | None, wanted: int
+) -> tuple[list[search.Hit], bool]:
+    """The best `wanted` hits of `q` the gate lets through (`reading.crossing`), and whether there
+    are more. The search runs up to the gate's highest tier, so a gate that is not every tier from 1
+    up (tiers 1 and 3) leaves some of the hits out after the search's own limit: the limit is then
+    widened, up to `WIDEN` times what the page needs, until the page is full or the matches end."""
+    limit = wanted + 1  # one more than the page shows: whether there is a next page
+    while True:
+        result = search.search(idx, dataclasses.replace(q, limit=limit))
+        held = {id(line) for line in reading.crossing([hit.line for hit in result.hits], tiers)}
+        hits = [hit for hit in result.hits if id(hit.line) in held]
+        if len(hits) > wanted or not result.full or limit >= wanted * WIDEN:
+            return hits[:wanted], len(hits) > wanted or result.full
+        limit *= 4
+
+
+def _nothing(text: str, kind: str | None, year: str | None) -> str:
+    """The one sentence of a search that finds nothing; the year first, never beside the words."""
+    said = f"othing in the record matches {text}" + ("" if kind is None else f" as a {kind}") + "."
+    return ("N" if year is None else f"In {year}, n") + said
 
 
 def _document(site: Site, parts: Sequence[str]) -> str:
@@ -208,13 +239,6 @@ def _folded(kind: str) -> str:
     return search.ALIASES.get(kind, (kind,))[-1]
 
 
-def _among(kind: str | None, year: str | None) -> str:
-    said = [f"as a {kind}"] if kind is not None else []
-    if year is not None:
-        said.append(f"in {year}")
-    return "" if not said else " " + " ".join(said)
-
-
 def _link(label: str, href: str) -> str:
     return f'<a href="{escape(href)}">{label}</a>'
 
@@ -230,31 +254,75 @@ def _superseded(hits: Sequence[search.Hit]) -> dict[str, str]:
 
 
 def _day_html(
-    site: Site, day: str, hits: Sequence[search.Hit], superseded: Mapping[str, str], tz: ZoneInfo
+    site: Site, day: str, hits: Sequence[search.Hit], superseded: Mapping[str, str], tz: ZoneInfo, text: str
 ) -> str:
     head = site.link(f"{escape(day)} {escape(search.weekday(day))}", f"/day/{day}")
-    rows = "".join(_hit_html(site, day, hit, superseded.get(str(hit.line["id"])), tz) for hit in hits)
+    terms = _terms(text)
+    rows = "".join(_hit_html(site, day, hit, superseded.get(str(hit.line["id"])), tz, terms) for hit in hits)
     return f'<section class="day">\n<h2>{head}</h2>\n<ol class="hits">\n{rows}</ol>\n</section>\n'
 
 
-def _hit_html(site: Site, day: str, hit: search.Hit, superseded: str | None, tz: ZoneInfo) -> str:
-    """One hit: its time, a link to its row on its Day; its kind; the excerpt, the match marked; its
-    line's id, a link to the line as written; and, when a later line supersedes it, that mark."""
+def _hit_html(
+    site: Site, day: str, hit: search.Hit, superseded: str | None, tz: ZoneInfo, terms: Terms
+) -> str:
+    """One hit: its time, a link to its Day (to its row there, for the kinds the Day gives a row,
+    `ROWED`); its kind; the excerpt, the match marked; its line's id, a link to the line as written;
+    and, when a later line supersedes it, that mark."""
     line = hit.line
     line_id = str(line["id"])
-    at = site.link(escape(f"{day} {_clock(line, tz)}"), f"/day/{day}#{_row_id(line_id)}", "at")
+    row = f"#{_row_id(line_id)}" if line.get("kind") in ROWED else ""
+    at = site.link(escape(f"{day} {_clock(line, tz)}"), f"/day/{day}{row}", "at")
     kind = f'<span class="kind">{escape(str(line["kind"]))}</span>'
     mark = "" if superseded is None else f' <span class="superseded">{escape(superseded)}</span>'
     return (
         f'<li class="hit" id="{_row_id(line_id)}">{at} {kind}{mark}'
-        f'<q class="excerpt">{marked(hit.snippet)}</q>'
+        f'<q class="excerpt">{marked(hit.snippet, terms)}</q>'
         f"{site.link(escape(line_id), f'/line/{line_id}', 'id')}</li>\n"
     )
 
 
-def marked(snippet: str) -> str:
-    """The snippet as HTML: escaped, each word `search` bracketed (`search.MARK`) in `<mark>`."""
-    return MARKED.sub(r"<mark>\1</mark>", escape(snippet, quote=False))
+# -- the mark ---------------------------------------------------------------------------------------------
+
+
+Terms = tuple[frozenset[str], tuple[str, ...]]  # the query's words, folded; and its prefixes
+
+
+def marked(snippet: str, terms: Terms) -> str:
+    """The snippet as HTML, escaped, each run `search` bracketed (`search.MARK`) in `<mark>` when its
+    words are the query's (`_terms`): a bracket the record itself holds (`[urgent]` in a note) stays
+    as written, since the snippet's marks and the text's own brackets are the same characters."""
+    out: list[str] = []
+    at = 0
+    for m in MARKED.finditer(snippet):
+        out.append(escape(snippet[at : m.start()], quote=False))
+        words = _tokens(m.group(1))
+        ours = bool(words) and all(w in terms[0] or w.startswith(terms[1]) for w in words)
+        out.append(
+            f"<mark>{escape(m.group(1), quote=False)}</mark>" if ours else escape(m.group(0), quote=False)
+        )
+        at = m.end()
+    out.append(escape(snippet[at:], quote=False))
+    return "".join(out)
+
+
+def _terms(text: str) -> Terms:
+    """The words of a query as the index's tokeniser reads them (`_tokens`), and the prefixes (a
+    term's last word before a `*`), as `search.expression` parses the query."""
+    words: set[str] = set()
+    prefixes: list[str] = []
+    for phrase, word in search.TERM.findall(text):
+        term = phrase or word
+        found = _tokens(term.rstrip("*"))
+        if term.endswith("*") and found:
+            prefixes.append(found.pop())
+        words.update(found)
+    return frozenset(words), tuple(prefixes)
+
+
+def _tokens(text: str) -> list[str]:
+    """The words of `text` as `unicode61` folds them: case, then diacritics (ø and å to o and a)."""
+    plain = unicodedata.normalize("NFKD", text.casefold().translate(STROKES))
+    return re.findall(r"[^\W_]+", "".join(ch for ch in plain if not unicodedata.combining(ch)))
 
 
 def _clock(line: Line, tz: ZoneInfo) -> str:

@@ -242,3 +242,99 @@ def test_an_exported_site_has_no_search(lb: Logbook) -> None:
     static = serve.Site(lb, href=lambda path: path)
     text = search_page.page_search(static, {"q": "kari"})
     assert "<form" not in text and "Dinner" not in text
+
+
+def _notes(lb: Logbook, word: str, n: int, tiers: tuple[int, ...] = (2,)) -> None:
+    for i in range(n):
+        lb.append(
+            at=f"2026-0{1 + i // 28 % 9}-{1 + i % 28:02d}T09:00:00Z",
+            source="manual",
+            kind="note",
+            tier=tiers[i % len(tiers)],
+            payload={"schema": "note/v1", "text": f"The {word} at Oslo, number {i}"},
+        )
+
+
+def test_a_gate_of_some_tiers_still_fills_its_pages(lb: Logbook) -> None:
+    _notes(lb, "fjord", 120, tiers=(1, 2))  # every other one tier 2, which a gate of 1 and 3 holds back
+    site = serve.Site(lb, tiers=(1, 3))
+    first = _get(site, "/search", "q=fjord")
+    assert len(_hits(first)) == 50 and "page=2" in first
+    second = _get(site, "/search", "q=fjord&page=2")
+    assert len(_hits(second)) == 10 and "page=3" not in second
+    assert '<span class="kind">note</span>' in second and "tier 2" not in page_text.seen(second)
+
+
+@pytest.mark.parametrize("n", [50, 100])
+def test_a_last_full_page_offers_no_next(lb: Logbook, n: int) -> None:
+    _notes(lb, "anchorage", n)
+    site = serve.Site(lb)
+    last = _get(site, "/search", f"q=anchorage&page={n // 50}")
+    assert len(_hits(last)) == 50 and f"page={n // 50 + 1}" not in last
+
+
+def test_every_link_to_a_row_on_the_day_lands_on_it(lb: Logbook) -> None:
+    """The Day lists a note, a mail and a calendar entry as rows of their own (`l-ID`); a message is
+    under its conversation, a page browsed or a task among the day's lines: a hit of those links to
+    the Day itself, never to an anchor the Day does not have."""
+    day = "2026-06-20"
+    said = {
+        "mail": {"raw_id": "m:9", "thread": "m:9", "subject": "Lofoten mooring", "direction": "received",
+                 "from": {"email": "marina@example.org"}, "body": "Lofoten is due"},
+        "message": {"raw_id": "s:9", "chat": {"id": "c:1", "type": "direct", "name": "Per Hansen"},
+                    "from_me": False, "sender": {"kind": "phone", "value": "+447700900123"},
+                    "text": "Lofoten is ready"},
+        "event": {"raw_id": "ev:9", "title": "Lofoten haul-out"},
+        "task": {"raw_id": "t:9", "title": "Varnish Lofoten"},
+        "browse": {"raw_id": "b:9", "title": "Lofoten chandlery", "url": "https://example.org/solvind"},
+        "highlight": {"raw_id": "h:9", "text": "Lofoten heels well"},
+        "watch": {"raw_id": "w:9", "title": "Lofoten documentary"},
+        "listen": {"raw_id": "li:9", "title": "Lofoten shanty"},
+        "voice-memo": {"raw_id": "v:9", "transcript": "Lofoten needs fuel"},
+    }  # fmt: skip
+    for hour, (kind, payload) in enumerate(said.items()):
+        lb.append(
+            at=f"{day}T{8 + hour:02d}:00:00Z",
+            source="manual",
+            kind=kind,
+            tier=2,
+            payload={"schema": f"{kind}/v1", **payload},
+        )
+    site = serve.Site(lb)
+    found = _get(site, "/search", "q=lofoten")
+    assert len(_hits(found)) == len(said)
+    on_day = _get(site, f"/day/{day}")
+    anchors = re.findall(rf'href="/day/{day}#(l-[^"]+)"', found)
+    assert len(anchors) >= 2  # the mail and the calendar entry at least
+    for anchor in anchors:
+        assert f'id="{anchor}"' in on_day, anchor
+    assert len(re.findall(rf'href="/day/{day}"', found)) >= len(said) - len(anchors)
+
+
+def test_a_bracket_the_record_holds_is_not_a_mark(lb: Logbook) -> None:
+    lb.append(
+        at="2026-06-14T10:00:00Z",
+        source="manual",
+        kind="note",
+        tier=2,
+        payload={"schema": "note/v1", "text": "Per said [urgent] the boatyard gate in Zürich is broken"},
+    )
+    site = serve.Site(lb)
+    (hit,) = _hits(_get(site, "/search", "q=boatyard"))
+    assert "[urgent]" in hit and "<mark>urgent</mark>" not in hit and "<mark>boatyard</mark>" in hit
+    (accent,) = _hits(_get(site, "/search", "q=zurich+boatyard"))
+    assert "<mark>Zürich</mark>" in accent  # the index folds the accent, and so does the mark
+    (prefix,) = _hits(_get(site, "/search", "q=boatya*"))
+    assert "<mark>boatyard</mark>" in prefix
+
+
+def test_what_the_page_refuses(lb: Logbook) -> None:
+    site = serve.Site(lb)
+    for query in ("q=kari&year=2026%0A", "q=&kind=location", "q=&page=0", "q=kari&year=twenty"):
+        assert site.respond("/search", query).status == 400, query
+
+
+def test_a_filter_that_finds_nothing_says_the_year_first(lb: Logbook) -> None:
+    page = _get(serve.Site(lb), "/search", "q=marina&year=2025")
+    assert "In 2025, nothing in the record matches marina." in page_text.seen(page)
+    assert 'href="/search?q=marina"' in page  # the filter can be taken off
